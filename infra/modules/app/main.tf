@@ -56,7 +56,11 @@ resource "random_password" "db" {
 resource "aws_ssm_parameter" "db_url" {
   name  = "/${var.project}/${var.environment}/DATABASE_URL"
   type  = "SecureString"
-  value = "postgres://app:${random_password.db.result}@${aws_db_instance.app.address}:5432/charity"
+  # sslmode=no-verify: RDS enforces TLS (rds.force_ssl=1), so connect encrypted.
+  # no-verify encrypts without requiring the RDS CA bundle in the image. The pg
+  # client AND node-pg-migrate both parse this from the URL. (Local dev uses a
+  # plain URL with no sslmode, so docker Postgres still connects plaintext.)
+  value = "postgres://app:${random_password.db.result}@${aws_db_instance.app.address}:5432/charity?sslmode=no-verify"
 }
 
 # App / third-party secrets: placeholders. Set REAL values out of band:

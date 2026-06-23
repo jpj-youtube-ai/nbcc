@@ -1,0 +1,59 @@
+name: Infra
+on:
+  pull_request:
+    paths: ["infra/**"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        type: choice
+        options: [staging, production]
+      action:
+        description: plan or apply
+        type: choice
+        options: [plan, apply]
+        default: plan
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  plan-on-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        env: [staging, production]
+    environment: ${{ matrix.env }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+      - uses: hashicorp/setup-terraform@v3
+      - working-directory: infra/envs/${{ matrix.env }}
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -no-color
+
+  dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}   # production can require approval
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: eu-west-2
+      - uses: hashicorp/setup-terraform@v3
+      - working-directory: infra/envs/${{ inputs.environment }}
+        run: |
+          terraform init -input=false
+          if [ "${{ inputs.action }}" = "apply" ]; then
+            terraform apply -input=false -auto-approve -no-color
+          else
+            terraform plan -input=false -no-color
+          fi

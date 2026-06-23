@@ -1,0 +1,44 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/charity
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine   # match the MAJOR version of your RDS engine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: charity
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d charity"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot migration runner - SAME image as the app.
+  # Run explicitly:  docker compose run --rm migrate
+  # Mirrors the `ecs run-task` migration step in the pipeline.
+  migrate:
+    build: .
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://app:app@db:5432/charity
+    depends_on:
+      db:
+        condition: service_healthy
+    command: npm run migrate
+
+volumes:
+  pgdata:

@@ -1,0 +1,104 @@
+name: Deploy staging
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # OIDC into AWS
+  contents: write   # push the release tag
+
+concurrency: deploy-staging
+
+env:
+  AWS_REGION: eu-west-2
+  PROJECT: charity-site
+  ENVIRONMENT: staging
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - name: Build & push image (shared repo, tagged by SHA = build once)
+        run: |
+          IMAGE="${{ steps.ecr.outputs.registry }}/${PROJECT}:${GITHUB_SHA}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Read infra wiring from state
+        working-directory: infra/envs/staging
+        run: |
+          terraform init -input=false
+          {
+            echo "CLUSTER=$(terraform output -raw ecs_cluster)"
+            echo "SERVICE=$(terraform output -raw ecs_service)"
+            echo "FAMILY=$(terraform output -raw task_family)"
+            echo "SUBNETS=$(terraform output -raw task_subnet_ids_csv)"
+            echo "SG=$(terraform output -raw task_security_group_id)"
+            echo "ALB_URL=http://$(terraform output -raw alb_dns_name)"
+          } >> "$GITHUB_ENV"
+
+      - name: Register new task definition (swap image only)
+        run: |
+          CURRENT=$(aws ecs describe-task-definition --task-definition "$FAMILY" --query 'taskDefinition')
+          NEW=$(echo "$CURRENT" | jq --arg IMG "$IMAGE" '
+            .containerDefinitions[0].image = $IMG
+            | {family, networkMode, requiresCompatibilities, cpu, memory,
+               executionRoleArn, taskRoleArn, containerDefinitions}')
+          ARN=$(aws ecs register-task-definition --cli-input-json "$NEW" \
+                  --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "TASK_ARN=$ARN" >> "$GITHUB_ENV"
+
+      - name: Run DB migrations (expand phase, before deploy)
+        run: |
+          TASK=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE \
+            --task-definition "$TASK_ARN" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"app","command":["npm","run","migrate"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK"
+          CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" \
+                   --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "migration exit code: $CODE"
+          [ "$CODE" = "0" ]
+
+      - name: Deploy service
+        run: |
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
+            --task-definition "$TASK_ARN" >/dev/null
+          aws ecs wait services-stable --cluster "$CLUSTER" --service "$SERVICE"
+
+      - name: Smoke test staging
+        run: bash scripts/smoke.sh "$ALB_URL"
+
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: BDD against staging (end-to-end)
+        env:
+          BASE_URL: ${{ env.ALB_URL }}
+        run: npm run test:bdd
+
+      - name: Tag release (known-good staging build)
+        run: |
+          TAG="release-$(date +%Y%m%d)-${GITHUB_SHA::7}"
+          git tag "$TAG"
+          git push origin "$TAG"

@@ -7,7 +7,13 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 When("I GET {string}", async function (path) {
   const res = await fetch(`${BASE_URL}${path}`);
   this.statusCode = res.status;
-  this.body = await res.json().catch(() => ({}));
+  // Keep the raw text (HTML responses) and parse JSON when the body is JSON.
+  this.text = await res.text();
+  try {
+    this.body = JSON.parse(this.text);
+  } catch {
+    this.body = {};
+  }
 });
 
 Then("the response status should be {int}", function (expected) {
@@ -16,4 +22,11 @@ Then("the response status should be {int}", function (expected) {
 
 Then("the response field {string} should be {string}", function (field, value) {
   assert.equal(this.body[field], value);
+});
+
+Then("the response body should contain {string}", function (expected) {
+  assert.ok(
+    this.text.includes(expected),
+    `expected response body to contain "${expected}"`,
+  );
 });

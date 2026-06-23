@@ -2,6 +2,9 @@ name: Deploy staging
 on:
   push:
     branches: [main]
+    # Docs-only changes shouldn't rebuild/redeploy the service.
+    paths-ignore:
+      - "**/*.md"
 
 permissions:
   id-token: write   # OIDC into AWS

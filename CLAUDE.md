@@ -75,8 +75,9 @@ tests `/health`; the ECS circuit breaker rolls back failed deploys.
 - Unit tests: `test/unit/*.test.ts` (Vitest).
 - BDD: `features/*.feature` + `features/steps/*.js` (Cucumber, CommonJS, hit
   `process.env.BASE_URL`).
-- Infra: edit the module in `infra/modules/app/`; env differences go in
-  `infra/envs/{staging,production}/main.tf`.
+- Infra: Terraform under `infra/` — edit the reusable module in
+  `infra/modules/app/`, per-env differences in `infra/envs/{staging,production}/`.
+  See **Infrastructure changes (Terraform)** below and `infra/README.md`.
 
 ## How to add things
 
@@ -111,6 +112,65 @@ npm run lint
   task from starting).
 - Rollback is the ECS circuit breaker plus the smoke/BDD gate; you don't script
   rollback by hand.
+
+## Infrastructure changes (Terraform)
+
+Infra lives in `infra/`, split into a **reusable module** and **thin per-env
+roots**. Change the module once and both environments inherit it; use the env
+roots *only* for per-environment differences. Apply through the **Infra**
+workflow (plan on PR, manual `apply` via `workflow_dispatch`) — never
+`terraform apply` shared state by hand, and never from an app deploy. Full
+walkthrough: `infra/README.md`.
+
+Where things live:
+
+- **`infra/modules/app/`** — edit here for anything both envs share:
+  - `main.tf` — VPC/subnets, CloudWatch log group, the generated DB password, and
+    the **SSM parameters** (the `DATABASE_URL` is assembled here, including the
+    required `sslmode=no-verify`).
+  - `alb.tf` — ALB, target group, HTTP listener, and the three security groups
+    (alb ⇽ internet:80; task ⇽ alb:`app_port`; rds ⇽ task:5432).
+  - `ecs.tf` — ECS cluster, the **task definition** (container `environment` +
+    `secrets`), the ECS service, and the **execution/task IAM roles**.
+  - `rds.tf` — the Postgres instance.
+  - `variables.tf` — every knob (with defaults); `outputs.tf` — the values the
+    deploy workflows read back from state (cluster, service, family, subnets, SG,
+    `alb_dns_name`).
+- **`infra/envs/{staging,production}/`** — edit here ONLY for env differences.
+  `main.tf` sets the module inputs that differ (CIDRs, `desired_count`,
+  `multi_az`, `deletion_protection`, `skip_final_snapshot`); `backend.tf` is the
+  S3 state config; `outputs.tf` re-exports module outputs. Add an env by copying a
+  root.
+- **`scripts/bootstrap-aws.sh`** — one-time account setup (OIDC provider, per-env
+  deploy roles, the state bucket, the shared ECR repo). Only re-run when those
+  change.
+
+Common change → where to make it:
+
+| Change | Edit |
+|---|---|
+| New AWS resource shared by both envs | a `.tf` in `infra/modules/app/` |
+| Tune an existing resource for all envs | that resource in `infra/modules/app/` |
+| Make a setting differ per env | add a `variable` (module `variables.tf`) + set it in each `infra/envs/*/main.tf` |
+| **New secret/config the app reads** | SSM param in `main.tf` **+** the `secrets`/`environment` block in `ecs.tf` **+** that param's ARN in the `exec_secrets` IAM policy in `ecs.tf` **+** (app side) `src/config/schema.ts` and `.env.example` (golden rule 3) |
+| Open a port / change network reachability | the security groups in `alb.tf` |
+| Change DB size / version | `rds.tf` (shared); AZ/protection/snapshot are per-env knobs in the env root |
+| Add HTTPS | a 443 listener + ACM cert in `alb.tf` (note already in the file) |
+| A value the deploy pipeline needs | add an `output` in module `outputs.tf` **and** re-export it in each env `outputs.tf` |
+
+Infra gotchas (these have already bitten):
+
+- A new **secret** must be added in three places or the task won't start: the SSM
+  parameter (`main.tf`), the task-def `secrets` (`ecs.tf`), AND the
+  `exec_secrets` IAM policy resource list (`ecs.tf`).
+- RDS **enforces TLS** (`rds.force_ssl=1`). The `DATABASE_URL` must carry
+  `sslmode` (we use `no-verify`); don't drop it. Local dev uses a plain URL.
+- The `production` Environment's required-reviewer gate **also gates the Infra
+  `apply`** (its job runs in `environment: production`), so prod infra changes
+  wait for approval too.
+- The ECS service sets `lifecycle.ignore_changes = [task_definition,
+  desired_count]`: **CI owns the running image and scale, Terraform owns
+  everything else.** Roll a new image via a deploy, not Terraform.
 
 ## If you prefer NestJS
 

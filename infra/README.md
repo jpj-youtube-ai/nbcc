@@ -1,0 +1,209 @@
+# Infrastructure
+
+How the AWS infrastructure for this service is built, deployed, and changed.
+For the quick "where do I edit X" map, see **Infrastructure changes (Terraform)**
+in the repo root `CLAUDE.md`. This file is the deeper walkthrough.
+
+## What runs where
+
+A single containerised Express service runs on **AWS Fargate** behind an
+**Application Load Balancer**, talking to **RDS Postgres**, in two isolated
+environments (**staging** and **production**). Everything is Terraform.
+
+```
+Internet
+   │  HTTP :80
+   ▼
+Application Load Balancer  (public subnets)         security group: alb  (⇽ 0.0.0.0/0:80)
+   │  forward → target group (/health check, target_type=ip)
+   ▼
+ECS Fargate service · task "app" :3000  (public subnets, public IP, no NAT)
+   │   • config from env vars; secrets injected from SSM at task start
+   │   • logs → CloudWatch  /ecs/<project>-<env>
+   ▼  TLS :5432                                       security group: task (⇽ alb:3000 only)
+RDS Postgres 16  (isolated database subnets, not publicly accessible)
+                                                      security group: rds  (⇽ task:5432 only)
+```
+
+Cost note: tasks run in **public subnets with a public IP and no NAT gateway**
+(saves ~£25–30/mo). That public IP is for *egress only* (external APIs, ECR, SSM
+pulls); inbound to the task is locked to the ALB security group. RDS is reachable
+only from the task security group.
+
+## Layout
+
+```
+infra/
+  modules/app/         Reusable module — the actual resources. Edit here for
+                       anything BOTH environments share.
+    main.tf            VPC + subnets (terraform-aws-modules/vpc), CloudWatch log
+                       group, generated DB password, SSM parameters (DATABASE_URL
+                       built here with sslmode=no-verify; API keys as placeholders).
+    alb.tf             ALB, target group, HTTP listener, and the alb/task/rds
+                       security groups.
+    ecs.tf             ECS cluster, task definition (env + secrets), ECS service,
+                       and the execution/task IAM roles.
+    rds.tf             Postgres instance.
+    variables.tf       Every input knob, with defaults.
+    outputs.tf         Values the deploy workflows read back from state.
+  envs/
+    staging/           Thin root: calls the module with staging settings.
+    production/        Thin root: calls the module with production settings.
+      main.tf          Module call + per-env inputs (CIDRs, counts, AZ, etc.).
+      backend.tf       S3 remote-state config + AWS provider/default tags.
+      variables.tf     Root vars (region).
+      outputs.tf       Re-exports module outputs.
+```
+
+Module-vs-root rule of thumb: **a resource or a setting that's the same in both
+environments belongs in the module; only the values that differ belong in the env
+roots.**
+
+## Environments
+
+| | staging | production |
+|---|---|---|
+| VPC CIDR | `10.20.0.0/16` | `10.30.0.0/16` (non-overlapping, so they could peer later) |
+| ECS `desired_count` | 1 | 2 |
+| RDS | `db.t4g.micro`, single-AZ | `db.t4g.micro`, **multi-AZ** |
+| `deletion_protection` | off | **on** |
+| Final snapshot on destroy | skipped | **taken** |
+| State key | `staging/terraform.tfstate` | `production/terraform.tfstate` |
+
+Both use region **eu-west-2**, project name **charity-site**, the shared ECR repo
+**charity-site**, and the S3 state bucket **charity-site-tfstate**.
+
+## State
+
+Terraform state is in S3 (`charity-site-tfstate`), one key per environment, with
+native S3 locking (`use_lockfile`, Terraform ≥ 1.10 — no DynamoDB). The bucket is
+versioned, encrypted, and public-access-blocked. It's created by the bootstrap
+script (below); if you rename it, update `bucket` in both `envs/*/backend.tf`.
+
+## Config & secrets
+
+The app reads only `process.env` (via `src/config`). In AWS those vars come from
+the task definition:
+
+- **Plain values** → `environment` block in `ecs.tf` (`NODE_ENV`, `PORT`,
+  `EXTERNAL_API_ONE_BASE_URL`). `NODE_ENV` is set to the env name, which is what
+  makes the home page show `staging` vs `production`.
+- **Secrets** → `secrets` block in `ecs.tf`, each pointing at an **SSM parameter**
+  (`DATABASE_URL`, `EXTERNAL_API_ONE_KEY`, `EXTERNAL_API_TWO_KEY`). ECS resolves
+  them at task start and injects them as env vars — no AWS SDK in the app.
+
+Adding a secret takes **three** edits or the task fails to start:
+1. the SSM parameter in `main.tf`,
+2. the `secrets` entry in `ecs.tf`,
+3. that parameter's ARN in the `exec_secrets` IAM policy in `ecs.tf`.
+
+`DATABASE_URL` is assembled in `main.tf` from the generated password + RDS address
+and **must** include `sslmode=no-verify` — RDS enforces TLS (`rds.force_ssl=1`),
+so a plaintext connection is rejected (`no pg_hba.conf entry … no encryption`).
+The API-key SSM params ship as `REPLACE_ME` placeholders with
+`lifecycle { ignore_changes = [value] }`; set real values out of band:
+
+```
+aws ssm put-parameter --name /charity-site/staging/EXTERNAL_API_ONE_KEY \
+  --type SecureString --value 'real-key' --overwrite
+```
+
+## One-time bootstrap
+
+Before any workflow can run, an admin runs `scripts/bootstrap-aws.sh` once. It
+creates the chicken-and-egg prerequisites:
+
+- the S3 Terraform state bucket,
+- the shared ECR repo (immutable tags),
+- the GitHub OIDC provider,
+- one IAM deploy role per environment, trusting `repo:<org>/<repo>:*`.
+
+```
+GITHUB_ORG=jpj-youtube-ai GITHUB_REPO=nbcc bash scripts/bootstrap-aws.sh
+```
+
+> The script's repo default is `charity-site` — pass `GITHUB_REPO=nbcc` or the
+> OIDC trust won't match this repo. On Windows the IAM-role step needs a tweak
+> (it passes a `/tmp` path to the Windows AWS CLI); create the roles manually if
+> it fails there.
+
+Then in GitHub repo settings: create Environments `staging` and `production`, set
+a variable `AWS_ROLE_ARN` on each to the printed role ARN, and add required
+reviewers to `production` (the prod approval gate — needs a public repo or a paid
+plan to be available).
+
+## Provisioning (apply)
+
+Infra is **never** applied on a normal push. Apply it deliberately via the
+**Infra** workflow:
+
+- GitHub → Actions → **Infra** → Run workflow → environment + `apply`. Do
+  **staging** first, then **production**.
+- On pull requests that touch `infra/**`, the same workflow runs `plan` for both
+  envs so you review the diff.
+- Because the `apply` job runs in `environment: production`, a prod apply also
+  waits on the **same required-reviewer gate** as a prod deploy.
+
+On the very first apply, the ECS service comes up on a placeholder image and is
+unhealthy until the first real deploy.
+
+CLI fallback: `cd infra/envs/staging && terraform init && terraform apply`.
+
+## Deploy & promote (the app, not infra)
+
+Build-once, promote-the-same-artifact:
+
+1. **Merge to `main`** → `deploy-staging.yml`: builds the image tagged by commit
+   SHA, pushes to the shared ECR, reads infra wiring via `terraform output`,
+   registers a new task-def revision (image swap only), runs DB migrations as a
+   one-off Fargate task **before** the service update, rolls the ECS service
+   (`wait services-stable`), smoke-tests `/health`, runs unit + BDD against the
+   live staging ALB, then tags a release.
+2. **Staging success** triggers `deploy-prod.yml` (via `workflow_run`), which
+   **pauses on the production approval gate**, then deploys the *same image by
+   SHA* to prod and smoke-tests it. No rebuild.
+3. **On-demand promotion**: `deploy-prod.yml` also accepts `workflow_dispatch`
+   with an `image_sha` input, to promote a specific already-validated image:
+   `gh workflow run deploy-prod.yml -f image_sha=<sha>` (then approve the gate).
+
+Migrations run as a separate task *before* the service updates (never on app
+boot — that would race across tasks). Follow **expand-contract**: the migration
+that ships with a code change is additive only; destructive cleanup ships a later
+release. Rollback is automatic — the ECS deployment circuit breaker reverts to the
+last healthy task set, and a failed smoke/BDD step stops the pipeline before it
+promotes.
+
+## Common operations
+
+```bash
+# Get an environment's URL
+cd infra/envs/staging && terraform init && terraform output -raw alb_dns_name
+#   → open http://<that-dns>/   (/health for the health check)
+
+# Tail the app/migration logs  (run from PowerShell on Windows — see gotchas)
+aws logs tail /ecs/charity-site-staging --since 30m --region eu-west-2 --format short
+
+# Promote a validated build to prod on demand, then approve the gate in Actions
+gh workflow run deploy-prod.yml -f image_sha=<commit-sha>
+
+# Pause costs for an environment (destroys it; prod takes a final snapshot)
+cd infra/envs/staging && terraform destroy
+```
+
+## Gotchas
+
+- **ECR is immutable.** Re-running a *failed* deploy on the same commit SHA fails
+  at `docker push` (the tag already exists). Delete the orphaned tag
+  (`aws ecr batch-delete-image --repository-name charity-site --image-ids
+  imageTag=<sha>`) and re-run, or promote via a new SHA / `workflow_dispatch`.
+- **TLS to RDS is mandatory** — keep `sslmode=no-verify` on `DATABASE_URL` (or
+  upgrade to `verify-full` with the RDS CA bundle for stricter security).
+- **CI owns the running image + scale.** The ECS service ignores changes to
+  `task_definition` and `desired_count`, so Terraform won't clobber a deploy.
+  Change the image via a deploy, not an `apply`.
+- **The prod gate also gates infra applies.** Approving a prod infra change is the
+  same "Review deployments → Approve" step as a prod deploy.
+- **Security follow-ups before real traffic:** delete any root access key used for
+  bootstrap; tighten the bootstrap deploy roles (they ship with PowerUser +
+  IAMFullAccess); add an HTTPS (443) listener + ACM cert once you have a domain.
+```

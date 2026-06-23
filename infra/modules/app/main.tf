@@ -32,9 +32,10 @@ module "vpc" {
   public_subnets   = var.public_subnet_cidrs
   database_subnets = var.db_subnet_cidrs
 
-  create_database_subnet_group = true
-  enable_nat_gateway           = false
-  enable_dns_hostnames         = true
+  create_database_subnet_group       = true
+  create_database_subnet_route_table = true
+  enable_nat_gateway                 = false
+  enable_dns_hostnames               = true
 }
 
 # --- Logs ---------------------------------------------------------------------

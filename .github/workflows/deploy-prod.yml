@@ -7,6 +7,14 @@ on:
   workflow_run:
     workflows: ["Deploy staging"]
     types: [completed]
+  # On-demand promotion of an already-staging-validated image (by commit SHA),
+  # e.g. when the staging run that validated it predates this workflow being
+  # enabled. The production Environment's required-reviewer gate still applies.
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: "Staging-validated commit SHA to promote to production"
+        required: true
 
 permissions:
   id-token: write
@@ -19,13 +27,13 @@ env:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production   # set required reviewers on this environment
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -37,7 +45,8 @@ jobs:
 
       - name: Resolve image (same artifact staging built)
         run: |
-          echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_ENV"
+          SHA="${{ github.event.workflow_run.head_sha || inputs.image_sha }}"
+          echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${SHA}" >> "$GITHUB_ENV"
 
       - uses: hashicorp/setup-terraform@v3
 

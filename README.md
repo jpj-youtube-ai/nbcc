@@ -88,13 +88,15 @@ so run the staging pipeline (below) right after.
    builds + pushes the image (tagged by commit SHA, to the shared ECR repo),
    runs migrations as a one-off task, deploys to ECS, smoke-tests `/health`,
    runs **unit + BDD against the live staging URL**, then tags a release.
-3. Staging success triggers `deploy-prod.yml`, which **waits for approval**
-   (production environment) then deploys the *same image* to production and
-   smoke-tests it.
+3. **Promote to production manually** -> run `deploy-prod.yml`
+   (**Actions -> Deploy production -> Run workflow**) with the staging-validated
+   commit SHA. It deploys the *same image* to production and smoke-tests it.
+   Production does **not** auto-deploy on staging success; the `production`
+   environment's **required-reviewer approval** gate still applies.
 
 Rollback is automatic: the ECS deployment circuit breaker reverts to the last
 healthy task set if a deploy fails its health checks, and a failed smoke/BDD
-step stops the pipeline before it promotes.
+step fails the run so a bad image never reaches production.
 
 ## Configuration
 

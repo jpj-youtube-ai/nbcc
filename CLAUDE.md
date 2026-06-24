@@ -241,7 +241,10 @@ npm run lint
   go through `infra.yml` (plan on PR, manual apply). App deploys only build an
   image and update the ECS service.
 - The image is built once in the staging pipeline and the *same* image (by SHA,
-  in the shared ECR repo) is promoted to production. Don't rebuild for prod.
+  in the shared ECR repo) is promoted to production. **Promotion is manual** —
+  trigger the **Deploy production** workflow (`workflow_dispatch`) with the
+  staging-validated SHA; it does not auto-deploy on staging success. Don't
+  rebuild for prod.
 - Migrations run as a one-off `ecs run-task` *before* the service updates -
   never on app boot (that races across tasks and a bad migration blocks every
   task from starting).

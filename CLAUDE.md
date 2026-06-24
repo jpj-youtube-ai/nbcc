@@ -88,9 +88,36 @@ acting as the watcher:
    merging to `main` deploys to staging, so a red merge ships a broken build.
 
 The shape is a watch loop: open → wait → (green ⇒ squash-merge) / (red ⇒ fix &
-repeat). Optional belt-and-suspenders: enable branch protection on `main` with
-`pr.yml` as a required status check so the gate is enforced server-side too (the
-repo is public, so this is available).
+repeat). This is enforced server-side too: `main` has branch protection — PRs
+only, the `test` check (`pr.yml`) must be green, 1 approving review, plus
+code-owner review on the paths in `.github/CODEOWNERS`. The repo owner is an admin
+and can bypass in a pinch; everyone else is fully gated.
+
+## Resolving merge conflicts
+
+This codebase is deliberately **additive** — a feature is usually new files, and
+shared files grow by appending — so most conflicts are two people *both adding*
+something. Default to **keeping both sides**, not picking one:
+
+- `src/app.ts` — mount **both** routers.
+- `src/config/schema.ts` + `.env.example` — keep **both** new config keys.
+- `migrations/` — keep **both** migration files. They're additive
+  (expand-contract) and independent, so order between them doesn't matter; **never
+  edit an already-merged migration**.
+- `CLAUDE.md` / docs — keep **both** sections, and **preserve the
+  `<!-- THROUGHLINE:START … END -->` block verbatim** (it is machine-managed) —
+  merge other edits around it.
+- `.github/CODEOWNERS`, `features/*.feature` — additive; keep both.
+
+The exception: when both sides changed the **same logic** (not additive), do
+**not** just concatenate them — that ships duplicated or broken code. Reconcile
+the two intents into one correct version, and if intent is unclear, ask the other
+author rather than guessing.
+
+A resolved conflict is a code change like any other: **run `npm run lint &&
+npm run build && npm run test:unit`** (and BDD if HTTP behaviour changed) before
+pushing, and let the PR's `pr.yml` go green (see **PR workflow**). To keep
+conflicts rare and trivial, `git rebase main` often on small, single-task PRs.
 
 ## Where things go
 

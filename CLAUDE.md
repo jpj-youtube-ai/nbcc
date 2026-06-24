@@ -46,7 +46,8 @@ tests `/health`; the ECS circuit breaker rolls back failed deploys.
    and open a PR that passes lint, build, unit, and BDD before it merges. Branch
    naming and merge mechanics are set by the **Working conventions** above (task
    branches, `[TASK-NNN]` titles, squash-merge) — follow those; don't reintroduce
-   a "branch off `main`, merge to `main`" flow that contradicts them.
+   a "branch off `main`, merge to `main`" flow that contradicts them. Drive the PR
+   to a green merge in-session — see **PR workflow** below.
 2. **Expand-contract migrations.** A migration that ships with a code change is
    *additive only* (new table/column/index, nullable or with a default).
    Destructive changes (drop/rename column, NOT NULL on existing data) ship in
@@ -65,6 +66,31 @@ tests `/health`; the ECS circuit breaker rolls back failed deploys.
    functions / schemas); use BDD for HTTP behaviour.
 6. **`/health` stays fast and cheap.** It backs the load-balancer health check
    and the deploy rollback trigger. Don't add heavy work to it.
+
+## PR workflow (Claude drives this in-session: lint → wait for green → merge)
+
+Don't open a PR and walk away — take it to a green merge in the same session,
+acting as the watcher:
+
+1. **Lint locally first (fail fast).** Run `npm run lint` (and `npm run build`)
+   before you push, and fix anything red — don't spend a CI round-trip on a typo.
+2. **Open the PR** off the task branch (`task-<key>-<slug>`, title starting
+   `[TASK-NNN]` — see Working conventions).
+3. **Wait for the checks to go green.** Block on the PR's checks until they
+   finish: `gh pr checks <pr> --watch` (or watch the `PR checks` run). The required
+   gate is `pr.yml` — lint, build, migrations, unit, BDD. Do not proceed while
+   anything is still pending. For a long wait, hand it to a background watcher /
+   subagent and continue once it reports green.
+4. **Merge only on green — then do it automatically.** All checks pass ⇒
+   squash-merge it yourself (`gh pr merge <pr> --squash --delete-branch`). Anything
+   red ⇒ **do not merge**: open the failing job, fix the cause, push, and wait
+   again. Never merge a red or still-pending PR, and never bypass the checks —
+   merging to `main` deploys to staging, so a red merge ships a broken build.
+
+The shape is a watch loop: open → wait → (green ⇒ squash-merge) / (red ⇒ fix &
+repeat). Optional belt-and-suspenders: enable branch protection on `main` with
+`pr.yml` as a required status check so the gate is enforced server-side too (the
+repo is public, so this is available).
 
 ## Where things go
 

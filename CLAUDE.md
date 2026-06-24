@@ -102,6 +102,21 @@ Use them at the matching point in the work:
 Explicit user instructions still win where they conflict; otherwise these skills
 override default behaviour. Don't rationalize your way out of a relevant skill.
 
+## UI and design work: reach for the design skills
+
+When a task touches frontend, UI, UX, visual design, styling, or the polish of
+user-facing output, use the design skills where they help — judgement applies,
+they're for design-facing work (e.g. the home page or any new UI), not
+backend/infra changes:
+
+- **`impeccable`** (`/impeccable polish`, `/impeccable audit`,
+  `/impeccable critique`, …) — design critique, polish, and anti-pattern
+  detection.
+- **`ui-ux-pro-max`** — layout, styling, colour/type systems, and component
+  design across stacks.
+
+These complement, and don't replace, the required superpowers workflow above.
+
 ## PR workflow (Claude drives this in-session: lint → wait for green → merge)
 
 Don't open a PR and walk away — take it to a green merge in the same session,

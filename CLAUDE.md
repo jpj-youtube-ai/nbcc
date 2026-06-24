@@ -71,6 +71,37 @@ tests `/health`; the ECS circuit breaker rolls back failed deploys.
    structure, infra, or the deploy flow, reflect it in the matching README
    section. A change that leaves README.md stale is incomplete.
 
+## Working method: the superpowers skills are required
+
+The **superpowers** plugin is part of how we work in this repo — not optional. It
+encodes the disciplines that make the golden rules above actually hold, so
+skipping a relevant skill is skipping the rule it backs. Before acting on a task,
+check whether a skill applies and invoke it; if there's even a small chance one
+fits, use it (see `superpowers:using-superpowers`). Announce the skill you're
+using and follow it exactly.
+
+Use them at the matching point in the work:
+
+- **Before any feature or behaviour change** → `superpowers:brainstorming` to pin
+  down intent and design before writing code.
+- **Before multi-step work** → `superpowers:writing-plans`, then
+  `superpowers:executing-plans` / `superpowers:subagent-driven-development`.
+- **Implementing a feature or bugfix** → `superpowers:test-driven-development`.
+  This is *how* golden rules 1 & 5 are met — write the test first, then the code.
+- **Any bug, test failure, or surprise** → `superpowers:systematic-debugging`
+  before proposing a fix.
+- **Before claiming done / committing / opening a PR** →
+  `superpowers:verification-before-completion` — run the checks and show the
+  output; evidence before assertions.
+- **Completing or merging** → `superpowers:requesting-code-review` and
+  `superpowers:finishing-a-development-branch`; when given feedback,
+  `superpowers:receiving-code-review`.
+- **Isolated or parallel work** → `superpowers:using-git-worktrees` and
+  `superpowers:dispatching-parallel-agents`.
+
+Explicit user instructions still win where they conflict; otherwise these skills
+override default behaviour. Don't rationalize your way out of a relevant skill.
+
 ## PR workflow (Claude drives this in-session: lint → wait for green → merge)
 
 Don't open a PR and walk away — take it to a green merge in the same session,

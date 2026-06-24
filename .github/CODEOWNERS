@@ -1,0 +1,24 @@
+# Code owners. Paths listed here require review from the owner before a PR can
+# merge (enforced by branch protection: require_code_owner_reviews). Everything
+# else just needs the normal 1 approval + green `pr.yml` checks.
+#
+# These are the paths that can break production, change the pipeline, touch the
+# secret surface, or alter the project's ground rules.
+
+# Infrastructure — can create/change/destroy AWS resources
+/infra/                @jpj-youtube-ai
+
+# CI/CD pipelines and repo automation
+/.github/              @jpj-youtube-ai
+
+# Config surface + secret wiring (golden rule 3)
+/src/config/           @jpj-youtube-ai
+
+# Database migrations — can break prod data (expand-contract, golden rule 2)
+/migrations/           @jpj-youtube-ai
+
+# Container build — defines the deployed artifact
+/Dockerfile            @jpj-youtube-ai
+
+# The project ground rules themselves
+/CLAUDE.md             @jpj-youtube-ai

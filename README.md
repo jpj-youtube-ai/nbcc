@@ -18,7 +18,26 @@ infra/envs/          Thin per-env roots: staging/ and production/
 .github/workflows/   pr.yml, deploy-staging.yml, deploy-prod.yml, infra.yml
 .claude/             Claude Code automation (hooks, reviewer agents, skills)
 .mcp.json            MCP servers for this repo (github, postgres)
+index.html …         Static site: Home, About, Donate, Contact (HTML pages)
+assets/              Shared site stylesheet (css/styles.css) + script (js/main.js)
 ```
+
+## Static site
+
+A standalone four-page static site lives at the repo root, independent of the
+Express service: `index.html` (Home), `about.html` (About), `donate.html`
+(Donate), `contact.html` (Contact). Each is a complete HTML5 document that links
+the **one** shared stylesheet `assets/css/styles.css` and the **one** shared
+script `assets/js/main.js` (loaded with `defer`) — no inline or per-page
+styles/scripts. View it by opening any page in a browser, or by serving the repo
+root with any static file server.
+
+It is intentionally a skeleton: navigation, footer, and page content sections
+arrive in their own requirements (REQ-002, REQ-003, REQ-010+) and are empty
+placeholders in the markup for now. The shared-asset wiring is verified by
+`test/unit/static-site.test.ts` (`npm run test:unit`). The site is not part of
+the container image (the Dockerfile copies only `src/`, `migrations/`, and build
+config), so it does not affect the service build or deploy.
 
 ## Prerequisites
 

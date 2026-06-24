@@ -1,0 +1,64 @@
+/*
+ * Charity Site — shared baseline stylesheet (REQ-001 scaffold).
+ *
+ * Intentionally minimal: a clean, accessible baseline so all four pages render
+ * consistently from one file. The real visual design — navigation, footer, page
+ * sections, and the colour/type systems — lands in its own requirements
+ * (REQ-002, REQ-003, REQ-010+). Add page styling here; never inline a style
+ * block in a page.
+ */
+
+:root {
+  --content-width: 70ch;
+  --space: 1rem;
+  --color-text: #1a1a1a;
+  --color-muted: #565656;
+  --color-bg: #ffffff;
+  --color-accent: #0b5fff;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+}
+
+.site-main {
+  max-width: var(--content-width);
+  margin-inline: auto;
+  padding: calc(var(--space) * 2) var(--space);
+}
+
+h1 {
+  margin: 0 0 var(--space);
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.2;
+}
+
+p {
+  margin: 0 0 var(--space);
+  color: var(--color-muted);
+}
+
+a {
+  color: var(--color-accent);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}

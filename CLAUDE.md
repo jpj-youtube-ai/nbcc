@@ -141,6 +141,38 @@ conflicts rare and trivial, `git rebase main` often on small, single-task PRs.
 - **A migration:** `npx node-pg-migrate create my_change` then edit the
   generated file. Additive only (see rule 2).
 - **A config value:** schema + `.env.example` + SSM param + task def env/secret.
+  The `/add-config` skill scaffolds all of these at once.
+
+## Claude Code automation (`.claude/`)
+
+This repo ships Claude Code tooling that mechanically enforces the rules above so
+they can't be tripped by accident. It's committed and team-wide, in `.claude/`
+plus `.mcp.json`. After changing anything under `.claude/`, open `/hooks` (or
+restart Claude Code) so it reloads the config.
+
+- **Hooks** (`.claude/settings.json` → `.claude/hooks/`):
+  - `guard.js` (PreToolUse) **blocks** edits/commands that violate a "never edit
+    / never run" rule: hand-editing `SPEC.md`, editing a migration **already
+    merged to `main`** (expand-contract), editing `.env`, altering the
+    machine-managed marker block, or running `terraform apply`. New/unmerged
+    migrations stay editable. It **fails open** on its own errors, so a guard bug
+    can never block legitimate work.
+  - `check-ts.js` (PostToolUse) runs ESLint on the edited file and `tsc --noEmit`
+    after any `src/`/`test/` `*.ts` edit, surfacing lint/type errors in-session
+    instead of a CI round-trip (golden rule 1).
+- **Reviewer subagents** (`.claude/agents/`, read-only — run at PR time):
+  - `config-drift-reviewer` — verifies a new config value/secret is wired through
+    every golden-rule-3 touch-point (schema, `.env.example`, SSM, task def, and
+    the `exec_secrets` IAM policy for secrets).
+  - `migration-safety-reviewer` — verifies a migration is additive-only
+    (expand-contract) and safe to ship with a code-level rollback.
+- **Skills** (`.claude/skills/`): `/add-config` and `/new-route` scaffold those
+  two recipes through every required file. Invocable by you and by Claude.
+- **MCP servers** (`.mcp.json`, approve on first start):
+  - `github` — PRs, checks, and Actions over the GitHub MCP (OAuth on first use).
+  - `postgres` — read-mostly access to the **local** dev DB via `DATABASE_URL`
+    (default `localhost:5435`, matching the local port convention). **Never**
+    point it at staging/prod; those creds live in SSM.
 
 ## Commands
 

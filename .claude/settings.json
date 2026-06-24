@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/guard.js"],
+            "timeout": 15,
+            "statusMessage": "Checking golden-rule guards…"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [".claude/hooks/check-ts.js"],
+            "timeout": 60,
+            "statusMessage": "Lint + typecheck…"
+          }
+        ]
+      }
+    ]
+  }
+}

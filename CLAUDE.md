@@ -66,6 +66,10 @@ tests `/health`; the ECS circuit breaker rolls back failed deploys.
    functions / schemas); use BDD for HTTP behaviour.
 6. **`/health` stays fast and cheap.** It backs the load-balancer health check
    and the deploy rollback trigger. Don't add heavy work to it.
+7. **README.md tracks every change.** Update `README.md` in the same PR as the
+   change — whenever you touch setup, commands, config, routes/behaviour, project
+   structure, infra, or the deploy flow, reflect it in the matching README
+   section. A change that leaves README.md stale is incomplete.
 
 ## PR workflow (Claude drives this in-session: lint → wait for green → merge)
 

@@ -16,6 +16,8 @@ scripts/             bootstrap-aws.sh (one-time) + smoke.sh
 infra/modules/app/   Reusable Terraform module (VPC, ALB, ECS, RDS, secrets)
 infra/envs/          Thin per-env roots: staging/ and production/
 .github/workflows/   pr.yml, deploy-staging.yml, deploy-prod.yml, infra.yml
+.claude/             Claude Code automation (hooks, reviewer agents, skills)
+.mcp.json            MCP servers for this repo (github, postgres)
 ```
 
 ## Prerequisites

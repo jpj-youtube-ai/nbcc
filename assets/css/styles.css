@@ -62,3 +62,167 @@ a {
   outline: 3px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* =================================================================
+   NAV (TASK-007 / REQ-002) — ported from the NBCC baseline.
+   Token SUBSET only; the full design-token system is REQ-004/006.
+   ================================================================= */
+:root {
+  --crimson: #c02238;
+  --maroon: #800000;
+  --cream: #f8f5ee;
+  --line: #e9dfd2; /* warm hairline derived from cream */
+  --slate: #333333;
+  --shadow-sm: 0 2px 10px rgba(51, 51, 51, 0.06);
+  --shadow: 0 16px 44px -20px rgba(128, 0, 0, 0.28);
+  --nav-h: 78px;
+  --maxw: 1180px;
+}
+
+/* keep placeholder page content clear of the fixed nav */
+.site-main {
+  padding-top: var(--nav-h);
+}
+
+.nav {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 100;
+  height: var(--nav-h);
+  display: flex;
+  align-items: center;
+  background: rgba(248, 245, 238, 0); /* transparent over-hero by default */
+  transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
+}
+.nav.scrolled {
+  background: rgba(248, 245, 238, 0.9); /* cream */
+  backdrop-filter: saturate(150%) blur(10px);
+  -webkit-backdrop-filter: saturate(150%) blur(10px);
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--line);
+}
+.nav .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  width: 100%;
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-inline: clamp(20px, 5vw, 48px);
+}
+.brand {
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+  color: var(--maroon);
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.nav-links a {
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.98rem;
+  color: var(--slate);
+  padding: 9px 15px;
+  border-radius: 999px;
+  position: relative;
+  transition: color 0.2s;
+}
+.nav-links a:hover {
+  color: var(--crimson);
+}
+.nav-links a.active {
+  color: var(--crimson);
+  font-weight: 600;
+}
+.nav-links a.active::after {
+  content: "";
+  position: absolute;
+  left: 15px;
+  right: 15px;
+  bottom: 4px;
+  height: 2px;
+  background: var(--crimson);
+  border-radius: 2px;
+}
+.nav-cta {
+  text-decoration: none;
+  background: var(--crimson);
+  color: #fff;
+  font-weight: 600;
+  padding: 11px 24px;
+  border-radius: 999px;
+  font-size: 0.96rem;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s, background 0.2s;
+}
+.nav-cta:hover {
+  background: var(--maroon);
+  transform: translateY(-1px);
+}
+.burger {
+  display: none;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+}
+.burger span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--maroon);
+  margin: 5px 0;
+  border-radius: 2px;
+  transition: transform 0.25s, opacity 0.25s;
+}
+
+/* Collapse links into the burger menu at narrow widths (REQ-032 mobile). */
+@media (max-width: 680px) {
+  .nav-links,
+  .nav-cta {
+    display: none;
+  }
+  .nav.open .nav-links {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    position: absolute;
+    top: var(--nav-h);
+    left: 0;
+    right: 0;
+    background: var(--cream);
+    border-bottom: 1px solid var(--line);
+    padding: 14px clamp(20px, 5vw, 48px) 20px;
+    box-shadow: var(--shadow);
+  }
+  .nav.open .nav-links a {
+    padding: 13px 8px;
+    font-size: 1.05rem;
+  }
+  .nav.open .nav-links a.active::after {
+    display: none;
+  }
+  .burger {
+    display: block;
+  }
+  .nav.open .burger span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+  .nav.open .burger span:nth-child(2) {
+    opacity: 0;
+  }
+  .nav.open .burger span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+}

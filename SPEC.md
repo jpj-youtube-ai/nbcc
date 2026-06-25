@@ -113,6 +113,9 @@ Tasks:
 
 Eyebrow "About us"; H1 "Powered by kindness, driven by community"; a lede on Annbank, Ayrshire and the Girvan-to-Largs reach. *Accept:* the intro shows the H1 and the reach lede.
 
+Tasks:
+- TASK-020 — Build the About intro section in about.html with eyebrow, H1 and reach lede
+
 ### REQ-015 — About our story
 
 The founding quote ("Do all children get a Christmas Eve box like I do?", Tygan, 2015), the origin narrative, and Tygan's real headshot with a caption. This is the one piece of copy carried from the existing site rather than the leaflet, so wording and figures must be verified. *Accept:* the story shows the quote, the narrative, and a captioned headshot, flagged for content verification.

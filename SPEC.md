@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (9)
+## Shipped (10)
 
 ### REQ-001 — Multi-page site structure
 
@@ -63,6 +63,13 @@ Restrained motion: scroll reveal fades content up on entry, the nav transitions 
 Tasks:
 - TASK-014 — Implement the restrained motion system: scroll-reveal, hover lifts, and prefers-reduced-motion off-switch
 
+### REQ-009 — Global UI components
+
+A button system with three pill-shaped variants (primary crimson, ghost outlined-maroon, holly green) and an animated arrow on hover; and a shared card surface (card background, hairline border, soft shadow) reused by pillars, tiers, reassurance items and team members. *Accept:* the three button variants and the shared card surface render to spec wherever used.
+
+Tasks:
+- TASK-015 — Add the global button system (three pill variants + hover arrow) and shared card surface
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -72,14 +79,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (25)
-
-### REQ-009 — Global UI components
-
-A button system with three pill-shaped variants (primary crimson, ghost outlined-maroon, holly green) and an animated arrow on hover; and a shared card surface (card background, hairline border, soft shadow) reused by pillars, tiers, reassurance items and team members. *Accept:* the three button variants and the shared card surface render to spec wherever used.
-
-Tasks:
-- TASK-015 — Add the global button system (three pill variants + hover arrow) and shared card surface
+## Planned (24)
 
 ### REQ-010 — Home hero
 

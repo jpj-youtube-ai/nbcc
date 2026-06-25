@@ -134,6 +134,9 @@ Tasks:
 
 A maroon band presenting eight age-band counts that sum to exactly 7,657: 0–12 months 182; 1–3 years 762; 4–7 years 1,663; 8–11 years 1,990; 12–15 years 1,719; 16–17 years 587; 18 and over 528; not stated 226. *Accept:* the eight figures display and total exactly 7,657.
 
+Tasks:
+- TASK-025 — Build the About age-reach figures (2025) maroon band in about.html
+
 ### REQ-018 — About top-10 communities (2025)
 
 A ranked horizontal bar list of the top ten 2025 communities, bar width relative to Ayr at 100%: Ayr 2,096 (27.4%); Kilwinning 692 (9.0%); Stevenston 547 (7.1%); Kilmarnock 532 (6.9%); Auchinleck 510 (6.7%); Maybole 370 (4.8%); Dalmellington 332 (4.3%); Ardrossan 301 (3.9%); Irvine 280 (3.7%); Girvan 205 (2.7%). *Accept:* ten communities are ranked with proportional bars, Ayr at full width. A geographic map is a later enhancement, not this requirement.

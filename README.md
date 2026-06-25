@@ -12,7 +12,7 @@ src/                 Express + TypeScript app (health check, config, db, clients
 migrations/          node-pg-migrate migrations (expand-contract)
 test/unit/           Vitest unit tests (DB-free)
 features/            Cucumber BDD (.feature + JS step defs)
-scripts/             bootstrap-aws.sh (one-time) + smoke.sh
+scripts/             bootstrap-aws.sh, branch-protection.sh (one-time) + smoke.sh
 infra/modules/app/   Reusable Terraform module (VPC, ALB, ECS, RDS, secrets)
 infra/envs/          Thin per-env roots: staging/ and production/
 .github/workflows/   pr.yml, deploy-staging.yml, deploy-prod.yml, infra.yml
@@ -78,6 +78,11 @@ Then in GitHub repo Settings:
   `production` (this is the prod deploy approval gate).
 - On each environment set a variable `AWS_ROLE_ARN` to the role ARN the script
   printed.
+- Apply the `main` branch-protection ruleset: `./scripts/branch-protection.sh`
+  (PRs only, green `test` check required, code-owner review on CODEOWNERS paths;
+  see the script header for the full policy). It requires **0** separate
+  approving reviews, so a green PR that touches no code-owned path can merge
+  without a second person — anything sensitive still needs the owner.
 
 Finally, set the real secret values (the bootstrap leaves placeholders):
 

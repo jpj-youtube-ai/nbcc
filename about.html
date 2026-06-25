@@ -160,6 +160,32 @@
           </article>
         </div>
       </section>
+      <!-- 2025 age-reach figures (REQ-017): a maroon band of eight age-band
+           counts that total exactly 7,657. Numbers in Playfair, cream-on-maroon
+           tints only (no tan/holly body text), and no image tags so the perf
+           budget holds. Ranges are written with "to"/"and over"/words per REQ-031. -->
+      <section class="age-reach" aria-labelledby="age-reach-heading">
+        <span class="eyebrow">Our reach in 2025</span>
+        <h2 id="age-reach-heading">Who we reached, by age</h2>
+        <div class="rule center"></div>
+        <p class="age-reach-intro">
+          Every figure is a real person who knew they had not been forgotten.
+          Together they add up to 7,657 Red Bags Full of Joy.
+        </p>
+        <!-- Semantic name/value pairs: dt is the age band, dd the 2025 count.
+             dt precedes dd (valid <dl>); the band renders the figure on top via
+             column-reverse. Each pair reveals on scroll (REQ-008). -->
+        <dl class="ages">
+          <div class="age reveal"><dt class="age-label">0 to 12 months</dt><dd class="age-num">182</dd></div>
+          <div class="age reveal"><dt class="age-label">1 to 3 years</dt><dd class="age-num">762</dd></div>
+          <div class="age reveal"><dt class="age-label">4 to 7 years</dt><dd class="age-num">1,663</dd></div>
+          <div class="age reveal"><dt class="age-label">8 to 11 years</dt><dd class="age-num">1,990</dd></div>
+          <div class="age reveal"><dt class="age-label">12 to 15 years</dt><dd class="age-num">1,719</dd></div>
+          <div class="age reveal"><dt class="age-label">16 to 17 years</dt><dd class="age-num">587</dd></div>
+          <div class="age reveal"><dt class="age-label">18 and over</dt><dd class="age-num">528</dd></div>
+          <div class="age reveal"><dt class="age-label">not stated</dt><dd class="age-num">226</dd></div>
+        </dl>
+      </section>
       <!-- About page sections: REQ-010+. Empty placeholder for now. -->
       <section class="page-sections" data-region="sections"></section>
       <!-- Recurring crimson conversion strip (REQ-013). -->

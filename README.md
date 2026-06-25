@@ -355,6 +355,24 @@ Jodie/Head Elf and Founder, Isabella/Co founder, Jaimie/Donations, then six
 by its `<h2>` (REQ-032); token-only colours; `.reveal` reused. Verified by
 `test/unit/about-team.test.ts`.
 
+### About age-reach figures (REQ-017)
+
+Below the team, a maroon band (`ABOUT AGE-REACH FIGURES` CSS block,
+`var(--maroon)`, `--radius-lg`) presents the 2025 reach by age. A semantic
+`<dl class="ages">` holds eight `.age` name/value pairs — `<dt class="age-label">`
+the age band, `<dd class="age-num">` the count — laid out 8-across desktop → 4
+≤900px → 2 ≤680px. Each band shows the figure on top (Playfair `--font-head`,
+REQ-005) with the label beneath; `column-reverse` keeps the markup a valid
+`<dt>`-before-`<dd>` pair. The eight counts total **exactly 7,657**: 0 to 12
+months 182, 1 to 3 years 762, 4 to 7 years 1,663, 8 to 11 years 1,990, 12 to 15
+years 1,719, 16 to 17 years 587, 18 and over 528, not stated 226. Cream-on-maroon
+tints only — eyebrow/heading/labels in `--cream`/`--cream-82`, never tan/holly
+body text — following the footer's token approach; **no image tags** so the perf
+budget holds. Age ranges are written with "to"/"and over"/words (no dashes,
+REQ-031). Semantic `<section>` named by its `<h2>` (REQ-032), reusing the `.rule`
+divider (REQ-007) and `.reveal` (REQ-008); token-only colours. Verified by
+`test/unit/about-age-reach.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

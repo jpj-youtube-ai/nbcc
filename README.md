@@ -97,6 +97,23 @@ server that honours `_redirects` (e.g. `npx netlify dev`) and request `/`,
 `/about-us`, `/donate`, `/contact`. The mapping itself is verified host-free by
 `test/unit/clean-urls.test.ts` (`npm run test:unit`).
 
+### SEO & social metadata
+
+Every page's `<head>` carries a unique set of SEO + social-share tags following
+one shared structure (same tags/order on each page; only the values differ):
+`<title>`, `<meta name="description">`, a `<link rel="canonical">`, Open Graph
+(`og:type`/`og:site_name`/`og:title`/`og:description`/`og:url`/`og:image`) and
+Twitter card tags. `canonical` and `og:url` are absolute and match the clean URL
+above; no title/description/canonical is duplicated across pages. Verified by
+`test/unit/seo-metadata.test.ts`.
+
+> **Placeholder domain:** canonical/`og:url`/`og:image` use
+> `https://www.example.org` because no production domain exists yet (hosting is
+> REQ-033). Replace it across the four pages + `test/unit/seo-metadata.test.ts`
+> in one find/replace when the real domain lands. The share image
+> (`/assets/img/og-image.png`) is **referenced only** — the asset/pipeline is
+> REQ-034.
+
 ## Prerequisites
 
 - Node 20, Docker, AWS CLI v2, Terraform >= 1.6

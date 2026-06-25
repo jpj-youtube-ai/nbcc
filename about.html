@@ -186,6 +186,84 @@
           <div class="age reveal"><dt class="age-label">not stated</dt><dd class="age-num">226</dd></div>
         </dl>
       </section>
+      <!-- 2025 top-10 communities (REQ-018): a tinted band ranking the ten
+           communities NBCC reached most in 2025, as a semantic ordered list.
+           Each bar is pure CSS (no image tags) with width proportional to Ayr at
+           100% — set via the --w custom property (count ÷ Ayr's 2,096). The
+           visible value pairs the count with that community's share of the
+           7,657 total. A geographic map is a later enhancement, out of scope
+           here. Token-only colours, numbers in Playfair, reveals on scroll. -->
+      <section class="top-communities" aria-labelledby="top-communities-heading">
+        <span class="eyebrow">Across South West Scotland</span>
+        <h2 id="top-communities-heading">Top 10 communities we reached in 2025</h2>
+        <div class="rule center"></div>
+        <p class="top-communities-intro">
+          Red Bags Full of Joy reached communities right across Ayrshire in 2025.
+          These ten received the most, with Ayr leading the way.
+        </p>
+        <ol class="communities">
+          <li class="rank reveal">
+            <span class="rank-pos">1</span>
+            <span class="rank-name">Ayr</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:100%"></span></span>
+            <span class="rank-val"><span class="rank-count">2,096</span> <span class="rank-pct">(27.4%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">2</span>
+            <span class="rank-name">Kilwinning</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:33.0%"></span></span>
+            <span class="rank-val"><span class="rank-count">692</span> <span class="rank-pct">(9.0%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">3</span>
+            <span class="rank-name">Stevenston</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:26.1%"></span></span>
+            <span class="rank-val"><span class="rank-count">547</span> <span class="rank-pct">(7.1%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">4</span>
+            <span class="rank-name">Kilmarnock</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:25.4%"></span></span>
+            <span class="rank-val"><span class="rank-count">532</span> <span class="rank-pct">(6.9%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">5</span>
+            <span class="rank-name">Auchinleck</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:24.3%"></span></span>
+            <span class="rank-val"><span class="rank-count">510</span> <span class="rank-pct">(6.7%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">6</span>
+            <span class="rank-name">Maybole</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:17.7%"></span></span>
+            <span class="rank-val"><span class="rank-count">370</span> <span class="rank-pct">(4.8%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">7</span>
+            <span class="rank-name">Dalmellington</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:15.8%"></span></span>
+            <span class="rank-val"><span class="rank-count">332</span> <span class="rank-pct">(4.3%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">8</span>
+            <span class="rank-name">Ardrossan</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:14.4%"></span></span>
+            <span class="rank-val"><span class="rank-count">301</span> <span class="rank-pct">(3.9%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">9</span>
+            <span class="rank-name">Irvine</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:13.4%"></span></span>
+            <span class="rank-val"><span class="rank-count">280</span> <span class="rank-pct">(3.7%)</span></span>
+          </li>
+          <li class="rank reveal">
+            <span class="rank-pos">10</span>
+            <span class="rank-name">Girvan</span>
+            <span class="rank-bar"><span class="rank-fill" style="--w:9.8%"></span></span>
+            <span class="rank-val"><span class="rank-count">205</span> <span class="rank-pct">(2.7%)</span></span>
+          </li>
+        </ol>
+      </section>
       <!-- About page sections: REQ-010+. Empty placeholder for now. -->
       <section class="page-sections" data-region="sections"></section>
       <!-- Recurring crimson conversion strip (REQ-013). -->

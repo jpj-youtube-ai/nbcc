@@ -114,7 +114,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (19)
+## Planned (20)
 
 ### REQ-015 — About our story
 
@@ -194,3 +194,11 @@ A skip-to-content link; semantic landmarks (header, nav, main, section, footer);
 ### REQ-034 — Assets pipeline
 
 The logo PNG (`nbcc-logo.png`) used in nav, footer and Home hero; ten team headshots processed to 4:5 portrait JPEGs at 640×800, quality 82, progressive (about 644KB total), stored as `images/team-<name>.jpg` with a slightly top-biased face crop; and remaining placeholder figures replaced with real, consented photography of volunteers, packing days and deliveries, always with alt text. *Accept:* assets exist at the specified sizes and paths with alt text, and beneficiary images carry consent.
+
+### REQ-035 — Supporters page
+
+A fifth marketing page listing supporters grouped into Bronze, Silver and Gold tiers, alphabetical within each tier, including both individual people and brands/organisations. It is reachable at its own clean URL, shares the single nav, footer, stylesheet and script, and is structured so the frequently-changing list is easy to update.
+
+Tasks:
+- TASK-022 — Add the Supporters page to the multi-page site structure with clean URL, nav, footer and SEO
+- TASK-023 — Build the tiered, alphabetical supporters list on supporters.html

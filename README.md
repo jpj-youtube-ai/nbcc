@@ -235,6 +235,25 @@ Restrained, token-driven motion (`--ease`, `--motion-fast`, `--motion`,
 The elements that carry `.reveal` (hero, pillars, tiers) arrive in REQ-010+; this
 ships the system + the guard. Verified by `test/unit/motion.test.ts`.
 
+### Global UI components (REQ-009)
+
+Reusable, token-only components in the shared `GLOBAL UI COMPONENTS` block:
+
+- **Buttons** — `.btn` is the pill base (mirrors the `.nav-cta` pattern:
+  `--radius-pill`, Poppins, `11px 24px`, `--shadow-sm`) with three variants:
+  `.btn-primary` (crimson fill / cream text, maroon hover), `.btn-ghost`
+  (transparent + maroon outline/text, fills maroon on hover), `.btn-holly` (holly
+  fill / cream text). An **animated arrow** (`.btn::after`, a pseudo-element)
+  slides on hover/focus, gated by `--motion-fast`/`--ease` so the
+  prefers-reduced-motion off-switch disables it — no `<img>`.
+- **Card** — `.card` is the shared surface (`var(--card)` bg, `var(--line)`
+  hairline, `var(--shadow)`, `var(--radius)`; `.card-lg` uses `--radius-lg`).
+
+`.btn`/`.card`/`.tier` inherit the hover-lift transition from the MOTION block —
+it isn't re-declared. All colours are tokens (no hex/rgb outside `:root`). The
+consumers (pillars/tiers/reassurance/team) mount these classes in REQ-010+; this
+ships only the system. Verified by `test/unit/ui-components.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

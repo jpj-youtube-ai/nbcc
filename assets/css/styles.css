@@ -219,6 +219,69 @@ h1 {
   }
 }
 
+/* =================================================================
+   GLOBAL UI COMPONENTS (REQ-009) — shared pill buttons + card surface.
+   Token-only colours. .btn / .card / .tier inherit the hover-lift
+   transition from the MOTION (REQ-008) block — NOT re-declared here.
+   ================================================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 11px 24px; /* matches the .nav-cta pill */
+  border: 0;
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+}
+/* Animated arrow — pseudo-element gated by the motion tokens, so the
+   prefers-reduced-motion off-switch (MOTION block) disables it. No image. */
+.btn::after {
+  content: "\2192";
+  transition: transform var(--motion-fast) var(--ease);
+}
+.btn:hover::after,
+.btn:focus-visible::after {
+  transform: translateX(3px);
+}
+.btn-primary {
+  background: var(--crimson);
+  color: var(--cream);
+}
+.btn-primary:hover {
+  background: var(--maroon);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--maroon);
+  border: 1.6px solid var(--maroon);
+  box-shadow: none;
+}
+.btn-ghost:hover {
+  background: var(--maroon);
+  color: var(--cream);
+}
+.btn-holly {
+  background: var(--holly);
+  color: var(--cream);
+}
+
+/* Shared card surface (large figures use .card-lg). Hover-lift is inherited
+   from the MOTION (REQ-008) block — do not re-declare it here. */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.card-lg {
+  border-radius: var(--radius-lg);
+}
+
 p {
   margin: 0 0 var(--space);
   color: var(--slate-soft);

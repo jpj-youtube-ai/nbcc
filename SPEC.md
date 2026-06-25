@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (10)
+## Shipped (11)
 
 ### REQ-001 — Multi-page site structure
 
@@ -70,6 +70,13 @@ A button system with three pill-shaped variants (primary crimson, ghost outlined
 Tasks:
 - TASK-015 — Add the global button system (three pill variants + hover arrow) and shared card surface
 
+### REQ-010 — Home hero
+
+Eyebrow "Volunteer run Scottish charity"; H1 "No one should feel forgotten on Christmas Eve" with "forgotten" emphasised in maroon italic; a lede on the volunteer-run, year-round mission; two buttons, Donate now (primary) and Who we help (ghost); the logo as the hero illustration with a floating proof card reading "7,657 Red Bags Full of Joy delivered in 2025". *Accept:* the hero shows the emphasised H1, both CTAs, and the proof card figure.
+
+Tasks:
+- TASK-016 — Build the Home hero section in index.html with emphasised H1, both CTAs and the proof card
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -79,14 +86,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (24)
-
-### REQ-010 — Home hero
-
-Eyebrow "Volunteer run Scottish charity"; H1 "No one should feel forgotten on Christmas Eve" with "forgotten" emphasised in maroon italic; a lede on the volunteer-run, year-round mission; two buttons, Donate now (primary) and Who we help (ghost); the logo as the hero illustration with a floating proof card reading "7,657 Red Bags Full of Joy delivered in 2025". *Accept:* the hero shows the emphasised H1, both CTAs, and the proof card figure.
-
-Tasks:
-- TASK-016 — Build the Home hero section in index.html with emphasised H1, both CTAs and the proof card
+## Planned (23)
 
 ### REQ-011 — Home four pillars
 

@@ -155,6 +155,9 @@ Tasks:
 
 The conversion centrepiece: a card split into a main column and a Holly Green side panel, with a toggle between Give once and Give monthly that switches the visible tiers. *Accept:* the widget renders the two-column layout and a working once/monthly toggle.
 
+Tasks:
+- TASK-028 — Build the Give widget shell and once/monthly mode toggle in donate.html
+
 ### REQ-021 — Give once tiers
 
 Suggested one-off amounts — £10 (cosy essentials), £25 (towards a Red Bag, marked "Most chosen"), £50 (one full Red Bag), £100 (a whole family) — plus a Choose-your-own-amount option. These amounts are a suggestion to be confirmed or reworded, since the leaflet specifies only monthly tiers. *Accept:* the one-off tiers and the custom-amount option render, with the Most-chosen marker, flagged as suggested amounts.

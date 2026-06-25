@@ -288,6 +288,19 @@ Full of Joy**, **7,657 delivered in 2025**. Reuses `.card`/`.reveal`/tokens only
 no `<img>`, no new fonts, token-only colours. Verified by
 `test/unit/home-pillars.test.ts`.
 
+### Home why-your-donation-matters (REQ-012)
+
+After the pillars, a tinted band (`HOME WHY-YOUR-DONATION-MATTERS` CSS block,
+`var(--tan-soft)` background, `--radius-lg`) in a two-column layout (copy + photo
+slot, stacking ≤680px). The copy column has an eyebrow ("Why your donation
+matters"), an emotive `<h2>` ("Every pound reminds someone they have not been
+forgotten."), the `.rule` divider under it, two leaflet paragraphs, and a
+**Support NBCC** `.btn-primary` linking to `/donate`. The photo column is a
+`.photo-slot` placeholder (a `<figure>` with a decorative camera icon + caption,
+**no `<img>` yet** — the real packing/delivery photo is REQ-034). Token-only
+colours, reusing `.btn`/`.rule`/`.reveal`/`.card` tokens. Verified by
+`test/unit/home-why.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

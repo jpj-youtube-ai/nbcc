@@ -76,8 +76,46 @@
           all year round.
         </p>
       </section>
-      <!-- Donate page sections: REQ-010+. Empty placeholder for now. -->
-      <section class="page-sections" data-region="sections"></section>
+      <!-- Donate page sections: REQ-010+. Holds the give widget (REQ-020+). -->
+      <section class="page-sections" data-region="sections">
+        <!-- Give widget shell (REQ-020): the conversion card. A two-column
+             layout, a main column (the once/monthly toggle + tier containers)
+             beside a Holly Green side panel, on the shared .card/.card-lg
+             surface. The toggle (initGiveToggle in main.js) shows and hides the
+             tier groups; "give monthly" is the default per the leaflet emphasis.
+             Tier content is out of scope here and mounts later: REQ-021 fills
+             the one-off amounts into #tiersOnce, REQ-022 the monthly plans into
+             #tiersMonthly, and REQ-024 fills the side panel. Cream-on-holly text
+             only (brand-colours guard); copy uses "give once"/"give monthly" and
+             "NBCC" per REQ-031. -->
+        <section class="give-widget" aria-labelledby="give-widget-heading">
+          <h2 id="give-widget-heading">Make your gift</h2>
+          <div class="card card-lg give-card">
+            <div class="give-main">
+              <div class="give-toggle" role="group" aria-label="Choose how often to give">
+                <button type="button" class="give-mode" id="giveOnce" data-mode="once" aria-pressed="false" aria-controls="tiersOnce">Give once</button>
+                <button type="button" class="give-mode is-active" id="giveMonthly" data-mode="monthly" aria-pressed="true" aria-controls="tiersMonthly">Give monthly</button>
+              </div>
+              <!-- Empty tier containers; the toggle shows/hides these. Later REQs
+                   mount their tiers here: REQ-021 the one-off amounts into
+                   #tiersOnce, REQ-022 the monthly plans into #tiersMonthly. -->
+              <div class="give-tiers" id="tiersOnce" role="region" aria-label="Give once amounts" hidden></div>
+              <div class="give-tiers" id="tiersMonthly" role="region" aria-label="Give monthly amounts"></div>
+            </div>
+            <!-- Holly Green side panel. The detailed "where your gift goes"
+                 content (list, charity number, payment chips) is REQ-024; this
+                 is the inverted cream-on-holly shell with a brief lede. -->
+            <aside class="give-side">
+              <span class="eyebrow">Where your gift goes</span>
+              <p class="give-side-note">
+                Everyone at NBCC is a volunteer, so your gift goes straight to
+                comfort, dignity and joy for children, young people and vulnerable
+                adults across South West Scotland.
+              </p>
+            </aside>
+          </div>
+        </section>
+      </section>
     </main>
 
     <!-- Site footer (REQ-003). Identical across all four pages. -->

@@ -1046,3 +1046,84 @@ a {
 .donate-intro .lede {
   margin-inline: auto;
 }
+
+/* =================================================================
+   GIVE WIDGET (REQ-020) — donate.html. The conversion card: a two-column
+   grid (main column + Holly Green side panel) on the shared .card/.card-lg
+   surface (REQ-009), stacking <=680px, plus the once/monthly segmented
+   toggle. Cream-on-holly text only on the panel — inverted like the
+   .age-reach/footer cream tints, never holly body text (brand-colours
+   guard). Token-only colours. Tier content is REQ-021/022; the side-panel
+   content is REQ-024.
+   ================================================================= */
+.give-widget {
+  margin-block: clamp(8px, 3vw, 32px);
+}
+.give-widget > h2 {
+  text-align: center;
+  font-size: var(--fs-section);
+  margin-bottom: clamp(16px, 3vw, 28px);
+}
+.give-card {
+  display: grid;
+  grid-template-columns: 1.4fr 0.6fr;
+  /* Children pad themselves; overflow clips the holly panel to the radius. */
+  padding: 0;
+  overflow: hidden;
+}
+/* The card is a large surface, not a clickable tile — opt out of the shared
+   .card hover-lift (small tiers inside keep their own). */
+.give-card:hover {
+  transform: none;
+}
+.give-main {
+  padding: clamp(22px, 4vw, 40px);
+}
+.give-side {
+  background: var(--holly);
+  color: var(--cream-82);
+  padding: clamp(22px, 4vw, 40px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* Invert the eyebrow to cream for contrast on the holly panel. */
+.give-side .eyebrow {
+  color: var(--cream-82);
+}
+.give-side-note {
+  margin: 0;
+  color: var(--cream-82);
+}
+
+/* Segmented once/monthly toggle (pill control), mirroring the prototype. */
+.give-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 5px;
+  margin-bottom: clamp(18px, 3vw, 28px);
+  background: var(--tan-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+.give-mode {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  color: var(--slate-soft);
+  padding: 10px 22px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.give-mode.is-active {
+  background: var(--crimson);
+  color: var(--cream);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 680px) {
+  .give-card {
+    grid-template-columns: 1fr;
+  }
+}

@@ -32,15 +32,19 @@
   --cream-16: rgba(248, 245, 238, 0.16);
   --cream-12: rgba(248, 245, 238, 0.12);
 
-  /* Elevation */
-  --shadow-sm: 0 2px 10px rgba(51, 51, 51, 0.06);
+  /* Elevation — warm shadows tinted off maroon #800000 (REQ-006) */
+  --shadow-sm: 0 2px 10px rgba(128, 0, 0, 0.06);
   --shadow: 0 16px 44px -20px rgba(128, 0, 0, 0.28);
+  --shadow-lg: 0 30px 70px -28px rgba(128, 0, 0, 0.4);
 
-  /* Layout / spacing (typography & web fonts are REQ-005/006) */
-  --content-width: 70ch;
+  /* Layout / radius / spacing (REQ-006) */
   --space: 1rem;
   --nav-h: 78px;
   --maxw: 1180px;
+  --pad: clamp(20px, 5vw, 48px);
+  --radius: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 999px;
   /* Typography (REQ-005) — two-family system; faces self-hosted below */
   --font-head: "Playfair Display", Georgia, "Times New Roman", serif;
   --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
@@ -93,9 +97,9 @@ body {
 }
 
 .site-main {
-  max-width: var(--content-width);
+  max-width: var(--maxw);
   margin-inline: auto;
-  padding: calc(var(--space) * 2) var(--space);
+  padding: calc(var(--space) * 2) var(--pad);
 }
 
 h1,
@@ -110,6 +114,11 @@ h4 {
 h1 {
   margin: 0 0 var(--space);
   font-size: var(--fs-page-intro);
+}
+
+/* Anchored headings/sections clear the fixed nav (REQ-006). */
+:where(h1, h2, h3, h4, [id]) {
+  scroll-margin-top: calc(var(--nav-h) + 1rem);
 }
 
 p {
@@ -161,7 +170,7 @@ a {
   width: 100%;
   max-width: var(--maxw);
   margin-inline: auto;
-  padding-inline: clamp(20px, 5vw, 48px);
+  padding-inline: var(--pad);
 }
 .brand {
   text-decoration: none;
@@ -184,7 +193,7 @@ a {
   font-size: 0.98rem;
   color: var(--slate);
   padding: 9px 15px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   position: relative;
   transition: color 0.2s;
 }
@@ -211,7 +220,7 @@ a {
   color: var(--cream);
   font-weight: 600;
   padding: 11px 24px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 0.96rem;
   box-shadow: var(--shadow-sm);
   transition: transform 0.15s, background 0.2s;
@@ -255,7 +264,7 @@ a {
     right: 0;
     background: var(--cream);
     border-bottom: 1px solid var(--line);
-    padding: 14px clamp(20px, 5vw, 48px) 20px;
+    padding: 14px var(--pad) 20px;
     box-shadow: var(--shadow);
   }
   .nav.open .nav-links a {
@@ -292,7 +301,7 @@ a {
 .site-footer .wrap {
   max-width: var(--maxw);
   margin-inline: auto;
-  padding: clamp(46px, 6vw, 68px) clamp(20px, 5vw, 48px);
+  padding: clamp(46px, 6vw, 68px) var(--pad);
   display: grid;
   grid-template-columns: 1.5fr 1fr 1fr;
   gap: 36px;

@@ -179,6 +179,24 @@ weights (e.g. nav/footer 500/600) synthesise from the single weight. **Google
 Fonts** (preconnect + a non-`.css` stylesheet link per page) is the documented
 alternative. Enforced by `test/unit/typography.test.ts`.
 
+### Layout, radius and shadow tokens (REQ-006)
+
+Layout primitives live in the same canonical `:root` as the colours and type:
+
+- **Width & padding:** `--maxw: 1180px` caps the shared content container, with
+  fluid side padding `--pad: clamp(20px, 5vw, 48px)`. The nav, footer and
+  `.site-main` all use this pair, so every page region lines up at 1180 px.
+- **Radius:** `--radius: 16px` (cards), `--radius-lg: 24px` (large cards/figures),
+  `--radius-pill: 999px` (pills/buttons).
+- **Shadows:** three levels, all **warm-tinted off maroon `#800000`** (not neutral
+  grey) — `--shadow-sm`, `--shadow`, `--shadow-lg`.
+- **Sticky-nav offset:** `--nav-h: 78px`; headings and `[id]` anchors get
+  `scroll-margin-top: calc(var(--nav-h) + 1rem)` so anchored content isn't hidden
+  under the fixed nav.
+
+Every padding/radius/shadow value references a token (no inline literals — keeps
+the brand-colours contract). Enforced by `test/unit/layout-tokens.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

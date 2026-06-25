@@ -137,10 +137,14 @@ Then in GitHub repo Settings:
 - On each environment set a variable `AWS_ROLE_ARN` to the role ARN the script
   printed.
 - Apply the `main` branch-protection ruleset: `./scripts/branch-protection.sh`
-  (PRs only, green `test` check required, code-owner review on CODEOWNERS paths;
-  see the script header for the full policy). It requires **0** separate
-  approving reviews, so a green PR that touches no code-owned path can merge
-  without a second person — anything sensitive still needs the owner.
+  (PRs only, green `test` check required, **0** required approving reviews; see
+  the script header for the full policy). The green `test` check is the only
+  required gate, so any passing PR self-merges — the dev who built it reviews
+  locally, then merges. Code-owner reviews are **off**: GitHub ignores them when
+  0 approvals are required, so the flag is left off rather than implying a gate
+  that doesn't exist. `.github/CODEOWNERS` still auto-requests the owner as a
+  reviewer, but that review is advisory. To actually gate sensitive paths, raise
+  the approval count to ≥ 1 and re-enable code-owner reviews in the script.
 
 Finally, set the real secret values (the bootstrap leaves placeholders):
 

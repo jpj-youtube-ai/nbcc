@@ -6,14 +6,19 @@
 # repo). Codifies the rule so it is reproducible and reviewable instead of
 # living only in the GitHub UI.
 #
-# Policy (only the approval count was relaxed from 1 -> 0 vs the original):
+# Policy:
 #   - PRs only; the `test` check (pr.yml) must be green.
-#   - 0 required approving reviews, BUT code-owner review is still required on
-#     CODEOWNERS paths (infra, CI, config/secrets, migrations, Dockerfile,
-#     CLAUDE.md). So a green PR that touches no owned path can merge without a
-#     separate human approval; anything sensitive still needs the owner.
+#   - 0 required approving reviews and code-owner reviews OFF, so the green check
+#     is the only required gate: any PR that passes CI self-merges (the dev who
+#     built it reviews locally, then merges their own PR).
 #   - Linear history; no force-pushes; no branch deletion.
-#   - Stale reviews dismissed on new pushes.
+#
+# IMPORTANT: GitHub ignores code-owner reviews entirely when
+# required_approving_review_count is 0 — so leaving require_code_owner_reviews on
+# would be misleading (it enforces nothing). It is explicitly OFF here to match
+# reality. CODEOWNERS still auto-requests the owner as a reviewer, but that
+# review is advisory, not required. To actually gate sensitive paths you must set
+# required_approving_review_count to >= 1 AND turn code-owner reviews back on.
 #
 # Usage:  GH_REPO=jpj-youtube-ai/nbcc ./scripts/branch-protection.sh
 # ---------------------------------------------------------------------------
@@ -31,7 +36,7 @@ gh api -X PUT "repos/${REPO}/branches/${BRANCH}/protection" \
   "enforce_admins": false,
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
-    "require_code_owner_reviews": true,
+    "require_code_owner_reviews": false,
     "require_last_push_approval": false,
     "required_approving_review_count": 0
   },

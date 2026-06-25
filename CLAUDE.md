@@ -138,10 +138,20 @@ acting as the watcher:
    merging to `main` deploys to staging, so a red merge ships a broken build.
 
 The shape is a watch loop: open → wait → (green ⇒ squash-merge) / (red ⇒ fix &
-repeat). This is enforced server-side too: `main` has branch protection — PRs
-only, the `test` check (`pr.yml`) must be green, 1 approving review, plus
-code-owner review on the paths in `.github/CODEOWNERS`. The repo owner is an admin
-and can bypass in a pinch; everyone else is fully gated.
+repeat). The merge is self-service: whoever built the feature reviews it locally,
+confirms they're happy, then merges their own green PR — there is no mandatory
+review. This is enforced server-side: `main` has branch protection — PRs only and
+the `test` check (`pr.yml`) must be green, with **0 required approving reviews**
+and **code-owner reviews off**. (GitHub ignores code-owner reviews entirely when
+0 approvals are required, so the flag is left off rather than implying a gate
+that doesn't exist.) So the green `test` check is the only required gate and any
+passing PR self-merges; `.github/CODEOWNERS` only auto-requests the owner as an
+*advisory* reviewer. To actually gate sensitive paths (infra, CI, `src/config`,
+migrations, `Dockerfile`, this file), raise the approval count to ≥ 1 **and**
+re-enable code-owner reviews — note that, with a single owner who also authors
+PRs, that makes code-owned PRs need an admin bypass to merge. The ruleset is
+codified in `scripts/branch-protection.sh` (re-runnable). The repo owner is an
+admin and can bypass in a pinch.
 
 ## Resolving merge conflicts
 

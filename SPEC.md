@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (16)
+## Shipped (17)
 
 ### REQ-001 — Multi-page site structure
 
@@ -112,6 +112,13 @@ The founding quote ("Do all children get a Christmas Eve box like I do?", Tygan,
 Tasks:
 - TASK-021 — Build the About our story section in about.html with founding quote, origin narrative and captioned headshot
 
+### REQ-016 — About meet-the-team grid
+
+A tinted band with a grid of ten members, each a portrait photo, name and role, laid out five across on desktop, three on tablet and two on mobile. Six of the ten roles are "Volunteer Elf" placeholders to be confirmed by NBCC before launch. *Accept:* ten responsive team cards render, with placeholder roles marked for confirmation.
+
+Tasks:
+- TASK-024 — Build the About meet-the-team responsive grid in about.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -121,14 +128,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (19)
-
-### REQ-016 — About meet-the-team grid
-
-A tinted band with a grid of ten members, each a portrait photo, name and role, laid out five across on desktop, three on tablet and two on mobile. Six of the ten roles are "Volunteer Elf" placeholders to be confirmed by NBCC before launch. *Accept:* ten responsive team cards render, with placeholder roles marked for confirmation.
-
-Tasks:
-- TASK-024 — Build the About meet-the-team responsive grid in about.html
+## Planned (18)
 
 ### REQ-017 — About age-reach figures (2025)
 

@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (18)
+## Shipped (19)
 
 ### REQ-001 — Multi-page site structure
 
@@ -126,6 +126,13 @@ A maroon band presenting eight age-band counts that sum to exactly 7,657: 0–12
 Tasks:
 - TASK-025 — Build the About age-reach figures (2025) maroon band in about.html
 
+### REQ-018 — About top-10 communities (2025)
+
+A ranked horizontal bar list of the top ten 2025 communities, bar width relative to Ayr at 100%: Ayr 2,096 (27.4%); Kilwinning 692 (9.0%); Stevenston 547 (7.1%); Kilmarnock 532 (6.9%); Auchinleck 510 (6.7%); Maybole 370 (4.8%); Dalmellington 332 (4.3%); Ardrossan 301 (3.9%); Irvine 280 (3.7%); Girvan 205 (2.7%). *Accept:* ten communities are ranked with proportional bars, Ayr at full width. A geographic map is a later enhancement, not this requirement.
+
+Tasks:
+- TASK-026 — Build the About top-10 communities (2025) ranked bar list in about.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -135,14 +142,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (17)
-
-### REQ-018 — About top-10 communities (2025)
-
-A ranked horizontal bar list of the top ten 2025 communities, bar width relative to Ayr at 100%: Ayr 2,096 (27.4%); Kilwinning 692 (9.0%); Stevenston 547 (7.1%); Kilmarnock 532 (6.9%); Auchinleck 510 (6.7%); Maybole 370 (4.8%); Dalmellington 332 (4.3%); Ardrossan 301 (3.9%); Irvine 280 (3.7%); Girvan 205 (2.7%). *Accept:* ten communities are ranked with proportional bars, Ayr at full width. A geographic map is a later enhancement, not this requirement.
-
-Tasks:
-- TASK-026 — Build the About top-10 communities (2025) ranked bar list in about.html
+## Planned (16)
 
 ### REQ-019 — Donate intro
 

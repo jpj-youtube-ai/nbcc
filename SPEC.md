@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (15)
+## Shipped (16)
 
 ### REQ-001 — Multi-page site structure
 
@@ -105,6 +105,13 @@ Eyebrow "About us"; H1 "Powered by kindness, driven by community"; a lede on Ann
 Tasks:
 - TASK-020 — Build the About intro section in about.html with eyebrow, H1 and reach lede
 
+### REQ-015 — About our story
+
+The founding quote ("Do all children get a Christmas Eve box like I do?", Tygan, 2015), the origin narrative, and Tygan's real headshot with a caption. This is the one piece of copy carried from the existing site rather than the leaflet, so wording and figures must be verified. *Accept:* the story shows the quote, the narrative, and a captioned headshot, flagged for content verification.
+
+Tasks:
+- TASK-021 — Build the About our story section in about.html with founding quote, origin narrative and captioned headshot
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -114,14 +121,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (20)
-
-### REQ-015 — About our story
-
-The founding quote ("Do all children get a Christmas Eve box like I do?", Tygan, 2015), the origin narrative, and Tygan's real headshot with a caption. This is the one piece of copy carried from the existing site rather than the leaflet, so wording and figures must be verified. *Accept:* the story shows the quote, the narrative, and a captioned headshot, flagged for content verification.
-
-Tasks:
-- TASK-021 — Build the About our story section in about.html with founding quote, origin narrative and captioned headshot
+## Planned (19)
 
 ### REQ-016 — About meet-the-team grid
 

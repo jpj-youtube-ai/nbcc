@@ -282,6 +282,90 @@ h1 {
   border-radius: var(--radius-lg);
 }
 
+/* =================================================================
+   HOME HERO (REQ-010) — index.html only. Reuses the buttons/.card
+   (REQ-009), .rule + logo (REQ-007), .reveal (REQ-008) and the tokens.
+   Token-only colours. Two-column grid that stacks on mobile.
+   ================================================================= */
+.eyebrow {
+  display: inline-block;
+  font-size: var(--fs-eyebrow);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 600;
+  color: var(--crimson);
+  margin-bottom: 14px;
+}
+.hero {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: clamp(28px, 5vw, 64px);
+  align-items: center;
+  padding-block: clamp(8px, 3vw, 40px) clamp(32px, 6vw, 72px);
+}
+.hero h1 {
+  font-size: var(--fs-hero);
+  max-width: 15ch;
+}
+.hero-emph {
+  color: var(--maroon);
+  font-style: italic;
+}
+.lede {
+  font-size: var(--fs-lede);
+  color: var(--slate);
+  max-width: 52ch;
+  margin-top: 1.3rem;
+}
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 2rem;
+}
+.hero-art {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+.hero-art img {
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+}
+.proof {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  text-align: center;
+  padding: 14px 20px;
+}
+.proof-num {
+  display: block;
+  font-family: var(--font-head);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--crimson);
+  line-height: 1;
+}
+.proof-lbl {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--slate-soft);
+  max-width: 16ch;
+  margin: 4px auto 0;
+}
+
+@media (max-width: 680px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+  .proof {
+    position: static;
+    margin: 16px auto 0;
+  }
+}
+
 p {
   margin: 0 0 var(--space);
   color: var(--slate-soft);

@@ -162,6 +162,9 @@ Tasks:
 
 Suggested one-off amounts — £10 (cosy essentials), £25 (towards a Red Bag, marked "Most chosen"), £50 (one full Red Bag), £100 (a whole family) — plus a Choose-your-own-amount option. These amounts are a suggestion to be confirmed or reworded, since the leaflet specifies only monthly tiers. *Accept:* the one-off tiers and the custom-amount option render, with the Most-chosen marker, flagged as suggested amounts.
 
+Tasks:
+- TASK-029 — Build the Give once tiers into #tiersOnce on donate.html
+
 ### REQ-022 — Give monthly tiers
 
 Four monthly tiers with the exact leaflet copy: Bronze £10/month "Building towards Christmas joy"; Silver £25/month "Halfway to a Red Bag Full of Joy"; Gold £50/month "One Christmas made brighter"; Platinum £100/month "More joy, every month" — each with its leaflet description — plus a line for other monthly amounts linking to giving@nightbeforechristmas.co.uk. *Accept:* the four monthly tiers render with leaflet headlines and descriptions and the other-amount contact line.

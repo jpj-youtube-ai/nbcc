@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (19)
+## Shipped (20)
 
 ### REQ-001 — Multi-page site structure
 
@@ -133,6 +133,13 @@ A ranked horizontal bar list of the top ten 2025 communities, bar width relative
 Tasks:
 - TASK-026 — Build the About top-10 communities (2025) ranked bar list in about.html
 
+### REQ-019 — Donate intro
+
+Headline "Your gift becomes someone's Christmas" with a lede noting the volunteer base and that around £50 is the value of one Red Bag Full of Joy. *Accept:* the intro shows the headline and the £50-per-Red-Bag framing.
+
+Tasks:
+- TASK-027 — Build the Donate intro section in donate.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -142,14 +149,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (16)
-
-### REQ-019 — Donate intro
-
-Headline "Your gift becomes someone's Christmas" with a lede noting the volunteer base and that around £50 is the value of one Red Bag Full of Joy. *Accept:* the intro shows the headline and the £50-per-Red-Bag framing.
-
-Tasks:
-- TASK-027 — Build the Donate intro section in donate.html
+## Planned (15)
 
 ### REQ-020 — Give widget shell and mode toggle
 

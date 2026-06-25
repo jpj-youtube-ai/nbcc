@@ -45,6 +45,13 @@
   --radius: 16px;
   --radius-lg: 24px;
   --radius-pill: 999px;
+
+  /* Motion (REQ-008) — token-driven, consistent with the nav timings */
+  --ease: ease;
+  --motion-fast: 0.15s;
+  --motion: 0.3s;
+  --reveal: 0.5s;
+
   /* Typography (REQ-005) — two-family system; faces self-hosted below */
   --font-head: "Playfair Display", Georgia, "Times New Roman", serif;
   --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
@@ -168,6 +175,48 @@ h1 {
   height: 74px;
   width: auto;
   margin-bottom: 14px; /* clear space below the footer lockup */
+}
+
+/* =================================================================
+   MOTION (REQ-008) — restrained scroll reveal + hover lifts. Durations
+   and easing are token-driven and consistent with the nav timings.
+   ================================================================= */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity var(--reveal) var(--ease), transform var(--reveal) var(--ease);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hover lift for interactive surfaces — follows the .nav-cta pattern.
+   .card / .btn / .tier arrive in REQ-009 and inherit this when added. */
+.card,
+.btn,
+.tier {
+  transition: transform var(--motion-fast) var(--ease);
+}
+.card:hover,
+.btn:hover,
+.tier:hover {
+  transform: translateY(-1px);
+}
+
+/* Reduced-motion off-switch (REQ-032): never animate, never hide content. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 p {

@@ -41,8 +41,36 @@
   --space: 1rem;
   --nav-h: 78px;
   --maxw: 1180px;
-  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
+  /* Typography (REQ-005) — two-family system; faces self-hosted below */
+  --font-head: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  --fs-hero: clamp(2.5rem, 2rem + 4.2vw, 4.4rem);
+  --fs-page-intro: clamp(2rem, 1.6rem + 2.2vw, 3.25rem);
+  --fs-section: clamp(1.5rem, 1.2rem + 1.4vw, 2.2rem);
+  --fs-lede: clamp(1.05rem, 1rem + 0.35vw, 1.28rem);
+  --fs-body: clamp(1rem, 0.97rem + 0.2vw, 1.08rem);
+  --fs-eyebrow: clamp(0.7rem, 0.68rem + 0.1vw, 0.78rem);
+}
+
+/* =================================================================
+   TYPOGRAPHY (REQ-005) — two families, self-hosted latin subset, one
+   weight each to satisfy the <=2 font-file perf budget (Google Fonts is
+   the documented alternative). No build step. Other weights synthesise.
+   ================================================================= */
+@font-face {
+  font-family: "Playfair Display";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/assets/fonts/playfair-display-700-latin.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Poppins";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/assets/fonts/poppins-400-latin.woff2) format("woff2");
 }
 
 *,
@@ -58,6 +86,7 @@ html {
 body {
   margin: 0;
   font-family: var(--font-body);
+  font-size: var(--fs-body);
   line-height: 1.6;
   color: var(--slate);
   background-color: var(--cream);
@@ -69,10 +98,18 @@ body {
   padding: calc(var(--space) * 2) var(--space);
 }
 
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--crimson);
+  line-height: 1.2;
+}
 h1 {
   margin: 0 0 var(--space);
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  line-height: 1.2;
+  font-size: var(--fs-page-intro);
 }
 
 p {

@@ -341,6 +341,20 @@ NBCC site rather than the 2025 leaflet, so its copy is flagged with a
 token-only colours. Stacks ≤680px. Verified by
 `test/unit/about-our-story.test.ts`.
 
+### About meet-the-team grid (REQ-016)
+
+Below the story, a tinted band (`ABOUT MEET THE TEAM` CSS block,
+`var(--holly-soft)`, `--radius-lg`) holds a responsive grid of ten member cards
+(`.team-grid`: 5-across desktop → 3 ≤900px → 2 ≤680px, mirroring `.pillar-grid`).
+Each `.member` is a 4:5 `.photo-slot` portrait placeholder (decorative
+`aria-hidden` person icon, **no `<img>`** — real headshots are REQ-034) with a
+Playfair crimson `.member-name` and a `.member-role`: Tygan/Founder,
+Jodie/Head Elf and Founder, Isabella/Co founder, Jaimie/Donations, then six
+**Volunteer Elf** placeholders (Dawn, Jill, Jon, Kenny, Liz, Vicky) flagged with a
+`CONTENT VERIFICATION` HTML comment for NBCC to confirm. Semantic `<section>` named
+by its `<h2>` (REQ-032); token-only colours; `.reveal` reused. Verified by
+`test/unit/about-team.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

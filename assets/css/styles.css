@@ -805,3 +805,63 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   ABOUT MEET THE TEAM (REQ-016) — about.html. Tinted band with a
+   responsive grid of member cards (portrait placeholder + name + role).
+   Reuses the tinted-band pattern, .photo-slot, .reveal and tokens.
+   ================================================================= */
+.meet-team {
+  background: var(--holly-soft);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
+  margin-block: clamp(8px, 3vw, 32px);
+  text-align: center;
+}
+.meet-team .team-intro {
+  font-size: var(--fs-lede);
+  color: var(--slate);
+  max-width: 52ch;
+  margin: 0.6rem auto 0;
+}
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: clamp(16px, 2vw, 24px);
+  margin-top: clamp(24px, 4vw, 40px);
+}
+.member {
+  text-align: center;
+}
+/* The member portrait reuses .photo-slot as a 4:5 placeholder (no <img> yet). */
+.member .photo-slot {
+  min-height: 0;
+  aspect-ratio: 4 / 5;
+  padding: 0;
+  border-style: solid;
+  border-radius: var(--radius-lg);
+}
+.member-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--crimson);
+  font-size: 1.15rem;
+  line-height: 1.1;
+  margin: 14px 0 0;
+}
+.member-role {
+  font-size: 0.84rem;
+  color: var(--slate-soft);
+  margin: 3px 0 0;
+}
+
+@media (max-width: 900px) {
+  .team-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 680px) {
+  .team-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -301,6 +301,20 @@ forgotten."), the `.rule` divider under it, two leaflet paragraphs, and a
 colours, reusing `.btn`/`.rule`/`.reveal`/`.card` tokens. Verified by
 `test/unit/home-why.test.ts`.
 
+### Closing CTA strip (REQ-013)
+
+A reusable crimson conversion panel (`CLOSING CTA STRIP` CSS block,
+`background: var(--crimson)`, cream text, `--radius-lg`, centred) at the foot of
+`<main>` on **index.html and about.html only** (donate/contact are out of scope).
+Each is a semantic `<section class="closing-cta reveal" aria-labelledby="...">`
+with an `<h2>` and a **Donate now** `.btn-primary` → `/donate`. The structure is
+shared; only the headline differs: Home is "Help us reach even more in 2026",
+About is "Be part of the next chapter". On the crimson strip the global
+`.btn-primary` is reused with a scoped token-only inversion (cream fill, crimson
+text) so it stays high-contrast (REQ-032) — matching the prototype; the global
+button is unchanged. Token-only colours, `.reveal` reused. Verified by
+`test/unit/closing-cta.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

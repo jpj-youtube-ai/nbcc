@@ -710,3 +710,37 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   CLOSING CTA STRIP (REQ-013) — index.html + about.html. A reusable
+   crimson conversion panel at the foot of <main>. Token-only; reuses
+   the .btn .btn-primary component and .reveal.
+   ================================================================= */
+.closing-cta {
+  background: var(--crimson);
+  color: var(--cream);
+  text-align: center;
+  border-radius: var(--radius-lg);
+  padding: clamp(36px, 5vw, 60px) clamp(24px, 4vw, 48px);
+  margin-block: clamp(8px, 3vw, 32px);
+}
+.closing-cta h2 {
+  color: var(--cream);
+  font-size: var(--fs-section);
+  max-width: 24ch;
+  margin-inline: auto;
+}
+.closing-cta p {
+  color: var(--cream);
+  max-width: 50ch;
+  margin: 14px auto 26px;
+}
+/* Invert the Donate button for contrast on the crimson strip (matches the
+   prototype): cream fill, crimson text. The global .btn-primary is unchanged. */
+.closing-cta .btn-primary {
+  background: var(--cream);
+  color: var(--crimson);
+}
+.closing-cta .btn-primary:hover {
+  background: var(--tan-soft);
+}

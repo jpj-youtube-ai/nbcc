@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (12)
+## Shipped (13)
 
 ### REQ-001 — Multi-page site structure
 
@@ -84,6 +84,13 @@ A tinted band of the four leaflet pillars, each an icon, title and one line: Vol
 Tasks:
 - TASK-017 — Build the Home four-pillars tinted band in index.html
 
+### REQ-012 — Home why-your-donation-matters section
+
+A heading, the signature rule, two paragraphs drawn from the leaflet, a Support NBCC button, and an impact photo slot (currently a placeholder, to be swapped for a real packing or delivery photo). *Accept:* the section shows the two leaflet paragraphs, the CTA, and an image slot.
+
+Tasks:
+- TASK-018 — Build the Home why-your-donation-matters section in index.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -93,14 +100,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (22)
-
-### REQ-012 — Home why-your-donation-matters section
-
-A heading, the signature rule, two paragraphs drawn from the leaflet, a Support NBCC button, and an impact photo slot (currently a placeholder, to be swapped for a real packing or delivery photo). *Accept:* the section shows the two leaflet paragraphs, the CTA, and an image slot.
-
-Tasks:
-- TASK-018 — Build the Home why-your-donation-matters section in index.html
+## Planned (21)
 
 ### REQ-013 — Recurring closing CTA strip
 

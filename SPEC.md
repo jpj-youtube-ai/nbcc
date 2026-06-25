@@ -141,6 +141,9 @@ Tasks:
 
 A ranked horizontal bar list of the top ten 2025 communities, bar width relative to Ayr at 100%: Ayr 2,096 (27.4%); Kilwinning 692 (9.0%); Stevenston 547 (7.1%); Kilmarnock 532 (6.9%); Auchinleck 510 (6.7%); Maybole 370 (4.8%); Dalmellington 332 (4.3%); Ardrossan 301 (3.9%); Irvine 280 (3.7%); Girvan 205 (2.7%). *Accept:* ten communities are ranked with proportional bars, Ayr at full width. A geographic map is a later enhancement, not this requirement.
 
+Tasks:
+- TASK-026 — Build the About top-10 communities (2025) ranked bar list in about.html
+
 ### REQ-019 — Donate intro
 
 Headline "Your gift becomes someone's Christmas" with a lede noting the volunteer base and that around £50 is the value of one Red Bag Full of Joy. *Accept:* the intro shows the headline and the £50-per-Red-Bag framing.

@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (14)
+## Shipped (15)
 
 ### REQ-001 — Multi-page site structure
 
@@ -98,6 +98,13 @@ A crimson panel reused at the foot of the Home and About pages: a short rallying
 Tasks:
 - TASK-019 — Add the recurring crimson closing CTA strip to the foot of Home and About
 
+### REQ-014 — About intro
+
+Eyebrow "About us"; H1 "Powered by kindness, driven by community"; a lede on Annbank, Ayrshire and the Girvan-to-Largs reach. *Accept:* the intro shows the H1 and the reach lede.
+
+Tasks:
+- TASK-020 — Build the About intro section in about.html with eyebrow, H1 and reach lede
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -107,14 +114,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (20)
-
-### REQ-014 — About intro
-
-Eyebrow "About us"; H1 "Powered by kindness, driven by community"; a lede on Annbank, Ayrshire and the Girvan-to-Largs reach. *Accept:* the intro shows the H1 and the reach lede.
-
-Tasks:
-- TASK-020 — Build the About intro section in about.html with eyebrow, H1 and reach lede
+## Planned (19)
 
 ### REQ-015 — About our story
 

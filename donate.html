@@ -59,13 +59,23 @@
     </header>
 
     <main class="site-main" id="main">
-      <h1>Donate</h1>
-      <div class="rule"></div>
-      <p>
-        This is the placeholder Donate page. The donation flow and its content
-        sections, along with the shared navigation and footer, are delivered by
-        later requirements.
-      </p>
+      <!-- Donate intro (REQ-019): centred page intro mirroring .about-intro.
+           Reuses .eyebrow / base h1 / .rule / .lede and the tokens (the .rule
+           is centred by the .donate-intro auto-margin, as on .about-intro); no
+           new fonts and no image tags. The give widget lands in page-sections
+           (REQ-020+). Copy carries the £50-per-Red-Bag framing; "NBCC" in full
+           per REQ-031, no dashes. -->
+      <section class="donate-intro">
+        <span class="eyebrow">Donate</span>
+        <h1>Your gift becomes someone's Christmas</h1>
+        <div class="rule"></div>
+        <p class="lede">
+          Everyone involved in NBCC is a volunteer, so your kindness goes straight
+          to thoughtful gifts and moments of joy. Around &pound;50 is the value of
+          one Red Bag Full of Joy. Give once, or give monthly and support the work
+          all year round.
+        </p>
+      </section>
       <!-- Donate page sections: REQ-010+. Empty placeholder for now. -->
       <section class="page-sections" data-region="sections"></section>
     </main>

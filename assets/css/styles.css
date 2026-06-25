@@ -1029,3 +1029,20 @@ a {
     order: 3;
   }
 }
+
+/* =================================================================
+   DONATE INTRO (REQ-019) — donate.html. Centred page intro matching
+   .about-intro; reuses .eyebrow / base h1 / .rule.center / .lede and
+   the tokens. Token-only, no new type rules (those come from existing
+   element styles).
+   ================================================================= */
+.donate-intro {
+  text-align: center;
+  max-width: 760px;
+  margin-inline: auto;
+  padding-block: clamp(8px, 3vw, 40px);
+}
+.donate-intro .rule,
+.donate-intro .lede {
+  margin-inline: auto;
+}

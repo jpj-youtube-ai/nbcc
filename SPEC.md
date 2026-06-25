@@ -106,6 +106,9 @@ Tasks:
 
 A crimson panel reused at the foot of the Home and About pages: a short rallying headline (Home: "Help us reach even more in 2026") and a Donate now button. *Accept:* the crimson CTA strip with headline and Donate button appears at the foot of Home and About.
 
+Tasks:
+- TASK-019 — Add the recurring crimson closing CTA strip to the foot of Home and About
+
 ### REQ-014 — About intro
 
 Eyebrow "About us"; H1 "Powered by kindness, driven by community"; a lede on Annbank, Ayrshire and the Girvan-to-Largs reach. *Accept:* the intro shows the H1 and the reach lede.

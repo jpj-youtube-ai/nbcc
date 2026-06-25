@@ -407,6 +407,29 @@ fonts/images, token-only colours; the `.page-sections` placeholder (for the give
 widget, REQ-020+) and the shared nav/footer are kept. Verified by
 `test/unit/donate-intro.test.ts`.
 
+### Give widget shell (REQ-020)
+
+Inside the donate `.page-sections` slot, below the intro, the give widget
+(`GIVE WIDGET` CSS block) is the conversion card: a `.give-card` two-column grid
+on the shared `.card`/`.card-lg` surface (REQ-009) that stacks ≤680px — a main
+column (the once/monthly toggle and the tier containers) beside a **Holly Green**
+(`var(--holly)`) side panel. The panel is **cream-on-holly** only (eyebrow/text in
+`--cream-82`, never holly body text), inverted like the `.age-reach`/footer tints
+so the `brand-colours` guard holds; token-only colours, no hex/rgb outside
+`:root`. The mode toggle is a segmented pill of two labelled `<button>`s ("Give
+once" / "Give monthly") with `aria-pressed` + `aria-controls`, wired by a new
+`initGiveToggle()` in `assets/js/main.js` (exported and called alongside
+`initNav`/`initReveal`). It shows/hides two placeholder tier containers,
+`#tiersOnce` and `#tiersMonthly`; **give monthly is the default** (leaflet
+emphasis) and the markup ships with `#tiersOnce` `hidden`, so it works without JS
+(progressive enhancement) and native buttons give keyboard activation for free
+(no animation, reduced-motion safe). Tier content is out of scope here — REQ-021
+mounts the one-off amounts into `#tiersOnce`, REQ-022 the monthly plans into
+`#tiersMonthly`, and REQ-024 fills the side panel (each named in HTML comments).
+Semantic `<section>` named by its `<h2>` (REQ-032); copy uses "give once"/"give
+monthly" and "NBCC", dash-free (REQ-031). Verified by
+`test/unit/give-widget.test.ts` (static markup + the toggle behaviour in jsdom).
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

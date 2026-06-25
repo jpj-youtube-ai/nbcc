@@ -77,10 +77,46 @@
     });
   }
 
+  // Give widget once/monthly toggle (REQ-020): the segmented control switches
+  // which tier group is visible. Progressive enhancement — the markup ships
+  // with "give monthly" pressed and #tiersOnce hidden, so it works without JS;
+  // this just wires the buttons. Native <button>s give keyboard activation for
+  // free, and no animation is required (reduced-motion safe).
+  function initGiveToggle(doc) {
+    var toggle = doc.querySelector(".give-toggle");
+    if (!toggle) return;
+    var buttons = Array.prototype.slice.call(toggle.querySelectorAll(".give-mode"));
+    if (!buttons.length) return;
+
+    function activate(mode) {
+      buttons.forEach(function (btn) {
+        var on = btn.getAttribute("data-mode") === mode;
+        btn.setAttribute("aria-pressed", String(on));
+        btn.classList.toggle("is-active", on);
+        var panel = doc.getElementById(btn.getAttribute("aria-controls"));
+        if (panel) panel.hidden = !on;
+      });
+    }
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        activate(btn.getAttribute("data-mode"));
+      });
+    });
+
+    // Sync visible state to the button marked pressed in the markup (monthly).
+    var start =
+      buttons.filter(function (b) {
+        return b.getAttribute("aria-pressed") === "true";
+      })[0] || buttons[0];
+    activate(start.getAttribute("data-mode"));
+  }
+
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initNav, initReveal };
+    module.exports = { initNav, initReveal, initGiveToggle };
   } else {
     initNav(document, window);
     initReveal(document, window);
+    initGiveToggle(document);
   }
 })();

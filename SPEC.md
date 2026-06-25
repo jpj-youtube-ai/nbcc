@@ -148,6 +148,9 @@ Tasks:
 
 Headline "Your gift becomes someone's Christmas" with a lede noting the volunteer base and that around £50 is the value of one Red Bag Full of Joy. *Accept:* the intro shows the headline and the £50-per-Red-Bag framing.
 
+Tasks:
+- TASK-027 — Build the Donate intro section in donate.html
+
 ### REQ-020 — Give widget shell and mode toggle
 
 The conversion centrepiece: a card split into a main column and a Holly Green side panel, with a toggle between Give once and Give monthly that switches the visible tiers. *Accept:* the widget renders the two-column layout and a working once/monthly toggle.

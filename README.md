@@ -106,8 +106,9 @@ host-free. The `_redirects` file also works as-is on a static host
 ### Navigation
 
 Every page mounts the same sticky top nav in its `<header class="nav">` slot
-(REQ-002, ported from the NBCC design): brand → `/`, links to `/`, `/about-us`,
-`/donate`, `/contact`, a persistent Donate button, and a mobile burger.
+(REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
+links to `/`, `/about-us`, `/donate`, `/contact`, a persistent Donate button, and
+a mobile burger.
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -115,24 +116,25 @@ to a cream/hairline/shadow state past 24px; the burger toggles the link panel
 current page's link is marked `class="active" aria-current="page"`. Verified by
 `test/unit/nav.test.ts` (static markup + jsdom behaviour).
 
-> Uses the **nav-relevant token subset** from the NBCC baseline
-> (`--crimson`/`--maroon`/`--cream`/`--line`…); the full design-token system and
-> web fonts are REQ-004/006, the logo image is REQ-034, and the footer slot is
-> REQ-003. The brand reads "NBCC" while page `<title>`s still carry the
-> "Charity Site" placeholder (a later rename).
+> The brand is the **master logo lockup** (nav 50px, footer 74px) — a lightweight
+> ~12 KB display-sized PNG at `assets/img/nbcc-logo.png` with `alt`, intrinsic
+> `width`/`height` and `loading="lazy"`. The optimised/responsive asset pipeline
+> is REQ-034. Page `<title>`s still carry the "Charity Site" placeholder (a later
+> rename).
 
 ### Footer
 
 Every page mounts the same maroon footer in its `<footer class="site-footer">`
 slot (REQ-003, ported from the NBCC design), **identical across all four pages**:
-three columns — brand + social links (Instagram/Facebook/X), **Explore** (the
-clean URLs `/`, `/about-us`, `/donate`, `/contact`), and **Ways to give**
-(`/donate`, `/contact`) — plus a legal strip with the SCIO line and the OSCR
-registration link for charity **SC047995**. Styling lives in the shared
-`assets/css/styles.css` under a commented `FOOTER (REQ-003)` block (maroon
+three columns — the logo lockup (74px) + social links (Instagram/Facebook/X),
+**Explore** (the clean URLs `/`, `/about-us`, `/donate`, `/contact`), and
+**Ways to give** (`/donate`, `/contact`) — plus a legal strip with the SCIO line
+and the OSCR registration link for charity **SC047995**. Styling lives in the
+shared `assets/css/styles.css` under a commented `FOOTER (REQ-003)` block (maroon
 background, cream text, reuses `--maroon`/`--cream`/`--line`/`--maxw`; columns
-stack at ≤680px). No web fonts and no `<img>` (social icons are inline SVG), so
-the perf budget holds. Verified by `test/unit/footer.test.ts`.
+stack at ≤680px). The logo is the only `<img>` (social icons are inline SVG) and
+declares width/height + `loading="lazy"`, so the perf budget holds. Verified by
+`test/unit/footer.test.ts`.
 
 ### SEO & social metadata
 
@@ -207,6 +209,11 @@ perf budget is unaffected — and uses token-only colours (`--holly`, `--crimson
 Use it **sparingly, directly under a heading** (`<div class="rule"></div>` sits
 under each page `<h1>`); later section heads reuse the same class. Enforced by
 `test/unit/brand-marks.test.ts`.
+
+The same `BRAND MARKS` block also sizes the **master logo lockup** — `.brand img`
+(nav, 50px) and `.foot-brand img` (footer, 74px) — and gives it clear space (the
+footer `margin-bottom` plus the nav `.wrap` gap). The lockup is used whole; see
+the Navigation note for the asset (REQ-034 owns the optimised pipeline).
 
 ### API endpoints
 

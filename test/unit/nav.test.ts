@@ -29,9 +29,12 @@ describe.each(PAGES)("$file nav markup", ({ file, active }) => {
   const nav = navOf(read(file));
   const list = linkListOf(nav);
 
-  it("has a nav header with a brand link to /", () => {
+  it("has a brand: the logo lockup linking to /", () => {
     expect(nav).not.toBe("");
-    expect(nav).toMatch(/<a[^>]*class="brand"[^>]*href="\/"|href="\/"[^>]*class="brand"/);
+    const brand = nav.match(/<a[^>]*class="brand"[\s\S]*?<\/a>/i)?.[0] ?? "";
+    expect(brand).toMatch(/href="\/"/);
+    expect(brand).toMatch(/<img[^>]+src="[^"]*nbcc-logo\.png"[^>]*>/i);
+    expect(brand).toMatch(/alt="[^"]+"/);
   });
 
   it("lists the four pages by clean URL", () => {

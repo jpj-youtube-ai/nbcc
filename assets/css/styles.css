@@ -157,6 +157,19 @@ h1 {
   margin-inline: auto;
 }
 
+/* Brand logo lockup — used whole at the REQ-007 sizes, with clear space. */
+.brand img {
+  display: block;
+  height: 50px;
+  width: auto;
+}
+.foot-brand img {
+  display: block;
+  height: 74px;
+  width: auto;
+  margin-bottom: 14px; /* clear space below the footer lockup */
+}
+
 p {
   margin: 0 0 var(--space);
   color: var(--slate-soft);
@@ -362,12 +375,6 @@ a {
   flex-direction: column;
   gap: 9px;
   font-size: 0.94rem;
-}
-.foot-name {
-  color: var(--cream);
-  font-weight: 700;
-  font-size: 1.15rem;
-  margin: 0 0 10px;
 }
 .foot-brand p {
   font-size: 0.92rem;

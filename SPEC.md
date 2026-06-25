@@ -78,6 +78,9 @@ Tasks:
 
 A button system with three pill-shaped variants (primary crimson, ghost outlined-maroon, holly green) and an animated arrow on hover; and a shared card surface (card background, hairline border, soft shadow) reused by pillars, tiers, reassurance items and team members. *Accept:* the three button variants and the shared card surface render to spec wherever used.
 
+Tasks:
+- TASK-015 — Add the global button system (three pill variants + hover arrow) and shared card surface
+
 ### REQ-010 — Home hero
 
 Eyebrow "Volunteer run Scottish charity"; H1 "No one should feel forgotten on Christmas Eve" with "forgotten" emphasised in maroon italic; a lede on the volunteer-run, year-round mission; two buttons, Donate now (primary) and Who we help (ghost); the logo as the hero illustration with a floating proof card reading "7,657 Red Bags Full of Joy delivered in 2025". *Accept:* the hero shows the emphasised H1, both CTAs, and the proof card figure.

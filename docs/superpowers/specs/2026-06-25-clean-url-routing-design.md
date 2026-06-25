@@ -1,7 +1,9 @@
 # TASK-002 — Clean-URL routing for the static site
 
-**Requirement:** REQ-002 (clean URLs). Complements but does **not** implement
-REQ-033 (hosting/perf). Scope is URL mapping only.
+**Task:** TASK-002 — clean, canonical URLs for the static pages. Complements but
+does **not** implement REQ-033 (hosting/perf). Scope is URL mapping only. (The
+scaffold's HTML comments already attribute REQ-002/REQ-003 to *navigation*, so
+this doc deliberately keys off the task, not a guessed clean-URL REQ number.)
 
 ## Problem
 

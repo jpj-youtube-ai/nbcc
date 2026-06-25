@@ -103,6 +103,24 @@ dist/index.js`) and request `/`, `/about-us`, `/donate`, `/contact`. The
 host-free. The `_redirects` file also works as-is on a static host
 (e.g. `npx netlify dev`).
 
+### Navigation
+
+Every page mounts the same sticky top nav in its `<header class="nav">` slot
+(REQ-002, ported from the NBCC design): brand → `/`, links to `/`, `/about-us`,
+`/donate`, `/contact`, a persistent Donate button, and a mobile burger.
+Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
+`requestAnimationFrame`-throttled scroll listener flips the bar from transparent
+to a cream/hairline/shadow state past 24px; the burger toggles the link panel
+(`aria-expanded`/`aria-controls`) and Escape closes it and restores focus. The
+current page's link is marked `class="active" aria-current="page"`. Verified by
+`test/unit/nav.test.ts` (static markup + jsdom behaviour).
+
+> Uses the **nav-relevant token subset** from the NBCC baseline
+> (`--crimson`/`--maroon`/`--cream`/`--line`…); the full design-token system and
+> web fonts are REQ-004/006, the logo image is REQ-034, and the footer slot is
+> REQ-003. The brand reads "NBCC" while page `<title>`s still carry the
+> "Charity Site" placeholder (a later rename).
+
 ### SEO & social metadata
 
 Every page's `<head>` carries a unique set of SEO + social-share tags following

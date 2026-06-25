@@ -39,8 +39,24 @@
     <script defer src="assets/js/main.js"></script>
   </head>
   <body>
-    <!-- Primary navigation: REQ-002 / REQ-003. Empty placeholder for now. -->
-    <header class="site-header" data-region="nav"></header>
+    <!-- Primary navigation (REQ-002). Footer slot below is REQ-003. -->
+    <header class="nav" id="nav" data-region="nav">
+      <div class="wrap">
+        <a class="brand" href="/">NBCC</a>
+        <nav aria-label="Primary">
+          <ul class="nav-links" id="navLinks">
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About</a></li>
+            <li><a href="/donate" class="active" aria-current="page">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+          </ul>
+        </nav>
+        <a class="nav-cta" href="/donate">Donate</a>
+        <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </header>
 
     <main class="site-main" id="main">
       <h1>Donate</h1>

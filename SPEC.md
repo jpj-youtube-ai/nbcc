@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (17)
+## Shipped (18)
 
 ### REQ-001 — Multi-page site structure
 
@@ -119,6 +119,13 @@ A tinted band with a grid of ten members, each a portrait photo, name and role, 
 Tasks:
 - TASK-024 — Build the About meet-the-team responsive grid in about.html
 
+### REQ-017 — About age-reach figures (2025)
+
+A maroon band presenting eight age-band counts that sum to exactly 7,657: 0–12 months 182; 1–3 years 762; 4–7 years 1,663; 8–11 years 1,990; 12–15 years 1,719; 16–17 years 587; 18 and over 528; not stated 226. *Accept:* the eight figures display and total exactly 7,657.
+
+Tasks:
+- TASK-025 — Build the About age-reach figures (2025) maroon band in about.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -128,14 +135,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (18)
-
-### REQ-017 — About age-reach figures (2025)
-
-A maroon band presenting eight age-band counts that sum to exactly 7,657: 0–12 months 182; 1–3 years 762; 4–7 years 1,663; 8–11 years 1,990; 12–15 years 1,719; 16–17 years 587; 18 and over 528; not stated 226. *Accept:* the eight figures display and total exactly 7,657.
-
-Tasks:
-- TASK-025 — Build the About age-reach figures (2025) maroon band in about.html
+## Planned (17)
 
 ### REQ-018 — About top-10 communities (2025)
 

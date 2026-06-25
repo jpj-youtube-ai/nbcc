@@ -276,6 +276,18 @@ keyboard-focusable CTAs). Verified by `test/unit/home-hero.test.ts`.
 > italic is synthesised (only Playfair 700 normal is self-hosted). The hi-res hero
 > logo asset is REQ-034.
 
+### Home pillars (REQ-011)
+
+Below the hero, a tinted band (`HOME PILLARS` CSS block, `var(--holly-soft)`
+background, `--radius-lg`) holds four `.card` pillars in a responsive grid
+(4-across → 2-col ≤900px → 1-col ≤680px). Each pillar is an `<article class="card
+pillar reveal">` with a decorative `aria-hidden` inline-SVG icon (crimson via
+`currentColor` — the contrast guard forbids holly text), an `<h2>` title and a
+one-line of leaflet copy: **Volunteer run**, **South West Scotland**, **Red Bags
+Full of Joy**, **7,657 delivered in 2025**. Reuses `.card`/`.reveal`/tokens only —
+no `<img>`, no new fonts, token-only colours. Verified by
+`test/unit/home-pillars.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

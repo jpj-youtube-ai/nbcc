@@ -366,6 +366,49 @@ h1 {
   }
 }
 
+/* =================================================================
+   HOME PILLARS (REQ-011) — index.html. A tinted band of four .card
+   pillars. Reuses .card / .reveal / tokens; token-only colours.
+   ================================================================= */
+.pillars {
+  background: var(--holly-soft);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
+  margin-block: clamp(8px, 3vw, 32px);
+}
+.pillar-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(16px, 2vw, 24px);
+}
+.pillar {
+  padding: clamp(20px, 2.5vw, 28px);
+}
+.pillar-icon {
+  color: var(--crimson);
+  margin-bottom: 12px;
+}
+.pillar-title {
+  font-size: var(--fs-lede);
+  margin: 0 0 6px;
+}
+.pillar-line {
+  font-size: var(--fs-body);
+  color: var(--slate-soft);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .pillar-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 680px) {
+  .pillar-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 p {
   margin: 0 0 var(--space);
   color: var(--slate-soft);

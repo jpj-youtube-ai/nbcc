@@ -215,6 +215,26 @@ The same `BRAND MARKS` block also sizes the **master logo lockup** — `.brand i
 footer `margin-bottom` plus the nav `.wrap` gap). The lockup is used whole; see
 the Navigation note for the asset (REQ-034 owns the optimised pipeline).
 
+### Motion system (REQ-008)
+
+Restrained, token-driven motion (`--ease`, `--motion-fast`, `--motion`,
+`--reveal`, consistent with the nav timings) in the shared `MOTION` CSS block:
+
+- **Scroll reveal:** `.reveal` starts faded + nudged down; `initReveal` in
+  `assets/js/main.js` (exported alongside `initNav`) uses an `IntersectionObserver`
+  to add `.is-visible` as each element enters the viewport.
+- **Hover lifts:** interactive surfaces lift `translateY(-1px)` on hover, following
+  the `.nav-cta` pattern — extended to `.card` / `.btn` / `.tier` so they inherit
+  it when those arrive (REQ-009).
+- **Reduced-motion off-switch (REQ-032):** `@media (prefers-reduced-motion:
+  reduce)` disables all transitions/animations (`none !important`) and forces
+  `.reveal` fully visible. `initReveal` also reveals everything immediately when
+  reduced motion is set or `IntersectionObserver` is unavailable — content is
+  never left hidden.
+
+The elements that carry `.reveal` (hero, pillars, tiers) arrive in REQ-010+; this
+ships the system + the guard. Verified by `test/unit/motion.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

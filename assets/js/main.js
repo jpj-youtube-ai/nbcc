@@ -46,9 +46,41 @@
     });
   }
 
+  // Scroll reveal (REQ-008): add .is-visible to .reveal elements as they enter
+  // the viewport. Falls back to revealing everything immediately when reduced
+  // motion is requested or IntersectionObserver is unavailable (REQ-032), so
+  // content is never left hidden.
+  function initReveal(doc, win) {
+    var reveals = doc.querySelectorAll(".reveal");
+    var reduced =
+      typeof win.matchMedia === "function" &&
+      win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || !win.IntersectionObserver) {
+      reveals.forEach(function (el) {
+        el.classList.add("is-visible");
+      });
+      return;
+    }
+    var io = new win.IntersectionObserver(
+      function (entries, obs) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            obs.unobserve(entry.target);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -10% 0px" },
+    );
+    reveals.forEach(function (el) {
+      io.observe(el);
+    });
+  }
+
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initNav };
+    module.exports = { initNav, initReveal };
   } else {
     initNav(document, window);
+    initReveal(document, window);
   }
 })();

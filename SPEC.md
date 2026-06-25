@@ -99,6 +99,9 @@ Tasks:
 
 A heading, the signature rule, two paragraphs drawn from the leaflet, a Support NBCC button, and an impact photo slot (currently a placeholder, to be swapped for a real packing or delivery photo). *Accept:* the section shows the two leaflet paragraphs, the CTA, and an image slot.
 
+Tasks:
+- TASK-018 — Build the Home why-your-donation-matters section in index.html
+
 ### REQ-013 — Recurring closing CTA strip
 
 A crimson panel reused at the foot of the Home and About pages: a short rallying headline (Home: "Help us reach even more in 2026") and a Donate now button. *Accept:* the crimson CTA strip with headline and Donate button appears at the foot of Home and About.

@@ -92,6 +92,9 @@ Tasks:
 
 A tinted band of the four leaflet pillars, each an icon, title and one line: Volunteer run ("Powered by kindness, driven by community"); South West Scotland ("Supporting children, young people and vulnerable adults from Girvan to Largs"); Red Bags Full of Joy ("Thoughtful gifts. Dignity. Comfort. Moments of joy."); 7,657 delivered in 2025 ("Real impact. Real children, young people and vulnerable adults. Real difference."). *Accept:* four pillars render with their exact titles and lines.
 
+Tasks:
+- TASK-017 — Build the Home four-pillars tinted band in index.html
+
 ### REQ-012 — Home why-your-donation-matters section
 
 A heading, the signature rule, two paragraphs drawn from the leaflet, a Support NBCC button, and an impact photo slot (currently a placeholder, to be swapped for a real packing or delivery photo). *Accept:* the section shows the two leaflet paragraphs, the CTA, and an image slot.

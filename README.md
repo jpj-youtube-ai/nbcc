@@ -20,6 +20,7 @@ infra/envs/          Thin per-env roots: staging/ and production/
 .mcp.json            MCP servers for this repo (github, postgres)
 index.html …         Static site: Home, About, Donate, Contact (HTML pages)
 assets/              Shared site stylesheet (css/styles.css) + script (js/main.js)
+_redirects           Clean-URL rewrite/redirect rules for the static site
 ```
 
 ## Static site
@@ -38,6 +39,63 @@ placeholders in the markup for now. The shared-asset wiring is verified by
 `test/unit/static-site.test.ts` (`npm run test:unit`). The site is not part of
 the container image (the Dockerfile copies only `src/`, `migrations/`, and build
 config), so it does not affect the service build or deploy.
+
+### Clean URLs
+
+Each page is served at a clean, canonical URL (no `.html`):
+
+| Clean URL   | Serves        |
+|-------------|---------------|
+| `/`         | `index.html`  |
+| `/about-us` | `about.html`  |
+| `/donate`   | `donate.html` |
+| `/contact`  | `contact.html`|
+
+The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
+Netlify-style format honoured natively by **Netlify** and **Cloudflare Pages**:
+
+```
+/about-us      /about.html     200    # rewrite: serve the page, URL stays clean
+/donate        /donate.html    200
+/contact       /contact.html   200
+/index.html    /               301!   # canonicalise raw .html onto the clean URL
+/about.html    /about-us       301!   # ! forces the redirect over the real file
+/donate.html   /donate         301!
+/contact.html  /contact        301!
+```
+
+`200` is a *rewrite* (content served, address bar unchanged); `301!` is a forced
+permanent redirect — the `!` is required because the `.html` files physically
+exist and would otherwise be served directly. `/` serves `index.html`
+automatically, so it needs no rewrite rule. This is URL mapping only; it does
+**not** pick the host (REQ-033).
+
+**Equivalent rules on other hosts** (if `_redirects` isn't honoured), should the
+host decision land elsewhere:
+
+- **Netlify `netlify.toml`** — one block per rule:
+  ```toml
+  [[redirects]]
+  from = "/about-us"
+  to = "/about.html"
+  status = 200
+  [[redirects]]
+  from = "/about.html"
+  to = "/about-us"
+  status = 301
+  force = true
+  ```
+- **Vercel `vercel.json`** — `rewrites` for the clean URLs, `redirects` (with
+  `"permanent": true`) for the `.html → clean` canonicalisation.
+- **nginx** — `location = /about-us { try_files /about.html =404; }` for the
+  rewrite, plus `location = /about.html { return 301 /about-us; }`.
+- **Apache `.htaccess`** — `RewriteRule ^about-us$ about.html [L]` for the
+  rewrite, plus `RewriteRule ^about\.html$ /about-us [R=301,L]`.
+
+To exercise the acceptance check locally, serve the repo root with any static
+server that honours `_redirects` (e.g. `npx netlify dev`) and request `/`,
+`/about-us`, `/donate`, `/contact`. The mapping itself is verified host-free by
+`test/unit/clean-urls.test.ts` (`npm run test:unit`).
 
 ## Prerequisites
 

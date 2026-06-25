@@ -744,3 +744,18 @@ a {
 .closing-cta .btn-primary:hover {
   background: var(--tan-soft);
 }
+
+/* =================================================================
+   ABOUT INTRO (REQ-014) — about.html. Centred page intro; reuses
+   .eyebrow / base h1 / .rule.center / .lede and the tokens.
+   ================================================================= */
+.about-intro {
+  text-align: center;
+  max-width: 760px;
+  margin-inline: auto;
+  padding-block: clamp(8px, 3vw, 40px);
+}
+.about-intro .rule,
+.about-intro .lede {
+  margin-inline: auto;
+}

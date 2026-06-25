@@ -32,6 +32,12 @@ describe.each(PAGES)("%s footer", (file) => {
     expect(footer).toMatch(/<h4>\s*Ways to give\s*<\/h4>/i);
   });
 
+  it("shows the brand logo lockup in the foot-brand column", () => {
+    const brand = footer.match(/<div class="foot-brand">[\s\S]*?<div class="socials">/i)?.[0] ?? "";
+    expect(brand).toMatch(/<img[^>]+src="[^"]*nbcc-logo\.png"[^>]*>/i);
+    expect(brand).toMatch(/alt="[^"]+"/);
+  });
+
   it("lists the four Explore links by clean URL", () => {
     const list = exploreList(footer);
     for (const href of ["/", "/about-us", "/donate", "/contact"]) {

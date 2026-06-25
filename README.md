@@ -163,8 +163,21 @@ dark surfaces). **Every `color`/`background`/`border` value references a
 `var(--…)` token**; the only hex/rgb literals live inside `:root`.
 
 Contrast rule: body/long-form text is never set in Elfin Tan or Holly Green on
-cream/card surfaces. Enforced by `test/unit/brand-colours.test.ts`. Typography and
-web fonts are REQ-005/006; the logo asset is REQ-034.
+cream/card surfaces. Enforced by `test/unit/brand-colours.test.ts`. Typography is
+documented below (REQ-005); the logo asset is REQ-034.
+
+### Typography (REQ-005)
+
+Two families, both **self-hosted** as latin-subset `woff2` in `assets/fonts/` (one
+weight each, to stay within the perf budget's ≤ 2 font files): **Playfair Display
+700** for headings (`--font-head`, set in `var(--crimson)`) and **Poppins 400**
+for body, nav, buttons and labels (`--font-body`). Each token includes a system
+fallback stack. Sizes come from `clamp()` scale tokens — `--fs-hero`,
+`--fs-page-intro`, `--fs-section`, `--fs-lede`, `--fs-body`, `--fs-eyebrow`. The
+two `@font-face` blocks live in the one shared stylesheet (no build step); other
+weights (e.g. nav/footer 500/600) synthesise from the single weight. **Google
+Fonts** (preconnect + a non-`.css` stylesheet link per page) is the documented
+alternative. Enforced by `test/unit/typography.test.ts`.
 
 ### API endpoints
 
@@ -199,9 +212,10 @@ The four pages target a low-weight mobile budget:
 
 How it's kept:
 
-- **Fonts:** a pure **system font stack** — zero web-font downloads. If web fonts
-  are ever added, cap at two families, self-host subset `woff2`, and use
-  `font-display: swap`.
+- **Fonts:** **two** self-hosted latin-subset `woff2` (Playfair Display + Poppins,
+  one weight each, `font-display: swap`) — exactly at the ≤ 2 font-file cap,
+  ~31 KB total. See **Typography (REQ-005)** above. Google Fonts is the documented
+  alternative.
 - **JS:** the one shared script loads with `defer` (never render-blocking); no
   framework bundles, no build step.
 - **Images:** none yet; any `<img>` must declare intrinsic `width`/`height`, use

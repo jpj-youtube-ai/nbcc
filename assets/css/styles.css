@@ -226,3 +226,89 @@ a {
     transform: translateY(-7px) rotate(-45deg);
   }
 }
+
+/* =================================================================
+   FOOTER (REQ-003) — ported from the NBCC baseline.
+   Reuses the nav token subset (--maroon, --cream, --line, --maxw);
+   cream-on-maroon tints via the same rgba(248,245,238,a) the nav uses.
+   ================================================================= */
+.site-footer {
+  background: var(--maroon);
+  color: rgba(248, 245, 238, 0.82); /* cream at 82% */
+  margin-top: clamp(48px, 8vw, 96px);
+}
+.site-footer .wrap {
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding: clamp(46px, 6vw, 68px) clamp(20px, 5vw, 48px);
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr;
+  gap: 36px;
+}
+.site-footer h4 {
+  color: var(--cream);
+  font-size: 1.05rem;
+  margin: 0 0 14px;
+}
+.site-footer a {
+  color: rgba(248, 245, 238, 0.82);
+  text-decoration: none;
+}
+.site-footer a:hover {
+  color: var(--cream);
+}
+.site-footer ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 0.94rem;
+}
+.foot-name {
+  color: var(--cream);
+  font-weight: 700;
+  font-size: 1.15rem;
+  margin: 0 0 10px;
+}
+.foot-brand p {
+  font-size: 0.92rem;
+  max-width: 36ch;
+}
+.socials {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+.socials a {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(248, 245, 238, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.socials a:hover {
+  background: rgba(248, 245, 238, 0.24);
+}
+.site-footer .legal {
+  border-top: 1px solid rgba(248, 245, 238, 0.16);
+}
+.site-footer .legal .wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  justify-content: space-between;
+  padding-block: 18px;
+  font-size: 0.82rem;
+}
+
+/* Stack the footer columns on narrow screens (REQ-032). */
+@media (max-width: 680px) {
+  .site-footer .wrap {
+    grid-template-columns: 1fr;
+  }
+}

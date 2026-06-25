@@ -121,6 +121,19 @@ current page's link is marked `class="active" aria-current="page"`. Verified by
 > REQ-003. The brand reads "NBCC" while page `<title>`s still carry the
 > "Charity Site" placeholder (a later rename).
 
+### Footer
+
+Every page mounts the same maroon footer in its `<footer class="site-footer">`
+slot (REQ-003, ported from the NBCC design), **identical across all four pages**:
+three columns — brand + social links (Instagram/Facebook/X), **Explore** (the
+clean URLs `/`, `/about-us`, `/donate`, `/contact`), and **Ways to give**
+(`/donate`, `/contact`) — plus a legal strip with the SCIO line and the OSCR
+registration link for charity **SC047995**. Styling lives in the shared
+`assets/css/styles.css` under a commented `FOOTER (REQ-003)` block (maroon
+background, cream text, reuses `--maroon`/`--cream`/`--line`/`--maxw`; columns
+stack at ≤680px). No web fonts and no `<img>` (social icons are inline SVG), so
+the perf budget holds. Verified by `test/unit/footer.test.ts`.
+
 ### SEO & social metadata
 
 Every page's `<head>` carries a unique set of SEO + social-share tags following

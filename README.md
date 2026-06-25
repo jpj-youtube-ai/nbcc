@@ -8,7 +8,7 @@ pipeline.
 ## What's here
 
 ```
-src/                 Express + TypeScript app (health check, config, db, clients)
+src/                 Express + TypeScript app (health, static site, /api stubs, config, db)
 migrations/          node-pg-migrate migrations (expand-contract)
 test/unit/           Vitest unit tests (DB-free)
 features/            Cucumber BDD (.feature + JS step defs)
@@ -25,20 +25,21 @@ _redirects           Clean-URL rewrite/redirect rules for the static site
 
 ## Static site
 
-A standalone four-page static site lives at the repo root, independent of the
-Express service: `index.html` (Home), `about.html` (About), `donate.html`
-(Donate), `contact.html` (Contact). Each is a complete HTML5 document that links
-the **one** shared stylesheet `assets/css/styles.css` and the **one** shared
-script `assets/js/main.js` (loaded with `defer`) — no inline or per-page
-styles/scripts. View it by opening any page in a browser, or by serving the repo
-root with any static file server.
+A four-page static site lives at the repo root and is **served by the Express
+service** (TASK-005 / REQ-033): `index.html` (Home), `about.html` (About),
+`donate.html` (Donate), `contact.html` (Contact). Each is a complete HTML5
+document that links the **one** shared stylesheet `assets/css/styles.css` and the
+**one** shared script `assets/js/main.js` (loaded with `defer`) — no inline or
+per-page styles/scripts, no build step. View it by opening any page in a browser,
+or by running the app (below) and visiting the clean URLs.
 
 It is intentionally a skeleton: navigation, footer, and page content sections
 arrive in their own requirements (REQ-002, REQ-003, REQ-010+) and are empty
 placeholders in the markup for now. The shared-asset wiring is verified by
-`test/unit/static-site.test.ts` (`npm run test:unit`). The site is not part of
-the container image (the Dockerfile copies only `src/`, `migrations/`, and build
-config), so it does not affect the service build or deploy.
+`test/unit/static-site.test.ts` (`npm run test:unit`). `src/routes/site.ts`
+serves `/`, the clean URLs and `/assets`, and the Dockerfile copies the four
+pages + `assets/` + `_redirects` into the runtime image — so the marketing site
+ships and deploys with the service.
 
 ### Clean URLs
 
@@ -52,7 +53,9 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/contact`  | `contact.html`|
 
 The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
-Netlify-style format honoured natively by **Netlify** and **Cloudflare Pages**:
+Netlify-style format. The Express site router (`src/routes/site.ts`) parses it
+and applies the same rules at runtime, and the file is also honoured natively by
+**Netlify** / **Cloudflare Pages** for any future static host:
 
 ```
 /about-us      /about.html     200    # rewrite: serve the page, URL stays clean
@@ -67,8 +70,9 @@ Netlify-style format honoured natively by **Netlify** and **Cloudflare Pages**:
 `200` is a *rewrite* (content served, address bar unchanged); `301!` is a forced
 permanent redirect — the `!` is required because the `.html` files physically
 exist and would otherwise be served directly. `/` serves `index.html`
-automatically, so it needs no rewrite rule. This is URL mapping only; it does
-**not** pick the host (REQ-033).
+automatically, so it needs no rewrite rule. REQ-033 (hosting) is resolved by
+serving the site from the existing Express/ECS service (see the API + budget
+notes below); the same `_redirects` file stays valid for a static host later.
 
 **Equivalent rules on other hosts** (if `_redirects` isn't honoured), should the
 host decision land elsewhere:
@@ -92,10 +96,12 @@ host decision land elsewhere:
 - **Apache `.htaccess`** — `RewriteRule ^about-us$ about.html [L]` for the
   rewrite, plus `RewriteRule ^about\.html$ /about-us [R=301,L]`.
 
-To exercise the acceptance check locally, serve the repo root with any static
-server that honours `_redirects` (e.g. `npx netlify dev`) and request `/`,
-`/about-us`, `/donate`, `/contact`. The mapping itself is verified host-free by
-`test/unit/clean-urls.test.ts` (`npm run test:unit`).
+To exercise the acceptance check locally, run the app (`npm run build && node
+dist/index.js`) and request `/`, `/about-us`, `/donate`, `/contact`. The
+`features/site.feature` BDD asserts this end-to-end against the running app, and
+`test/unit/clean-urls.test.ts` + `test/unit/site.test.ts` verify the rules
+host-free. The `_redirects` file also works as-is on a static host
+(e.g. `npx netlify dev`).
 
 ### SEO & social metadata
 
@@ -108,11 +114,63 @@ above; no title/description/canonical is duplicated across pages. Verified by
 `test/unit/seo-metadata.test.ts`.
 
 > **Placeholder domain:** canonical/`og:url`/`og:image` use
-> `https://www.example.org` because no production domain exists yet (hosting is
-> REQ-033). Replace it across the four pages + `test/unit/seo-metadata.test.ts`
+> `https://www.example.org` because there's no production domain / custom
+> hostname yet. Replace it across the four pages + `test/unit/seo-metadata.test.ts`
 > in one find/replace when the real domain lands. The share image
 > (`/assets/img/og-image.png`) is **referenced only** — the asset/pipeline is
 > REQ-034.
+
+### API endpoints
+
+Two marketing endpoints are wired as routes but **not yet implemented** — each
+returns `501 Not Implemented` until its own requirement lands:
+
+| Method + path | Status | Requirement |
+|---|---|---|
+| `POST /api/checkout-session` | `501` stub | REQ-029 (payment) |
+| `POST /api/contact` | `501` stub | REQ-030 (contact form) |
+
+They live in `src/routes/api.ts`; TASK-005 wires only the routing.
+
+> **Hosting (REQ-033):** the marketing site and these endpoints are served by the
+> **existing Express service on ECS/Fargate behind the ALB** — not a static host
+> or serverless platform. This deliberately reuses the current AWS infra; the
+> issue's "static deploy + serverless functions" (Vercel/Netlify) wording was
+> adapted accordingly. The `_redirects` file + per-host notes above keep a
+> static-host migration cheap if that ever changes.
+
+### Performance budget
+
+The four pages target a low-weight mobile budget:
+
+| Metric | Budget |
+|---|---|
+| Lighthouse Performance (mobile) | ≥ 95 |
+| Total transfer / page | ≤ 150 KB |
+| Requests / page | ≤ 15 |
+| Web-font files | ≤ 2 |
+| LCP (mobile) | < 2.5 s |
+
+How it's kept:
+
+- **Fonts:** a pure **system font stack** — zero web-font downloads. If web fonts
+  are ever added, cap at two families, self-host subset `woff2`, and use
+  `font-display: swap`.
+- **JS:** the one shared script loads with `defer` (never render-blocking); no
+  framework bundles, no build step.
+- **Images:** none yet; any `<img>` must declare intrinsic `width`/`height`, use
+  `loading="lazy"`, and a modern format (WebP/AVIF).
+
+`test/unit/perf-budget.test.ts` enforces the structural invariants (transfer
+weight, ≤ 2 font files, no render-blocking JS, image attributes, request count)
+in CI. A full **Lighthouse** pass needs headless Chrome, so run it manually
+against the running app (mobile is Lighthouse's default form factor):
+
+```bash
+npm run build && node dist/index.js &     # serve on :3000
+npx lighthouse http://localhost:3000/ --only-categories=performance --view
+# repeat for /about-us, /donate, /contact
+```
 
 ## Prerequisites
 

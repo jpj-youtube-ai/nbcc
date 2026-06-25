@@ -85,6 +85,9 @@ Tasks:
 
 Eyebrow "Volunteer run Scottish charity"; H1 "No one should feel forgotten on Christmas Eve" with "forgotten" emphasised in maroon italic; a lede on the volunteer-run, year-round mission; two buttons, Donate now (primary) and Who we help (ghost); the logo as the hero illustration with a floating proof card reading "7,657 Red Bags Full of Joy delivered in 2025". *Accept:* the hero shows the emphasised H1, both CTAs, and the proof card figure.
 
+Tasks:
+- TASK-016 — Build the Home hero section in index.html with emphasised H1, both CTAs and the proof card
+
 ### REQ-011 — Home four pillars
 
 A tinted band of the four leaflet pillars, each an icon, title and one line: Volunteer run ("Powered by kindness, driven by community"); South West Scotland ("Supporting children, young people and vulnerable adults from Girvan to Largs"); Red Bags Full of Joy ("Thoughtful gifts. Dignity. Comfort. Moments of joy."); 7,657 delivered in 2025 ("Real impact. Real children, young people and vulnerable adults. Real difference."). *Accept:* four pillars render with their exact titles and lines.

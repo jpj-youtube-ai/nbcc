@@ -394,6 +394,19 @@ by its `<h2>` (REQ-032), reusing the `.rule` divider (REQ-007) and `.reveal`
 explicitly a later enhancement, out of scope here. Verified by
 `test/unit/about-top-communities.test.ts`.
 
+### Donate intro (REQ-019)
+
+`donate.html`'s `<main>` opens with a centred intro (`DONATE INTRO` CSS block,
+mirroring `ABOUT INTRO`) that reuses the home systems: a crimson `.eyebrow`
+("Donate"), the base `<h1>` ("Your gift becomes someone's Christmas"), the
+`.rule` divider under it (centred by the `.donate-intro` auto-margin, as on
+`.about-intro`), and a `.lede` noting that everyone at **NBCC** is a volunteer and
+that **around £50 is the value of one Red Bag Full of Joy**, with a give-once or
+give-monthly framing. Copy leads with "NBCC" and is dash-free (REQ-031). No new
+fonts/images, token-only colours; the `.page-sections` placeholder (for the give
+widget, REQ-020+) and the shared nav/footer are kept. Verified by
+`test/unit/donate-intro.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

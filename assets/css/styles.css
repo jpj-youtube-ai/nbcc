@@ -865,3 +865,75 @@ a {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* =================================================================
+   ABOUT AGE-REACH FIGURES (REQ-017) — about.html. A maroon band of
+   eight 2025 age-band counts (totalling 7,657) rendered as a semantic
+   <dl>. Cream-on-maroon tints only — never tan/holly body text — with
+   the figures in Playfair (REQ-005). Reuses the tinted-band pattern,
+   .rule (REQ-007), .reveal (REQ-008) and the tokens; token-only colours.
+   ================================================================= */
+.age-reach {
+  background: var(--maroon);
+  color: var(--cream-82);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
+  margin-block: clamp(8px, 3vw, 32px);
+  text-align: center;
+}
+/* Invert the eyebrow + heading to cream for contrast on the maroon band. */
+.age-reach .eyebrow {
+  color: var(--cream-82);
+}
+.age-reach h2 {
+  color: var(--cream);
+  font-size: var(--fs-section);
+}
+.age-reach-intro {
+  font-size: var(--fs-lede);
+  color: var(--cream-82);
+  max-width: 56ch;
+  margin: 1rem auto 0;
+}
+.ages {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: clamp(12px, 1.5vw, 20px);
+  margin-top: clamp(24px, 4vw, 40px);
+}
+/* Each band shows the figure on top, label beneath. column-reverse lets the
+   markup keep a valid dt-before-dd pair while putting the number first. */
+.age {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  padding: 18px 8px;
+  background: var(--cream-12);
+  border: 1px solid var(--cream-16);
+  border-radius: var(--radius);
+}
+.age-num {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: clamp(1.3rem, 1rem + 1vw, 1.9rem);
+  line-height: 1;
+  color: var(--cream);
+  margin: 0;
+}
+.age-label {
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  color: var(--cream-82);
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .ages {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+@media (max-width: 680px) {
+  .ages {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

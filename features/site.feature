@@ -9,7 +9,7 @@ Feature: Marketing site served by the app
 
     Examples:
       | path      | marker                  |
-      | /         | Welcome to Charity Site |
+      | /         | Christmas Eve           |
       | /about-us | About                   |
       | /donate   | Donate                  |
       | /contact  | Contact                 |

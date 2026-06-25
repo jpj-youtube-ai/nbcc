@@ -315,6 +315,18 @@ text) so it stays high-contrast (REQ-032) — matching the prototype; the global
 button is unchanged. Token-only colours, `.reveal` reused. Verified by
 `test/unit/closing-cta.test.ts`.
 
+### About intro (REQ-014)
+
+`about.html`'s `<main>` opens with a centred intro (`ABOUT INTRO` CSS block) that
+reuses the home systems: a crimson `.eyebrow` ("About us"), the base `<h1>`
+("Powered by kindness, driven by community"), the `.rule` divider under it, and a
+`.lede` introducing **The Night Before Christmas Campaign (NBCC)** in Annbank,
+Ayrshire, supporting children, young people and vulnerable adults across South
+West Scotland, from Girvan to Largs. The full name is introduced with the acronym
+so the copy still leads with "NBCC" elsewhere (REQ-031). No new fonts/images,
+token-only; the `.page-sections` placeholder and the closing CTA strip are kept.
+Verified by `test/unit/about-intro.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

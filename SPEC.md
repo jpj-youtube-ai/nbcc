@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (13)
+## Shipped (14)
 
 ### REQ-001 — Multi-page site structure
 
@@ -91,6 +91,13 @@ A heading, the signature rule, two paragraphs drawn from the leaflet, a Support 
 Tasks:
 - TASK-018 — Build the Home why-your-donation-matters section in index.html
 
+### REQ-013 — Recurring closing CTA strip
+
+A crimson panel reused at the foot of the Home and About pages: a short rallying headline (Home: "Help us reach even more in 2026") and a Donate now button. *Accept:* the crimson CTA strip with headline and Donate button appears at the foot of Home and About.
+
+Tasks:
+- TASK-019 — Add the recurring crimson closing CTA strip to the foot of Home and About
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -100,14 +107,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (21)
-
-### REQ-013 — Recurring closing CTA strip
-
-A crimson panel reused at the foot of the Home and About pages: a short rallying headline (Home: "Help us reach even more in 2026") and a Donate now button. *Accept:* the crimson CTA strip with headline and Donate button appears at the foot of Home and About.
-
-Tasks:
-- TASK-019 — Add the recurring crimson closing CTA strip to the foot of Home and About
+## Planned (20)
 
 ### REQ-014 — About intro
 

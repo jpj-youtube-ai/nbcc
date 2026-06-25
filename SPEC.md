@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (21)
+## Shipped (22)
 
 ### REQ-001 — Multi-page site structure
 
@@ -147,6 +147,13 @@ The conversion centrepiece: a card split into a main column and a Holly Green si
 Tasks:
 - TASK-028 — Build the Give widget shell and once/monthly mode toggle in donate.html
 
+### REQ-021 — Give once tiers
+
+Suggested one-off amounts — £10 (cosy essentials), £25 (towards a Red Bag, marked "Most chosen"), £50 (one full Red Bag), £100 (a whole family) — plus a Choose-your-own-amount option. These amounts are a suggestion to be confirmed or reworded, since the leaflet specifies only monthly tiers. *Accept:* the one-off tiers and the custom-amount option render, with the Most-chosen marker, flagged as suggested amounts.
+
+Tasks:
+- TASK-029 — Build the Give once tiers into #tiersOnce on donate.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -156,14 +163,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (14)
-
-### REQ-021 — Give once tiers
-
-Suggested one-off amounts — £10 (cosy essentials), £25 (towards a Red Bag, marked "Most chosen"), £50 (one full Red Bag), £100 (a whole family) — plus a Choose-your-own-amount option. These amounts are a suggestion to be confirmed or reworded, since the leaflet specifies only monthly tiers. *Accept:* the one-off tiers and the custom-amount option render, with the Most-chosen marker, flagged as suggested amounts.
-
-Tasks:
-- TASK-029 — Build the Give once tiers into #tiersOnce on donate.html
+## Planned (13)
 
 ### REQ-022 — Give monthly tiers
 

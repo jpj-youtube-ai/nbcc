@@ -127,6 +127,9 @@ Tasks:
 
 A tinted band with a grid of ten members, each a portrait photo, name and role, laid out five across on desktop, three on tablet and two on mobile. Six of the ten roles are "Volunteer Elf" placeholders to be confirmed by NBCC before launch. *Accept:* ten responsive team cards render, with placeholder roles marked for confirmation.
 
+Tasks:
+- TASK-024 — Build the About meet-the-team responsive grid in about.html
+
 ### REQ-017 — About age-reach figures (2025)
 
 A maroon band presenting eight age-band counts that sum to exactly 7,657: 0–12 months 182; 1–3 years 762; 4–7 years 1,663; 8–11 years 1,990; 12–15 years 1,719; 16–17 years 587; 18 and over 528; not stated 226. *Accept:* the eight figures display and total exactly 7,657.

@@ -120,6 +120,9 @@ Tasks:
 
 The founding quote ("Do all children get a Christmas Eve box like I do?", Tygan, 2015), the origin narrative, and Tygan's real headshot with a caption. This is the one piece of copy carried from the existing site rather than the leaflet, so wording and figures must be verified. *Accept:* the story shows the quote, the narrative, and a captioned headshot, flagged for content verification.
 
+Tasks:
+- TASK-021 — Build the About our story section in about.html with founding quote, origin narrative and captioned headshot
+
 ### REQ-016 — About meet-the-team grid
 
 A tinted band with a grid of ten members, each a portrait photo, name and role, laid out five across on desktop, three on tablet and two on mobile. Six of the ten roles are "Volunteer Elf" placeholders to be confirmed by NBCC before launch. *Accept:* ten responsive team cards render, with placeholder roles marked for confirmation.

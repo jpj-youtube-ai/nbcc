@@ -430,6 +430,25 @@ Semantic `<section>` named by its `<h2>` (REQ-032); copy uses "give once"/"give
 monthly" and "NBCC", dash-free (REQ-031). Verified by
 `test/unit/give-widget.test.ts` (static markup + the toggle behaviour in jsdom).
 
+### Give once tiers (REQ-021)
+
+The give-once amounts are mounted into the shell's `#tiersOnce` container
+(`GIVE ONCE TIERS` CSS block): four selectable amount tiles plus a
+choose-your-own-amount field, laid out on the shared `.give-tiers` grid (two
+columns, collapsing to one ~360px). Each amount is a `.card.tier.give-tier`
+`<button>` — reusing the `.card`/`.tier` surface (REQ-009) and the hover-lift
+(REQ-008) — showing a Playfair crimson `.give-amount` and a `.give-tier-desc`:
+**£10** (cosy essentials), **£25** (towards a Red Bag, marked **"Most chosen"**
+via a floating `.give-flag` on the crimson-outlined `.is-featured` tile), **£50**
+(one full Red Bag) and **£100** (a whole family). The custom option is a
+full-width `.give-tier-custom` card with a real `<label for="customAmount">` tied
+to a number `#customAmount` input (REQ-032). Token-only colours, no hex/rgb
+outside `:root`; copy is dash-free and uses "NBCC" (REQ-031). These one-off
+amounts are flagged with a `CONTENT VERIFICATION (REQ-021)` comment — the 2025
+leaflet specifies only monthly tiers, so they are a suggestion to confirm. **Out
+of scope here:** the `data-amount`/`startCheckout` checkout contract (REQ-028) and
+the monthly tiers (REQ-022). Verified by `test/unit/give-once-tiers.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

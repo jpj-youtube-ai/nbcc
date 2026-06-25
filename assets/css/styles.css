@@ -1127,3 +1127,107 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   GIVE ONCE TIERS (REQ-021) — donate.html. The one-off suggested amounts
+   mounted into #tiersOnce: four selectable amount tiles plus a full-width
+   choose-your-own-amount field, on the shared .card/.tier surface (REQ-009)
+   with the hover-lift (REQ-008). The .give-tiers grid (shared with the
+   monthly tiers, REQ-022) is two columns, collapsing to one ~360px.
+   Token-only colours.
+   ================================================================= */
+.give-tiers {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(12px, 1.5vw, 16px);
+}
+/* Each amount is a selectable tile: the .card surface + .tier hover-lift,
+   with a button reset so it reads as a control. */
+.give-tier {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: clamp(18px, 2.5vw, 24px);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.give-tier:hover,
+.give-tier:focus-visible {
+  border-color: var(--crimson);
+}
+.give-amount {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: clamp(1.4rem, 1.1rem + 1vw, 1.8rem);
+  line-height: 1;
+  color: var(--crimson);
+}
+.give-tier-desc {
+  font-size: 0.9rem;
+  color: var(--slate-soft);
+}
+/* The "Most chosen" tile: crimson outline + the floating pill marker. */
+.give-tier.is-featured {
+  border-color: var(--crimson);
+}
+.give-flag {
+  position: absolute;
+  top: -11px;
+  right: 16px;
+  padding: 4px 12px;
+  background: var(--crimson);
+  color: var(--cream);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+}
+/* Choose your own amount: a full-width labelled field, not a clickable tile. */
+.give-tier-custom {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: clamp(16px, 2.5vw, 22px);
+}
+.give-custom-label {
+  font-weight: 600;
+  color: var(--maroon);
+}
+.give-custom-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 160px;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+.give-custom-field:focus-within {
+  border-color: var(--crimson);
+}
+.give-custom-currency {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--crimson);
+}
+.give-custom-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--slate);
+}
+
+@media (max-width: 420px) {
+  .give-tiers {
+    grid-template-columns: 1fr;
+  }
+}

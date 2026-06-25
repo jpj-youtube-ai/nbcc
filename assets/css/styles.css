@@ -121,6 +121,42 @@ h1 {
   scroll-margin-top: calc(var(--nav-h) + 1rem);
 }
 
+/* =================================================================
+   BRAND MARKS (REQ-007) — the signature divider: a thin Holly Green
+   hairline with a centred crimson diamond. Pseudo-elements only (no
+   image); token-only colours. Use sparingly, directly under a heading.
+   ================================================================= */
+.rule {
+  position: relative;
+  height: 12px;
+  max-width: 340px;
+  margin: 14px 0 0;
+}
+.rule::before {
+  content: "";
+  position: absolute;
+  inset: 50% 0 auto 0;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--holly);
+  opacity: 0.55;
+  border-radius: 2px;
+}
+.rule::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--crimson);
+  box-shadow: 0 0 0 4px var(--cream); /* halo breaks the hairline around the diamond */
+}
+.rule.center {
+  margin-inline: auto;
+}
+
 p {
   margin: 0 0 var(--space);
   color: var(--slate-soft);

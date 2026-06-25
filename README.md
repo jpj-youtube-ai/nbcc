@@ -197,6 +197,17 @@ Layout primitives live in the same canonical `:root` as the colours and type:
 Every padding/radius/shadow value references a token (no inline literals — keeps
 the brand-colours contract). Enforced by `test/unit/layout-tokens.test.ts`.
 
+### Brand marks (REQ-007)
+
+The signature divider — a thin **Holly Green** hairline with a centred **crimson**
+diamond — is the `.rule` component in the shared stylesheet (`BRAND MARKS`
+block). It's drawn entirely with pseudo-elements (`::before` = the hairline,
+`::after` = a rotated-square diamond with a `--cream` halo) — **no image**, so the
+perf budget is unaffected — and uses token-only colours (`--holly`, `--crimson`).
+Use it **sparingly, directly under a heading** (`<div class="rule"></div>` sits
+under each page `<h1>`); later section heads reuse the same class. Enforced by
+`test/unit/brand-marks.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

@@ -373,6 +373,27 @@ REQ-031). Semantic `<section>` named by its `<h2>` (REQ-032), reusing the `.rule
 divider (REQ-007) and `.reveal` (REQ-008); token-only colours. Verified by
 `test/unit/about-age-reach.test.ts`.
 
+### About top-10 communities (REQ-018)
+
+Below the age-reach band, a tinted band (`ABOUT TOP-10 COMMUNITIES` CSS block,
+`var(--holly-soft)`, `--radius-lg`, mirroring `.meet-team`/`.pillars`) ranks the
+ten communities NBCC reached most in 2025. A semantic `<ol class="communities">`
+carries the rank order; each `<li class="rank">` lays out rank position, name, a
+**pure-CSS** horizontal bar (`.rank-bar` track + `.rank-fill`), and the value
+(count plus that community's share of the 7,657 total). Each bar's width is
+**proportional to Ayr at 100%** — set via the `--w` custom property
+(`count ÷ Ayr's 2,096`), so Ayr is full width: Ayr 2,096 (27.4%), Kilwinning 692
+(9.0%), Stevenston 547 (7.1%), Kilmarnock 532 (6.9%), Auchinleck 510 (6.7%),
+Maybole 370 (4.8%), Dalmellington 332 (4.3%), Ardrossan 301 (3.9%), Irvine 280
+(3.7%), Girvan 205 (2.7%). Counts render in Playfair (`--font-head`, REQ-005);
+the fill is a `--crimson`→`--maroon` gradient on a `--tan-soft` track. **No image
+tags** — bars are CSS, so the perf budget holds. Responsive down to ~360px (the
+bar drops onto its own full-width row below ~560px). Semantic `<section>` named
+by its `<h2>` (REQ-032), reusing the `.rule` divider (REQ-007) and `.reveal`
+(REQ-008); copy is dash-free (REQ-031); token-only colours. A geographic map is
+explicitly a later enhancement, out of scope here. Verified by
+`test/unit/about-top-communities.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

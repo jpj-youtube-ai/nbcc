@@ -99,7 +99,37 @@
               <!-- Empty tier containers; the toggle shows/hides these. Later REQs
                    mount their tiers here: REQ-021 the one-off amounts into
                    #tiersOnce, REQ-022 the monthly plans into #tiersMonthly. -->
-              <div class="give-tiers" id="tiersOnce" role="region" aria-label="Give once amounts" hidden></div>
+              <div class="give-tiers" id="tiersOnce" role="region" aria-label="Give once amounts" hidden>
+                <!-- CONTENT VERIFICATION (REQ-021): these one-off amounts are
+                     SUGGESTED tiers. The 2025 leaflet specifies only monthly
+                     tiers (REQ-022); confirm or reword these amounts and their
+                     descriptions with NBCC before launch. The checkout contract
+                     (data-amount and startCheckout wiring) is REQ-028, not here. -->
+                <button type="button" class="card tier give-tier">
+                  <span class="give-amount">&pound;10</span>
+                  <span class="give-tier-desc">Cosy essentials: a hat, gloves, hot chocolate and treats.</span>
+                </button>
+                <button type="button" class="card tier give-tier is-featured">
+                  <span class="give-flag">Most chosen</span>
+                  <span class="give-amount">&pound;25</span>
+                  <span class="give-tier-desc">A thoughtful bundle towards a Red Bag Full of Joy.</span>
+                </button>
+                <button type="button" class="card tier give-tier">
+                  <span class="give-amount">&pound;50</span>
+                  <span class="give-tier-desc">Around the value of one full Red Bag Full of Joy.</span>
+                </button>
+                <button type="button" class="card tier give-tier">
+                  <span class="give-amount">&pound;100</span>
+                  <span class="give-tier-desc">Christmas joy for a whole family who would go without.</span>
+                </button>
+                <div class="card give-tier-custom">
+                  <label class="give-custom-label" for="customAmount">Choose your own amount</label>
+                  <div class="give-custom-field">
+                    <span class="give-custom-currency" aria-hidden="true">&pound;</span>
+                    <input class="give-custom-input" type="number" id="customAmount" name="customAmount" min="1" step="1" inputmode="numeric" placeholder="Other amount" />
+                  </div>
+                </div>
+              </div>
               <div class="give-tiers" id="tiersMonthly" role="region" aria-label="Give monthly amounts"></div>
             </div>
             <!-- Holly Green side panel. The detailed "where your gift goes"

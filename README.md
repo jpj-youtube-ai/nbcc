@@ -254,6 +254,28 @@ it isn't re-declared. All colours are tokens (no hex/rgb outside `:root`). The
 consumers (pillars/tiers/reassurance/team) mount these classes in REQ-010+; this
 ships only the system. Verified by `test/unit/ui-components.test.ts`.
 
+### Home hero (REQ-010)
+
+`index.html`'s `<main>` opens with the hero — the first page to mount the design
+system as content. It **reuses** existing systems only: the `.btn`/`.card`
+components (REQ-009), the `.rule` divider + logo lockup (REQ-007), `.reveal`
+(REQ-008) and the `:root` tokens. A `HOME HERO (REQ-010)` CSS block adds only
+hero-specific layout (two-column grid stacking ≤680px, `.eyebrow`, `.hero-emph`,
+proof-card positioning) — token-only colours.
+
+Content: a crimson eyebrow ("Volunteer run Scottish charity"), an H1 with
+"forgotten" emphasised maroon italic (`.hero-emph`), a lede on the volunteer run,
+year round mission, two CTAs (**Donate now** `.btn-primary` → `/donate`, **Who we
+help** `.btn-ghost`), the logo lockup as the illustration, and a floating proof
+card (`.card`) reading "7,657 Red Bags Full of Joy delivered in 2025". Honours
+the copy rules (REQ-031, no dashes) and accessibility floor (REQ-032: alt text,
+keyboard-focusable CTAs). Verified by `test/unit/home-hero.test.ts`.
+
+> The eyebrow uses crimson rather than the baseline's holly green because the
+> brand-colours contrast guard forbids holly text on light surfaces; `.hero-emph`
+> italic is synthesised (only Playfair 700 normal is self-hosted). The hi-res hero
+> logo asset is REQ-034.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (20)
+## Shipped (21)
 
 ### REQ-001 — Multi-page site structure
 
@@ -140,6 +140,13 @@ Headline "Your gift becomes someone's Christmas" with a lede noting the voluntee
 Tasks:
 - TASK-027 — Build the Donate intro section in donate.html
 
+### REQ-020 — Give widget shell and mode toggle
+
+The conversion centrepiece: a card split into a main column and a Holly Green side panel, with a toggle between Give once and Give monthly that switches the visible tiers. *Accept:* the widget renders the two-column layout and a working once/monthly toggle.
+
+Tasks:
+- TASK-028 — Build the Give widget shell and once/monthly mode toggle in donate.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -149,14 +156,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (15)
-
-### REQ-020 — Give widget shell and mode toggle
-
-The conversion centrepiece: a card split into a main column and a Holly Green side panel, with a toggle between Give once and Give monthly that switches the visible tiers. *Accept:* the widget renders the two-column layout and a working once/monthly toggle.
-
-Tasks:
-- TASK-028 — Build the Give widget shell and once/monthly mode toggle in donate.html
+## Planned (14)
 
 ### REQ-021 — Give once tiers
 

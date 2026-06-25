@@ -759,3 +759,49 @@ a {
 .about-intro .lede {
   margin-inline: auto;
 }
+
+/* =================================================================
+   ABOUT OUR STORY (REQ-015) — about.html. Two-column founding
+   narrative + headshot placeholder. Reuses .photo-slot / .reveal /
+   tokens; token-only colours.
+   ================================================================= */
+.our-story {
+  margin-block: clamp(8px, 3vw, 32px);
+}
+.story-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: clamp(28px, 5vw, 56px);
+  align-items: center;
+}
+/* "Our story" is an <h2> but reads as the eyebrow — keep the body font. */
+.our-story .eyebrow {
+  font-family: var(--font-body);
+}
+.story-prose .quote {
+  font-family: var(--font-head);
+  font-style: italic;
+  font-size: clamp(1.4rem, 1.1rem + 1.4vw, 2.1rem);
+  color: var(--crimson);
+  line-height: 1.25;
+  margin: 6px 0;
+}
+.story-prose .by {
+  color: var(--slate-soft);
+  font-weight: 600;
+  font-size: 0.92rem;
+  margin-bottom: 1.2rem;
+}
+.story-prose p {
+  color: var(--slate);
+  margin-bottom: 1rem;
+}
+.story-prose .story-close {
+  font-weight: 600;
+}
+
+@media (max-width: 680px) {
+  .story-grid {
+    grid-template-columns: 1fr;
+  }
+}

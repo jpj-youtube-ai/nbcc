@@ -327,6 +327,20 @@ so the copy still leads with "NBCC" elsewhere (REQ-031). No new fonts/images,
 token-only; the `.page-sections` placeholder and the closing CTA strip are kept.
 Verified by `test/unit/about-intro.test.ts`.
 
+### About our story (REQ-015)
+
+Below the intro, a two-column "our story" section (`ABOUT OUR STORY` CSS block)
+tells the founding narrative: an "Our story" `<h2>` (styled as the eyebrow), the
+founding quote "Do all children get a Christmas Eve box like I do?" (Playfair
+italic, crimson) attributed to **Tygan, age twelve, Annbank, 2015**, the origin
+paragraphs, and a captioned headshot placeholder — a `.photo-slot` `<figure>` with
+a decorative `aria-hidden` person icon and a `<figcaption>` (no `<img>` yet; the
+real Tygan headshot is REQ-034). This is the one section carried from the existing
+NBCC site rather than the 2025 leaflet, so its copy is flagged with a
+`CONTENT VERIFICATION` HTML comment. Reuses `.photo-slot`/`.reveal`/tokens;
+token-only colours. Stacks ≤680px. Verified by
+`test/unit/about-our-story.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

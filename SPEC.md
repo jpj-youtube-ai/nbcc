@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (11)
+## Shipped (12)
 
 ### REQ-001 — Multi-page site structure
 
@@ -77,6 +77,13 @@ Eyebrow "Volunteer run Scottish charity"; H1 "No one should feel forgotten on Ch
 Tasks:
 - TASK-016 — Build the Home hero section in index.html with emphasised H1, both CTAs and the proof card
 
+### REQ-011 — Home four pillars
+
+A tinted band of the four leaflet pillars, each an icon, title and one line: Volunteer run ("Powered by kindness, driven by community"); South West Scotland ("Supporting children, young people and vulnerable adults from Girvan to Largs"); Red Bags Full of Joy ("Thoughtful gifts. Dignity. Comfort. Moments of joy."); 7,657 delivered in 2025 ("Real impact. Real children, young people and vulnerable adults. Real difference."). *Accept:* four pillars render with their exact titles and lines.
+
+Tasks:
+- TASK-017 — Build the Home four-pillars tinted band in index.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -86,14 +93,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (23)
-
-### REQ-011 — Home four pillars
-
-A tinted band of the four leaflet pillars, each an icon, title and one line: Volunteer run ("Powered by kindness, driven by community"); South West Scotland ("Supporting children, young people and vulnerable adults from Girvan to Largs"); Red Bags Full of Joy ("Thoughtful gifts. Dignity. Comfort. Moments of joy."); 7,657 delivered in 2025 ("Real impact. Real children, young people and vulnerable adults. Real difference."). *Accept:* four pillars render with their exact titles and lines.
-
-Tasks:
-- TASK-017 — Build the Home four-pillars tinted band in index.html
+## Planned (22)
 
 ### REQ-012 — Home why-your-donation-matters section
 

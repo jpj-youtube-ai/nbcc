@@ -9,12 +9,38 @@
  */
 
 :root {
+  /* ===== NBCC brand colour system (REQ-004) ===== */
+  /* Six official colours */
+  --crimson: #c02238; /* Deep Crimson */
+  --maroon: #800000; /* Rich Maroon */
+  --cream: #f8f5ee; /* Natural Cream */
+  --tan: #d29c8a; /* Elfin Tan */
+  --slate: #333333; /* Dark Slate */
+  --holly: #1a531a; /* Holly Green */
+
+  /* Derived surfaces */
+  --card: #fffdfa;
+  --line: #e9dfd2; /* warm hairline derived from cream */
+  --tan-soft: #f3e4dd;
+  --holly-soft: #eaf0e7;
+  --slate-soft: #6f6a66; /* muted body text on light surfaces */
+
+  /* Cream alpha tints for dark surfaces/overlays (rgba allowed in :root) */
+  --cream-90: rgba(248, 245, 238, 0.9);
+  --cream-82: rgba(248, 245, 238, 0.82);
+  --cream-24: rgba(248, 245, 238, 0.24);
+  --cream-16: rgba(248, 245, 238, 0.16);
+  --cream-12: rgba(248, 245, 238, 0.12);
+
+  /* Elevation */
+  --shadow-sm: 0 2px 10px rgba(51, 51, 51, 0.06);
+  --shadow: 0 16px 44px -20px rgba(128, 0, 0, 0.28);
+
+  /* Layout / spacing (typography & web fonts are REQ-005/006) */
   --content-width: 70ch;
   --space: 1rem;
-  --color-text: #1a1a1a;
-  --color-muted: #565656;
-  --color-bg: #ffffff;
-  --color-accent: #0b5fff;
+  --nav-h: 78px;
+  --maxw: 1180px;
   --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
 }
@@ -33,8 +59,8 @@ body {
   margin: 0;
   font-family: var(--font-body);
   line-height: 1.6;
-  color: var(--color-text);
-  background-color: var(--color-bg);
+  color: var(--slate);
+  background-color: var(--cream);
 }
 
 .site-main {
@@ -51,33 +77,22 @@ h1 {
 
 p {
   margin: 0 0 var(--space);
-  color: var(--color-muted);
+  color: var(--slate-soft);
 }
 
 a {
-  color: var(--color-accent);
+  color: var(--maroon);
 }
 
 :focus-visible {
-  outline: 3px solid var(--color-accent);
+  outline: 3px solid var(--holly);
   outline-offset: 2px;
 }
 
 /* =================================================================
    NAV (TASK-007 / REQ-002) — ported from the NBCC baseline.
-   Token SUBSET only; the full design-token system is REQ-004/006.
+   Colour/layout tokens live in the canonical :root block above (REQ-004).
    ================================================================= */
-:root {
-  --crimson: #c02238;
-  --maroon: #800000;
-  --cream: #f8f5ee;
-  --line: #e9dfd2; /* warm hairline derived from cream */
-  --slate: #333333;
-  --shadow-sm: 0 2px 10px rgba(51, 51, 51, 0.06);
-  --shadow: 0 16px 44px -20px rgba(128, 0, 0, 0.28);
-  --nav-h: 78px;
-  --maxw: 1180px;
-}
 
 /* keep placeholder page content clear of the fixed nav */
 .site-main {
@@ -91,11 +106,11 @@ a {
   height: var(--nav-h);
   display: flex;
   align-items: center;
-  background: rgba(248, 245, 238, 0); /* transparent over-hero by default */
+  background: transparent; /* transparent over-hero by default */
   transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
 }
 .nav.scrolled {
-  background: rgba(248, 245, 238, 0.9); /* cream */
+  background: var(--cream-90); /* cream */
   backdrop-filter: saturate(150%) blur(10px);
   -webkit-backdrop-filter: saturate(150%) blur(10px);
   box-shadow: var(--shadow-sm);
@@ -156,7 +171,7 @@ a {
 .nav-cta {
   text-decoration: none;
   background: var(--crimson);
-  color: #fff;
+  color: var(--cream);
   font-weight: 600;
   padding: 11px 24px;
   border-radius: 999px;
@@ -229,12 +244,12 @@ a {
 
 /* =================================================================
    FOOTER (REQ-003) — ported from the NBCC baseline.
-   Reuses the nav token subset (--maroon, --cream, --line, --maxw);
-   cream-on-maroon tints via the same rgba(248,245,238,a) the nav uses.
+   Reuses the canonical brand tokens; cream-on-maroon tints use the
+   --cream-NN alpha tint tokens.
    ================================================================= */
 .site-footer {
   background: var(--maroon);
-  color: rgba(248, 245, 238, 0.82); /* cream at 82% */
+  color: var(--cream-82); /* cream at 82% */
   margin-top: clamp(48px, 8vw, 96px);
 }
 .site-footer .wrap {
@@ -251,7 +266,7 @@ a {
   margin: 0 0 14px;
 }
 .site-footer a {
-  color: rgba(248, 245, 238, 0.82);
+  color: var(--cream-82);
   text-decoration: none;
 }
 .site-footer a:hover {
@@ -285,17 +300,17 @@ a {
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: rgba(248, 245, 238, 0.12);
+  background: var(--cream-12);
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
 }
 .socials a:hover {
-  background: rgba(248, 245, 238, 0.24);
+  background: var(--cream-24);
 }
 .site-footer .legal {
-  border-top: 1px solid rgba(248, 245, 238, 0.16);
+  border-top: 1px solid var(--cream-16);
 }
 .site-footer .legal .wrap {
   display: flex;

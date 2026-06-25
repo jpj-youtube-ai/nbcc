@@ -151,6 +151,21 @@ above; no title/description/canonical is duplicated across pages. Verified by
 > (`/assets/img/og-image.png`) is **referenced only** — the asset/pipeline is
 > REQ-034.
 
+### Brand colour system (REQ-004)
+
+All colours are defined once as CSS custom properties in a single `:root` block in
+`assets/css/styles.css`. The six official NBCC colours — Deep Crimson `#C02238`
+(`--crimson`), Rich Maroon `#800000` (`--maroon`), Natural Cream `#F8F5EE`
+(`--cream`), Elfin Tan `#D29C8A` (`--tan`), Dark Slate `#333333` (`--slate`),
+Holly Green `#1A531A` (`--holly`) — plus derived surfaces `--card`, `--line`,
+`--tan-soft`, `--holly-soft`, `--slate-soft` (and `--cream-NN` alpha tints for
+dark surfaces). **Every `color`/`background`/`border` value references a
+`var(--…)` token**; the only hex/rgb literals live inside `:root`.
+
+Contrast rule: body/long-form text is never set in Elfin Tan or Holly Green on
+cream/card surfaces. Enforced by `test/unit/brand-colours.test.ts`. Typography and
+web fonts are REQ-005/006; the logo asset is REQ-034.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

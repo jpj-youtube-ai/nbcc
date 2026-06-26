@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (29)
+## Shipped (30)
 
 ### REQ-001 — Multi-page site structure
 
@@ -203,6 +203,14 @@ Every tier and amount button carries data attributes — `data-mode` (`once` or 
 Tasks:
 - TASK-036 — Wire the donate tier buttons to the startCheckout payload contract (data attributes + startCheckout in main.js)
 
+### REQ-029 — Checkout session endpoint
+
+`POST /api/create-checkout-session` receives `{ mode, plan, amount, giftAid }`, creates a Stripe Checkout session and returns `{ url }`. Payment methods are Card and BACS Direct Debit (Apple Pay and Google Pay come automatically on supported devices); one-off uses a price built from `amount`, monthly uses recurring prices keyed by `plan`; when `giftAid` is true a Gift Aid declaration is captured and stored for the 25% claim; monthly giving is 18 or over and cancellable under the Direct Debit Guarantee. *Accept:* a valid payload returns a Stripe redirect URL reflecting the correct mode, plan and amount.
+
+Tasks:
+- TASK-037 — Wire Stripe config, secret and client for the checkout endpoint
+- TASK-038 — Implement POST /api/checkout-session to create a Stripe Checkout session
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -212,15 +220,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (6)
-
-### REQ-029 — Checkout session endpoint
-
-`POST /api/create-checkout-session` receives `{ mode, plan, amount, giftAid }`, creates a Stripe Checkout session and returns `{ url }`. Payment methods are Card and BACS Direct Debit (Apple Pay and Google Pay come automatically on supported devices); one-off uses a price built from `amount`, monthly uses recurring prices keyed by `plan`; when `giftAid` is true a Gift Aid declaration is captured and stored for the 25% claim; monthly giving is 18 or over and cancellable under the Direct Debit Guarantee. *Accept:* a valid payload returns a Stripe redirect URL reflecting the correct mode, plan and amount.
-
-Tasks:
-- TASK-037 — Wire Stripe config, secret and client for the checkout endpoint
-- TASK-038 — Implement POST /api/checkout-session to create a Stripe Checkout session
+## Planned (5)
 
 ### REQ-030 — Contact endpoint
 

@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (25)
+## Shipped (26)
 
 ### REQ-001 — Multi-page site structure
 
@@ -175,6 +175,13 @@ The Holly Green side panel: where the money goes (three points), the charity num
 Tasks:
 - TASK-032 — Fill the Holly Green donate side panel with where-the-money-goes points, charity number and payment chips
 
+### REQ-025 — Monthly donor benefits
+
+A tinted band: all monthly donors are named on the Donors Page (unless anonymous) and receive a post-Christmas impact update; Platinum donors also receive a social-media thank-you, an optional digital supporter badge, and a personalised supporter certificate. *Accept:* the benefits clearly distinguish all-donor perks from Platinum-only perks.
+
+Tasks:
+- TASK-033 — Build the monthly donor benefits tinted band on donate.html distinguishing all-donor from Platinum-only perks
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -184,14 +191,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (10)
-
-### REQ-025 — Monthly donor benefits
-
-A tinted band: all monthly donors are named on the Donors Page (unless anonymous) and receive a post-Christmas impact update; Platinum donors also receive a social-media thank-you, an optional digital supporter badge, and a personalised supporter certificate. *Accept:* the benefits clearly distinguish all-donor perks from Platinum-only perks.
-
-Tasks:
-- TASK-033 — Build the monthly donor benefits tinted band on donate.html distinguishing all-donor from Platinum-only perks
+## Planned (9)
 
 ### REQ-026 — Donate reassurance
 

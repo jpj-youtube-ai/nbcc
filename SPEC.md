@@ -204,6 +204,9 @@ Tasks:
 
 An intro with the signature rule and a lede; contact points (info@nightbeforechristmas.co.uk for general enquiries, 01292 811 015, donations via Jaimie Wakefield at giving@, and Annbank Village Hall as the base); and a form with First name (required), Last name, Email (required) and Message (required), with client-side validation. The preview shows a success message; the live site posts to the backend. *Accept:* the contact details display and the validated form yields a success message in the preview.
 
+Tasks:
+- TASK-035 — Build the Contact page intro, contact points and validated enquiry form in contact.html
+
 ### REQ-028 — Donate front-end checkout contract
 
 Every tier and amount button carries data attributes — `data-mode` (`once` or `monthly`), `data-plan` (`bronze`/`silver`/`gold`/`platinum`, empty for one-off), `data-amount` (pence, empty for choose-your-own) — and calls `startCheckout(button)`, which reads the `#giftAid` checkbox and assembles a single `{ mode, plan, amount, giftAid }` payload. This is the one integration point: in production it POSTs to the backend and redirects to the returned Stripe URL; in the preview it shows the payload. *Accept:* clicking any tier produces the correct payload (alert in preview, POST + redirect in production).

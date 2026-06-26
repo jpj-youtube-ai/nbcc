@@ -623,7 +623,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | Method + path | Status | Requirement |
 |---|---|---|
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
-| `POST /api/contact` | `501` stub | REQ-030 (contact form) |
+| `POST /api/contact` | **implemented** | REQ-030 (contact form) |
 
 They live in `src/routes/api.ts`.
 
@@ -650,6 +650,26 @@ writing to the DB) is out of scope here**. An upstream Stripe failure returns
 > exercised end to end (see `features/checkout.feature`) without a Stripe account.
 > Production **never** stubs, so a missing real key surfaces loudly. Verified by
 > `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios.
+
+**`POST /api/contact` (REQ-030).** Validates a website enquiry
+`{ firstName, lastName, email, message }` (the payload `initContactForm` posts,
+REQ-027) zod-first — `firstName`/`email`/`message` required, `lastName` optional —
+rejecting bad/missing fields with **400**. A valid enquiry is forwarded to the
+configured form service via `src/clients/contact.ts` (`forwardEnquiry`, a thin
+`fetch` wrapper reading `CONTACT_FORWARD_URL` through config) and returns
+`{ status: "sent" }`. An upstream forwarding failure returns **502**, at which
+point the front-end degrades to its `mailto:` fallback (REQ-027) — the documented
+behaviour whenever the endpoint is missing or unavailable; this task does **not**
+change `initContactForm`.
+
+> **Stub seam (no live form-service account needed).** `src/clients/contact.ts`
+> POSTs to a real URL when one is configured. **Outside production**, when
+> `CONTACT_FORWARD_URL` is a `.example` placeholder (local dev, CI, fresh SSM
+> param), the forward is stubbed (no network) so the request → success flow runs
+> end to end (see `features/contact.feature`) without a form service. Production
+> **never** stubs, so a missing/placeholder URL there returns 502 (→ mailto
+> fallback). Verified by `test/unit/contact-endpoint.test.ts` (mocked client) +
+> the BDD scenarios.
 
 > **Hosting (REQ-033):** the marketing site and these endpoints are served by the
 > **existing Express service on ECS/Fargate behind the ALB** — not a static host
@@ -755,6 +775,12 @@ aws ssm put-parameter --name /charity-site/staging/STRIPE_SECRET_KEY \
 aws ssm put-parameter --name /charity-site/staging/STRIPE_PRICE_BRONZE \
   --type String --value 'price_...' --overwrite
 # ...repeat for STRIPE_PRICE_SILVER/GOLD/PLATINUM and the production path.
+
+# Contact forwarding (REQ-030): the form-service endpoint (SecureString). Starts
+# as a https://forward.example/replace-me placeholder, which keeps the forward
+# stubbed until a real URL is set.
+aws ssm put-parameter --name /charity-site/staging/CONTACT_FORWARD_URL \
+  --type SecureString --value 'https://formspree.io/f/xxxx' --overwrite
 ```
 
 ## Provisioning infrastructure
@@ -804,7 +830,14 @@ the `exec_secrets` IAM policy too. `src/clients/stripe.ts` wraps the SDK, readin
 the key and price IDs **only** through `src/config`. The live checkout-session
 endpoint that uses them is **REQ-029**, out of scope here.
 
-## Cost & gotchas
+`CONTACT_FORWARD_URL` (TASK-039, REQ-030) is the form-service endpoint
+`/api/contact` forwards enquiries to (a Formspree-style form URL or an NBCC inbox
+endpoint). It is a secret (it authorises submissions), so it is an SSM
+`SecureString` injected via `valueFrom` with its ARN in `exec_secrets`, and is
+validated as a URL. Its placeholder is a valid `.example` URL (not `REPLACE_ME`,
+which would fail URL validation); `src/clients/contact.ts` treats a `.example`
+host as unconfigured and stubs the forward outside production. Set the real value
+with `put-parameter` (above) when the form service is chosen.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

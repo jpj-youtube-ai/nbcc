@@ -2,12 +2,14 @@ import { Router, type Request, type Response } from "express";
 import type StripeNS from "stripe";
 import { z } from "zod";
 import { stripe, stripePriceByPlan } from "../clients/stripe";
+import { forwardEnquiry } from "../clients/contact";
 import { config } from "../config";
 
-// Marketing-site API endpoints.
-// - POST /api/checkout-session is implemented (REQ-029): it turns the REQ-028
-//   front-end payload into a Stripe Checkout session and returns its { url }.
-// - POST /api/contact is still a 501 stub (REQ-030).
+// Marketing-site API endpoints, both implemented.
+// - POST /api/checkout-session (REQ-029): turns the REQ-028 front-end payload into
+//   a Stripe Checkout session and returns its { url }.
+// - POST /api/contact (REQ-030): validates a website enquiry and forwards it to
+//   the configured form service, returning success.
 export const apiRouter = Router();
 
 const PLANS = ["bronze", "silver", "gold", "platinum"] as const;
@@ -109,6 +111,33 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
 
 apiRouter.post("/api/checkout-session", postCheckoutSession);
 
-apiRouter.post("/api/contact", (_req, res) => {
-  res.status(501).json({ error: "Not Implemented", requirement: "REQ-030" });
+// Contact enquiry (REQ-030). Mirrors the checkout handler: zod-first validation,
+// then forward via the contact client. The body matches the payload initContactForm
+// posts (REQ-027): firstName/email/message required, lastName optional.
+const contactBodySchema = z.object({
+  firstName: z.string().min(1),
+  lastName: z.string().optional().default(""),
+  email: z.string().email(),
+  message: z.string().min(1),
 });
+
+export async function postContact(req: Request, res: Response): Promise<Response> {
+  const parsed = contactBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid contact request",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  try {
+    await forwardEnquiry(parsed.data);
+    return res.status(200).json({ status: "sent" });
+  } catch {
+    // Upstream forwarding failure: the front-end (initContactForm) degrades to its
+    // mailto fallback when it cannot reach the endpoint (REQ-027).
+    return res.status(502).json({ error: "Could not send your message right now" });
+  }
+}
+
+apiRouter.post("/api/contact", postContact);

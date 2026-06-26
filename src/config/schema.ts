@@ -23,6 +23,12 @@ export const configSchema = z.object({
   STRIPE_PRICE_SILVER: z.string().min(1),
   STRIPE_PRICE_GOLD: z.string().min(1),
   STRIPE_PRICE_PLATINUM: z.string().min(1),
+
+  // Contact form forwarding (REQ-030). The endpoint URL of the form service
+  // (Formspree-style) or NBCC inbox the /api/contact handler POSTs enquiries to.
+  // It is the credential that authorises submissions, so it is held as a secret
+  // (SSM SecureString in AWS); validated as a URL.
+  CONTACT_FORWARD_URL: z.string().url(),
 });
 
 export type Config = z.infer<typeof configSchema>;

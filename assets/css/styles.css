@@ -1375,3 +1375,76 @@ a {
 .giftaid-label strong {
   color: var(--maroon);
 }
+
+/* =================================================================
+   MONTHLY DONOR BENEFITS (REQ-025) — donate.html. A tan-soft tinted
+   band beneath the give widget, mirroring the .why/.meet-team pattern
+   (--radius-lg, clamp padding). Two .card groups make the all-donor vs
+   Platinum-only split structurally clear. Reuses .card / .reveal / .rule /
+   .eyebrow and the tokens; token-only colours. On this light surface the
+   brand-colours guard forbids holly/tan body text, so headings are maroon,
+   the eyebrow and check icons crimson, and body copy slate. Check icons are
+   inline SVG via currentColor, no <img> (perf budget).
+   ================================================================= */
+.donor-benefits {
+  background: var(--tan-soft);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
+  margin-block: clamp(8px, 3vw, 32px);
+  text-align: center;
+}
+.donor-benefits h2 {
+  font-size: var(--fs-section);
+}
+.donor-benefits-intro {
+  font-size: var(--fs-lede);
+  color: var(--slate);
+  max-width: 58ch;
+  margin: 0.6rem auto 0;
+}
+.benefit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 3vw, 28px);
+  margin-top: clamp(24px, 4vw, 40px);
+  text-align: left;
+}
+.benefit-group {
+  padding: clamp(22px, 3vw, 32px);
+}
+.benefit-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--maroon);
+  font-size: 1.3rem;
+  margin: 0 0 16px;
+}
+.benefit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.benefit-list li {
+  display: flex;
+  gap: 12px;
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  color: var(--slate);
+}
+.benefit-list a {
+  color: var(--crimson);
+}
+.benefit-check {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--crimson);
+}
+
+@media (max-width: 680px) {
+  .benefit-grid {
+    grid-template-columns: 1fr;
+  }
+}

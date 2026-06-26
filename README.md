@@ -512,6 +512,29 @@ Dash-free copy, "NBCC" (REQ-031). **Out of scope here:** the reassurance items
 (REQ-026), the monthly donor benefits (REQ-025), and the checkout contract
 (REQ-028). Verified by `test/unit/donate-side-panel.test.ts`.
 
+### Monthly donor benefits (REQ-025)
+
+Below the give widget, still inside the donate `.page-sections` slot, a **tan-soft
+tinted band** (`MONTHLY DONOR BENEFITS` CSS block) thanks monthly donors, reusing
+the `.why`/`.meet-team` band pattern (`--radius-lg`, clamp padding). It is a
+semantic `<section class="donor-benefits">` named by its own `<h2>`
+("What monthly donors receive") via `aria-labelledby` (REQ-032), with an eyebrow,
+a centred `.rule`, and a `.reveal` intro. Two `.card` `.benefit-group` columns make
+the split **structurally clear**:
+
+- **All monthly donors** — your name (or business name) added to the **Donors
+  Page** unless you choose to stay anonymous (cross-linked to the **Supporters
+  page** `/supporters`, REQ-035), plus a post Christmas impact update.
+- **Platinum donors also receive** — a social media thank you, an optional
+  **digital supporter badge**, and a personalised **supporter certificate**.
+
+On this light surface body text stays `--slate` with maroon headings and crimson
+check icons, never holly/tan, so the `brand-colours` guard holds; the check icons
+are inline SVG via `currentColor`, `aria-hidden`, **no image tags** so the perf
+budget holds. Dash-free copy, "NBCC" in full, and the **children, young people and
+vulnerable adults** phrasing (REQ-031). Verified by
+`test/unit/monthly-donor-benefits.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

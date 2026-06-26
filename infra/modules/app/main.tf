@@ -79,3 +79,43 @@ resource "aws_ssm_parameter" "api_two_key" {
   value = "REPLACE_ME"
   lifecycle { ignore_changes = [value] }
 }
+
+# Stripe (REQ-028/REQ-029). The secret key is a SecureString; the four recurring
+# price IDs are non-secret Strings but still env-specific, so they live in SSM and
+# are injected the same way (and so need the same exec-role read grant, ecs.tf).
+# Real values set out of band (see the put-parameter example above), so the apply
+# never overwrites them: lifecycle ignore_changes = [value].
+resource "aws_ssm_parameter" "stripe_secret_key" {
+  name  = "/${var.project}/${var.environment}/STRIPE_SECRET_KEY"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "stripe_price_bronze" {
+  name  = "/${var.project}/${var.environment}/STRIPE_PRICE_BRONZE"
+  type  = "String"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "stripe_price_silver" {
+  name  = "/${var.project}/${var.environment}/STRIPE_PRICE_SILVER"
+  type  = "String"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "stripe_price_gold" {
+  name  = "/${var.project}/${var.environment}/STRIPE_PRICE_GOLD"
+  type  = "String"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "stripe_price_platinum" {
+  name  = "/${var.project}/${var.environment}/STRIPE_PRICE_PLATINUM"
+  type  = "String"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}

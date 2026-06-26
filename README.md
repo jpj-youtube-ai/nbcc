@@ -726,6 +726,14 @@ Finally, set the real secret values (the bootstrap leaves placeholders):
 aws ssm put-parameter --name /charity-site/staging/EXTERNAL_API_ONE_KEY \
   --type SecureString --value 'real-key' --overwrite
 # ...repeat for EXTERNAL_API_TWO_KEY and for the production path.
+
+# Stripe (REQ-028/REQ-029): the live secret key (SecureString) and the four
+# recurring price IDs (String); all start as REPLACE_ME placeholders.
+aws ssm put-parameter --name /charity-site/staging/STRIPE_SECRET_KEY \
+  --type SecureString --value 'sk_live_...' --overwrite
+aws ssm put-parameter --name /charity-site/staging/STRIPE_PRICE_BRONZE \
+  --type String --value 'price_...' --overwrite
+# ...repeat for STRIPE_PRICE_SILVER/GOLD/PLATINUM and the production path.
 ```
 
 ## Provisioning infrastructure
@@ -764,6 +772,16 @@ Every config value lives in `src/config/schema.ts` and `.env.example`. Locally
 they come from `.env`; in AWS the same keys are SSM parameters that ECS injects
 as environment variables, so the app reads `process.env` identically in both.
 Secrets are never in code or in the image.
+
+The **Stripe checkout** keys (TASK-037, REQ-028/REQ-029) follow this pattern:
+`STRIPE_SECRET_KEY` is a secret (SSM `SecureString`, required, never defaulted);
+`STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` are plain redirect URLs (task-def
+`environment`, backed by the `stripe_success_url` / `stripe_cancel_url` module
+variables); and the four `STRIPE_PRICE_*` IDs (one per donate tier, REQ-022) are
+SSM-held `String`s injected via `valueFrom` like a secret, so their ARNs are in
+the `exec_secrets` IAM policy too. `src/clients/stripe.ts` wraps the SDK, reading
+the key and price IDs **only** through `src/config`. The live checkout-session
+endpoint that uses them is **REQ-029**, out of scope here.
 
 ## Cost & gotchas
 

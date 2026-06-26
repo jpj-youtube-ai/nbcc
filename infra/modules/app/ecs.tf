@@ -29,6 +29,13 @@ data "aws_iam_policy_document" "exec_secrets" {
       aws_ssm_parameter.db_url.arn,
       aws_ssm_parameter.api_one_key.arn,
       aws_ssm_parameter.api_two_key.arn,
+      # Stripe (REQ-028/REQ-029): the secret key and the SSM-held price IDs are
+      # all injected via valueFrom, so the exec role must be able to read them.
+      aws_ssm_parameter.stripe_secret_key.arn,
+      aws_ssm_parameter.stripe_price_bronze.arn,
+      aws_ssm_parameter.stripe_price_silver.arn,
+      aws_ssm_parameter.stripe_price_gold.arn,
+      aws_ssm_parameter.stripe_price_platinum.arn,
     ]
   }
   statement {
@@ -73,6 +80,9 @@ resource "aws_ecs_task_definition" "app" {
       { name = "NODE_ENV", value = var.environment },
       { name = "PORT", value = tostring(var.app_port) },
       { name = "EXTERNAL_API_ONE_BASE_URL", value = var.external_api_base_url },
+      # Stripe redirect URLs (REQ-028/REQ-029) — non-secret, so plain env values.
+      { name = "STRIPE_SUCCESS_URL", value = var.stripe_success_url },
+      { name = "STRIPE_CANCEL_URL", value = var.stripe_cancel_url },
     ]
 
     # ECS resolves these from SSM at task start and injects them as env vars, so
@@ -82,6 +92,14 @@ resource "aws_ecs_task_definition" "app" {
       { name = "DATABASE_URL", valueFrom = aws_ssm_parameter.db_url.arn },
       { name = "EXTERNAL_API_ONE_KEY", valueFrom = aws_ssm_parameter.api_one_key.arn },
       { name = "EXTERNAL_API_TWO_KEY", valueFrom = aws_ssm_parameter.api_two_key.arn },
+      # Stripe (REQ-028/REQ-029): the secret key plus the SSM-held price IDs.
+      # All are pulled from SSM via valueFrom, so every ARN must also appear in
+      # the exec_secrets policy below or the task fails to start.
+      { name = "STRIPE_SECRET_KEY", valueFrom = aws_ssm_parameter.stripe_secret_key.arn },
+      { name = "STRIPE_PRICE_BRONZE", valueFrom = aws_ssm_parameter.stripe_price_bronze.arn },
+      { name = "STRIPE_PRICE_SILVER", valueFrom = aws_ssm_parameter.stripe_price_silver.arn },
+      { name = "STRIPE_PRICE_GOLD", valueFrom = aws_ssm_parameter.stripe_price_gold.arn },
+      { name = "STRIPE_PRICE_PLATINUM", valueFrom = aws_ssm_parameter.stripe_price_platinum.arn },
     ]
 
     logConfiguration = {

@@ -22,6 +22,17 @@ jobs:
       EXTERNAL_API_ONE_BASE_URL: https://sandbox.api-one.example
       EXTERNAL_API_ONE_KEY: ci-dummy
       EXTERNAL_API_TWO_KEY: ci-dummy
+      # Stripe checkout config (REQ-028/REQ-029) is required by the schema, so the
+      # app needs it to boot for the BDD step. Dummy values that satisfy the
+      # schema (non-empty secret, valid URLs, non-empty price IDs); no real
+      # checkout runs in CI. Real values come from SSM in staging/prod.
+      STRIPE_SECRET_KEY: sk_test_ci_dummy
+      STRIPE_SUCCESS_URL: http://localhost:3000/donate/thank-you
+      STRIPE_CANCEL_URL: http://localhost:3000/donate
+      STRIPE_PRICE_BRONZE: price_ci_bronze
+      STRIPE_PRICE_SILVER: price_ci_silver
+      STRIPE_PRICE_GOLD: price_ci_gold
+      STRIPE_PRICE_PLATINUM: price_ci_platinum
       BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

@@ -55,6 +55,19 @@ variable "external_api_base_url" {
   default = "https://sandbox.api-one.example"
 }
 
+# Stripe redirect URLs (REQ-028/REQ-029) — non-secret, injected via the task-def
+# environment block. Placeholder defaults use the REQ-033 placeholder domain;
+# override per env (or once the real domain lands) in infra/envs/*/main.tf.
+variable "stripe_success_url" {
+  type    = string
+  default = "https://www.example.org/donate/thank-you"
+}
+
+variable "stripe_cancel_url" {
+  type    = string
+  default = "https://www.example.org/donate"
+}
+
 # Per-environment toggles (staging vs prod).
 variable "multi_az" {
   type    = bool

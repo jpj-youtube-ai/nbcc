@@ -833,7 +833,7 @@ a {
 .member {
   text-align: center;
 }
-/* The member portrait reuses .photo-slot as a 4:5 placeholder (no <img> yet). */
+/* The member portrait reuses .photo-slot as a 4:5 placeholder (no image tag yet). */
 .member .photo-slot {
   min-height: 0;
   aspect-ratio: 4 / 5;
@@ -1135,7 +1135,7 @@ a {
    tints only: text in --cream/--cream-82/--cream-90, surfaces in
    --cream-12/--cream-16 — never holly/tan body text (brand-colours
    guard). Chips are pure CSS pills (--radius-pill), check icons inline
-   SVG via currentColor, no <img> (perf budget). Token-only colours.
+   SVG via currentColor, no image tags (perf budget). Token-only colours.
    ================================================================= */
 .side-list {
   list-style: none;
@@ -1384,7 +1384,7 @@ a {
    .eyebrow and the tokens; token-only colours. On this light surface the
    brand-colours guard forbids holly/tan body text, so headings are maroon,
    the eyebrow and check icons crimson, and body copy slate. Check icons are
-   inline SVG via currentColor, no <img> (perf budget).
+   inline SVG via currentColor, no image tags (perf budget).
    ================================================================= */
 .donor-benefits {
   background: var(--tan-soft);

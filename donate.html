@@ -164,6 +164,24 @@
                   <a href="mailto:giving@nightbeforechristmas.co.uk?subject=Monthly%20giving%20enquiry">Email us about monthly giving</a>
                 </p>
               </div>
+              <!-- GIFT AID CALLOUT START (REQ-023) — single removable switch.
+                   CONTENT VERIFICATION (REQ-023): PENDING DECISION. Only show this
+                   if NBCC is registered with HMRC to claim Gift Aid. If NBCC is
+                   NOT registered, delete everything between this START marker and
+                   the GIFT AID CALLOUT END marker below (and the matching
+                   .giftaid CSS block) to remove the control cleanly. The #giftAid
+                   checkbox id is the hook the REQ-028 checkout contract reads
+                   (startCheckout); REQ-028/REQ-029 wiring is out of scope here. -->
+              <div class="giftaid">
+                <input type="checkbox" id="giftAid" name="giftAid" class="giftaid-check" />
+                <label for="giftAid" class="giftaid-label">
+                  <strong>Add Gift Aid and your gift grows by 25%.</strong>
+                  If you are a UK taxpayer, NBCC can claim an extra 25p for every
+                  &pound;1 you give on eligible gifts, at no cost to you. You can
+                  confirm this securely at checkout.
+                </label>
+              </div>
+              <!-- GIFT AID CALLOUT END (REQ-023) -->
             </div>
             <!-- Holly Green side panel. The detailed "where your gift goes"
                  content (list, charity number, payment chips) is REQ-024; this

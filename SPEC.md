@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (30)
+## Shipped (31)
 
 ### REQ-001 — Multi-page site structure
 
@@ -211,6 +211,13 @@ Tasks:
 - TASK-037 — Wire Stripe config, secret and client for the checkout endpoint
 - TASK-038 — Implement POST /api/checkout-session to create a Stripe Checkout session
 
+### REQ-030 — Contact endpoint
+
+`POST /api/contact` receives `{ firstName, lastName, email, message }`, sends to the NBCC inbox (or a form service such as Formspree) and returns success. Until built, the form falls back to opening the visitor's email client. *Accept:* a submitted form reaches the inbox and returns success, with the mail-client fallback when the endpoint is absent.
+
+Tasks:
+- TASK-039 — Implement POST /api/contact to forward enquiries to the NBCC inbox
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -220,14 +227,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (5)
-
-### REQ-030 — Contact endpoint
-
-`POST /api/contact` receives `{ firstName, lastName, email, message }`, sends to the NBCC inbox (or a form service such as Formspree) and returns success. Until built, the form falls back to opening the visitor's email client. *Accept:* a submitted form reaches the inbox and returns success, with the mail-client fallback when the endpoint is absent.
-
-Tasks:
-- TASK-039 — Implement POST /api/contact to forward enquiries to the NBCC inbox
+## Planned (4)
 
 ### REQ-031 — Content and copy rules
 

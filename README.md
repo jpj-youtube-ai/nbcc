@@ -620,15 +620,36 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 
 ### API endpoints
 
-Two marketing endpoints are wired as routes but **not yet implemented** — each
-returns `501 Not Implemented` until its own requirement lands:
-
 | Method + path | Status | Requirement |
 |---|---|---|
-| `POST /api/checkout-session` | `501` stub | REQ-029 (payment) |
+| `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/contact` | `501` stub | REQ-030 (contact form) |
 
-They live in `src/routes/api.ts`; TASK-005 wires only the routing.
+They live in `src/routes/api.ts`.
+
+**`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
+`{ mode, plan, amount, giftAid }` into a Stripe Checkout session and returns its
+`{ url }` (which `startCheckout` redirects to). The body is validated zod-first
+(same style as `src/config/schema.ts`); impossible combinations are rejected with
+**400** (a monthly gift with no plan, a one-off with no amount, a bad mode/plan,
+a non-positive amount). A one-off is a `mode: payment` session with inline GBP
+`price_data` built from the amount in **pence**; a monthly is a
+`mode: subscription` session using the recurring `STRIPE_PRICE_*` id keyed by
+plan. `payment_method_types` is `['card', 'bacs_debit']` (Apple Pay / Google Pay
+ride on the card method). `success_url` / `cancel_url` come from config. When
+`giftAid` is true the declaration is recorded as `metadata.giftAid='true'` on the
+session for the 25% claim — **durable storage of the declaration (a Stripe webhook
+writing to the DB) is out of scope here**. An upstream Stripe failure returns
+**502**, which the front-end degrades to its preview.
+
+> **Stub seam (no live account needed).** `src/clients/stripe.ts` uses the real
+> Stripe SDK when given a real key (`sk_test_…` / `sk_live_…`). **Outside
+> production**, when the key is a placeholder (local dev, CI, fresh `REPLACE_ME`
+> SSM params), it falls back to a thin stub whose `checkout.sessions.create`
+> returns a deterministic preview URL — so the full request → `{ url }` flow is
+> exercised end to end (see `features/checkout.feature`) without a Stripe account.
+> Production **never** stubs, so a missing real key surfaces loudly. Verified by
+> `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios.
 
 > **Hosting (REQ-033):** the marketing site and these endpoints are served by the
 > **existing Express service on ECS/Fargate behind the ALB** — not a static host

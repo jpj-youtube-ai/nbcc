@@ -86,6 +86,8 @@ resource "aws_ecs_task_definition" "app" {
       # Stripe redirect URLs (REQ-028/REQ-029) — non-secret, so plain env values.
       { name = "STRIPE_SUCCESS_URL", value = var.stripe_success_url },
       { name = "STRIPE_CANCEL_URL", value = var.stripe_cancel_url },
+      # Optional Stripe donation product id for one-off gifts — non-secret, empty by default.
+      { name = "STRIPE_DONATION_PRODUCT", value = var.stripe_donation_product },
     ]
 
     # ECS resolves these from SSM at task start and injects them as env vars, so

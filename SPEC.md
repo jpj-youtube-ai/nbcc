@@ -190,6 +190,9 @@ Tasks:
 
 A tinted band: all monthly donors are named on the Donors Page (unless anonymous) and receive a post-Christmas impact update; Platinum donors also receive a social-media thank-you, an optional digital supporter badge, and a personalised supporter certificate. *Accept:* the benefits clearly distinguish all-donor perks from Platinum-only perks.
 
+Tasks:
+- TASK-033 — Build the monthly donor benefits tinted band on donate.html distinguishing all-donor from Platinum-only perks
+
 ### REQ-026 — Donate reassurance
 
 Three reassurance items: cancel any time under the Direct Debit Guarantee; secure via Stripe and 18 or over; and a help line pointing to Jaimie Wakefield at giving@nightbeforechristmas.co.uk or 01292 811 015. *Accept:* the three reassurance items render with the correct contact details.

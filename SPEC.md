@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (28)
+## Shipped (29)
 
 ### REQ-001 — Multi-page site structure
 
@@ -196,6 +196,13 @@ An intro with the signature rule and a lede; contact points (info@nightbeforechr
 Tasks:
 - TASK-035 — Build the Contact page intro, contact points and validated enquiry form in contact.html
 
+### REQ-028 — Donate front-end checkout contract
+
+Every tier and amount button carries data attributes — `data-mode` (`once` or `monthly`), `data-plan` (`bronze`/`silver`/`gold`/`platinum`, empty for one-off), `data-amount` (pence, empty for choose-your-own) — and calls `startCheckout(button)`, which reads the `#giftAid` checkbox and assembles a single `{ mode, plan, amount, giftAid }` payload. This is the one integration point: in production it POSTs to the backend and redirects to the returned Stripe URL; in the preview it shows the payload. *Accept:* clicking any tier produces the correct payload (alert in preview, POST + redirect in production).
+
+Tasks:
+- TASK-036 — Wire the donate tier buttons to the startCheckout payload contract (data attributes + startCheckout in main.js)
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -205,14 +212,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (7)
-
-### REQ-028 — Donate front-end checkout contract
-
-Every tier and amount button carries data attributes — `data-mode` (`once` or `monthly`), `data-plan` (`bronze`/`silver`/`gold`/`platinum`, empty for one-off), `data-amount` (pence, empty for choose-your-own) — and calls `startCheckout(button)`, which reads the `#giftAid` checkbox and assembles a single `{ mode, plan, amount, giftAid }` payload. This is the one integration point: in production it POSTs to the backend and redirects to the returned Stripe URL; in the preview it shows the payload. *Accept:* clicking any tier produces the correct payload (alert in preview, POST + redirect in production).
-
-Tasks:
-- TASK-036 — Wire the donate tier buttons to the startCheckout payload contract (data attributes + startCheckout in main.js)
+## Planned (6)
 
 ### REQ-029 — Checkout session endpoint
 

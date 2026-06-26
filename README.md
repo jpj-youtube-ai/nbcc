@@ -445,9 +445,10 @@ full-width `.give-tier-custom` card with a real `<label for="customAmount">` tie
 to a number `#customAmount` input (REQ-032). Token-only colours, no hex/rgb
 outside `:root`; copy is dash-free and uses "NBCC" (REQ-031). These one-off
 amounts are flagged with a `CONTENT VERIFICATION (REQ-021)` comment — the 2025
-leaflet specifies only monthly tiers, so they are a suggestion to confirm. **Out
-of scope here:** the `data-amount`/`startCheckout` checkout contract (REQ-028) and
-the monthly tiers (REQ-022). Verified by `test/unit/give-once-tiers.test.ts`.
+leaflet specifies only monthly tiers, so they are a suggestion to confirm. Each
+tile now carries the `data-mode`/`data-plan`/`data-amount` + `startCheckout`
+checkout contract (REQ-028, see **Checkout contract** below). Verified by
+`test/unit/give-once-tiers.test.ts`.
 
 ### Give monthly tiers (REQ-022)
 
@@ -465,8 +466,8 @@ one Red Bag"** on the featured tile), and **Platinum £100 per month** ("More jo
 every month"), each with its leaflet description. A `.give-other` line links to
 `mailto:giving@nightbeforechristmas.co.uk` for other monthly amounts. Token-only
 colours, no hex/rgb outside `:root`; copy is dash-free and uses "NBCC" / "per
-month" (REQ-031). **Out of scope here:** the `data-mode`/`data-plan`/`data-amount`
-checkout contract (REQ-028) and the Holly Green side-panel content (REQ-024).
+month" (REQ-031). Each tile now carries the `data-mode`/`data-plan`/`data-amount`
++ `startCheckout` checkout contract (REQ-028, see **Checkout contract** below).
 Verified by `test/unit/give-monthly-tiers.test.ts`.
 
 ### Gift Aid callout (REQ-023)
@@ -480,8 +481,9 @@ to satisfy the `brand-colours` guard (no holly *text* on light surfaces) the
 emphasis is `--maroon` and the tick `accent-color` is `--crimson`, on a
 `--holly-soft` panel with a `--holly` border; the checkbox keeps the global
 `:focus-visible` holly ring (REQ-032). Copy is dash-free and names "NBCC"
-(REQ-031). The `#giftAid` id is the hook the **REQ-028** checkout contract
-(`startCheckout`) will read later — REQ-028/REQ-029 wiring is out of scope here.
+(REQ-031). The `#giftAid` id is the hook the **REQ-028** checkout contract reads:
+`startCheckout` folds its checked state into the payload (the live POST target
+`/api/checkout-session` is REQ-029).
 
 > **Gating — pending registration decision (REQ-023).** The callout is shown only
 > if NBCC is registered with HMRC to claim Gift Aid (flagged with a
@@ -589,6 +591,32 @@ keep the global `:focus-visible` holly ring. Token-only colours honouring the
 text); inline SVG icons, no image tags. Dash-free copy, "NBCC" in full (REQ-031).
 Verified by `test/unit/contact.test.ts` (static markup + jsdom validation
 behaviour).
+
+### Checkout contract (REQ-028)
+
+Every amount control wires the one front-end → backend integration point. Each
+tier button in `#tiersOnce`/`#tiersMonthly`, and the choose-your-own **Give**
+button, carries:
+
+- `data-mode` — `once` or `monthly`
+- `data-plan` — `bronze`/`silver`/`gold`/`platinum`, **empty** for one-off
+- `data-amount` — the amount in **pence** (`1000`/`2500`/`5000`/`10000`),
+  **empty** for choose-your-own
+
+`startCheckout(button)` in the shared `assets/js/main.js` (exported alongside the
+other inits; the controls are bound on load by `initCheckout`, which targets
+`[data-amount]` so the once/monthly toggle stays with `initGiveToggle`) reads
+those attributes plus the `#giftAid` checkbox (REQ-023) into a single
+`{ mode, plan, amount, giftAid }` payload (`plan`/`amount` normalise to `null`
+when empty; the choose-your-own amount is built from the `#customAmount` value ×
+100). It then mirrors `initContactForm`'s best-effort pattern: in production it
+POSTs the payload to **`/api/checkout-session`** and redirects to the returned
+Stripe `{ url }`; with no working backend (the current `501` stub) it degrades to
+**showing the payload** (an `alert`, the preview). The buttons are native
+`<button>`s (keyboard-activatable, global `:focus-visible` ring; REQ-032). The
+live endpoint is **REQ-029**, out of scope here. Verified by
+`test/unit/give-checkout.test.ts` (markup + jsdom payload behaviour) and the
+per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 
 ### API endpoints
 

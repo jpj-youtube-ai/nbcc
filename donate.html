@@ -104,21 +104,22 @@
                      SUGGESTED tiers. The 2025 leaflet specifies only monthly
                      tiers (REQ-022); confirm or reword these amounts and their
                      descriptions with NBCC before launch. The checkout contract
-                     (data-amount and startCheckout wiring) is REQ-028, not here. -->
-                <button type="button" class="card tier give-tier">
+                     (data-mode/data-plan/data-amount + startCheckout) is wired per
+                     REQ-028; data-amount is in pence, data-plan empty for one-off. -->
+                <button type="button" class="card tier give-tier" data-mode="once" data-plan="" data-amount="1000">
                   <span class="give-amount">&pound;10</span>
                   <span class="give-tier-desc">Cosy essentials: a hat, gloves, hot chocolate and treats.</span>
                 </button>
-                <button type="button" class="card tier give-tier is-featured">
+                <button type="button" class="card tier give-tier is-featured" data-mode="once" data-plan="" data-amount="2500">
                   <span class="give-flag">Most chosen</span>
                   <span class="give-amount">&pound;25</span>
                   <span class="give-tier-desc">A thoughtful bundle towards a Red Bag Full of Joy.</span>
                 </button>
-                <button type="button" class="card tier give-tier">
+                <button type="button" class="card tier give-tier" data-mode="once" data-plan="" data-amount="5000">
                   <span class="give-amount">&pound;50</span>
                   <span class="give-tier-desc">Around the value of one full Red Bag Full of Joy.</span>
                 </button>
-                <button type="button" class="card tier give-tier">
+                <button type="button" class="card tier give-tier" data-mode="once" data-plan="" data-amount="10000">
                   <span class="give-amount">&pound;100</span>
                   <span class="give-tier-desc">Christmas joy for a whole family who would go without.</span>
                 </button>
@@ -128,32 +129,34 @@
                     <span class="give-custom-currency" aria-hidden="true">&pound;</span>
                     <input class="give-custom-input" type="number" id="customAmount" name="customAmount" min="1" step="1" inputmode="numeric" placeholder="Other amount" />
                   </div>
+                  <!-- Empty data-amount: startCheckout builds the pence from #customAmount (REQ-028). -->
+                  <button type="button" class="btn btn-primary give-custom-go" data-mode="once" data-plan="" data-amount="">Give</button>
                 </div>
               </div>
               <div class="give-tiers" id="tiersMonthly" role="region" aria-label="Give monthly amounts">
                 <!-- The four monthly tiers (REQ-022) carry the 2025 leaflet copy
                      verbatim. The checkout contract (data-mode/data-plan/
-                     data-amount and startCheckout wiring) is REQ-028, not here. -->
-                <button type="button" class="card tier give-tier">
+                     data-amount + startCheckout) is wired per REQ-028. -->
+                <button type="button" class="card tier give-tier" data-mode="monthly" data-plan="bronze" data-amount="1000">
                   <span class="give-tier-name">Bronze</span>
                   <span class="give-price"><span class="give-amount">&pound;10</span> <span class="give-cadence">per month</span></span>
                   <span class="give-tier-head">Building towards Christmas joy</span>
                   <span class="give-tier-desc">Every month helps build towards the comfort, care and thoughtful gifts that make someone feel remembered.</span>
                 </button>
-                <button type="button" class="card tier give-tier">
+                <button type="button" class="card tier give-tier" data-mode="monthly" data-plan="silver" data-amount="2500">
                   <span class="give-tier-name">Silver</span>
                   <span class="give-price"><span class="give-amount">&pound;25</span> <span class="give-cadence">per month</span></span>
                   <span class="give-tier-head">Halfway to a Red Bag Full of Joy</span>
                   <span class="give-tier-desc">Each month brings NBCC closer to the kind of Christmas support that gives one person comfort, dignity and joy.</span>
                 </button>
-                <button type="button" class="card tier give-tier is-featured">
+                <button type="button" class="card tier give-tier is-featured" data-mode="monthly" data-plan="gold" data-amount="5000">
                   <span class="give-flag">Around one Red Bag</span>
                   <span class="give-tier-name">Gold</span>
                   <span class="give-price"><span class="give-amount">&pound;50</span> <span class="give-cadence">per month</span></span>
                   <span class="give-tier-head">One Christmas made brighter</span>
                   <span class="give-tier-desc">Each month gives support around the value of one Red Bag Full of Joy, helping NBCC deliver Christmas.</span>
                 </button>
-                <button type="button" class="card tier give-tier">
+                <button type="button" class="card tier give-tier" data-mode="monthly" data-plan="platinum" data-amount="10000">
                   <span class="give-tier-name">Platinum</span>
                   <span class="give-price"><span class="give-amount">&pound;100</span> <span class="give-cadence">per month</span></span>
                   <span class="give-tier-head">More joy, every month</span>
@@ -171,7 +174,8 @@
                    the GIFT AID CALLOUT END marker below (and the matching
                    .giftaid CSS block) to remove the control cleanly. The #giftAid
                    checkbox id is the hook the REQ-028 checkout contract reads
-                   (startCheckout); REQ-028/REQ-029 wiring is out of scope here. -->
+                   (startCheckout assembles { mode, plan, amount, giftAid }); the
+                   live POST target /api/checkout-session is REQ-029. -->
               <div class="giftaid">
                 <input type="checkbox" id="giftAid" name="giftAid" class="giftaid-check" />
                 <label for="giftAid" class="giftaid-label">

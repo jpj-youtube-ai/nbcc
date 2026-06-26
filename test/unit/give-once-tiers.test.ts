@@ -67,11 +67,15 @@ describe("give once tiers (REQ-021)", () => {
     expect(norm(label?.textContent).length).toBeGreaterThan(0);
   });
 
-  it("does NOT wire the checkout contract yet (that is REQ-028)", () => {
-    for (const t of tiers) {
-      expect(t.getAttribute("data-amount")).toBeNull();
+  it("wires the checkout contract: data-mode=once, empty data-plan, data-amount in pence (REQ-028)", () => {
+    const pence = ["1000", "2500", "5000", "10000"];
+    tiers.forEach((t, i) => {
+      expect(t.getAttribute("data-mode")).toBe("once");
+      expect(t.getAttribute("data-plan")).toBe("");
+      expect(t.getAttribute("data-amount")).toBe(pence[i]);
+      // Wiring is via the shared startCheckout listener, never an inline handler.
       expect(t.getAttribute("onclick")).toBeNull();
-    }
+    });
   });
 
   it("flags the suggested set with a CONTENT VERIFICATION comment", () => {

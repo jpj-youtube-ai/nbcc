@@ -244,12 +244,100 @@
     });
   }
 
+  // Donate checkout contract (REQ-028): each tier/amount control carries
+  // data-mode (once/monthly), data-plan (bronze/silver/gold/platinum, empty for
+  // one-off) and data-amount (pence, empty for choose-your-own). startCheckout
+  // reads those plus the #giftAid checkbox (REQ-023) into one
+  // { mode, plan, amount, giftAid } payload and returns it. In production it
+  // POSTs to /api/checkout-session (REQ-029) and redirects to the returned Stripe
+  // { url }; with no working backend it degrades to showing the payload (the
+  // preview), mirroring initContactForm's best-effort approach. Amount is in
+  // pence; the choose-your-own control builds it from the #customAmount input.
+  function startCheckout(button, win) {
+    if (!button) return null;
+    var doc = button.ownerDocument;
+    win = win || (doc && doc.defaultView) || window;
+
+    var amount = parseInt(button.getAttribute("data-amount"), 10);
+    if (!amount) {
+      // Choose your own amount: build pence from the linked number input.
+      var custom = button.closest ? button.closest(".give-tier-custom") : null;
+      var input = custom ? custom.querySelector("input") : doc.getElementById("customAmount");
+      var pounds = input ? parseFloat(input.value) : NaN;
+      amount = isFinite(pounds) && pounds > 0 ? Math.round(pounds * 100) : null;
+    }
+
+    var giftAidEl = doc.getElementById("giftAid");
+    var payload = {
+      mode: button.getAttribute("data-mode") || null,
+      plan: button.getAttribute("data-plan") || null,
+      amount: amount || null,
+      giftAid: !!(giftAidEl && giftAidEl.checked),
+    };
+
+    // Preview: show the payload a live checkout would send to the backend.
+    function preview() {
+      try {
+        win.alert(
+          "This is where Stripe Checkout opens.\n\nPayload for your backend:\n" +
+            JSON.stringify(payload, null, 2),
+        );
+      } catch (e) {
+        /* alert unavailable (e.g. tests) */
+      }
+    }
+
+    // Production: POST to the checkout endpoint (REQ-029) and redirect to the
+    // returned Stripe URL; degrade to the preview if it is absent/unavailable.
+    if (typeof win.fetch === "function") {
+      win
+        .fetch("/api/checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        .then(function (res) {
+          return res && res.ok ? res.json() : null;
+        })
+        .then(function (data) {
+          if (data && data.url) win.location.href = data.url;
+          else preview();
+        })
+        .catch(preview);
+    } else {
+      preview();
+    }
+
+    return payload;
+  }
+
+  // Wire every checkout control (the tier buttons and the choose-your-own button,
+  // all carrying data-amount) to startCheckout. The once/monthly toggle buttons
+  // carry data-mode but NOT data-amount, so they stay with initGiveToggle.
+  function initCheckout(doc, win) {
+    var controls = doc.querySelectorAll("[data-amount]");
+    if (!controls.length) return;
+    Array.prototype.forEach.call(controls, function (btn) {
+      btn.addEventListener("click", function () {
+        startCheckout(btn, win);
+      });
+    });
+  }
+
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initNav, initReveal, initGiveToggle, initContactForm };
+    module.exports = {
+      initNav,
+      initReveal,
+      initGiveToggle,
+      initContactForm,
+      startCheckout,
+      initCheckout,
+    };
   } else {
     initNav(document, window);
     initReveal(document, window);
     initGiveToggle(document);
     initContactForm(document, window);
+    initCheckout(document, window);
   }
 })();

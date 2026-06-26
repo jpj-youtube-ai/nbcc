@@ -81,13 +81,16 @@ describe("give monthly tiers (REQ-022)", () => {
     expect(norm(link?.textContent).length).toBeGreaterThan(0);
   });
 
-  it("does NOT wire the checkout contract yet (that is REQ-028)", () => {
-    for (const t of tiers) {
-      expect(t.getAttribute("data-amount")).toBeNull();
-      expect(t.getAttribute("data-plan")).toBeNull();
-      expect(t.getAttribute("data-mode")).toBeNull();
+  it("wires the checkout contract: data-mode=monthly, data-plan and data-amount in pence (REQ-028)", () => {
+    const plans = ["bronze", "silver", "gold", "platinum"];
+    const pence = ["1000", "2500", "5000", "10000"];
+    tiers.forEach((t, i) => {
+      expect(t.getAttribute("data-mode")).toBe("monthly");
+      expect(t.getAttribute("data-plan")).toBe(plans[i]);
+      expect(t.getAttribute("data-amount")).toBe(pence[i]);
+      // Wiring is via the shared startCheckout listener, never an inline handler.
       expect(t.getAttribute("onclick")).toBeNull();
-    }
+    });
   });
 
   it("writes the visible monthly copy without dashes (REQ-031)", () => {

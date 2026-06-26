@@ -176,6 +176,9 @@ Tasks:
 
 A Gift Aid callout with a tick box, worth 25% on eligible gifts, enabled only once NBCC is registered to claim Gift Aid and removed otherwise. Gift Aid is not in the leaflet, so its inclusion is a pending NBCC decision. *Accept:* the Gift Aid control renders and is gated on the registration decision.
 
+Tasks:
+- TASK-031 — Build the Gift Aid callout with tick box into the give widget on donate.html
+
 ### REQ-024 — Donate side panel
 
 The Holly Green side panel: where the money goes (three points), the charity number SC047995, and payment-method chips for Card, Direct Debit, Apple Pay and Google Pay. *Accept:* the side panel shows the three points, the charity number, and the four payment chips.

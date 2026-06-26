@@ -712,6 +712,29 @@ npx lighthouse http://localhost:3000/ --only-categories=performance --view
 # repeat for /about-us, /donate, /contact
 ```
 
+### Content and copy rules (REQ-031)
+
+The 2025 NBCC donation leaflet is the **source of truth** for page content, and
+the marketing copy follows a small house style:
+
+- **No dashes in visible copy.** Reword rather than hyphenate — "one off",
+  "year round", "volunteer run", "post Christmas", "South West Scotland" — and use
+  commas, parentheses or restructured sentences instead of en/em dashes.
+- **Write "NBCC"** in full (never a mistyped variant such as "NB4CC").
+- **Beneficiaries** are always the full phrase **"children, young people and
+  vulnerable adults"** — never a truncated form like "children and young people".
+- Anything not yet confirmed against the leaflet is flagged inline with a
+  `CONTENT VERIFICATION (REQ-NNN)` HTML comment.
+
+`test/unit/copy-rules.test.ts` guards this across `index.html` / `about.html` /
+`donate.html` / `contact.html` (and `supporters.html` once it exists). It scans
+the **visible** copy only — the `<body>` text plus `alt` / `title` / `aria-label`
+/ `placeholder` attributes, with `<script>` / `<style>` / `<svg>` stripped — so
+hyphens inside URLs, `mailto:`/`tel:` hrefs, `data-*` attributes, SVG path data
+and HTML comments don't trip it (and the `Page — Site` pattern in the SEO
+`<title>`/`<meta>` is out of scope). The build fails if any page puts a dash in
+visible copy, contains "NB4CC", or uses a truncated beneficiary phrase.
+
 ## Prerequisites
 
 - Node 20, Docker, AWS CLI v2, Terraform >= 1.6

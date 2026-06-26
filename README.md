@@ -559,6 +559,37 @@ email and phone are real links with accessible text that keep the global
 `:focus-visible` ring (REQ-032). Dash-free copy, "NBCC" not "NB4CC" (REQ-031).
 Verified by `test/unit/donate-reassurance.test.ts`.
 
+### Contact page (REQ-027)
+
+`contact.html` opens with a centred intro (`CONTACT PAGE` CSS block) mirroring the
+About/Donate intros — a crimson `.eyebrow` ("Contact"), a base `<h1>`, the
+centred `.rule`, and a `.lede`. Below it a two-column `.contact-grid` pairs NBCC's
+contact points with the enquiry form:
+
+- **Contact points** — four `.card` tiles, each with an inline `aria-hidden` SVG
+  icon: general enquiries (`info@nightbeforechristmas.co.uk`), the phone
+  (`tel:+441292811015`, shown as **01292 811 015**), donations via **Jaimie
+  Wakefield** (`giving@nightbeforechristmas.co.uk`), and **Annbank Village Hall**
+  as the base.
+- **Enquiry form** — a `.card` form with a real `<label for=…>` on every field
+  (REQ-032): required **First name**, optional **Last name**, required **Email**,
+  required **Message** `<textarea>`; required fields carry `required` +
+  `aria-required` and a `*` marker.
+
+`initContactForm()` in the shared `assets/js/main.js` (exported alongside
+`initNav`/`initReveal`/`initGiveToggle`) validates the required fields and the
+email format on submit, surfaces inline errors via `aria-invalid` +
+`aria-describedby`, and on a valid submit shows a cream-on-holly success message
+(the preview behaviour). In production it best-effort POSTs
+`{firstName,lastName,email,message}` to **`/api/contact`** and falls back to the
+visitor's mail client (`mailto`) if that endpoint is absent or unavailable; the
+endpoint itself is **REQ-030** (out of scope here, currently a `501` stub). Inputs
+keep the global `:focus-visible` holly ring. Token-only colours honouring the
+`brand-colours` guard (slate body, maroon labels, crimson icons, never holly/tan
+text); inline SVG icons, no image tags. Dash-free copy, "NBCC" in full (REQ-031).
+Verified by `test/unit/contact.test.ts` (static markup + jsdom validation
+behaviour).
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

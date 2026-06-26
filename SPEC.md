@@ -218,6 +218,10 @@ Tasks:
 
 `POST /api/create-checkout-session` receives `{ mode, plan, amount, giftAid }`, creates a Stripe Checkout session and returns `{ url }`. Payment methods are Card and BACS Direct Debit (Apple Pay and Google Pay come automatically on supported devices); one-off uses a price built from `amount`, monthly uses recurring prices keyed by `plan`; when `giftAid` is true a Gift Aid declaration is captured and stored for the 25% claim; monthly giving is 18 or over and cancellable under the Direct Debit Guarantee. *Accept:* a valid payload returns a Stripe redirect URL reflecting the correct mode, plan and amount.
 
+Tasks:
+- TASK-037 — Wire Stripe config, secret and client for the checkout endpoint
+- TASK-038 — Implement POST /api/checkout-session to create a Stripe Checkout session
+
 ### REQ-030 — Contact endpoint
 
 `POST /api/contact` receives `{ firstName, lastName, email, message }`, sends to the NBCC inbox (or a form service such as Formspree) and returns success. Until built, the form falls back to opening the visitor's email client. *Accept:* a submitted form reaches the inbox and returns success, with the mail-client fallback when the endpoint is absent.

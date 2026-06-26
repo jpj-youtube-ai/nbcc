@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (26)
+## Shipped (27)
 
 ### REQ-001 — Multi-page site structure
 
@@ -182,6 +182,13 @@ A tinted band: all monthly donors are named on the Donors Page (unless anonymous
 Tasks:
 - TASK-033 — Build the monthly donor benefits tinted band on donate.html distinguishing all-donor from Platinum-only perks
 
+### REQ-026 — Donate reassurance
+
+Three reassurance items: cancel any time under the Direct Debit Guarantee; secure via Stripe and 18 or over; and a help line pointing to Jaimie Wakefield at giving@nightbeforechristmas.co.uk or 01292 811 015. *Accept:* the three reassurance items render with the correct contact details.
+
+Tasks:
+- TASK-034 — Build the donate reassurance section in donate.html with the three reassurance items
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -191,14 +198,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (9)
-
-### REQ-026 — Donate reassurance
-
-Three reassurance items: cancel any time under the Direct Debit Guarantee; secure via Stripe and 18 or over; and a help line pointing to Jaimie Wakefield at giving@nightbeforechristmas.co.uk or 01292 811 015. *Accept:* the three reassurance items render with the correct contact details.
-
-Tasks:
-- TASK-034 — Build the donate reassurance section in donate.html with the three reassurance items
+## Planned (8)
 
 ### REQ-027 — Contact page and enquiry form
 

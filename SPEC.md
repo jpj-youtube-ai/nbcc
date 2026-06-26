@@ -211,6 +211,9 @@ Tasks:
 
 Every tier and amount button carries data attributes — `data-mode` (`once` or `monthly`), `data-plan` (`bronze`/`silver`/`gold`/`platinum`, empty for one-off), `data-amount` (pence, empty for choose-your-own) — and calls `startCheckout(button)`, which reads the `#giftAid` checkbox and assembles a single `{ mode, plan, amount, giftAid }` payload. This is the one integration point: in production it POSTs to the backend and redirects to the returned Stripe URL; in the preview it shows the payload. *Accept:* clicking any tier produces the correct payload (alert in preview, POST + redirect in production).
 
+Tasks:
+- TASK-036 — Wire the donate tier buttons to the startCheckout payload contract (data attributes + startCheckout in main.js)
+
 ### REQ-029 — Checkout session endpoint
 
 `POST /api/create-checkout-session` receives `{ mode, plan, amount, giftAid }`, creates a Stripe Checkout session and returns `{ url }`. Payment methods are Card and BACS Direct Debit (Apple Pay and Google Pay come automatically on supported devices); one-off uses a price built from `amount`, monthly uses recurring prices keyed by `plan`; when `giftAid` is true a Gift Aid declaration is captured and stored for the 25% claim; monthly giving is 18 or over and cancellable under the Direct Debit Guarantee. *Accept:* a valid payload returns a Stripe redirect URL reflecting the correct mode, plan and amount.

@@ -637,7 +637,8 @@ a non-positive amount). A one-off is a `mode: payment` session with inline GBP
 `STRIPE_DONATION_PRODUCT` product when that optional id is set, otherwise an inline
 product is named — and a monthly is a `mode: subscription` session using the
 recurring `STRIPE_PRICE_*` id keyed by plan. `payment_method_types` is
-`['card', 'bacs_debit']` (Apple Pay / Google Pay ride on the card method).
+`['card']` (Apple Pay / Google Pay ride on the card method; BACS Direct Debit was
+dropped pending Stripe account activation).
 `success_url` / `cancel_url` come from config. When
 `giftAid` is true the declaration is recorded as `metadata.giftAid='true'` on the
 session for the 25% claim — **durable storage of the declaration (a Stripe webhook

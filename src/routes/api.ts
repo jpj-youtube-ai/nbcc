@@ -37,12 +37,11 @@ const checkoutBodySchema = z
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
 
-// Card plus BACS Direct Debit; Apple Pay / Google Pay are offered automatically
-// by Stripe Checkout when the card method is enabled, so they need no entry here.
-const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_types"] = [
-  "card",
-  "bacs_debit",
-];
+// Card only. Apple Pay / Google Pay are offered automatically by Stripe Checkout
+// when the card method is enabled, so they need no entry here. BACS Direct Debit
+// was dropped because it needs a separate Stripe account activation; re-add
+// "bacs_debit" here once it is enabled in the Stripe dashboard.
+const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_types"] = ["card"];
 
 // Assemble the Stripe Checkout session parameters from a validated body.
 export function buildSessionParams(
@@ -107,9 +106,12 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
   try {
     const session = await stripe.checkout.sessions.create(buildSessionParams(parsed.data));
     return res.status(200).json({ url: session.url });
-  } catch {
-    // Upstream Stripe failure: the front-end (startCheckout) degrades to its
-    // preview when it cannot get a { url }.
+  } catch (err) {
+    // Upstream Stripe failure: log the real reason (e.g. a payment method not
+    // activated, or a key-permission error) so it is visible in CloudWatch, then
+    // return 502 — the front-end (startCheckout) degrades to its preview when it
+    // cannot get a { url }. The message is safe to log; no secret is included.
+    console.error("checkout-session create failed:", err instanceof Error ? err.message : err);
     return res.status(502).json({ error: "Checkout is temporarily unavailable" });
   }
 }

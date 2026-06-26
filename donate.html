@@ -225,6 +225,61 @@
             </aside>
           </div>
         </section>
+
+        <!-- Monthly donor benefits (REQ-025): a tan-soft tinted band beneath
+             the give widget, mirroring the .why/.meet-team pattern (--radius-lg,
+             clamp padding). A semantic section named by its <h2> (REQ-032). Two
+             .card groups make the split structurally clear: perks for ALL
+             monthly donors (named on the Donors Page unless anonymous,
+             cross-linked to the Supporters page REQ-035; a post Christmas impact
+             update) and the Platinum-only extras (social media thank you,
+             optional digital supporter badge, personalised supporter
+             certificate). Check icons are inline SVG, aria-hidden, no image
+             tags (perf budget). Copy is dash-free with "NBCC" in full (REQ-031); on
+             this light surface body text stays slate, never holly/tan
+             (brand-colours guard). -->
+        <section class="donor-benefits" aria-labelledby="benefits-heading">
+          <span class="eyebrow">A thank you for monthly donors</span>
+          <h2 id="benefits-heading">What monthly donors receive</h2>
+          <div class="rule center"></div>
+          <p class="donor-benefits-intro">
+            Give monthly and you help NBCC bring comfort, dignity and joy to
+            children, young people and vulnerable adults across South West
+            Scotland all year round. Here is how we say thank you.
+          </p>
+          <div class="benefit-grid reveal">
+            <div class="benefit-group card">
+              <h3 class="benefit-title">All monthly donors</h3>
+              <ul class="benefit-list">
+                <li>
+                  <svg class="benefit-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span>Your name, or your business name, added to our <a href="/supporters">Donors Page</a>, unless you choose to remain anonymous.</span>
+                </li>
+                <li>
+                  <svg class="benefit-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span>A post Christmas end of year impact update, keeping you in the loop on the difference your support has helped make.</span>
+                </li>
+              </ul>
+            </div>
+            <div class="benefit-group card">
+              <h3 class="benefit-title">Platinum donors also receive</h3>
+              <ul class="benefit-list">
+                <li>
+                  <svg class="benefit-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span>A special thank you on our social media channels, celebrating your generous ongoing support.</span>
+                </li>
+                <li>
+                  <svg class="benefit-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span>An optional digital supporter badge for your website, ideal for businesses.</span>
+                </li>
+                <li>
+                  <svg class="benefit-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  <span>A personalised supporter certificate, printed and posted, or sent digitally.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
       </section>
     </main>
 

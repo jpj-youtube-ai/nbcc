@@ -30,11 +30,11 @@ Feature: Marketing site served by the app
     When I GET "/assets/css/styles.css"
     Then the response status should be 200
 
+  # /api/checkout-session is implemented (REQ-029) — see checkout.feature.
   Scenario Outline: API endpoints are wired but not yet implemented
     When I POST "<path>"
     Then the response status should be 501
 
     Examples:
-      | path                  |
-      | /api/checkout-session |
-      | /api/contact          |
+      | path         |
+      | /api/contact |

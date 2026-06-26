@@ -535,6 +535,30 @@ budget holds. Dash-free copy, "NBCC" in full, and the **children, young people a
 vulnerable adults** phrasing (REQ-031). Verified by
 `test/unit/monthly-donor-benefits.test.ts`.
 
+### Donate reassurance (REQ-026)
+
+The last band in the donate `.page-sections` slot, below the monthly donor
+benefits and before the footer, is a row of **three `.card` trust items**
+(`DONATE REASSURANCE` CSS block). It is a semantic `<section class="reassure">`
+named by its own `<h2>` ("Giving with confidence") via `aria-labelledby`
+(REQ-032), with an eyebrow, a centred `.rule`, and a `.reveal` intro. Each item
+carries an inline-SVG icon and a heading + line:
+
+- **Cancel any time** — monthly gifts can be changed or cancelled whenever you
+  like; Direct Debits are protected by the **Direct Debit Guarantee**.
+- **Secure and simple** — donations are handled securely by **Stripe**; monthly
+  giving should be set up by adults aged **18 or over**.
+- **Need a hand?** — contact **Jaimie Wakefield** by email
+  (`mailto:giving@nightbeforechristmas.co.uk`) or phone (`tel:+441292811015`,
+  shown as **01292 811 015**).
+
+On this light surface body text stays `--slate` with maroon titles and crimson
+icons, never holly/tan, so the `brand-colours` guard holds; icons are inline SVG
+via `currentColor`, `aria-hidden`, **no image tags** so the perf budget holds. The
+email and phone are real links with accessible text that keep the global
+`:focus-visible` ring (REQ-032). Dash-free copy, "NBCC" not "NB4CC" (REQ-031).
+Verified by `test/unit/donate-reassurance.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

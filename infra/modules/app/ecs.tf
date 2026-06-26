@@ -36,6 +36,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       aws_ssm_parameter.stripe_price_silver.arn,
       aws_ssm_parameter.stripe_price_gold.arn,
       aws_ssm_parameter.stripe_price_platinum.arn,
+      # Contact forwarding endpoint (REQ-030): injected via valueFrom, so the exec
+      # role must be able to read it.
+      aws_ssm_parameter.contact_forward_url.arn,
     ]
   }
   statement {
@@ -100,6 +103,8 @@ resource "aws_ecs_task_definition" "app" {
       { name = "STRIPE_PRICE_SILVER", valueFrom = aws_ssm_parameter.stripe_price_silver.arn },
       { name = "STRIPE_PRICE_GOLD", valueFrom = aws_ssm_parameter.stripe_price_gold.arn },
       { name = "STRIPE_PRICE_PLATINUM", valueFrom = aws_ssm_parameter.stripe_price_platinum.arn },
+      # Contact forwarding endpoint (REQ-030): a SecureString, injected like a secret.
+      { name = "CONTACT_FORWARD_URL", valueFrom = aws_ssm_parameter.contact_forward_url.arn },
     ]
 
     logConfiguration = {

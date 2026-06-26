@@ -16,6 +16,8 @@ const validEnv = (): Record<string, string> => ({
   STRIPE_PRICE_SILVER: "price_silver",
   STRIPE_PRICE_GOLD: "price_gold",
   STRIPE_PRICE_PLATINUM: "price_platinum",
+  // Contact forwarding (TASK-039, REQ-030).
+  CONTACT_FORWARD_URL: "https://formspree.io/f/test",
 });
 
 describe("config schema", () => {
@@ -53,6 +55,20 @@ describe("config schema — Stripe checkout keys (REQ-028/REQ-029)", () => {
 
   it.each(["STRIPE_SUCCESS_URL", "STRIPE_CANCEL_URL"])("validates %s as a URL", (key) => {
     expect(configSchema.safeParse({ ...validEnv(), [key]: "not-a-url" }).success).toBe(false);
+  });
+});
+
+describe("config schema — contact forwarding key (REQ-030)", () => {
+  it("requires CONTACT_FORWARD_URL", () => {
+    const env = validEnv();
+    delete env.CONTACT_FORWARD_URL;
+    expect(configSchema.safeParse(env).success).toBe(false);
+  });
+
+  it("validates CONTACT_FORWARD_URL as a URL", () => {
+    expect(configSchema.safeParse({ ...validEnv(), CONTACT_FORWARD_URL: "not-a-url" }).success).toBe(
+      false,
+    );
   });
 
   it("parses the Stripe values onto the typed config", () => {

@@ -119,3 +119,15 @@ resource "aws_ssm_parameter" "stripe_price_platinum" {
   value = "REPLACE_ME"
   lifecycle { ignore_changes = [value] }
 }
+
+# Contact form forwarding endpoint (REQ-030). A SecureString — it authorises form
+# submissions. The placeholder is a VALID `.example` URL (not REPLACE_ME) so the
+# app's URL validation passes on a fresh apply; the contact client treats a
+# `.example` host as unconfigured and stubs the forward outside production until a
+# real URL is set out of band. Set the real value with put-parameter (see README).
+resource "aws_ssm_parameter" "contact_forward_url" {
+  name  = "/${var.project}/${var.environment}/CONTACT_FORWARD_URL"
+  type  = "SecureString"
+  value = "https://forward.example/replace-me"
+  lifecycle { ignore_changes = [value] }
+}

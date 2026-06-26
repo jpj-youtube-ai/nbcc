@@ -33,6 +33,9 @@ jobs:
       STRIPE_PRICE_SILVER: price_ci_silver
       STRIPE_PRICE_GOLD: price_ci_gold
       STRIPE_PRICE_PLATINUM: price_ci_platinum
+      # Contact forwarding (REQ-030). A `.example` placeholder so the app boots and
+      # the forward is stubbed (no live form service) for the BDD step.
+      CONTACT_FORWARD_URL: https://forward.example/contact
       BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

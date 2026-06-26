@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (22)
+## Shipped (23)
 
 ### REQ-001 — Multi-page site structure
 
@@ -154,6 +154,13 @@ Suggested one-off amounts — £10 (cosy essentials), £25 (towards a Red Bag, m
 Tasks:
 - TASK-029 — Build the Give once tiers into #tiersOnce on donate.html
 
+### REQ-022 — Give monthly tiers
+
+Four monthly tiers with the exact leaflet copy: Bronze £10/month "Building towards Christmas joy"; Silver £25/month "Halfway to a Red Bag Full of Joy"; Gold £50/month "One Christmas made brighter"; Platinum £100/month "More joy, every month" — each with its leaflet description — plus a line for other monthly amounts linking to giving@nightbeforechristmas.co.uk. *Accept:* the four monthly tiers render with leaflet headlines and descriptions and the other-amount contact line.
+
+Tasks:
+- TASK-030 — Build the four monthly give tiers into #tiersMonthly on donate.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -163,14 +170,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (13)
-
-### REQ-022 — Give monthly tiers
-
-Four monthly tiers with the exact leaflet copy: Bronze £10/month "Building towards Christmas joy"; Silver £25/month "Halfway to a Red Bag Full of Joy"; Gold £50/month "One Christmas made brighter"; Platinum £100/month "More joy, every month" — each with its leaflet description — plus a line for other monthly amounts linking to giving@nightbeforechristmas.co.uk. *Accept:* the four monthly tiers render with leaflet headlines and descriptions and the other-amount contact line.
-
-Tasks:
-- TASK-030 — Build the four monthly give tiers into #tiersMonthly on donate.html
+## Planned (12)
 
 ### REQ-023 — Gift Aid callout
 

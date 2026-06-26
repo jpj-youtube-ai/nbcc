@@ -197,6 +197,9 @@ Tasks:
 
 Three reassurance items: cancel any time under the Direct Debit Guarantee; secure via Stripe and 18 or over; and a help line pointing to Jaimie Wakefield at giving@nightbeforechristmas.co.uk or 01292 811 015. *Accept:* the three reassurance items render with the correct contact details.
 
+Tasks:
+- TASK-034 — Build the donate reassurance section in donate.html with the three reassurance items
+
 ### REQ-027 — Contact page and enquiry form
 
 An intro with the signature rule and a lede; contact points (info@nightbeforechristmas.co.uk for general enquiries, 01292 811 015, donations via Jaimie Wakefield at giving@, and Annbank Village Hall as the base); and a form with First name (required), Last name, Email (required) and Message (required), with client-side validation. The preview shows a success message; the live site posts to the backend. *Accept:* the contact details display and the validated form yields a success message in the preview.

@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (31)
+## Shipped (32)
 
 ### REQ-001 — Multi-page site structure
 
@@ -218,6 +218,13 @@ Tasks:
 Tasks:
 - TASK-039 — Implement POST /api/contact to forward enquiries to the NBCC inbox
 
+### REQ-031 — Content and copy rules
+
+House style holds sitewide: no dashes in any visible copy (use commas, parentheses or restructured sentences, matching leaflet style such as "one off", "year round", "volunteer run"); always write "NBCC", never "NB4CC"; beneficiaries are always "children, young people and vulnerable adults"; gifts are described as curated by age with emphasis on inclusivity; tone is warm and dignified, never pity-driven. The 2025 donation leaflet is the source of truth for content. *Accept:* a copy review finds no dashes, correct NBCC usage, the full beneficiary phrasing, and the warm dignified tone throughout.
+
+Tasks:
+- TASK-040 — Add a sitewide copy-rules guard test and fix any violations across all pages
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -227,14 +234,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (4)
-
-### REQ-031 — Content and copy rules
-
-House style holds sitewide: no dashes in any visible copy (use commas, parentheses or restructured sentences, matching leaflet style such as "one off", "year round", "volunteer run"); always write "NBCC", never "NB4CC"; beneficiaries are always "children, young people and vulnerable adults"; gifts are described as curated by age with emphasis on inclusivity; tone is warm and dignified, never pity-driven. The 2025 donation leaflet is the source of truth for content. *Accept:* a copy review finds no dashes, correct NBCC usage, the full beneficiary phrasing, and the warm dignified tone throughout.
-
-Tasks:
-- TASK-040 — Add a sitewide copy-rules guard test and fix any violations across all pages
+## Planned (3)
 
 ### REQ-032 — Accessibility floor (WCAG 2.1 AA)
 

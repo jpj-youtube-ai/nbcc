@@ -130,7 +130,40 @@
                   </div>
                 </div>
               </div>
-              <div class="give-tiers" id="tiersMonthly" role="region" aria-label="Give monthly amounts"></div>
+              <div class="give-tiers" id="tiersMonthly" role="region" aria-label="Give monthly amounts">
+                <!-- The four monthly tiers (REQ-022) carry the 2025 leaflet copy
+                     verbatim. The checkout contract (data-mode/data-plan/
+                     data-amount and startCheckout wiring) is REQ-028, not here. -->
+                <button type="button" class="card tier give-tier">
+                  <span class="give-tier-name">Bronze</span>
+                  <span class="give-price"><span class="give-amount">&pound;10</span> <span class="give-cadence">per month</span></span>
+                  <span class="give-tier-head">Building towards Christmas joy</span>
+                  <span class="give-tier-desc">Every month helps build towards the comfort, care and thoughtful gifts that make someone feel remembered.</span>
+                </button>
+                <button type="button" class="card tier give-tier">
+                  <span class="give-tier-name">Silver</span>
+                  <span class="give-price"><span class="give-amount">&pound;25</span> <span class="give-cadence">per month</span></span>
+                  <span class="give-tier-head">Halfway to a Red Bag Full of Joy</span>
+                  <span class="give-tier-desc">Each month brings NBCC closer to the kind of Christmas support that gives one person comfort, dignity and joy.</span>
+                </button>
+                <button type="button" class="card tier give-tier is-featured">
+                  <span class="give-flag">Around one Red Bag</span>
+                  <span class="give-tier-name">Gold</span>
+                  <span class="give-price"><span class="give-amount">&pound;50</span> <span class="give-cadence">per month</span></span>
+                  <span class="give-tier-head">One Christmas made brighter</span>
+                  <span class="give-tier-desc">Each month gives support around the value of one Red Bag Full of Joy, helping NBCC deliver Christmas.</span>
+                </button>
+                <button type="button" class="card tier give-tier">
+                  <span class="give-tier-name">Platinum</span>
+                  <span class="give-price"><span class="give-amount">&pound;100</span> <span class="give-cadence">per month</span></span>
+                  <span class="give-tier-head">More joy, every month</span>
+                  <span class="give-tier-desc">Each month gives support around the value of two Red Bags Full of Joy, helping NBCC reach more people across South West Scotland.</span>
+                </button>
+                <p class="give-other">
+                  Want a different monthly amount?
+                  <a href="mailto:giving@nightbeforechristmas.co.uk?subject=Monthly%20giving%20enquiry">Email us about monthly giving</a>
+                </p>
+              </div>
             </div>
             <!-- Holly Green side panel. The detailed "where your gift goes"
                  content (list, charity number, payment chips) is REQ-024; this

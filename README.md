@@ -449,6 +449,26 @@ leaflet specifies only monthly tiers, so they are a suggestion to confirm. **Out
 of scope here:** the `data-amount`/`startCheckout` checkout contract (REQ-028) and
 the monthly tiers (REQ-022). Verified by `test/unit/give-once-tiers.test.ts`.
 
+### Give monthly tiers (REQ-022)
+
+The monthly plans are mounted into the shell's `#tiersMonthly` container (the
+default-visible group) and **reuse** the GIVE ONCE TIERS surface — the same
+`.give-tiers` grid, `.card.tier.give-tier` tiles, `.give-amount`,
+`.give-tier-desc`, and `.is-featured`/`.give-flag`. A small `GIVE MONTHLY TIERS`
+CSS block adds only the monthly-specific pieces: the `.give-tier-name`, the
+`.give-cadence` ("per month") label on the `.give-price` row, the
+`.give-tier-head` headline, and the `.give-other` contact line. The four leaflet
+tiers carry their exact copy and order: **Bronze £10 per month** ("Building
+towards Christmas joy"), **Silver £25 per month** ("Halfway to a Red Bag Full of
+Joy"), **Gold £50 per month** ("One Christmas made brighter", marked **"Around
+one Red Bag"** on the featured tile), and **Platinum £100 per month** ("More joy,
+every month"), each with its leaflet description. A `.give-other` line links to
+`mailto:giving@nightbeforechristmas.co.uk` for other monthly amounts. Token-only
+colours, no hex/rgb outside `:root`; copy is dash-free and uses "NBCC" / "per
+month" (REQ-031). **Out of scope here:** the `data-mode`/`data-plan`/`data-amount`
+checkout contract (REQ-028) and the Holly Green side-panel content (REQ-024).
+Verified by `test/unit/give-monthly-tiers.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

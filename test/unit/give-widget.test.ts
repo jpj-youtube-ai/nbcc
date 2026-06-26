@@ -62,14 +62,13 @@ describe("give widget shell (REQ-020)", () => {
     expect(norm(controls[1].textContent).toLowerCase()).toContain("monthly");
   });
 
-  it("has the two tier containers: #tiersOnce filled by REQ-021, #tiersMonthly still empty", () => {
+  it("has both tier containers filled: #tiersOnce by REQ-021, #tiersMonthly by REQ-022", () => {
     const once = widget?.querySelector("#tiersOnce");
     const monthly = widget?.querySelector("#tiersMonthly");
     expect(once).not.toBeNull();
     expect(monthly).not.toBeNull();
-    // REQ-021 mounts the give-once tiers here; REQ-022 will fill the monthly one.
     expect(norm(once?.textContent).length).toBeGreaterThan(0);
-    expect(norm(monthly?.textContent)).toBe("");
+    expect(norm(monthly?.textContent).length).toBeGreaterThan(0);
   });
 
   it("defaults to give monthly visible without JS (progressive enhancement)", () => {

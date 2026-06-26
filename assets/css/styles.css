@@ -1231,3 +1231,48 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   GIVE MONTHLY TIERS (REQ-022) — donate.html. The Bronze/Silver/Gold/
+   Platinum plans mounted into #tiersMonthly reuse the GIVE ONCE TIERS
+   surface (.give-tiers grid, .card.tier.give-tier, .give-amount,
+   .give-tier-desc, .is-featured/.give-flag). This block adds only the
+   monthly-specific pieces: the plan name, the per-month cadence label,
+   the headline, and the other-amount contact line. Token-only colours.
+   ================================================================= */
+.give-tier-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: var(--slate);
+}
+/* Amount + cadence sit on one baseline row ("£10  per month"). */
+.give-price {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.give-cadence {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--slate-soft);
+}
+.give-tier-head {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--maroon);
+}
+/* Other monthly amounts: a full-width contact line under the tiers. */
+.give-other {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--slate-soft);
+}
+.give-other a {
+  color: var(--crimson);
+  font-weight: 600;
+}

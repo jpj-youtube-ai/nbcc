@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (23)
+## Shipped (24)
 
 ### REQ-001 — Multi-page site structure
 
@@ -161,6 +161,13 @@ Four monthly tiers with the exact leaflet copy: Bronze £10/month "Building towa
 Tasks:
 - TASK-030 — Build the four monthly give tiers into #tiersMonthly on donate.html
 
+### REQ-023 — Gift Aid callout
+
+A Gift Aid callout with a tick box, worth 25% on eligible gifts, enabled only once NBCC is registered to claim Gift Aid and removed otherwise. Gift Aid is not in the leaflet, so its inclusion is a pending NBCC decision. *Accept:* the Gift Aid control renders and is gated on the registration decision.
+
+Tasks:
+- TASK-031 — Build the Gift Aid callout with tick box into the give widget on donate.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -170,14 +177,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (12)
-
-### REQ-023 — Gift Aid callout
-
-A Gift Aid callout with a tick box, worth 25% on eligible gifts, enabled only once NBCC is registered to claim Gift Aid and removed otherwise. Gift Aid is not in the leaflet, so its inclusion is a pending NBCC decision. *Accept:* the Gift Aid control renders and is gated on the registration decision.
-
-Tasks:
-- TASK-031 — Build the Gift Aid callout with tick box into the give widget on donate.html
+## Planned (11)
 
 ### REQ-024 — Donate side panel
 

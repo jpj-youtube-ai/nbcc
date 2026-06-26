@@ -169,6 +169,9 @@ Tasks:
 
 Four monthly tiers with the exact leaflet copy: Bronze £10/month "Building towards Christmas joy"; Silver £25/month "Halfway to a Red Bag Full of Joy"; Gold £50/month "One Christmas made brighter"; Platinum £100/month "More joy, every month" — each with its leaflet description — plus a line for other monthly amounts linking to giving@nightbeforechristmas.co.uk. *Accept:* the four monthly tiers render with leaflet headlines and descriptions and the other-amount contact line.
 
+Tasks:
+- TASK-030 — Build the four monthly give tiers into #tiersMonthly on donate.html
+
 ### REQ-023 — Gift Aid callout
 
 A Gift Aid callout with a tick box, worth 25% on eligible gifts, enabled only once NBCC is registered to claim Gift Aid and removed otherwise. Gift Aid is not in the leaflet, so its inclusion is a pending NBCC decision. *Accept:* the Gift Aid control renders and is gated on the registration decision.

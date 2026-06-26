@@ -28,6 +28,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.image_sha || github.sha }}
+          # Full history: a promoted commit SHA isn't always reachable in a
+          # shallow (depth 1) fetch, which makes checkout fail to resolve it.
+          fetch-depth: 0
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:

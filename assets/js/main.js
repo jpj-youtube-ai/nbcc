@@ -112,11 +112,144 @@
     activate(start.getAttribute("data-mode"));
   }
 
+  // Contact form (REQ-027): client-side validation + submit handling for the
+  // enquiry form. Progressive enhancement — without JS the form posts to
+  // /api/contact (REQ-030). With JS this validates the required fields and the
+  // email format, surfaces inline errors (aria-invalid + aria-describedby), and
+  // on a valid submit shows the success message (the preview behaviour). It then
+  // best-effort POSTs {firstName,lastName,email,message} to /api/contact and, if
+  // that endpoint is absent or unavailable, falls back to the visitor's mail
+  // client (mailto). The endpoint itself is REQ-030 and out of scope here.
+  function initContactForm(doc, win) {
+    var form = doc.getElementById("contactForm");
+    if (!form) return;
+    var status = doc.getElementById("formStatus");
+
+    // The required fields and how each is validated. Last name is optional.
+    var fields = [
+      { id: "firstName", required: true },
+      { id: "email", required: true, email: true },
+      { id: "message", required: true },
+    ];
+
+    function emailValid(value) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+    }
+
+    function validateField(f) {
+      var el = doc.getElementById(f.id);
+      if (!el) return true;
+      var value = (el.value || "").trim();
+      var ok = true;
+      if (f.required && !value) ok = false;
+      else if (f.email && !emailValid(value)) ok = false;
+      el.setAttribute("aria-invalid", String(!ok));
+      var err = doc.getElementById(f.id + "-error");
+      if (err) err.hidden = ok;
+      var wrap = el.closest ? el.closest(".field") : null;
+      if (wrap) wrap.classList.toggle("invalid", !ok);
+      return ok;
+    }
+
+    function clearErrors() {
+      fields.forEach(function (f) {
+        var el = doc.getElementById(f.id);
+        if (!el) return;
+        el.setAttribute("aria-invalid", "false");
+        var err = doc.getElementById(f.id + "-error");
+        if (err) err.hidden = true;
+        var wrap = el.closest ? el.closest(".field") : null;
+        if (wrap) wrap.classList.remove("invalid");
+      });
+    }
+
+    function value(id) {
+      var el = doc.getElementById(id);
+      return el ? (el.value || "").trim() : "";
+    }
+
+    // Best-effort delivery (production). Preview/local has no working backend, so
+    // this only runs in a real browser with fetch; a 501/error/absent endpoint
+    // falls back to opening the visitor's mail client.
+    function deliver(payload) {
+      if (typeof win.fetch !== "function") return;
+      function mailFallback() {
+        try {
+          var subject = "Website enquiry from " + payload.firstName;
+          var body =
+            "Name: " + payload.firstName + " " + payload.lastName + "\n" +
+            "Email: " + payload.email + "\n\n" + payload.message;
+          win.location.href =
+            "mailto:info@nightbeforechristmas.co.uk?subject=" +
+            encodeURIComponent(subject) +
+            "&body=" +
+            encodeURIComponent(body);
+        } catch (e) {
+          /* navigation unavailable (e.g. tests); the success message already shows */
+        }
+      }
+      win
+        .fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        .then(function (res) {
+          if (!res || !res.ok) mailFallback();
+        })
+        .catch(mailFallback);
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      var firstBad = null;
+      var allOk = true;
+      fields.forEach(function (f) {
+        var ok = validateField(f);
+        if (!ok) {
+          allOk = false;
+          if (!firstBad) firstBad = doc.getElementById(f.id);
+        }
+      });
+
+      if (!allOk) {
+        if (status) {
+          status.textContent = "";
+          status.className = "form-status";
+        }
+        if (firstBad && firstBad.focus) firstBad.focus();
+        return;
+      }
+
+      var payload = {
+        firstName: value("firstName"),
+        lastName: value("lastName"),
+        email: value("email"),
+        message: value("message"),
+      };
+
+      // Preview behaviour: show the success message.
+      if (status) {
+        status.textContent =
+          "Thank you " +
+          payload.firstName +
+          ", your message is on its way to the NBCC inbox. We will be in touch soon.";
+        status.className = "form-status is-success";
+      }
+
+      form.reset();
+      clearErrors();
+      deliver(payload);
+    });
+  }
+
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initNav, initReveal, initGiveToggle };
+    module.exports = { initNav, initReveal, initGiveToggle, initContactForm };
   } else {
     initNav(document, window);
     initReveal(document, window);
     initGiveToggle(document);
+    initContactForm(document, window);
   }
 })();

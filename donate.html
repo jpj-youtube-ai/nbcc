@@ -183,16 +183,45 @@
               </div>
               <!-- GIFT AID CALLOUT END (REQ-023) -->
             </div>
-            <!-- Holly Green side panel. The detailed "where your gift goes"
-                 content (list, charity number, payment chips) is REQ-024; this
-                 is the inverted cream-on-holly shell with a brief lede. -->
+            <!-- Holly Green side panel (REQ-024): the inverted cream-on-holly
+                 "where your gift goes" content. Cream tints only (never holly/tan
+                 body text, brand-colours guard); decorative check icons are
+                 inline SVG, aria-hidden, no image tags (perf budget). The
+                 reassurance items (REQ-026) and monthly donor benefits (REQ-025)
+                 are separate requirements, not here. -->
             <aside class="give-side">
               <span class="eyebrow">Where your gift goes</span>
               <p class="give-side-note">
-                Everyone at NBCC is a volunteer, so your gift goes straight to
-                comfort, dignity and joy for children, young people and vulnerable
-                adults across South West Scotland.
+                Everyone at NBCC is a volunteer, so more of your gift reaches the
+                people who need it.
               </p>
+              <ul class="side-list">
+                <li>
+                  <svg class="side-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  Thoughtful gifts and essential support, not salaries
+                </li>
+                <li>
+                  <svg class="side-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  The everyday costs of keeping NBCC running
+                </li>
+                <li>
+                  <svg class="side-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                  Reaching children, young people and vulnerable adults in hardship
+                </li>
+              </ul>
+              <div class="side-foot">
+                <p class="side-charity">
+                  Registered Scottish charity
+                  <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-details?number=SC047995" target="_blank" rel="noopener">SC047995</a>,
+                  regulated by OSCR.
+                </p>
+                <ul class="side-pay" aria-label="Accepted payment methods">
+                  <li class="chip">Card</li>
+                  <li class="chip">Direct Debit</li>
+                  <li class="chip">Apple Pay</li>
+                  <li class="chip">Google Pay</li>
+                </ul>
+              </div>
             </aside>
           </div>
         </section>

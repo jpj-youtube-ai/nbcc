@@ -1129,6 +1129,67 @@ a {
 }
 
 /* =================================================================
+   GIVE SIDE PANEL (REQ-024) — donate.html. Fills the .give-side holly
+   panel (GIVE WIDGET block above) with the where-your-gift-goes points,
+   the charity number, and the payment chips. Inverted cream-on-holly
+   tints only: text in --cream/--cream-82/--cream-90, surfaces in
+   --cream-12/--cream-16 — never holly/tan body text (brand-colours
+   guard). Chips are pure CSS pills (--radius-pill), check icons inline
+   SVG via currentColor, no <img> (perf budget). Token-only colours.
+   ================================================================= */
+.side-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.side-list li {
+  display: flex;
+  gap: 12px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--cream-90);
+}
+.side-check {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--cream);
+}
+.side-foot {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--cream-16);
+}
+.side-charity {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--cream-82);
+}
+.side-charity a {
+  color: var(--cream);
+  font-weight: 600;
+}
+.side-pay {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.side-pay .chip {
+  padding: 5px 10px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  color: var(--cream-82);
+  background: var(--cream-12);
+  border: 1px solid var(--cream-16);
+  border-radius: var(--radius-pill);
+}
+
+/* =================================================================
    GIVE ONCE TIERS (REQ-021) — donate.html. The one-off suggested amounts
    mounted into #tiersOnce: four selectable amount tiles plus a full-width
    choose-your-own-amount field, on the shared .card/.tier surface (REQ-009)

@@ -494,6 +494,24 @@ emphasis is `--maroon` and the tick `accent-color` is `--crimson`, on a
 
 Verified by `test/unit/gift-aid.test.ts`.
 
+### Give side panel content (REQ-024)
+
+The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE
+PANEL` CSS block, next to `GIVE WIDGET`): a "Where your gift goes" eyebrow and
+short lede, a semantic `.side-list` of **three** points (thoughtful gifts and
+essential support not salaries; the everyday costs of keeping NBCC running;
+reaching **children, young people and vulnerable adults** in hardship), then a
+`.side-foot` with the **SC047995** charity number — linked to the OSCR register,
+reusing the footer's reference style — and four payment-method chips (**Card,
+Direct Debit, Apple Pay, Google Pay**) as a labelled `.side-pay` list of pure-CSS
+pills. Inverted **cream-on-holly** tints only (text `--cream`/`--cream-82`/
+`--cream-90`, chip surfaces `--cream-12`/`--cream-16`), never holly/tan body text,
+so the `brand-colours` guard holds; the check icons are inline SVG via
+`currentColor`, `aria-hidden`, **no `<img>`** so the perf budget holds (REQ-032).
+Dash-free copy, "NBCC" (REQ-031). **Out of scope here:** the reassurance items
+(REQ-026), the monthly donor benefits (REQ-025), and the checkout contract
+(REQ-028). Verified by `test/unit/donate-side-panel.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

@@ -84,7 +84,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
 
     const p = lastParams();
     expect(p.mode).toBe("payment");
-    expect(p.payment_method_types).toEqual(["card", "bacs_debit"]);
+    expect(p.payment_method_types).toEqual(["card"]);
     expect(p.line_items[0].quantity).toBe(1);
     expect(p.line_items[0].price_data.currency).toBe("gbp");
     expect(p.line_items[0].price_data.unit_amount).toBe(5000);
@@ -165,8 +165,11 @@ describe("POST /api/checkout-session — invalid bodies return 400", () => {
 
 describe("POST /api/checkout-session — upstream failure", () => {
   it("returns 502 when the Stripe call throws", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     create.mockRejectedValueOnce(new Error("stripe unavailable"));
     const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
     expect(res.statusCode).toBe(502);
+    expect(errSpy).toHaveBeenCalled(); // the failure is logged for diagnosis
+    errSpy.mockRestore();
   });
 });

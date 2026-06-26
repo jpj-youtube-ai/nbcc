@@ -226,6 +226,9 @@ Tasks:
 
 `POST /api/contact` receives `{ firstName, lastName, email, message }`, sends to the NBCC inbox (or a form service such as Formspree) and returns success. Until built, the form falls back to opening the visitor's email client. *Accept:* a submitted form reaches the inbox and returns success, with the mail-client fallback when the endpoint is absent.
 
+Tasks:
+- TASK-039 — Implement POST /api/contact to forward enquiries to the NBCC inbox
+
 ### REQ-031 — Content and copy rules
 
 House style holds sitewide: no dashes in any visible copy (use commas, parentheses or restructured sentences, matching leaflet style such as "one off", "year round", "volunteer run"); always write "NBCC", never "NB4CC"; beneficiaries are always "children, young people and vulnerable adults"; gifts are described as curated by age with emphasis on inclusivity; tone is warm and dignified, never pity-driven. The 2025 donation leaflet is the source of truth for content. *Accept:* a copy review finds no dashes, correct NBCC usage, the full beneficiary phrasing, and the warm dignified tone throughout.

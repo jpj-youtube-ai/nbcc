@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (27)
+## Shipped (28)
 
 ### REQ-001 — Multi-page site structure
 
@@ -189,6 +189,13 @@ Three reassurance items: cancel any time under the Direct Debit Guarantee; secur
 Tasks:
 - TASK-034 — Build the donate reassurance section in donate.html with the three reassurance items
 
+### REQ-027 — Contact page and enquiry form
+
+An intro with the signature rule and a lede; contact points (info@nightbeforechristmas.co.uk for general enquiries, 01292 811 015, donations via Jaimie Wakefield at giving@, and Annbank Village Hall as the base); and a form with First name (required), Last name, Email (required) and Message (required), with client-side validation. The preview shows a success message; the live site posts to the backend. *Accept:* the contact details display and the validated form yields a success message in the preview.
+
+Tasks:
+- TASK-035 — Build the Contact page intro, contact points and validated enquiry form in contact.html
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -198,14 +205,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (8)
-
-### REQ-027 — Contact page and enquiry form
-
-An intro with the signature rule and a lede; contact points (info@nightbeforechristmas.co.uk for general enquiries, 01292 811 015, donations via Jaimie Wakefield at giving@, and Annbank Village Hall as the base); and a form with First name (required), Last name, Email (required) and Message (required), with client-side validation. The preview shows a success message; the live site posts to the backend. *Accept:* the contact details display and the validated form yields a success message in the preview.
-
-Tasks:
-- TASK-035 — Build the Contact page intro, contact points and validated enquiry form in contact.html
+## Planned (7)
 
 ### REQ-028 — Donate front-end checkout contract
 

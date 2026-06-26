@@ -1448,3 +1448,63 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   DONATE REASSURANCE (REQ-026) — donate.html. A row of three .card
+   trust items beneath the monthly donor benefits band, before the
+   footer, mirroring the prototype. Reuses .card / .rule / .reveal /
+   .eyebrow and the tokens; token-only colours. On this light surface the
+   brand-colours guard forbids holly/tan body text, so the heading and
+   item titles are maroon, the eyebrow and icons crimson, and body copy
+   slate. Icons are inline SVG via currentColor, aria-hidden, no image
+   tags (perf budget). Links keep the global :focus-visible ring (REQ-032).
+   ================================================================= */
+.reassure {
+  margin-block: clamp(8px, 3vw, 32px);
+  text-align: center;
+}
+.reassure > h2 {
+  font-size: var(--fs-section);
+}
+.reassure-intro {
+  font-size: var(--fs-lede);
+  color: var(--slate);
+  max-width: 58ch;
+  margin: 0.6rem auto 0;
+}
+.reassure-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 3vw, 28px);
+  margin-top: clamp(24px, 4vw, 40px);
+  text-align: left;
+}
+.reassure-item {
+  padding: clamp(20px, 3vw, 28px);
+}
+.reassure-icon {
+  color: var(--crimson);
+  margin-bottom: 12px;
+}
+.reassure-item h3 {
+  font-family: var(--font-head);
+  font-weight: 700;
+  color: var(--maroon);
+  font-size: 1.15rem;
+  margin: 0 0 8px;
+}
+.reassure-item p {
+  font-size: var(--fs-body);
+  color: var(--slate);
+  line-height: 1.55;
+  margin: 0;
+}
+.reassure-item a {
+  color: var(--crimson);
+}
+
+@media (max-width: 900px) {
+  .reassure-grid {
+    grid-template-columns: 1fr;
+  }
+}

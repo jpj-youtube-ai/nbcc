@@ -233,6 +233,9 @@ Tasks:
 
 House style holds sitewide: no dashes in any visible copy (use commas, parentheses or restructured sentences, matching leaflet style such as "one off", "year round", "volunteer run"); always write "NBCC", never "NB4CC"; beneficiaries are always "children, young people and vulnerable adults"; gifts are described as curated by age with emphasis on inclusivity; tone is warm and dignified, never pity-driven. The 2025 donation leaflet is the source of truth for content. *Accept:* a copy review finds no dashes, correct NBCC usage, the full beneficiary phrasing, and the warm dignified tone throughout.
 
+Tasks:
+- TASK-040 — Add a sitewide copy-rules guard test and fix any violations across all pages
+
 ### REQ-032 — Accessibility floor (WCAG 2.1 AA)
 
 A skip-to-content link; semantic landmarks (header, nav, main, section, footer); visible Holly Green keyboard focus rings; real labels on all form fields with required fields marked; meaningful alt text on all images; the section colour-contrast rules respected; `prefers-reduced-motion` honoured; mobile-first and responsive down to roughly 360px. *Accept:* an AA audit passes on all four pages. *Non-negotiable.*

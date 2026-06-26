@@ -68,6 +68,14 @@ variable "stripe_cancel_url" {
   default = "https://www.example.org/donate"
 }
 
+# Optional Stripe Product id (prod_…) to group one-off donations under. Non-secret;
+# empty by default (the app then names an inline product). Set per env in
+# infra/envs/*/main.tf when a donation product exists.
+variable "stripe_donation_product" {
+  type    = string
+  default = ""
+}
+
 # Per-environment toggles (staging vs prod).
 variable "multi_az" {
   type    = bool

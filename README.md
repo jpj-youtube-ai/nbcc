@@ -633,17 +633,20 @@ They live in `src/routes/api.ts`.
 (same style as `src/config/schema.ts`); impossible combinations are rejected with
 **400** (a monthly gift with no plan, a one-off with no amount, a bad mode/plan,
 a non-positive amount). A one-off is a `mode: payment` session with inline GBP
-`price_data` built from the amount in **pence**; a monthly is a
-`mode: subscription` session using the recurring `STRIPE_PRICE_*` id keyed by
-plan. `payment_method_types` is `['card', 'bacs_debit']` (Apple Pay / Google Pay
-ride on the card method). `success_url` / `cancel_url` come from config. When
+`price_data` built from the amount in **pence** — attached to the
+`STRIPE_DONATION_PRODUCT` product when that optional id is set, otherwise an inline
+product is named — and a monthly is a `mode: subscription` session using the
+recurring `STRIPE_PRICE_*` id keyed by plan. `payment_method_types` is
+`['card', 'bacs_debit']` (Apple Pay / Google Pay ride on the card method).
+`success_url` / `cancel_url` come from config. When
 `giftAid` is true the declaration is recorded as `metadata.giftAid='true'` on the
 session for the 25% claim — **durable storage of the declaration (a Stripe webhook
 writing to the DB) is out of scope here**. An upstream Stripe failure returns
 **502**, which the front-end degrades to its preview.
 
 > **Stub seam (no live account needed).** `src/clients/stripe.ts` uses the real
-> Stripe SDK when given a real key (`sk_test_…` / `sk_live_…`). **Outside
+> Stripe SDK when given a real key — standard (`sk_test_…`/`sk_live_…`) or
+> restricted (`rk_test_…`/`rk_live_…`). **Outside
 > production**, when the key is a placeholder (local dev, CI, fresh `REPLACE_ME`
 > SSM params), it falls back to a thin stub whose `checkout.sessions.create`
 > returns a deterministic preview URL — so the full request → `{ url }` flow is
@@ -851,7 +854,12 @@ variables); and the four `STRIPE_PRICE_*` IDs (one per donate tier, REQ-022) are
 SSM-held `String`s injected via `valueFrom` like a secret, so their ARNs are in
 the `exec_secrets` IAM policy too. `src/clients/stripe.ts` wraps the SDK, reading
 the key and price IDs **only** through `src/config`. The live checkout-session
-endpoint that uses them is **REQ-029**, out of scope here.
+endpoint that uses them is **REQ-029**, out of scope here. `STRIPE_DONATION_PRODUCT`
+is an **optional**, non-secret Stripe Product id (`prod_…`) one-off donations are
+grouped under — a `stripe_donation_product` module variable in the task-def
+`environment` (default empty); left unset, the endpoint names an inline product, so
+it never blocks boot. The secret key accepts both standard (`sk_…`) and restricted
+(`rk_…`) keys.
 
 `CONTACT_FORWARD_URL` (TASK-039, REQ-030) is the form-service endpoint
 `/api/contact` forwards enquiries to (a Formspree-style form URL or an NBCC inbox

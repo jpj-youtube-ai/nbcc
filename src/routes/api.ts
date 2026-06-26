@@ -73,7 +73,10 @@ export function buildSessionParams(
   }
 
   // One-off: an inline GBP price built from the amount in pence (schema-guaranteed
-  // non-null for mode=once).
+  // non-null for mode=once). When a donation product is configured, attach it so
+  // all one-off gifts roll up under that product in Stripe; otherwise name an
+  // inline product. Either way the amount stays the donor's entered value.
+  const donationProduct = config.STRIPE_DONATION_PRODUCT;
   return {
     ...base,
     mode: "payment",
@@ -83,7 +86,9 @@ export function buildSessionParams(
         price_data: {
           currency: "gbp",
           unit_amount: body.amount as number,
-          product_data: { name: "Donation to NBCC" },
+          ...(donationProduct
+            ? { product: donationProduct }
+            : { product_data: { name: "Donation to NBCC" } }),
         },
       },
     ],

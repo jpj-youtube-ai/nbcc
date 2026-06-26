@@ -8,16 +8,16 @@ import { config } from "../config";
 // src/clients/exampleApi.ts shape: a thin wrapper reading its credentials through
 // the config module.
 //
-// A real Stripe secret key is `sk_test_<token>` / `sk_live_<token>`. Local dev and
-// CI use short placeholder keys, and fresh SSM params start as REPLACE_ME, so
-// there is no live Stripe to call. OUTSIDE production, when the key is not a real
-// key, we expose a thin STUB whose checkout.sessions.create returns a
-// deterministic preview URL (no network), so the /api/checkout-session flow can be
-// exercised end to end — locally and in CI — without a Stripe account. With a real
-// key the real SDK is used in any environment, and production NEVER stubs, so a
-// missing real key there surfaces as a loud Stripe error rather than a silent fake
-// checkout.
-const REAL_KEY = /^sk_(test|live)_[A-Za-z0-9]{20,}$/;
+// A real Stripe API key is `sk_test_`/`sk_live_` (standard) or `rk_test_`/`rk_live_`
+// (restricted), followed by a long token. Local dev and CI use short placeholder
+// keys, and fresh SSM params start as REPLACE_ME, so there is no live Stripe to
+// call. OUTSIDE production, when the key is not a real key, we expose a thin STUB
+// whose checkout.sessions.create returns a deterministic preview URL (no network),
+// so the /api/checkout-session flow can be exercised end to end — locally and in
+// CI — without a Stripe account. With a real key the real SDK is used in any
+// environment, and production NEVER stubs, so a missing real key there surfaces as
+// a loud Stripe error rather than a silent fake checkout.
+const REAL_KEY = /^(sk|rk)_(test|live)_[A-Za-z0-9]{20,}$/;
 export const stripeConfigured = REAL_KEY.test(config.STRIPE_SECRET_KEY);
 const useStub = !stripeConfigured && config.NODE_ENV !== "production";
 

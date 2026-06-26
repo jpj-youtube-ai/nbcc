@@ -22,12 +22,16 @@ vi.mock("../../src/clients/stripe", () => ({
   stripeConfigured: true,
 }));
 
-vi.mock("../../src/config", () => ({
-  config: {
+// Mutable so individual tests can toggle the optional donation product.
+const { mockConfig } = vi.hoisted(() => ({
+  mockConfig: {
     STRIPE_SUCCESS_URL: "https://nbcc.test/donate/thank-you",
     STRIPE_CANCEL_URL: "https://nbcc.test/donate",
+    STRIPE_DONATION_PRODUCT: undefined as string | undefined,
   },
 }));
+
+vi.mock("../../src/config", () => ({ config: mockConfig }));
 
 import { postCheckoutSession } from "../../src/routes/api";
 
@@ -67,6 +71,7 @@ const lastParams = (): any => create.mock.calls[create.mock.calls.length - 1][0]
 beforeEach(() => {
   create.mockClear();
   create.mockResolvedValue({ url: "https://checkout.stripe.com/c/pay/test_123" });
+  mockConfig.STRIPE_DONATION_PRODUCT = undefined;
 });
 
 describe("POST /api/checkout-session — one-off (REQ-029)", () => {
@@ -85,6 +90,23 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
     expect(p.line_items[0].price_data.unit_amount).toBe(5000);
     expect(p.success_url).toBe("https://nbcc.test/donate/thank-you");
     expect(p.cancel_url).toBe("https://nbcc.test/donate");
+  });
+
+  it("falls back to an inline product when STRIPE_DONATION_PRODUCT is unset", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const p = lastParams();
+    expect(p.line_items[0].price_data.product).toBeUndefined();
+    expect(p.line_items[0].price_data.product_data.name.length).toBeGreaterThan(0);
+  });
+
+  it("attaches the configured donation product to the inline price when set", async () => {
+    mockConfig.STRIPE_DONATION_PRODUCT = "prod_donation_123";
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const p = lastParams();
+    expect(p.line_items[0].price_data.product).toBe("prod_donation_123");
+    expect(p.line_items[0].price_data.product_data).toBeUndefined();
+    // The amount is still the donor's entered value (variable one-off).
+    expect(p.line_items[0].price_data.unit_amount).toBe(5000);
   });
 });
 

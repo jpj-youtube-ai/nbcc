@@ -24,6 +24,12 @@ export const configSchema = z.object({
   STRIPE_PRICE_GOLD: z.string().min(1),
   STRIPE_PRICE_PLATINUM: z.string().min(1),
 
+  // Optional: a Stripe Product id (prod_…) to group one-off donations under. The
+  // one-off amount stays variable; this only sets the product the inline price
+  // hangs off (cleaner Stripe reporting/receipts). Left unset, an inline product
+  // is named instead, so it is optional and never blocks boot.
+  STRIPE_DONATION_PRODUCT: z.string().optional(),
+
   // Contact form forwarding (REQ-030). The endpoint URL of the form service
   // (Formspree-style) or NBCC inbox the /api/contact handler POSTs enquiries to.
   // It is the credential that authorises submissions, so it is held as a secret

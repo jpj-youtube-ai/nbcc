@@ -71,6 +71,15 @@ describe("config schema — contact forwarding key (REQ-030)", () => {
     );
   });
 
+  it("treats STRIPE_DONATION_PRODUCT as optional", () => {
+    // absent is fine (validEnv omits it)...
+    expect(configSchema.safeParse(validEnv()).success).toBe(true);
+    // ...and a prod_ id is accepted when present.
+    expect(
+      configSchema.safeParse({ ...validEnv(), STRIPE_DONATION_PRODUCT: "prod_abc123" }).success,
+    ).toBe(true);
+  });
+
   it("parses the Stripe values onto the typed config", () => {
     const parsed = configSchema.safeParse(validEnv());
     expect(parsed.success).toBe(true);

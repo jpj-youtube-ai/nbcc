@@ -1276,3 +1276,41 @@ a {
   color: var(--crimson);
   font-weight: 600;
 }
+
+/* =================================================================
+   GIFT AID CALLOUT (REQ-023) — donate.html. A holly-tinted opt-in box
+   beneath the tiers in .give-main, mirroring the prototype's treatment.
+   Reuses --radius / --line / surface tokens; the checkbox keeps the
+   global :focus-visible holly ring (REQ-032). Token-only colours — the
+   brand-colours guard forbids holly *text* on light surfaces, so the
+   emphasis is maroon and the tick accent is crimson (not holly).
+   Gated: this whole block is removed with the markup if NBCC is not
+   registered for Gift Aid (see the GIFT AID CALLOUT START/END comments).
+   ================================================================= */
+.giftaid {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: clamp(16px, 2.5vw, 24px);
+  padding: clamp(14px, 2vw, 18px);
+  background: var(--holly-soft);
+  border: 1px solid var(--holly);
+  border-radius: var(--radius);
+}
+.giftaid-check {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--crimson);
+  cursor: pointer;
+}
+.giftaid-label {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--slate);
+  cursor: pointer;
+}
+.giftaid-label strong {
+  color: var(--maroon);
+}

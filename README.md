@@ -469,6 +469,31 @@ month" (REQ-031). **Out of scope here:** the `data-mode`/`data-plan`/`data-amoun
 checkout contract (REQ-028) and the Holly Green side-panel content (REQ-024).
 Verified by `test/unit/give-monthly-tiers.test.ts`.
 
+### Gift Aid callout (REQ-023)
+
+Beneath the tiers in the `.give-main` column sits a holly-tinted Gift Aid opt-in
+(`GIFT AID CALLOUT` CSS block): a `#giftAid` checkbox tied to a real
+`<label for="giftAid">` whose copy states that Gift Aid grows an eligible gift by
+**25%** (NBCC reclaims 25p per £1 from HMRC, at no cost to the donor, confirmed at
+checkout). The box is **not** pre-ticked — the donor opts in. Token-only colours:
+to satisfy the `brand-colours` guard (no holly *text* on light surfaces) the
+emphasis is `--maroon` and the tick `accent-color` is `--crimson`, on a
+`--holly-soft` panel with a `--holly` border; the checkbox keeps the global
+`:focus-visible` holly ring (REQ-032). Copy is dash-free and names "NBCC"
+(REQ-031). The `#giftAid` id is the hook the **REQ-028** checkout contract
+(`startCheckout`) will read later — REQ-028/REQ-029 wiring is out of scope here.
+
+> **Gating — pending registration decision (REQ-023).** The callout is shown only
+> if NBCC is registered with HMRC to claim Gift Aid (flagged with a
+> `CONTENT VERIFICATION (REQ-023)` comment). It is wrapped by a single documented
+> switch: the `<!-- GIFT AID CALLOUT START (REQ-023) -->` … `<!-- GIFT AID CALLOUT
+> END (REQ-023) -->` comment pair in `donate.html`. **To remove it cleanly if NBCC
+> is not registered**, delete everything between those two markers, then delete the
+> matching `.giftaid` rules (the `GIFT AID CALLOUT (REQ-023)` block) in
+> `assets/css/styles.css`. No other markup depends on it.
+
+Verified by `test/unit/gift-aid.test.ts`.
+
 ### API endpoints
 
 Two marketing endpoints are wired as routes but **not yet implemented** — each

@@ -183,6 +183,9 @@ Tasks:
 
 The Holly Green side panel: where the money goes (three points), the charity number SC047995, and payment-method chips for Card, Direct Debit, Apple Pay and Google Pay. *Accept:* the side panel shows the three points, the charity number, and the four payment chips.
 
+Tasks:
+- TASK-032 — Fill the Holly Green donate side panel with where-the-money-goes points, charity number and payment chips
+
 ### REQ-025 — Monthly donor benefits
 
 A tinted band: all monthly donors are named on the Donors Page (unless anonymous) and receive a post-Christmas impact update; Platinum donors also receive a social-media thank-you, an optional digital supporter badge, and a personalised supporter certificate. *Accept:* the benefits clearly distinguish all-donor perks from Platinum-only perks.

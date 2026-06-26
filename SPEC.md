@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (24)
+## Shipped (25)
 
 ### REQ-001 — Multi-page site structure
 
@@ -168,6 +168,13 @@ A Gift Aid callout with a tick box, worth 25% on eligible gifts, enabled only on
 Tasks:
 - TASK-031 — Build the Gift Aid callout with tick box into the give widget on donate.html
 
+### REQ-024 — Donate side panel
+
+The Holly Green side panel: where the money goes (three points), the charity number SC047995, and payment-method chips for Card, Direct Debit, Apple Pay and Google Pay. *Accept:* the side panel shows the three points, the charity number, and the four payment chips.
+
+Tasks:
+- TASK-032 — Fill the Holly Green donate side panel with where-the-money-goes points, charity number and payment chips
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -177,14 +184,7 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (11)
-
-### REQ-024 — Donate side panel
-
-The Holly Green side panel: where the money goes (three points), the charity number SC047995, and payment-method chips for Card, Direct Debit, Apple Pay and Google Pay. *Accept:* the side panel shows the three points, the charity number, and the four payment chips.
-
-Tasks:
-- TASK-032 — Fill the Holly Green donate side panel with where-the-money-goes points, charity number and payment chips
+## Planned (10)
 
 ### REQ-025 — Monthly donor benefits
 

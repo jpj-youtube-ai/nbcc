@@ -244,6 +244,10 @@ A skip-to-content link; semantic landmarks (header, nav, main, section, footer);
 
 The logo PNG (`nbcc-logo.png`) used in nav, footer and Home hero; ten team headshots processed to 4:5 portrait JPEGs at 640×800, quality 82, progressive (about 644KB total), stored as `images/team-<name>.jpg` with a slightly top-biased face crop; and remaining placeholder figures replaced with real, consented photography of volunteers, packing days and deliveries, always with alt text. *Accept:* assets exist at the specified sizes and paths with alt text, and beneficiary images carry consent.
 
+Tasks:
+- TASK-041 — Add the headshot/image processing pipeline and wire ten 4:5 team portraits into the About grid
+- TASK-042 — Replace the remaining placeholder figures (Tygan headshot, home photo slot, OG image) with consented imagery
+
 ### REQ-035 — Supporters page
 
 A fifth marketing page listing supporters grouped into Bronze, Silver and Gold tiers, alphabetical within each tier, including both individual people and brands/organisations. It is reachable at its own clean URL, shares the single nav, footer, stylesheet and script, and is structured so the frequently-changing list is easy to update.

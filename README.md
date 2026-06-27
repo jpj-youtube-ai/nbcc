@@ -702,8 +702,10 @@ How it's kept:
   alternative.
 - **JS:** the one shared script loads with `defer` (never render-blocking); no
   framework bundles, no build step.
-- **Images:** none yet; any `<img>` must declare intrinsic `width`/`height`, use
-  `loading="lazy"`, and a modern format (WebP/AVIF).
+- **Images:** every `<img>` declares intrinsic `width`/`height` and uses
+  `loading="lazy"`. Lazy images (the logos and the below-the-fold team headshots)
+  are **deferred**, so they're **excluded from the initial-load budget** — see
+  **Assets and images** below for that decision and the headshot pipeline.
 
 `test/unit/perf-budget.test.ts` enforces the structural invariants (transfer
 weight, ≤ 2 font files, no render-blocking JS, image attributes, request count)
@@ -715,6 +717,32 @@ npm run build && node dist/index.js &     # serve on :3000
 npx lighthouse http://localhost:3000/ --only-categories=performance --view
 # repeat for /about-us, /donate, /contact
 ```
+
+### Assets and images (REQ-016 / REQ-034)
+
+All images live in **`assets/img/`** (the spec text says `images/`; we standardise
+on `assets/img/`, where `nbcc-logo.png` already lives and which the pages and the
+Dockerfile serve — one convention, documented here).
+
+**Team headshots** are produced by `scripts/process-images.mjs` (run with
+**`npm run images`**, which uses the `sharp` devDependency). Each source portrait in
+`assets/img/source/<firstname>.{jpg,png,…}` is cropped to **4:5, 640×800, quality
+82, progressive JPEG** with a slightly top-biased crop (keeps faces) and written to
+**`assets/img/team-<firstname>.jpg`** (lowercase). The ten about-page headshots are
+wired into `about.html`'s team grid as lazy `<img>`s framed by the `.photo-slot`
+4:5 box. Until real photos exist the script generates **spec-correct placeholders**
+at the exact size/quality, each flagged for swap-in — drop a consented photo into
+`assets/img/source/` and re-run.
+
+**Consent rule:** no beneficiary or volunteer photograph ships without recorded,
+informed consent (beneficiary imagery — children, young people and vulnerable
+adults — also needs guardian/safeguarding consent). Every image's source and
+consent status is tracked in **`assets/img/CREDITS.md`**.
+
+**Budget note:** because every image is `loading="lazy"`, the headshots (and real
+consented photos later, ~644 KB total) are deferred and **don't count against the
+150 KB first-paint budget**; `perf-budget.test.ts` still enforces the per-image
+`width`/`height`/`lazy` invariant. That decision is recorded in the test.
 
 ### Content and copy rules (REQ-031)
 

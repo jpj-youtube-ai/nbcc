@@ -28,12 +28,18 @@ describe("about meet the team (REQ-016)", () => {
     expect(members).toHaveLength(10);
   });
 
-  it("each card has a name, a role and an aria-hidden icon placeholder, no <img>", () => {
+  it("each card has a name, a role and a lazy 640x800 headshot <img> with alt (REQ-016/034)", () => {
     for (const m of members) {
       expect(norm(m.querySelector(".member-name")?.textContent).length).toBeGreaterThan(0);
       expect(norm(m.querySelector(".member-role")?.textContent).length).toBeGreaterThan(0);
-      expect(m.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
-      expect(m.querySelector("img")).toBeNull();
+      // The portrait is now a team-<name>.jpg headshot (REQ-034), framed by .photo-slot.
+      const img = m.querySelector(".photo-slot img");
+      expect(img).not.toBeNull();
+      expect(img?.getAttribute("src")).toMatch(/^\/assets\/img\/team-[a-z]+\.jpg$/);
+      expect(img?.getAttribute("width")).toBe("640");
+      expect(img?.getAttribute("height")).toBe("800");
+      expect(img?.getAttribute("loading")).toBe("lazy");
+      expect(norm(img?.getAttribute("alt")).length).toBeGreaterThan(0);
     }
   });
 

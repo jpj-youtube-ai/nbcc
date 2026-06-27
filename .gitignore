@@ -3,6 +3,10 @@ dist/
 coverage/
 .env
 .DS_Store
+# Raw source portraits for the headshot pipeline (scripts/process-images.mjs):
+# keep originals (and any unconsented/in-progress photos) out of version control;
+# only the processed assets/img/team-*.jpg outputs are committed.
+assets/img/source/
 # terraform
 **/.terraform/*
 *.tfstate

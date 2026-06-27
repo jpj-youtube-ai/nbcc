@@ -86,11 +86,18 @@ describe.each(PAGES)("%s performance budget", (page) => {
     }
   });
 
-  it(`stays within ${BUDGET.maxRequests} requests and ${BUDGET.maxTransferKB}KB`, () => {
+  it(`stays within ${BUDGET.maxRequests} requests and ${BUDGET.maxTransferKB}KB on first paint`, () => {
+    // TASK-041 (REQ-016/REQ-034) decision: the initial-load budget counts what the
+    // browser fetches on FIRST PAINT. Every <img> on the site is loading="lazy"
+    // (enforced above) — the logos and the below-the-fold team headshots — so they
+    // are deferred and excluded here. The ten 640x800 headshots (and real consented
+    // photos later, ~644KB total) therefore do NOT count against the 150KB initial
+    // budget; their weight is governed by lazy loading + the per-image invariant.
+    const eagerImgs = imgs.filter((t) => attr(t, "loading") !== "lazy");
     const resources = [
       ...stylesheets(html),
       ...scripts.map((t) => attr(t, "src")!),
-      ...imgs.map((t) => attr(t, "src")!).filter(Boolean),
+      ...eagerImgs.map((t) => attr(t, "src")!).filter(Boolean),
       ...fonts,
     ];
     const requests = 1 + resources.length; // 1 for the HTML document itself

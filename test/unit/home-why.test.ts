@@ -45,8 +45,15 @@ describe("home why-your-donation-matters (REQ-012)", () => {
     expect(norm(btn?.textContent)).toContain("Support NBCC");
   });
 
-  it("has an image slot placeholder", () => {
-    expect(why?.querySelector(".photo-slot")).not.toBeNull();
-    expect(why?.querySelector(".photo-slot img")).toBeNull(); // no <img> yet (REQ-034)
+  it("has a captioned packing photo <img> with alt and intrinsic dims (REQ-012/034)", () => {
+    const fig = why?.querySelector("figure.photo-slot");
+    expect(fig).not.toBeNull();
+    const img = fig?.querySelector("img");
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute("src")).toMatch(/^\/assets\/img\/[a-z-]+\.jpg$/);
+    expect(img?.getAttribute("width")).toBeTruthy();
+    expect(img?.getAttribute("height")).toBeTruthy();
+    expect(img?.getAttribute("loading")).toBe("lazy");
+    expect(norm(img?.getAttribute("alt")).length).toBeGreaterThan(0);
   });
 });

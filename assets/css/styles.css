@@ -457,6 +457,27 @@ h1 {
   color: var(--slate-soft);
   max-width: 28ch;
 }
+/* Captioned photo figures (REQ-015 founding headshot, REQ-012 packing photo): the
+   img frames itself and the figcaption sits below, overriding the dashed
+   placeholder box. The img's intrinsic width/height set its aspect ratio. */
+figure.photo-slot {
+  min-height: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+figure.photo-slot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+figure.photo-slot figcaption {
+  margin-top: 12px;
+  font-style: italic;
+}
 
 @media (max-width: 680px) {
   .why-grid {

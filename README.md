@@ -734,6 +734,14 @@ wired into `about.html`'s team grid as lazy `<img>`s framed by the `.photo-slot`
 at the exact size/quality, each flagged for swap-in — drop a consented photo into
 `assets/img/source/` and re-run.
 
+The same script also produces the **captioned scene photos** — `story-tygan.jpg`
+(about "our story" founding headshot, 640×800, REQ-015) and `why-packing.jpg`
+(home "why your donation matters" packing/delivery photo, 900×600, REQ-012),
+wired into their `<figure class="photo-slot">` slots as lazy `<img>`s with the
+`<figcaption>` kept — and the **social share card** `og-image.png` (1200×630 PNG,
+REQ-034) referenced by every page's `og:image` / `twitter:image`. All three are
+branded placeholders pending real assets (`CONTENT VERIFICATION`).
+
 **Consent rule:** no beneficiary or volunteer photograph ships without recorded,
 informed consent (beneficiary imagery — children, young people and vulnerable
 adults — also needs guardian/safeguarding consent). Every image's source and

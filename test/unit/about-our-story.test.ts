@@ -39,12 +39,17 @@ describe("about our story (REQ-015)", () => {
     expect(prose).toContain("first year they delivered 90 boxes");
   });
 
-  it("has a captioned headshot placeholder with a decorative icon, no <img>", () => {
+  it("has a captioned founding headshot <img> with alt and intrinsic dims (REQ-015/034)", () => {
     const fig = story?.querySelector("figure.photo-slot");
     expect(fig).not.toBeNull();
     expect(norm(fig?.querySelector("figcaption")?.textContent).length).toBeGreaterThan(0);
-    expect(fig?.querySelector("img")).toBeNull();
-    expect(fig?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    const img = fig?.querySelector("img");
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute("src")).toMatch(/^\/assets\/img\/[a-z-]+\.jpg$/);
+    expect(img?.getAttribute("width")).toBeTruthy();
+    expect(img?.getAttribute("height")).toBeTruthy();
+    expect(img?.getAttribute("loading")).toBe("lazy");
+    expect(norm(img?.getAttribute("alt")).length).toBeGreaterThan(0);
   });
 
   it("flags the carried copy for content verification", () => {

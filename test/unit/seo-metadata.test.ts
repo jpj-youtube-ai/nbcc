@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -86,6 +86,13 @@ describe.each(PAGES)("$file metadata", ({ file, label, url }) => {
     expect(img).toMatch(/^https:\/\//);
     expect(img).toContain("/assets/");
     expect(meta(html, "twitter:image")).toBe(img);
+  });
+
+  it("the referenced share image exists on disk (REQ-034)", () => {
+    const img = meta(html, "og:image")!;
+    // Map the absolute (placeholder-domain) URL to the local asset path.
+    const path = img.replace(/^https?:\/\/[^/]+\//, "");
+    expect(existsSync(resolve(ROOT, path)), `missing share image: ${path}`).toBe(true);
   });
 
   it("has Twitter card tags", () => {

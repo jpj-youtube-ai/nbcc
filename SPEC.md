@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (32)
+## Shipped (33)
 
 ### REQ-001 — Multi-page site structure
 
@@ -234,12 +234,6 @@ Tasks:
 - TASK-004 — Add unique per-page SEO and social metadata to each page head
 - TASK-005 — Meet the low-weight performance budget and configure static hosting with serverless functions
 
-## Planned (3)
-
-### REQ-032 — Accessibility floor (WCAG 2.1 AA)
-
-A skip-to-content link; semantic landmarks (header, nav, main, section, footer); visible Holly Green keyboard focus rings; real labels on all form fields with required fields marked; meaningful alt text on all images; the section colour-contrast rules respected; `prefers-reduced-motion` honoured; mobile-first and responsive down to roughly 360px. *Accept:* an AA audit passes on all four pages. *Non-negotiable.*
-
 ### REQ-034 — Assets pipeline
 
 The logo PNG (`nbcc-logo.png`) used in nav, footer and Home hero; ten team headshots processed to 4:5 portrait JPEGs at 640×800, quality 82, progressive (about 644KB total), stored as `images/team-<name>.jpg` with a slightly top-biased face crop; and remaining placeholder figures replaced with real, consented photography of volunteers, packing days and deliveries, always with alt text. *Accept:* assets exist at the specified sizes and paths with alt text, and beneficiary images carry consent.
@@ -247,6 +241,12 @@ The logo PNG (`nbcc-logo.png`) used in nav, footer and Home hero; ten team heads
 Tasks:
 - TASK-041 — Add the headshot/image processing pipeline and wire ten 4:5 team portraits into the About grid
 - TASK-042 — Replace the remaining placeholder figures (Tygan headshot, home photo slot, OG image) with consented imagery
+
+## Planned (2)
+
+### REQ-032 — Accessibility floor (WCAG 2.1 AA)
+
+A skip-to-content link; semantic landmarks (header, nav, main, section, footer); visible Holly Green keyboard focus rings; real labels on all form fields with required fields marked; meaningful alt text on all images; the section colour-contrast rules respected; `prefers-reduced-motion` honoured; mobile-first and responsive down to roughly 360px. *Accept:* an AA audit passes on all four pages. *Non-negotiable.*
 
 ### REQ-035 — Supporters page
 

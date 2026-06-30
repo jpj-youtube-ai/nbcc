@@ -242,7 +242,7 @@ Tasks:
 - TASK-041 — Add the headshot/image processing pipeline and wire ten 4:5 team portraits into the About grid
 - TASK-042 — Replace the remaining placeholder figures (Tygan headshot, home photo slot, OG image) with consented imagery
 
-## Planned (2)
+## Planned (31)
 
 ### REQ-032 — Accessibility floor (WCAG 2.1 AA)
 
@@ -255,3 +255,119 @@ A fifth marketing page listing supporters grouped into Bronze, Silver and Gold t
 Tasks:
 - TASK-022 — Add the Supporters page to the multi-page site structure with clean URL, nav, footer and SEO
 - TASK-023 — Build the tiered, alphabetical supporters list on supporters.html
+
+### REQ-036 — One unified donation platform
+
+Build a single on-site platform where the donation flow, Stripe payments, subscriptions, declaration capture, refund logic and admin all share one data model and one set of Stripe webhooks; treat Gift Aid eligibility as a flag/relationship on each donation, never a bolted-on second system. *Accept:* no duplicate donor/donation stores; a refund updates the one record; a single webhook handler set that no other "module" duplicates.
+
+### REQ-037 — Core donation data model
+
+Implement donors, declarations, donations, claim_batches, users and audit_log with the invariant that a donation is claimable only when donor_type is individual, a valid active declaration covers it, and it is not (fully) refunded. *Accept:* company donations are always not-claimable/not_eligible; a donation enters at most one claim batch; every admin write appends an audit_log row.
+
+### REQ-038 — Donor-type routing question
+
+Ask "are you donating as an individual or on behalf of a business?", routing individuals (including sole traders and partners) to the Gift Aid path and incorporated companies (Ltd, PLC, LLP) to the no-Gift-Aid path, with helper text that a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
+
+### REQ-039 — Consent-based contact capture
+
+Capture email (optional and consent-based), full name (required), an optional display business name and an anonymous flag, and require monthly donors to confirm they are 18+. *Accept:* when no email is captured the platform sends nothing; anonymous donors are pulled through to payment but never shown on the public donors page.
+
+### REQ-040 — Verbatim, versioned HMRC declaration wording
+
+Show HMRC's official template liability statement verbatim (multiple/all-donations template for monthly and enduring, single-donation template for one-offs) and store the exact wording in a versioned config so every saved declaration records the version the donor saw. *Accept:* "I am a UK taxpayer" alone is rejected because the full liability paragraph must be present; wording_version and a wording_snapshot are persisted on each declaration.
+
+### REQ-041 — Amount, tier and frequency
+
+Let the donor pick monthly (a Stripe subscription) or one-off (a single charge) and either a preset tier (£10/£25/£50/£100) or a custom GBP amount, pairing monthly with an enduring declaration. *Accept:* amount, frequency and currency are captured; monthly defaults the declaration scope to enduring.
+
+### REQ-042 — Gift Aid opt-in, never pre-ticked
+
+Offer Gift Aid as an explicit opt-in bound to the displayed HMRC statement, eligible only for genuine gifts of the donor's own money (not goods/services, not crypto, not benefits over the caps). *Accept:* an affirmative tick is required and the consent is stored against the exact statement shown.
+
+### REQ-043 — Declaration field capture
+
+Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode, with a non-UK donor flag (Channel Islands / Isle of Man) that omits the postcode. *Accept:* field-level validation enforces postcode format and a required house number; only a home address is accepted (no work or c/o addresses).
+
+### REQ-044 — Declaration scope
+
+Capture scope as this-donation-only or all-donations (the past four years plus present and future), defaulting monthly to enduring. *Accept:* declaration_scope is persisted and an enduring declaration covers every future charge without re-asking.
+
+### REQ-045 — Benefit tracking and caps
+
+Record the benefits accepted per donation with an admin-set value per perk and an automatic check against HMRC's annualised benefit caps (≤£100 → 25%; £101–£1,000 → £25; £1,001+ → 5% capped at £2,500). *Accept:* recognition perks such as name-on-page, impact updates, social thank-yous, digital badges and certificates are recorded at zero monetary value; any cap breach is flagged.
+
+### REQ-046 — Immutable declaration audit record
+
+Persist each declaration immutably with all captured fields, the declaration timestamp, the wording-version snapshot, the scope, the benefits accepted and foreign keys to every charge, retaining it six years after the most recent claimed donation (permanently while an enduring or monthly declaration is active, with the clock starting at the final charge on cancellation). *Accept:* online declarations require no 30-day confirmation letter.
+
+### REQ-047 — Post-payment confirmation and donors page
+
+On a successful payment show a confirmation screen, send a confirmation when an email is present, add a donors-page entry showing name or business name unless anonymous, and mark claimable donations for the next claim schedule. *Accept:* anonymous donations never appear on the public page yet are still queued for claiming with real details.
+
+### REQ-048 — Contactless ingestion via the Paid app
+
+Ingest in-person card-present charges from NBCC's single Stripe account — volunteers sign into the third-party Paid app via Stripe OAuth on their own phones — over webhooks, tagging payment_channel as in_person, with no custom Terminal build and no shared Apple ID. *Accept:* card_present charges are reconciled into the one platform regardless of which volunteer or device took them.
+
+### REQ-049 — Contactless Gift Aid capture by auto-email and QR
+
+Capture Gift Aid for contactless gifts after the tap by autk to the receipt_email Paid attaches to the charge, plus a QR/short-link card fallback, both leading to the same fulldeclaration form. *Accept:* a bounced or undeliverable auto-email sets declaration_status to undelivered and surfaces in admin as awaiting declaration; a sent link is never treated as a completed declaration.
+
+### REQ-050 — GASDS for small contactless gifts
+
+Claim small in-person gifts of £30 or less that carry no declaration via GAseparately within its limits (up to £8,000 of small donations a year, a £2,000 top-up cap, capped at ten times the Gift Aidclaimed that year). *Accept:* gasds_eligible is flagged and the GASDS pool is tracked independently of declared claims.
+
+### REQ-051 — Partnership donations
+
+Support business-partnership donors by collecting one Gift Aid declaration per partner ome address, postcode, taxpayer consent and share — with shares summing to the donation total, via a lightweightthat a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
+
+### REQ-052 — Charities Online claim export
+
+Produce a correctly formatted export (Title, First name, Last name, House name/number, Postcode, Donation date, Amount; one row per successful charge, with OSCR as regulator, charity number SC047995 and NBCC's HMRC reference) for finance to upload to Charities Online, with the direct HMRC API deferred to phase two. *Accept:* each successful charge under an enduring monthly declaration produces its own claimable row.
+
+### REQ-053 — Company donation flow
+
+Provide a company path that suppresses all Gift Aid UI and captures the legal company name (required), an optional registration number, a required contact name and email, a billing address and an anonymous flag, recording the donation as permanently not-claimable. *Accept:* no declaration is taken, no Charities Online row is produced, and the donation never enters a claim.
+
+### REQ-054 — Corporation-tax receipt for companies
+
+Email a dated receipt in place of a declaration stating NBCC's name and OSCR SC047995, the amount and date, that it is a genuine donation with nothing of value given in return, and that NBCC has not and will not claim Gift Aid on it. *Accept:* genuine sponsorship where consideration is given is flagged for trustees as a separate flow rather than processed as a donation.
+
+### REQ-055 — Stripe subscriptions for monthly giving
+
+Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
+
+### REQ-056 — One-off, BACS and card payments
+
+Support one-off single charges via PaymentIntents and both BACS Direct Debit (bacs_debit, handling the setup/confirmation lead time) and card for monthly and one-off giving. *Accept:* the pending BACS mandate state is handled and the Direct Debit Guarantee is honoured.
+
+### REQ-057 — Dunning and failed-payment retries
+
+Configure Stripe Smart Retries for three attempts over roughly two weeks, then mark the subscription lapsed, stop future claims and notify the donor and admin. *Accept:* a lapsed subscription produces no further claimable donations.
+
+### REQ-058 — Refund and chargeback handling
+
+On a refund or dispute update the refunded amount, set the donation not-claimable (or recalculate for a partial) when it has not yet been claimed, and when it has already been claimed set claim_status to adjustment_due and net the over-claim off the next submission, always recalculating partial refunds on the retained amount. *Accept:* Gift Aid is never kept on returned money, adjustments are recorded against the claim batch for auditability, and a company refund voids or corrects the receipt only.
+
+### REQ-059 — Editing a declaration creates a new one
+
+Treat declarations as immutable so that any change to name, address, scope or taxpayer confirmation deactivates the old declaration with a revoked timestamp and creates a new one with the current wording, linking future charges to the new declaration while past claimed donations keep their original. *Accept:* each donation's claim references the declaration that was valid at the time of that donation.
+
+### REQ-060 — Consent-based emails and thank-yous
+
+Send nothing without a captured email, and give every donation that has a, layered with a Gift Aid confirmation and manage/cancel instructions for individuals, a corporation-tax receipt forcompanies, or a refund confirmation where relevant. *Accept:* no email is ever sent without an address.
+
+### REQ-061 — Self-serve donor portal
+
+Let donors edit their details, downgrade, manage or cancel Gift Aid and cancel their subscription, making cancellation easy as required but offering a reduce-instead option first, with cancelling Gift Aid setting the declaration inactive and stopping future claims. *Accept:* cancellation is reachable without contacting staff and a reduce-instead option is offered before cancel.
+
+### REQ-062 — Role-based admin mirroring self-serve
+
+Provide a standalone admin back-end with Viewer (read-only), Editor (view, edit, cancellations and queues) and Admin (all that plus user management, running and submitting claims, recording adjustments and settings) roles, able to perform any self-serve action on a donor's behalf. *Accept:* Kenny and Isabel hold the Admin/Claims permission and roles enforce read-only versus edit versus claim.
+
+### REQ-063 — Admin queues and claim operations
+
+Give admins donor, declaration and donation search, the Charities Online export, batch-submitted marking, the adjustment-due queue, retention-expiry flags and an awaiting-declaration queue for in-person links that were sent but not completed (including bounced emails). *Accept:* every admin write (edit, submit, adjust) appends to the audit log to form the HMRC-claim and governance trail.
+
+### REQ-064 — Data protection and anonymity
+
+Store personal data securely, enforce retention per the audit-record rule, link the privacy notice in the form, and treat anonymity as a public-display setting only while the HMRC claim still uses the donor's real name and address. *Accept:* anonymous donors are hidden on the public page yet fully recorded for claiming.

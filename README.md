@@ -980,6 +980,12 @@ aws ssm put-parameter --name /charity-site/staging/STRIPE_PRICE_BRONZE \
   --type String --value 'price_...' --overwrite
 # ...repeat for STRIPE_PRICE_SILVER/GOLD/PLATINUM and the production path.
 
+# Stripe webhook signing secret (REQ-036): a SecureString for verifying inbound
+# webhook signatures. The whsec_... value comes from the Stripe Dashboard webhook
+# endpoint (a separate endpoint + value per environment); starts as REPLACE_ME.
+aws ssm put-parameter --name /charity-site/staging/STRIPE_WEBHOOK_SECRET \
+  --type SecureString --value 'whsec_...' --overwrite
+
 # Contact forwarding (REQ-030): the form-service endpoint (SecureString). Starts
 # as a https://forward.example/replace-me placeholder, which keeps the forward
 # stubbed until a real URL is set.
@@ -1037,7 +1043,12 @@ is an **optional**, non-secret Stripe Product id (`prod_…`) one-off donations 
 grouped under — a `stripe_donation_product` module variable in the task-def
 `environment` (default empty); left unset, the endpoint names an inline product, so
 it never blocks boot. The secret key accepts both standard (`sk_…`) and restricted
-(`rk_…`) keys.
+(`rk_…`) keys. `STRIPE_WEBHOOK_SECRET` (REQ-036) is a second Stripe secret with the
+same treatment as the secret key — an SSM `SecureString`, required and never
+defaulted, injected via `valueFrom` with its ARN in `exec_secrets`. It is the
+`whsec_…` signing secret the webhook endpoint (`POST /api/stripe/webhook`) uses to
+verify inbound events; its `.env.example`/CI placeholder is any non-empty
+`whsec_…` string, which keeps signature checks working offline.
 
 `CONTACT_FORWARD_URL` (TASK-039, REQ-030) is the form-service endpoint
 `/api/contact` forwards enquiries to (a Formspree-style form URL or an NBCC inbox

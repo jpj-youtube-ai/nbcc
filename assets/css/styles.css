@@ -1734,7 +1734,7 @@ a.contact-value:hover {
    SUPPORTERS PAGE (REQ-035) — supporters.html. A centred page intro
    mirroring .about-intro/.donate-intro/.contact-intro; reuses .eyebrow /
    base h1 / .rule / .lede and the tokens. The tiered supporters list that
-   fills the page-sections slot below lands in TASK-023.
+   fills the page-sections slot below is the SUPPORTERS TIERS block (TASK-023).
    ================================================================= */
 .supporters-intro {
   text-align: center;
@@ -1745,4 +1745,71 @@ a.contact-value:hover {
 .supporters-intro .rule,
 .supporters-intro .lede {
   margin-inline: auto;
+}
+
+/* =================================================================
+   SUPPORTERS TIERS (REQ-035) — supporters.html. Three tinted-band tier
+   groups (Bronze, Silver, Gold) in the page-sections slot, each a .card
+   grid of supporter entries. Reuses the home pillars/why tinted-band
+   pattern, .card, .reveal and tokens; token-only colours. Alternating band
+   tints (tan / holly / tan via :nth-child) give the three groups rhythm;
+   person vs organisation icons are crimson (holly text is forbidden on
+   these light bands by the brand-colours guard), like the pillar icons.
+   ================================================================= */
+.supporter-tier {
+  background: var(--tan-soft);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
+  margin-block: clamp(8px, 3vw, 32px);
+}
+.supporter-tiers > .supporter-tier:nth-child(even) {
+  background: var(--holly-soft);
+}
+.supporter-tier-name {
+  font-size: var(--fs-section);
+  text-align: center;
+  margin: 0 0 clamp(18px, 3vw, 30px);
+}
+.supporter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(14px, 2vw, 22px);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.supporter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: clamp(16px, 2vw, 22px);
+}
+.supporter-icon {
+  color: var(--crimson);
+  flex: none;
+}
+.supporter-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.supporter-name {
+  font-weight: 600;
+  color: var(--slate);
+}
+.supporter-kind {
+  font-size: 0.82rem;
+  color: var(--slate-soft);
+}
+
+@media (max-width: 900px) {
+  .supporter-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 680px) {
+  .supporter-grid {
+    grid-template-columns: 1fr;
+  }
 }

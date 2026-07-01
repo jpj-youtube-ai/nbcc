@@ -78,11 +78,83 @@
         </p>
       </section>
 
-      <!-- Supporters list slot (REQ-035): the tiered Bronze, Silver and Gold
-           supporters list (alphabetical within each tier) mounts here in TASK-023.
-           Kept as the shared page-sections region so the frequently changing list
-           has one clear home, consistent with the other pages. -->
-      <section class="page-sections" data-region="sections"></section>
+      <!-- Supporters tiers (REQ-035): the Bronze, Silver and Gold groups fill the
+           shared page-sections slot. CONTENT VERIFICATION — these are placeholder
+           supporters pending the charity's real, consented list. The list lives in
+           the HTML (SEO + perf budget + no build); to update, add or remove a
+           supporter card in the right tier, keeping each tier alphabetical. Person
+           vs organisation is carried on data-type plus the visible kind label;
+           icons are decorative inline SVG (aria-hidden), no image tags. Design and
+           update-mechanism tradeoff:
+           docs/superpowers/specs/2026-07-01-supporters-list-design.md. Ties to the
+           Donors Page references in REQ-024/REQ-025. -->
+      <section class="page-sections" data-region="sections">
+        <div class="supporter-tiers">
+          <section class="supporter-tier reveal" aria-labelledby="tier-bronze-heading">
+            <h2 class="supporter-tier-name" id="tier-bronze-heading">Bronze</h2>
+            <ul class="supporter-grid">
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Ailsa Grant</span><span class="supporter-kind">Individual</span></span>
+              </li>
+              <li class="card supporter" data-type="organisation">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M8 8h3M8 12h3M8 16h3"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Annbank Village Stores</span><span class="supporter-kind">Organisation</span></span>
+              </li>
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">David Reid</span><span class="supporter-kind">Individual</span></span>
+              </li>
+              <li class="card supporter" data-type="organisation">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M8 8h3M8 12h3M8 16h3"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Kyle Joinery</span><span class="supporter-kind">Organisation</span></span>
+              </li>
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Morag Bell</span><span class="supporter-kind">Individual</span></span>
+              </li>
+            </ul>
+          </section>
+          <section class="supporter-tier reveal" aria-labelledby="tier-silver-heading">
+            <h2 class="supporter-tier-name" id="tier-silver-heading">Silver</h2>
+            <ul class="supporter-grid">
+              <li class="card supporter" data-type="organisation">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M8 8h3M8 12h3M8 16h3"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Ayrshire Print Company</span><span class="supporter-kind">Organisation</span></span>
+              </li>
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Fiona Campbell</span><span class="supporter-kind">Individual</span></span>
+              </li>
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Iain Murray</span><span class="supporter-kind">Individual</span></span>
+              </li>
+              <li class="card supporter" data-type="organisation">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M8 8h3M8 12h3M8 16h3"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Prestwick Motors</span><span class="supporter-kind">Organisation</span></span>
+              </li>
+            </ul>
+          </section>
+          <section class="supporter-tier reveal" aria-labelledby="tier-gold-heading">
+            <h2 class="supporter-tier-name" id="tier-gold-heading">Gold</h2>
+            <ul class="supporter-grid">
+              <li class="card supporter" data-type="organisation">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M8 8h3M8 12h3M8 16h3"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Burns Country Trust</span><span class="supporter-kind">Organisation</span></span>
+              </li>
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Elizabeth Scott</span><span class="supporter-kind">Individual</span></span>
+              </li>
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Robert Thomson</span><span class="supporter-kind">Individual</span></span>
+              </li>
+            </ul>
+          </section>
+        </div>
+      </section>
     </main>
 
     <!-- Site footer (REQ-003). Identical across all five pages. -->

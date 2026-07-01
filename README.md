@@ -765,6 +765,20 @@ donors/declarations/donations) **and** its matching `audit_log` row inside one
 commit together, a throwing write persists neither, and `audit_log` rejects
 deletes.
 
+**Declaration wording (REQ-040).** `src/declarations/wording.ts` is the versioned,
+verbatim source of truth for HMRC's Gift Aid liability statements — a
+single-donation template (`hmrc-single-…`) and a multiple/all-donations template
+(`hmrc-all-donations-…`), each an immutable version id + full statement string.
+`selectDeclarationWording({ mode, scope })` picks the all-donations template for an
+enduring gift (any monthly, or `all_donations` scope) and the single-donation
+template for a one-off, returning `{ wording_version, wording_snapshot }` — the exact
+`declarations` columns — so a saved declaration records the precise text the donor
+saw. `assertFullLiabilityStatement` / `wordingSnapshotSchema` reject wording that
+omits the taxpayer-responsibility clause (bare `"I am a UK taxpayer"`), requiring the
+full Income / Capital Gains Tax liability sentence by **content**, not length. Pure
+and DB-free (`test/unit/declaration-wording.test.ts`); the declaration-capture
+form/endpoint (REQ-043) and persistence via `writeWithAudit` are separate.
+
 **The Stripe webhook (REQ-036 / TASK-046).** `POST /api/stripe/webhook`
 (`src/routes/stripe-webhook.ts`) is the **single** set of Stripe webhooks — no
 other route touches donor/donation events. It is mounted **before** `express.json`

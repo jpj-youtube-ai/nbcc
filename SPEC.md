@@ -292,6 +292,9 @@ Capture email (optional and consent-based), full name (required), an optional di
 
 Show HMRC's official template liability statement verbatim (multiple/all-donations template for monthly and enduring, single-donation template for one-offs) and store the exact wording in a versioned config so every saved declaration records the version the donor saw. *Accept:* "I am a UK taxpayer" alone is rejected because the full liability paragraph must be present; wording_version and a wording_snapshot are persisted on each declaration.
 
+Tasks:
+- TASK-049 — Add versioned, verbatim HMRC declaration wording config with scope selection and liability-paragraph validation
+
 ### REQ-041 — Amount, tier and frequency
 
 Let the donor pick monthly (a Stripe subscription) or one-off (a single charge) and either a preset tier (£10/£25/£50/£100) or a custom GBP amount, pairing monthly with an enduring declaration. *Accept:* amount, frequency and currency are captured; monthly defaults the declaration scope to enduring.

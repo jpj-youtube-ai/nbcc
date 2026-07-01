@@ -303,6 +303,10 @@ Let the donor pick monthly (a Stripe subscription) or one-off (a single charge) 
 
 Offer Gift Aid as an explicit opt-in bound to the displayed HMRC statement, eligible only for genuine gifts of the donor's own money (not goods/services, not crypto, not benefits over the caps). *Accept:* an affirmative tick is required and the consent is stored against the exact statement shown.
 
+Tasks:
+- TASK-052 — Show the verbatim HMRC Gift Aid statement in the donate opt-in, bound to the never-pre-ticked tick
+- TASK-053 — Stamp the exact HMRC wording version and snapshot onto the checkout session when Gift Aid is affirmatively opted in
+
 ### REQ-043 — Declaration field capture
 
 Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode, with a non-UK donor flag (Channel Islands / Isle of Man) that omits the postcode. *Accept:* field-level validation enforces postcode format and a required house number; only a home address is accepted (no work or c/o addresses).
@@ -354,6 +358,10 @@ Email a dated receipt in place of a declaration stating NBCC's name and OSCR SC0
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
+
+Tasks:
+- TASK-050 — Add a subscription plan-change endpoint that up/downgrades a monthly tier via Stripe proration
+- TASK-051 — Ensure the Stripe webhook records the actual charged amount on every recurring/prorated invoice so Gift Aid claims the real amount
 
 ### REQ-056 — One-off, BACS and card payments
 

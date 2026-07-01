@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import type StripeNS from "stripe";
 import { z } from "zod";
-import { stripe, stripePriceByPlan } from "../clients/stripe";
+import { stripe, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import { forwardEnquiry } from "../clients/contact";
 import { config } from "../config";
 
@@ -117,6 +117,47 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
 }
 
 apiRouter.post("/api/checkout-session", postCheckoutSession);
+
+// POST /api/subscription/change-plan (REQ-055): move a monthly subscription up or
+// down a tier. Validated zod-first (same style as checkout above): a non-empty
+// subscriptionId and a known plan. The plan→price mapping and the single-item swap
+// (with proration_behavior 'create_prorations' — one Price per tier, so proration
+// is Stripe's job) live in src/clients/stripe (changeSubscriptionPlan). This is the
+// backend capability ONLY — the donor-facing triggers are out of scope here: the
+// self-serve donor portal (REQ-061) and role-based admin-on-behalf (REQ-062).
+const changePlanBodySchema = z.object({
+  subscriptionId: z.string().min(1),
+  plan: z.enum(PLANS),
+});
+
+export async function postChangePlan(req: Request, res: Response): Promise<Response> {
+  const parsed = changePlanBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Invalid plan change request",
+      details: parsed.error.flatten(),
+    });
+  }
+
+  try {
+    const subscription = await changeSubscriptionPlan(
+      parsed.data.subscriptionId,
+      parsed.data.plan,
+    );
+    return res.status(200).json(subscription);
+  } catch (err) {
+    // A no-op change (already on this tier) is a client error → 400. Any other
+    // failure is an upstream Stripe problem → 502, mirroring the checkout endpoint's
+    // shape. The message is safe to log; no secret is included.
+    if (err instanceof SamePlanError) {
+      return res.status(400).json({ error: err.message });
+    }
+    console.error("change-plan update failed:", err instanceof Error ? err.message : err);
+    return res.status(502).json({ error: "Plan change is temporarily unavailable" });
+  }
+}
+
+apiRouter.post("/api/subscription/change-plan", postChangePlan);
 
 // Contact enquiry (REQ-030). Mirrors the checkout handler: zod-first validation,
 // then forward via the contact client. The body matches the payload initContactForm

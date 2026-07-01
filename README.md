@@ -793,6 +793,18 @@ offline with `STRIPE_WEBHOOK_SECRET` via `generateTestHeaderString` — no live
 account needed. The secret is wired through config, `.env.example`, SSM, the
 task-def `secrets` and the `exec_secrets` IAM policy (golden rule 3).
 
+**Reusable idempotency helper (REQ-036 / TASK-048).** `src/webhooks/idempotency.ts`
+factors the de-dup out as a small, composable foundation: `claimWebhookEvent(client,
+id, type)` runs `INSERT … ON CONFLICT (stripe_event_id) DO NOTHING` against a
+`webhook_events` ledger (migration `1782926443623_webhook-events.js`) and reports
+`alreadyProcessed`, and `markWebhookEventProcessed` stamps `processed_at`. Both take
+the caller's `PoolClient`, so they compose **inside** one `writeWithAudit`
+transaction rather than opening their own — unit-tested DB-free against a mock client
+(`test/unit/idempotency.test.ts`). It is the designed drop-in for the handler above,
+which currently performs the same claim inline against its own
+`stripe_webhook_events` ledger; consolidating the handler onto this helper and
+retiring the inline ledger (an expand-contract drop) is a small follow-up.
+
 **Not built here (named, separate tasks):** the `claim_batches` + `users` tables
 and the one-batch-per-donation / admin-write invariants (REQ-037).
 

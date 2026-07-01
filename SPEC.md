@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (34)
+## Shipped (35)
 
 ### REQ-001 — Multi-page site structure
 
@@ -250,8 +250,6 @@ Tasks:
 - TASK-041 — Add the headshot/image processing pipeline and wire ten 4:5 team portraits into the About grid
 - TASK-042 — Replace the remaining placeholder figures (Tygan headshot, home photo slot, OG image) with consented imagery
 
-## Planned (30)
-
 ### REQ-035 — Supporters page
 
 A fifth marketing page listing supporters grouped into Bronze, Silver and Gold tiers, alphabetical within each tier, including both individual people and brands/organisations. It is reachable at its own clean URL, shares the single nav, footer, stylesheet and script, and is structured so the frequently-changing list is easy to update.
@@ -259,6 +257,8 @@ A fifth marketing page listing supporters grouped into Bronze, Silver and Gold t
 Tasks:
 - TASK-022 — Add the Supporters page to the multi-page site structure with clean URL, nav, footer and SEO
 - TASK-023 — Build the tiered, alphabetical supporters list on supporters.html
+
+## Planned (29)
 
 ### REQ-036 — One unified donation platform
 

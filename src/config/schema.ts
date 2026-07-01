@@ -24,6 +24,12 @@ export const configSchema = z.object({
   STRIPE_PRICE_GOLD: z.string().min(1),
   STRIPE_PRICE_PLATINUM: z.string().min(1),
 
+  // Stripe webhook signing secret (whsec_…) for verifying inbound webhook
+  // signatures via stripe.webhooks.constructEvent (REQ-036/TASK-046). A secret —
+  // required, non-empty, NEVER defaulted; a placeholder locally/CI, a SecureString
+  // in SSM in staging/prod.
+  STRIPE_WEBHOOK_SECRET: z.string().min(1),
+
   // Optional: a Stripe Product id (prod_…) to group one-off donations under. The
   // one-off amount stays variable; this only sets the product the inline price
   // hangs off (cleaner Stripe reporting/receipts). Left unset, an inline product

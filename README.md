@@ -637,6 +637,35 @@ text); inline SVG icons, no image tags. Dash-free copy, "NBCC" in full (REQ-031)
 Verified by `test/unit/contact.test.ts` (static markup + jsdom validation
 behaviour).
 
+### Supporters page (REQ-035)
+
+`supporters.html` opens with a centred intro (the `SUPPORTERS PAGE` CSS block,
+mirroring the About/Donate/Contact intros) and then fills its `.page-sections`
+slot with the tiered supporters list (`SUPPORTERS TIERS` block). Three
+`.supporter-tier` tinted bands — **Bronze → Silver → Gold**, in that order,
+alternating tan/holly tint — each hold a `.supporter-grid` of `.card` entries
+listed **alphabetically within the tier**. Every entry carries a
+`data-type="person"`/`"organisation"` marker, a decorative `aria-hidden` inline
+SVG icon (person vs building, no image tags), and a visible **Individual** /
+**Organisation** label so the person-vs-brand distinction is clear to sighted and
+assistive-tech users. Reuses `.card` / `.reveal` / the pillars-and-why
+tinted-band pattern / tokens; icons are crimson (the `brand-colours` guard forbids
+holly/tan text on light bands). Dash-free copy, "NBCC" (REQ-031). The entries are
+**placeholder** (`CONTENT VERIFICATION`) pending the charity's real, consented
+list; it also serves as the **Donors Page** referenced by REQ-024/REQ-025.
+
+**Update mechanism (decided):** the list lives **in the HTML** (hand-edited
+`<li>` entries), not a client-fetched JSON file or a JS-rendered list — so the
+names are crawlable for SEO, add no request/parse cost against the perf budget,
+and fit the no-build static-site model. To update, add or remove a
+`<li class="card supporter" data-type="…">` in the right tier, keeping it
+alphabetical. The tradeoff (manual HTML edits vs a data-driven authoring surface)
+and the rejected alternatives are recorded in
+`docs/superpowers/specs/2026-07-01-supporters-list-design.md`. Verified by
+`test/unit/supporters.test.ts` (three tiers in order, alphabetical within each,
+person + organisation both render); `copy-rules`/`accessibility`/`brand-colours`
+auto-cover the page and stay green.
+
 ### Checkout contract (REQ-028)
 
 Every amount control wires the one front-end → backend integration point. Each

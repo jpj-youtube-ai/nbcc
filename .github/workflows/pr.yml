@@ -33,6 +33,10 @@ jobs:
       STRIPE_PRICE_SILVER: price_ci_silver
       STRIPE_PRICE_GOLD: price_ci_gold
       STRIPE_PRICE_PLATINUM: price_ci_platinum
+      # Stripe webhook signing secret (REQ-036/TASK-046). Required by the schema so
+      # the app boots; the stripe-webhook BDD signs its events with THIS same value
+      # (via generateTestHeaderString) so signature verification passes offline.
+      STRIPE_WEBHOOK_SECRET: whsec_ci_dummy_secret
       # Contact forwarding (REQ-030). A `.example` placeholder so the app boots and
       # the forward is stubbed (no live form service) for the BDD step.
       CONTACT_FORWARD_URL: https://forward.example/contact

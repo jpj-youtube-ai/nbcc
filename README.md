@@ -765,10 +765,36 @@ donors/declarations/donations) **and** its matching `audit_log` row inside one
 commit together, a throwing write persists neither, and `audit_log` rejects
 deletes.
 
+**The Stripe webhook (REQ-036 / TASK-046).** `POST /api/stripe/webhook`
+(`src/routes/stripe-webhook.ts`) is the **single** set of Stripe webhooks — no
+other route touches donor/donation events. It is mounted **before** `express.json`
+in `src/app.ts` and parses its own body with `express.raw`, so the raw bytes are
+available for signature verification: `constructEvent` (`src/clients/stripe.ts`,
+using `STRIPE_WEBHOOK_SECRET`) rejects a bad/missing signature with **400**. Pure
+event→record mapping lives in `src/db/stripe-webhook-model.ts` (DB-free,
+`test/unit/stripe-webhook-model.test.ts`); the transactional processor
+`src/db/stripe-webhook.ts` handles each event through the REQ-037 write helpers in
+ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger with
+`ON CONFLICT DO NOTHING`; migration `1782924697956_stripe-webhook-events.js`):
+
+- **`checkout.session.completed`** → persists the donation, recording Gift Aid as
+  a flag when `metadata.giftAid === 'true'` (stamped by the REQ-029 checkout).
+- **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
+  monthly charge as a further donation against the SAME donor (found via the
+  subscription id); the first `subscription_create` invoice is skipped so the
+  initial charge (already captured at checkout) is not double-counted.
+- **`charge.refunded` / `charge.dispute.*`** → updates the SAME donation record's
+  `refunded_amount_pence` (absolute, so replay-safe) and recomputes `claim_status`
+  — never a duplicate row.
+
+`constructEvent` uses a real Stripe instance (pure HMAC, no network), so the stub
+seam still holds: unit tests and `features/stripe-webhook.feature` sign events
+offline with `STRIPE_WEBHOOK_SECRET` via `generateTestHeaderString` — no live
+account needed. The secret is wired through config, `.env.example`, SSM, the
+task-def `secrets` and the `exec_secrets` IAM policy (golden rule 3).
+
 **Not built here (named, separate tasks):** the `claim_batches` + `users` tables
-and the one-batch-per-donation / admin-write invariants (REQ-037), and REQ-036's
-Stripe webhook that populates these rows — the checkout handler above still only
-records intent on the Stripe session metadata until that webhook lands.
+and the one-batch-per-donation / admin-write invariants (REQ-037).
 
 **`POST /api/contact` (REQ-030).** Validates a website enquiry
 `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,

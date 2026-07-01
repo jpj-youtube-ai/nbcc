@@ -92,6 +92,15 @@ resource "aws_ssm_parameter" "stripe_secret_key" {
   lifecycle { ignore_changes = [value] }
 }
 
+# Stripe webhook signing secret (REQ-036/TASK-046) — verifies inbound webhook
+# signatures. A SecureString like the API key; real value set out of band.
+resource "aws_ssm_parameter" "stripe_webhook_secret" {
+  name  = "/${var.project}/${var.environment}/STRIPE_WEBHOOK_SECRET"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
 resource "aws_ssm_parameter" "stripe_price_bronze" {
   name  = "/${var.project}/${var.environment}/STRIPE_PRICE_BRONZE"
   type  = "String"

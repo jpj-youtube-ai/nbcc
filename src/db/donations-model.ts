@@ -45,6 +45,17 @@ export const donationInputSchema = z
 
 export type DonationInput = z.infer<typeof donationInputSchema>;
 
+// The donor identity fields (donor_type comes from the donation — one source of
+// truth). A plain data shape, so pure event→record mappers can build it DB-free.
+export interface DonorInput {
+  fullName: string; // person name, or a company's contact name
+  businessName?: string | null;
+  companyNumber?: string | null;
+  email?: string | null;
+  emailConsent?: boolean;
+  anonymous?: boolean;
+}
+
 // A row ready to INSERT into donations (snake_case columns). created_at is left to
 // the column default, so this stays pure/clock-free.
 export interface DonationRow {

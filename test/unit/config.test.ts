@@ -16,6 +16,8 @@ const validEnv = (): Record<string, string> => ({
   STRIPE_PRICE_SILVER: "price_silver",
   STRIPE_PRICE_GOLD: "price_gold",
   STRIPE_PRICE_PLATINUM: "price_platinum",
+  // Stripe webhook signing secret (TASK-046, REQ-036).
+  STRIPE_WEBHOOK_SECRET: "whsec_test",
   // Contact forwarding (TASK-039, REQ-030).
   CONTACT_FORWARD_URL: "https://formspree.io/f/test",
 });
@@ -41,6 +43,7 @@ describe("config schema — Stripe checkout keys (REQ-028/REQ-029)", () => {
     "STRIPE_PRICE_SILVER",
     "STRIPE_PRICE_GOLD",
     "STRIPE_PRICE_PLATINUM",
+    "STRIPE_WEBHOOK_SECRET",
   ];
 
   it.each(REQUIRED)("requires %s", (key) => {

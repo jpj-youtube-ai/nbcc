@@ -32,6 +32,7 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Stripe (REQ-028/REQ-029): the secret key and the SSM-held price IDs are
       # all injected via valueFrom, so the exec role must be able to read them.
       aws_ssm_parameter.stripe_secret_key.arn,
+      aws_ssm_parameter.stripe_webhook_secret.arn,
       aws_ssm_parameter.stripe_price_bronze.arn,
       aws_ssm_parameter.stripe_price_silver.arn,
       aws_ssm_parameter.stripe_price_gold.arn,
@@ -101,6 +102,7 @@ resource "aws_ecs_task_definition" "app" {
       # All are pulled from SSM via valueFrom, so every ARN must also appear in
       # the exec_secrets policy below or the task fails to start.
       { name = "STRIPE_SECRET_KEY", valueFrom = aws_ssm_parameter.stripe_secret_key.arn },
+      { name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.stripe_webhook_secret.arn },
       { name = "STRIPE_PRICE_BRONZE", valueFrom = aws_ssm_parameter.stripe_price_bronze.arn },
       { name = "STRIPE_PRICE_SILVER", valueFrom = aws_ssm_parameter.stripe_price_silver.arn },
       { name = "STRIPE_PRICE_GOLD", valueFrom = aws_ssm_parameter.stripe_price_gold.arn },

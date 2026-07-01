@@ -38,6 +38,17 @@ function stubStripe(): Stripe {
 
 export const stripe: Stripe = useStub ? stubStripe() : new Stripe(config.STRIPE_SECRET_KEY);
 
+// Webhook signature verification (REQ-036/TASK-046). constructEvent is pure
+// HMAC-SHA256 over the raw body — NO network — so it uses a real Stripe instance
+// even when the checkout client above is the stub (placeholder key, no live
+// account). Tests and the BDD sign events with STRIPE_WEBHOOK_SECRET via
+// stripe.webhooks.generateTestHeaderString, so the whole verify path runs offline.
+const webhookVerifier = new Stripe(config.STRIPE_SECRET_KEY);
+
+export function constructEvent(payload: Buffer | string, signature: string): Stripe.Event {
+  return webhookVerifier.webhooks.constructEvent(payload, signature, config.STRIPE_WEBHOOK_SECRET);
+}
+
 // The recurring monthly Stripe price IDs, keyed by donate plan (REQ-022/REQ-028).
 // The checkout-session endpoint maps an incoming `plan` to its price ID here.
 export const stripePriceByPlan: Record<string, string> = {

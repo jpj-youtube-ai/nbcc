@@ -248,6 +248,10 @@ Tasks:
 
 A skip-to-content link; semantic landmarks (header, nav, main, section, footer); visible Holly Green keyboard focus rings; real labels on all form fields with required fields marked; meaningful alt text on all images; the section colour-contrast rules respected; `prefers-reduced-motion` honoured; mobile-first and responsive down to roughly 360px. *Accept:* an AA audit passes on all four pages. *Non-negotiable.*
 
+Tasks:
+- TASK-043 — Add a skip-to-content link and complete semantic landmarks across all pages
+- TASK-044 — Add a sitewide accessibility-floor guard test asserting the WCAG 2.1 AA invariants on all four pages
+
 ### REQ-035 — Supporters page
 
 A fifth marketing page listing supporters grouped into Bronze, Silver and Gold tiers, alphabetical within each tier, including both individual people and brands/organisations. It is reachable at its own clean URL, shares the single nav, footer, stylesheet and script, and is structured so the frequently-changing list is easy to update.

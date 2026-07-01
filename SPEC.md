@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (33)
+## Shipped (34)
 
 ### REQ-001 — Multi-page site structure
 
@@ -225,6 +225,14 @@ House style holds sitewide: no dashes in any visible copy (use commas, parenthes
 Tasks:
 - TASK-040 — Add a sitewide copy-rules guard test and fix any violations across all pages
 
+### REQ-032 — Accessibility floor (WCAG 2.1 AA)
+
+A skip-to-content link; semantic landmarks (header, nav, main, section, footer); visible Holly Green keyboard focus rings; real labels on all form fields with required fields marked; meaningful alt text on all images; the section colour-contrast rules respected; `prefers-reduced-motion` honoured; mobile-first and responsive down to roughly 360px. *Accept:* an AA audit passes on all four pages. *Non-negotiable.*
+
+Tasks:
+- TASK-043 — Add a skip-to-content link and complete semantic landmarks across all pages
+- TASK-044 — Add a sitewide accessibility-floor guard test asserting the WCAG 2.1 AA invariants on all four pages
+
 ### REQ-033 — SEO, performance and hosting
 
 Each page sets its own title, meta description, canonical URL, and Open Graph and Twitter tags (the reason for the multi-page structure); page weight is kept low (optimised images, two web fonts, no framework, no build step); static hosting serves the four pages with the two API endpoints running as serverless functions alongside. *Accept:* each page has unique metadata and meets the low-weight performance budget on mobile.
@@ -242,15 +250,7 @@ Tasks:
 - TASK-041 — Add the headshot/image processing pipeline and wire ten 4:5 team portraits into the About grid
 - TASK-042 — Replace the remaining placeholder figures (Tygan headshot, home photo slot, OG image) with consented imagery
 
-## Planned (31)
-
-### REQ-032 — Accessibility floor (WCAG 2.1 AA)
-
-A skip-to-content link; semantic landmarks (header, nav, main, section, footer); visible Holly Green keyboard focus rings; real labels on all form fields with required fields marked; meaningful alt text on all images; the section colour-contrast rules respected; `prefers-reduced-motion` honoured; mobile-first and responsive down to roughly 360px. *Accept:* an AA audit passes on all four pages. *Non-negotiable.*
-
-Tasks:
-- TASK-043 — Add a skip-to-content link and complete semantic landmarks across all pages
-- TASK-044 — Add a sitewide accessibility-floor guard test asserting the WCAG 2.1 AA invariants on all four pages
+## Planned (30)
 
 ### REQ-035 — Supporters page
 

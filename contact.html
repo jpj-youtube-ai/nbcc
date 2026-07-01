@@ -39,6 +39,8 @@
     <script defer src="assets/js/main.js"></script>
   </head>
   <body>
+    <!-- Skip link (REQ-032): first focusable element; jumps to <main id="main">. -->
+    <a class="skip-link" href="#main">Skip to content</a>
     <!-- Primary navigation (REQ-002). Footer slot below is REQ-003. -->
     <header class="nav" id="nav" data-region="nav">
       <div class="wrap">
@@ -58,15 +60,15 @@
       </div>
     </header>
 
-    <main class="site-main" id="main">
+    <main class="site-main" id="main" tabindex="-1">
       <!-- Contact intro (REQ-027): centred page intro mirroring .about-intro /
            .donate-intro. Reuses .eyebrow / base h1 / .rule (centred by the
            .contact-intro auto-margin) / .lede and the tokens; no new fonts and
            no image tags. Copy carries "NBCC" in full and the full beneficiary
            phrasing per REQ-031, no dashes. -->
-      <section class="contact-intro">
+      <section class="contact-intro" aria-labelledby="contact-intro-heading">
         <span class="eyebrow">Contact</span>
-        <h1>We would love to hear from you</h1>
+        <h1 id="contact-intro-heading">We would love to hear from you</h1>
         <div class="rule"></div>
         <p class="lede">
           Whether it is a question, an offer of help, a fundraising idea, or a

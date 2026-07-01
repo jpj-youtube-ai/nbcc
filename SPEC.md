@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (36)
+## Shipped (37)
 
 ### REQ-001 — Multi-page site structure
 
@@ -266,7 +266,15 @@ Tasks:
 - TASK-045 — Create the unified donation schema and transactional audit-log write helper
 - TASK-046 — Add the single Stripe webhook handler set that updates the one donation record
 
-## Planned (29)
+### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
+
+A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
+
+Tasks:
+- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
+- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
+
+## Planned (28)
 
 ### REQ-037 — Core donation data model
 
@@ -379,11 +387,3 @@ Give admins donor, declaration and donation search, the Charities Online export,
 ### REQ-064 — Data protection and anonymity
 
 Store personal data securely, enforce retention per the audit-record rule, link the privacy notice in the form, and treat anonymity as a public-display setting only while the HMRC claim still uses the donor's real name and address. *Accept:* anonymous donors are hidden on the public page yet fully recorded for claiming.
-
-### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
-
-A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
-
-Tasks:
-- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
-- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)

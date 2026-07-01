@@ -37,7 +37,7 @@ It is intentionally a skeleton: navigation, footer, and page content sections
 arrive in their own requirements (REQ-002, REQ-003, REQ-010+) and are empty
 placeholders in the markup for now. The shared-asset wiring is verified by
 `test/unit/static-site.test.ts` (`npm run test:unit`). `src/routes/site.ts`
-serves `/`, the clean URLs and `/assets`, and the Dockerfile copies the four
+serves `/`, the clean URLs and `/assets`, and the Dockerfile copies the five
 pages + `assets/` + `_redirects` into the runtime image — so the marketing site
 ships and deploys with the service.
 
@@ -45,12 +45,13 @@ ships and deploys with the service.
 
 Each page is served at a clean, canonical URL (no `.html`):
 
-| Clean URL   | Serves        |
-|-------------|---------------|
-| `/`         | `index.html`  |
-| `/about-us` | `about.html`  |
-| `/donate`   | `donate.html` |
-| `/contact`  | `contact.html`|
+| Clean URL     | Serves            |
+|---------------|-------------------|
+| `/`           | `index.html`      |
+| `/about-us`   | `about.html`      |
+| `/donate`     | `donate.html`     |
+| `/contact`    | `contact.html`    |
+| `/supporters` | `supporters.html` |
 
 The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
 Netlify-style format. The Express site router (`src/routes/site.ts`) parses it
@@ -58,13 +59,15 @@ and applies the same rules at runtime, and the file is also honoured natively by
 **Netlify** / **Cloudflare Pages** for any future static host:
 
 ```
-/about-us      /about.html     200    # rewrite: serve the page, URL stays clean
-/donate        /donate.html    200
-/contact       /contact.html   200
-/index.html    /               301!   # canonicalise raw .html onto the clean URL
-/about.html    /about-us       301!   # ! forces the redirect over the real file
-/donate.html   /donate         301!
-/contact.html  /contact        301!
+/about-us         /about.html       200    # rewrite: serve the page, URL stays clean
+/donate           /donate.html      200
+/contact          /contact.html     200
+/supporters       /supporters.html  200
+/index.html       /                 301!   # canonicalise raw .html onto the clean URL
+/about.html       /about-us         301!   # ! forces the redirect over the real file
+/donate.html      /donate           301!
+/contact.html     /contact          301!
+/supporters.html  /supporters       301!
 ```
 
 `200` is a *rewrite* (content served, address bar unchanged); `301!` is a forced
@@ -97,7 +100,7 @@ host decision land elsewhere:
   rewrite, plus `RewriteRule ^about\.html$ /about-us [R=301,L]`.
 
 To exercise the acceptance check locally, run the app (`npm run build && node
-dist/index.js`) and request `/`, `/about-us`, `/donate`, `/contact`. The
+dist/index.js`) and request `/`, `/about-us`, `/donate`, `/contact`, `/supporters`. The
 `features/site.feature` BDD asserts this end-to-end against the running app, and
 `test/unit/clean-urls.test.ts` + `test/unit/site.test.ts` verify the rules
 host-free. The `_redirects` file also works as-is on a static host
@@ -107,8 +110,8 @@ host-free. The `_redirects` file also works as-is on a static host
 
 Every page mounts the same sticky top nav in its `<header class="nav">` slot
 (REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
-links to `/`, `/about-us`, `/donate`, `/contact`, a persistent Donate button, and
-a mobile burger.
+links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
+Donate button, and a mobile burger.
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -125,9 +128,9 @@ current page's link is marked `class="active" aria-current="page"`. Verified by
 ### Footer
 
 Every page mounts the same maroon footer in its `<footer class="site-footer">`
-slot (REQ-003, ported from the NBCC design), **identical across all four pages**:
+slot (REQ-003, ported from the NBCC design), **identical across all five pages**:
 three columns — the logo lockup (74px) + social links (Instagram/Facebook/X),
-**Explore** (the clean URLs `/`, `/about-us`, `/donate`, `/contact`), and
+**Explore** (the clean URLs `/`, `/about-us`, `/donate`, `/contact`, `/supporters`), and
 **Ways to give** (`/donate`, `/contact`) — plus a legal strip with the SCIO line
 and the OSCR registration link for charity **SC047995**. Styling lives in the
 shared `assets/css/styles.css` under a commented `FOOTER (REQ-003)` block (maroon
@@ -160,7 +163,7 @@ section naming, per page). The reduced-motion half of REQ-032 lives in the
 **Motion system** section above.
 
 **AA floor guard + manual audit.** `test/unit/accessibility.test.ts` enforces the
-*structural* WCAG 2.1 AA invariants across all four pages in CI: a skip link as
+*structural* WCAG 2.1 AA invariants across all five pages in CI: a skip link as
 the first tabbable element targeting an existing `#main`; exactly one `<main>`
 plus the header/nav/footer landmarks; non-empty `alt` on every `<img>`
 (decorative SVGs use `aria-hidden` instead); a `<label for>` on every form
@@ -190,7 +193,7 @@ above; no title/description/canonical is duplicated across pages. Verified by
 
 > **Placeholder domain:** canonical/`og:url`/`og:image` use
 > `https://www.example.org` because there's no production domain / custom
-> hostname yet. Replace it across the four pages + `test/unit/seo-metadata.test.ts`
+> hostname yet. Replace it across the five pages + `test/unit/seo-metadata.test.ts`
 > in one find/replace when the real domain lands. The share image
 > (`/assets/img/og-image.png`) is **referenced only** — the asset/pipeline is
 > REQ-034.

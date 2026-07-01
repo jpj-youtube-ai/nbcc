@@ -17,6 +17,7 @@ const PAGES = [
   { file: "about.html", label: "About" },
   { file: "donate.html", label: "Donate" },
   { file: "contact.html", label: "Contact" },
+  { file: "supporters.html", label: "Supporters" },
 ] as const;
 
 function readOrEmpty(rel: string): string {
@@ -88,7 +89,7 @@ for (const { file, label } of PAGES) {
   });
 }
 
-describe("the four pages together", () => {
+describe("the five pages together", () => {
   it("each have a distinct <title>", () => {
     const titles = PAGES.map(({ file }) => titleOf(readOrEmpty(file)));
     const nonEmpty = titles.filter((t) => t.length > 0);

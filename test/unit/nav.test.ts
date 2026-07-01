@@ -23,6 +23,7 @@ const PAGES = [
   { file: "about.html", active: "/about-us" },
   { file: "donate.html", active: "/donate" },
   { file: "contact.html", active: "/contact" },
+  { file: "supporters.html", active: "/supporters" },
 ] as const;
 
 describe.each(PAGES)("$file nav markup", ({ file, active }) => {
@@ -37,8 +38,8 @@ describe.each(PAGES)("$file nav markup", ({ file, active }) => {
     expect(brand).toMatch(/alt="[^"]+"/);
   });
 
-  it("lists the four pages by clean URL", () => {
-    for (const href of ["/", "/about-us", "/donate", "/contact"]) {
+  it("lists the five pages by clean URL", () => {
+    for (const href of ["/", "/about-us", "/donate", "/contact", "/supporters"]) {
       expect(list).toContain(`href="${href}"`);
     }
   });

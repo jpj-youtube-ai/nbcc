@@ -729,6 +729,47 @@ writing to the DB) is out of scope here**. An upstream Stripe failure returns
 > Production **never** stubs, so a missing real key surfaces loudly. Verified by
 > `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios.
 
+### Donation data model (REQ-036 / REQ-037)
+
+The unified donation platform's **one** persistence model — the foundation every
+channel writes through. Added by the additive, expand-contract migration
+`migrations/1782923222001_unified-donation-model.js` (four new tables, no existing
+table touched, so a code-level rollback stays safe — golden rule 2):
+
+- **`donors`** — an individual or a company (`donor_type`), a name, optional
+  business name / registration number, optional consent-based `email` +
+  `email_consent`, and an `anonymous` flag (REQ-038/REQ-039/REQ-053).
+- **`declarations`** — the immutable Gift Aid / HMRC declaration: the matching
+  fields (title, names, `house_name_number`, address, `postcode`, `non_uk`), the
+  `scope` (this-donation vs enduring), and the versioned wording the donor saw
+  (`wording_version` + `wording_snapshot`) (REQ-040/REQ-043/REQ-044/REQ-046).
+- **`donations`** — **THE** one donation record: FK `donor_id`, `mode`
+  (once/monthly), `plan`, `amount_pence`, `currency`, the Stripe ids,
+  `refunded_amount_pence`, `claim_status`, `payment_channel`, and Gift Aid as a
+  **flag** (`gift_aid` boolean + nullable `declaration_id` FK) — never a second
+  store (REQ-036). A donation is claimable only when the donor is an individual,
+  an active declaration covers it and it is not (fully) refunded; company
+  donations are permanently `not_eligible` (REQ-037/REQ-053).
+- **`audit_log`** — an **append-only** trail (`actor`, `action`, `entity`,
+  `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
+
+**Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
+claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`)
+— no pool/config/clock, so it is unit-tested DB-free
+(`test/unit/donations-model.test.ts`). `src/db/donations.ts` owns the
+transaction: `writeWithAudit(write, toAudit)` runs a state write (insert/update on
+donors/declarations/donations) **and** its matching `audit_log` row inside one
+`BEGIN…COMMIT`, rolling **both** back on any throw (the truth model in CLAUDE.md);
+`recordDonation()` is the concrete "create a donor + donation, audit
+`donation.created`" use. Verified against the local DB: the row and its audit row
+commit together, a throwing write persists neither, and `audit_log` rejects
+deletes.
+
+**Not built here (named, separate tasks):** the `claim_batches` + `users` tables
+and the one-batch-per-donation / admin-write invariants (REQ-037), and REQ-036's
+Stripe webhook that populates these rows — the checkout handler above still only
+records intent on the Stripe session metadata until that webhook lands.
+
 **`POST /api/contact` (REQ-030).** Validates a website enquiry
 `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,
 REQ-027) zod-first — `firstName`/`email`/`message` required, `lastName` optional —

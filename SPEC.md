@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (35)
+## Shipped (36)
 
 ### REQ-001 — Multi-page site structure
 
@@ -258,8 +258,6 @@ Tasks:
 - TASK-022 — Add the Supporters page to the multi-page site structure with clean URL, nav, footer and SEO
 - TASK-023 — Build the tiered, alphabetical supporters list on supporters.html
 
-## Planned (30)
-
 ### REQ-036 — One unified donation platform
 
 Build a single on-site platform where the donation flow, Stripe payments, subscriptions, declaration capture, refund logic and admin all share one data model and one set of Stripe webhooks; treat Gift Aid eligibility as a flag/relationship on each donation, never a bolted-on second system. *Accept:* no duplicate donor/donation stores; a refund updates the one record; a single webhook handler set that no other "module" duplicates.
@@ -267,6 +265,8 @@ Build a single on-site platform where the donation flow, Stripe payments, subscr
 Tasks:
 - TASK-045 — Create the unified donation schema and transactional audit-log write helper
 - TASK-046 — Add the single Stripe webhook handler set that updates the one donation record
+
+## Planned (29)
 
 ### REQ-037 — Core donation data model
 

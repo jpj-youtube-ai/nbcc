@@ -697,6 +697,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | Method + path | Status | Requirement |
 |---|---|---|
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
+| `POST /api/subscription/change-plan` | **implemented** | REQ-055 (tier up/down) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form) |
 
 They live in `src/routes/api.ts`.
@@ -728,6 +729,24 @@ writing to the DB) is out of scope here**. An upstream Stripe failure returns
 > exercised end to end (see `features/checkout.feature`) without a Stripe account.
 > Production **never** stubs, so a missing real key surfaces loudly. Verified by
 > `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios.
+
+**`POST /api/subscription/change-plan` (REQ-055).** Moves a monthly subscription up
+or down a tier. The body `{ subscriptionId, plan }` is validated zod-first (same
+style as checkout); an unknown `plan`, a missing/empty `subscriptionId`, or a `plan`
+the subscription is already on is rejected with **400**. The client wrapper
+`changeSubscriptionPlan` (`src/clients/stripe.ts`) retrieves the subscription — Stripe
+*adds* an item when the item id is omitted, so the existing item id is needed to swap
+in place — and calls `stripe.subscriptions.update`, swapping its single recurring item
+to the target plan's `STRIPE_PRICE_*` id (the same config-wired mapping the checkout
+endpoint uses) with `proration_behavior: 'create_prorations'`. **One Price per tier, so
+proration is Stripe's job, not ours** (REQ-055: Gift Aid is claimed on each actual
+charge, needing no special handling). It returns the updated subscription; an upstream
+Stripe failure returns **502**, matching the checkout endpoint's error shape. This is
+the **backend capability only** — the donor-facing triggers are out of scope here: the
+self-serve donor portal (REQ-061) and role-based admin-on-behalf (REQ-062). The offline
+stub implements `subscriptions.retrieve`/`update`, so the flow runs end to end without a
+Stripe account. Verified by `test/unit/change-plan.test.ts` (mocked SDK) +
+`features/change-plan.feature`.
 
 ### Donation data model (REQ-036 / REQ-037)
 

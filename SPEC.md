@@ -291,6 +291,10 @@ Implement donors, declarations, donations, claim_batches, users and audit_log wi
 
 Ask "are you donating as an individual or on behalf of a business?", routing individuals (including sole traders and partners) to the Gift Aid path and incorporated companies (Ltd, PLC, LLP) to the no-Gift-Aid path, with helper text that a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
 
+Tasks:
+- TASK-054 — Add the individual-or-business donor-type routing question to the donate give widget
+- TASK-055 — Persist donor_type (and business name) through the checkout session and webhook onto the donor record
+
 ### REQ-039 — Consent-based contact capture
 
 Capture email (optional and consent-based), full name (required), an optional display business name and an anonymous flag, and require monthly donors to confirm they are 18+. *Accept:* when no email is captured the platform sends nothing; anonymous donors are pulled through to payment but never shown on the public donors page.

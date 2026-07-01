@@ -264,6 +264,10 @@ Tasks:
 
 Build a single on-site platform where the donation flow, Stripe payments, subscriptions, declaration capture, refund logic and admin all share one data model and one set of Stripe webhooks; treat Gift Aid eligibility as a flag/relationship on each donation, never a bolted-on second system. *Accept:* no duplicate donor/donation stores; a refund updates the one record; a single webhook handler set that no other "module" duplicates.
 
+Tasks:
+- TASK-045 — Create the unified donation schema and transactional audit-log write helper
+- TASK-046 — Add the single Stripe webhook handler set that updates the one donation record
+
 ### REQ-037 — Core donation data model
 
 Implement donors, declarations, donations, claim_batches, users and audit_log with the invariant that a donation is claimable only when donor_type is individual, a valid active declaration covers it, and it is not (fully) refunded. *Accept:* company donations are always not-claimable/not_eligible; a donation enters at most one claim batch; every admin write appends an audit_log row.

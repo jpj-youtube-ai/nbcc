@@ -39,6 +39,8 @@
     <script defer src="assets/js/main.js"></script>
   </head>
   <body>
+    <!-- Skip link (REQ-032): first focusable element; jumps to <main id="main">. -->
+    <a class="skip-link" href="#main">Skip to content</a>
     <!-- Primary navigation (REQ-002). Footer slot below is REQ-003. -->
     <header class="nav" id="nav" data-region="nav">
       <div class="wrap">
@@ -58,10 +60,10 @@
       </div>
     </header>
 
-    <main class="site-main" id="main">
-      <section class="about-intro">
+    <main class="site-main" id="main" tabindex="-1">
+      <section class="about-intro" aria-labelledby="about-intro-heading">
         <span class="eyebrow">About us</span>
-        <h1>Powered by kindness, driven by community</h1>
+        <h1 id="about-intro-heading">Powered by kindness, driven by community</h1>
         <div class="rule"></div>
         <p class="lede">
           The Night Before Christmas Campaign (NBCC) is a volunteer run charity in

@@ -136,6 +136,30 @@ stack at ≤680px). The logo is the only `<img>` (social icons are inline SVG) a
 declares width/height + `loading="lazy"`, so the perf budget holds. Verified by
 `test/unit/footer.test.ts`.
 
+### Accessibility floor — skip link & landmarks (REQ-032)
+
+Every page's `<body>` opens with a **skip link** — `<a class="skip-link"
+href="#main">Skip to content</a>` — as its **first focusable element**, so the
+first Tab from page load lands on it. It's off-screen until focused (a
+token-only `.skip-link` rule near the focus/nav block: cream-on-maroon, sliding
+into the top-left over the fixed nav), then the global `:focus-visible` holly
+ring applies on top and the `prefers-reduced-motion` off-switch zeroes the
+slide. Activating it jumps to `<main id="main" tabindex="-1">`; the `tabindex`
+makes `<main>` a valid focus target so focus actually moves into the content
+(not just the scroll position).
+
+Each page carries the full semantic landmark set — `<header>`/`<nav>` (REQ-002),
+`<main id="main">`, content `<section>`s and `<footer>` (REQ-003) — and every
+content `<section>` is **named** via `aria-labelledby` pointing at its heading id
+(e.g. the four page-intro sections are named by their `<h1>`), so each surfaces
+as a labelled region. The one exception is the `.page-sections[data-region]`
+wrapper, an empty/programmatic JS-mount slot that is intentionally left unnamed
+(naming it would announce an empty or redundant region). Verified by
+`test/unit/skip-link.test.ts` (skip link + focusable `#main` + landmark set +
+section naming, per page). The reduced-motion half of REQ-032 lives in the
+**Motion system** section above; the wider WCAG 2.1 AA guard is REQ-032's
+follow-up task.
+
 ### SEO & social metadata
 
 Every page's `<head>` carries a unique set of SEO + social-share tags following

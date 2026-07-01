@@ -499,6 +499,32 @@ a {
   outline-offset: 2px;
 }
 
+/* ---- ACCESSIBILITY FLOOR (REQ-032) ----
+   Skip link: the first focusable element on every page. Off-screen until it
+   takes focus, then it drops into the top-left over the fixed nav so keyboard
+   and screen-reader users can jump straight to <main id="main">. Token-only
+   colours (cream on maroon); the global :focus-visible holly ring above applies
+   on top, and the prefers-reduced-motion block below zeroes the slide. */
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  transform: translateY(calc(-100% - 24px));
+  background: var(--maroon);
+  color: var(--cream);
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--shadow);
+  transition: transform 0.2s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 /* =================================================================
    NAV (TASK-007 / REQ-002) — ported from the NBCC baseline.
    Colour/layout tokens live in the canonical :root block above (REQ-004).

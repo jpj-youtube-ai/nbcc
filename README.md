@@ -157,8 +157,26 @@ wrapper, an empty/programmatic JS-mount slot that is intentionally left unnamed
 (naming it would announce an empty or redundant region). Verified by
 `test/unit/skip-link.test.ts` (skip link + focusable `#main` + landmark set +
 section naming, per page). The reduced-motion half of REQ-032 lives in the
-**Motion system** section above; the wider WCAG 2.1 AA guard is REQ-032's
-follow-up task.
+**Motion system** section above.
+
+**AA floor guard + manual audit.** `test/unit/accessibility.test.ts` enforces the
+*structural* WCAG 2.1 AA invariants across all four pages in CI: a skip link as
+the first tabbable element targeting an existing `#main`; exactly one `<main>`
+plus the header/nav/footer landmarks; non-empty `alt` on every `<img>`
+(decorative SVGs use `aria-hidden` instead); a `<label for>` on every form
+control with `required` fields also carrying `aria-required`; and the shared
+stylesheet's Holly Green `:focus-visible` ring + `prefers-reduced-motion`
+off-switch. As with the performance budget, this structural test is paired with a
+**full automated audit** that needs a running app + headless Chrome, so run it
+manually against the served pages (accessibility is one of Lighthouse's
+categories; `axe` is the alternative):
+
+```bash
+npm run build && node dist/index.js &     # serve on :3000
+npx lighthouse http://localhost:3000/ --only-categories=accessibility --view
+# or: npx @axe-core/cli http://localhost:3000/
+# repeat for /about-us, /donate, /contact
+```
 
 ### SEO & social metadata
 

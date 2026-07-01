@@ -95,6 +95,47 @@
           <h2 id="give-widget-heading">Make your gift</h2>
           <div class="card card-lg give-card">
             <div class="give-main">
+              <!-- DONOR TYPE (REQ-038): the individual/business routing question,
+                   the first choice in .give-main, above the once/monthly toggle,
+                   the tiers and the Gift Aid callout. Native radios (they keep the
+                   global :focus-visible ring, REQ-032) drive the Gift Aid path in
+                   main.js (initDonorType): choosing "A business" hides and unticks
+                   the #giftAid callout and reveals the optional business-name
+                   field; "Individual" restores the callout and hides the field.
+                   Individual is the default, so the Gift Aid path works without JS.
+                   A sole trader and business partners are individuals in law and
+                   keep Gift Aid; only an incorporated company (Ltd, PLC, LLP) takes
+                   the path with no Gift Aid. The optional business-name field is a
+                   Donors Page display label ONLY and NEVER switches the path (that
+                   is driven solely by this choice). donorType (and businessName
+                   when filled) fold into the REQ-028 startCheckout payload. Copy is
+                   dash-free and names "NBCC" in full (REQ-031). -->
+              <fieldset class="give-donor">
+                <legend class="give-donor-legend">Are you donating as an individual or on behalf of a business?</legend>
+                <div class="give-donor-options">
+                  <span class="give-donor-option">
+                    <input type="radio" id="donorIndividual" name="donorType" value="individual" checked />
+                    <label for="donorIndividual">Individual</label>
+                  </span>
+                  <span class="give-donor-option">
+                    <input type="radio" id="donorBusiness" name="donorType" value="business" />
+                    <label for="donorBusiness">A business</label>
+                  </span>
+                </div>
+                <p class="give-donor-help">
+                  A sole trader, and business partners, count as an individual in
+                  law and stay on the Gift Aid path. Only an incorporated company,
+                  such as a Ltd, PLC or LLP, uses the path with no Gift Aid.
+                </p>
+                <!-- Optional display label for the Donors Page, revealed by
+                     initDonorType only for business donors. It never switches the
+                     Gift Aid path. -->
+                <div class="give-business" id="businessNameField" hidden>
+                  <label for="businessName">Business name</label>
+                  <input type="text" id="businessName" name="businessName" class="give-business-input" autocomplete="organization" placeholder="Your business name" />
+                  <p class="give-business-help">Optional. We show this on our Donors Page. It never changes your Gift Aid path.</p>
+                </div>
+              </fieldset>
               <div class="give-toggle" role="group" aria-label="Choose how often to give">
                 <button type="button" class="give-mode" id="giveOnce" data-mode="once" aria-pressed="false" aria-controls="tiersOnce">Give once</button>
                 <button type="button" class="give-mode is-active" id="giveMonthly" data-mode="monthly" aria-pressed="true" aria-controls="tiersMonthly">Give monthly</button>

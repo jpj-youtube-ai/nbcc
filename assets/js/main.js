@@ -112,6 +112,54 @@
     activate(start.getAttribute("data-mode"));
   }
 
+  // Donor-type routing (REQ-038): the individual/business question at the top of
+  // the give widget. Native radios, progressive enhancement — individual is the
+  // default in the markup, so the Gift Aid path works without JS. Choosing "A
+  // business" hides and unticks the #giftAid callout (an incorporated company
+  // cannot claim Gift Aid) and reveals the optional business-name field;
+  // "Individual" restores the callout and hides the field. The business-name field
+  // is a Donors Page display label ONLY and never switches the path — the path is
+  // driven solely by this choice. On wiring, the control is marked data-ready so
+  // startCheckout knows the enhancement is active and folds donorType into the
+  // REQ-028 payload (without JS it emits the base { mode, plan, amount, giftAid }).
+  function initDonorType(doc) {
+    var control = doc.querySelector(".give-donor");
+    if (!control) return;
+    var radios = Array.prototype.slice.call(
+      control.querySelectorAll('input[name="donorType"]'),
+    );
+    if (!radios.length) return;
+
+    var giftAidRegion = doc.querySelector(".giftaid");
+    var giftAidBox = doc.getElementById("giftAid");
+    var businessField = doc.getElementById("businessNameField");
+
+    function apply(type) {
+      var isBusiness = type === "business";
+      // Companies take the no Gift Aid path: hide the callout and clear any tick.
+      if (giftAidRegion) giftAidRegion.hidden = isBusiness;
+      if (isBusiness && giftAidBox) giftAidBox.checked = false;
+      // The business-name field is only relevant to business donors.
+      if (businessField) businessField.hidden = !isBusiness;
+    }
+
+    radios.forEach(function (btn) {
+      btn.addEventListener("change", function () {
+        if (btn.checked) apply(btn.value);
+      });
+    });
+
+    // Sync to the radio marked checked in the markup (individual by default).
+    var start =
+      radios.filter(function (r) {
+        return r.checked;
+      })[0] || radios[0];
+    apply(start.value);
+
+    // Signal the enhancement is wired; startCheckout only folds donorType in then.
+    control.dataset.ready = "true";
+  }
+
   // Contact form (REQ-027): client-side validation + submit handling for the
   // enquiry form. Progressive enhancement — without JS the form posts to
   // /api/contact (REQ-030). With JS this validates the required fields and the
@@ -275,6 +323,19 @@
       giftAid: !!(giftAidEl && giftAidEl.checked),
     };
 
+    // Donor-type routing (REQ-038): once initDonorType has wired the control
+    // (data-ready), fold the selected donorType in, plus the optional business
+    // name when the donor filled it. The business name is a Donors Page display
+    // label only and never affects the Gift Aid path.
+    var donorControl = doc.querySelector(".give-donor[data-ready]");
+    if (donorControl) {
+      var donorRadio = donorControl.querySelector('input[name="donorType"]:checked');
+      if (donorRadio) payload.donorType = donorRadio.value;
+    }
+    var businessNameEl = doc.getElementById("businessName");
+    var businessName = businessNameEl ? (businessNameEl.value || "").trim() : "";
+    if (businessName) payload.businessName = businessName;
+
     // Preview: show the payload a live checkout would send to the backend.
     function preview() {
       try {
@@ -329,6 +390,7 @@
       initNav,
       initReveal,
       initGiveToggle,
+      initDonorType,
       initContactForm,
       startCheckout,
       initCheckout,
@@ -337,6 +399,7 @@
     initNav(document, window);
     initReveal(document, window);
     initGiveToggle(document);
+    initDonorType(document);
     initContactForm(document, window);
     initCheckout(document, window);
   }

@@ -541,6 +541,33 @@ emphasis is `--maroon` and the tick `accent-color` is `--crimson`, on a
 
 Verified by `test/unit/gift-aid.test.ts`.
 
+### Donor-type routing (REQ-038)
+
+At the top of the give-card's `.give-main` column, above the once/monthly toggle,
+the tiers and the Gift Aid callout, a `.give-donor` `<fieldset>` (`DONOR TYPE` CSS
+block) asks **"Are you donating as an individual or on behalf of a business?"** —
+two native radios (`#donorIndividual` / `#donorBusiness`, each with a real
+`<label for>`, REQ-032) defaulting to **individual**, so the Gift Aid path works
+without JS. Helper text explains a **sole trader** and **business partners** are
+individuals in law and keep Gift Aid, while only an **incorporated company (Ltd,
+PLC, LLP)** takes the path with no Gift Aid. An optional business-name field
+(`#businessName`, a real `<label for>`) is a **Donors Page display label only** and
+**never** switches the Gift Aid path.
+
+`initDonorType` in `assets/js/main.js` (exported and called alongside
+`initGiveToggle`/`initCheckout`) wires the radios: choosing **A business** hides
+and unticks the `#giftAid` callout (a company cannot claim Gift Aid) and reveals
+the business-name field; **Individual** restores the callout and hides the field.
+Because the callout is `display:flex`, the `DONOR TYPE` block adds
+`.giftaid[hidden]` / `.give-business[hidden]` `display:none` rules so the bare
+`hidden` attribute actually collapses them. On wiring, the control is marked
+`data-ready`, so `startCheckout` folds **`donorType`** (and **`businessName`** when
+filled) into the REQ-028 payload only once the enhancement is active — the base
+`{ mode, plan, amount, giftAid }` contract is unchanged without JS. Token-only
+colours (slate body, maroon legend, crimson accents; the `brand-colours` guard
+forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
+`test/unit/give-donor-type.test.ts`.
+
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE
@@ -683,7 +710,9 @@ other inits; the controls are bound on load by `initCheckout`, which targets
 those attributes plus the `#giftAid` checkbox (REQ-023) into a single
 `{ mode, plan, amount, giftAid }` payload (`plan`/`amount` normalise to `null`
 when empty; the choose-your-own amount is built from the `#customAmount` value ×
-100). It then mirrors `initContactForm`'s best-effort pattern: in production it
+100) — and, once the donor-type control (REQ-038) is wired, folds in
+**`donorType`** and an optional **`businessName`** (see **Donor-type routing**
+above). It then mirrors `initContactForm`'s best-effort pattern: in production it
 POSTs the payload to **`/api/checkout-session`** and redirects to the returned
 Stripe `{ url }`; with no working backend (the current `501` stub) it degrades to
 **showing the payload** (an `alert`, the preview). The buttons are native

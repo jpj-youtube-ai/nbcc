@@ -17,6 +17,7 @@ const PAGES = [
   { file: "about.html", label: "About", url: `${BASE}/about-us` },
   { file: "donate.html", label: "Donate", url: `${BASE}/donate` },
   { file: "contact.html", label: "Contact", url: `${BASE}/contact` },
+  { file: "supporters.html", label: "Supporters", url: `${BASE}/supporters` },
 ] as const;
 
 function read(file: string): string {
@@ -102,7 +103,7 @@ describe.each(PAGES)("$file metadata", ({ file, label, url }) => {
   });
 });
 
-describe("the four pages together (no duplicated metadata)", () => {
+describe("the five pages together (no duplicated metadata)", () => {
   const htmls = PAGES.map(({ file }) => read(file));
 
   const distinct = (values: (string | undefined)[]) => {

@@ -1,5 +1,5 @@
 Feature: Marketing site served by the app
-  The service serves the four static pages at their clean URLs and exposes the
+  The service serves the five static pages at their clean URLs and exposes the
   two marketing API endpoints (stubbed until REQ-029 / REQ-030).
 
   Scenario Outline: clean URLs serve the right page
@@ -8,11 +8,12 @@ Feature: Marketing site served by the app
     And the response body should contain "<marker>"
 
     Examples:
-      | path      | marker                  |
-      | /         | Christmas Eve           |
-      | /about-us | About                   |
-      | /donate   | Donate                  |
-      | /contact  | Contact                 |
+      | path        | marker        |
+      | /           | Christmas Eve |
+      | /about-us   | About         |
+      | /donate     | Donate        |
+      | /contact    | Contact       |
+      | /supporters | Supporters    |
 
   Scenario Outline: raw .html paths canonicalise to the clean URL
     When I GET "<path>" without following redirects
@@ -20,11 +21,12 @@ Feature: Marketing site served by the app
     And the response should redirect to "<location>"
 
     Examples:
-      | path          | location  |
-      | /index.html   | /         |
-      | /about.html   | /about-us |
-      | /donate.html  | /donate   |
-      | /contact.html | /contact  |
+      | path             | location    |
+      | /index.html      | /           |
+      | /about.html      | /about-us   |
+      | /donate.html     | /donate     |
+      | /contact.html    | /contact    |
+      | /supporters.html | /supporters |
 
   Scenario: the shared stylesheet is served from /assets
     When I GET "/assets/css/styles.css"

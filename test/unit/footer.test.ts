@@ -15,7 +15,7 @@ const footerOf = (html: string) =>
 const exploreList = (footer: string) =>
   footer.match(/Explore<\/h4>[\s\S]*?<ul>([\s\S]*?)<\/ul>/i)?.[1] ?? "";
 
-const PAGES = ["index.html", "about.html", "donate.html", "contact.html"];
+const PAGES = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html"];
 
 describe.each(PAGES)("%s footer", (file) => {
   const footer = footerOf(read(file));
@@ -38,9 +38,9 @@ describe.each(PAGES)("%s footer", (file) => {
     expect(brand).toMatch(/alt="[^"]+"/);
   });
 
-  it("lists the four Explore links by clean URL", () => {
+  it("lists the five Explore links by clean URL", () => {
     const list = exploreList(footer);
-    for (const href of ["/", "/about-us", "/donate", "/contact"]) {
+    for (const href of ["/", "/about-us", "/donate", "/contact", "/supporters"]) {
       expect(list).toContain(`href="${href}"`);
     }
   });
@@ -58,7 +58,7 @@ describe.each(PAGES)("%s footer", (file) => {
   });
 });
 
-describe("the footer is identical across all four pages", () => {
+describe("the footer is identical across all five pages", () => {
   it("is byte-identical", () => {
     const footers = PAGES.map((f) => footerOf(read(f)));
     expect(footers.every((f) => f.length > 0)).toBe(true);

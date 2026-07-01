@@ -1729,3 +1729,20 @@ a.contact-value:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   SUPPORTERS PAGE (REQ-035) — supporters.html. A centred page intro
+   mirroring .about-intro/.donate-intro/.contact-intro; reuses .eyebrow /
+   base h1 / .rule / .lede and the tokens. The tiered supporters list that
+   fills the page-sections slot below lands in TASK-023.
+   ================================================================= */
+.supporters-intro {
+  text-align: center;
+  max-width: 760px;
+  margin-inline: auto;
+  padding-block: clamp(8px, 3vw, 40px);
+}
+.supporters-intro .rule,
+.supporters-intro .lede {
+  margin-inline: auto;
+}

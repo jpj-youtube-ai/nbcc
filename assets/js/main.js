@@ -185,6 +185,42 @@
     control.dataset.ready = "true";
   }
 
+  // Gift Aid declaration capture (REQ-043): the HMRC declaration fieldset below the Gift
+  // Aid callout. Progressive enhancement — the fields are plain inputs that work without
+  // JS. This wires the non-UK checkbox (a donor outside the UK has no UK postcode, so it
+  // hides, disables and un-requires the postcode) and marks the fieldset data-ready, so
+  // startCheckout folds a `declaration` object into the payload — but ONLY when Gift Aid
+  // is opted in, since that is the only time a declaration is made. Without JS the base
+  // { mode, plan, amount, giftAid } contract is unchanged.
+  function initDeclarationCapture(doc) {
+    var control = doc.querySelector(".give-declaration");
+    if (!control) return;
+
+    var nonUkBox = doc.getElementById("declNonUk");
+    var postcodeField = doc.getElementById("declPostcodeField");
+    var postcodeInput = doc.getElementById("declPostcode");
+
+    function applyNonUk() {
+      var nonUk = !!(nonUkBox && nonUkBox.checked);
+      if (postcodeField) postcodeField.hidden = nonUk;
+      if (postcodeInput) {
+        postcodeInput.disabled = nonUk;
+        if (nonUk) {
+          postcodeInput.removeAttribute("required");
+          postcodeInput.removeAttribute("aria-required");
+        } else {
+          postcodeInput.setAttribute("required", "");
+          postcodeInput.setAttribute("aria-required", "true");
+        }
+      }
+    }
+
+    if (nonUkBox) nonUkBox.addEventListener("change", applyNonUk);
+    applyNonUk(); // sync to the shipped state (UK by default)
+
+    control.dataset.ready = "true";
+  }
+
   // Contact form (REQ-027): client-side validation + submit handling for the
   // enquiry form. Progressive enhancement — without JS the form posts to
   // /api/contact (REQ-030). With JS this validates the required fields and the
@@ -383,6 +419,30 @@
       }
     }
 
+    // Gift Aid declaration (REQ-043): once initDeclarationCapture has wired the fieldset
+    // (data-ready), fold the captured HMRC declaration in — but ONLY when the donor opted
+    // into Gift Aid, since a declaration is made only then (mirrors the donorType gate). A
+    // non-UK donor omits the postcode; the optional title is folded in only when filled.
+    var declControl = doc.querySelector(".give-declaration[data-ready]");
+    if (declControl && payload.giftAid) {
+      var declVal = function (id) {
+        var el = doc.getElementById(id);
+        return el ? (el.value || "").trim() : "";
+      };
+      var declNonUk = !!(doc.getElementById("declNonUk") && doc.getElementById("declNonUk").checked);
+      var declaration = {
+        firstName: declVal("declFirstName"),
+        lastName: declVal("declLastName"),
+        houseNameNumber: declVal("declHouse"),
+        address: declVal("declAddress"),
+        nonUk: declNonUk,
+      };
+      var declTitle = declVal("declTitle");
+      if (declTitle) declaration.title = declTitle;
+      if (!declNonUk) declaration.postcode = declVal("declPostcode");
+      payload.declaration = declaration;
+    }
+
     // Preview: show the payload a live checkout would send to the backend.
     function preview() {
       try {
@@ -439,6 +499,7 @@
       initGiveToggle,
       initDonorType,
       initContactCapture,
+      initDeclarationCapture,
       initContactForm,
       startCheckout,
       initCheckout,
@@ -449,6 +510,7 @@
     initGiveToggle(document);
     initDonorType(document);
     initContactCapture(document);
+    initDeclarationCapture(document);
     initContactForm(document, window);
     initCheckout(document, window);
   }

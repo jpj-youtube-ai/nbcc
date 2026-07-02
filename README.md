@@ -603,6 +603,26 @@ Token-only colours (slate body, maroon legend, crimson accents; the `brand-colou
 guard forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-contact-capture.test.ts`.
 
+### Gift Aid declaration capture (REQ-043)
+
+Below the Gift Aid callout, a `.give-declaration` `<fieldset>` (`GIFT AID DECLARATION`
+markup) captures the HMRC declaration: an optional `title` and a **required** first name
+(`#declFirstName`), last name (`#declLastName`) and house name/number (`#declHouse`) — the
+HMRC matching keys, all `required` + `aria-required` — plus the **one** home address
+(`#declAddress`, no work / c-o address) and a `postcode` (`#declPostcode`). A non-UK donor
+checkbox (`#declNonUk`, Channel Islands / Isle of Man) drives `initDeclarationCapture`,
+which **hides, disables and un-requires** the postcode (a non-UK declaration omits it). Every
+field has a real `<label for>` (REQ-032). `initDeclarationCapture` marks the fieldset
+`data-ready`, so `startCheckout` folds a **`declaration`** object (`{ title?, firstName,
+lastName, houseNameNumber, address, postcode?, nonUk }`) into the REQ-028 payload **only when
+`#giftAid` is checked** (mirroring the `donorType` gate) — a declaration is made only with
+Gift Aid, and without JS the base `{ mode, plan, amount, giftAid }` contract is unchanged.
+The field validation + declarations-row builder it feeds is `src/declarations/fields.ts`
+(REQ-043 · TASK-061); threading it through the checkout endpoint and persisting a
+`declarations` row via the webhook is TASK-063. Token-only colours (slate body, maroon
+legend, crimson accents). Dash-free copy, "NBCC" (REQ-031). Verified by
+`test/unit/declaration-capture.test.ts`.
+
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE

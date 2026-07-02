@@ -334,6 +334,11 @@ Tasks:
 
 Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode, with a non-UK donor flag (Channel Islands / Isle of Man) that omits the postcode. *Accept:* field-level validation enforces postcode format and a required house number; only a home address is accepted (no work or c/o addresses).
 
+Tasks:
+- TASK-061 — Add declaration field capture validation and row-builder module
+- TASK-062 — Add Gift Aid declaration capture fields to the give widget and fold into the checkout payload
+- TASK-063 — Thread declaration fields through the checkout endpoint and persist them onto the declarations table via the webhook
+
 ### REQ-044 — Declaration scope
 
 Capture scope as this-donation-only or all-donations (the past four years plus present and future), defaulting monthly to enduring. *Accept:* declaration_scope is persisted and an enduring declaration covers every future charge without re-asking.

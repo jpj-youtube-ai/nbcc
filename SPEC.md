@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (51)
+## Shipped (52)
 
 ### REQ-001 — Multi-page site structure
 
@@ -370,6 +370,14 @@ Tasks:
 - TASK-075 — Send the auto-email (with QR/short-link fallback) after a contactless charge is ingested
 - TASK-076 — Build the public Gift Aid declaration completion page and endpoint for the emailed/QR link
 
+### REQ-050 — GASDS for small contactless gifts
+
+Claim small in-person gifts of £30 or less that carry no declaration via GAseparately within its limits (up to £8,000 of small donations a year, a £2,000 top-up cap, capped at ten times the Gift Aidclaimed that year). *Accept:* gasds_eligible is flagged and the GASDS pool is tracked independently of declared claims.
+
+Tasks:
+- TASK-077 — Add gasds_eligible column and a pure GASDS eligibility/cap calculator
+- TASK-078 — Flag gasds_eligible on card-present ingestion and add an annual GASDS pool read
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -386,15 +394,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (14)
-
-### REQ-050 — GASDS for small contactless gifts
-
-Claim small in-person gifts of £30 or less that carry no declaration via GAseparately within its limits (up to £8,000 of small donations a year, a £2,000 top-up cap, capped at ten times the Gift Aidclaimed that year). *Accept:* gasds_eligible is flagged and the GASDS pool is tracked independently of declared claims.
-
-Tasks:
-- TASK-077 — Add gasds_eligible column and a pure GASDS eligibility/cap calculator
-- TASK-078 — Flag gasds_eligible on card-present ingestion and add an annual GASDS pool read
+## Planned (13)
 
 ### REQ-051 — Partnership donations
 

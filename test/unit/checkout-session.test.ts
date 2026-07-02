@@ -290,6 +290,34 @@ describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", 
   });
 });
 
+describe("POST /api/checkout-session — declaration scope + currency (REQ-041 / TASK-060)", () => {
+  it("stamps metadata.declarationScope='enduring' for a monthly gift (pairs with an enduring declaration)", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true });
+    expect(lastParams().metadata.declarationScope).toBe("enduring");
+  });
+
+  it("stamps metadata.declarationScope='this_donation' for a one-off gift", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    expect(lastParams().metadata.declarationScope).toBe("this_donation");
+  });
+
+  it("stamps the declaration scope regardless of the Gift Aid opt-in", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true });
+    expect(lastParams().metadata.declarationScope).toBe("enduring");
+  });
+
+  it("captures the frequency (mode) and currency explicitly on the session (REQ-041)", async () => {
+    // A one-off carries its amount + GBP currency inline on the session price; the
+    // frequency rides on metadata.mode. (A monthly gift's currency lives on its Stripe
+    // recurring price.)
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const p = lastParams();
+    expect(p.metadata.mode).toBe("once");
+    expect(p.line_items[0].price_data.currency).toBe("gbp");
+    expect(p.line_items[0].price_data.unit_amount).toBe(5000);
+  });
+});
+
 describe("POST /api/checkout-session — invalid bodies return 400", () => {
   it.each([
     ["monthly without a plan", { mode: "monthly", plan: null, amount: 1000, giftAid: false }],

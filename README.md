@@ -792,6 +792,14 @@ version id + full snapshot from `selectDeclarationWording({ mode, scope })` in
 `src/declarations/wording.ts` — the all-donations/enduring statement for a monthly gift,
 the single-donation statement for a one-off), so the REQ-036 webhook can persist them
 onto the immutable declaration. A `giftAid=false` gift stamps **no** wording metadata.
+Independently of Gift Aid, **every** session also carries `metadata.declarationScope`
+— `enduring` for a monthly gift, `this_donation` for a one-off (REQ-041 · TASK-060) —
+the concrete "monthly pairs with an enduring declaration" default the full
+declaration-capture flow (REQ-043/044) will build on. It is derived once via
+`declarationScopeForMode` in `src/declarations/wording.ts` and reused to pick the
+matching verbatim wording, so the mode→scope decision is never duplicated. The
+persisted donation itself captures the gift's **amount**, **frequency** (`mode`) and
+**currency** (defaulting to `GBP`) explicitly (REQ-041).
 **Durable storage of the declaration (a Stripe webhook writing to the DB) — and the
 `declarations` row itself (name/address are not captured yet, REQ-043/REQ-046) — is out
 of scope here**; the consent binding lives on the session metadata. The `donorType` and

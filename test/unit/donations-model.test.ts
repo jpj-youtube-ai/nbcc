@@ -175,3 +175,31 @@ describe("isPubliclyListable (REQ-039 — anonymous donors are never shown publi
     expect(isPubliclyListable({})).toBe(true);
   });
 });
+
+describe("REQ-041 — amount, frequency and currency are captured on the donation", () => {
+  it("carries amount_pence, mode (frequency) and an explicit GBP currency onto the row", () => {
+    const row = buildDonationRow(
+      donationInputSchema.parse({
+        donorType: "individual",
+        mode: "monthly",
+        plan: "gold",
+        amountPence: 5000,
+        giftAid: false,
+      }),
+      99,
+    );
+    expect(row.amount_pence).toBe(5000);
+    expect(row.mode).toBe("monthly"); // frequency
+    expect(row.currency).toBe("GBP"); // captured explicitly, defaulting to GBP
+  });
+
+  it("preserves a one-off's amount and defaults its currency to GBP", () => {
+    const row = buildDonationRow(
+      donationInputSchema.parse({ donorType: "individual", mode: "once", amountPence: 2500, giftAid: false }),
+      99,
+    );
+    expect(row.amount_pence).toBe(2500);
+    expect(row.mode).toBe("once");
+    expect(row.currency).toBe("GBP");
+  });
+});

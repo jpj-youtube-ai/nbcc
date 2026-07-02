@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (45)
+## Shipped (46)
 
 ### REQ-001 — Multi-page site structure
 
@@ -321,6 +321,14 @@ Tasks:
 - TASK-062 — Add Gift Aid declaration capture fields to the give widget and fold into the checkout payload
 - TASK-063 — Thread declaration fields through the checkout endpoint and persist them onto the declarations table via the webhook
 
+### REQ-044 — Declaration scope
+
+Capture scope as this-donation-only or all-donations (the past four years plus present and future), defaulting monthly to enduring. *Accept:* declaration_scope is persisted and an enduring declaration covers every future charge without re-asking.
+
+Tasks:
+- TASK-064 — Add an explicit this-donation-only / all-donations scope choice to the declaration fieldset
+- TASK-065 — Let an explicit declaration scope override the mode-derived default through checkout and persistence
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -337,15 +345,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (20)
-
-### REQ-044 — Declaration scope
-
-Capture scope as this-donation-only or all-donations (the past four years plus present and future), defaulting monthly to enduring. *Accept:* declaration_scope is persisted and an enduring declaration covers every future charge without re-asking.
-
-Tasks:
-- TASK-064 — Add an explicit this-donation-only / all-donations scope choice to the declaration fieldset
-- TASK-065 — Let an explicit declaration scope override the mode-derived default through checkout and persistence
+## Planned (19)
 
 ### REQ-045 — Benefit tracking and caps
 

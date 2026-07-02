@@ -383,6 +383,18 @@ describe("POST /api/checkout-session — Gift Aid declaration (REQ-043 / TASK-06
     expect(md.declFirstName).toBe("Jean");
   });
 
+  it("accepts a declaration that carries an explicit scope (the give widget now folds it in, TASK-064)", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      declaration: { ...decl, scope: "this_donation" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(create).toHaveBeenCalledOnce();
+  });
+
   it("stamps no declaration metadata when Gift Aid is not opted in", async () => {
     await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
     expect(lastParams().metadata.declFirstName).toBeUndefined();

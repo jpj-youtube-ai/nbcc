@@ -1520,6 +1520,13 @@ a {
   line-height: 1.5;
   color: var(--slate-soft);
 }
+/* Heading for the declaration-scope radio group (REQ-044); slate, like a field label. */
+.give-scope-legend {
+  display: block;
+  font-weight: 600;
+  color: var(--slate);
+  margin-bottom: 6px;
+}
 .give-field {
   margin-bottom: 14px;
 }

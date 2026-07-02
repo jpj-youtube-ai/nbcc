@@ -35,7 +35,11 @@ async function postWebhook(payload, signature) {
 // Fresh start for the tagged scenarios: remove any test donations/donors from a
 // previous run so the "exactly 1" counts are deterministic.
 Before({ tags: "@stripe-webhook" }, async function () {
-  await pool.query("DELETE FROM donations WHERE stripe_payment_intent_id LIKE 'pi_bdd_%'");
+  // Also match by subscription id: the monthly parent donation has a NULL payment
+  // intent, so it must be cleared via its subscription id before the donor delete.
+  await pool.query(
+    "DELETE FROM donations WHERE stripe_payment_intent_id LIKE 'pi_bdd_%' OR stripe_subscription_id LIKE 'sub_bdd_%'",
+  );
   await pool.query("DELETE FROM donors WHERE email LIKE '%bdd@example.com'");
 });
 
@@ -69,6 +73,18 @@ Then(
       [paymentIntent],
     );
     assert.equal(r.rows[0].n, count);
+  },
+);
+
+Then(
+  "the donation with payment intent {string} should have amount {int}",
+  async function (paymentIntent, amount) {
+    const r = await pool.query(
+      "SELECT amount_pence FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].amount_pence, amount);
   },
 );
 

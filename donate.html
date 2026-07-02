@@ -279,6 +279,51 @@
                 </label>
               </div>
               <!-- GIFT AID CALLOUT END (REQ-023) -->
+              <!-- GIFT AID DECLARATION (REQ-043): the HMRC declaration details, captured
+                   only when the donor opts into Gift Aid above (that is the only time a
+                   declaration is made). Placed right after the GIFT AID CALLOUT because it
+                   belongs to that opt-in. Required first/last name and house name/number
+                   are the HMRC matching keys; the ONE home address and a UK postcode
+                   complete it (no work or c/o address). A donor outside the UK (Channel
+                   Islands or Isle of Man) ticks the box, which initDeclarationCapture uses
+                   to hide, disable and un-require the postcode (a non-UK declaration omits
+                   it). Every field is a real <label for> (REQ-032). initDeclarationCapture
+                   marks the fieldset data-ready; startCheckout folds a `declaration` object
+                   into the REQ-028 payload ONLY when #giftAid is checked (mirroring
+                   donorType). Without JS the base { mode, plan, amount, giftAid } contract
+                   is unchanged. Copy is dash-free and names "NBCC" (REQ-031). -->
+              <fieldset class="give-declaration" id="declarationCapture">
+                <legend class="give-declaration-legend">Your Gift Aid declaration</legend>
+                <p class="give-declaration-help">We ask for these only if you add Gift Aid, so HMRC can match your donation to your tax record.</p>
+                <div class="give-field">
+                  <label for="declTitle">Title <span class="give-optional">(optional)</span></label>
+                  <input type="text" id="declTitle" name="title" class="give-field-input" autocomplete="honorific-prefix" placeholder="Mr, Ms, Dr" />
+                </div>
+                <div class="give-field">
+                  <label for="declFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="declFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="declLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="declLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="declHouse">House name or number <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="declHouse" name="houseNameNumber" class="give-field-input" required aria-required="true" placeholder="e.g. 12 or Rose Cottage" />
+                </div>
+                <div class="give-field">
+                  <label for="declAddress">Home address <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="declAddress" name="address" class="give-field-input" autocomplete="street-address" required aria-required="true" placeholder="Street and town" />
+                </div>
+                <div class="give-field" id="declPostcodeField">
+                  <label for="declPostcode">Postcode <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="declPostcode" name="postcode" class="give-field-input" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" />
+                </div>
+                <label class="give-check" for="declNonUk">
+                  <input type="checkbox" id="declNonUk" name="nonUk" class="give-check-box" />
+                  <span class="give-check-text">I live outside the UK (Channel Islands or Isle of Man), so I have no UK postcode.</span>
+                </label>
+              </fieldset>
             </div>
             <!-- Holly Green side panel (REQ-024): the inverted cream-on-holly
                  "where your gift goes" content. Cream tints only (never holly/tan

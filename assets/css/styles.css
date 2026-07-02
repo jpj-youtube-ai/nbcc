@@ -1495,20 +1495,30 @@ a {
    it (a bare hidden attribute cannot hide a flex box) — the same
    pattern as .giftaid[hidden].
    ================================================================= */
-.give-contact {
+.give-contact,
+.give-declaration {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: clamp(16px, 2.5vw, 22px);
   margin-bottom: clamp(18px, 3vw, 28px);
   background: var(--card);
 }
-.give-contact-legend {
+.give-contact-legend,
+.give-declaration-legend {
   font-family: var(--font-head);
   font-weight: 700;
   color: var(--maroon);
   font-size: 1.05rem;
   padding: 0;
   margin-bottom: 12px;
+}
+/* Intro line under the Gift Aid declaration legend (REQ-043); slate-soft, like the
+   donor-type helper — never holly/tan text, so the brand-colours guard holds. */
+.give-declaration-help {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--slate-soft);
 }
 .give-field {
   margin-bottom: 14px;

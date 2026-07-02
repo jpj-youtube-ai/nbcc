@@ -327,6 +327,9 @@ Tasks:
 
 Let the donor pick monthly (a Stripe subscription) or one-off (a single charge) and either a preset tier (£10/£25/£50/£100) or a custom GBP amount, pairing monthly with an enduring declaration. *Accept:* amount, frequency and currency are captured; monthly defaults the declaration scope to enduring.
 
+Tasks:
+- TASK-060 — Capture explicit frequency/currency on checkout and default declaration scope to enduring for monthly gifts
+
 ### REQ-043 — Declaration field capture
 
 Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode, with a non-UK donor flag (Channel Islands / Isle of Man) that omits the postcode. *Accept:* field-level validation enforces postcode format and a required house number; only a home address is accepted (no work or c/o addresses).

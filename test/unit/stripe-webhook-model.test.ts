@@ -9,6 +9,7 @@ import {
   refundedPenceFromDispute,
   claimStatusAfterRefund,
 } from "../../src/db/stripe-webhook-model";
+import { buildDonationRow } from "../../src/db/donations-model";
 
 // TASK-046 (REQ-036): the PURE event→record mapping for the single Stripe webhook
 // handler. No pool/config/network — importing this touches only the pure donation
@@ -74,6 +75,61 @@ describe("donationFromCheckoutSession", () => {
     expect(donation.plan).toBe("gold");
     expect(donation.stripeSubscriptionId).toBe("sub_test_1");
     expect(donation.stripePaymentIntentId).toBeNull();
+  });
+});
+
+describe("donationFromCheckoutSession — donor-type routing (REQ-038)", () => {
+  it("maps metadata.donorType='company' and metadata.businessName onto the donation + donor", () => {
+    const { donor, donation } = donationFromCheckoutSession(
+      session({
+        metadata: {
+          mode: "once",
+          plan: "",
+          giftAid: "false",
+          donorType: "company",
+          businessName: "Acme Ltd",
+        },
+        customer_details: { name: "Ada Contact", email: "ada@example.com" },
+      }),
+    );
+    expect(donation.donorType).toBe("company");
+    expect(donor.businessName).toBe("Acme Ltd");
+  });
+
+  it("defaults to an individual donor when metadata omits donorType (no-JS base contract)", () => {
+    const { donation } = donationFromCheckoutSession(
+      session({ metadata: { mode: "once", plan: "", giftAid: "true" } }),
+    );
+    expect(donation.donorType).toBe("individual");
+  });
+
+  it("leaves businessName null when metadata carries no business name", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({ metadata: { mode: "once", plan: "", giftAid: "true", donorType: "individual" } }),
+    );
+    expect(donor.businessName ?? null).toBeNull();
+  });
+
+  it("persists a company donation as gift_aid=false / not_eligible through buildDonationRow (REQ-036/REQ-053)", () => {
+    // The end-to-end mapping the webhook performs: metadata → donation input →
+    // donations row. donor_type is the single field driving Gift Aid suppression;
+    // no second store. Even though this company session carries giftAid metadata,
+    // buildDonationRow forces the flag off and derives not_eligible.
+    const { donation } = donationFromCheckoutSession(
+      session({
+        metadata: {
+          mode: "once",
+          plan: "",
+          giftAid: "true", // a stray flag on a company session must not survive
+          donorType: "company",
+          businessName: "Acme Ltd",
+        },
+      }),
+    );
+    const row = buildDonationRow(donation, 42);
+    expect(row.gift_aid).toBe(false);
+    expect(row.declaration_id).toBeNull();
+    expect(row.claim_status).toBe("not_eligible");
   });
 });
 

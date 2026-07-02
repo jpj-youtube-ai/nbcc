@@ -111,3 +111,55 @@ Then(
     assert.equal(r.rows[0].gift_aid, true);
   },
 );
+
+Then(
+  "the donation with payment intent {string} should have gift aid false",
+  async function (paymentIntent) {
+    const r = await pool.query(
+      "SELECT gift_aid FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].gift_aid, false);
+  },
+);
+
+Then(
+  "the donation with payment intent {string} should have claim status {string}",
+  async function (paymentIntent, claimStatus) {
+    const r = await pool.query(
+      "SELECT claim_status FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].claim_status, claimStatus);
+  },
+);
+
+// donor_type / business_name live on the donor the donation points to (one model),
+// so these join donations → donors to assert the persisted donor record (REQ-038).
+Then(
+  "the donor for payment intent {string} should have donor type {string}",
+  async function (paymentIntent, donorType) {
+    const r = await pool.query(
+      `SELECT dn.donor_type FROM donations d JOIN donors dn ON dn.id = d.donor_id
+        WHERE d.stripe_payment_intent_id = $1`,
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donor for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].donor_type, donorType);
+  },
+);
+
+Then(
+  "the donor for payment intent {string} should have business name {string}",
+  async function (paymentIntent, businessName) {
+    const r = await pool.query(
+      `SELECT dn.business_name FROM donations d JOIN donors dn ON dn.id = d.donor_id
+        WHERE d.stripe_payment_intent_id = $1`,
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donor for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].business_name, businessName);
+  },
+);

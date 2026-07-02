@@ -3,6 +3,7 @@ import {
   donationInputSchema,
   buildDonationRow,
   deriveClaimStatus,
+  batchAssignmentBlock,
 } from "../../src/db/donations-model";
 
 // TASK-045 (REQ-036/REQ-037): the pure field-mapping / claim-eligibility logic of
@@ -131,5 +132,31 @@ describe("buildDonationRow", () => {
       donorId,
     );
     expect(row.currency).toBe("GBP");
+  });
+});
+
+describe("batchAssignmentBlock (REQ-037 — the claim invariant + one batch)", () => {
+  it("returns null (assignable) for an eligible donation not yet in a batch", () => {
+    expect(batchAssignmentBlock({ claimStatus: "eligible", claimBatchId: null })).toBeNull();
+  });
+
+  it("blocks a donation already in a batch as 'already_batched' (one-batch-per-donation)", () => {
+    // A batched donation carries claim_status 'batched' AND a non-null claim_batch_id;
+    // the non-null FK is checked first, so re-assignment is reported as already_batched.
+    expect(batchAssignmentBlock({ claimStatus: "batched", claimBatchId: 7 })).toBe("already_batched");
+  });
+
+  it("blocks a claim-ineligible donation as 'not_eligible' even when unbatched", () => {
+    expect(batchAssignmentBlock({ claimStatus: "not_eligible", claimBatchId: null })).toBe(
+      "not_eligible",
+    );
+  });
+
+  it("blocks an eligible donation that somehow already has a batch id as 'already_batched'", () => {
+    // The FK guard wins over the status guard, so a stale eligible+batched row still can't
+    // be double-assigned.
+    expect(batchAssignmentBlock({ claimStatus: "eligible", claimBatchId: 3 })).toBe(
+      "already_batched",
+    );
   });
 });

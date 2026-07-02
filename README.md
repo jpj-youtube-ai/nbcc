@@ -825,8 +825,8 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
-claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`)
-— no pool/config/clock, so it is unit-tested DB-free
+claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,
+`batchAssignmentBlock`) — no pool/config/clock, so it is unit-tested DB-free
 (`test/unit/donations-model.test.ts`). `src/db/donations.ts` owns the
 transaction: `writeWithAudit(write, toAudit)` runs a state write (insert/update on
 donors/declarations/donations) **and** its matching `audit_log` row inside one
@@ -835,6 +835,23 @@ donors/declarations/donations) **and** its matching `audit_log` row inside one
 `donation.created`" use. Verified against the local DB: the row and its audit row
 commit together, a throwing write persists neither, and `audit_log` rejects
 deletes.
+
+**Claim-batch assignment (REQ-037 · TASK-057).** `assignDonationToBatch(donationId,
+batchId, actor?)` is the concrete audited admin write that enforces the claim
+invariant and one-batch-per-donation. It locks the donation (`SELECT … FOR UPDATE`),
+applies the pure guard `batchAssignmentBlock` (a donation may be batched only when it
+is currently `eligible` **and** not already in a batch — the non-null `claim_batch_id`
+is checked first, so a re-assignment is rejected as `already_batched`), then sets
+`claim_batch_id` + `claim_status='batched'` and appends a `donation.batched`
+`audit_log` row in the **same** transaction (mirroring `recordDonation`'s audit shape).
+A blocked donation throws a typed `BatchAssignmentError` (`already_batched` /
+`not_eligible` / `not_found`), so `writeWithAudit` rolls **both** the state and audit
+writes back — never a half-batched donation. The transaction shape is unit-tested
+DB-free against a mocked pool (`test/unit/donations-batch.test.ts`); the real SQL is
+verified against the local DB (the batched row + its audit row commit together; a
+second assignment on the same donation throws and writes neither). The claim-export /
+submission pipeline (REQ-052) and the admin RBAC that gates it (REQ-062) that will
+*call* this helper are separate follow-ups.
 
 **Declaration wording (REQ-040).** `src/declarations/wording.ts` is the versioned,
 verbatim source of truth for HMRC's Gift Aid liability statements — a

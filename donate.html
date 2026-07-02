@@ -224,9 +224,17 @@
                 <input type="checkbox" id="giftAid" name="giftAid" class="giftaid-check" />
                 <label for="giftAid" class="giftaid-label">
                   <strong>Add Gift Aid and your gift grows by 25%.</strong>
-                  If you are a UK taxpayer, NBCC can claim an extra 25p for every
-                  &pound;1 you give on eligible gifts, at no cost to you. You can
-                  confirm this securely at checkout.
+                  <span class="giftaid-intro">If you are a UK taxpayer, NBCC can claim an extra
+                    25p for every &pound;1 you give on eligible gifts, at no cost to you.</span>
+                  <!-- The tick agrees to the VERBATIM HMRC declaration below (REQ-042),
+                       not the framing copy. Two statements, one per give mode, kept byte
+                       for byte in sync with src/declarations/wording.ts: the
+                       SINGLE_DONATION_WORDING for give once, the ALL_DONATIONS_WORDING for
+                       give monthly (the default). initGiveToggle shows the one matching the
+                       mode; test/unit/gift-aid.test.ts imports both snapshots and fails the
+                       moment this hand-synced text drifts from the source of truth. -->
+                  <span class="giftaid-statement" data-mode="once" hidden>I want to Gift Aid my donation to the Night Before Christmas Campaign. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.</span>
+                  <span class="giftaid-statement" data-mode="monthly">I want to Gift Aid my donation and any donations I make in the future or have made in the past 4 years to the Night Before Christmas Campaign. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.</span>
                 </label>
               </div>
               <!-- GIFT AID CALLOUT END (REQ-023) -->

@@ -1518,7 +1518,26 @@ a {
   cursor: pointer;
 }
 .giftaid-label strong {
+  display: block;
   color: var(--maroon);
+}
+.giftaid-intro {
+  display: block;
+  margin-top: 2px;
+}
+/* The verbatim HMRC declaration (REQ-042): a quieter, hairline-topped legal
+   block below the framing copy. Exactly one shows per give mode; the inactive
+   one carries [hidden]. As with .giftaid above, a display rule beats the bare
+   [hidden] attribute, so collapse the inactive statement explicitly. */
+.giftaid-statement {
+  display: block;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 0.82rem;
+}
+.giftaid-statement[hidden] {
+  display: none;
 }
 
 /* =================================================================

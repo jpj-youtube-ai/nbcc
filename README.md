@@ -746,11 +746,14 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 They live in `src/routes/api.ts`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
-`{ mode, plan, amount, giftAid }` into a Stripe Checkout session and returns its
+`{ mode, plan, amount, giftAid }` — plus an optional `donorType`
+(`individual`|`company`, defaulting to `individual`) and `businessName` folded in by
+the REQ-038 give widget — into a Stripe Checkout session and returns its
 `{ url }` (which `startCheckout` redirects to). The body is validated zod-first
 (same style as `src/config/schema.ts`); impossible combinations are rejected with
 **400** (a monthly gift with no plan, a one-off with no amount, a bad mode/plan,
-a non-positive amount). A one-off is a `mode: payment` session with inline GBP
+a non-positive amount, an unknown `donorType`, or a `company` payload that also
+asserts `giftAid=true` — companies take the no-Gift-Aid path). A one-off is a `mode: payment` session with inline GBP
 `price_data` built from the amount in **pence** — attached to the
 `STRIPE_DONATION_PRODUCT` product when that optional id is set, otherwise an inline
 product is named — and a monthly is a `mode: subscription` session using the
@@ -760,7 +763,9 @@ dropped pending Stripe account activation).
 `success_url` / `cancel_url` come from config. When
 `giftAid` is true the declaration is recorded as `metadata.giftAid='true'` on the
 session for the 25% claim — **durable storage of the declaration (a Stripe webhook
-writing to the DB) is out of scope here**. An upstream Stripe failure returns
+writing to the DB) is out of scope here**. The `donorType` and `businessName` are
+likewise stamped onto `metadata` (alongside `giftAid`) so the webhook can persist them
+onto the donor record (REQ-038 → REQ-036). An upstream Stripe failure returns
 **502**, which the front-end degrades to its preview.
 
 > **Stub seam (no live account needed).** `src/clients/stripe.ts` uses the real
@@ -854,7 +859,12 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
 `ON CONFLICT DO NOTHING`; migration `1782924697956_stripe-webhook-events.js`):
 
 - **`checkout.session.completed`** → persists the donation, recording Gift Aid as
-  a flag when `metadata.giftAid === 'true'` (stamped by the REQ-029 checkout).
+  a flag when `metadata.giftAid === 'true'` (stamped by the REQ-029 checkout), and
+  routing `metadata.donorType` / `metadata.businessName` onto the donor's
+  `donor_type` / `business_name` (REQ-038). `donor_type` is the single field that
+  governs claims: a `company` donation is stored `gift_aid=false` and derives
+  `claim_status='not_eligible'` via `buildDonationRow` — never a second store
+  (REQ-036/REQ-053).
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
   monthly charge as a further donation against the SAME donor (found via the
   subscription id), carrying the Gift Aid flag + declaration from the original.

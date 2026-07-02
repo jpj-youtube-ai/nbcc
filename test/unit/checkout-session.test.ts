@@ -147,6 +147,60 @@ describe("POST /api/checkout-session — Gift Aid (REQ-023)", () => {
   });
 });
 
+describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
+  it("stamps donorType and businessName onto the session metadata for a company", async () => {
+    await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: false,
+      donorType: "company",
+      businessName: "Acme Ltd",
+    });
+    const md = lastParams().metadata;
+    expect(md.donorType).toBe("company");
+    expect(md.businessName).toBe("Acme Ltd");
+  });
+
+  it("defaults donorType to 'individual' when omitted (the no-JS base contract is unchanged)", async () => {
+    // startCheckout only folds donorType in once the REQ-038 enhancement is active;
+    // a bare { mode, plan, amount, giftAid } body must still be accepted as an individual.
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: true });
+    expect(lastParams().metadata.donorType).toBe("individual");
+  });
+
+  it("stamps an empty businessName when none is supplied", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "individual" });
+    expect(lastParams().metadata.businessName).toBe("");
+  });
+
+  it("accepts a company donation without Gift Aid (companies take the no-Gift-Aid path)", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: false,
+      donorType: "company",
+      businessName: "Acme Ltd",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a company payload that also asserts giftAid=true with 400 and never calls Stripe", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      donorType: "company",
+      businessName: "Acme Ltd",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/checkout-session — invalid bodies return 400", () => {
   it.each([
     ["monthly without a plan", { mode: "monthly", plan: null, amount: 1000, giftAid: false }],
@@ -155,6 +209,8 @@ describe("POST /api/checkout-session — invalid bodies return 400", () => {
     ["a non-boolean giftAid", { mode: "once", plan: null, amount: 1000, giftAid: "yes" }],
     ["a zero/negative amount", { mode: "once", plan: null, amount: -5, giftAid: false }],
     ["an unknown plan", { mode: "monthly", plan: "diamond", amount: 1000, giftAid: false }],
+    ["an unknown donorType", { mode: "once", plan: null, amount: 1000, giftAid: false, donorType: "trust" }],
+    ["a company asserting Gift Aid", { mode: "once", plan: null, amount: 1000, giftAid: true, donorType: "company" }],
     ["an empty body", {}],
   ])("rejects %s and never calls Stripe", async (_label, body) => {
     const res = await run(body);

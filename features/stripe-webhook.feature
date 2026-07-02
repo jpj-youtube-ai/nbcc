@@ -77,6 +77,30 @@ Feature: Stripe webhook handler (REQ-036)
     And the donation with payment intent "pi_bdd_prorate" should have amount 1234
     And the donation with payment intent "pi_bdd_prorate" should have gift aid true
 
+  Scenario: a company checkout persists a not-eligible, non-Gift-Aid company donation (REQ-038)
+    # donor_type + business name ride through metadata onto the donor record; a company
+    # is stored gift_aid=false and derives claim_status='not_eligible' (REQ-036/REQ-053).
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_company",
+        "object": "checkout.session",
+        "amount_total": 100000,
+        "currency": "gbp",
+        "mode": "payment",
+        "payment_intent": "pi_bdd_company",
+        "subscription": null,
+        "metadata": { "mode": "once", "plan": "", "giftAid": "false", "donorType": "company", "businessName": "Acme Ltd" },
+        "customer_details": { "name": "Casey Contact", "email": "acme.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_company"
+    And the donation with payment intent "pi_bdd_company" should have gift aid false
+    And the donation with payment intent "pi_bdd_company" should have claim status "not_eligible"
+    And the donor for payment intent "pi_bdd_company" should have donor type "company"
+    And the donor for payment intent "pi_bdd_company" should have business name "Acme Ltd"
+
   Scenario: an invalid signature is rejected
     When I POST a Stripe "charge.refunded" webhook event with an invalid signature:
       """

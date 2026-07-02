@@ -19,12 +19,22 @@ const PLANS = ["bronze", "silver", "gold", "platinum"] as const;
 // as src/config/schema.ts. The refinements reject the impossible combinations:
 // a monthly gift needs a plan (to pick its recurring price), a one-off needs an
 // amount (to build the inline price).
+const DONOR_TYPES = ["individual", "company"] as const;
+
 const checkoutBodySchema = z
   .object({
     mode: z.enum(["once", "monthly"]),
     plan: z.enum(PLANS).nullable(),
     amount: z.number().int().positive().nullable(),
     giftAid: z.boolean(),
+    // REQ-038: individuals (incl. sole traders / partners) take the Gift Aid path,
+    // incorporated companies the no-Gift-Aid path. Defaulted to "individual" so the
+    // no-JS base contract ({ mode, plan, amount, giftAid }) is still accepted — the
+    // give widget only folds donorType/businessName in once its enhancement is live.
+    // businessName is an optional donors-page display label carried through to the
+    // donor record (REQ-053); it never switches the Gift Aid path.
+    donorType: z.enum(DONOR_TYPES).default("individual"),
+    businessName: z.string().optional(),
   })
   .refine((b) => b.mode !== "monthly" || b.plan !== null, {
     message: "monthly giving requires a plan",
@@ -33,6 +43,12 @@ const checkoutBodySchema = z
   .refine((b) => b.mode !== "once" || b.amount !== null, {
     message: "a one-off gift requires an amount",
     path: ["amount"],
+  })
+  // A company can never claim Gift Aid, so a company payload that also asserts
+  // giftAid=true is contradictory — reject it rather than silently dropping the flag.
+  .refine((b) => !(b.donorType === "company" && b.giftAid), {
+    message: "a company donation cannot claim Gift Aid",
+    path: ["giftAid"],
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
@@ -59,6 +75,10 @@ export function buildSessionParams(
       mode: body.mode,
       plan: body.plan ?? "",
       giftAid: String(body.giftAid),
+      // Stamp the donor type + optional business name alongside giftAid (REQ-038), so
+      // the single Stripe webhook can persist them onto the donor record (REQ-036).
+      donorType: body.donorType,
+      businessName: body.businessName ?? "",
     },
   };
 

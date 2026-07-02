@@ -33,8 +33,16 @@ const asString = (v: string | { id: string } | null | undefined): string | null 
 export function donationFromCheckoutSession(session: Stripe.Checkout.Session): DonationWrite {
   const md = session.metadata ?? {};
   const mode = md.mode === "monthly" ? "monthly" : "once";
+  // donor_type + business name are stamped on the session metadata by the REQ-029
+  // checkout endpoint (REQ-038): donorType defaults to "individual" (the no-JS base
+  // contract), businessName is the optional donors-page display label. donor_type is
+  // the SINGLE field that routes claims — buildDonationRow forces Gift Aid off and
+  // derives claim_status='not_eligible' for a company (REQ-036/REQ-053), so even a
+  // stray giftAid flag on a company session never survives into the row.
+  const donorType = md.donorType === "company" ? "company" : "individual";
+  const businessName = md.businessName ? md.businessName : null;
   const donation = donationInputSchema.parse({
-    donorType: "individual", // the current REQ-029 donate flow; company flow is REQ-053
+    donorType,
     mode,
     plan: md.plan ? md.plan : null,
     amountPence: session.amount_total ?? 0,
@@ -52,6 +60,7 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
   return {
     donor: {
       fullName: name ?? "Anonymous donor",
+      businessName,
       email,
       emailConsent: email != null,
       anonymous: name == null,

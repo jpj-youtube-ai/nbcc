@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (48)
+## Shipped (49)
 
 ### REQ-001 — Multi-page site structure
 
@@ -344,6 +344,15 @@ Persist each declaration immutably with all captured fields, the declaration tim
 Tasks:
 - TASK-068 — Add a pure declaration retention-expiry calculator implementing the six-year-after-last-claim rule
 
+### REQ-047 — Post-payment confirmation and donors page
+
+On a successful payment show a confirmation screen, send a confirmation when an email is present, add a donors-page entry showing name or business name unless anonymous, and mark claimable donations for the next claim schedule. *Accept:* anonymous donations never appear on the public page yet are still queued for claiming with real details.
+
+Tasks:
+- TASK-069 — Add a post-payment confirmation page wired to Stripe's success_url
+- TASK-070 — Send a post-payment confirmation email when the donor's email is present and consented
+- TASK-071 — Show real, non-anonymous donors on the public donors page
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -360,16 +369,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (17)
-
-### REQ-047 — Post-payment confirmation and donors page
-
-On a successful payment show a confirmation screen, send a confirmation when an email is present, add a donors-page entry showing name or business name unless anonymous, and mark claimable donations for the next claim schedule. *Accept:* anonymous donations never appear on the public page yet are still queued for claiming with real details.
-
-Tasks:
-- TASK-069 — Add a post-payment confirmation page wired to Stripe's success_url
-- TASK-070 — Send a post-payment confirmation email when the donor's email is present and consented
-- TASK-071 — Show real, non-anonymous donors on the public donors page
+## Planned (16)
 
 ### REQ-048 — Contactless ingestion via the Paid app
 

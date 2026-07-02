@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (47)
+## Shipped (48)
 
 ### REQ-001 — Multi-page site structure
 
@@ -337,6 +337,13 @@ Tasks:
 - TASK-066 — Add benefit_types and donation_benefits tables plus a donation cap-breach flag (additive migration)
 - TASK-067 — Add HMRC annualised benefit-cap calculator and an audited donation-benefit recording write helper
 
+### REQ-046 — Immutable declaration audit record
+
+Persist each declaration immutably with all captured fields, the declaration timestamp, the wording-version snapshot, the scope, the benefits accepted and foreign keys to every charge, retaining it six years after the most recent claimed donation (permanently while an enduring or monthly declaration is active, with the clock starting at the final charge on cancellation). *Accept:* online declarations require no 30-day confirmation letter.
+
+Tasks:
+- TASK-068 — Add a pure declaration retention-expiry calculator implementing the six-year-after-last-claim rule
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -353,18 +360,16 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (18)
-
-### REQ-046 — Immutable declaration audit record
-
-Persist each declaration immutably with all captured fields, the declaration timestamp, the wording-version snapshot, the scope, the benefits accepted and foreign keys to every charge, retaining it six years after the most recent claimed donation (permanently while an enduring or monthly declaration is active, with the clock starting at the final charge on cancellation). *Accept:* online declarations require no 30-day confirmation letter.
-
-Tasks:
-- TASK-068 — Add a pure declaration retention-expiry calculator implementing the six-year-after-last-claim rule
+## Planned (17)
 
 ### REQ-047 — Post-payment confirmation and donors page
 
 On a successful payment show a confirmation screen, send a confirmation when an email is present, add a donors-page entry showing name or business name unless anonymous, and mark claimable donations for the next claim schedule. *Accept:* anonymous donations never appear on the public page yet are still queued for claiming with real details.
+
+Tasks:
+- TASK-069 — Add a post-payment confirmation page wired to Stripe's success_url
+- TASK-070 — Send a post-payment confirmation email when the donor's email is present and consented
+- TASK-071 — Show real, non-anonymous donors on the public donors page
 
 ### REQ-048 — Contactless ingestion via the Paid app
 

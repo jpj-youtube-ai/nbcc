@@ -40,6 +40,9 @@ jobs:
       # Contact forwarding (REQ-030). A `.example` placeholder so the app boots and
       # the forward is stubbed (no live form service) for the BDD step.
       CONTACT_FORWARD_URL: https://forward.example/contact
+      # Transactional email (TASK-070). A `.example` placeholder so the app boots and
+      # the confirmation-email send is stubbed (no live provider) for the BDD step.
+      EMAIL_SEND_URL: https://email.example/send
       BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

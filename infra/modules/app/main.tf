@@ -140,3 +140,15 @@ resource "aws_ssm_parameter" "contact_forward_url" {
   value = "https://forward.example/replace-me"
   lifecycle { ignore_changes = [value] }
 }
+
+# Transactional email send endpoint (TASK-070). A SecureString — it authorises
+# sends. The placeholder is a VALID `.example` URL (not REPLACE_ME) so the app's URL
+# validation passes on a fresh apply; the email client treats a `.example` host as
+# unconfigured and stubs the send outside production until a real URL is set out of
+# band. Set the real value with put-parameter (see README).
+resource "aws_ssm_parameter" "email_send_url" {
+  name  = "/${var.project}/${var.environment}/EMAIL_SEND_URL"
+  type  = "SecureString"
+  value = "https://email.example/replace-me"
+  lifecycle { ignore_changes = [value] }
+}

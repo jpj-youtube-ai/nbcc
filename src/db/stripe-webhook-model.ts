@@ -123,6 +123,45 @@ export function declarationFromCheckoutSession(
   };
 }
 
+// The single donation-confirmation email payload (TASK-070). Pure data shape — the
+// network send lives in src/clients/email.ts. NOT the full REQ-060 templated system
+// (Gift Aid confirmation, manage/cancel, receipts); just enough to thank a donor.
+export interface DonationConfirmationEmail {
+  email: string;
+  fullName: string;
+  amountPence: number;
+  currency: string;
+}
+
+// Decide whether — and with what payload — to send a donation-confirmation email.
+// Returns null (send nothing) unless the donor gave us an email AND opted into
+// contact (email_consent). This is the consent gate: donationFromCheckoutSession
+// already suppresses the email when consent was withheld, and this predicate is the
+// belt-and-braces the send path checks. Pure: no pool/config/network/clock.
+export function confirmationEmailFor(
+  donor: { email?: string | null; emailConsent?: boolean; fullName: string },
+  amount: { amountPence: number; currency: string },
+): DonationConfirmationEmail | null {
+  if (!donor.email || donor.emailConsent !== true) return null;
+  return {
+    email: donor.email,
+    fullName: donor.fullName,
+    amountPence: amount.amountPence,
+    currency: amount.currency,
+  };
+}
+
+// checkout.session.completed → the confirmation-email payload, or null when the
+// donor withheld their email / did not consent. The event→payload mapping the
+// webhook processor triggers a send from, kept pure so the trigger is unit-tested
+// DB-free (the send itself is a mocked client).
+export function confirmationEmailFromCheckoutSession(
+  session: Stripe.Checkout.Session,
+): DonationConfirmationEmail | null {
+  const { donor, donation } = donationFromCheckoutSession(session);
+  return confirmationEmailFor(donor, donation);
+}
+
 export interface RecurringCharge {
   subscriptionId: string;
   amountPence: number;

@@ -16,6 +16,9 @@ const { queryMock, mockClient, connect } = vi.hoisted(() => {
 });
 
 vi.mock("../../src/db/pool", () => ({ pool: { connect } }));
+// The processor now sends a post-commit confirmation email (TASK-070); mock the
+// client so importing it never loads the real config (which validates process.env).
+vi.mock("../../src/clients/email", () => ({ sendDonationConfirmation: vi.fn() }));
 
 import { processWebhookEvent } from "../../src/db/stripe-webhook";
 

@@ -28,8 +28,13 @@ function stubStripe(): Stripe {
       sessions: {
         create: async (params: Stripe.Checkout.SessionCreateParams) => ({
           id: `cs_preview_${(n += 1)}`,
-          // An obviously-fake but well-formed Checkout URL; no network call.
-          url: `https://checkout.stripe.com/c/pay/preview_${params.mode ?? "session"}`,
+          // An obviously-fake but well-formed Checkout URL; no network call. The offline
+          // preview URL reflects the session's key attributes — its mode and whether Gift
+          // Aid was opted in (the verbatim wording is bound in metadata, TASK-053) — so the
+          // gift-aided checkout flow is observable end to end without a live account.
+          url: `https://checkout.stripe.com/c/pay/preview_${params.mode ?? "session"}${
+            params.metadata?.giftAid === "true" ? "_giftaid" : ""
+          }`,
         }),
       },
     },

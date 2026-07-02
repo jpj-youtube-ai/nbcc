@@ -3,6 +3,7 @@ import type StripeNS from "stripe";
 import { z } from "zod";
 import { stripe, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import { forwardEnquiry } from "../clients/contact";
+import { selectDeclarationWording } from "../declarations/wording";
 import { config } from "../config";
 
 // Marketing-site API endpoints, both implemented.
@@ -67,19 +68,34 @@ export function buildSessionParams(
   // 25% claim can be reconciled later. NOTE: durable storage of the declaration
   // (a Stripe webhook writing to the DB) is out of scope here — this only records
   // intent on the session metadata.
+  const metadata: Record<string, string> = {
+    mode: body.mode,
+    plan: body.plan ?? "",
+    giftAid: String(body.giftAid),
+    // Stamp the donor type + optional business name alongside giftAid (REQ-038), so
+    // the single Stripe webhook can persist them onto the donor record (REQ-036).
+    donorType: body.donorType,
+    businessName: body.businessName ?? "",
+  };
+
+  // When Gift Aid is affirmatively opted in, bind the consent to the EXACT verbatim
+  // HMRC statement the donor saw (REQ-042): stamp the selected wording version +
+  // snapshot so the REQ-036 webhook can persist them onto the immutable declaration
+  // (REQ-043/REQ-046) — no declarations row is written here. A monthly gift is
+  // enduring (all_donations scope), a one-off covers this donation only; this mirrors
+  // selectDeclarationWording, the single source of truth for the wording text.
+  if (body.giftAid) {
+    const scope = body.mode === "monthly" ? "all_donations" : "this_donation";
+    const wording = selectDeclarationWording({ mode: body.mode, scope });
+    metadata.giftAidWordingVersion = wording.wording_version;
+    metadata.giftAidWording = wording.wording_snapshot;
+  }
+
   const base: StripeNS.Checkout.SessionCreateParams = {
     payment_method_types: PAYMENT_METHODS,
     success_url: config.STRIPE_SUCCESS_URL,
     cancel_url: config.STRIPE_CANCEL_URL,
-    metadata: {
-      mode: body.mode,
-      plan: body.plan ?? "",
-      giftAid: String(body.giftAid),
-      // Stamp the donor type + optional business name alongside giftAid (REQ-038), so
-      // the single Stripe webhook can persist them onto the donor record (REQ-036).
-      donorType: body.donorType,
-      businessName: body.businessName ?? "",
-    },
+    metadata,
   };
 
   if (body.mode === "monthly") {

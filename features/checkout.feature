@@ -11,13 +11,17 @@ Feature: Checkout session endpoint (REQ-029)
     Then the response status should be 200
     And the response field "url" should start with "https://"
 
-  Scenario: a valid monthly donation returns a Stripe checkout URL
+  Scenario: a valid monthly Gift Aid donation returns a session reflecting the opt-in
+    # giftAid=true binds the verbatim HMRC wording onto the session metadata (TASK-053);
+    # the offline stub reflects the opt-in in its preview URL, so this is asserted
+    # without a live Stripe account.
     When I POST "/api/checkout-session" with JSON:
       """
       { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true }
       """
     Then the response status should be 200
     And the response field "url" should start with "https://"
+    And the response field "url" should contain "giftaid"
 
   Scenario: an invalid body is rejected
     When I POST "/api/checkout-session" with JSON:

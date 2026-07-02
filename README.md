@@ -761,19 +761,27 @@ recurring `STRIPE_PRICE_*` id keyed by plan. `payment_method_types` is
 `['card']` (Apple Pay / Google Pay ride on the card method; BACS Direct Debit was
 dropped pending Stripe account activation).
 `success_url` / `cancel_url` come from config. When
-`giftAid` is true the declaration is recorded as `metadata.giftAid='true'` on the
-session for the 25% claim — **durable storage of the declaration (a Stripe webhook
-writing to the DB) is out of scope here**. The `donorType` and `businessName` are
-likewise stamped onto `metadata` (alongside `giftAid`) so the webhook can persist them
-onto the donor record (REQ-038 → REQ-036). An upstream Stripe failure returns
-**502**, which the front-end degrades to its preview.
+`giftAid` is affirmatively true the consent is bound to the **exact verbatim HMRC
+statement** the donor saw (REQ-042 · TASK-053): alongside `metadata.giftAid='true'`,
+the handler stamps `metadata.giftAidWordingVersion` and `metadata.giftAidWording` (the
+version id + full snapshot from `selectDeclarationWording({ mode, scope })` in
+`src/declarations/wording.ts` — the all-donations/enduring statement for a monthly gift,
+the single-donation statement for a one-off), so the REQ-036 webhook can persist them
+onto the immutable declaration. A `giftAid=false` gift stamps **no** wording metadata.
+**Durable storage of the declaration (a Stripe webhook writing to the DB) — and the
+`declarations` row itself (name/address are not captured yet, REQ-043/REQ-046) — is out
+of scope here**; the consent binding lives on the session metadata. The `donorType` and
+`businessName` are likewise stamped onto `metadata` (alongside `giftAid`) so the webhook
+can persist them onto the donor record (REQ-038 → REQ-036). An upstream Stripe failure
+returns **502**, which the front-end degrades to its preview.
 
 > **Stub seam (no live account needed).** `src/clients/stripe.ts` uses the real
 > Stripe SDK when given a real key — standard (`sk_test_…`/`sk_live_…`) or
 > restricted (`rk_test_…`/`rk_live_…`). **Outside
 > production**, when the key is a placeholder (local dev, CI, fresh `REPLACE_ME`
 > SSM params), it falls back to a thin stub whose `checkout.sessions.create`
-> returns a deterministic preview URL — so the full request → `{ url }` flow is
+> returns a deterministic preview URL that reflects the session's mode and Gift Aid
+> opt-in — so the full request → `{ url }` flow (including the gift-aided path) is
 > exercised end to end (see `features/checkout.feature`) without a Stripe account.
 > Production **never** stubs, so a missing real key surfaces loudly. Verified by
 > `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios.

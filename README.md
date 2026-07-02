@@ -900,7 +900,9 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `claim_batch_id` FK (`onDelete RESTRICT`, added by the claim-batches migration —
   see **Claim batches + users** below) links a donation to **at most one** claim
   batch; that single column *is* the "a donation enters at most one claim batch"
-  invariant (REQ-037).
+  invariant (REQ-037). A NOT-NULL-defaulted `benefit_cap_breached` boolean (added by the
+  benefit-tracking migration — see **Benefit tracking** below) records whether this gift's
+  benefits breach the Gift Aid cap (REQ-045).
 - **`audit_log`** — an **append-only** trail (`actor`, `action`, `entity`,
   `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
 
@@ -1043,6 +1045,27 @@ additive (two new tables + a nullable FK column, no existing shape touched), so 
 code-level rollback stays safe (golden rule 2). Still separate follow-ups: the REQ-052
 export/submission pipeline and the REQ-062 admin RBAC that assemble and gate batches,
 plus the admin-write audit invariant (every admin write appends an `audit_log` row).
+
+**Benefit tracking (REQ-045 · TASK-066).** The additive migration
+`migrations/1783003547726_benefit-types-and-donation-benefits.js` lays the model for the
+Gift Aid **benefit cap** — the catalogue of donor benefits and the benefits awarded per
+donation — alongside the shape above:
+
+- **`benefit_types`** — the catalogue: a unique `name`, an `is_recognition_perk` flag
+  (default `false`), and a nullable `default_value_pence` (the typical monetary value used
+  by the cap calc, `NULL` for a no-set-value perk). Seeded with the five recognition perks
+  — `name-on-page`, `impact update`, `social thank-you`, `digital badge`, `certificate` —
+  at `is_recognition_perk=true` and `default_value_pence` NULL.
+- **`donation_benefits`** — a benefit awarded against one donation: FK `donation_id` →
+  `donations` and `benefit_type_id` → `benefit_types` (both indexed, `onDelete RESTRICT`),
+  a NOT NULL `value_pence` (the value attributed to this award; `0` for a no-value perk),
+  and `created_at`.
+
+It also adds the NOT-NULL-defaulted `donations.benefit_cap_breached` boolean (default
+`false`, so every existing row back-fills without touching an existing column). The cap
+calculation (HMRC's relevant-value rule) that awards benefits and flips the flag is a
+later task. Every operation is additive (two new tables + a defaulted boolean column, no
+existing shape touched), so a code-level rollback stays safe (golden rule 2).
 
 **`POST /api/contact` (REQ-030).** Validates a website enquiry
 `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,

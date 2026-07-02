@@ -95,6 +95,42 @@ export function recurringChargeFromInvoice(invoice: Stripe.Invoice): RecurringCh
   };
 }
 
+// The Gift Aid / declaration context carried from the ORIGINAL donation on the
+// subscription (found via the subscription id in the processor). A monthly gift's
+// declaration governs every later charge on that subscription — including prorated
+// up/downgrades — so it is inherited, never re-derived here (REQ-055/REQ-059).
+export interface RecurringDonationParent {
+  donorType: DonorType;
+  plan: string | null;
+  giftAid: boolean;
+  declarationId: number | null;
+}
+
+// Assemble the donation input for a recurring OR prorated charge. The amount is the
+// invoice's ACTUALLY-charged amount (rec.amountPence = invoice.amount_paid), NOT the
+// plan's preset tier value — a mid-subscription up/downgrade bills a prorated amount,
+// and Gift Aid is claimed on the true amount charged, needing no special handling
+// (REQ-055). Gift Aid + declaration + plan come from the original declaration on the
+// subscription; each charge becomes its own donation row against the same donor.
+export function recurringDonationInput(
+  rec: RecurringCharge,
+  parent: RecurringDonationParent,
+): DonationInput {
+  return donationInputSchema.parse({
+    donorType: parent.donorType,
+    mode: "monthly",
+    plan: parent.plan,
+    amountPence: rec.amountPence,
+    currency: rec.currency,
+    giftAid: parent.giftAid,
+    declarationId: parent.declarationId,
+    paymentChannel: "online",
+    stripeSubscriptionId: rec.subscriptionId,
+    stripePaymentIntentId: rec.paymentIntentId,
+    stripeChargeId: rec.chargeId,
+  });
+}
+
 // charge.refunded carries the ABSOLUTE total refunded so far, so replaying the
 // event is idempotent (we set, never increment).
 export function refundedPenceFromCharge(charge: Stripe.Charge): number {

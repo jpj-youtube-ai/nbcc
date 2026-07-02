@@ -1,11 +1,12 @@
 import type { PoolClient } from "pg";
 import type Stripe from "stripe";
 import { pool } from "./pool";
-import { buildDonationRow, donationInputSchema } from "./donations-model";
+import { buildDonationRow } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation } from "./donations";
 import {
   donationFromCheckoutSession,
   recurringChargeFromInvoice,
+  recurringDonationInput,
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   claimStatusAfterRefund,
@@ -121,18 +122,14 @@ async function handleRecurring(
     if (dup.rowCount && dup.rowCount > 0) return "ignored.duplicate_charge";
   }
 
-  const donation = donationInputSchema.parse({
+  // The amount is the invoice's actually-charged amount (rec.amountPence =
+  // amount_paid), so a prorated up/downgrade claims the true amount; Gift Aid +
+  // declaration are carried from the original declaration on the subscription (REQ-055).
+  const donation = recurringDonationInput(rec, {
     donorType: parent.donor_type,
-    mode: "monthly",
     plan: parent.plan,
-    amountPence: rec.amountPence,
-    currency: rec.currency,
     giftAid: parent.gift_aid,
     declarationId: parent.declaration_id,
-    paymentChannel: "online",
-    stripeSubscriptionId: rec.subscriptionId,
-    stripePaymentIntentId: rec.paymentIntentId,
-    stripeChargeId: rec.chargeId,
   });
   const donationId = await insertDonation(client, buildDonationRow(donation, parent.donor_id));
   await insertAudit(client, {

@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (44)
+## Shipped (45)
 
 ### REQ-001 — Multi-page site structure
 
@@ -312,6 +312,15 @@ Tasks:
 - TASK-052 — Show the verbatim HMRC Gift Aid statement in the donate opt-in, bound to the never-pre-ticked tick
 - TASK-053 — Stamp the exact HMRC wording version and snapshot onto the checkout session when Gift Aid is affirmatively opted in
 
+### REQ-043 — Declaration field capture
+
+Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode, with a non-UK donor flag (Channel Islands / Isle of Man) that omits the postcode. *Accept:* field-level validation enforces postcode format and a required house number; only a home address is accepted (no work or c/o addresses).
+
+Tasks:
+- TASK-061 — Add declaration field capture validation and row-builder module
+- TASK-062 — Add Gift Aid declaration capture fields to the give widget and fold into the checkout payload
+- TASK-063 — Thread declaration fields through the checkout endpoint and persist them onto the declarations table via the webhook
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -328,16 +337,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (21)
-
-### REQ-043 — Declaration field capture
-
-Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode, with a non-UK donor flag (Channel Islands / Isle of Man) that omits the postcode. *Accept:* field-level validation enforces postcode format and a required house number; only a home address is accepted (no work or c/o addresses).
-
-Tasks:
-- TASK-061 — Add declaration field capture validation and row-builder module
-- TASK-062 — Add Gift Aid declaration capture fields to the give widget and fold into the checkout payload
-- TASK-063 — Thread declaration fields through the checkout endpoint and persist them onto the declarations table via the webhook
+## Planned (20)
 
 ### REQ-044 — Declaration scope
 

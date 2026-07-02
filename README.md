@@ -1141,6 +1141,29 @@ throw; the donation never rolled back. `DECLARATION_FORM_BASE_URL` (non-secret, 
 SSM-injected like the price IDs) is wired through config, `.env.example`, the CI env, SSM,
 the task-def `secrets` and the `exec_secrets` IAM policy (golden rule 3).
 
+**Gift Aid declaration completion page (TASK-076 / REQ-048).** The token in that email
+addresses the donor to the completion form. `GET /api/gift-aid/:token` (`src/routes/api.ts`)
+looks the donation up by `declaration_token` and **server-renders** `gift-aid.html` — the
+ported declaration fieldset + the **verbatim HMRC statement** (from
+`src/declarations/wording.ts`) with the token injected into the form action — **without any
+write**, so a mere view never advances `declaration_status` off `sent`/`undelivered`.
+`POST /api/gift-aid/:token` validates the (url-encoded, no-JS) form with the existing
+`declarationFieldsSchema` and calls `completeDeclaration` (`src/db/donations.ts`), which in
+**one audited transaction** (`writeWithAudit`, mirroring `assignDonationToBatch`): locks the
+donation by its token (`FOR UPDATE`), enforces the legal `confirm` transition
+(`applyDeclarationEvent` — only a `sent`/bounced-`undelivered` link completes; an already
+`completed`/`not_required`/`pending` token throws `GiftAidCompletionError` → 409, an unknown
+token → 404), inserts the **immutable `declarations` row** (`buildDeclarationRow`), links it
+onto `donations.declaration_id`, and — since the donor has now Gift-Aided the gift — sets
+`gift_aid=true`, `declaration_status='completed'` and recomputes `claim_status` (an
+individual with Gift Aid + a declaration is `eligible`), appending a `declaration.completed`
+audit row. Any throw rolls back **both** the declaration and the audit row, so a token that
+merely rendered the form is never read as completed until this POST succeeds. The TASK-075
+email links (`/gift-aid/declare?token=…`, `/g/:token`) redirect here (`src/routes/site.ts`).
+Proven DB-free by `test/unit/gift-aid-completion.test.ts` (mocked pool — GET issues only the
+lookup SELECT; POST completes from `sent`/`undelivered`, refuses `completed`/`pending`/
+unknown) and `test/unit/gift-aid-render.test.ts`; end to end by `features/gift-aid.feature`.
+
 `constructEvent` uses a real Stripe instance (pure HMAC, no network), so the stub
 seam still holds: unit tests and `features/stripe-webhook.feature` sign events
 offline with `STRIPE_WEBHOOK_SECRET` via `generateTestHeaderString` — no live

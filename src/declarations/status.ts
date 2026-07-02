@@ -40,7 +40,10 @@ const TRANSITIONS: Partial<Record<DeclarationStatus, Partial<Record<DeclarationS
   // without passing through `sent`.
   pending: { send: "sent", mark_undelivered: "undelivered" },
   sent: { confirm: "completed", mark_undelivered: "undelivered" },
-  undelivered: { resend: "sent" },
+  // A donor whose auto-email bounced can still `confirm` — e.g. via the QR short link on a
+  // printed receipt (TASK-076) — so `undelivered` also completes on an explicit confirm, as
+  // well as recovering to `sent` on a `resend`.
+  undelivered: { resend: "sent", confirm: "completed" },
   // `completed` is terminal — no outgoing transitions.
 };
 

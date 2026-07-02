@@ -1,4 +1,6 @@
-import { Router, type Request, type Response } from "express";
+import express, { Router, type Request, type Response } from "express";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type StripeNS from "stripe";
 import { z } from "zod";
 import { stripe, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
@@ -9,6 +11,8 @@ import {
   scopeFromDeclarationScope,
 } from "../declarations/wording";
 import { declarationFieldsSchema } from "../declarations/fields";
+import { getGiftAidDeclarationContext, completeDeclaration, GiftAidCompletionError } from "../db/donations";
+import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render";
 import { config } from "../config";
 
 // Marketing-site API endpoints, both implemented.
@@ -284,3 +288,114 @@ export async function postContact(req: Request, res: Response): Promise<Response
 }
 
 apiRouter.post("/api/contact", postContact);
+
+// Token-scoped Gift Aid declaration completion (REQ-048/TASK-076). The in-person
+// confirmation email/QR (TASK-075) links a walk-in donor here with their donation's unique
+// declaration_token. GET renders the declaration form with the VERBATIM HMRC wording and
+// does NOT mutate (a mere view never advances declaration_status). POST persists the
+// immutable declaration + links it + sets declaration_status='completed' in ONE audited
+// transaction (completeDeclaration → writeWithAudit). The gift-aid.html file is the template
+// rendered server side, so the form works without JS.
+const GIFT_AID_TEMPLATE = resolve(__dirname, "../..", "gift-aid.html");
+
+export async function getGiftAid(req: Request, res: Response): Promise<Response> {
+  const template = readFileSync(GIFT_AID_TEMPLATE, "utf8");
+  try {
+    const ctx = await getGiftAidDeclarationContext(req.params.token);
+    if (ctx.alreadyCompleted) {
+      return res.status(200).type("html").send(
+        renderGiftAidMessage(template, {
+          heading: "Gift Aid already added",
+          body: "Thank you. This donation's Gift Aid declaration is already complete, so there is nothing more for you to do.",
+        }),
+      );
+    }
+    return res.status(200).type("html").send(
+      renderGiftAidForm(template, { token: req.params.token, wordingSnapshot: ctx.wordingSnapshot }),
+    );
+  } catch (err) {
+    if (err instanceof GiftAidCompletionError && err.reason === "not_found") {
+      return res.status(404).type("html").send(
+        renderGiftAidMessage(template, {
+          heading: "This link is not valid",
+          body: "We could not find a donation for this Gift Aid link. Please use the link from your confirmation email.",
+        }),
+      );
+    }
+    console.error("gift-aid GET failed:", err instanceof Error ? err.message : err);
+    return res.status(500).type("html").send(
+      renderGiftAidMessage(template, {
+        heading: "Something went wrong",
+        body: "We could not load your Gift Aid form right now. Please try again later.",
+      }),
+    );
+  }
+}
+
+// Coerce a native (url-encoded) form submission onto the declaration fields shape: empty
+// optional inputs become undefined, and the non-UK checkbox (present only when ticked)
+// becomes a boolean. declarationFieldsSchema.strict() then validates the rest.
+function coerceDeclarationFields(body: Record<string, unknown>): Record<string, unknown> {
+  const str = (v: unknown): string | undefined => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s.length > 0 ? s : undefined;
+  };
+  return {
+    title: str(body.title),
+    firstName: str(body.firstName),
+    lastName: str(body.lastName),
+    houseNameNumber: str(body.houseNameNumber),
+    address: str(body.address),
+    postcode: str(body.postcode),
+    nonUk: body.nonUk === "true" || body.nonUk === "on" || body.nonUk === true,
+  };
+}
+
+export async function postGiftAid(req: Request, res: Response): Promise<Response> {
+  const template = readFileSync(GIFT_AID_TEMPLATE, "utf8");
+  const parsed = declarationFieldsSchema.safeParse(
+    coerceDeclarationFields((req.body ?? {}) as Record<string, unknown>),
+  );
+  if (!parsed.success) {
+    return res.status(400).type("html").send(
+      renderGiftAidMessage(template, {
+        heading: "Please check your details",
+        body: "Some required details were missing or invalid. Please go back and complete every required field, including a valid UK postcode unless you live outside the UK.",
+      }),
+    );
+  }
+
+  try {
+    await completeDeclaration(req.params.token, parsed.data);
+    return res.status(200).type("html").send(
+      renderGiftAidMessage(template, {
+        heading: "Gift Aid added, thank you",
+        body: "Your Gift Aid declaration is complete. NBCC can now reclaim the tax on your gift at no extra cost to you.",
+      }),
+    );
+  } catch (err) {
+    if (err instanceof GiftAidCompletionError) {
+      const notFound = err.reason === "not_found";
+      return res.status(notFound ? 404 : 409).type("html").send(
+        renderGiftAidMessage(template, {
+          heading: notFound ? "This link is not valid" : "Nothing to complete",
+          body: notFound
+            ? "We could not find a donation for this Gift Aid link. Please use the link from your confirmation email."
+            : "This Gift Aid declaration has already been completed, or is not awaiting confirmation.",
+        }),
+      );
+    }
+    console.error("gift-aid POST failed:", err instanceof Error ? err.message : err);
+    return res.status(500).type("html").send(
+      renderGiftAidMessage(template, {
+        heading: "Something went wrong",
+        body: "We could not save your Gift Aid declaration right now. Please try again later.",
+      }),
+    );
+  }
+}
+
+apiRouter.get("/api/gift-aid/:token", getGiftAid);
+// The form posts url-encoded (native, no-JS), so parse it here — the global express.json
+// (src/app.ts) only handles application/json.
+apiRouter.post("/api/gift-aid/:token", express.urlencoded({ extended: false }), postGiftAid);

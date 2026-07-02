@@ -14,7 +14,18 @@ import {
   type SupporterTier,
   type PublicSupporter,
 } from "./donations-model";
-import { buildDeclarationRow, type DeclarationRow } from "../declarations/fields";
+import {
+  buildDeclarationRow,
+  type DeclarationRow,
+  type DeclarationFields,
+} from "../declarations/fields";
+import {
+  selectDeclarationWording,
+  declarationScopeForMode,
+  scopeFromDeclarationScope,
+} from "../declarations/wording";
+import { applyDeclarationEvent, type DeclarationStatus } from "../declarations/status";
+import { deriveClaimStatus } from "./donations-model";
 import type { DeclarationWrite } from "./stripe-webhook-model";
 import {
   annualisePence,
@@ -377,6 +388,145 @@ export async function recordDonationBenefits(
       entity: "donation",
       entityId: r.donationId,
       data: { donorId: r.donorId, benefitIds: r.benefitIds, capBreached: r.capBreached },
+    }),
+  );
+}
+
+// Why a token-scoped declaration completion cannot proceed (TASK-076/REQ-057): the token
+// matched no donation, or the donation is not in a completable state (already completed, or
+// an online donation that needs no separate confirmation). A typed error like
+// BatchAssignmentError so the route can map it (404 / 409) rather than a bare 500.
+export class GiftAidCompletionError extends Error {
+  constructor(public readonly reason: "not_found" | "not_completable") {
+    super(`gift aid declaration cannot be completed: ${reason}`);
+    this.name = "GiftAidCompletionError";
+  }
+}
+
+// The donation a valid completion token addresses, for rendering the form (GET) — the
+// verbatim wording the donor will agree to, and whether it is already done. Pure lookup, no
+// mutation, so a GET never advances declaration_status off 'sent'/'undelivered'.
+export interface GiftAidDeclarationContext {
+  donationId: number;
+  amountPence: number;
+  currency: string;
+  declarationStatus: DeclarationStatus;
+  alreadyCompleted: boolean;
+  wordingVersion: string;
+  wordingSnapshot: string;
+}
+
+interface TokenDonationRow {
+  id: number;
+  donor_id: number;
+  donor_type: DonorType;
+  mode: Mode;
+  amount_pence: number;
+  currency: string;
+  declaration_status: DeclarationStatus;
+}
+
+// Read the donation a completion token addresses. Returns its context (incl. the verbatim
+// HMRC wording it would record) WITHOUT any write — the GET render path (REQ-048). Throws
+// GiftAidCompletionError('not_found') for an unknown token. A `completed` token still
+// resolves (alreadyCompleted=true) so the page can show a done state; the caller does not
+// mutate here, so a mere GET never reads as / advances to completed.
+export async function getGiftAidDeclarationContext(
+  token: string,
+): Promise<GiftAidDeclarationContext> {
+  const row = (
+    await pool.query<TokenDonationRow>(
+      `SELECT d.id, d.donor_id, dn.donor_type, d.mode, d.amount_pence, d.currency, d.declaration_status
+         FROM donations d JOIN donors dn ON dn.id = d.donor_id
+        WHERE d.declaration_token = $1`,
+      [token],
+    )
+  ).rows[0];
+  if (!row) throw new GiftAidCompletionError("not_found");
+  const scope = scopeFromDeclarationScope(declarationScopeForMode(row.mode));
+  const wording = selectDeclarationWording({ mode: row.mode, scope });
+  return {
+    donationId: row.id,
+    amountPence: row.amount_pence,
+    currency: row.currency,
+    declarationStatus: row.declaration_status,
+    alreadyCompleted: row.declaration_status === "completed",
+    wordingVersion: wording.wording_version,
+    wordingSnapshot: wording.wording_snapshot,
+  };
+}
+
+export interface CompleteDeclarationResult {
+  donationId: number;
+  donorId: number;
+  declarationId: number;
+}
+
+// Concrete audited write (REQ-048/REQ-057): the donor completes their Gift Aid declaration
+// via the token-scoped link. In ONE transaction (writeWithAudit, mirroring
+// assignDonationToBatch) it locks the donation by its declaration_token (FOR UPDATE, so a
+// double submit races safely), enforces the legal declaration transition
+// (applyDeclarationEvent(current, 'confirm') — only 'sent'/'undelivered' complete; an
+// already-'completed' or 'not_required' token throws GiftAidCompletionError), inserts the
+// IMMUTABLE declarations row (buildDeclarationRow, with the verbatim wording), links it onto
+// donations.declaration_id, and — because the donor has now Gift-Aided the gift — sets
+// gift_aid=true and declaration_status='completed' and recomputes claim_status. Any throw
+// rolls BOTH the declaration insert and the audit row back, so a token that merely rendered
+// the form is never read as completed until this write succeeds.
+export async function completeDeclaration(
+  token: string,
+  fields: DeclarationFields,
+): Promise<CompleteDeclarationResult> {
+  return writeWithAudit(
+    async (client) => {
+      const row = (
+        await client.query<TokenDonationRow>(
+          `SELECT d.id, d.donor_id, dn.donor_type, d.mode, d.amount_pence, d.currency, d.declaration_status
+             FROM donations d JOIN donors dn ON dn.id = d.donor_id
+            WHERE d.declaration_token = $1 FOR UPDATE`,
+          [token],
+        )
+      ).rows[0];
+      if (!row) throw new GiftAidCompletionError("not_found");
+
+      // Enforce the legal transition: only a 'sent' or bounced 'undelivered' confirmation
+      // completes. 'completed' (already done) / 'not_required' / 'pending' throw.
+      let nextStatus: DeclarationStatus;
+      try {
+        nextStatus = applyDeclarationEvent(row.declaration_status, "confirm");
+      } catch {
+        throw new GiftAidCompletionError("not_completable");
+      }
+
+      const scope = scopeFromDeclarationScope(declarationScopeForMode(row.mode));
+      const wording = selectDeclarationWording({ mode: row.mode, scope });
+      const declarationId = await insertDeclaration(
+        client,
+        buildDeclarationRow(fields, { donorId: row.donor_id, scope, wording, confirmedTaxpayer: true }),
+      );
+
+      // The donor has now Gift-Aided this gift: flip gift_aid on, link the declaration, and
+      // recompute claim_status (an individual with Gift Aid + a declaration is eligible).
+      const claimStatus = deriveClaimStatus({
+        donorType: row.donor_type,
+        giftAid: true,
+        hasDeclaration: true,
+      });
+      await client.query(
+        `UPDATE donations
+            SET declaration_id = $1, gift_aid = true, declaration_status = $2, claim_status = $3
+          WHERE id = $4`,
+        [declarationId, nextStatus, claimStatus, row.id],
+      );
+
+      return { donationId: row.id, donorId: row.donor_id, declarationId };
+    },
+    (r) => ({
+      actor: "donor",
+      action: "declaration.completed",
+      entity: "declaration",
+      entityId: r.declarationId,
+      data: { donationId: r.donationId, donorId: r.donorId },
     }),
   );
 }

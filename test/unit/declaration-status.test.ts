@@ -41,18 +41,23 @@ describe("nextDeclarationStatus — legal transitions", () => {
 });
 
 describe("nextDeclarationStatus — illegal transitions return null", () => {
-  it("NEVER reaches completed except by an explicit confirm from sent (no bare GET/send)", () => {
+  it("NEVER reaches completed except by an explicit confirm (no bare GET/send)", () => {
     // A GET of the confirmation link is not modelled as an event, and no non-confirm
-    // event yields completed from any state.
+    // event yields completed from any state — completion is ALWAYS an explicit confirm.
     for (const from of DECLARATION_STATUSES) {
       for (const event of ["require", "send", "mark_undelivered", "resend"] as DeclarationStatusEvent[]) {
         expect(nextDeclarationStatus(from, event)).not.toBe("completed");
       }
     }
-    // Even a confirm only works from sent — not from pending / not_required / undelivered.
+    // `confirm` completes only from a state where a confirmation is outstanding (sent or a
+    // bounced undelivered) — never from pending (email not yet sent) or not_required.
     expect(nextDeclarationStatus("pending", "confirm")).toBeNull();
     expect(nextDeclarationStatus("not_required", "confirm")).toBeNull();
-    expect(nextDeclarationStatus("undelivered", "confirm")).toBeNull();
+  });
+
+  it("completes from sent OR a bounced undelivered on an explicit confirm (TASK-076)", () => {
+    expect(nextDeclarationStatus("sent", "confirm")).toBe("completed");
+    expect(nextDeclarationStatus("undelivered", "confirm")).toBe("completed");
   });
 
   it("treats completed as terminal (no outgoing transition)", () => {

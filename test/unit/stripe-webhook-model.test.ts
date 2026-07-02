@@ -6,6 +6,7 @@ import {
   declarationFromCheckoutSession,
   recurringChargeFromInvoice,
   recurringDonationInput,
+  cardPresentDonationInput,
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   claimStatusAfterRefund,
@@ -372,6 +373,52 @@ describe("recurringDonationInput (REQ-055)", () => {
 
   it("carries gift_aid=false through when the original declaration had no Gift Aid", () => {
     expect(recurringDonationInput(rec, { ...parent, giftAid: false }).giftAid).toBe(false);
+  });
+});
+
+describe("cardPresentDonationInput (REQ-054) — in-person card_present charges", () => {
+  const charge = (over: Record<string, unknown> = {}): Stripe.Charge =>
+    ({
+      id: "ch_terminal_1",
+      object: "charge",
+      amount: 5000,
+      currency: "gbp",
+      payment_intent: "pi_terminal_1",
+      payment_method_details: { type: "card_present" },
+      ...over,
+    }) as unknown as Stripe.Charge;
+
+  it("maps a card_present charge to a one-off in-person donation, no Gift Aid / declaration", () => {
+    const donation = cardPresentDonationInput(charge());
+    expect(donation).not.toBeNull();
+    expect(donation?.paymentChannel).toBe("in_person");
+    expect(donation?.mode).toBe("once");
+    expect(donation?.giftAid).toBe(false);
+    expect(donation?.declarationId).toBeNull();
+    expect(donation?.plan).toBeNull();
+    expect(donation?.amountPence).toBe(5000);
+    expect(donation?.currency).toBe("GBP");
+    expect(donation?.stripeChargeId).toBe("ch_terminal_1");
+    expect(donation?.stripePaymentIntentId).toBe("pi_terminal_1");
+  });
+
+  it("builds a not_eligible donations row (in-person tap captures no Gift Aid)", () => {
+    const donation = cardPresentDonationInput(charge());
+    const row = buildDonationRow(donation!, 7);
+    expect(row.payment_channel).toBe("in_person");
+    expect(row.gift_aid).toBe(false);
+    expect(row.declaration_id).toBeNull();
+    expect(row.claim_status).toBe("not_eligible");
+  });
+
+  it("returns null for an online 'card' charge (already captured via checkout — never double-mapped)", () => {
+    expect(cardPresentDonationInput(charge({ payment_method_details: { type: "card" } }))).toBeNull();
+  });
+
+  it("returns null when payment_method_details is absent or the type is anything else", () => {
+    expect(cardPresentDonationInput(charge({ payment_method_details: null }))).toBeNull();
+    expect(cardPresentDonationInput(charge({ payment_method_details: undefined }))).toBeNull();
+    expect(cardPresentDonationInput(charge({ payment_method_details: { type: "acss_debit" } }))).toBeNull();
   });
 });
 

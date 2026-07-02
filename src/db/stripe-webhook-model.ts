@@ -233,6 +233,34 @@ export function recurringDonationInput(
   });
 }
 
+// charge.succeeded → an IN-PERSON donation input (REQ-054). A Stripe Terminal /
+// card-present charge (payment_method_details.type === 'card_present') is a gift taken
+// at an event, NOT an online checkout — it has no checkout.session, so it is captured
+// straight off the charge. Mirrors recurringDonationInput: pure, no pool/clock; parses
+// through donationInputSchema so the row is validated the same way. Marked
+// payment_channel='in_person' (the REQ-036 column), a one-off with NO Gift Aid and NO
+// declaration (an in-person tap captures no Gift Aid declaration — declaration_id null,
+// so buildDonationRow derives claim_status='not_eligible').
+//
+// Returns null for ANY other charge shape — crucially an online 'card' charge, which is
+// already captured via checkout.session.completed; returning null there stops the same
+// gift being mapped twice (the double-count guard the acceptance requires).
+export function cardPresentDonationInput(charge: Stripe.Charge): DonationInput | null {
+  if (charge.payment_method_details?.type !== "card_present") return null;
+  return donationInputSchema.parse({
+    donorType: "individual",
+    mode: "once",
+    plan: null,
+    amountPence: charge.amount ?? 0,
+    currency: (charge.currency ?? "gbp").toUpperCase(),
+    giftAid: false,
+    declarationId: null,
+    paymentChannel: "in_person",
+    stripePaymentIntentId: asString(charge.payment_intent),
+    stripeChargeId: charge.id,
+  });
+}
+
 // charge.refunded carries the ABSOLUTE total refunded so far, so replaying the
 // event is idempotent (we set, never increment).
 export function refundedPenceFromCharge(charge: Stripe.Charge): number {

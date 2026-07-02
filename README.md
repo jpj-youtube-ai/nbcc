@@ -945,7 +945,9 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   (default `not_required`) plus a unique nullable `declaration_token` (added by the
   declaration-confirmation migration `1783010739790_declaration-status-and-token.js`) track
   the Gift Aid declaration-confirmation lifecycle — see **Declaration confirmation lifecycle**
-  below (REQ-057).
+  below (REQ-057). A NOT-NULL-defaulted `gasds_eligible` boolean (default `false`, added by
+  migration `1783014186353_gasds-eligible.js`) marks a small gift claimable under the Gift
+  Aid Small Donations Scheme — see **GASDS eligibility** below (REQ-058).
 - **`audit_log`** — an **append-only** trail (`actor`, `action`, `entity`,
   `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
 
@@ -1239,6 +1241,24 @@ benefit (recognition perks zeroed), derives the cap breach from the annualised t
 `donations.benefit_cap_breached`, and appends a `donation.benefits_recorded` `audit_log`
 row — any throw rolls **both** back (verified DB-free against a mocked pool in
 `test/unit/donation-benefits.test.ts`).
+
+**GASDS eligibility (REQ-058 · TASK-077).** The additive migration
+`migrations/1783014186353_gasds-eligible.js` adds the NOT-NULL-defaulted
+`donations.gasds_eligible` boolean (default `false`, so every existing row back-fills without
+touching an existing column — golden rule 2). The Gift Aid **Small Donations Scheme** lets a
+charity claim a Gift-Aid-style top-up on small cash/contactless gifts it holds no declaration
+for (e.g. an in-person card-present tap). The pure logic is `src/gasds/caps.ts` — no
+pool/config/clock, unit-tested DB-free (`test/unit/gasds-caps.test.ts`) like
+`src/benefits/caps.ts`. `isGasdsEligibleAmount(amountPence, { hasDeclaration, giftAid })` is
+true only for a small gift (≤ **£30**) with **no** declaration and **no** Gift Aid (a gift is
+never claimed under both schemes). `gasdsPoolLimitPence({ smallDonationsClaimedPenceThisYear,
+giftAidClaimedPenceThisYear })` returns the remaining pool headroom as the binding (lowest) of
+three caps — an **£8,000** annual ceiling, a **£2,000** top-up component, and **10×** the Gift
+Aid claimed that year — minus what is already claimed, never negative. **Assumption flagged in
+the code for NBCC finance sign-off:** the source wording was garbled, so the three figures are
+treated as three *independent* ceilings and the minimum taken (the conservative reading that
+can only under-claim). The code that SETS `gasds_eligible` on ingestion and the claim pipeline
+that reads the pool limit are later tasks; this lays the column + rules only.
 
 **`POST /api/contact` (REQ-030).** Validates a website enquiry
 `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,

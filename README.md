@@ -767,14 +767,17 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 They live in `src/routes/api.ts`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
-`{ mode, plan, amount, giftAid }` — plus an optional `donorType`
-(`individual`|`company`, defaulting to `individual`) and `businessName` folded in by
-the REQ-038 give widget — into a Stripe Checkout session and returns its
+`{ mode, plan, amount, giftAid }` — plus optional `donorType`
+(`individual`|`company`, defaulting to `individual`), `businessName`, and the REQ-039
+contact capture (`fullName`, `email`, `emailConsent`, `anonymous`, `ageConfirmed`)
+folded in by the give widget — into a Stripe Checkout session and returns its
 `{ url }` (which `startCheckout` redirects to). The body is validated zod-first
 (same style as `src/config/schema.ts`); impossible combinations are rejected with
 **400** (a monthly gift with no plan, a one-off with no amount, a bad mode/plan,
-a non-positive amount, an unknown `donorType`, or a `company` payload that also
-asserts `giftAid=true` — companies take the no-Gift-Aid path). A one-off is a `mode: payment` session with inline GBP
+a non-positive amount, an unknown `donorType`, a `company` payload that also
+asserts `giftAid=true` — companies take the no-Gift-Aid path — or a **monthly** gift
+that does not confirm 18 or over (`ageConfirmed`, REQ-039)). All captured contact
+fields are stamped onto the session metadata for the webhook. A one-off is a `mode: payment` session with inline GBP
 `price_data` built from the amount in **pence** — attached to the
 `STRIPE_DONATION_PRODUCT` product when that optional id is set, otherwise an inline
 product is named — and a monthly is a `mode: subscription` session using the
@@ -832,9 +835,14 @@ channel writes through. Added by the additive, expand-contract migration
 `migrations/1782923222001_unified-donation-model.js` (four new tables, no existing
 table touched, so a code-level rollback stays safe — golden rule 2):
 
-- **`donors`** — an individual or a company (`donor_type`), a name, optional
-  business name / registration number, optional consent-based `email` +
-  `email_consent`, and an `anonymous` flag (REQ-038/REQ-039/REQ-053).
+- **`donors`** — an individual or a company (`donor_type`), a `full_name`, optional
+  business name / registration number, an optional consent-based `email` +
+  `email_consent`, and an `anonymous` flag (REQ-038/REQ-039/REQ-053). The contact
+  fields are captured by the give widget (TASK-058), carried through the checkout
+  session metadata and mapped on by the webhook: `email` + `email_consent` are stored
+  **only** when the donor opted in — otherwise no email, so the platform sends nothing —
+  and `anonymous` drives `isPubliclyListable` (an anonymous donor is paid through but
+  never shown on the public donors page, REQ-047).
 - **`declarations`** — the immutable Gift Aid / HMRC declaration: the matching
   fields (title, names, `house_name_number`, address, `postcode`, `non_uk`), the
   `scope` (this-donation vs enduring), and the versioned wording the donor saw
@@ -855,7 +863,7 @@ table touched, so a code-level rollback stays safe — golden rule 2):
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,
-`batchAssignmentBlock`) — no pool/config/clock, so it is unit-tested DB-free
+`batchAssignmentBlock`, `isPubliclyListable`) — no pool/config/clock, so it is unit-tested DB-free
 (`test/unit/donations-model.test.ts`). `src/db/donations.ts` owns the
 transaction: `writeWithAudit(write, toAudit)` runs a state write (insert/update on
 donors/declarations/donations) **and** its matching `audit_log` row inside one
@@ -914,7 +922,10 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   `donor_type` / `business_name` (REQ-038). `donor_type` is the single field that
   governs claims: a `company` donation is stored `gift_aid=false` and derives
   `claim_status='not_eligible'` via `buildDonationRow` — never a second store
-  (REQ-036/REQ-053).
+  (REQ-036/REQ-053). It also maps the REQ-039 contact capture onto the donor:
+  `full_name` (falling back to the Stripe cardholder name), the `anonymous` flag, and
+  `email` + `email_consent` **only** when consent was given — otherwise no email is
+  stored, so the platform sends nothing.
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
   monthly charge as a further donation against the SAME donor (found via the
   subscription id), carrying the Gift Aid flag + declaration from the original.

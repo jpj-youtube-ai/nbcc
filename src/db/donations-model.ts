@@ -134,3 +134,11 @@ export function batchAssignmentBlock(current: {
   if (current.claimStatus !== "eligible") return "not_eligible";
   return null;
 }
+
+// REQ-039: an anonymous donor is pulled through to payment but is NEVER shown on the
+// public donors page. This pure predicate captures that invariant on the one model, so
+// the rule is testable here; the donors-page rendering that consumes it is REQ-047 and
+// out of scope. A donor is publicly listable only when they did not opt to be anonymous.
+export function isPubliclyListable(donor: { anonymous?: boolean }): boolean {
+  return donor.anonymous !== true;
+}

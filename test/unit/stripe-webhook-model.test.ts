@@ -26,7 +26,17 @@ const session = (over: Record<string, unknown> = {}): Stripe.Checkout.Session =>
     payment_intent: "pi_test_1",
     subscription: null,
     customer_details: { name: "Ada Lovelace", email: "ada@example.com" },
-    metadata: { mode: "once", plan: "", giftAid: "true" },
+    // Post-REQ-039, the donor's contact details are captured by the front-end and
+    // stamped on metadata (consent-based); the webhook maps THESE onto the donor row.
+    metadata: {
+      mode: "once",
+      plan: "",
+      giftAid: "true",
+      fullName: "Ada Lovelace",
+      email: "ada@example.com",
+      emailConsent: "true",
+      anonymous: "false",
+    },
     ...over,
   }) as unknown as Stripe.Checkout.Session;
 
@@ -75,6 +85,77 @@ describe("donationFromCheckoutSession", () => {
     expect(donation.plan).toBe("gold");
     expect(donation.stripeSubscriptionId).toBe("sub_test_1");
     expect(donation.stripePaymentIntentId).toBeNull();
+  });
+});
+
+describe("donationFromCheckoutSession — contact capture (REQ-039)", () => {
+  it("maps the captured full name from metadata onto the donor", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({
+        metadata: { mode: "once", plan: "", giftAid: "false", fullName: "Captured Name" },
+        customer_details: { name: "Stripe Name", email: "stripe@example.com" },
+      }),
+    );
+    expect(donor.fullName).toBe("Captured Name");
+  });
+
+  it("falls back to the Stripe cardholder name when metadata omits the full name", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({
+        metadata: { mode: "once", plan: "", giftAid: "false" },
+        customer_details: { name: "Stripe Name", email: "stripe@example.com" },
+      }),
+    );
+    expect(donor.fullName).toBe("Stripe Name");
+  });
+
+  it("stores the email and marks consent ONLY when the donor opted in", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({
+        metadata: {
+          mode: "once",
+          plan: "",
+          giftAid: "false",
+          email: "captured@example.com",
+          emailConsent: "true",
+        },
+        customer_details: { name: "Ada", email: "stripe@example.com" },
+      }),
+    );
+    // From OUR consent-based capture, never Stripe's separate receipt email.
+    expect(donor.email).toBe("captured@example.com");
+    expect(donor.emailConsent).toBe(true);
+  });
+
+  it("suppresses the email and consent when consent was NOT given (platform sends nothing)", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({
+        metadata: {
+          mode: "once",
+          plan: "",
+          giftAid: "false",
+          email: "captured@example.com",
+          emailConsent: "false",
+        },
+        customer_details: { name: "Ada", email: "stripe@example.com" },
+      }),
+    );
+    expect(donor.email).toBeNull();
+    expect(donor.emailConsent).toBe(false);
+  });
+
+  it("persists the anonymous flag from metadata", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({ metadata: { mode: "once", plan: "", giftAid: "false", anonymous: "true", fullName: "Ada" } }),
+    );
+    expect(donor.anonymous).toBe(true);
+  });
+
+  it("defaults anonymous to false when metadata omits it", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({ metadata: { mode: "once", plan: "", giftAid: "false", fullName: "Ada" } }),
+    );
+    expect(donor.anonymous).toBe(false);
   });
 });
 

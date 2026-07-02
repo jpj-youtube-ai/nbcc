@@ -4,6 +4,7 @@ import {
   buildDonationRow,
   deriveClaimStatus,
   batchAssignmentBlock,
+  isPubliclyListable,
 } from "../../src/db/donations-model";
 
 // TASK-045 (REQ-036/REQ-037): the pure field-mapping / claim-eligibility logic of
@@ -158,5 +159,19 @@ describe("batchAssignmentBlock (REQ-037 — the claim invariant + one batch)", (
     expect(batchAssignmentBlock({ claimStatus: "eligible", claimBatchId: 3 })).toBe(
       "already_batched",
     );
+  });
+});
+
+describe("isPubliclyListable (REQ-039 — anonymous donors are never shown publicly)", () => {
+  it("is false for an anonymous donor (pulled through to payment, never shown publicly)", () => {
+    expect(isPubliclyListable({ anonymous: true })).toBe(false);
+  });
+
+  it("is true for a donor who did not opt to be anonymous", () => {
+    expect(isPubliclyListable({ anonymous: false })).toBe(true);
+  });
+
+  it("defaults to listable when anonymity is unset", () => {
+    expect(isPubliclyListable({})).toBe(true);
   });
 });

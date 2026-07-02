@@ -55,15 +55,20 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
     stripeSubscriptionId: asString(session.subscription),
     stripeChargeId: null,
   });
-  const name = session.customer_details?.name ?? null;
-  const email = session.customer_details?.email ?? null;
+  // REQ-039: the donor's contact details come from OUR consent-based capture, stamped
+  // on metadata by the checkout endpoint. Full name falls back to the Stripe cardholder
+  // name (then a placeholder) when the capture form was bypassed. Email is consent-based:
+  // store the captured email + mark consent ONLY when the donor opted in, otherwise
+  // persist no email so the platform sends nothing (Stripe's receipt email is separate).
+  const cardholderName = session.customer_details?.name ?? null;
+  const consented = md.emailConsent === "true";
   return {
     donor: {
-      fullName: name ?? "Anonymous donor",
+      fullName: md.fullName ? md.fullName : (cardholderName ?? "Anonymous donor"),
       businessName,
-      email,
-      emailConsent: email != null,
-      anonymous: name == null,
+      email: consented && md.email ? md.email : null,
+      emailConsent: consented,
+      anonymous: md.anonymous === "true",
     },
     donation,
   };

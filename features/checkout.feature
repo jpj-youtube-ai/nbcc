@@ -14,14 +14,22 @@ Feature: Checkout session endpoint (REQ-029)
   Scenario: a valid monthly Gift Aid donation returns a session reflecting the opt-in
     # giftAid=true binds the verbatim HMRC wording onto the session metadata (TASK-053);
     # the offline stub reflects the opt-in in its preview URL, so this is asserted
-    # without a live Stripe account.
+    # without a live Stripe account. Monthly giving requires confirming 18 or over
+    # (ageConfirmed, REQ-039/TASK-059).
     When I POST "/api/checkout-session" with JSON:
       """
-      { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true }
+      { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true, "ageConfirmed": true }
       """
     Then the response status should be 200
     And the response field "url" should start with "https://"
     And the response field "url" should contain "giftaid"
+
+  Scenario: a monthly donation that does not confirm 18 or over is rejected (REQ-039)
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true }
+      """
+    Then the response status should be 400
 
   Scenario: an invalid body is rejected
     When I POST "/api/checkout-session" with JSON:

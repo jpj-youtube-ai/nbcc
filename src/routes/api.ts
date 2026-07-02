@@ -36,6 +36,15 @@ const checkoutBodySchema = z
     // donor record (REQ-053); it never switches the Gift Aid path.
     donorType: z.enum(DONOR_TYPES).default("individual"),
     businessName: z.string().optional(),
+    // REQ-039: consent-based contact capture folded in by the give widget (TASK-058).
+    // All optional so the no-JS base contract ({ mode, plan, amount, giftAid }) is
+    // unchanged. email is optional and its persistence is gated on emailConsent by the
+    // webhook; ageConfirmed is the 18+ attestation required for monthly giving below.
+    fullName: z.string().optional(),
+    email: z.string().optional(),
+    emailConsent: z.boolean().optional(),
+    anonymous: z.boolean().optional(),
+    ageConfirmed: z.boolean().optional(),
   })
   .refine((b) => b.mode !== "monthly" || b.plan !== null, {
     message: "monthly giving requires a plan",
@@ -50,6 +59,12 @@ const checkoutBodySchema = z
   .refine((b) => !(b.donorType === "company" && b.giftAid), {
     message: "a company donation cannot claim Gift Aid",
     path: ["giftAid"],
+  })
+  // Monthly giving is set up by adults aged 18 or over (REQ-039), so a monthly payload
+  // must affirmatively confirm it — reject one that does not with a 400.
+  .refine((b) => b.mode !== "monthly" || b.ageConfirmed === true, {
+    message: "monthly giving requires confirming you are aged 18 or over",
+    path: ["ageConfirmed"],
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
@@ -76,6 +91,14 @@ export function buildSessionParams(
     // the single Stripe webhook can persist them onto the donor record (REQ-036).
     donorType: body.donorType,
     businessName: body.businessName ?? "",
+    // REQ-039: carry the consent-based contact capture to the webhook, which maps
+    // full_name / email / email_consent / anonymous onto the donor row (email is
+    // persisted only with consent). ageConfirmed records the 18+ attestation.
+    fullName: body.fullName ?? "",
+    email: body.email ?? "",
+    emailConsent: String(body.emailConsent ?? false),
+    anonymous: String(body.anonymous ?? false),
+    ageConfirmed: String(body.ageConfirmed ?? false),
   };
 
   // When Gift Aid is affirmatively opted in, bind the consent to the EXACT verbatim

@@ -113,7 +113,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
 
 describe("POST /api/checkout-session — monthly (REQ-029)", () => {
   it("creates a subscription session using the plan's recurring price id", async () => {
-    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false });
+    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true });
 
     expect(res.statusCode).toBe(200);
     const p = lastParams();
@@ -130,7 +130,7 @@ describe("POST /api/checkout-session — monthly (REQ-029)", () => {
       ["platinum", "price_platinum_id"],
     ] as const) {
       create.mockClear();
-      await run({ mode: "monthly", plan, amount: 1000, giftAid: false });
+      await run({ mode: "monthly", plan, amount: 1000, giftAid: false, ageConfirmed: true });
       expect(lastParams().line_items[0].price).toBe(price);
     }
   });
@@ -143,7 +143,7 @@ describe("POST /api/checkout-session — Gift Aid (REQ-023)", () => {
   });
 
   it("records metadata.giftAid='false' when not opted in", async () => {
-    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false });
+    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false, ageConfirmed: true });
     expect(lastParams().metadata.giftAid).toBe("false");
   });
 });
@@ -152,7 +152,7 @@ describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", (
   it("stamps the all-donations wording version + snapshot for a gift-aided monthly gift", async () => {
     // A monthly gift is enduring (all_donations scope), so it binds the multiple/all-
     // donations HMRC statement — the exact text selectDeclarationWording returns.
-    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true });
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true });
     const md = lastParams().metadata;
     const wording = selectDeclarationWording({ mode: "monthly", scope: "all_donations" });
     expect(md.giftAidWordingVersion).toBe(wording.wording_version);
@@ -168,7 +168,7 @@ describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", (
   });
 
   it("binds distinct wording versions for monthly (enduring) vs one-off", async () => {
-    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true });
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true });
     const monthly = lastParams().metadata.giftAidWordingVersion;
     await run({ mode: "once", plan: null, amount: 2500, giftAid: true });
     const oneOff = lastParams().metadata.giftAidWordingVersion;
@@ -176,7 +176,7 @@ describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", (
   });
 
   it("stamps NO wording metadata when Gift Aid is not opted in", async () => {
-    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false });
+    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false, ageConfirmed: true });
     const md = lastParams().metadata;
     expect(md.giftAid).toBe("false");
     expect(md.giftAidWordingVersion).toBeUndefined();
@@ -238,9 +238,62 @@ describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
   });
 });
 
+describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", () => {
+  const monthly = { mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true };
+
+  it("rejects a monthly payload that does not confirm 18 or over with 400 and never calls Stripe", async () => {
+    // Monthly giving is set up by adults aged 18 or over (REQ-039).
+    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a monthly payload with ageConfirmed=false", async () => {
+    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: false });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a monthly payload once 18 or over is confirmed", async () => {
+    const res = await run(monthly);
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("does not require the 18+ confirmation for a one-off gift", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("stamps the captured contact fields onto the session metadata", async () => {
+    await run({
+      ...monthly,
+      fullName: "Ada Lovelace",
+      email: "ada@example.com",
+      emailConsent: true,
+      anonymous: false,
+    });
+    const md = lastParams().metadata;
+    expect(md.fullName).toBe("Ada Lovelace");
+    expect(md.email).toBe("ada@example.com");
+    expect(md.emailConsent).toBe("true");
+    expect(md.anonymous).toBe("false");
+    expect(md.ageConfirmed).toBe("true");
+  });
+
+  it("stamps empty/false contact metadata when the fields are absent (base contract)", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const md = lastParams().metadata;
+    expect(md.fullName).toBe("");
+    expect(md.email).toBe("");
+    expect(md.emailConsent).toBe("false");
+    expect(md.anonymous).toBe("false");
+  });
+});
+
 describe("POST /api/checkout-session — invalid bodies return 400", () => {
   it.each([
     ["monthly without a plan", { mode: "monthly", plan: null, amount: 1000, giftAid: false }],
+    ["monthly not confirming 18 or over", { mode: "monthly", plan: "gold", amount: 5000, giftAid: false }],
     ["once without an amount", { mode: "once", plan: null, amount: null, giftAid: false }],
     ["an unknown mode", { mode: "annual", plan: null, amount: 1000, giftAid: false }],
     ["a non-boolean giftAid", { mode: "once", plan: null, amount: 1000, giftAid: "yes" }],

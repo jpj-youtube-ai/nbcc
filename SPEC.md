@@ -409,6 +409,10 @@ Tasks:
 
 Produce a correctly formatted export (Title, First name, Last name, House name/number, Postcode, Donation date, Amount; one row per successful charge, with OSCR as regulator, charity number SC047995 and NBCC's HMRC reference) for finance to upload to Charities Online, with the direct HMRC API deferred to phase two. *Accept:* each successful charge under an enduring monthly declaration produces its own claimable row.
 
+Tasks:
+- TASK-082 — Add a pure Charities Online export row builder and CSV formatter
+- TASK-083 — Add a claimable-donations export query and Charities Online CSV export script
+
 ### REQ-053 — Company donation flow
 
 Provide a company path that suppresses all Gift Aid UI and captures the legal company name (required), an optional registration number, a required contact name and email, a billing address and an anonymous flag, recording the donation as permanently not-claimable. *Accept:* no declaration is taken, no Charities Online row is produced, and the donation never enters a claim.

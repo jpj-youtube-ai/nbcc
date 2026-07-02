@@ -1,3 +1,18 @@
+> **Superseded in part by TASK-071 (2026-07-02).** The "list lives in the HTML as
+> hand-edited `<li>` entries" decision below held for the initial scaffold, but
+> **donation-sourced entries are now rendered server-side** from the real donor
+> records. `GET /supporters` (`src/routes/site.ts`) reads the publicly listable
+> donors (`listPublicSupporters` in `src/db/donations.ts`, using the pure
+> `isPubliclyListable` / `groupPublicSupporters` in `src/db/donations-model.ts`) and
+> injects them into the **same** `supporters.html` markup — three Bronze/Silver/Gold
+> tiers, alphabetical within tier, person vs organisation marker. `supporters.html`
+> remains the **template and the fallback** if the DB read fails, so the static-file
+> structure guards (`supporters.test.ts`, accessibility/copy/brand) still hold. An
+> anonymous donor is never rendered; a company is listed by `business_name`, an
+> individual by `full_name`; the tier is derived from the donor's largest gift using
+> the give-monthly thresholds (platinum-level gifts fold into the top Gold tier). The
+> hand-edited-HTML rationale below still governs any **non-donation** honour entries.
+
 # TASK-023 — Tiered supporters list on supporters.html (REQ-035)
 
 **Task:** fill the kept `.page-sections` slot on `supporters.html` (the TASK-022

@@ -3,11 +3,16 @@ import { pool } from "./pool";
 import {
   buildDonationRow,
   batchAssignmentBlock,
+  groupPublicSupporters,
   type DonationInput,
   type DonationRow,
   type DonorInput,
+  type DonorType,
   type BatchBlockReason,
   type ClaimStatus,
+  type SupporterSourceRow,
+  type SupporterTier,
+  type PublicSupporter,
 } from "./donations-model";
 import { buildDeclarationRow, type DeclarationRow } from "../declarations/fields";
 import type { DeclarationWrite } from "./stripe-webhook-model";
@@ -176,6 +181,35 @@ export async function insertDonorAndDonation(
   const donationInput = declarationId != null ? { ...donation, declarationId } : donation;
   const donationId = await insertDonation(client, buildDonationRow(donationInput, donorId));
   return { donorId, donationId, declarationId };
+}
+
+// Read the publicly listable supporters for the donors wall (TASK-071/REQ-035). Selects
+// each donor with at least one donation and their LARGEST gift (MAX amount_pence), then
+// the pure groupPublicSupporters places them into the three display tiers (alphabetical
+// within tier). Anonymous donors are dropped by isPubliclyListable inside the grouper —
+// selected here so the invariant is enforced by the shared helper, never re-implemented
+// in SQL — so they never reach the page. Read-only; no audit row.
+export async function listPublicSupporters(): Promise<Record<SupporterTier, PublicSupporter[]>> {
+  const res = await pool.query<{
+    donor_type: DonorType;
+    full_name: string;
+    business_name: string | null;
+    anonymous: boolean;
+    max_amount: string | number;
+  }>(
+    `SELECT dn.donor_type, dn.full_name, dn.business_name, dn.anonymous,
+            MAX(d.amount_pence) AS max_amount
+       FROM donors dn JOIN donations d ON d.donor_id = dn.id
+      GROUP BY dn.id, dn.donor_type, dn.full_name, dn.business_name, dn.anonymous`,
+  );
+  const rows: SupporterSourceRow[] = res.rows.map((r) => ({
+    donorType: r.donor_type,
+    fullName: r.full_name,
+    businessName: r.business_name,
+    anonymous: r.anonymous,
+    amountPence: Number(r.max_amount),
+  }));
+  return groupPublicSupporters(rows);
 }
 
 export interface RecordDonationInput {

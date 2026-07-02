@@ -142,3 +142,70 @@ export function batchAssignmentBlock(current: {
 export function isPubliclyListable(donor: { anonymous?: boolean }): boolean {
   return donor.anonymous !== true;
 }
+
+// The public supporters wall (TASK-071/REQ-035) groups donation-sourced donors into
+// three display tiers. Ascending order — the order the page renders and the tier
+// headings the supporters markup uses.
+export const SUPPORTER_TIERS = ["bronze", "silver", "gold"] as const;
+export type SupporterTier = (typeof SUPPORTER_TIERS)[number];
+
+// Derive a supporter's tier from their donation amount, reusing the give-monthly tier
+// thresholds (donate.html: bronze £10, silver £25, gold £50, platinum £100 — in pence).
+// The public wall has three display tiers, so a platinum-level gift (≥ £50) sits in the
+// top Gold band alongside gold. Pure.
+export function supporterTierForAmount(amountPence: number): SupporterTier {
+  if (amountPence >= 5000) return "gold";
+  if (amountPence >= 2500) return "silver";
+  return "bronze";
+}
+
+// The public display name: a company (or any donor carrying a business name) is listed
+// by its business name; an individual by their full name. Mirrors the acceptance rule
+// "business_name when donor_type is company (or businessName is set), otherwise full_name".
+export function supporterDisplayName(donor: {
+  donorType: DonorType;
+  fullName: string;
+  businessName?: string | null;
+}): string {
+  return donor.donorType === "company" || donor.businessName
+    ? (donor.businessName ?? donor.fullName)
+    : donor.fullName;
+}
+
+// A raw donor row (one per non-anonymous donor, carrying their largest gift) the DB read
+// hands to the grouper.
+export interface SupporterSourceRow {
+  donorType: DonorType;
+  fullName: string;
+  businessName?: string | null;
+  anonymous?: boolean;
+  amountPence: number;
+}
+
+// A rendered supporter entry.
+export interface PublicSupporter {
+  name: string;
+  kind: "person" | "organisation";
+}
+
+// Group raw donor rows into the three display tiers (TASK-071). Drops anonymous donors
+// via isPubliclyListable (they are NEVER shown), derives each tier from the donor's
+// amount and the person/organisation kind from donor_type, and sorts each tier
+// alphabetically by display name. Pure — DB-free-testable; the SQL read lives in
+// donations.ts and the HTML render in src/routes/site.ts.
+export function groupPublicSupporters(
+  rows: SupporterSourceRow[],
+): Record<SupporterTier, PublicSupporter[]> {
+  const tiers: Record<SupporterTier, PublicSupporter[]> = { bronze: [], silver: [], gold: [] };
+  for (const row of rows) {
+    if (!isPubliclyListable(row)) continue;
+    tiers[supporterTierForAmount(row.amountPence)].push({
+      name: supporterDisplayName(row),
+      kind: row.donorType === "company" ? "organisation" : "person",
+    });
+  }
+  for (const tier of SUPPORTER_TIERS) {
+    tiers[tier].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return tiers;
+}

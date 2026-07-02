@@ -359,6 +359,9 @@ Tasks:
 
 Persist each declaration immutably with all captured fields, the declaration timestamp, the wording-version snapshot, the scope, the benefits accepted and foreign keys to every charge, retaining it six years after the most recent claimed donation (permanently while an enduring or monthly declaration is active, with the clock starting at the final charge on cancellation). *Accept:* online declarations require no 30-day confirmation letter.
 
+Tasks:
+- TASK-068 — Add a pure declaration retention-expiry calculator implementing the six-year-after-last-claim rule
+
 ### REQ-047 — Post-payment confirmation and donors page
 
 On a successful payment show a confirmation screen, send a confirmation when an email is present, add a donors-page entry showing name or business name unless anonymous, and mark claimable donations for the next claim schedule. *Accept:* anonymous donations never appear on the public page yet are still queued for claiming with real details.

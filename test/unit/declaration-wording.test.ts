@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   selectDeclarationWording,
+  declarationScopeForMode,
   hasFullLiabilityStatement,
   assertFullLiabilityStatement,
   wordingSnapshotSchema,
@@ -32,6 +33,13 @@ describe("selectDeclarationWording (REQ-040/REQ-044)", () => {
   it("treats a monthly gift as enduring even if scope says this_donation (REQ-041)", () => {
     const w = selectDeclarationWording({ mode: "monthly", scope: "this_donation" });
     expect(w.wording_version).toBe(ALL_DONATIONS_WORDING.wording_version);
+  });
+
+  it("defaults the declaration scope from the frequency: monthly is enduring, one-off is this_donation (REQ-041)", () => {
+    // The single source of the mode→scope decision the checkout endpoint stamps as
+    // metadata.declarationScope and reuses to pick the wording above.
+    expect(declarationScopeForMode("monthly")).toBe("enduring");
+    expect(declarationScopeForMode("once")).toBe("this_donation");
   });
 
   it("returns exactly the declarations columns: wording_version + wording_snapshot", () => {

@@ -61,6 +61,21 @@ export function selectDeclarationWording(input: { mode: Mode; scope: Scope }): D
   return enduring ? ALL_DONATIONS_WORDING : SINGLE_DONATION_WORDING;
 }
 
+// The declaration scope a gift's frequency DEFAULTS to (REQ-041): a monthly gift is
+// *enduring* — one declaration covers this and future (and the past four years')
+// donations — while a one-off covers just this donation. This is THE single source of
+// the mode→scope decision, so the checkout endpoint stamps it as
+// metadata.declarationScope AND reuses it to pick the matching verbatim wording (the
+// enduring scope maps to the all-donations template) rather than choosing scope twice.
+// The capture flow that lets a one-off donor opt into an enduring scope is REQ-043/044,
+// not built yet.
+export const DECLARATION_SCOPES = ["enduring", "this_donation"] as const;
+export type DeclarationScope = (typeof DECLARATION_SCOPES)[number];
+
+export function declarationScopeForMode(mode: Mode): DeclarationScope {
+  return mode === "monthly" ? "enduring" : "this_donation";
+}
+
 // The full HMRC liability statement requires the taxpayer-responsibility clause —
 // naming Income Tax AND Capital Gains Tax AND the responsibility to pay any
 // shortfall. A snapshot of just "I am a UK taxpayer" (or any text missing this

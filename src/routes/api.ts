@@ -3,7 +3,7 @@ import type StripeNS from "stripe";
 import { z } from "zod";
 import { stripe, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import { forwardEnquiry } from "../clients/contact";
-import { selectDeclarationWording } from "../declarations/wording";
+import { selectDeclarationWording, declarationScopeForMode } from "../declarations/wording";
 import { config } from "../config";
 
 // Marketing-site API endpoints, both implemented.
@@ -101,15 +101,25 @@ export function buildSessionParams(
     ageConfirmed: String(body.ageConfirmed ?? false),
   };
 
+  // Default the declaration scope from the gift's frequency (REQ-041): monthly is
+  // enduring — one declaration covers all the donor's gifts — while a one-off covers
+  // just this donation. Stamped on EVERY session as the concrete "monthly pairs with an
+  // enduring declaration" default the full capture flow (REQ-043/044) will build on.
+  // declarationScopeForMode is the SINGLE source of this decision, reused below to pick
+  // the matching verbatim wording so scope selection is never duplicated.
+  const declarationScope = declarationScopeForMode(body.mode);
+  metadata.declarationScope = declarationScope;
+
   // When Gift Aid is affirmatively opted in, bind the consent to the EXACT verbatim
   // HMRC statement the donor saw (REQ-042): stamp the selected wording version +
   // snapshot so the REQ-036 webhook can persist them onto the immutable declaration
-  // (REQ-043/REQ-046) — no declarations row is written here. A monthly gift is
-  // enduring (all_donations scope), a one-off covers this donation only; this mirrors
-  // selectDeclarationWording, the single source of truth for the wording text.
+  // (REQ-043/REQ-046) — no declarations row is written here. The enduring declaration
+  // scope maps to the all-donations template, this_donation to the single-donation one.
   if (body.giftAid) {
-    const scope = body.mode === "monthly" ? "all_donations" : "this_donation";
-    const wording = selectDeclarationWording({ mode: body.mode, scope });
+    const wording = selectDeclarationWording({
+      mode: body.mode,
+      scope: declarationScope === "enduring" ? "all_donations" : "this_donation",
+    });
     metadata.giftAidWordingVersion = wording.wording_version;
     metadata.giftAidWording = wording.wording_snapshot;
   }

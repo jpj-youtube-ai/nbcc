@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (38)
+## Shipped (39)
 
 ### REQ-001 — Multi-page site structure
 
@@ -273,6 +273,14 @@ Show HMRC's official template liability statement verbatim (multiple/all-donatio
 Tasks:
 - TASK-049 — Add versioned, verbatim HMRC declaration wording config with scope selection and liability-paragraph validation
 
+### REQ-055 — Stripe subscriptions for monthly giving
+
+Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
+
+Tasks:
+- TASK-050 — Add a subscription plan-change endpoint that up/downgrades a monthly tier via Stripe proration
+- TASK-051 — Ensure the Stripe webhook records the actual charged amount on every recurring/prorated invoice so Gift Aid claims the real amount
+
 ### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
 
 A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
@@ -281,7 +289,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (27)
+## Planned (26)
 
 ### REQ-037 — Core donation data model
 
@@ -358,14 +366,6 @@ Provide a company path that suppresses all Gift Aid UI and captures the legal co
 ### REQ-054 — Corporation-tax receipt for companies
 
 Email a dated receipt in place of a declaration stating NBCC's name and OSCR SC047995, the amount and date, that it is a genuine donation with nothing of value given in return, and that NBCC has not and will not claim Gift Aid on it. *Accept:* genuine sponsorship where consideration is given is flagged for trustees as a separate flow rather than processed as a donation.
-
-### REQ-055 — Stripe subscriptions for monthly giving
-
-Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
-
-Tasks:
-- TASK-050 — Add a subscription plan-change endpoint that up/downgrades a monthly tier via Stripe proration
-- TASK-051 — Ensure the Stripe webhook records the actual charged amount on every recurring/prorated invoice so Gift Aid claims the real amount
 
 ### REQ-056 — One-off, BACS and card payments
 

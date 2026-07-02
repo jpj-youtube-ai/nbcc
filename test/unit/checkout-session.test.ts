@@ -460,6 +460,69 @@ describe("POST /api/checkout-session — explicit declaration scope override (RE
   });
 });
 
+describe("POST /api/checkout-session — partnership shares (REQ-051 / TASK-081)", () => {
+  const partner = (firstName: string, sharePence: number) => ({
+    firstName,
+    lastName: "Partner",
+    houseNameNumber: "1",
+    address: "Partnership House, London",
+    postcode: "SW1A 1AA",
+    nonUk: false,
+    sharePence,
+  });
+
+  const partnershipBody = (partners: unknown[], amount = 10000) => ({
+    mode: "once" as const,
+    plan: null,
+    amount,
+    giftAid: true,
+    donorType: "partnership" as const,
+    partners,
+  });
+
+  it("accepts a partnership whose partner shares sum EXACTLY to the amount and stamps them onto metadata", async () => {
+    const res = await run(partnershipBody([partner("Ada", 6000), partner("Grace", 4000)], 10000));
+    expect(res.statusCode).toBe(200);
+    expect(create).toHaveBeenCalledOnce();
+    const md = lastParams().metadata;
+    expect(md.donorType).toBe("partnership");
+    const stamped = JSON.parse(md.partners);
+    expect(stamped).toHaveLength(2);
+    expect(stamped.reduce((a: number, p: { sharePence: number }) => a + p.sharePence, 0)).toBe(10000);
+  });
+
+  it("rejects a partnership whose shares OVER-sum the amount with 400 and never calls Stripe", async () => {
+    const res = await run(partnershipBody([partner("Ada", 6000), partner("Grace", 5000)], 10000));
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a partnership whose shares UNDER-sum the amount with 400 and never calls Stripe", async () => {
+    const res = await run(partnershipBody([partner("Ada", 6000), partner("Grace", 3000)], 10000));
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a partnership Gift Aid payload with no partners with 400", async () => {
+    const res = await run(partnershipBody([], 10000));
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("does not stamp partners metadata for a partnership that did not opt into Gift Aid", async () => {
+    // Without Gift Aid there is no declaration to make, so no partner shares are carried.
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 10000,
+      giftAid: false,
+      donorType: "partnership",
+    });
+    expect(res.statusCode).toBe(200);
+    expect(lastParams().metadata.partners).toBeUndefined();
+  });
+});
+
 describe("POST /api/checkout-session — invalid bodies return 400", () => {
   it.each([
     ["monthly without a plan", { mode: "monthly", plan: null, amount: 1000, giftAid: false }],

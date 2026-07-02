@@ -124,6 +124,58 @@ export function declarationFromCheckoutSession(
   };
 }
 
+// One partner's Gift Aid declaration + share of a partnership donation to persist (REQ-051).
+// Mirrors DeclarationWrite (the declaration fields, scope column value and wording snapshot,
+// with the donor FK filled in by the transactional writer) plus the partner's share in pence.
+export interface PartnerShareWrite extends DeclarationWrite {
+  sharePence: number;
+}
+
+// checkout.session.completed → the partnership's per-partner declarations + shares, or [] when
+// there is none. A partnership stamps a `partners` JSON array on the session (REQ-051 checkout,
+// TASK-081) only for the gift-aided partnership path; each entry is a declaration + sharePence
+// (already validated at checkout to sum to the amount). The scope column value and the verbatim
+// wording are shared across the partners (same gift), mirroring declarationFromCheckoutSession.
+export function partnerSharesFromCheckoutSession(
+  session: Stripe.Checkout.Session,
+): PartnerShareWrite[] {
+  const md = session.metadata ?? {};
+  if (!giftAidFromMetadata(md)) return [];
+  if (!md.partners) return [];
+  let raw: unknown;
+  try {
+    raw = JSON.parse(md.partners);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(raw)) return [];
+  const scope: Scope = scopeFromDeclarationScope(md.declarationScope);
+  const wording: DeclarationWording = {
+    wording_version: md.giftAidWordingVersion ?? "",
+    wording_snapshot: md.giftAidWording ?? "",
+  };
+  return raw.map((p: Record<string, unknown>): PartnerShareWrite => {
+    const str = (v: unknown): string | undefined =>
+      typeof v === "string" && v.length > 0 ? v : undefined;
+    const fields: DeclarationFields = {
+      title: str(p.title),
+      firstName: (p.firstName as string) ?? "",
+      lastName: (p.lastName as string) ?? "",
+      houseNameNumber: str(p.houseNameNumber),
+      address: (p.address as string) ?? "",
+      postcode: str(p.postcode),
+      nonUk: p.nonUk === true,
+    };
+    return {
+      fields,
+      scope,
+      wording,
+      confirmedTaxpayer: true,
+      sharePence: typeof p.sharePence === "number" ? p.sharePence : 0,
+    };
+  });
+}
+
 // The single donation-confirmation email payload (TASK-070). Pure data shape — the
 // network send lives in src/clients/email.ts. NOT the full REQ-060 templated system
 // (Gift Aid confirmation, manage/cancel, receipts); just enough to thank a donor.

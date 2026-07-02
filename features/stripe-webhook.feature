@@ -39,6 +39,44 @@ Feature: Stripe webhook handler (REQ-036)
     And there should be exactly 1 donation with payment intent "pi_bdd_1"
     And the donation with payment intent "pi_bdd_1" should have refunded amount 5000
 
+  Scenario: a prorated subscription charge records the actual amount and keeps Gift Aid
+    # The monthly checkout captures the initial charge and the Gift Aid declaration.
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_prorate",
+        "object": "checkout.session",
+        "amount_total": 2500,
+        "currency": "gbp",
+        "mode": "subscription",
+        "payment_intent": null,
+        "subscription": "sub_bdd_prorate",
+        "metadata": { "mode": "monthly", "plan": "gold", "giftAid": "true" },
+        "customer_details": { "name": "Grace Prorate", "email": "grace.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    # A mid-subscription up/downgrade bills a prorated amount (1234) that differs from
+    # the 2500 tier preset; it must become its own donation recording that true amount,
+    # carrying the Gift Aid flag from the original declaration.
+    When I POST a signed Stripe "invoice.paid" webhook event:
+      """
+      {
+        "id": "in_bdd_prorate",
+        "object": "invoice",
+        "amount_paid": 1234,
+        "currency": "gbp",
+        "subscription": "sub_bdd_prorate",
+        "payment_intent": "pi_bdd_prorate",
+        "charge": "ch_bdd_prorate",
+        "billing_reason": "subscription_update"
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_prorate"
+    And the donation with payment intent "pi_bdd_prorate" should have amount 1234
+    And the donation with payment intent "pi_bdd_prorate" should have gift aid true
+
   Scenario: an invalid signature is rejected
     When I POST a Stripe "charge.refunded" webhook event with an invalid signature:
       """

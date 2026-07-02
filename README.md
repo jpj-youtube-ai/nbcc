@@ -857,8 +857,15 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   a flag when `metadata.giftAid === 'true'` (stamped by the REQ-029 checkout).
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
   monthly charge as a further donation against the SAME donor (found via the
-  subscription id); the first `subscription_create` invoice is skipped so the
-  initial charge (already captured at checkout) is not double-counted.
+  subscription id), carrying the Gift Aid flag + declaration from the original.
+  The amount recorded is the invoice's **actually-charged amount** (`amount_paid`),
+  never the plan's preset tier value — so a mid-subscription up/downgrade
+  (`subscription_update`) claims the true prorated amount, needing no special Gift
+  Aid handling beyond the actual amount charged (REQ-055). Only the first
+  `subscription_create` invoice is skipped (already captured at checkout, so not
+  double-counted); `subscription_update` / `subscription_cycle` invoices each
+  become their own donation row. The pure `recurringDonationInput` mapping
+  (`src/db/stripe-webhook-model.ts`) is unit-tested DB-free.
 - **`charge.refunded` / `charge.dispute.*`** → updates the SAME donation record's
   `refunded_amount_pence` (absolute, so replay-safe) and recomputes `claim_status`
   — never a duplicate row.

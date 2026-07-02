@@ -4,6 +4,7 @@ import {
   giftAidFromMetadata,
   donationFromCheckoutSession,
   recurringChargeFromInvoice,
+  recurringDonationInput,
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   claimStatusAfterRefund,
@@ -99,8 +100,63 @@ describe("recurringChargeFromInvoice", () => {
     expect(rec?.chargeId).toBe("ch_test_2");
   });
 
-  it("skips the first (subscription_create) invoice — already captured at checkout", () => {
-    expect(recurringChargeFromInvoice(invoice({ billing_reason: "subscription_create" }))).toBeNull();
+  it("records the ACTUAL charged amount (amount_paid) for a prorated invoice, not a tier preset (REQ-055)", () => {
+    // A mid-subscription up/downgrade bills an odd prorated amount unlike any round
+    // tier preset; the charge must carry that exact amount so Gift Aid claims the true value.
+    const rec = recurringChargeFromInvoice(
+      invoice({ billing_reason: "subscription_update", amount_paid: 1234 }),
+    );
+    expect(rec?.amountPence).toBe(1234);
+  });
+
+  it("does NOT skip a prorated (subscription_update) or renewal (subscription_cycle) invoice", () => {
+    expect(
+      recurringChargeFromInvoice(invoice({ billing_reason: "subscription_update" })),
+    ).not.toBeNull();
+    expect(
+      recurringChargeFromInvoice(invoice({ billing_reason: "subscription_cycle" })),
+    ).not.toBeNull();
+  });
+
+  it("skips ONLY the first (subscription_create) invoice — already captured at checkout", () => {
+    expect(
+      recurringChargeFromInvoice(invoice({ billing_reason: "subscription_create" })),
+    ).toBeNull();
+  });
+});
+
+describe("recurringDonationInput (REQ-055)", () => {
+  // The invoice-derived charge (amount is the invoice's amount_paid) …
+  const rec = {
+    subscriptionId: "sub_test_1",
+    amountPence: 1234, // a prorated amount, unlike any round tier preset
+    currency: "GBP",
+    paymentIntentId: "pi_test_2",
+    chargeId: "ch_test_2",
+  };
+  // … combined with the Gift Aid / declaration carried from the ORIGINAL donation
+  // (found via the subscription id in the processor).
+  const parent = {
+    donorType: "individual" as const,
+    plan: "gold" as const,
+    giftAid: true,
+    declarationId: 7,
+  };
+
+  it("records the actual charged amount and carries Gift Aid + declaration from the original", () => {
+    const donation = recurringDonationInput(rec, parent);
+    expect(donation.amountPence).toBe(1234); // the invoice's amount_paid, NOT the tier preset
+    expect(donation.giftAid).toBe(true); // carried from the original declaration
+    expect(donation.declarationId).toBe(7); // the same declaration governs the prorated charge
+    expect(donation.mode).toBe("monthly");
+    expect(donation.plan).toBe("gold");
+    expect(donation.stripeSubscriptionId).toBe("sub_test_1");
+    expect(donation.stripePaymentIntentId).toBe("pi_test_2");
+    expect(donation.stripeChargeId).toBe("ch_test_2");
+  });
+
+  it("carries gift_aid=false through when the original declaration had no Gift Aid", () => {
+    expect(recurringDonationInput(rec, { ...parent, giftAid: false }).giftAid).toBe(false);
   });
 });
 

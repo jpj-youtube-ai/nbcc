@@ -1,6 +1,8 @@
+import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import type Stripe from "stripe";
 import { pool } from "./pool";
+import { config } from "../config";
 import { buildDonationRow, type DonorInput } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation } from "./donations";
 import {
@@ -9,13 +11,15 @@ import {
   recurringChargeFromInvoice,
   recurringDonationInput,
   cardPresentDonationInput,
+  declarationLinks,
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   claimStatusAfterRefund,
   confirmationEmailFor,
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
-import { sendDonationConfirmation } from "../clients/email";
+import { sendDonationConfirmation, sendDeclarationEmail } from "../clients/email";
+import { applyDeclarationEvent } from "../declarations/status";
 
 // The SINGLE Stripe webhook processor for the unified platform (REQ-036) — no
 // other module handles donor/donation events. Every event is processed in ONE
@@ -42,13 +46,17 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email } = await dispatch(client, event);
+    const { action, email, declaration } = await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
     // donation row has committed, and OUTSIDE the transaction: a slow or failing
     // provider must never roll back a recorded gift. Best-effort — the send is
     // swallowed on failure (the donation is already durably recorded).
     await sendConfirmation(email);
+    // In-person Gift Aid declaration email (TASK-075): also post-commit, best-effort. Its
+    // outcome flips declaration_status to 'sent' or 'undelivered' via a SEPARATE write, so
+    // neither the send nor its status stamp can roll back the committed donation.
+    await sendDeclarationConfirmation(declaration ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -64,6 +72,55 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
 interface DispatchResult {
   action: string;
   email: DonationConfirmationEmail | null;
+  // The in-person declaration email to send + stamp post-commit (TASK-075), or null when
+  // there is nothing to confirm (non-card-present, or no receipt_email to send to).
+  declaration?: DeclarationSend | null;
+}
+
+// A pending in-person declaration whose confirmation email must be sent AFTER commit; its
+// send outcome flips declaration_status. Carries the committed donation id, the recipient
+// (the charge's receipt_email), the unique token addressing the declaration, and the
+// amount for the email body.
+interface DeclarationSend {
+  donationId: number;
+  receiptEmail: string;
+  token: string;
+  amountPence: number;
+  currency: string;
+}
+
+// Post-commit, best-effort in-person declaration email (TASK-075/REQ-048). Sends the
+// unique declaration link + QR short link to the charge's receipt_email, then stamps
+// declaration_status: 'sent' on success, 'undelivered' when the send throws — via a
+// SEPARATE write, so a failed send/stamp never rolls back the committed donation. The
+// legal pending→sent / pending→undelivered transition is enforced by applyDeclarationEvent.
+// Exported so the trigger is unit-testable with a mocked email client.
+export async function sendDeclarationConfirmation(decl: DeclarationSend | null): Promise<void> {
+  if (!decl) return;
+  const links = declarationLinks(config.DECLARATION_FORM_BASE_URL, decl.token);
+  let event: "send" | "mark_undelivered" = "send";
+  try {
+    await sendDeclarationEmail({
+      email: decl.receiptEmail,
+      declarationLink: links.link,
+      shortLink: links.shortLink,
+      amountPence: decl.amountPence,
+      currency: decl.currency,
+    });
+  } catch {
+    // The provider failed: the confirmation was not delivered.
+    event = "mark_undelivered";
+  }
+  const status = applyDeclarationEvent("pending", event); // 'sent' | 'undelivered'
+  try {
+    await pool.query(`UPDATE donations SET declaration_status = $1 WHERE id = $2`, [
+      status,
+      decl.donationId,
+    ]);
+  } catch {
+    // Best-effort status stamp: the donation + token are already durably committed, so a
+    // failure here must not fail the webhook (which would make Stripe redeliver).
+  }
 }
 
 // Post-commit, best-effort send of the donation-confirmation email. Isolated so the
@@ -164,6 +221,18 @@ async function handleChargeSucceeded(
     emailConsent: false,
   };
   const { donorId, donationId } = await insertDonorAndDonation(client, donor, donation);
+
+  // An in-person gift has no Gift Aid declaration yet, but the walk-in donor may add one:
+  // stamp the donation with a UNIQUE token and declaration_status='pending' (a confirmation
+  // is owed), in the SAME transaction as the donation. The token addresses the declaration
+  // link/QR in the post-commit email (TASK-075). Kept off buildDonationRow (which is shared
+  // with online channels that never carry a token) — a targeted UPDATE on the new row.
+  const token = randomUUID();
+  await client.query(
+    `UPDATE donations SET declaration_status = 'pending', declaration_token = $1 WHERE id = $2`,
+    [token, donationId],
+  );
+
   await insertAudit(client, {
     actor: "stripe",
     action: "donation.created",
@@ -171,7 +240,20 @@ async function handleChargeSucceeded(
     entityId: donationId,
     data: { eventId: event.id, donorId, paymentChannel: donation.paymentChannel },
   });
-  return { action: "donation.created", email: null };
+
+  // Email the declaration link only when the terminal captured a receipt email; otherwise
+  // the confirmation stays 'pending' (a printed-QR follow-up, out of scope here).
+  const receiptEmail = event.data.object.receipt_email;
+  const declaration: DeclarationSend | null = receiptEmail
+    ? {
+        donationId,
+        receiptEmail,
+        token,
+        amountPence: donation.amountPence,
+        currency: donation.currency,
+      }
+    : null;
+  return { action: "donation.created", email: null, declaration };
 }
 
 interface ParentDonation {

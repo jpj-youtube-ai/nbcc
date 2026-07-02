@@ -261,6 +261,26 @@ export function cardPresentDonationInput(charge: Stripe.Charge): DonationInput |
   });
 }
 
+// The declaration-confirmation links for an in-person donation (TASK-075/REQ-048). Built
+// from the site base URL + the donation's UNIQUE declaration_token, so each addresses
+// exactly one gift: `link` is the full Gift Aid declaration form URL (emailed as a click
+// target); `shortLink` is a compact, QR-encodable variant of the same token (printed on a
+// receipt / shown as a QR). Pure — the base URL is passed in (read from config by the
+// caller), no pool/config/clock. Trailing slashes on the base are trimmed so the paths
+// never double up.
+export interface DeclarationLinks {
+  link: string;
+  shortLink: string;
+}
+
+export function declarationLinks(baseUrl: string, token: string): DeclarationLinks {
+  const base = baseUrl.replace(/\/+$/, "");
+  return {
+    link: `${base}/gift-aid/declare?token=${encodeURIComponent(token)}`,
+    shortLink: `${base}/g/${encodeURIComponent(token)}`,
+  };
+}
+
 // charge.refunded carries the ABSOLUTE total refunded so far, so replaying the
 // event is idempotent (we set, never increment).
 export function refundedPenceFromCharge(charge: Stripe.Charge): number {

@@ -7,6 +7,7 @@ import {
   recurringChargeFromInvoice,
   recurringDonationInput,
   cardPresentDonationInput,
+  declarationLinks,
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   claimStatusAfterRefund,
@@ -419,6 +420,25 @@ describe("cardPresentDonationInput (REQ-054) — in-person card_present charges"
     expect(cardPresentDonationInput(charge({ payment_method_details: null }))).toBeNull();
     expect(cardPresentDonationInput(charge({ payment_method_details: undefined }))).toBeNull();
     expect(cardPresentDonationInput(charge({ payment_method_details: { type: "acss_debit" } }))).toBeNull();
+  });
+});
+
+describe("declarationLinks (REQ-048) — in-person confirmation link + QR short link", () => {
+  it("builds a unique token-addressed full link and a compact QR short link", () => {
+    const { link, shortLink } = declarationLinks("https://nbcc.test", "abc123");
+    expect(link).toBe("https://nbcc.test/gift-aid/declare?token=abc123");
+    expect(shortLink).toBe("https://nbcc.test/g/abc123");
+  });
+
+  it("trims trailing slashes on the base so paths never double up", () => {
+    expect(declarationLinks("https://nbcc.test/", "t").link).toBe(
+      "https://nbcc.test/gift-aid/declare?token=t",
+    );
+    expect(declarationLinks("https://nbcc.test///", "t").shortLink).toBe("https://nbcc.test/g/t");
+  });
+
+  it("URL-encodes the token", () => {
+    expect(declarationLinks("https://nbcc.test", "a/b c").shortLink).toBe("https://nbcc.test/g/a%2Fb%20c");
   });
 });
 

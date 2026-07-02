@@ -35,7 +35,10 @@ export type DeclarationStatusEvent = (typeof DECLARATION_STATUS_EVENTS)[number];
 // there. `undelivered` recovers via `resend`.
 const TRANSITIONS: Partial<Record<DeclarationStatus, Partial<Record<DeclarationStatusEvent, DeclarationStatus>>>> = {
   not_required: { require: "pending" },
-  pending: { send: "sent" },
+  // `mark_undelivered` from `pending` covers a confirmation whose dispatch FAILED before
+  // it was ever sent (TASK-075): the auto-email throws, so the confirmation is undelivered
+  // without passing through `sent`.
+  pending: { send: "sent", mark_undelivered: "undelivered" },
   sent: { confirm: "completed", mark_undelivered: "undelivered" },
   undelivered: { resend: "sent" },
   // `completed` is terminal — no outgoing transitions.

@@ -48,6 +48,13 @@ export const configSchema = z.object({
   // AWS); validated as a URL. A `.example` host is treated as unconfigured and the
   // send is stubbed outside production (mirrors CONTACT_FORWARD_URL / the Stripe seam).
   EMAIL_SEND_URL: z.string().url(),
+
+  // Base URL for the Gift Aid declaration form the in-person confirmation email links to
+  // (TASK-075/REQ-048). The auto-email after a card-present donation embeds a unique,
+  // token-addressed declaration link + a QR-encodable short link built on this base, so a
+  // walk-in donor can add Gift Aid afterwards. NOT a secret (it ships in emails/QR codes),
+  // but AWS-injected like the price IDs (SSM String → task-def secrets). Validated as a URL.
+  DECLARATION_FORM_BASE_URL: z.string().url(),
 });
 
 export type Config = z.infer<typeof configSchema>;

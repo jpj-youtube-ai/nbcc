@@ -43,6 +43,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Transactional email send endpoint (TASK-070): injected via valueFrom, so the
       # exec role must be able to read it.
       aws_ssm_parameter.email_send_url.arn,
+      # Declaration form base URL (TASK-075): injected via valueFrom, so the exec role
+      # must be able to read it.
+      aws_ssm_parameter.declaration_form_base_url.arn,
     ]
   }
   statement {
@@ -114,6 +117,9 @@ resource "aws_ecs_task_definition" "app" {
       { name = "CONTACT_FORWARD_URL", valueFrom = aws_ssm_parameter.contact_forward_url.arn },
       # Transactional email send endpoint (TASK-070): a SecureString, injected like a secret.
       { name = "EMAIL_SEND_URL", valueFrom = aws_ssm_parameter.email_send_url.arn },
+      # Declaration form base URL (TASK-075): non-secret SSM String, injected via valueFrom
+      # like the price IDs — so its ARN must also appear in exec_secrets below.
+      { name = "DECLARATION_FORM_BASE_URL", valueFrom = aws_ssm_parameter.declaration_form_base_url.arn },
     ]
 
     logConfiguration = {

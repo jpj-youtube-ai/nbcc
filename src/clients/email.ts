@@ -44,3 +44,31 @@ export async function sendDonationConfirmation(message: DonationConfirmation): P
     throw new Error(`Email send responded ${res.status}`);
   }
 }
+
+// The in-person Gift Aid declaration email (TASK-075/REQ-048). After a card-present
+// donation with no Gift Aid, the walk-in donor is emailed a unique, token-addressed
+// declaration link plus a QR-encodable short link so they can add Gift Aid afterwards.
+// The links are built in the processor (from DECLARATION_FORM_BASE_URL + the donation's
+// unique token) and passed in, so they are unit-testable there; this client only ships
+// the payload. Same stub-seam + best-effort contract as sendDonationConfirmation.
+export interface DeclarationEmail {
+  email: string;
+  declarationLink: string; // the full, token-addressed Gift Aid declaration form URL
+  shortLink: string; // the QR-encodable short link (same token, compact path)
+  amountPence: number;
+  currency: string;
+}
+
+export async function sendDeclarationEmail(message: DeclarationEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Declaration email send responded ${res.status}`);
+  }
+}

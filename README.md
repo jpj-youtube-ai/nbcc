@@ -519,16 +519,30 @@ Verified by `test/unit/give-monthly-tiers.test.ts`.
 
 Beneath the tiers in the `.give-main` column sits a holly-tinted Gift Aid opt-in
 (`GIFT AID CALLOUT` CSS block): a `#giftAid` checkbox tied to a real
-`<label for="giftAid">` whose copy states that Gift Aid grows an eligible gift by
-**25%** (NBCC reclaims 25p per £1 from HMRC, at no cost to the donor, confirmed at
-checkout). The box is **not** pre-ticked — the donor opts in. Token-only colours:
-to satisfy the `brand-colours` guard (no holly *text* on light surfaces) the
-emphasis is `--maroon` and the tick `accent-color` is `--crimson`, on a
+`<label for="giftAid">`. The label leads with plain-language framing — Gift Aid
+grows an eligible gift by **25%** (NBCC reclaims 25p per £1 from HMRC, at no cost
+to the donor) — then shows the **verbatim HMRC declaration** the tick actually
+agrees to (REQ-042). The box is **not** pre-ticked — the donor opts in. Token-only
+colours: to satisfy the `brand-colours` guard (no holly *text* on light surfaces)
+the emphasis is `--maroon` and the tick `accent-color` is `--crimson`, on a
 `--holly-soft` panel with a `--holly` border; the checkbox keeps the global
 `:focus-visible` holly ring (REQ-032). Copy is dash-free and names "NBCC"
 (REQ-031). The `#giftAid` id is the hook the **REQ-028** checkout contract reads:
 `startCheckout` folds its checked state into the payload (the live POST target
 `/api/checkout-session` is REQ-029).
+
+**Versioned, mode-matched declaration wording (REQ-042).** The statement shown is
+the exact `wording_snapshot` from `src/declarations/wording.ts` (the versioned
+source of truth, TASK-049): the **single-donation** template for **give once** and
+the **all-donations** template for **give monthly** (the default). Both statements
+ship inside the label as `.giftaid-statement[data-mode]` spans — monthly visible,
+once `hidden` — and `initGiveToggle` swaps the visible one with the give mode,
+exactly as it toggles `#tiersOnce`/`#tiersMonthly`. A `.giftaid-statement[hidden]`
+`display:none` rule collapses the inactive one (a `display` rule otherwise beats
+the bare `hidden` attribute, the same reason the `DONOR TYPE` block needs
+`.giftaid[hidden]`). There is no build step, so the wording is hand-synced into
+`donate.html`; `test/unit/gift-aid.test.ts` imports both snapshots and fails the
+moment the page copy drifts from the source of truth.
 
 > **Gating — pending registration decision (REQ-023).** The callout is shown only
 > if NBCC is registered with HMRC to claim Gift Aid (flagged with a

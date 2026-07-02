@@ -96,6 +96,13 @@
         var panel = doc.getElementById(btn.getAttribute("aria-controls"));
         if (panel) panel.hidden = !on;
       });
+      // Gift Aid declaration (REQ-042): the visible verbatim HMRC statement the
+      // opt-in tick agrees to tracks the give mode — the single-donation wording
+      // for once, the all-donations wording for monthly. No-op if the callout was
+      // removed via the gating switch (empty NodeList).
+      Array.prototype.forEach.call(doc.querySelectorAll(".giftaid-statement"), function (el) {
+        el.hidden = el.getAttribute("data-mode") !== mode;
+      });
     }
 
     buttons.forEach(function (btn) {

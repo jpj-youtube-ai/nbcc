@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (42)
+## Shipped (43)
 
 ### REQ-001 — Multi-page site structure
 
@@ -282,6 +282,14 @@ Tasks:
 - TASK-054 — Add the individual-or-business donor-type routing question to the donate give widget
 - TASK-055 — Persist donor_type (and business name) through the checkout session and webhook onto the donor record
 
+### REQ-039 — Consent-based contact capture
+
+Capture email (optional and consent-based), full name (required), an optional display business name and an anonymous flag, and require monthly donors to confirm they are 18+. *Accept:* when no email is captured the platform sends nothing; anonymous donors are pulled through to payment but never shown on the public donors page.
+
+Tasks:
+- TASK-058 — Add consent-based contact-capture fields to the give widget and fold them into the checkout payload
+- TASK-059 — Thread consent-based contact fields through checkout and persist them onto the donor via the webhook
+
 ### REQ-040 — Verbatim, versioned HMRC declaration wording
 
 Show HMRC's official template liability statement verbatim (multiple/all-donations template for monthly and enduring, single-donation template for one-offs) and store the exact wording in a versioned config so every saved declaration records the version the donor saw. *Accept:* "I am a UK taxpayer" alone is rejected because the full liability paragraph must be present; wording_version and a wording_snapshot are persisted on each declaration.
@@ -313,15 +321,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (23)
-
-### REQ-039 — Consent-based contact capture
-
-Capture email (optional and consent-based), full name (required), an optional display business name and an anonymous flag, and require monthly donors to confirm they are 18+. *Accept:* when no email is captured the platform sends nothing; anonymous donors are pulled through to payment but never shown on the public donors page.
-
-Tasks:
-- TASK-058 — Add consent-based contact-capture fields to the give widget and fold them into the checkout payload
-- TASK-059 — Thread consent-based contact fields through checkout and persist them onto the donor via the webhook
+## Planned (22)
 
 ### REQ-041 — Amount, tier and frequency
 

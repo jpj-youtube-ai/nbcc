@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (46)
+## Shipped (47)
 
 ### REQ-001 — Multi-page site structure
 
@@ -329,6 +329,14 @@ Tasks:
 - TASK-064 — Add an explicit this-donation-only / all-donations scope choice to the declaration fieldset
 - TASK-065 — Let an explicit declaration scope override the mode-derived default through checkout and persistence
 
+### REQ-045 — Benefit tracking and caps
+
+Record the benefits accepted per donation with an admin-set value per perk and an automatic check against HMRC's annualised benefit caps (≤£100 → 25%; £101–£1,000 → £25; £1,001+ → 5% capped at £2,500). *Accept:* recognition perks such as name-on-page, impact updates, social thank-yous, digital badges and certificates are recorded at zero monetary value; any cap breach is flagged.
+
+Tasks:
+- TASK-066 — Add benefit_types and donation_benefits tables plus a donation cap-breach flag (additive migration)
+- TASK-067 — Add HMRC annualised benefit-cap calculator and an audited donation-benefit recording write helper
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -345,15 +353,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (19)
-
-### REQ-045 — Benefit tracking and caps
-
-Record the benefits accepted per donation with an admin-set value per perk and an automatic check against HMRC's annualised benefit caps (≤£100 → 25%; £101–£1,000 → £25; £1,001+ → 5% capped at £2,500). *Accept:* recognition perks such as name-on-page, impact updates, social thank-yous, digital badges and certificates are recorded at zero monetary value; any cap breach is flagged.
-
-Tasks:
-- TASK-066 — Add benefit_types and donation_benefits tables plus a donation cap-breach flag (additive migration)
-- TASK-067 — Add HMRC annualised benefit-cap calculator and an audited donation-benefit recording write helper
+## Planned (18)
 
 ### REQ-046 — Immutable declaration audit record
 

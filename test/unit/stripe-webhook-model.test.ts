@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import {
   giftAidFromMetadata,
   donationFromCheckoutSession,
+  declarationFromCheckoutSession,
   recurringChargeFromInvoice,
   recurringDonationInput,
   refundedPenceFromCharge,
@@ -10,6 +11,7 @@ import {
   claimStatusAfterRefund,
 } from "../../src/db/stripe-webhook-model";
 import { buildDonationRow } from "../../src/db/donations-model";
+import { buildDeclarationRow } from "../../src/declarations/fields";
 
 // TASK-046 (REQ-036): the PURE event→record mapping for the single Stripe webhook
 // handler. No pool/config/network — importing this touches only the pure donation
@@ -211,6 +213,82 @@ describe("donationFromCheckoutSession — donor-type routing (REQ-038)", () => {
     expect(row.gift_aid).toBe(false);
     expect(row.declaration_id).toBeNull();
     expect(row.claim_status).toBe("not_eligible");
+  });
+});
+
+describe("declarationFromCheckoutSession — Gift Aid declaration mapping (REQ-043)", () => {
+  const declMeta = (over: Record<string, string> = {}) => ({
+    mode: "once",
+    plan: "",
+    giftAid: "true",
+    donorType: "individual",
+    declarationScope: "this_donation",
+    giftAidWordingVersion: "hmrc-single-2024-01",
+    giftAidWording: "I want to Gift Aid my donation. I am a UK taxpayer ...",
+    declTitle: "Dr",
+    declFirstName: "Ada",
+    declLastName: "Lovelace",
+    declHouseNameNumber: "12",
+    declAddress: "Analytical Avenue, London",
+    declPostcode: "SW1A 1AA",
+    declNonUk: "false",
+    ...over,
+  });
+
+  it("builds a declaration write from the stamped metadata, with the wording + scope", () => {
+    const w = declarationFromCheckoutSession(session({ metadata: declMeta() }));
+    expect(w).not.toBeNull();
+    expect(w?.fields.firstName).toBe("Ada");
+    expect(w?.fields.lastName).toBe("Lovelace");
+    expect(w?.fields.houseNameNumber).toBe("12");
+    expect(w?.fields.postcode).toBe("SW1A 1AA");
+    expect(w?.fields.nonUk).toBe(false);
+    expect(w?.scope).toBe("this_donation");
+    expect(w?.wording.wording_version).toBe("hmrc-single-2024-01");
+    expect(w?.confirmedTaxpayer).toBe(true); // opting into Gift Aid confirms UK taxpayer status
+  });
+
+  it("maps an enduring monthly declarationScope onto the all-donations scope column (REQ-044)", () => {
+    const w = declarationFromCheckoutSession(
+      session({ metadata: declMeta({ mode: "monthly", declarationScope: "enduring" }) }),
+    );
+    expect(w?.scope).toBe("all_donations");
+  });
+
+  it("returns null when Gift Aid was not opted in (no declaration is made)", () => {
+    expect(declarationFromCheckoutSession(session({ metadata: declMeta({ giftAid: "false" }) }))).toBeNull();
+  });
+
+  it("returns null when no declaration was captured (no decl fields stamped)", () => {
+    expect(
+      declarationFromCheckoutSession(
+        session({ metadata: { mode: "once", plan: "", giftAid: "true", donorType: "individual" } }),
+      ),
+    ).toBeNull();
+  });
+
+  it("exempts a non-UK declaration from the postcode", () => {
+    const w = declarationFromCheckoutSession(
+      session({ metadata: declMeta({ declNonUk: "true", declPostcode: "" }) }),
+    );
+    expect(w?.fields.nonUk).toBe(true);
+    expect(w?.fields.postcode ?? null).toBeNull();
+  });
+
+  it("feeds buildDeclarationRow to produce a donor-linked declarations row", () => {
+    const w = declarationFromCheckoutSession(session({ metadata: declMeta() }));
+    const row = buildDeclarationRow(w!.fields, {
+      donorId: 42,
+      scope: w!.scope,
+      wording: w!.wording,
+      confirmedTaxpayer: w!.confirmedTaxpayer,
+    });
+    expect(row.donor_id).toBe(42);
+    expect(row.first_name).toBe("Ada");
+    expect(row.postcode).toBe("SW1A 1AA");
+    expect(row.scope).toBe("this_donation");
+    expect(row.wording_version).toBe("hmrc-single-2024-01");
+    expect(row.confirmed_taxpayer).toBe(true);
   });
 });
 

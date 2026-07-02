@@ -101,6 +101,36 @@ Feature: Stripe webhook handler (REQ-036)
     And the donor for payment intent "pi_bdd_company" should have donor type "company"
     And the donor for payment intent "pi_bdd_company" should have business name "Acme Ltd"
 
+  Scenario: a gift-aided checkout with a declaration persists a claimable donation linked to a declarations row (REQ-043)
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_decl",
+        "object": "checkout.session",
+        "amount_total": 5000,
+        "currency": "gbp",
+        "mode": "payment",
+        "payment_intent": "pi_bdd_decl",
+        "subscription": null,
+        "metadata": {
+          "mode": "once", "plan": "", "giftAid": "true", "donorType": "individual",
+          "declarationScope": "this_donation",
+          "giftAidWordingVersion": "hmrc-single-2024-01",
+          "giftAidWording": "I want to Gift Aid my donation to the Night Before Christmas Campaign. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.",
+          "declTitle": "Dr", "declFirstName": "Ada", "declLastName": "Decl",
+          "declHouseNameNumber": "12", "declAddress": "Analytical Avenue", "declPostcode": "KA1 1AA", "declNonUk": "false",
+          "email": "ada.decl.bdd@example.com", "emailConsent": "true"
+        },
+        "customer_details": { "name": "Ada Decl", "email": "ada.decl.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_decl"
+    And the donation with payment intent "pi_bdd_decl" should have gift aid true
+    # An individual gift-aided donation with a declaration is claimable (REQ-037).
+    And the donation with payment intent "pi_bdd_decl" should have claim status "eligible"
+    And the donation with payment intent "pi_bdd_decl" should have a linked declaration
+
   Scenario: an invalid signature is rejected
     When I POST a Stripe "charge.refunded" webhook event with an invalid signature:
       """

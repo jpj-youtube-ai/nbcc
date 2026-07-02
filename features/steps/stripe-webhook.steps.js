@@ -40,6 +40,12 @@ Before({ tags: "@stripe-webhook" }, async function () {
   await pool.query(
     "DELETE FROM donations WHERE stripe_payment_intent_id LIKE 'pi_bdd_%' OR stripe_subscription_id LIKE 'sub_bdd_%'",
   );
+  // Declarations reference donors (RESTRICT), and donations reference declarations
+  // (RESTRICT) — so clear the bdd donors' declarations after their donations, before
+  // the donor delete.
+  await pool.query(
+    "DELETE FROM declarations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%bdd@example.com')",
+  );
   await pool.query("DELETE FROM donors WHERE email LIKE '%bdd@example.com'");
 });
 
@@ -97,6 +103,21 @@ Then(
     );
     assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
     assert.equal(r.rows[0].refunded_amount_pence, amount);
+  },
+);
+
+Then(
+  "the donation with payment intent {string} should have a linked declaration",
+  async function (paymentIntent) {
+    const r = await pool.query(
+      "SELECT declaration_id FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.ok(
+      r.rows[0].declaration_id != null,
+      `expected a non-null declaration_id, got ${r.rows[0].declaration_id}`,
+    );
   },
 );
 

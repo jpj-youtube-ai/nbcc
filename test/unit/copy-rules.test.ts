@@ -19,10 +19,16 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel: string) => readFileSync(resolve(ROOT, rel), "utf8");
 
-// supporters.html is guarded defensively — scanned only if/when it exists.
-const PAGES = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html"].filter(
-  (f) => existsSync(resolve(ROOT, f)),
-);
+// supporters.html and thank-you.html are guarded defensively — scanned only if/when
+// they exist.
+const PAGES = [
+  "index.html",
+  "about.html",
+  "donate.html",
+  "contact.html",
+  "supporters.html",
+  "thank-you.html",
+].filter((f) => existsSync(resolve(ROOT, f)));
 
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];
 const FULL_PHRASE = "children, young people and vulnerable adults";

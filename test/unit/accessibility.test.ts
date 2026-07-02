@@ -20,10 +20,15 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 
 const CSS = read("assets/css/styles.css");
 
-// supporters.html rides along defensively once TASK-022 lands (mirrors copy-rules).
-const PAGES = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html"].filter(
-  (f) => existsSync(resolve(ROOT, f)),
-);
+// supporters.html and thank-you.html ride along defensively (mirrors copy-rules).
+const PAGES = [
+  "index.html",
+  "about.html",
+  "donate.html",
+  "contact.html",
+  "supporters.html",
+  "thank-you.html",
+].filter((f) => existsSync(resolve(ROOT, f)));
 
 // Tabbable = what the first Tab from page load can reach, in DOM order. A
 // tabindex="-1" element is programmatically focusable but NOT in the tab order,

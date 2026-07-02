@@ -319,6 +319,10 @@ Tasks:
 
 Capture email (optional and consent-based), full name (required), an optional display business name and an anonymous flag, and require monthly donors to confirm they are 18+. *Accept:* when no email is captured the platform sends nothing; anonymous donors are pulled through to payment but never shown on the public donors page.
 
+Tasks:
+- TASK-058 — Add consent-based contact-capture fields to the give widget and fold them into the checkout payload
+- TASK-059 — Thread consent-based contact fields through checkout and persist them onto the donor via the webhook
+
 ### REQ-041 — Amount, tier and frequency
 
 Let the donor pick monthly (a Stripe subscription) or one-off (a single charge) and either a preset tier (£10/£25/£50/£100) or a custom GBP amount, pairing monthly with an enduring declaration. *Accept:* amount, frequency and currency are captured; monthly defaults the declaration scope to enduring.

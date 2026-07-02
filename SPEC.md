@@ -303,6 +303,10 @@ Tasks:
 
 Implement donors, declarations, donations, claim_batches, users and audit_log with the invariant that a donation is claimable only when donor_type is individual, a valid active declaration covers it, and it is not (fully) refunded. *Accept:* company donations are always not-claimable/not_eligible; a donation enters at most one claim batch; every admin write appends an audit_log row.
 
+Tasks:
+- TASK-056 — Add claim_batches and users tables plus a one-batch-per-donation FK (additive migration)
+- TASK-057 — Enforce the claim invariant and at-most-one-batch assignment with an audited write helper
+
 ### REQ-039 — Consent-based contact capture
 
 Capture email (optional and consent-based), full name (required), an optional display business name and an anonymous flag, and require monthly donors to confirm they are 18+. *Accept:* when no email is captured the platform sends nothing; anonymous donors are pulled through to payment but never shown on the public donors page.

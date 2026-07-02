@@ -27,3 +27,11 @@ Then("the response field {string} should start with {string}", function (field, 
     `expected field "${field}" (${value}) to start with "${prefix}"`,
   );
 });
+
+Then("the response field {string} should contain {string}", function (field, substring) {
+  const value = this.body[field];
+  assert.ok(
+    typeof value === "string" && value.includes(substring),
+    `expected field "${field}" (${value}) to contain "${substring}"`,
+  );
+});

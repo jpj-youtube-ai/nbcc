@@ -34,6 +34,7 @@ const { mockConfig } = vi.hoisted(() => ({
 vi.mock("../../src/config", () => ({ config: mockConfig }));
 
 import { postCheckoutSession } from "../../src/routes/api";
+import { selectDeclarationWording } from "../../src/declarations/wording";
 
 type MockRes = {
   statusCode: number;
@@ -144,6 +145,42 @@ describe("POST /api/checkout-session — Gift Aid (REQ-023)", () => {
   it("records metadata.giftAid='false' when not opted in", async () => {
     await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false });
     expect(lastParams().metadata.giftAid).toBe("false");
+  });
+});
+
+describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", () => {
+  it("stamps the all-donations wording version + snapshot for a gift-aided monthly gift", async () => {
+    // A monthly gift is enduring (all_donations scope), so it binds the multiple/all-
+    // donations HMRC statement — the exact text selectDeclarationWording returns.
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true });
+    const md = lastParams().metadata;
+    const wording = selectDeclarationWording({ mode: "monthly", scope: "all_donations" });
+    expect(md.giftAidWordingVersion).toBe(wording.wording_version);
+    expect(md.giftAidWording).toBe(wording.wording_snapshot);
+  });
+
+  it("stamps the single-donation wording version + snapshot for a gift-aided one-off gift", async () => {
+    await run({ mode: "once", plan: null, amount: 2500, giftAid: true });
+    const md = lastParams().metadata;
+    const wording = selectDeclarationWording({ mode: "once", scope: "this_donation" });
+    expect(md.giftAidWordingVersion).toBe(wording.wording_version);
+    expect(md.giftAidWording).toBe(wording.wording_snapshot);
+  });
+
+  it("binds distinct wording versions for monthly (enduring) vs one-off", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true });
+    const monthly = lastParams().metadata.giftAidWordingVersion;
+    await run({ mode: "once", plan: null, amount: 2500, giftAid: true });
+    const oneOff = lastParams().metadata.giftAidWordingVersion;
+    expect(monthly).not.toBe(oneOff);
+  });
+
+  it("stamps NO wording metadata when Gift Aid is not opted in", async () => {
+    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false });
+    const md = lastParams().metadata;
+    expect(md.giftAid).toBe("false");
+    expect(md.giftAidWordingVersion).toBeUndefined();
+    expect(md.giftAidWording).toBeUndefined();
   });
 });
 

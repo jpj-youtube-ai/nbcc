@@ -912,6 +912,21 @@ full Income / Capital Gains Tax liability sentence by **content**, not length. P
 and DB-free (`test/unit/declaration-wording.test.ts`); the declaration-capture
 form/endpoint (REQ-043) and persistence via `writeWithAudit` are separate.
 
+**Declaration field capture (REQ-043 · TASK-061).** `src/declarations/fields.ts` is the
+pure, DB-free validation + row builder for the fields a Gift Aid declaration captures:
+`title` (optional), `firstName`, `lastName`, `houseNameNumber` (a separate HMRC matching
+key), the rest of the **one** home address, and a UK `postcode`, with a `nonUk` flag
+(Channel Islands / Isle of Man) that omits the postcode. `declarationFieldsSchema` is a
+`.strict()` zod schema — so a stray work / c-o address field is **rejected**, there is
+one home address only — that validates the postcode against `UK_POSTCODE_RE` (the GOV.UK
+format) and requires the house name/number, both waived when `nonUk` is true.
+`buildDeclarationRow(fields, { donorId, scope, wording, confirmedTaxpayer })` maps the
+validated fields onto the snake_case `declarations` columns (nulling the postcode for a
+non-UK declaration), pairing them with the REQ-044 `scope` and the REQ-040 wording
+snapshot. Pure and DB-free (`test/unit/declaration-fields.test.ts`); threading these
+through the checkout endpoint and persisting a `declarations` row via the webhook is
+REQ-043's follow-up (TASK-062/063), not built here.
+
 **The Stripe webhook (REQ-036 / TASK-046).** `POST /api/stripe/webhook`
 (`src/routes/stripe-webhook.ts`) is the **single** set of Stripe webhooks — no
 other route touches donor/donation events. It is mounted **before** `express.json`

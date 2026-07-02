@@ -11,6 +11,13 @@ import {
 } from "./donations-model";
 import { buildDeclarationRow, type DeclarationRow } from "../declarations/fields";
 import type { DeclarationWrite } from "./stripe-webhook-model";
+import {
+  annualisePence,
+  deriveBenefitCapBreach,
+  recordedBenefitValuePence,
+  type BenefitAward,
+  type Mode,
+} from "../benefits/caps";
 
 // The unified donation model's write layer (REQ-036/REQ-037). Every state write and
 // its matching audit_log row commit or roll back TOGETHER, inside one BEGIN…COMMIT
@@ -256,6 +263,86 @@ export async function assignDonationToBatch(
       entity: "donation",
       entityId: r.donationId,
       data: { claimBatchId: r.claimBatchId },
+    }),
+  );
+}
+
+// Insert one donation_benefits row (donation FK + benefit_type FK + the recorded value)
+// using the given client, so it joins the caller's transaction; returns its id. The value
+// is already normalised by the caller (recognition perks forced to £0).
+export async function insertDonationBenefit(
+  client: PoolClient,
+  donationId: number,
+  benefitTypeId: number,
+  valuePence: number,
+): Promise<number> {
+  const res = await client.query<{ id: number }>(
+    `INSERT INTO donation_benefits (donation_id, benefit_type_id, value_pence)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    [donationId, benefitTypeId, valuePence],
+  );
+  return res.rows[0].id;
+}
+
+export interface RecordBenefitsResult {
+  donationId: number;
+  donorId: number;
+  benefitIds: number[];
+  capBreached: boolean;
+}
+
+// Concrete audited admin write (REQ-045): record the benefits awarded against a donation
+// and flag whether they breach the HMRC donor-benefit cap, atomically — mirrors
+// recordDonation / assignDonationToBatch. In ONE BEGIN…COMMIT it (a) locks the donation
+// (FOR UPDATE, so the flag update races safely), (b) inserts one donation_benefits row per
+// benefit — each a NAMED recognition perk is forced to £0 regardless of admin input
+// (recordedBenefitValuePence), (c) derives the cap breach from the ANNUALISED donation vs
+// the ANNUALISED benefit total (a monthly gift ×12, so the bands compare on a yearly
+// basis — the pure logic in src/benefits/caps.ts), and (d) sets donations.benefit_cap_breached.
+// Any throw rolls BOTH the benefit rows and the audit row back (never a half-recorded set,
+// never a drifted audit trail). actor defaults to "system"; an admin action passes its user.
+export async function recordDonationBenefits(
+  donationId: number,
+  donorId: number,
+  benefits: BenefitAward[],
+  actor = "system",
+): Promise<RecordBenefitsResult> {
+  return writeWithAudit(
+    async (client) => {
+      const donation = (
+        await client.query<{ amount_pence: number; mode: Mode }>(
+          `SELECT amount_pence, mode FROM donations WHERE id = $1 FOR UPDATE`,
+          [donationId],
+        )
+      ).rows[0];
+      if (!donation) throw new Error(`donation ${donationId} not found`);
+
+      const benefitIds: number[] = [];
+      let benefitTotalPence = 0;
+      for (const benefit of benefits) {
+        const value = recordedBenefitValuePence(benefit); // recognition perks → £0
+        benefitTotalPence += value;
+        benefitIds.push(await insertDonationBenefit(client, donationId, benefit.benefitTypeId, value));
+      }
+
+      const capBreached = deriveBenefitCapBreach({
+        annualisedDonationPence: annualisePence(donation.mode, donation.amount_pence),
+        benefitValuePence: annualisePence(donation.mode, benefitTotalPence),
+      });
+      await client.query(`UPDATE donations SET benefit_cap_breached = $1 WHERE id = $2`, [
+        capBreached,
+        donationId,
+      ]);
+
+      return { donationId, donorId, benefitIds, capBreached };
+    },
+    (r) => ({
+      actor,
+      action: "donation.benefits_recorded",
+      entity: "donation",
+      entityId: r.donationId,
+      data: { donorId: r.donorId, benefitIds: r.benefitIds, capBreached: r.capBreached },
     }),
   );
 }

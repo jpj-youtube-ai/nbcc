@@ -26,7 +26,7 @@ import {
 } from "../declarations/wording";
 import { applyDeclarationEvent, type DeclarationStatus } from "../declarations/status";
 import { deriveClaimStatus } from "./donations-model";
-import type { DeclarationWrite } from "./stripe-webhook-model";
+import type { DeclarationWrite, PartnerShareWrite } from "./stripe-webhook-model";
 import {
   annualisePence,
   deriveBenefitCapBreach,
@@ -145,19 +145,47 @@ export async function insertDeclaration(client: PoolClient, row: DeclarationRow)
   return res.rows[0].id;
 }
 
+// Insert one donation_partner_shares row (donation FK + a partner's declaration FK + that
+// partner's share in pence) using the given client, so it joins the caller's transaction;
+// returns its id. Enables many declarations per donation for a partnership (REQ-051), one
+// per partner, instead of the single donations.declaration_id used for individuals.
+export async function insertPartnerShare(
+  client: PoolClient,
+  donationId: number,
+  declarationId: number,
+  sharePence: number,
+): Promise<number> {
+  const res = await client.query<{ id: number }>(
+    `INSERT INTO donation_partner_shares (donation_id, declaration_id, share_pence)
+     VALUES ($1, $2, $3)
+     RETURNING id`,
+    [donationId, declarationId, sharePence],
+  );
+  return res.rows[0].id;
+}
+
 // Insert a donor and its donation row (mapped + claim-derived by buildDonationRow)
 // using the given client, so it joins the caller's transaction. donor_type comes
 // from the donation (one source of truth). When a Gift Aid declaration is supplied
 // (REQ-043), it is inserted BETWEEN the donor and the donation and its id is wired onto
 // the donation's declaration_id — so the declaration + donation commit together and the
-// donation derives claim_status='eligible' from the now-present declaration. Shared by
-// recordDonation and the Stripe webhook processor.
+// donation derives claim_status='eligible' from the now-present declaration. For a business
+// PARTNERSHIP (REQ-051) there is no single declaration_id; instead `partners` are inserted
+// AFTER the donation (they FK its id) as one immutable declarations row + one
+// donation_partner_shares row each, all in the SAME transaction. Shared by recordDonation and
+// the Stripe webhook processor.
 export async function insertDonorAndDonation(
   client: PoolClient,
   donor: DonorInput,
   donation: DonationInput,
   declaration?: DeclarationWrite,
-): Promise<{ donorId: number; donationId: number; declarationId: number | null }> {
+  partners?: PartnerShareWrite[],
+): Promise<{
+  donorId: number;
+  donationId: number;
+  declarationId: number | null;
+  partnerShareIds: number[];
+}> {
   const donorRes = await client.query<{ id: number }>(
     `INSERT INTO donors
        (donor_type, full_name, business_name, company_number, email, email_consent, anonymous)
@@ -192,7 +220,31 @@ export async function insertDonorAndDonation(
   // now-present declaration (an individual gift with a declaration is eligible).
   const donationInput = declarationId != null ? { ...donation, declarationId } : donation;
   const donationId = await insertDonation(client, buildDonationRow(donationInput, donorId));
-  return { donorId, donationId, declarationId };
+
+  // Partnership (REQ-051): one immutable declarations row + one donation_partner_shares row
+  // per partner, inserted AFTER the donation (the share FKs its id). Each partner is an
+  // individual in law with their own declaration; the shares were validated at checkout to
+  // sum to the donation amount. donations.declaration_id stays null — the partner shares carry
+  // the declarations, not the single-declaration link used for individuals.
+  const partnerShareIds: number[] = [];
+  if (partners) {
+    for (const partner of partners) {
+      const partnerDeclarationId = await insertDeclaration(
+        client,
+        buildDeclarationRow(partner.fields, {
+          donorId,
+          scope: partner.scope,
+          wording: partner.wording,
+          confirmedTaxpayer: partner.confirmedTaxpayer,
+        }),
+      );
+      partnerShareIds.push(
+        await insertPartnerShare(client, donationId, partnerDeclarationId, partner.sharePence),
+      );
+    }
+  }
+
+  return { donorId, donationId, declarationId, partnerShareIds };
 }
 
 // Read the publicly listable supporters for the donors wall (TASK-071/REQ-035). Selects

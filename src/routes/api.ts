@@ -11,6 +11,7 @@ import {
   scopeFromDeclarationScope,
 } from "../declarations/wording";
 import { declarationFieldsSchema } from "../declarations/fields";
+import { partnerShareSchema, validatePartnerShares } from "../declarations/partnership";
 import { getGiftAidDeclarationContext, completeDeclaration, GiftAidCompletionError } from "../db/donations";
 import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render";
 import { config } from "../config";
@@ -29,7 +30,7 @@ const PLANS = ["bronze", "silver", "gold", "platinum"] as const;
 // as src/config/schema.ts. The refinements reject the impossible combinations:
 // a monthly gift needs a plan (to pick its recurring price), a one-off needs an
 // amount (to build the inline price).
-const DONOR_TYPES = ["individual", "company"] as const;
+const DONOR_TYPES = ["individual", "company", "partnership"] as const;
 
 const checkoutBodySchema = z
   .object({
@@ -60,6 +61,13 @@ const checkoutBodySchema = z
     // donor is exempt from the postcode), so a malformed one is rejected with 400. Only
     // an individual opts into Gift Aid, so this only ever arrives for that path.
     declaration: declarationFieldsSchema.optional(),
+    // REQ-051: a business PARTNERSHIP makes one Gift Aid declaration per partner, each with
+    // a share of the gift (TASK-080 folds these in as `partners`). Partners are individuals
+    // in law, so the partnership keeps Gift Aid. Each entry is a full declaration + sharePence
+    // (validated by the shared partnership module, TASK-079); the shares must sum EXACTLY to
+    // amount, enforced below. Optional so the base contract and the individual/company paths
+    // are unchanged.
+    partners: z.array(partnerShareSchema).optional(),
   })
   .refine((b) => b.mode !== "monthly" || b.plan !== null, {
     message: "monthly giving requires a plan",
@@ -80,6 +88,22 @@ const checkoutBodySchema = z
   .refine((b) => b.mode !== "monthly" || b.ageConfirmed === true, {
     message: "monthly giving requires confirming you are aged 18 or over",
     path: ["ageConfirmed"],
+  })
+  // REQ-051: on the partnership Gift Aid path, the partners' shares must sum EXACTLY to the
+  // donation amount — reject a payload whose shares over- or under-sum (or that carries no
+  // partners) with a 400, reusing the pure validatePartnerShares (TASK-079). Only enforced
+  // for a gift-aided partnership; the individual/company/no-Gift-Aid paths are untouched.
+  .superRefine((b, ctx) => {
+    if (b.donorType !== "partnership" || !b.giftAid) return;
+    try {
+      validatePartnerShares(b.partners ?? [], b.amount ?? -1);
+    } catch (err) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: err instanceof Error ? err.message : "invalid partner shares",
+        path: ["partners"],
+      });
+    }
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
@@ -152,6 +176,15 @@ export function buildSessionParams(
     metadata.declAddress = d.address;
     metadata.declPostcode = d.nonUk ? "" : (d.postcode ?? "");
     metadata.declNonUk = String(d.nonUk);
+  }
+
+  // Stamp the per-partner declarations + shares onto the session (REQ-051) so the webhook can
+  // persist one declarations row + one donation_partner_shares row per partner — only for a
+  // gift-aided partnership (its shares are already validated to sum to amount above). Carried
+  // as a compact JSON array; a partnership with many partners could approach Stripe's 500-char
+  // metadata value limit, which a later task can revisit if it bites.
+  if (body.giftAid && body.donorType === "partnership" && body.partners) {
+    metadata.partners = JSON.stringify(body.partners);
   }
 
   const base: StripeNS.Checkout.SessionCreateParams = {

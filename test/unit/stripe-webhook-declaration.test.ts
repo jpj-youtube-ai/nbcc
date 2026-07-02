@@ -35,6 +35,7 @@ vi.mock("../../src/config", () => ({
 import { processWebhookEvent } from "../../src/db/stripe-webhook";
 
 const DECL_ID = 55;
+const SHARE_ID = 77;
 const DONOR_ID = 10;
 const DONATION_ID = 99;
 
@@ -44,6 +45,7 @@ function installQuery() {
     if (/insert into stripe_webhook_events/i.test(sql)) return { rowCount: 1, rows: [] }; // claimed (not a duplicate)
     if (/insert into donors/i.test(sql)) return { rows: [{ id: DONOR_ID }], rowCount: 1 };
     if (/insert into declarations/i.test(sql)) return { rows: [{ id: DECL_ID }], rowCount: 1 };
+    if (/insert into donation_partner_shares/i.test(sql)) return { rows: [{ id: SHARE_ID }], rowCount: 1 };
     if (/insert into donations/i.test(sql)) return { rows: [{ id: DONATION_ID }], rowCount: 1 };
     if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };
     return { rows: [], rowCount: 0 };
@@ -162,5 +164,113 @@ describe("processWebhookEvent — checkout.session.completed with a Gift Aid dec
     const actions = auditCalls.map((c) => c[1][1]); // the `action` param
     expect(actions).toContain("declaration.created");
     expect(actions).toContain("donation.created");
+  });
+});
+
+// A gift-aided PARTNERSHIP checkout session (REQ-051 / TASK-081): the checkout endpoint stamps
+// a `partners` JSON array (one declaration + share per partner) INSTEAD of a single decl* set,
+// so the webhook inserts one declarations row + one donation_partner_shares row per partner
+// alongside the donation, all in the one BEGIN…COMMIT.
+const partner = (firstName: string, sharePence: number) => ({
+  title: "",
+  firstName,
+  lastName: "Partner",
+  houseNameNumber: "1",
+  address: "Partnership House, London",
+  postcode: "SW1A 1AA",
+  nonUk: false,
+  sharePence,
+});
+
+const partnershipSession = () =>
+  ({
+    id: "cs_test_partners",
+    object: "checkout.session",
+    amount_total: 10000,
+    currency: "gbp",
+    mode: "payment",
+    payment_intent: "pi_test_partners",
+    subscription: null,
+    customer_details: { name: "Acme Partnership", email: null },
+    metadata: {
+      mode: "once",
+      plan: "",
+      giftAid: "true",
+      donorType: "partnership",
+      declarationScope: "this_donation",
+      giftAidWordingVersion: "hmrc-single-2024-01",
+      giftAidWording: "I want to Gift Aid my donation. I am a UK taxpayer ...",
+      partners: JSON.stringify([partner("Ada", 6000), partner("Grace", 4000)]),
+    },
+  }) as unknown as import("stripe").Checkout.Session;
+
+const partnershipEvent = () =>
+  ({
+    id: "evt_partners_1",
+    type: "checkout.session.completed",
+    data: { object: partnershipSession() },
+  }) as unknown as import("stripe").Event;
+
+describe("processWebhookEvent — partnership checkout.session.completed (REQ-051 / TASK-081)", () => {
+  it("inserts one declarations row and one donation_partner_shares row per partner alongside the donation, in one transaction", async () => {
+    const result = await processWebhookEvent(partnershipEvent());
+    expect(result).toEqual({ processed: true, action: "donation.created" });
+
+    const seq = sqls();
+    expect(seq[0]).toMatch(/^begin/i);
+    expect(seq[seq.length - 1]).toMatch(/^commit/i);
+    expect(seq.some((s) => /rollback/i.test(s))).toBe(false);
+
+    // Two partners → two declarations rows + two donation_partner_shares rows.
+    const declInserts = queryMock.mock.calls.filter((c) => /insert into declarations/i.test(String(c[0])));
+    const shareInserts = queryMock.mock.calls.filter((c) =>
+      /insert into donation_partner_shares/i.test(String(c[0])),
+    );
+    expect(declInserts).toHaveLength(2);
+    expect(shareInserts).toHaveLength(2);
+
+    // Each partner-share row references the donation + the just-inserted declaration + the share.
+    expect(shareInserts[0][1]).toEqual([DONATION_ID, DECL_ID, 6000]);
+    expect(shareInserts[1][1]).toEqual([DONATION_ID, DECL_ID, 4000]);
+
+    // The donation itself carries NO single declaration_id (the shares hold the declarations)
+    // but is still a gift-aided gift.
+    const donationCall = call(/insert into donations/i);
+    expect(donationCall?.[1][1]).toBeNull(); // declaration_id (2nd param)
+    expect(donationCall?.[1][6]).toBe(true); // gift_aid (7th param)
+
+    // Ordering: donor → donation → (declaration → partner share) per partner, all committed.
+    const donorIdx = idx(/insert into donors/i);
+    const donationIdx = idx(/insert into donations/i);
+    const firstDeclIdx = idx(/insert into declarations/i);
+    const firstShareIdx = idx(/insert into donation_partner_shares/i);
+    expect(donationIdx).toBeGreaterThan(donorIdx);
+    expect(firstDeclIdx).toBeGreaterThan(donationIdx);
+    expect(firstShareIdx).toBeGreaterThan(firstDeclIdx);
+  });
+
+  it("rolls back the declarations + partner-share rows together with the donation when the transaction throws", async () => {
+    // Force the SECOND partner-share insert to throw, mid-transaction.
+    let shareInserts = 0;
+    queryMock.mockImplementation(async (sql: string) => {
+      if (/^\s*(begin|commit|rollback)/i.test(sql)) return {};
+      if (/insert into stripe_webhook_events/i.test(sql)) return { rowCount: 1, rows: [] };
+      if (/insert into donors/i.test(sql)) return { rows: [{ id: DONOR_ID }], rowCount: 1 };
+      if (/insert into declarations/i.test(sql)) return { rows: [{ id: DECL_ID }], rowCount: 1 };
+      if (/insert into donation_partner_shares/i.test(sql)) {
+        shareInserts += 1;
+        if (shareInserts === 2) throw new Error("insert failed");
+        return { rows: [{ id: SHARE_ID }], rowCount: 1 };
+      }
+      if (/insert into donations/i.test(sql)) return { rows: [{ id: DONATION_ID }], rowCount: 1 };
+      if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };
+      return { rows: [], rowCount: 0 };
+    });
+
+    await expect(processWebhookEvent(partnershipEvent())).rejects.toThrow("insert failed");
+
+    const seq = sqls();
+    expect(seq.some((s) => /rollback/i.test(s))).toBe(true);
+    expect(seq.some((s) => /^commit/i.test(s))).toBe(false);
   });
 });

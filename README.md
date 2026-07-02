@@ -1068,9 +1068,29 @@ totalAmountPence)` accepts **only** when there is at least one partner, every pa
 valid declaration+share, and the shares sum **exactly** to the donation total; any empty
 list, invalid partner, or over-/under-sum throws a typed `PartnerShareError`. The validated
 partners persist through the `donation_partner_shares` join table (migration
-`1783015422184_partnership-shares.js`); the checkout flow that collects them and the
-eligibility/claim logic that reads them are REQ-051 follow-ups, not built here. Pure and
-DB-free (`test/unit/partnership-shares.test.ts`).
+`1783015422184_partnership-shares.js`); the eligibility/claim logic that reads them is a
+REQ-051 follow-up, not built here. Pure and DB-free (`test/unit/partnership-shares.test.ts`).
+
+**Threading partnership shares through checkout + the webhook (REQ-051 · TASK-081).** The
+`POST /api/checkout-session` body accepts `donorType: "partnership"` and a `partners` array
+(each a full declaration + `sharePence`, validated by `partnerShareSchema`). A zod
+`superRefine` runs `validatePartnerShares(partners, amount)` for the gift-aided partnership
+path, so a payload whose shares do **not** sum exactly to `amount` (or that carries no
+partners) is rejected **400** before Stripe is called; the individual/company paths are
+untouched. On success the validated partners are stamped as a compact JSON array on the
+session metadata (`metadata.partners`) alongside the shared scope + wording — *not* the
+single `decl*` fields. The single Stripe webhook (`src/db/stripe-webhook.ts`) then reads them
+via `partnerSharesFromCheckoutSession` and, in the **same** `writeWithAudit` transaction as
+the donor + donation, inserts **one immutable `declarations` row + one
+`donation_partner_shares` row per partner** (`insertPartnerShare`) — the shares FK the
+donation id, so they are written *after* it, and `donations.declaration_id` stays null (the
+shares carry the declarations). Any throw rolls **all** of it back together (declarations,
+partner shares, donation, audit). A partnership donor is persisted with `donor_type =
+'individual'` (partners are individuals in law). Verified DB-free against a mocked pool by
+`test/unit/checkout-session.test.ts` (the 400 sum check) and
+`test/unit/stripe-webhook-declaration.test.ts` (the per-partner inserts + shared rollback).
+The aggregate **claim eligibility** of a partnership gift (deriving `claim_status` from the
+partner declarations rather than a single `declaration_id`) is a REQ-051 follow-up.
 
 **Declaration retention (REQ-046 · TASK-068).** `src/declarations/retention.ts` is the
 pure, DB-free calculator for how long an immutable declaration must be kept.

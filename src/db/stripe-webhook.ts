@@ -8,6 +8,7 @@ import { insertAudit, insertDonation, insertDonorAndDonation } from "./donations
 import {
   donationFromCheckoutSession,
   declarationFromCheckoutSession,
+  partnerSharesFromCheckoutSession,
   recurringChargeFromInvoice,
   recurringDonationInput,
   cardPresentDonationInput,
@@ -172,11 +173,15 @@ async function handleCheckoutCompleted(
   // A gift-aided individual also captures a Gift Aid declaration (REQ-043); it is
   // inserted and linked to the donation in the SAME transaction (declaration_id FK).
   const declaration = declarationFromCheckoutSession(event.data.object);
-  const { donorId, donationId, declarationId } = await insertDonorAndDonation(
+  // A gift-aided PARTNERSHIP instead captures one declaration + share per partner (REQ-051),
+  // inserted alongside the donation in the SAME transaction (donation_partner_shares rows).
+  const partners = partnerSharesFromCheckoutSession(event.data.object);
+  const { donorId, donationId, declarationId, partnerShareIds } = await insertDonorAndDonation(
     client,
     donor,
     donation,
     declaration ?? undefined,
+    partners.length ? partners : undefined,
   );
   if (declarationId != null) {
     await insertAudit(client, {
@@ -185,6 +190,15 @@ async function handleCheckoutCompleted(
       entity: "declaration",
       entityId: declarationId,
       data: { eventId: event.id, donorId, donationId },
+    });
+  }
+  if (partnerShareIds.length) {
+    await insertAudit(client, {
+      actor: "stripe",
+      action: "partnership.shares_created",
+      entity: "donation",
+      entityId: donationId,
+      data: { eventId: event.id, donorId, partnerShareIds, partnerCount: partnerShareIds.length },
     });
   }
   await insertAudit(client, {

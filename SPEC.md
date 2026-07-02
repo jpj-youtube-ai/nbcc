@@ -392,6 +392,10 @@ Tasks:
 
 Claim small in-person gifts of £30 or less that carry no declaration via GAseparately within its limits (up to £8,000 of small donations a year, a £2,000 top-up cap, capped at ten times the Gift Aidclaimed that year). *Accept:* gasds_eligible is flagged and the GASDS pool is tracked independently of declared claims.
 
+Tasks:
+- TASK-077 — Add gasds_eligible column and a pure GASDS eligibility/cap calculator
+- TASK-078 — Flag gasds_eligible on card-present ingestion and add an annual GASDS pool read
+
 ### REQ-051 — Partnership donations
 
 Support business-partnership donors by collecting one Gift Aid declaration per partner ome address, postcode, taxpayer consent and share — with shares summing to the donation total, via a lightweightthat a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.

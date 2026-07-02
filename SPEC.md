@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (52)
+## Shipped (53)
 
 ### REQ-001 — Multi-page site structure
 
@@ -378,6 +378,15 @@ Tasks:
 - TASK-077 — Add gasds_eligible column and a pure GASDS eligibility/cap calculator
 - TASK-078 — Flag gasds_eligible on card-present ingestion and add an annual GASDS pool read
 
+### REQ-051 — Partnership donations
+
+Support business-partnership donors by collecting one Gift Aid declaration per partner ome address, postcode, taxpayer consent and share — with shares summing to the donation total, via a lightweightthat a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
+
+Tasks:
+- TASK-079 — Add partnership Gift Aid share data model and pure share-validation module
+- TASK-080 — Add a partnership donor path with repeatable per-partner declaration capture to the give widget
+- TASK-081 — Thread partnership shares through the checkout endpoint and persist one declaration per partner via the webhook
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -394,16 +403,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (13)
-
-### REQ-051 — Partnership donations
-
-Support business-partnership donors by collecting one Gift Aid declaration per partner ome address, postcode, taxpayer consent and share — with shares summing to the donation total, via a lightweightthat a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
-
-Tasks:
-- TASK-079 — Add partnership Gift Aid share data model and pure share-validation module
-- TASK-080 — Add a partnership donor path with repeatable per-partner declaration capture to the give widget
-- TASK-081 — Thread partnership shares through the checkout endpoint and persist one declaration per partner via the webhook
+## Planned (12)
 
 ### REQ-052 — Charities Online claim export
 

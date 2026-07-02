@@ -343,6 +343,10 @@ Tasks:
 
 Capture scope as this-donation-only or all-donations (the past four years plus present and future), defaulting monthly to enduring. *Accept:* declaration_scope is persisted and an enduring declaration covers every future charge without re-asking.
 
+Tasks:
+- TASK-064 — Add an explicit this-donation-only / all-donations scope choice to the declaration fieldset
+- TASK-065 — Let an explicit declaration scope override the mode-derived default through checkout and persistence
+
 ### REQ-045 — Benefit tracking and caps
 
 Record the benefits accepted per donation with an admin-set value per perk and an automatic check against HMRC's annualised benefit caps (≤£100 → 25%; £101–£1,000 → £25; £1,001+ → 5% capped at £2,500). *Accept:* recognition perks such as name-on-page, impact updates, social thank-yous, digital badges and certificates are recorded at zero monetary value; any cap breach is flagged.

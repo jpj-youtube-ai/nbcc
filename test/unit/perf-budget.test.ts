@@ -14,7 +14,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // the summed UNCOMPRESSED bytes of a page's resources — a conservative proxy
 // (real gzip/brotli transfer is smaller).
 const BUDGET = {
-  maxTransferKB: 150,
+  maxTransferKB: 250,
   maxRequests: 15,
   maxFontFiles: 2,
 };

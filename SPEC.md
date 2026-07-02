@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (49)
+## Shipped (50)
 
 ### REQ-001 — Multi-page site structure
 
@@ -353,6 +353,14 @@ Tasks:
 - TASK-070 — Send a post-payment confirmation email when the donor's email is present and consented
 - TASK-071 — Show real, non-anonymous donors on the public donors page
 
+### REQ-048 — Contactless ingestion via the Paid app
+
+Ingest in-person card-present charges from NBCC's single Stripe account — volunteers sign into the third-party Paid app via Stripe OAuth on their own phones — over webhooks, tagging payment_channel as in_person, with no custom Terminal build and no shared Apple ID. *Accept:* card_present charges are reconciled into the one platform regardless of which volunteer or device took them.
+
+Tasks:
+- TASK-072 — Add pure card-present charge mapping for in-person Stripe webhook events
+- TASK-073 — Ingest card-present charge.succeeded events into the donations table via the single Stripe webhook
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -369,19 +377,16 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (16)
-
-### REQ-048 — Contactless ingestion via the Paid app
-
-Ingest in-person card-present charges from NBCC's single Stripe account — volunteers sign into the third-party Paid app via Stripe OAuth on their own phones — over webhooks, tagging payment_channel as in_person, with no custom Terminal build and no shared Apple ID. *Accept:* card_present charges are reconciled into the one platform regardless of which volunteer or device took them.
-
-Tasks:
-- TASK-072 — Add pure card-present charge mapping for in-person Stripe webhook events
-- TASK-073 — Ingest card-present charge.succeeded events into the donations table via the single Stripe webhook
+## Planned (15)
 
 ### REQ-049 — Contactless Gift Aid capture by auto-email and QR
 
 Capture Gift Aid for contactless gifts after the tap by autk to the receipt_email Paid attaches to the charge, plus a QR/short-link card fallback, both leading to the same fulldeclaration form. *Accept:* a bounced or undeliverable auto-email sets declaration_status to undelivered and surfaces in admin as awaiting declaration; a sent link is never treated as a completed declaration.
+
+Tasks:
+- TASK-074 — Add declaration_status and declaration_token to donations for contactless Gift Aid tracking
+- TASK-075 — Send the auto-email (with QR/short-link fallback) after a contactless charge is ingested
+- TASK-076 — Build the public Gift Aid declaration completion page and endpoint for the emailed/QR link
 
 ### REQ-050 — GASDS for small contactless gifts
 

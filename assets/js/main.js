@@ -103,6 +103,11 @@
       Array.prototype.forEach.call(doc.querySelectorAll(".giftaid-statement"), function (el) {
         el.hidden = el.getAttribute("data-mode") !== mode;
       });
+      // Age confirmation (REQ-039): monthly giving is set up by adults 18 or over, so
+      // the 18+ confirmation shows only in give-monthly mode (its .give-age[hidden]
+      // rule collapses the flex row). No-op if the field is absent.
+      var ageField = doc.getElementById("ageConfirmField");
+      if (ageField) ageField.hidden = mode !== "monthly";
     }
 
     buttons.forEach(function (btn) {
@@ -164,6 +169,19 @@
     apply(start.value);
 
     // Signal the enhancement is wired; startCheckout only folds donorType in then.
+    control.dataset.ready = "true";
+  }
+
+  // Contact capture (REQ-039): the consent-based contact fieldset below the donor-type
+  // question. Progressive enhancement — the fields are plain inputs that work without
+  // JS; this only marks the fieldset data-ready so startCheckout knows the enhancement
+  // is active and folds fullName, email, emailConsent, anonymous and (monthly)
+  // ageConfirmed into the REQ-028 payload (without JS the base { mode, plan, amount,
+  // giftAid } contract is emitted unchanged). The 18+ row's monthly-only visibility is
+  // owned by initGiveToggle, which tracks the give mode.
+  function initContactCapture(doc) {
+    var control = doc.querySelector(".give-contact");
+    if (!control) return;
     control.dataset.ready = "true";
   }
 
@@ -343,6 +361,28 @@
     var businessName = businessNameEl ? (businessNameEl.value || "").trim() : "";
     if (businessName) payload.businessName = businessName;
 
+    // Contact capture (REQ-039): once initContactCapture has wired the fieldset
+    // (data-ready), fold the donor's contact details in — the required full name, the
+    // optional email and its consent tick (never assumed), the anonymous choice, and
+    // (monthly only) the 18+ confirmation. Without JS these are omitted, so the base
+    // { mode, plan, amount, giftAid } contract is unchanged.
+    var contactControl = doc.querySelector(".give-contact[data-ready]");
+    if (contactControl) {
+      var fullNameEl = doc.getElementById("donorName");
+      payload.fullName = fullNameEl ? (fullNameEl.value || "").trim() : "";
+      var emailEl = doc.getElementById("donorEmail");
+      payload.email = emailEl ? (emailEl.value || "").trim() : "";
+      var consentEl = doc.getElementById("emailConsent");
+      payload.emailConsent = !!(consentEl && consentEl.checked);
+      var anonEl = doc.getElementById("anonymousDonor");
+      payload.anonymous = !!(anonEl && anonEl.checked);
+      // The 18 or over confirmation applies to monthly giving only.
+      if (payload.mode === "monthly") {
+        var ageEl = doc.getElementById("ageConfirmed");
+        payload.ageConfirmed = !!(ageEl && ageEl.checked);
+      }
+    }
+
     // Preview: show the payload a live checkout would send to the backend.
     function preview() {
       try {
@@ -398,6 +438,7 @@
       initReveal,
       initGiveToggle,
       initDonorType,
+      initContactCapture,
       initContactForm,
       startCheckout,
       initCheckout,
@@ -407,6 +448,7 @@
     initReveal(document, window);
     initGiveToggle(document);
     initDonorType(document);
+    initContactCapture(document);
     initContactForm(document, window);
     initCheckout(document, window);
   }

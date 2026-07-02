@@ -582,6 +582,27 @@ colours (slate body, maroon legend, crimson accents; the `brand-colours` guard
 forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-donor-type.test.ts`.
 
+### Contact capture (REQ-039)
+
+Below the donor-type fieldset and above the tiers, a `.give-contact` `<fieldset>`
+(`CONTACT CAPTURE` CSS block) captures consent-based contact details: a **required**
+full name (`#donorName`, `required` + `aria-required`), an **optional** email
+(`#donorEmail`) paired with an email-consent checkbox (`#emailConsent`) that is
+**never ticked in advance** (NBCC only emails with clear permission), an anonymous
+option (`#anonymousDonor`) that keeps the gift off the public Donors Page, and a
+monthly-only **18 or over** confirmation (`#ageConfirmed`). Every control has a real
+`<label for>` (REQ-032). The 18+ row (`#ageConfirmField`) shows **only in give-monthly
+mode**: `initGiveToggle` toggles it alongside the tier swap and the Gift Aid statement,
+and a `.give-age[hidden]` rule collapses the flex row (mirroring `.giftaid[hidden]`); it
+ships visible because monthly is the default. `initContactCapture` marks the fieldset
+`data-ready`, so `startCheckout` folds **`fullName`**, **`email`**, **`emailConsent`**,
+**`anonymous`** and (monthly) **`ageConfirmed`** into the REQ-028 payload only once the
+enhancement is active — the base `{ mode, plan, amount, giftAid }` contract is unchanged
+without JS (durable persistence is the REQ-039 webhook/back-end, out of scope here).
+Token-only colours (slate body, maroon legend, crimson accents; the `brand-colours`
+guard forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
+`test/unit/give-contact-capture.test.ts`.
+
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE

@@ -136,6 +136,47 @@
                   <p class="give-business-help">Optional. We show this on our Donors Page. It never changes your Gift Aid path.</p>
                 </div>
               </fieldset>
+              <!-- CONTACT CAPTURE (REQ-039): consent-based contact details, below the
+                   donor-type question and above the tiers. A REQUIRED full name; an
+                   OPTIONAL email paired with a consent tick that is NEVER ticked in
+                   advance, so NBCC only emails with clear permission; an anonymous
+                   option that keeps the gift off the public Donors Page; and, for
+                   monthly giving only, a confirmation the donor is 18 or over. The 18+
+                   row is shown only in give-monthly mode by initGiveToggle (mirroring
+                   the tier swap and the Gift Aid statement); it ships visible because
+                   monthly is the default, and its .give-age[hidden] rule collapses it
+                   for give once. Native inputs keep the global :focus-visible ring
+                   (REQ-032). initContactCapture marks the fieldset data-ready so
+                   startCheckout folds fullName, email, emailConsent, anonymous and
+                   (monthly) ageConfirmed into the REQ-028 payload; without JS the base
+                   { mode, plan, amount, giftAid } contract is unchanged. Copy is
+                   dash-free and names "NBCC" in full (REQ-031). -->
+              <fieldset class="give-contact" id="contactCapture">
+                <legend class="give-contact-legend">Your details</legend>
+                <div class="give-field">
+                  <label for="donorName">Full name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="donorName" name="fullName" class="give-field-input" autocomplete="name" required aria-required="true" placeholder="Your full name" />
+                </div>
+                <div class="give-field">
+                  <label for="donorEmail">Email <span class="give-optional">(optional)</span></label>
+                  <input type="email" id="donorEmail" name="email" class="give-field-input" autocomplete="email" placeholder="you@example.com" />
+                  <p class="give-field-help">We only use this to send your receipt and a thank you. We never share it.</p>
+                </div>
+                <label class="give-check" for="emailConsent">
+                  <input type="checkbox" id="emailConsent" name="emailConsent" class="give-check-box" />
+                  <span class="give-check-text">Yes, NBCC can email me about my gift and the difference it makes.</span>
+                </label>
+                <label class="give-check" for="anonymousDonor">
+                  <input type="checkbox" id="anonymousDonor" name="anonymous" class="give-check-box" />
+                  <span class="give-check-text">Keep my gift anonymous and off the public Donors Page.</span>
+                </label>
+                <!-- Monthly only: revealed for give monthly, collapsed for give once by
+                     initGiveToggle. Ships visible because monthly is the default mode. -->
+                <label class="give-check give-age" id="ageConfirmField" for="ageConfirmed">
+                  <input type="checkbox" id="ageConfirmed" name="ageConfirmed" class="give-check-box" />
+                  <span class="give-check-text">I confirm I am aged 18 or over. Monthly giving is set up by adults.</span>
+                </label>
+              </fieldset>
               <div class="give-toggle" role="group" aria-label="Choose how often to give">
                 <button type="button" class="give-mode" id="giveOnce" data-mode="once" aria-pressed="false" aria-controls="tiersOnce">Give once</button>
                 <button type="button" class="give-mode is-active" id="giveMonthly" data-mode="monthly" aria-pressed="true" aria-controls="tiersMonthly">Give monthly</button>

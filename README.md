@@ -752,17 +752,31 @@ holly/tan text on light bands). Dash-free copy, "NBCC" (REQ-031). The entries ar
 **placeholder** (`CONTENT VERIFICATION`) pending the charity's real, consented
 list; it also serves as the **Donors Page** referenced by REQ-024/REQ-025.
 
-**Update mechanism (decided):** the list lives **in the HTML** (hand-edited
-`<li>` entries), not a client-fetched JSON file or a JS-rendered list — so the
-names are crawlable for SEO, add no request/parse cost against the perf budget,
-and fit the no-build static-site model. To update, add or remove a
-`<li class="card supporter" data-type="…">` in the right tier, keeping it
-alphabetical. The tradeoff (manual HTML edits vs a data-driven authoring surface)
-and the rejected alternatives are recorded in
-`docs/superpowers/specs/2026-07-01-supporters-list-design.md`. Verified by
-`test/unit/supporters.test.ts` (three tiers in order, alphabetical within each,
-person + organisation both render); `copy-rules`/`accessibility`/`brand-colours`
-auto-cover the page and stay green.
+**Rendering (TASK-071):** the `/supporters` clean URL is **rendered server-side**
+from the real donor records, not served as the static file. `GET /supporters`
+(`src/routes/site.ts`) calls `listPublicSupporters` (`src/db/donations.ts`), which
+selects each donor with a donation and their **largest gift**, then the pure
+`groupPublicSupporters` (`src/db/donations-model.ts`) drops anonymous donors (via
+`isPubliclyListable`), derives each donor's tier from the amount using the
+give-monthly thresholds (bronze £10 / silver £25 / gold £50 / platinum £100 — a
+platinum-level gift folds into the top **Gold** tier), and sorts each tier
+alphabetically. A **company** (or any donor carrying a `business_name`) is listed by
+its business name, an **individual** by full name; the `person`/`organisation` marker
+comes from `donor_type`. The rendered HTML is injected into the **same**
+`supporters.html` markup, which stays the **template and the fallback** (served as-is
+if the DB read fails).
+
+`supporters.html`'s own static entries remain **placeholder** (`CONTENT
+VERIFICATION`) and are what the structure guards read: `test/unit/supporters.test.ts`
+(three tiers in order, alphabetical within each, person + organisation both render)
+plus `copy-rules`/`accessibility`/`brand-colours` auto-cover the file and stay green.
+The server-render is covered DB-free by `test/unit/supporters-render.test.ts` +
+`test/unit/supporters-read.test.ts` (pure grouping + HTML injection, mocked pool), and
+DB-backed end to end by `features/supporters.feature` (seed via the signed webhook,
+then assert a non-anonymous individual and company appear and an anonymous donor never
+does). This **supersedes** the earlier "list lives in hand-edited HTML" decision for
+donation-sourced entries; the rationale and rejected alternatives are recorded in
+`docs/superpowers/specs/2026-07-01-supporters-list-design.md`.
 
 ### Confirmation page (REQ-035)
 

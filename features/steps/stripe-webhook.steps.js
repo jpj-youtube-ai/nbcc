@@ -191,6 +191,18 @@ Then(
 );
 
 Then(
+  "the donation with payment intent {string} should have gasds eligible {word}",
+  async function (paymentIntent, expected) {
+    const r = await pool.query(
+      "SELECT gasds_eligible FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].gasds_eligible, expected === "true");
+  },
+);
+
+Then(
   "the donation with payment intent {string} should have declaration status {string}",
   async function (paymentIntent, status) {
     const r = await pool.query(

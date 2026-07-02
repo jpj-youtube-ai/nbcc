@@ -9,6 +9,7 @@ import {
 } from "./donations-model";
 import type { DeclarationFields } from "../declarations/fields";
 import { scopeFromDeclarationScope, type Scope, type DeclarationWording } from "../declarations/wording";
+import { isGasdsEligibleAmount } from "../gasds/caps";
 
 // PURE event→record mapping for the single Stripe webhook handler (REQ-036). No
 // pool/config/network/clock — imports only the pure donation model, so it is
@@ -247,14 +248,19 @@ export function recurringDonationInput(
 // gift being mapped twice (the double-count guard the acceptance requires).
 export function cardPresentDonationInput(charge: Stripe.Charge): DonationInput | null {
   if (charge.payment_method_details?.type !== "card_present") return null;
+  const amountPence = charge.amount ?? 0;
   return donationInputSchema.parse({
     donorType: "individual",
     mode: "once",
     plan: null,
-    amountPence: charge.amount ?? 0,
+    amountPence,
     currency: (charge.currency ?? "gbp").toUpperCase(),
     giftAid: false,
     declarationId: null,
+    // GASDS (REQ-058/TASK-078): a small (≤ £30), un-declared, non-Gift-Aided in-person tap is
+    // claimable under the Small Donations Scheme instead of Gift Aid. This gift carries no
+    // declaration and no Gift Aid, so eligibility rests only on the amount.
+    gasdsEligible: isGasdsEligibleAmount(amountPence, { hasDeclaration: false, giftAid: false }),
     paymentChannel: "in_person",
     stripePaymentIntentId: asString(charge.payment_intent),
     stripeChargeId: charge.id,

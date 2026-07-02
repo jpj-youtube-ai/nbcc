@@ -131,7 +131,8 @@ describe("processWebhookEvent — checkout.session.completed with a Gift Aid dec
     const donationCall = call(/insert into donations/i);
     expect(donationCall?.[1][1]).toBe(DECL_ID); // declaration_id (2nd param)
     expect(donationCall?.[1][6]).toBe(true); // gift_aid (7th param)
-    expect(donationCall?.[1][8]).toBe("eligible"); // claim_status (9th param)
+    expect(donationCall?.[1][7]).toBe(false); // gasds_eligible (8th param — a Gift Aid gift is never GASDS)
+    expect(donationCall?.[1][9]).toBe("eligible"); // claim_status (10th param)
 
     // Ordering inside the one transaction: donor → declaration → donation, all committed.
     const declIdx = idx(/insert into declarations/i);

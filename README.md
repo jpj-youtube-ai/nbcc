@@ -1242,6 +1242,23 @@ benefit (recognition perks zeroed), derives the cap breach from the annualised t
 row — any throw rolls **both** back (verified DB-free against a mocked pool in
 `test/unit/donation-benefits.test.ts`).
 
+**GASDS ingestion + pool read (REQ-058/REQ-050 · TASK-078).** The card-present mapper
+`cardPresentDonationInput` (`src/db/stripe-webhook-model.ts`) now sets `gasdsEligible` via
+`isGasdsEligibleAmount` (a small in-person tap carries no declaration and no Gift Aid, so
+eligibility rests on the amount); it rides through `donationInputSchema` → `buildDonationRow`
+→ the `donations` INSERT (`insertDonation`), so the card-present processor (TASK-073) persists
+`gasds_eligible` in the SAME transaction **without touching** the `gift_aid` / `claim_status`
+derivation — a £25 tap lands `gasds_eligible=true`, `claim_status='not_eligible'`; a £50 tap
+`gasds_eligible=false`. Every other channel (online checkout, recurring) leaves it `false`.
+The annual pool read is `getGasdsPoolReport(year)` in `src/gasds/pool.ts` (the DB-read half of
+the split, like `listPublicSupporters`): it sums this year's `gasds_eligible=true` amounts and
+— by a **separate** query — this year's claimed Gift Aid amounts, then applies the pure
+`gasdsPoolLimitPence` for the remaining headroom. The two sums are read independently so the
+GASDS pool total is never conflated with the Gift Aid claim total it references (REQ-050).
+Verified DB-free with a mocked pool (`test/unit/gasds-pool.test.ts`,
+`test/unit/stripe-webhook-card-present.test.ts`) and end to end
+(`features/stripe-webhook.feature`).
+
 **GASDS eligibility (REQ-058 · TASK-077).** The additive migration
 `migrations/1783014186353_gasds-eligible.js` adds the NOT-NULL-defaulted
 `donations.gasds_eligible` boolean (default `false`, so every existing row back-fills without
@@ -1257,8 +1274,8 @@ three caps — an **£8,000** annual ceiling, a **£2,000** top-up component, an
 Aid claimed that year — minus what is already claimed, never negative. **Assumption flagged in
 the code for NBCC finance sign-off:** the source wording was garbled, so the three figures are
 treated as three *independent* ceilings and the minimum taken (the conservative reading that
-can only under-claim). The code that SETS `gasds_eligible` on ingestion and the claim pipeline
-that reads the pool limit are later tasks; this lays the column + rules only.
+can only under-claim). Setting `gasds_eligible` on ingestion and reading the pool are wired in
+**TASK-078** (above); the downstream GASDS claim pipeline is a later task.
 
 **`POST /api/contact` (REQ-030).** Validates a website enquiry
 `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,

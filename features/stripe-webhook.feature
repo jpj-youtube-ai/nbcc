@@ -156,6 +156,8 @@ Feature: Stripe webhook handler (REQ-036)
     # flipped to 'sent' and a unique declaration_token addresses the emailed link/QR.
     And the donation with payment intent "pi_bdd_cp_1" should have declaration status "sent"
     And the donation with payment intent "pi_bdd_cp_1" should have a declaration token
+    # A £50 gift is above the £30 GASDS ceiling, so it is NOT GASDS-eligible (TASK-078).
+    And the donation with payment intent "pi_bdd_cp_1" should have gasds eligible false
 
     # Resending the IDENTICAL event id is a no-op (idempotent by event id) — still exactly one.
     When I POST a signed Stripe "charge.succeeded" webhook event with id "evt_bdd_cp_1":
@@ -188,6 +190,25 @@ Feature: Stripe webhook handler (REQ-036)
       """
     Then the response status should be 200
     And there should be exactly 0 donation with payment intent "pi_bdd_online_1"
+
+  Scenario: a small card-present gift is flagged GASDS-eligible, Gift Aid rules untouched (REQ-058)
+    # A £25 card-present tap is a GASDS small donation (no declaration, no Gift Aid), so it is
+    # flagged gasds_eligible=true while claim_status stays not_eligible (Gift Aid is untouched).
+    When I POST a signed Stripe "charge.succeeded" webhook event with id "evt_bdd_gasds_1":
+      """
+      {
+        "id": "ch_bdd_gasds_1",
+        "object": "charge",
+        "amount": 2500,
+        "currency": "gbp",
+        "payment_intent": "pi_bdd_gasds_1",
+        "payment_method_details": { "type": "card_present" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_gasds_1"
+    And the donation with payment intent "pi_bdd_gasds_1" should have gasds eligible true
+    And the donation with payment intent "pi_bdd_gasds_1" should have claim status "not_eligible"
 
   Scenario: an invalid signature is rejected
     When I POST a Stripe "charge.refunded" webhook event with an invalid signature:

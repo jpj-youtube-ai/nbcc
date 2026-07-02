@@ -29,6 +29,10 @@ export const donationInputSchema = z
     amountPence: z.number().int().positive(),
     currency: z.string().min(1).default("GBP"),
     giftAid: z.boolean().default(false),
+    // GASDS eligibility (REQ-058/TASK-078): set by cardPresentDonationInput for a small,
+    // un-declared, non-Gift-Aided in-person gift; every other channel leaves it false (an
+    // online/declared/Gift-Aided gift goes the Gift Aid route, never GASDS).
+    gasdsEligible: z.boolean().default(false),
     paymentChannel: z.enum(PAYMENT_CHANNELS).default("online"),
     declarationId: z.number().int().positive().nullable().default(null),
     stripeSessionId: z.string().nullable().default(null),
@@ -66,6 +70,7 @@ export interface DonationRow {
   amount_pence: number;
   currency: string;
   gift_aid: boolean;
+  gasds_eligible: boolean;
   payment_channel: (typeof PAYMENT_CHANNELS)[number];
   claim_status: ClaimStatus;
   stripe_session_id: string | null;
@@ -104,6 +109,9 @@ export function buildDonationRow(input: DonationInput, donorId: number): Donatio
     amount_pence: input.amountPence,
     currency: input.currency.toUpperCase(),
     gift_aid: giftAid,
+    // A company gift is never GASDS-eligible (nor Gift-Aid claimable); otherwise carry the
+    // flag the mapper computed (isGasdsEligibleAmount already rules out any Gift-Aided gift).
+    gasds_eligible: isCompany ? false : input.gasdsEligible,
     payment_channel: input.paymentChannel,
     claim_status: deriveClaimStatus({
       donorType: input.donorType,

@@ -1,4 +1,4 @@
-@gift-aid
+@gift-aid @db
 Feature: Public Gift Aid declaration completion (REQ-048)
   A walk-in donor whose in-person (card_present) gift was recorded can complete a Gift Aid
   declaration via the token-scoped link in their confirmation email. GETting the link renders

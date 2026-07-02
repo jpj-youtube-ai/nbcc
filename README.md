@@ -1062,10 +1062,26 @@ donation — alongside the shape above:
   and `created_at`.
 
 It also adds the NOT-NULL-defaulted `donations.benefit_cap_breached` boolean (default
-`false`, so every existing row back-fills without touching an existing column). The cap
-calculation (HMRC's relevant-value rule) that awards benefits and flips the flag is a
-later task. Every operation is additive (two new tables + a defaulted boolean column, no
-existing shape touched), so a code-level rollback stays safe (golden rule 2).
+`false`, so every existing row back-fills without touching an existing column). Every
+operation is additive (two new tables + a defaulted boolean column, no existing shape
+touched), so a code-level rollback stays safe (golden rule 2).
+
+**Benefit-cap calculation + write (REQ-045 · TASK-067).** The pure HMRC cap logic lives in
+`src/benefits/caps.ts` — no pool/config/clock, so it is unit-tested DB-free
+(`test/unit/benefit-caps.test.ts`), mirroring `src/db/donations-model.ts`. `benefitCapPence`
+implements the three tiers on the **annualised donation**: ≤£100 → 25% of the donation,
+£100–£1,000 → a flat £25, >£1,000 → 5% up to a £2,500 max. `deriveBenefitCapBreach({
+annualisedDonationPence, benefitValuePence })` returns whether the (annualised) benefit
+total exceeds that cap; `annualisePence` scales a monthly gift ×12 so the donation and the
+benefit total are banded on the same yearly basis. The five seeded **recognition perks**
+(`RECOGNITION_PERKS`) are always valued at **£0** via `recordedBenefitValuePence`, whatever
+an admin enters. The transactional write is `recordDonationBenefits(donationId, donorId,
+benefits[], actor?)` in `src/db/donations.ts` (mirroring `assignDonationToBatch`): in one
+`BEGIN…COMMIT` it locks the donation (`FOR UPDATE`), inserts one `donation_benefits` row per
+benefit (recognition perks zeroed), derives the cap breach from the annualised totals, sets
+`donations.benefit_cap_breached`, and appends a `donation.benefits_recorded` `audit_log`
+row — any throw rolls **both** back (verified DB-free against a mocked pool in
+`test/unit/donation-benefits.test.ts`).
 
 **`POST /api/contact` (REQ-030).** Validates a website enquiry
 `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,

@@ -950,6 +950,13 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   Aid Small Donations Scheme — see **GASDS eligibility** below (REQ-058).
 - **`audit_log`** — an **append-only** trail (`actor`, `action`, `entity`,
   `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
+- **`donation_partner_shares`** — the many-declarations-per-donation join for a
+  **partnership** gift (added by the additive migration
+  `1783015422184_partnership-shares.js`): `donation_id` + `declaration_id` (both indexed,
+  `onDelete RESTRICT`) and a positive `share_pence`. Where an individual/company gift uses
+  the single `donations.declaration_id` FK, a partnership records **one declaration per
+  partner** here, each with that partner's share — and the shares must sum exactly to the
+  donation total (see **Partnership shares** below, REQ-051).
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,
@@ -1027,6 +1034,21 @@ non-UK declaration), pairing them with the REQ-044 `scope` and the REQ-040 wordi
 snapshot. Pure and DB-free (`test/unit/declaration-fields.test.ts`); threading these
 through the checkout endpoint and persisting a `declarations` row via the webhook is
 REQ-043's follow-up (TASK-062/063), not built here.
+
+**Partnership shares (REQ-051 · TASK-079).** `src/declarations/partnership.ts` is the
+pure, DB-free model for a business-**partnership** donation, which — unlike an individual or
+company — is covered by **one Gift Aid declaration per partner** rather than the single
+`donations.declaration_id` FK. `partnerShareSchema` extends the shared declaration fields
+(same base + non-UK postcode/house rules as `src/declarations/fields.ts`, reused via the
+exported `declarationFieldsBase` + `refineDeclarationFields`) with a positive-integer
+`sharePence` — a partner's share of the gift. `validatePartnerShares(partners,
+totalAmountPence)` accepts **only** when there is at least one partner, every partner is a
+valid declaration+share, and the shares sum **exactly** to the donation total; any empty
+list, invalid partner, or over-/under-sum throws a typed `PartnerShareError`. The validated
+partners persist through the `donation_partner_shares` join table (migration
+`1783015422184_partnership-shares.js`); the checkout flow that collects them and the
+eligibility/claim logic that reads them are REQ-051 follow-ups, not built here. Pure and
+DB-free (`test/unit/partnership-shares.test.ts`).
 
 **Declaration retention (REQ-046 · TASK-068).** `src/declarations/retention.ts` is the
 pure, DB-free calculator for how long an immutable declaration must be kept.

@@ -964,6 +964,26 @@ snapshot. Pure and DB-free (`test/unit/declaration-fields.test.ts`); threading t
 through the checkout endpoint and persisting a `declarations` row via the webhook is
 REQ-043's follow-up (TASK-062/063), not built here.
 
+**Declaration retention (REQ-046 · TASK-068).** `src/declarations/retention.ts` is the
+pure, DB-free calculator for how long an immutable declaration must be kept.
+`computeRetentionExpiry({ scope, subscriptionActive, lastClaimedDonationAt, cancelledAt })`
+returns the retention-expiry `Date`, or `null` to retain indefinitely. HMRC's six-year
+window (`RETENTION_YEARS`) runs from the **most recent claimed donation**: while an enduring
+/ monthly declaration's subscription is active it is retained indefinitely (`null`); once
+inactive or cancelled the six-year clock is anchored to the **final claimed charge**
+(`lastClaimedDonationAt` as of cancellation), **not** the cancellation timestamp — a
+cancellation long after the last charge cannot extend retention. A `this_donation`
+declaration with a single claimed donation expires six years after that donation. **Edge
+case:** a declaration with **no claimed donation at all** has no anchor for the clock —
+nothing to retain against — so the calculator returns `null` deterministically (no throw),
+which the caller reads as "no computable expiry", not "retain forever". Online declarations
+require **no 30-day confirmation letter** (REQ-046 accept clause), so no confirmation-window
+offset is modelled. It reads nothing from the DB (`donations.created_at`,
+`claim_status`, `declaration_id` already exist per migration `1782923222001`); no migration
+is needed, since no persisted column or admin surface consumes it yet — the REQ-063 admin
+retention-expiry queue that will call it is out of scope. Pure and DB-free
+(`test/unit/declaration-retention.test.ts`).
+
 **The Stripe webhook (REQ-036 / TASK-046).** `POST /api/stripe/webhook`
 (`src/routes/stripe-webhook.ts`) is the **single** set of Stripe webhooks — no
 other route touches donor/donation events. It is mounted **before** `express.json`

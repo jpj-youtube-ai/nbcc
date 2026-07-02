@@ -941,7 +941,11 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   batch; that single column *is* the "a donation enters at most one claim batch"
   invariant (REQ-037). A NOT-NULL-defaulted `benefit_cap_breached` boolean (added by the
   benefit-tracking migration — see **Benefit tracking** below) records whether this gift's
-  benefits breach the Gift Aid cap (REQ-045).
+  benefits breach the Gift Aid cap (REQ-045). A NOT-NULL-defaulted `declaration_status`
+  (default `not_required`) plus a unique nullable `declaration_token` (added by the
+  declaration-confirmation migration `1783010739790_declaration-status-and-token.js`) track
+  the Gift Aid declaration-confirmation lifecycle — see **Declaration confirmation lifecycle**
+  below (REQ-057).
 - **`audit_log`** — an **append-only** trail (`actor`, `action`, `entity`,
   `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
 
@@ -973,6 +977,25 @@ verified against the local DB (the batched row + its audit row commit together; 
 second assignment on the same donation throws and writes neither). The claim-export /
 submission pipeline (REQ-052) and the admin RBAC that gates it (REQ-062) that will
 *call* this helper are separate follow-ups.
+
+**Declaration confirmation lifecycle (REQ-057 · TASK-074).** A Gift Aid declaration
+captured without a wet/online signature (in-person, telephone) must be confirmed by the
+donor before the gift is claimable. Two additive `donations` columns track this
+(migration `1783010739790_declaration-status-and-token.js`, additive/expand-contract —
+new NOT-NULL-defaulted + nullable columns, no existing column touched): **`declaration_status`**
+(`text`, default `not_required`, CHECK in `not_required` / `pending` / `sent` /
+`undelivered` / `completed`) and a unique nullable **`declaration_token`** (the unguessable
+token in the confirmation link, addressing exactly one donation; many NULLs coexist under
+the unique constraint). The **pure** state machine in `src/declarations/status.ts`
+(`nextDeclarationStatus` / `canApplyDeclarationEvent` / `applyDeclarationEvent`, no
+pool/config/clock) is the single source of truth for legal transitions: `require`
+(`not_required→pending`), `send` (`pending→sent`), `confirm` (`sent→completed`),
+`mark_undelivered` (`sent→undelivered`), `resend` (`undelivered→sent`). `completed` is
+**terminal** and reachable **only** by an explicit `confirm` from `sent` — a page view /
+bare GET of the confirmation link is not an event and can never mark a declaration
+completed. An illegal transition throws a typed `DeclarationTransitionError`. Unit-tested
+DB-free (`test/unit/declaration-status.test.ts`). This lays the column + rules only; the
+letter/link sending and the token-driven persistence that *call* the helper are a later task.
 
 **Declaration wording (REQ-040).** `src/declarations/wording.ts` is the versioned,
 verbatim source of truth for HMRC's Gift Aid liability statements — a

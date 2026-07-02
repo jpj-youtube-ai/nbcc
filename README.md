@@ -820,12 +820,16 @@ declaration-capture flow (REQ-043/044) will build on. It is derived once via
 matching verbatim wording, so the mode→scope decision is never duplicated. The
 persisted donation itself captures the gift's **amount**, **frequency** (`mode`) and
 **currency** (defaulting to `GBP`) explicitly (REQ-041).
-**Durable storage of the declaration (a Stripe webhook writing to the DB) — and the
-`declarations` row itself (name/address are not captured yet, REQ-043/REQ-046) — is out
-of scope here**; the consent binding lives on the session metadata. The `donorType` and
-`businessName` are likewise stamped onto `metadata` (alongside `giftAid`) so the webhook
-can persist them onto the donor record (REQ-038 → REQ-036). An upstream Stripe failure
-returns **502**, which the front-end degrades to its preview.
+When Gift Aid is opted in, the give widget (TASK-062) also captures the **HMRC
+declaration** (`{ title?, firstName, lastName, houseNameNumber, address, postcode?, nonUk }`);
+the endpoint validates it with the shared `declarationFieldsSchema`
+(`src/declarations/fields.ts`, REQ-043 · TASK-061) — a malformed postcode or a missing
+house name/number returns **400**, and a non-UK donor is exempt from the postcode — and
+stamps the `decl*` fields onto `metadata` so the webhook can persist an immutable
+`declarations` row (REQ-043/REQ-046). The `donorType` and `businessName` are likewise
+stamped onto `metadata` (alongside `giftAid`) so the webhook can persist them onto the
+donor record (REQ-038 → REQ-036). An upstream Stripe failure returns **502**, which the
+front-end degrades to its preview.
 
 > **Stub seam (no live account needed).** `src/clients/stripe.ts` uses the real
 > Stripe SDK when given a real key — standard (`sk_test_…`/`sk_live_…`) or
@@ -968,7 +972,12 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   (REQ-036/REQ-053). It also maps the REQ-039 contact capture onto the donor:
   `full_name` (falling back to the Stripe cardholder name), the `anonymous` flag, and
   `email` + `email_consent` **only** when consent was given — otherwise no email is
-  stored, so the platform sends nothing.
+  stored, so the platform sends nothing. For a gift-aided individual it also **inserts
+  an immutable `declarations` row** (REQ-043/TASK-063) from the `decl*` metadata — paired
+  with the stamped wording snapshot (REQ-042) and scope (REQ-044, the enduring monthly
+  default mapping to `all_donations`) — and links the donation's `declaration_id` to it,
+  in the **same** transaction with its own `declaration.created` audit row, so the
+  donation derives `claim_status='eligible'` (REQ-037).
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
   monthly charge as a further donation against the SAME donor (found via the
   subscription id), carrying the Gift Aid flag + declaration from the original.

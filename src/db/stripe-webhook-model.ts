@@ -7,6 +7,8 @@ import {
   type DonorType,
   type ClaimStatus,
 } from "./donations-model";
+import type { DeclarationFields } from "../declarations/fields";
+import type { Scope, DeclarationWording } from "../declarations/wording";
 
 // PURE event→record mapping for the single Stripe webhook handler (REQ-036). No
 // pool/config/network/clock — imports only the pure donation model, so it is
@@ -71,6 +73,51 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
       anonymous: md.anonymous === "true",
     },
     donation,
+  };
+}
+
+// The Gift Aid declaration to persist alongside a checkout donation (REQ-043). Carries
+// the validated capture fields, the REQ-044 scope column value, and the REQ-040 wording
+// snapshot the donor agreed to — everything except the donor FK, which the transactional
+// writer fills in after inserting the donor.
+export interface DeclarationWrite {
+  fields: DeclarationFields;
+  scope: Scope;
+  wording: DeclarationWording;
+  confirmedTaxpayer: boolean;
+}
+
+// checkout.session.completed → the Gift Aid declaration, or null when there is none. A
+// declaration exists only for a gift-aided individual, and only when the REQ-063 checkout
+// stamped the decl* fields (declFirstName is always present then). The declaration scope
+// column takes 'this_donation' | 'all_donations' (REQ-044), so the enduring monthly
+// default (metadata.declarationScope='enduring', REQ-041) maps to 'all_donations'. Opting
+// into Gift Aid is the taxpayer confirmation, so confirmed_taxpayer is true.
+export function declarationFromCheckoutSession(
+  session: Stripe.Checkout.Session,
+): DeclarationWrite | null {
+  const md = session.metadata ?? {};
+  if (!giftAidFromMetadata(md)) return null;
+  if (md.donorType === "company") return null;
+  if (!md.declFirstName) return null; // no declaration was captured
+  const fields: DeclarationFields = {
+    title: md.declTitle ? md.declTitle : undefined,
+    firstName: md.declFirstName,
+    lastName: md.declLastName ?? "",
+    houseNameNumber: md.declHouseNameNumber ? md.declHouseNameNumber : undefined,
+    address: md.declAddress ?? "",
+    postcode: md.declPostcode ? md.declPostcode : undefined,
+    nonUk: md.declNonUk === "true",
+  };
+  const scope: Scope = md.declarationScope === "enduring" ? "all_donations" : "this_donation";
+  return {
+    fields,
+    scope,
+    wording: {
+      wording_version: md.giftAidWordingVersion ?? "",
+      wording_snapshot: md.giftAidWording ?? "",
+    },
+    confirmedTaxpayer: true,
   };
 }
 

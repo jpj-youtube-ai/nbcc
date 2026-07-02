@@ -4,6 +4,7 @@ import { z } from "zod";
 import { stripe, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import { forwardEnquiry } from "../clients/contact";
 import { selectDeclarationWording, declarationScopeForMode } from "../declarations/wording";
+import { declarationFieldsSchema } from "../declarations/fields";
 import { config } from "../config";
 
 // Marketing-site API endpoints, both implemented.
@@ -45,6 +46,12 @@ const checkoutBodySchema = z
     emailConsent: z.boolean().optional(),
     anonymous: z.boolean().optional(),
     ageConfirmed: z.boolean().optional(),
+    // REQ-043: the Gift Aid declaration folded in by the give widget (TASK-062) when
+    // Gift Aid is opted in. Validated by the shared declarations module (TASK-061): a
+    // present declaration must carry a valid UK postcode + house name/number (a non-UK
+    // donor is exempt from the postcode), so a malformed one is rejected with 400. Only
+    // an individual opts into Gift Aid, so this only ever arrives for that path.
+    declaration: declarationFieldsSchema.optional(),
   })
   .refine((b) => b.mode !== "monthly" || b.plan !== null, {
     message: "monthly giving requires a plan",
@@ -122,6 +129,20 @@ export function buildSessionParams(
     });
     metadata.giftAidWordingVersion = wording.wording_version;
     metadata.giftAidWording = wording.wording_snapshot;
+  }
+
+  // Stamp the captured HMRC declaration onto the session (REQ-043) so the webhook can
+  // persist a declarations row — only for a gift-aided individual, the only path that
+  // makes a declaration. A non-UK donor omits the postcode.
+  if (body.giftAid && body.donorType === "individual" && body.declaration) {
+    const d = body.declaration;
+    metadata.declTitle = d.title ?? "";
+    metadata.declFirstName = d.firstName;
+    metadata.declLastName = d.lastName;
+    metadata.declHouseNameNumber = d.houseNameNumber ?? "";
+    metadata.declAddress = d.address;
+    metadata.declPostcode = d.nonUk ? "" : (d.postcode ?? "");
+    metadata.declNonUk = String(d.nonUk);
   }
 
   const base: StripeNS.Checkout.SessionCreateParams = {

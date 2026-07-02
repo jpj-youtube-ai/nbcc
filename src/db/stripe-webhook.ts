@@ -5,6 +5,7 @@ import { buildDonationRow } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation } from "./donations";
 import {
   donationFromCheckoutSession,
+  declarationFromCheckoutSession,
   recurringChargeFromInvoice,
   recurringDonationInput,
   refundedPenceFromCharge,
@@ -73,13 +74,30 @@ async function handleCheckoutCompleted(
   event: Stripe.Event & { data: { object: Stripe.Checkout.Session } },
 ): Promise<string> {
   const { donor, donation } = donationFromCheckoutSession(event.data.object);
-  const { donorId, donationId } = await insertDonorAndDonation(client, donor, donation);
+  // A gift-aided individual also captures a Gift Aid declaration (REQ-043); it is
+  // inserted and linked to the donation in the SAME transaction (declaration_id FK).
+  const declaration = declarationFromCheckoutSession(event.data.object);
+  const { donorId, donationId, declarationId } = await insertDonorAndDonation(
+    client,
+    donor,
+    donation,
+    declaration ?? undefined,
+  );
+  if (declarationId != null) {
+    await insertAudit(client, {
+      actor: "stripe",
+      action: "declaration.created",
+      entity: "declaration",
+      entityId: declarationId,
+      data: { eventId: event.id, donorId, donationId },
+    });
+  }
   await insertAudit(client, {
     actor: "stripe",
     action: "donation.created",
     entity: "donation",
     entityId: donationId,
-    data: { eventId: event.id, donorId, giftAid: donation.giftAid },
+    data: { eventId: event.id, donorId, giftAid: donation.giftAid, declarationId },
   });
   return "donation.created";
 }

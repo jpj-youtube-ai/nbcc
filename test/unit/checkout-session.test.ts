@@ -318,6 +318,77 @@ describe("POST /api/checkout-session — declaration scope + currency (REQ-041 /
   });
 });
 
+describe("POST /api/checkout-session — Gift Aid declaration (REQ-043 / TASK-063)", () => {
+  const decl = {
+    title: "Dr",
+    firstName: "Ada",
+    lastName: "Lovelace",
+    houseNameNumber: "12",
+    address: "Analytical Avenue, London",
+    postcode: "SW1A 1AA",
+    nonUk: false,
+  };
+
+  it("accepts a gift-aided individual with a valid declaration and stamps the fields onto metadata", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: true, declaration: decl });
+    expect(res.statusCode).toBe(200);
+    const md = lastParams().metadata;
+    expect(md.declFirstName).toBe("Ada");
+    expect(md.declLastName).toBe("Lovelace");
+    expect(md.declHouseNameNumber).toBe("12");
+    expect(md.declAddress).toBe("Analytical Avenue, London");
+    expect(md.declPostcode).toBe("SW1A 1AA");
+    expect(md.declTitle).toBe("Dr");
+    expect(md.declNonUk).toBe("false");
+  });
+
+  it("rejects a gift-aided declaration with a malformed postcode with 400 and never calls Stripe", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      declaration: { ...decl, postcode: "NOPE" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a gift-aided declaration missing the house name/number with 400", async () => {
+    const { houseNameNumber, ...noHouse } = decl;
+    void houseNameNumber;
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: true, declaration: noHouse });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("exempts a non-UK gift-aided declaration from the postcode requirement", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      declaration: {
+        firstName: "Jean",
+        lastName: "Le Maistre",
+        houseNameNumber: "La Rue",
+        address: "St Helier, Jersey",
+        nonUk: true,
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const md = lastParams().metadata;
+    expect(md.declNonUk).toBe("true");
+    expect(md.declPostcode).toBe("");
+    expect(md.declFirstName).toBe("Jean");
+  });
+
+  it("stamps no declaration metadata when Gift Aid is not opted in", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    expect(lastParams().metadata.declFirstName).toBeUndefined();
+  });
+});
+
 describe("POST /api/checkout-session — invalid bodies return 400", () => {
   it.each([
     ["monthly without a plan", { mode: "monthly", plan: null, amount: 1000, giftAid: false }],

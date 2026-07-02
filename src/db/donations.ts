@@ -9,6 +9,8 @@ import {
   type BatchBlockReason,
   type ClaimStatus,
 } from "./donations-model";
+import { buildDeclarationRow, type DeclarationRow } from "../declarations/fields";
+import type { DeclarationWrite } from "./stripe-webhook-model";
 
 // The unified donation model's write layer (REQ-036/REQ-037). Every state write and
 // its matching audit_log row commit or roll back TOGETHER, inside one BEGIN…COMMIT
@@ -91,15 +93,47 @@ export async function insertDonation(client: PoolClient, row: DonationRow): Prom
   return res.rows[0].id;
 }
 
+// Insert a single declarations row (already mapped by buildDeclarationRow) using the
+// given client; returns its id. The declarations table is immutable (REQ-046) — the app
+// never updates a saved row. Shared by insertDonorAndDonation.
+export async function insertDeclaration(client: PoolClient, row: DeclarationRow): Promise<number> {
+  const res = await client.query<{ id: number }>(
+    `INSERT INTO declarations
+       (donor_id, title, first_name, last_name, house_name_number, address, postcode,
+        non_uk, scope, wording_version, wording_snapshot, confirmed_taxpayer)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     RETURNING id`,
+    [
+      row.donor_id,
+      row.title,
+      row.first_name,
+      row.last_name,
+      row.house_name_number,
+      row.address,
+      row.postcode,
+      row.non_uk,
+      row.scope,
+      row.wording_version,
+      row.wording_snapshot,
+      row.confirmed_taxpayer,
+    ],
+  );
+  return res.rows[0].id;
+}
+
 // Insert a donor and its donation row (mapped + claim-derived by buildDonationRow)
 // using the given client, so it joins the caller's transaction. donor_type comes
-// from the donation (one source of truth). Shared by recordDonation and the Stripe
-// webhook processor.
+// from the donation (one source of truth). When a Gift Aid declaration is supplied
+// (REQ-043), it is inserted BETWEEN the donor and the donation and its id is wired onto
+// the donation's declaration_id — so the declaration + donation commit together and the
+// donation derives claim_status='eligible' from the now-present declaration. Shared by
+// recordDonation and the Stripe webhook processor.
 export async function insertDonorAndDonation(
   client: PoolClient,
   donor: DonorInput,
   donation: DonationInput,
-): Promise<{ donorId: number; donationId: number }> {
+  declaration?: DeclarationWrite,
+): Promise<{ donorId: number; donationId: number; declarationId: number | null }> {
   const donorRes = await client.query<{ id: number }>(
     `INSERT INTO donors
        (donor_type, full_name, business_name, company_number, email, email_consent, anonymous)
@@ -116,8 +150,25 @@ export async function insertDonorAndDonation(
     ],
   );
   const donorId = donorRes.rows[0].id;
-  const donationId = await insertDonation(client, buildDonationRow(donation, donorId));
-  return { donorId, donationId };
+
+  let declarationId: number | null = null;
+  if (declaration) {
+    declarationId = await insertDeclaration(
+      client,
+      buildDeclarationRow(declaration.fields, {
+        donorId,
+        scope: declaration.scope,
+        wording: declaration.wording,
+        confirmedTaxpayer: declaration.confirmedTaxpayer,
+      }),
+    );
+  }
+
+  // Set declarationId BEFORE buildDonationRow so claim_status derives from the
+  // now-present declaration (an individual gift with a declaration is eligible).
+  const donationInput = declarationId != null ? { ...donation, declarationId } : donation;
+  const donationId = await insertDonation(client, buildDonationRow(donationInput, donorId));
+  return { donorId, donationId, declarationId };
 }
 
 export interface RecordDonationInput {

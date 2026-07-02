@@ -191,6 +191,33 @@ Then(
 );
 
 Then(
+  "the donation with payment intent {string} should have declaration status {string}",
+  async function (paymentIntent, status) {
+    const r = await pool.query(
+      "SELECT declaration_status FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].declaration_status, status);
+  },
+);
+
+Then(
+  "the donation with payment intent {string} should have a declaration token",
+  async function (paymentIntent) {
+    const r = await pool.query(
+      "SELECT declaration_token FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.ok(
+      r.rows[0].declaration_token != null && r.rows[0].declaration_token.length > 0,
+      `expected a non-empty declaration_token, got ${r.rows[0].declaration_token}`,
+    );
+  },
+);
+
+Then(
   "there should be exactly {int} donor for payment intent {string}",
   async function (count, paymentIntent) {
     const r = await pool.query(

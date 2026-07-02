@@ -142,6 +142,7 @@ Feature: Stripe webhook handler (REQ-036)
         "amount": 5000,
         "currency": "gbp",
         "payment_intent": "pi_bdd_cp_1",
+        "receipt_email": "walkin.cp.bdd@example.com",
         "payment_method_details": { "type": "card_present" }
       }
       """
@@ -150,6 +151,11 @@ Feature: Stripe webhook handler (REQ-036)
     And the donation with payment intent "pi_bdd_cp_1" should have payment channel "in_person"
     And there should be exactly 1 donor for payment intent "pi_bdd_cp_1"
     And there should be a "donation.created" audit row for the donation with payment intent "pi_bdd_cp_1"
+    # The in-person confirmation email (TASK-075) is sent post-commit to the receipt email
+    # (stubbed on the .example provider URL in CI, so it "succeeds"): declaration_status is
+    # flipped to 'sent' and a unique declaration_token addresses the emailed link/QR.
+    And the donation with payment intent "pi_bdd_cp_1" should have declaration status "sent"
+    And the donation with payment intent "pi_bdd_cp_1" should have a declaration token
 
     # Resending the IDENTICAL event id is a no-op (idempotent by event id) — still exactly one.
     When I POST a signed Stripe "charge.succeeded" webhook event with id "evt_bdd_cp_1":
@@ -160,6 +166,7 @@ Feature: Stripe webhook handler (REQ-036)
         "amount": 5000,
         "currency": "gbp",
         "payment_intent": "pi_bdd_cp_1",
+        "receipt_email": "walkin.cp.bdd@example.com",
         "payment_method_details": { "type": "card_present" }
       }
       """

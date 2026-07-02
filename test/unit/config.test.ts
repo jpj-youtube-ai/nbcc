@@ -21,6 +21,7 @@ const validEnv = (): Record<string, string> => ({
   // Contact forwarding (TASK-039, REQ-030).
   CONTACT_FORWARD_URL: "https://formspree.io/f/test",
   EMAIL_SEND_URL: "https://email.example/send",
+  DECLARATION_FORM_BASE_URL: "https://nbcc.example",
 });
 
 describe("config schema", () => {

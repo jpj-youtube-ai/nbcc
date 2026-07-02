@@ -34,6 +34,10 @@ describe("nextDeclarationStatus — legal transitions", () => {
     expect(nextDeclarationStatus("sent", "mark_undelivered")).toBe("undelivered");
     expect(nextDeclarationStatus("undelivered", "resend")).toBe("sent");
   });
+
+  it("marks a pending confirmation undelivered when its auto-email never dispatches (TASK-075)", () => {
+    expect(nextDeclarationStatus("pending", "mark_undelivered")).toBe("undelivered");
+  });
 });
 
 describe("nextDeclarationStatus — illegal transitions return null", () => {

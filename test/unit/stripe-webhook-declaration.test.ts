@@ -16,9 +16,21 @@ const { queryMock, mockClient, connect } = vi.hoisted(() => {
 });
 
 vi.mock("../../src/db/pool", () => ({ pool: { connect } }));
-// The processor now sends a post-commit confirmation email (TASK-070); mock the
-// client so importing it never loads the real config (which validates process.env).
-vi.mock("../../src/clients/email", () => ({ sendDonationConfirmation: vi.fn() }));
+// The processor sends post-commit confirmation + declaration emails (TASK-070/075); mock
+// the client so importing it never hits the network.
+vi.mock("../../src/clients/email", () => ({
+  sendDonationConfirmation: vi.fn(),
+  sendDeclarationEmail: vi.fn(),
+}));
+// The processor reads config directly (DECLARATION_FORM_BASE_URL, TASK-075); mock config so
+// the real one never validates process.env and exits.
+vi.mock("../../src/config", () => ({
+  config: {
+    NODE_ENV: "development",
+    DATABASE_URL: "postgres://localhost:5432/test",
+    DECLARATION_FORM_BASE_URL: "https://nbcc.test",
+  },
+}));
 
 import { processWebhookEvent } from "../../src/db/stripe-webhook";
 

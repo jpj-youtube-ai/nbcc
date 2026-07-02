@@ -43,6 +43,8 @@ jobs:
       # Transactional email (TASK-070). A `.example` placeholder so the app boots and
       # the confirmation-email send is stubbed (no live provider) for the BDD step.
       EMAIL_SEND_URL: https://email.example/send
+      # Declaration form base URL (TASK-075) for the in-person confirmation link/QR.
+      DECLARATION_FORM_BASE_URL: http://localhost:3000
       BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

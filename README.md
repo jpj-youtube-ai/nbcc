@@ -1095,7 +1095,11 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   **non**-card-present `charge.succeeded` (an online `'card'` charge) is **ignored** —
   that gift is already captured by `checkout.session.completed`, so `cardPresentDonationInput`
   returns null and no row is written (the double-count guard). Idempotent by event id like
-  every branch, so a resent charge creates no duplicate.
+  every branch, so a resent charge creates no duplicate. The in-person donation is stamped
+  `declaration_status='pending'` + a unique `declaration_token` in the same transaction, and
+  — when the charge carried a `receipt_email` — the walk-in donor is emailed a
+  token-addressed Gift Aid declaration link + QR short link **post-commit** (TASK-075, see
+  **In-person declaration email** below).
 - **`charge.refunded` / `charge.dispute.*`** → updates the SAME donation record's
   `refunded_amount_pence` (absolute, so replay-safe) and recomputes `claim_status`
   — never a duplicate row.
@@ -1118,6 +1122,24 @@ send on email+consent and none otherwise.
 > is a `.example` placeholder (local dev, CI, fresh SSM param), the send is stubbed
 > (no network). `EMAIL_SEND_URL` is wired through config, `.env.example`, the CI env,
 > SSM, the task-def `secrets` and the `exec_secrets` IAM policy (golden rule 3).
+
+**In-person declaration email (TASK-075 / REQ-048).** A card-present (in-person) gift
+captures no Gift Aid declaration at the till, so the walk-in donor is offered one
+afterwards. When `charge.succeeded` books the in-person donation (above), it is stamped
+`declaration_status='pending'` + a unique `declaration_token` in the same transaction; then
+**post-commit** (like the confirmation email — best-effort, outside the transaction) the
+processor emails the charge's `receipt_email` a **token-addressed declaration link** plus a
+**QR-encodable short link** (both built by the pure `declarationLinks(base, token)` on
+`DECLARATION_FORM_BASE_URL`, via `sendDeclarationEmail`). The send outcome flips the status
+through the pure state machine (`applyDeclarationEvent('pending', …)`, TASK-074): a
+successful send → **`sent`**, a throwing send → **`undelivered`** — set by a **separate**
+`UPDATE`, so neither the send nor its status stamp can roll back the committed donation. A
+charge with no `receipt_email` stays `pending` (a printed-QR follow-up). Proven DB-free by
+`test/unit/declaration-email.test.ts` (mocked pool + email client): exactly one send to
+`receipt_email` with a unique link/QR and `declaration_status='sent'`; `undelivered` on a
+throw; the donation never rolled back. `DECLARATION_FORM_BASE_URL` (non-secret, but
+SSM-injected like the price IDs) is wired through config, `.env.example`, the CI env, SSM,
+the task-def `secrets` and the `exec_secrets` IAM policy (golden rule 3).
 
 `constructEvent` uses a real Stripe instance (pure HMAC, no network), so the stub
 seam still holds: unit tests and `features/stripe-webhook.feature` sign events
@@ -1396,6 +1418,12 @@ aws ssm put-parameter --name /charity-site/staging/CONTACT_FORWARD_URL \
 # email stubbed until a real URL is set.
 aws ssm put-parameter --name /charity-site/staging/EMAIL_SEND_URL \
   --type SecureString --value 'https://api.provider.com/send' --overwrite
+
+# Declaration form base URL (TASK-075): the public site base the in-person Gift Aid
+# declaration link/QR is built on. A plain String (not a secret); starts as a
+# https://nbcc.example placeholder. Set the real public site URL.
+aws ssm put-parameter --name /charity-site/staging/DECLARATION_FORM_BASE_URL \
+  --type String --value 'https://www.nbcc.org.uk' --overwrite
 ```
 
 ## Provisioning infrastructure
@@ -1471,6 +1499,12 @@ as `CONTACT_FORWARD_URL`: an SSM `SecureString` injected via `valueFrom` with it
 ARN in `exec_secrets`, validated as a URL, with a valid `.example` placeholder that
 `src/clients/email.ts` treats as unconfigured and stubs outside production. Set the
 real value with `put-parameter` (above) when a provider is chosen.
+
+`DECLARATION_FORM_BASE_URL` (TASK-075) is the public site base the in-person Gift Aid
+declaration link + QR short link are built on (`declarationLinks`). **Not** a secret (it
+ships in the email/QR), but SSM-held and injected via `valueFrom` like the price IDs — a
+plain SSM `String` with its ARN in `exec_secrets` — so it varies per environment; validated
+as a URL, with a valid placeholder so a fresh apply passes.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

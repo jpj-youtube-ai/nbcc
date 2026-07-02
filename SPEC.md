@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (43)
+## Shipped (44)
 
 ### REQ-001 — Multi-page site structure
 
@@ -297,6 +297,13 @@ Show HMRC's official template liability statement verbatim (multiple/all-donatio
 Tasks:
 - TASK-049 — Add versioned, verbatim HMRC declaration wording config with scope selection and liability-paragraph validation
 
+### REQ-041 — Amount, tier and frequency
+
+Let the donor pick monthly (a Stripe subscription) or one-off (a single charge) and either a preset tier (£10/£25/£50/£100) or a custom GBP amount, pairing monthly with an enduring declaration. *Accept:* amount, frequency and currency are captured; monthly defaults the declaration scope to enduring.
+
+Tasks:
+- TASK-060 — Capture explicit frequency/currency on checkout and default declaration scope to enduring for monthly gifts
+
 ### REQ-042 — Gift Aid opt-in, never pre-ticked
 
 Offer Gift Aid as an explicit opt-in bound to the displayed HMRC statement, eligible only for genuine gifts of the donor's own money (not goods/services, not crypto, not benefits over the caps). *Accept:* an affirmative tick is required and the consent is stored against the exact statement shown.
@@ -321,14 +328,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (22)
-
-### REQ-041 — Amount, tier and frequency
-
-Let the donor pick monthly (a Stripe subscription) or one-off (a single charge) and either a preset tier (£10/£25/£50/£100) or a custom GBP amount, pairing monthly with an enduring declaration. *Accept:* amount, frequency and currency are captured; monthly defaults the declaration scope to enduring.
-
-Tasks:
-- TASK-060 — Capture explicit frequency/currency on checkout and default declaration scope to enduring for monthly gifts
+## Planned (21)
 
 ### REQ-043 — Declaration field capture
 

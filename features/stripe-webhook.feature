@@ -1,4 +1,4 @@
-@stripe-webhook
+@stripe-webhook @db
 Feature: Stripe webhook handler (REQ-036)
   The ONE Stripe webhook endpoint verifies each event's signature and processes it
   against the single donation record: checkout.session.completed persists a

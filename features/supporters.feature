@@ -1,4 +1,4 @@
-@supporters
+@supporters @db
 Feature: Public supporters wall (REQ-035)
   The /supporters page renders the real, donation-sourced donor list server-side.
   A non-anonymous individual and a non-anonymous company donor appear, labelled by

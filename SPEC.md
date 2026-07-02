@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (39)
+## Shipped (40)
 
 ### REQ-001 — Multi-page site structure
 
@@ -266,6 +266,14 @@ Tasks:
 - TASK-045 — Create the unified donation schema and transactional audit-log write helper
 - TASK-046 — Add the single Stripe webhook handler set that updates the one donation record
 
+### REQ-038 — Donor-type routing question
+
+Ask "are you donating as an individual or on behalf of a business?", routing individuals (including sole traders and partners) to the Gift Aid path and incorporated companies (Ltd, PLC, LLP) to the no-Gift-Aid path, with helper text that a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
+
+Tasks:
+- TASK-054 — Add the individual-or-business donor-type routing question to the donate give widget
+- TASK-055 — Persist donor_type (and business name) through the checkout session and webhook onto the donor record
+
 ### REQ-040 — Verbatim, versioned HMRC declaration wording
 
 Show HMRC's official template liability statement verbatim (multiple/all-donations template for monthly and enduring, single-donation template for one-offs) and store the exact wording in a versioned config so every saved declaration records the version the donor saw. *Accept:* "I am a UK taxpayer" alone is rejected because the full liability paragraph must be present; wording_version and a wording_snapshot are persisted on each declaration.
@@ -289,19 +297,11 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (26)
+## Planned (25)
 
 ### REQ-037 — Core donation data model
 
 Implement donors, declarations, donations, claim_batches, users and audit_log with the invariant that a donation is claimable only when donor_type is individual, a valid active declaration covers it, and it is not (fully) refunded. *Accept:* company donations are always not-claimable/not_eligible; a donation enters at most one claim batch; every admin write appends an audit_log row.
-
-### REQ-038 — Donor-type routing question
-
-Ask "are you donating as an individual or on behalf of a business?", routing individuals (including sole traders and partners) to the Gift Aid path and incorporated companies (Ltd, PLC, LLP) to the no-Gift-Aid path, with helper text that a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
-
-Tasks:
-- TASK-054 — Add the individual-or-business donor-type routing question to the donate give widget
-- TASK-055 — Persist donor_type (and business name) through the checkout session and webhook onto the donor record
 
 ### REQ-039 — Consent-based contact capture
 

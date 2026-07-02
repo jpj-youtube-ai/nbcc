@@ -130,6 +130,19 @@ export function createSiteRouter(siteRoot: string): Router {
     }
   });
 
+  // Gift Aid declaration completion links (TASK-075/076). The in-person confirmation email
+  // embeds `/gift-aid/declare?token=…` (full) and `/g/:token` (QR short); both resolve to the
+  // token-scoped form served by GET /api/gift-aid/:token. Kept as thin redirects so the email
+  // link format (owned by TASK-075's declarationLinks) and the form endpoint stay decoupled.
+  router.get("/gift-aid/declare", (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    if (!token) return res.redirect(302, "/donate");
+    res.redirect(302, `/api/gift-aid/${encodeURIComponent(token)}`);
+  });
+  router.get("/g/:token", (req, res) => {
+    res.redirect(302, `/api/gift-aid/${encodeURIComponent(req.params.token)}`);
+  });
+
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).
   for (const rule of rules) {

@@ -614,13 +614,20 @@ checkbox (`#declNonUk`, Channel Islands / Isle of Man) drives `initDeclarationCa
 which **hides, disables and un-requires** the postcode (a non-UK declaration omits it). Every
 field has a real `<label for>` (REQ-032). `initDeclarationCapture` marks the fieldset
 `data-ready`, so `startCheckout` folds a **`declaration`** object (`{ title?, firstName,
-lastName, houseNameNumber, address, postcode?, nonUk }`) into the REQ-028 payload **only when
-`#giftAid` is checked** (mirroring the `donorType` gate) — a declaration is made only with
-Gift Aid, and without JS the base `{ mode, plan, amount, giftAid }` contract is unchanged.
-The field validation + declarations-row builder it feeds is `src/declarations/fields.ts`
-(REQ-043 · TASK-061); threading it through the checkout endpoint and persisting a
-`declarations` row via the webhook is TASK-063. Token-only colours (slate body, maroon
-legend, crimson accents). Dash-free copy, "NBCC" (REQ-031). Verified by
+lastName, houseNameNumber, address, postcode?, nonUk, scope }`) into the REQ-028 payload
+**only when `#giftAid` is checked** (mirroring the `donorType` gate) — a declaration is made
+only with Gift Aid, and without JS the base `{ mode, plan, amount, giftAid }` contract is
+unchanged. A `#declScope` radio pair (REQ-044 · TASK-064) keyed to the `declarations.scope`
+values — `all_donations` (this gift plus the past 4 years and future) vs `this_donation` —
+**defaults from the give mode**: `initDeclarationCapture` sets it and `initGiveToggle`
+re-syncs it (`all_donations` for monthly, `this_donation` for once, alongside the tier and
+Gift Aid statement swap) until the donor picks one, after which their choice sticks. The
+field validation + declarations-row builder it feeds is `src/declarations/fields.ts`
+(REQ-043 · TASK-061), which now also **accepts** the explicit `scope` (so the strict schema
+does not reject it); the checkout endpoint validates + stamps the declaration and the webhook
+persists an immutable `declarations` row (TASK-063), still deriving the persisted scope from
+the give mode for now (switching to the sent value is a later task). Token-only colours
+(slate body, maroon legend, crimson accents). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/declaration-capture.test.ts`.
 
 ### Give side panel content (REQ-024)

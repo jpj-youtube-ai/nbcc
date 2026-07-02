@@ -86,6 +86,22 @@ describe("Gift Aid declaration capture markup (REQ-043)", () => {
     expect(decl?.querySelector('label[for="declNonUk"]')).not.toBeNull();
   });
 
+  it("offers a declaration-scope radio pair keyed to the scope values, with real labels (REQ-032/REQ-044)", () => {
+    const radios = [...(decl?.querySelectorAll('input[type="radio"][name="declScope"]') ?? [])] as HTMLInputElement[];
+    expect(radios).toHaveLength(2);
+    expect(radios.map((r) => r.getAttribute("value")).sort()).toEqual(["all_donations", "this_donation"]);
+    for (const r of radios) {
+      const id = r.getAttribute("id");
+      expect(id, "radio has an id").toBeTruthy();
+      const label = decl?.querySelector(`label[for="${id}"]`);
+      expect(label, `label for #${id}`).not.toBeNull();
+      expect(norm(label?.textContent).length).toBeGreaterThan(0);
+    }
+    // Ships all_donations checked, matching the give-monthly default mode (works without JS).
+    expect(decl?.querySelector('input[value="all_donations"]')?.hasAttribute("checked")).toBe(true);
+    expect(decl?.querySelector('input[value="this_donation"]')?.hasAttribute("checked")).toBe(false);
+  });
+
   it("writes the declaration copy without dashes (REQ-031)", () => {
     expect(norm(decl?.textContent)).not.toMatch(/[–—-]/);
   });
@@ -155,6 +171,7 @@ describe("Gift Aid declaration capture behaviour (jsdom)", () => {
       address: "Analytical Avenue, London",
       postcode: "SW1A 1AA",
       nonUk: false,
+      scope: "all_donations", // the give-monthly default (REQ-044/TASK-064)
     });
   });
 
@@ -187,5 +204,69 @@ describe("Gift Aid declaration capture behaviour (jsdom)", () => {
     byId("declPostcode").value = "SW1A 1AA";
     onceTier(0).click();
     expect("title" in lastPayload().declaration).toBe(false);
+  });
+});
+
+describe("Gift Aid declaration scope (REQ-044 / TASK-064)", () => {
+  const { initGiveToggle, initDeclarationCapture, initCheckout } = require(
+    resolve(ROOT, "assets/js/main.js"),
+  );
+  const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
+
+  const scopeChecked = () =>
+    (document.querySelector('input[name="declScope"]:checked') as HTMLInputElement | null)?.value;
+  const clickMode = (id: string) => (document.getElementById(id) as HTMLElement).click();
+  const onceTier = (i: number) =>
+    document.querySelectorAll("#tiersOnce .give-tier")[i] as HTMLElement;
+  const byId = (id: string) => document.getElementById(id) as HTMLInputElement;
+
+  let alerts: string[];
+  const lastPayload = () => {
+    const a = alerts[alerts.length - 1];
+    return JSON.parse(a.slice(a.indexOf("{")));
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = `<main>${cardHtml}</main>`;
+    alerts = [];
+    window.alert = (m?: string) => {
+      alerts.push(String(m));
+    };
+    (window as unknown as { fetch?: unknown }).fetch = undefined;
+    initGiveToggle(document);
+    initDeclarationCapture(document);
+    initCheckout(document, window);
+  });
+
+  it("defaults the scope to all_donations in give-monthly mode (the default)", () => {
+    expect(scopeChecked()).toBe("all_donations");
+  });
+
+  it("re-syncs the scope default to this_donation for give once and back to all_donations for give monthly", () => {
+    clickMode("giveOnce");
+    expect(scopeChecked()).toBe("this_donation");
+    clickMode("giveMonthly");
+    expect(scopeChecked()).toBe("all_donations");
+  });
+
+  it("stops re-syncing once the donor picks a scope (sticky through later mode switches)", () => {
+    byId("declScopeThis").click(); // donor overrides to this_donation while in monthly mode
+    expect(scopeChecked()).toBe("this_donation");
+    clickMode("giveOnce");
+    expect(scopeChecked()).toBe("this_donation");
+    clickMode("giveMonthly");
+    expect(scopeChecked()).toBe("this_donation"); // stays on the donor's choice
+  });
+
+  it("folds the selected scope into the declaration payload when Gift Aid is checked", () => {
+    clickMode("giveOnce"); // give-mode once → scope this_donation
+    byId("giftAid").checked = true;
+    byId("declFirstName").value = "Ada";
+    byId("declLastName").value = "Lovelace";
+    byId("declHouse").value = "12";
+    byId("declAddress").value = "Analytical Avenue";
+    byId("declPostcode").value = "SW1A 1AA";
+    onceTier(0).click();
+    expect(lastPayload().declaration.scope).toBe("this_donation");
   });
 });

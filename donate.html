@@ -295,6 +295,23 @@
               <fieldset class="give-declaration" id="declarationCapture">
                 <legend class="give-declaration-legend">Your Gift Aid declaration</legend>
                 <p class="give-declaration-help">We ask for these only if you add Gift Aid, so HMRC can match your donation to your tax record.</p>
+                <!-- Declaration scope (REQ-044): which donations this declaration covers.
+                     Native radios keyed to the declarations.scope values. The default
+                     follows the give mode (initDeclarationCapture / initGiveToggle): all my
+                     donations for give monthly, this donation only for give once, until the
+                     donor picks one. Ships all_donations checked, matching the monthly
+                     default (works without JS). -->
+                <div class="give-field give-scope" id="declScopeField">
+                  <span class="give-scope-legend">Which donations does this declaration cover?</span>
+                  <label class="give-check" for="declScopeAll">
+                    <input type="radio" id="declScopeAll" name="declScope" value="all_donations" class="give-check-box" checked />
+                    <span class="give-check-text">All my donations, this one plus the past 4 years and future gifts</span>
+                  </label>
+                  <label class="give-check" for="declScopeThis">
+                    <input type="radio" id="declScopeThis" name="declScope" value="this_donation" class="give-check-box" />
+                    <span class="give-check-text">This donation only</span>
+                  </label>
+                </div>
                 <div class="give-field">
                   <label for="declTitle">Title <span class="give-optional">(optional)</span></label>
                   <input type="text" id="declTitle" name="title" class="give-field-input" autocomplete="honorific-prefix" placeholder="Mr, Ms, Dr" />

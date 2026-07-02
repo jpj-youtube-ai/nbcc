@@ -82,6 +82,26 @@
   // with "give monthly" pressed and #tiersOnce hidden, so it works without JS;
   // this just wires the buttons. Native <button>s give keyboard activation for
   // free, and no animation is required (reduced-motion safe).
+  // Declaration scope default from the give mode (REQ-044): a monthly gift defaults to
+  // an enduring all-donations declaration, a one-off to this donation only. Front-end
+  // only — mirrors declarationScopeForMode in src/declarations/wording.ts but yields the
+  // declarations.scope column values ('all_donations' / 'this_donation').
+  function scopeForGiveMode(mode) {
+    return mode === "monthly" ? "all_donations" : "this_donation";
+  }
+
+  // Check the declaration-scope radio matching the give mode's default — UNLESS the donor
+  // has already picked a scope (the field is marked data-touched), in which case their
+  // choice sticks through later mode switches. No-op if the scope control is absent.
+  function syncDeclScope(doc, mode) {
+    var field = doc.getElementById("declScopeField");
+    if (!field || field.dataset.touched === "true") return;
+    var scope = scopeForGiveMode(mode);
+    Array.prototype.forEach.call(doc.querySelectorAll('input[name="declScope"]'), function (r) {
+      r.checked = r.value === scope;
+    });
+  }
+
   function initGiveToggle(doc) {
     var toggle = doc.querySelector(".give-toggle");
     if (!toggle) return;
@@ -108,6 +128,9 @@
       // rule collapses the flex row). No-op if the field is absent.
       var ageField = doc.getElementById("ageConfirmField");
       if (ageField) ageField.hidden = mode !== "monthly";
+      // Declaration scope (REQ-044): re-sync the scope default to the new mode (unless
+      // the donor has already picked one).
+      syncDeclScope(doc, mode);
     }
 
     buttons.forEach(function (btn) {
@@ -217,6 +240,20 @@
 
     if (nonUkBox) nonUkBox.addEventListener("change", applyNonUk);
     applyNonUk(); // sync to the shipped state (UK by default)
+
+    // Declaration scope (REQ-044): default the radio from the current give mode, and mark
+    // the control touched once the donor picks a scope so later mode switches stop
+    // re-syncing it (initGiveToggle honours the same flag).
+    var scopeField = doc.getElementById("declScopeField");
+    if (scopeField) {
+      var pressed = doc.querySelector('.give-mode[aria-pressed="true"]');
+      syncDeclScope(doc, pressed ? pressed.getAttribute("data-mode") : "monthly");
+      Array.prototype.forEach.call(doc.querySelectorAll('input[name="declScope"]'), function (r) {
+        r.addEventListener("change", function () {
+          scopeField.dataset.touched = "true";
+        });
+      });
+    }
 
     control.dataset.ready = "true";
   }
@@ -440,6 +477,10 @@
       var declTitle = declVal("declTitle");
       if (declTitle) declaration.title = declTitle;
       if (!declNonUk) declaration.postcode = declVal("declPostcode");
+      // Declaration scope (REQ-044): the donor's selected radio (defaulting from the give
+      // mode). The backend still derives the persisted scope from the mode for now.
+      var declScope = doc.querySelector('input[name="declScope"]:checked');
+      if (declScope) declaration.scope = declScope.value;
       payload.declaration = declaration;
     }
 

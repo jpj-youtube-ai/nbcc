@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Scope, DeclarationWording } from "./wording";
+import { SCOPES, type Scope, type DeclarationWording } from "./wording";
 
 // The pure, DB-free declaration field-capture validation + row builder (REQ-043). A
 // Gift Aid declaration captures the donor's title (optional), first and last name, the
@@ -34,6 +34,11 @@ export const declarationFieldsSchema = z
     address: z.string().trim().min(1), // the rest of the ONE home address
     postcode: z.string().trim().min(1).optional(),
     nonUk: z.boolean().default(false),
+    // REQ-044 (TASK-064): the donor's explicit declaration scope, folded in by the give
+    // widget. Accepted here (so the strict schema does not reject it) but the backend still
+    // derives the persisted scope from the give mode — switching to this value is the next
+    // task. Optional so the base declaration (no scope) still validates.
+    scope: z.enum(SCOPES).optional(),
   })
   .strict()
   // A UK declaration needs the house name/number (the HMRC matching key); a non-UK

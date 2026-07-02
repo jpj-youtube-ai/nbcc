@@ -1009,6 +1009,28 @@ second assignment on the same donation throws and writes neither). The claim-exp
 submission pipeline (REQ-052) and the admin RBAC that gates it (REQ-062) that will
 *call* this helper are separate follow-ups.
 
+**Charities Online export row builder (REQ-052 · TASK-082).** `src/claims/charities-online.ts`
+is the **pure**, DB-free formatter that turns an already-eligible donation + its linked
+declarations row into HMRC's Charities Online claim columns, in order: **Title, First name,
+Last name, House name/number, Postcode, Donation date, Amount** (`CHARITIES_ONLINE_COLUMNS` is
+the single source of the ordering). It is **read-only formatting** — it sources only existing
+columns (declarations `title`/`first_name`/`last_name`/`house_name_number`/`postcode` and
+donations `created_at`/`amount_pence`, see **Donation data model** below), adds none, and does
+**not** re-derive eligibility: the caller (the REQ-052 claim pipeline) passes only rows that
+already satisfy the claim invariant (individual donor, active declaration, not refunded —
+`deriveClaimStatus`). `buildCharitiesOnlineRow` formats the **Donation date** as
+`DD/MM/YYYY` (UTC components, so no clock and no timezone drift) and the **Amount** as a plain
+decimal GBP string (`amount_pence / 100`, two places — never pence); Title passes through
+(HMRC allows a blank title) while a missing first/last name, house name/number or postcode
+**throws** `CharitiesOnlineExportError` rather than emitting a blank HMRC column.
+`toCharitiesOnlineCsv` serializes a header row + **one row per donation** (RFC-4180 quoting,
+CRLF-joined), so two gifts sharing one enduring monthly declaration (e.g. two `invoice.paid`
+charges) each get their own independent row. Pure like `src/declarations/fields.ts` /
+`src/declarations/render.ts` (no pool/config/clock), unit-tested DB-free
+(`test/unit/charities-online-export.test.ts`). The pipeline that *selects* the eligible rows
+and *submits* the file to HMRC (and the admin/RBAC that triggers it) are REQ-052/REQ-062
+follow-ups.
+
 **Declaration confirmation lifecycle (REQ-057 · TASK-074).** A Gift Aid declaration
 captured without a wet/online signature (in-person, telephone) must be confirmed by the
 donor before the gift is claimable. Two additive `donations` columns track this

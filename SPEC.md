@@ -351,6 +351,10 @@ Tasks:
 
 Record the benefits accepted per donation with an admin-set value per perk and an automatic check against HMRC's annualised benefit caps (≤£100 → 25%; £101–£1,000 → £25; £1,001+ → 5% capped at £2,500). *Accept:* recognition perks such as name-on-page, impact updates, social thank-yous, digital badges and certificates are recorded at zero monetary value; any cap breach is flagged.
 
+Tasks:
+- TASK-066 — Add benefit_types and donation_benefits tables plus a donation cap-breach flag (additive migration)
+- TASK-067 — Add HMRC annualised benefit-cap calculator and an audited donation-benefit recording write helper
+
 ### REQ-046 — Immutable declaration audit record
 
 Persist each declaration immutably with all captured fields, the declaration timestamp, the wording-version snapshot, the scope, the benefits accepted and foreign keys to every charge, retaining it six years after the most recent claimed donation (permanently while an enduring or monthly declaration is active, with the clock starting at the final charge on cancellation). *Accept:* online declarations require no 30-day confirmation letter.

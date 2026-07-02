@@ -50,7 +50,7 @@ function installQuery() {
 const sqls = (): string[] => queryMock.mock.calls.map((c) => String(c[0]));
 const call = (re: RegExp) => queryMock.mock.calls.find((c) => re.test(String(c[0])));
 
-const chargeEvent = (type: string) =>
+const chargeEvent = (type: string, amount = 5000) =>
   ({
     id: "evt_cp_1",
     type: "charge.succeeded",
@@ -58,7 +58,7 @@ const chargeEvent = (type: string) =>
       object: {
         id: "ch_cp_1",
         object: "charge",
-        amount: 5000,
+        amount,
         currency: "gbp",
         payment_intent: "pi_cp_1",
         payment_method_details: { type },
@@ -84,12 +84,28 @@ describe("processWebhookEvent — charge.succeeded (card_present, REQ-054)", () 
 
     const donationInsert = call(/insert into donations/i);
     expect(donationInsert).toBeDefined();
-    // payment_channel is the 8th donations column (index 7 in the params array).
     expect(donationInsert?.[1]).toContain("in_person");
 
     const auditInsert = call(/insert into audit_log/i);
     expect(auditInsert?.[1]).toContain("donation.created");
     expect(auditInsert?.[1]).toContain("donation");
+  });
+
+  // donations INSERT params (0-indexed): 6 gift_aid, 7 gasds_eligible, 8 payment_channel,
+  // 9 claim_status (see insertDonation in src/db/donations.ts).
+  it("flags a £25 card-present gift GASDS-eligible, leaving claim_status not_eligible (TASK-078)", async () => {
+    await processWebhookEvent(chargeEvent("card_present", 2500));
+    const params = call(/insert into donations/i)?.[1];
+    expect(params?.[6]).toBe(false); // gift_aid untouched
+    expect(params?.[7]).toBe(true); // gasds_eligible
+    expect(params?.[9]).toBe("not_eligible"); // Gift Aid rules untouched
+  });
+
+  it("does NOT flag a £50 card-present gift (above the £30 GASDS ceiling)", async () => {
+    await processWebhookEvent(chargeEvent("card_present", 5000));
+    const params = call(/insert into donations/i)?.[1];
+    expect(params?.[7]).toBe(false); // gasds_eligible
+    expect(params?.[9]).toBe("not_eligible");
   });
 
   it("ignores a non-card-present ('card') charge — never double-mapping an online gift", async () => {

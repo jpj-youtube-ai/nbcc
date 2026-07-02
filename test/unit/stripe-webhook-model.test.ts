@@ -412,6 +412,17 @@ describe("cardPresentDonationInput (REQ-054) — in-person card_present charges"
     expect(row.claim_status).toBe("not_eligible");
   });
 
+  it("flags GASDS eligibility for a small (≤ £30) gift, not for a larger one (TASK-078)", () => {
+    // A £25 tap is a GASDS small donation; a £50 tap is above the £30 ceiling.
+    expect(cardPresentDonationInput(charge({ amount: 2500 }))?.gasdsEligible).toBe(true);
+    expect(cardPresentDonationInput(charge({ amount: 3000 }))?.gasdsEligible).toBe(true); // £30 boundary
+    expect(cardPresentDonationInput(charge({ amount: 5000 }))?.gasdsEligible).toBe(false);
+    // The flag rides through to the row (and never disturbs claim_status).
+    const row = buildDonationRow(cardPresentDonationInput(charge({ amount: 2500 }))!, 7);
+    expect(row.gasds_eligible).toBe(true);
+    expect(row.claim_status).toBe("not_eligible");
+  });
+
   it("returns null for an online 'card' charge (already captured via checkout — never double-mapped)", () => {
     expect(cardPresentDonationInput(charge({ payment_method_details: { type: "card" } }))).toBeNull();
   });

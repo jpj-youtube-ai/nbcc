@@ -816,7 +816,11 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   **flag** (`gift_aid` boolean + nullable `declaration_id` FK) — never a second
   store (REQ-036). A donation is claimable only when the donor is an individual,
   an active declaration covers it and it is not (fully) refunded; company
-  donations are permanently `not_eligible` (REQ-037/REQ-053).
+  donations are permanently `not_eligible` (REQ-037/REQ-053). A nullable
+  `claim_batch_id` FK (`onDelete RESTRICT`, added by the claim-batches migration —
+  see **Claim batches + users** below) links a donation to **at most one** claim
+  batch; that single column *is* the "a donation enters at most one claim batch"
+  invariant (REQ-037).
 - **`audit_log`** — an **append-only** trail (`actor`, `action`, `entity`,
   `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
 
@@ -898,8 +902,26 @@ which currently performs the same claim inline against its own
 `stripe_webhook_events` ledger; consolidating the handler onto this helper and
 retiring the inline ledger (an expand-contract drop) is a small follow-up.
 
-**Not built here (named, separate tasks):** the `claim_batches` + `users` tables
-and the one-batch-per-donation / admin-write invariants (REQ-037).
+**Claim batches + users (REQ-037 / REQ-052 / REQ-062 · TASK-056).** The additive
+migration `migrations/1782987698792_claim-batches-and-users.js` lays the two model
+rows the claim pipeline and admin back-end will write through — the follow-up the
+unified-model migration deliberately named but did not build:
+
+- **`claim_batches`** — a Charities Online claim batch of eligible donations
+  (REQ-052): `status` (`open`/`submitted`/`adjustment_due`, default `open`), a
+  nullable `submitted_at`, and the export identity — `regulator` (default `OSCR`),
+  `charity_number` (default `SC047995`) and a nullable `hmrc_reference`.
+- **`users`** — minimal admin/staff accounts: a unique `email`, `full_name`, and a
+  `role` check (`viewer`/`editor`/`admin`, default `viewer`). The table only records
+  the role; **REQ-062 owns the actual RBAC enforcement and the admin back-end** — not
+  built here.
+
+It also adds the nullable `donations.claim_batch_id` FK (`onDelete RESTRICT`, indexed)
+whose single-column-ness enforces one-batch-per-donation (REQ-037). Every operation is
+additive (two new tables + a nullable FK column, no existing shape touched), so a
+code-level rollback stays safe (golden rule 2). Still separate follow-ups: the REQ-052
+export/submission pipeline and the REQ-062 admin RBAC that assemble and gate batches,
+plus the admin-write audit invariant (every admin write appends an `audit_log` row).
 
 **`POST /api/contact` (REQ-030).** Validates a website enquiry
 `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,

@@ -47,6 +47,12 @@ Before({ tags: "@stripe-webhook" }, async function () {
     "DELETE FROM declarations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%bdd@example.com')",
   );
   await pool.query("DELETE FROM donors WHERE email LIKE '%bdd@example.com'");
+  // Card-present (in-person) donations book an anonymous walk-in donor with NO email
+  // (REQ-054), so the email-based delete above can't reach them. Clear any now-childless
+  // walk-in donors (their pi_bdd_% donation was just deleted) so counts stay deterministic.
+  await pool.query(
+    "DELETE FROM donors WHERE full_name = 'In-person donor' AND id NOT IN (SELECT donor_id FROM donations WHERE donor_id IS NOT NULL)",
+  );
 });
 
 AfterAll(async function () {
@@ -60,6 +66,19 @@ When("I POST a signed Stripe {string} webhook event:", async function (type, doc
   this.statusCode = res.status;
   this.text = await res.text();
 });
+
+// Like the step above but with an EXPLICIT event id (not the auto-generated one), so a
+// scenario can resend the IDENTICAL id to prove idempotency (TASK-073).
+When(
+  "I POST a signed Stripe {string} webhook event with id {string}:",
+  async function (type, id, docString) {
+    const payload = JSON.stringify({ id, object: "event", type, data: { object: JSON.parse(docString) } });
+    const signature = stripe.webhooks.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET });
+    const res = await postWebhook(payload, signature);
+    this.statusCode = res.status;
+    this.text = await res.text();
+  },
+);
 
 When(
   "I POST a Stripe {string} webhook event with an invalid signature:",
@@ -159,6 +178,44 @@ Then(
 
 // donor_type / business_name live on the donor the donation points to (one model),
 // so these join donations → donors to assert the persisted donor record (REQ-038).
+Then(
+  "the donation with payment intent {string} should have payment channel {string}",
+  async function (paymentIntent, channel) {
+    const r = await pool.query(
+      "SELECT payment_channel FROM donations WHERE stripe_payment_intent_id = $1",
+      [paymentIntent],
+    );
+    assert.ok(r.rows.length > 0, `no donation for payment intent ${paymentIntent}`);
+    assert.equal(r.rows[0].payment_channel, channel);
+  },
+);
+
+Then(
+  "there should be exactly {int} donor for payment intent {string}",
+  async function (count, paymentIntent) {
+    const r = await pool.query(
+      `SELECT count(DISTINCT dn.id)::int AS n
+         FROM donations d JOIN donors dn ON dn.id = d.donor_id
+        WHERE d.stripe_payment_intent_id = $1`,
+      [paymentIntent],
+    );
+    assert.equal(r.rows[0].n, count);
+  },
+);
+
+Then(
+  "there should be a {string} audit row for the donation with payment intent {string}",
+  async function (action, paymentIntent) {
+    const r = await pool.query(
+      `SELECT count(*)::int AS n
+         FROM audit_log a JOIN donations d ON d.id = a.entity_id
+        WHERE d.stripe_payment_intent_id = $1 AND a.entity = 'donation' AND a.action = $2`,
+      [paymentIntent, action],
+    );
+    assert.ok(r.rows[0].n >= 1, `no ${action} audit row for donation ${paymentIntent}`);
+  },
+);
+
 Then(
   "the donor for payment intent {string} should have donor type {string}",
   async function (paymentIntent, donorType) {

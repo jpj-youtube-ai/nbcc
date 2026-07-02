@@ -131,6 +131,57 @@ Feature: Stripe webhook handler (REQ-036)
     And the donation with payment intent "pi_bdd_decl" should have claim status "eligible"
     And the donation with payment intent "pi_bdd_decl" should have a linked declaration
 
+  Scenario: a card-present (in-person) charge books a walk-in donation, idempotently; online charges are ignored
+    # A Stripe Terminal / card_present charge is an in-person gift with no checkout session,
+    # captured straight off the charge (REQ-054) as an anonymous walk-in donor + donation.
+    When I POST a signed Stripe "charge.succeeded" webhook event with id "evt_bdd_cp_1":
+      """
+      {
+        "id": "ch_bdd_cp_1",
+        "object": "charge",
+        "amount": 5000,
+        "currency": "gbp",
+        "payment_intent": "pi_bdd_cp_1",
+        "payment_method_details": { "type": "card_present" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_cp_1"
+    And the donation with payment intent "pi_bdd_cp_1" should have payment channel "in_person"
+    And there should be exactly 1 donor for payment intent "pi_bdd_cp_1"
+    And there should be a "donation.created" audit row for the donation with payment intent "pi_bdd_cp_1"
+
+    # Resending the IDENTICAL event id is a no-op (idempotent by event id) — still exactly one.
+    When I POST a signed Stripe "charge.succeeded" webhook event with id "evt_bdd_cp_1":
+      """
+      {
+        "id": "ch_bdd_cp_1",
+        "object": "charge",
+        "amount": 5000,
+        "currency": "gbp",
+        "payment_intent": "pi_bdd_cp_1",
+        "payment_method_details": { "type": "card_present" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_cp_1"
+
+    # A non-card-present (online) charge.succeeded is IGNORED — the gift is already captured
+    # via checkout.session.completed, so mapping it here too would double-count.
+    When I POST a signed Stripe "charge.succeeded" webhook event with id "evt_bdd_online_1":
+      """
+      {
+        "id": "ch_bdd_online_1",
+        "object": "charge",
+        "amount": 5000,
+        "currency": "gbp",
+        "payment_intent": "pi_bdd_online_1",
+        "payment_method_details": { "type": "card" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 0 donation with payment intent "pi_bdd_online_1"
+
   Scenario: an invalid signature is rejected
     When I POST a Stripe "charge.refunded" webhook event with an invalid signature:
       """

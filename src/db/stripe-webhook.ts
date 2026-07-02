@@ -1,13 +1,14 @@
 import type { PoolClient } from "pg";
 import type Stripe from "stripe";
 import { pool } from "./pool";
-import { buildDonationRow } from "./donations-model";
+import { buildDonationRow, type DonorInput } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation } from "./donations";
 import {
   donationFromCheckoutSession,
   declarationFromCheckoutSession,
   recurringChargeFromInvoice,
   recurringDonationInput,
+  cardPresentDonationInput,
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   claimStatusAfterRefund,
@@ -85,6 +86,8 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<Dispat
     case "invoice.paid":
     case "invoice.payment_succeeded":
       return handleRecurring(client, event);
+    case "charge.succeeded":
+      return handleChargeSucceeded(client, event);
     case "charge.refunded":
       return {
         action: await handleRefund(client, event, refundedPenceFromCharge(event.data.object)),
@@ -138,6 +141,37 @@ async function handleCheckoutCompleted(
   // (confirmationEmailFor gates this; donationFromCheckoutSession already suppresses
   // the email otherwise). Sent after COMMIT by the caller.
   return { action: "donation.created", email: confirmationEmailFor(donor, donation) };
+}
+
+// charge.succeeded → record an IN-PERSON (Stripe Terminal / card_present) donation
+// (REQ-054). ONLY card_present charges are handled: an online 'card' charge is already
+// captured by checkout.session.completed, so mapping it here too would double-count —
+// cardPresentDonationInput returns null for it and we ignore the event. A card-present
+// tap captures no donor identity, so it books a walk-in donor (anonymous, no email/
+// consent) + the donation + a donation.created audit row in the SAME transaction.
+async function handleChargeSucceeded(
+  client: PoolClient,
+  event: Stripe.Event & { data: { object: Stripe.Charge } },
+): Promise<DispatchResult> {
+  const donation = cardPresentDonationInput(event.data.object);
+  if (!donation) return { action: "ignored.not_card_present", email: null };
+
+  // A walk-in gift has no captured identity: an anonymous donor with no email/consent
+  // (never shown on the public supporters wall, never emailed).
+  const donor: DonorInput = {
+    fullName: "In-person donor",
+    anonymous: true,
+    emailConsent: false,
+  };
+  const { donorId, donationId } = await insertDonorAndDonation(client, donor, donation);
+  await insertAudit(client, {
+    actor: "stripe",
+    action: "donation.created",
+    entity: "donation",
+    entityId: donationId,
+    data: { eventId: event.id, donorId, paymentChannel: donation.paymentChannel },
+  });
+  return { action: "donation.created", email: null };
 }
 
 interface ParentDonation {

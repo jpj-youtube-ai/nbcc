@@ -1062,6 +1062,17 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   double-counted); `subscription_update` / `subscription_cycle` invoices each
   become their own donation row. The pure `recurringDonationInput` mapping
   (`src/db/stripe-webhook-model.ts`) is unit-tested DB-free.
+- **`charge.succeeded` (card-present only)** → records an **in-person** gift
+  (Stripe Terminal / `payment_method_details.type === 'card_present'`, REQ-054/TASK-073).
+  A card-present tap has no checkout session, so it is captured straight off the charge:
+  the pure `cardPresentDonationInput` (`src/db/stripe-webhook-model.ts`) maps it to a
+  one-off `payment_channel='in_person'` donation with **no Gift Aid / declaration**
+  (→ `claim_status='not_eligible'`), and the processor books an **anonymous walk-in
+  donor** + the donation + a `donation.created` audit row in one transaction. A
+  **non**-card-present `charge.succeeded` (an online `'card'` charge) is **ignored** —
+  that gift is already captured by `checkout.session.completed`, so `cardPresentDonationInput`
+  returns null and no row is written (the double-count guard). Idempotent by event id like
+  every branch, so a resent charge creates no duplicate.
 - **`charge.refunded` / `charge.dispute.*`** → updates the SAME donation record's
   `refunded_amount_pence` (absolute, so replay-safe) and recomputes `claim_status`
   — never a duplicate row.

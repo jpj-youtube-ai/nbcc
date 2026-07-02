@@ -1,6 +1,14 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
-import { buildDonationRow, type DonationInput, type DonationRow, type DonorInput } from "./donations-model";
+import {
+  buildDonationRow,
+  batchAssignmentBlock,
+  type DonationInput,
+  type DonationRow,
+  type DonorInput,
+  type BatchBlockReason,
+  type ClaimStatus,
+} from "./donations-model";
 
 // The unified donation model's write layer (REQ-036/REQ-037). Every state write and
 // its matching audit_log row commit or roll back TOGETHER, inside one BEGIN…COMMIT
@@ -130,6 +138,73 @@ export async function recordDonation(
       entity: "donation",
       entityId: r.donationId,
       data: { donorId: r.donorId, donorType: input.donation.donorType },
+    }),
+  );
+}
+
+// A donation cannot be assigned to a claim batch (REQ-037). Carries the pure reason
+// (from batchAssignmentBlock) plus not_found for a missing id — a typed error like
+// SamePlanError so callers/tests can branch on it rather than a bare Error.
+export class BatchAssignmentError extends Error {
+  constructor(
+    public readonly reason: BatchBlockReason | "not_found",
+    public readonly donationId: number,
+  ) {
+    super(`donation ${donationId} cannot be assigned to a claim batch: ${reason}`);
+    this.name = "BatchAssignmentError";
+  }
+}
+
+// Client-level state write: lock the donation row (FOR UPDATE, so concurrent claims
+// race safely), enforce the claim invariant + one-batch-per-donation guard
+// (batchAssignmentBlock), then set its claim_batch_id and claim_status='batched'.
+// Takes the caller's client so it joins the transaction opened by assignDonationToBatch
+// (or any future claim-pipeline caller). Throws BatchAssignmentError if the donation is
+// missing, not eligible, or already batched — which rolls the whole transaction back.
+export async function batchDonation(
+  client: PoolClient,
+  donationId: number,
+  claimBatchId: number,
+): Promise<{ donationId: number; claimBatchId: number }> {
+  const current = (
+    await client.query<{ claim_status: ClaimStatus; claim_batch_id: number | null }>(
+      `SELECT claim_status, claim_batch_id FROM donations WHERE id = $1 FOR UPDATE`,
+      [donationId],
+    )
+  ).rows[0];
+  if (!current) throw new BatchAssignmentError("not_found", donationId);
+
+  const block = batchAssignmentBlock({
+    claimStatus: current.claim_status,
+    claimBatchId: current.claim_batch_id,
+  });
+  if (block) throw new BatchAssignmentError(block, donationId);
+
+  await client.query(
+    `UPDATE donations SET claim_batch_id = $1, claim_status = 'batched' WHERE id = $2`,
+    [claimBatchId, donationId],
+  );
+  return { donationId, claimBatchId };
+}
+
+// Concrete audited admin write (REQ-037/REQ-062): assign an eligible donation to a
+// claim batch and append the "donation.batched" audit row, atomically — mirrors
+// recordDonation. Any guard failure in batchDonation throws, so writeWithAudit rolls
+// back BOTH the state change and the audit row (never a half-batched donation, never a
+// drifted audit trail). actor defaults to "system"; an admin action passes its user.
+export async function assignDonationToBatch(
+  donationId: number,
+  claimBatchId: number,
+  actor = "system",
+): Promise<{ donationId: number; claimBatchId: number }> {
+  return writeWithAudit(
+    (client) => batchDonation(client, donationId, claimBatchId),
+    (r) => ({
+      actor,
+      action: "donation.batched",
+      entity: "donation",
+      entityId: r.donationId,
+      data: { claimBatchId: r.claimBatchId },
     }),
   );
 }

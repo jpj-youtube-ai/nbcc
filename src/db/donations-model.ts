@@ -116,3 +116,21 @@ export function buildDonationRow(input: DonationInput, donorId: number): Donatio
     stripe_charge_id: input.stripeChargeId,
   };
 }
+
+// Why a donation may NOT enter a claim batch, or null if it may. Pure decision (no
+// pool/clock) — the transactional assignment in src/db/donations.ts reads the row and
+// calls this before writing. Two rules enforce REQ-037: a donation must currently be
+// `eligible` (the claim invariant — company/undeclared/refunded gifts are already
+// not_eligible via deriveClaimStatus), AND it must not already be in a batch. The
+// non-null claim_batch_id is checked FIRST, so a re-assignment is always reported as
+// already_batched (the one-batch-per-donation guard) rather than not_eligible.
+export type BatchBlockReason = "already_batched" | "not_eligible";
+
+export function batchAssignmentBlock(current: {
+  claimStatus: ClaimStatus;
+  claimBatchId: number | null;
+}): BatchBlockReason | null {
+  if (current.claimBatchId !== null) return "already_batched";
+  if (current.claimStatus !== "eligible") return "not_eligible";
+  return null;
+}

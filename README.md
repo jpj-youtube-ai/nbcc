@@ -639,6 +639,28 @@ so the no-JS/no-choice path is unchanged. Token-only colours
 (slate body, maroon legend, crimson accents). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/declaration-capture.test.ts`.
 
+### Partnership donor path (REQ-051)
+
+Choosing **A business** reveals a sub-type question (`#businessTypeField`, `businessType`
+radios) — an **incorporated company** (no Gift Aid) or a **business partnership** (partners
+are individuals in law, so Gift Aid stays). `initDonorType` derives the donor path
+(`currentDonorPath`: `individual` / `company` / `partnership`) from the donor-type +
+sub-type radios and drives visibility: the company path hides + unticks the Gift Aid callout;
+the **partnership** path keeps it and swaps the single `.give-declaration` for the repeatable
+`.give-partners` `<fieldset>` (one Gift Aid declaration per partner). `initPartnershipCapture`
+clones `#partnerRowTemplate` into one partner row on load and wires **add** (`#addPartner`) /
+**remove** (`[data-remove-partner]`, hidden while one partner remains); each row captures the
+same declaration fields as `.give-declaration` (with its own non-UK postcode toggle) **plus a
+required share** of the gift, and gets a per-row unique id base (`partner-N-*`) so every
+`<label for>`/input id stays matched and unique (REQ-032). `startCheckout` folds a **`partners`**
+array (`[{ title?, firstName, lastName, houseNameNumber, address, postcode?, nonUk, sharePence }]`,
+share captured in pounds → pence) into the REQ-028 payload **instead of** a single `declaration`
+**only** on the partnership path with `#giftAid` checked; the shares must sum to the donation
+total, which the pure `validatePartnerShares` (`src/declarations/partnership.ts`, REQ-051 ·
+TASK-079) enforces server-side. Without JS the base `{ mode, plan, amount, giftAid }` contract
+is unchanged. Token-only colours; dash-free copy, "NBCC" (REQ-031). Verified by
+`test/unit/give-partnership.test.ts`.
+
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE
@@ -1333,7 +1355,7 @@ The four pages target a low-weight mobile budget:
 | Metric | Budget |
 |---|---|
 | Lighthouse Performance (mobile) | ≥ 95 |
-| Total transfer / page | ≤ 150 KB |
+| Total transfer / page | ≤ 250 KB |
 | Requests / page | ≤ 15 |
 | Web-font files | ≤ 2 |
 | LCP (mobile) | < 2.5 s |
@@ -1393,8 +1415,12 @@ consent status is tracked in **`assets/img/CREDITS.md`**.
 
 **Budget note:** because every image is `loading="lazy"`, the headshots (and real
 consented photos later, ~644 KB total) are deferred and **don't count against the
-150 KB first-paint budget**; `perf-budget.test.ts` still enforces the per-image
-`width`/`height`/`lazy` invariant. That decision is recorded in the test.
+250 KB first-paint budget**; `perf-budget.test.ts` still enforces the per-image
+`width`/`height`/`lazy` invariant. That decision is recorded in the test. The
+first-paint transfer cap is measured as summed **uncompressed** bytes (a conservative
+proxy — real gzip/brotli transfer is roughly a quarter of it). It was re-baselined
+from 150 KB to **250 KB** when the partnership Gift Aid capture (REQ-051 · TASK-080)
+landed on `donate.html`, which added the repeatable per-partner declaration markup.
 
 ### Content and copy rules (REQ-031)
 

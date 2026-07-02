@@ -135,6 +135,23 @@
                   <input type="text" id="businessName" name="businessName" class="give-business-input" autocomplete="organization" placeholder="Your business name" />
                   <p class="give-business-help">Optional. We show this on our Donors Page. It never changes your Gift Aid path.</p>
                 </div>
+                <!-- BUSINESS SUB-TYPE (REQ-051): company (no Gift Aid) vs partnership
+                     (individuals in law, keeps Gift Aid). initDonorType reveals this for a
+                     business donor and drives the path; company is the default. -->
+                <div class="give-business give-business-type" id="businessTypeField" hidden>
+                  <span class="give-business-type-legend">Is your business an incorporated company or a business partnership?</span>
+                  <div class="give-donor-options">
+                    <span class="give-donor-option">
+                      <input type="radio" id="businessCompany" name="businessType" value="company" checked />
+                      <label for="businessCompany">Incorporated company</label>
+                    </span>
+                    <span class="give-donor-option">
+                      <input type="radio" id="businessPartnership" name="businessType" value="partnership" />
+                      <label for="businessPartnership">Business partnership</label>
+                    </span>
+                  </div>
+                  <p class="give-business-help">A partnership keeps Gift Aid, because each partner is an individual in law. An incorporated company, such as a Ltd, PLC or LLP, uses the path with no Gift Aid.</p>
+                </div>
               </fieldset>
               <!-- CONTACT CAPTURE (REQ-039): consent-based contact details, below the
                    donor-type question and above the tiers. A REQUIRED full name; an
@@ -340,6 +357,63 @@
                   <input type="checkbox" id="declNonUk" name="nonUk" class="give-check-box" />
                   <span class="give-check-text">I live outside the UK (Channel Islands or Isle of Man), so I have no UK postcode.</span>
                 </label>
+              </fieldset>
+              <!-- PARTNERSHIP DECLARATIONS (REQ-051): one Gift Aid declaration per partner,
+                   replacing the single .give-declaration on the partnership path. Hidden until
+                   initDonorType reveals it; initPartnershipCapture clones one row on load and
+                   wires add/remove. Each row is the declaration fields plus a required share;
+                   the shares must sum to the total (backend enforces the exact sum). Real
+                   <label for> per-row unique ids (REQ-032); startCheckout folds a `partners`
+                   array only on the partnership path with #giftAid. Dash-free (REQ-031). -->
+              <fieldset class="give-partners" id="partnershipCapture" hidden>
+                <legend class="give-partners-legend">Each partner's Gift Aid declaration</legend>
+                <p class="give-partners-help">A business partnership makes one Gift Aid declaration per partner. Give each partner's details and the share of this gift that is theirs. The shares must add up to your total.</p>
+                <div class="give-partners-list" id="partnersList"></div>
+                <button type="button" class="btn btn-secondary give-partner-add" id="addPartner">Add another partner</button>
+                <!-- One partner row. initPartnershipCapture clones this per partner, replacing the
+                     __ID__ placeholder with a per-row unique base so every label[for]/input id
+                     stays matched and unique. -->
+                <template id="partnerRowTemplate">
+                  <fieldset class="give-partner" data-partner-row>
+                    <legend class="give-partner-legend">Partner <span class="give-partner-num"></span></legend>
+                    <div class="give-field">
+                      <label for="__ID__-title">Title <span class="give-optional">(optional)</span></label>
+                      <input type="text" id="__ID__-title" data-field="title" class="give-field-input" autocomplete="honorific-prefix" placeholder="Mr, Ms, Dr" />
+                    </div>
+                    <div class="give-field">
+                      <label for="__ID__-firstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                      <input type="text" id="__ID__-firstName" data-field="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+                    </div>
+                    <div class="give-field">
+                      <label for="__ID__-lastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
+                      <input type="text" id="__ID__-lastName" data-field="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+                    </div>
+                    <div class="give-field">
+                      <label for="__ID__-house">House name or number <span class="give-req" aria-hidden="true">*</span></label>
+                      <input type="text" id="__ID__-house" data-field="houseNameNumber" class="give-field-input" required aria-required="true" placeholder="e.g. 12 or Rose Cottage" />
+                    </div>
+                    <div class="give-field">
+                      <label for="__ID__-address">Home address <span class="give-req" aria-hidden="true">*</span></label>
+                      <input type="text" id="__ID__-address" data-field="address" class="give-field-input" autocomplete="street-address" required aria-required="true" placeholder="Street and town" />
+                    </div>
+                    <div class="give-field" data-postcode-field>
+                      <label for="__ID__-postcode">Postcode <span class="give-req" aria-hidden="true">*</span></label>
+                      <input type="text" id="__ID__-postcode" data-field="postcode" class="give-field-input" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" />
+                    </div>
+                    <label class="give-check" for="__ID__-nonUk">
+                      <input type="checkbox" id="__ID__-nonUk" data-field="nonUk" class="give-check-box" />
+                      <span class="give-check-text">This partner lives outside the UK (Channel Islands or Isle of Man), so has no UK postcode.</span>
+                    </label>
+                    <div class="give-field give-partner-share">
+                      <label for="__ID__-share">This partner's share of the gift <span class="give-req" aria-hidden="true">*</span></label>
+                      <div class="give-custom-field">
+                        <span class="give-custom-currency" aria-hidden="true">&pound;</span>
+                        <input type="number" id="__ID__-share" data-field="share" class="give-custom-input" min="1" step="1" inputmode="numeric" required aria-required="true" placeholder="Amount" />
+                      </div>
+                    </div>
+                    <button type="button" class="give-partner-remove" data-remove-partner>Remove this partner</button>
+                  </fieldset>
+                </template>
               </fieldset>
             </div>
             <!-- Holly Green side panel (REQ-024): the inverted cream-on-holly

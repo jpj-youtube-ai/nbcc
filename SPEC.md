@@ -400,6 +400,11 @@ Tasks:
 
 Support business-partnership donors by collecting one Gift Aid declaration per partner ome address, postcode, taxpayer consent and share — with shares summing to the donation total, via a lightweightthat a sole trader is legally an individual. *Accept:* the optional business-name field is a donors-page display label only and never switches paths; donor_type is persisted.
 
+Tasks:
+- TASK-079 — Add partnership Gift Aid share data model and pure share-validation module
+- TASK-080 — Add a partnership donor path with repeatable per-partner declaration capture to the give widget
+- TASK-081 — Thread partnership shares through the checkout endpoint and persist one declaration per partner via the webhook
+
 ### REQ-052 — Charities Online claim export
 
 Produce a correctly formatted export (Title, First name, Last name, House name/number, Postcode, Donation date, Amount; one row per successful charge, with OSCR as regulator, charity number SC047995 and NBCC's HMRC reference) for finance to upload to Charities Online, with the direct HMRC API deferred to phase two. *Accept:* each successful charge under an enduring monthly declaration produces its own claimable row.

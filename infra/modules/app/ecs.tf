@@ -40,6 +40,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Contact forwarding endpoint (REQ-030): injected via valueFrom, so the exec
       # role must be able to read it.
       aws_ssm_parameter.contact_forward_url.arn,
+      # Transactional email send endpoint (TASK-070): injected via valueFrom, so the
+      # exec role must be able to read it.
+      aws_ssm_parameter.email_send_url.arn,
     ]
   }
   statement {
@@ -109,6 +112,8 @@ resource "aws_ecs_task_definition" "app" {
       { name = "STRIPE_PRICE_PLATINUM", valueFrom = aws_ssm_parameter.stripe_price_platinum.arn },
       # Contact forwarding endpoint (REQ-030): a SecureString, injected like a secret.
       { name = "CONTACT_FORWARD_URL", valueFrom = aws_ssm_parameter.contact_forward_url.arn },
+      # Transactional email send endpoint (TASK-070): a SecureString, injected like a secret.
+      { name = "EMAIL_SEND_URL", valueFrom = aws_ssm_parameter.email_send_url.arn },
     ]
 
     logConfiguration = {

@@ -41,6 +41,13 @@ export const configSchema = z.object({
   // It is the credential that authorises submissions, so it is held as a secret
   // (SSM SecureString in AWS); validated as a URL.
   CONTACT_FORWARD_URL: z.string().url(),
+
+  // Transactional email send endpoint (TASK-070). The provider URL the email
+  // client POSTs a single donation-confirmation message to after a successful
+  // payment. It authorises sends, so it is held as a secret (SSM SecureString in
+  // AWS); validated as a URL. A `.example` host is treated as unconfigured and the
+  // send is stubbed outside production (mirrors CONTACT_FORWARD_URL / the Stripe seam).
+  EMAIL_SEND_URL: z.string().url(),
 });
 
 export type Config = z.infer<typeof configSchema>;

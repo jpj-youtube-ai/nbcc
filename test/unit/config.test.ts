@@ -20,6 +20,7 @@ const validEnv = (): Record<string, string> => ({
   STRIPE_WEBHOOK_SECRET: "whsec_test",
   // Contact forwarding (TASK-039, REQ-030).
   CONTACT_FORWARD_URL: "https://formspree.io/f/test",
+  EMAIL_SEND_URL: "https://email.example/send",
 });
 
 describe("config schema", () => {

@@ -11,7 +11,10 @@ import {
   refundedPenceFromCharge,
   refundedPenceFromDispute,
   claimStatusAfterRefund,
+  confirmationEmailFor,
+  type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
+import { sendDonationConfirmation } from "../clients/email";
 
 // The SINGLE Stripe webhook processor for the unified platform (REQ-036) — no
 // other module handles donor/donation events. Every event is processed in ONE
@@ -38,8 +41,13 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const action = await dispatch(client, event);
+    const { action, email } = await dispatch(client, event);
     await client.query("COMMIT");
+    // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
+    // donation row has committed, and OUTSIDE the transaction: a slow or failing
+    // provider must never roll back a recorded gift. Best-effort — the send is
+    // swallowed on failure (the donation is already durably recorded).
+    await sendConfirmation(email);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -49,7 +57,28 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
   }
 }
 
-async function dispatch(client: PoolClient, event: Stripe.Event): Promise<string> {
+// A dispatched event's outcome: the action label (as before) plus the optional
+// confirmation-email payload to send once the transaction commits (null = send
+// nothing — e.g. a refund, or a donor who withheld their email / consent).
+interface DispatchResult {
+  action: string;
+  email: DonationConfirmationEmail | null;
+}
+
+// Post-commit, best-effort send of the donation-confirmation email. Isolated so the
+// trigger is unit-testable with a mocked email client (DB-free). A null payload
+// sends nothing; any send failure is swallowed (the donation already committed).
+export async function sendConfirmation(email: DonationConfirmationEmail | null): Promise<void> {
+  if (!email) return;
+  try {
+    await sendDonationConfirmation(email);
+  } catch {
+    // best-effort: the donation is durably recorded; a failed email must not fail
+    // the webhook (which would make Stripe redeliver and re-run the whole handler).
+  }
+}
+
+async function dispatch(client: PoolClient, event: Stripe.Event): Promise<DispatchResult> {
   switch (event.type) {
     case "checkout.session.completed":
       return handleCheckoutCompleted(client, event);
@@ -57,13 +86,19 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<string
     case "invoice.payment_succeeded":
       return handleRecurring(client, event);
     case "charge.refunded":
-      return handleRefund(client, event, refundedPenceFromCharge(event.data.object));
+      return {
+        action: await handleRefund(client, event, refundedPenceFromCharge(event.data.object)),
+        email: null,
+      };
     case "charge.dispute.created":
     case "charge.dispute.closed":
     case "charge.dispute.funds_withdrawn":
-      return handleRefund(client, event, refundedPenceFromDispute(event.data.object));
+      return {
+        action: await handleRefund(client, event, refundedPenceFromDispute(event.data.object)),
+        email: null,
+      };
     default:
-      return "ignored";
+      return { action: "ignored", email: null };
   }
 }
 
@@ -72,7 +107,7 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<string
 async function handleCheckoutCompleted(
   client: PoolClient,
   event: Stripe.Event & { data: { object: Stripe.Checkout.Session } },
-): Promise<string> {
+): Promise<DispatchResult> {
   const { donor, donation } = donationFromCheckoutSession(event.data.object);
   // A gift-aided individual also captures a Gift Aid declaration (REQ-043); it is
   // inserted and linked to the donation in the SAME transaction (declaration_id FK).
@@ -99,7 +134,10 @@ async function handleCheckoutCompleted(
     entityId: donationId,
     data: { eventId: event.id, donorId, giftAid: donation.giftAid, declarationId },
   });
-  return "donation.created";
+  // Confirm the gift by email only when the donor gave us their email AND consent
+  // (confirmationEmailFor gates this; donationFromCheckoutSession already suppresses
+  // the email otherwise). Sent after COMMIT by the caller.
+  return { action: "donation.created", email: confirmationEmailFor(donor, donation) };
 }
 
 interface ParentDonation {
@@ -108,6 +146,9 @@ interface ParentDonation {
   declaration_id: number | null;
   plan: string | null;
   donor_type: "individual" | "company";
+  full_name: string;
+  email: string | null;
+  email_consent: boolean;
 }
 
 // invoice.paid / invoice.payment_succeeded → record a recurring monthly charge as
@@ -117,27 +158,28 @@ interface ParentDonation {
 async function handleRecurring(
   client: PoolClient,
   event: Stripe.Event & { data: { object: Stripe.Invoice } },
-): Promise<string> {
+): Promise<DispatchResult> {
   const rec = recurringChargeFromInvoice(event.data.object);
-  if (!rec) return "ignored.invoice";
+  if (!rec) return { action: "ignored.invoice", email: null };
 
   const parent = (
     await client.query<ParentDonation>(
-      `SELECT d.donor_id, d.gift_aid, d.declaration_id, d.plan, dn.donor_type
+      `SELECT d.donor_id, d.gift_aid, d.declaration_id, d.plan, dn.donor_type,
+              dn.full_name, dn.email, dn.email_consent
          FROM donations d JOIN donors dn ON dn.id = d.donor_id
         WHERE d.stripe_subscription_id = $1
         ORDER BY d.id ASC LIMIT 1`,
       [rec.subscriptionId],
     )
   ).rows[0];
-  if (!parent) return "ignored.no_parent";
+  if (!parent) return { action: "ignored.no_parent", email: null };
 
   if (rec.paymentIntentId) {
     const dup = await client.query(
       `SELECT 1 FROM donations WHERE stripe_payment_intent_id = $1`,
       [rec.paymentIntentId],
     );
-    if (dup.rowCount && dup.rowCount > 0) return "ignored.duplicate_charge";
+    if (dup.rowCount && dup.rowCount > 0) return { action: "ignored.duplicate_charge", email: null };
   }
 
   // The amount is the invoice's actually-charged amount (rec.amountPence =
@@ -157,7 +199,15 @@ async function handleRecurring(
     entityId: donationId,
     data: { eventId: event.id, donorId: parent.donor_id, subscriptionId: rec.subscriptionId },
   });
-  return "donation.recurring";
+  // Confirm each recurring charge to a consenting donor (email + consent carried on
+  // the donor row found via the subscription). Sent after COMMIT by the caller.
+  return {
+    action: "donation.recurring",
+    email: confirmationEmailFor(
+      { email: parent.email, emailConsent: parent.email_consent, fullName: parent.full_name },
+      { amountPence: rec.amountPence, currency: rec.currency },
+    ),
+  };
 }
 
 interface RefundTarget {

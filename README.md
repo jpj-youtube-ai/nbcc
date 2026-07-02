@@ -1027,6 +1027,25 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   `refunded_amount_pence` (absolute, so replay-safe) and recomputes `claim_status`
   — never a duplicate row.
 
+**Donation-confirmation email (TASK-070).** After a `checkout.session.completed`
+(and each recurring `invoice.paid`) donation row **commits**, the processor sends a
+single confirmation email via `src/clients/email.ts`
+(`sendDonationConfirmation`) — but **only** when the donor gave us their `email` and
+`email_consent` is true (`confirmationEmailFor`, the pure consent gate in
+`src/db/stripe-webhook-model.ts`); a withheld email / no-consent sends nothing. The
+send happens **after COMMIT and outside the transaction**, and is **best-effort**: a
+slow or failing provider is swallowed, never rolling back a recorded gift or forcing
+a Stripe redelivery. This is the single, minimal confirmation — **not** the full
+REQ-060 templated email system (Gift Aid confirmation, manage/cancel, receipts).
+`test/unit/donation-confirmation-email.test.ts` (mocked client) proves exactly one
+send on email+consent and none otherwise.
+
+> **Stub seam (no live email provider needed).** `src/clients/email.ts` POSTs to a
+> real `EMAIL_SEND_URL` when one is configured. **Outside production**, when the URL
+> is a `.example` placeholder (local dev, CI, fresh SSM param), the send is stubbed
+> (no network). `EMAIL_SEND_URL` is wired through config, `.env.example`, the CI env,
+> SSM, the task-def `secrets` and the `exec_secrets` IAM policy (golden rule 3).
+
 `constructEvent` uses a real Stripe instance (pure HMAC, no network), so the stub
 seam still holds: unit tests and `features/stripe-webhook.feature` sign events
 offline with `STRIPE_WEBHOOK_SECRET` via `generateTestHeaderString` — no live
@@ -1298,6 +1317,12 @@ aws ssm put-parameter --name /charity-site/staging/STRIPE_WEBHOOK_SECRET \
 # stubbed until a real URL is set.
 aws ssm put-parameter --name /charity-site/staging/CONTACT_FORWARD_URL \
   --type SecureString --value 'https://formspree.io/f/xxxx' --overwrite
+
+# Transactional email (TASK-070): the provider send endpoint (SecureString). Starts
+# as a https://email.example/replace-me placeholder, which keeps the confirmation
+# email stubbed until a real URL is set.
+aws ssm put-parameter --name /charity-site/staging/EMAIL_SEND_URL \
+  --type SecureString --value 'https://api.provider.com/send' --overwrite
 ```
 
 ## Provisioning infrastructure
@@ -1365,6 +1390,13 @@ validated as a URL. Its placeholder is a valid `.example` URL (not `REPLACE_ME`,
 which would fail URL validation); `src/clients/contact.ts` treats a `.example`
 host as unconfigured and stubs the forward outside production. Set the real value
 with `put-parameter` (above) when the form service is chosen.
+
+`EMAIL_SEND_URL` (TASK-070) is the transactional-email provider endpoint the
+donation-confirmation email is POSTed to after a successful payment. Same treatment
+as `CONTACT_FORWARD_URL`: an SSM `SecureString` injected via `valueFrom` with its
+ARN in `exec_secrets`, validated as a URL, with a valid `.example` placeholder that
+`src/clients/email.ts` treats as unconfigured and stubs outside production. Set the
+real value with `put-parameter` (above) when a provider is chosen.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

@@ -24,8 +24,10 @@ export function isValidUkPostcode(value: string): boolean {
 
 // The captured declaration fields (camelCase input). `.strict()` rejects any unknown
 // key, so a stray work/c-o address field cannot slip in — there is one home address
-// only. houseNameNumber and postcode are validated conditionally on nonUk below.
-export const declarationFieldsSchema = z
+// only. houseNameNumber and postcode are validated conditionally on nonUk below. This is
+// the strict OBJECT before the cross-field refinements; partnership.ts (REQ-051) extends
+// it with a per-partner share, so it is exported for reuse.
+export const declarationFieldsBase = z
   .object({
     title: z.string().trim().min(1).optional(),
     firstName: z.string().trim().min(1),
@@ -40,18 +42,27 @@ export const declarationFieldsSchema = z
     // task. Optional so the base declaration (no scope) still validates.
     scope: z.enum(SCOPES).optional(),
   })
-  .strict()
-  // A UK declaration needs the house name/number (the HMRC matching key); a non-UK
-  // declaration may omit it.
-  .refine((d) => d.nonUk || (d.houseNameNumber != null && d.houseNameNumber.length > 0), {
-    message: "a house name or number is required for a UK declaration",
-    path: ["houseNameNumber"],
-  })
-  // A UK declaration needs a valid UK postcode; a non-UK declaration omits it.
-  .refine((d) => d.nonUk || (d.postcode != null && isValidUkPostcode(d.postcode)), {
-    message: "a valid UK postcode is required for a UK declaration",
-    path: ["postcode"],
-  });
+  .strict();
+
+// The nonUk-conditional home-address rules (house name/number + UK postcode). Applied to
+// the base object here, and reused by partnership.ts on its base+share object so the
+// per-partner declaration obeys the same rules — single source of truth.
+export function refineDeclarationFields<T extends z.ZodTypeAny>(schema: T) {
+  return schema
+    // A UK declaration needs the house name/number (the HMRC matching key); a non-UK
+    // declaration may omit it.
+    .refine((d) => d.nonUk || (d.houseNameNumber != null && d.houseNameNumber.length > 0), {
+      message: "a house name or number is required for a UK declaration",
+      path: ["houseNameNumber"],
+    })
+    // A UK declaration needs a valid UK postcode; a non-UK declaration omits it.
+    .refine((d) => d.nonUk || (d.postcode != null && isValidUkPostcode(d.postcode)), {
+      message: "a valid UK postcode is required for a UK declaration",
+      path: ["postcode"],
+    });
+}
+
+export const declarationFieldsSchema = refineDeclarationFields(declarationFieldsBase);
 
 export type DeclarationFields = z.infer<typeof declarationFieldsSchema>;
 

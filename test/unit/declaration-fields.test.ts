@@ -79,6 +79,14 @@ describe("declarationFieldsSchema (REQ-043)", () => {
     expect(res.success).toBe(true);
   });
 
+  it("accepts a donor-chosen scope and rejects anything outside the two SCOPES (REQ-044 / TASK-065)", () => {
+    for (const scope of ["this_donation", "all_donations"] as const) {
+      const parsed = declarationFieldsSchema.parse({ ...ukFields, scope });
+      expect(parsed.scope).toBe(scope);
+    }
+    expect(declarationFieldsSchema.safeParse({ ...ukFields, scope: "forever" }).success).toBe(false);
+  });
+
   it("exposes exactly one address field — an extra work/c-o address field is rejected", () => {
     expect(
       declarationFieldsSchema.safeParse({ ...ukFields, workAddress: "1 Office Park" }).success,

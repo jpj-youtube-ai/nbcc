@@ -8,7 +8,7 @@ import {
   type ClaimStatus,
 } from "./donations-model";
 import type { DeclarationFields } from "../declarations/fields";
-import type { Scope, DeclarationWording } from "../declarations/wording";
+import { scopeFromDeclarationScope, type Scope, type DeclarationWording } from "../declarations/wording";
 
 // PURE event→record mapping for the single Stripe webhook handler (REQ-036). No
 // pool/config/network/clock — imports only the pure donation model, so it is
@@ -90,9 +90,11 @@ export interface DeclarationWrite {
 // checkout.session.completed → the Gift Aid declaration, or null when there is none. A
 // declaration exists only for a gift-aided individual, and only when the REQ-063 checkout
 // stamped the decl* fields (declFirstName is always present then). The declaration scope
-// column takes 'this_donation' | 'all_donations' (REQ-044), so the enduring monthly
-// default (metadata.declarationScope='enduring', REQ-041) maps to 'all_donations'. Opting
-// into Gift Aid is the taxpayer confirmation, so confirmed_taxpayer is true.
+// column takes 'this_donation' | 'all_donations' (REQ-044): the enduring monthly default
+// (metadata.declarationScope='enduring', REQ-041) maps to 'all_donations', and a donor's
+// explicit override (REQ-044, TASK-065) is carried through verbatim — scopeFromDeclarationScope
+// collapses both the same way the checkout did. Opting into Gift Aid is the taxpayer
+// confirmation, so confirmed_taxpayer is true.
 export function declarationFromCheckoutSession(
   session: Stripe.Checkout.Session,
 ): DeclarationWrite | null {
@@ -109,7 +111,7 @@ export function declarationFromCheckoutSession(
     postcode: md.declPostcode ? md.declPostcode : undefined,
     nonUk: md.declNonUk === "true",
   };
-  const scope: Scope = md.declarationScope === "enduring" ? "all_donations" : "this_donation";
+  const scope: Scope = scopeFromDeclarationScope(md.declarationScope);
   return {
     fields,
     scope,

@@ -76,6 +76,17 @@ export function declarationScopeForMode(mode: Mode): DeclarationScope {
   return mode === "monthly" ? "enduring" : "this_donation";
 }
 
+// Collapse a stamped metadata.declarationScope value onto the persisted declarations.scope
+// (a Scope, REQ-044). The stamped value is a union: the mode default ("enduring" |
+// "this_donation") OR, when the donor makes an explicit choice (REQ-044, TASK-065), the raw
+// SCOPES value ("this_donation" | "all_donations"). Both the wording selection (checkout)
+// and the persisted row (webhook) map them the SAME way — "enduring" and "all_donations" are
+// the all-donations template; anything else is this_donation — so scope collapse is never
+// duplicated. Kept next to declarationScopeForMode so the mode→scope decision stays here.
+export function scopeFromDeclarationScope(value: string | null | undefined): Scope {
+  return value === "enduring" || value === "all_donations" ? "all_donations" : "this_donation";
+}
+
 // The full HMRC liability statement requires the taxpayer-responsibility clause —
 // naming Income Tax AND Capital Gains Tax AND the responsibility to pay any
 // shortfall. A snapshot of just "I am a UK taxpayer" (or any text missing this

@@ -3,7 +3,11 @@ import type StripeNS from "stripe";
 import { z } from "zod";
 import { stripe, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import { forwardEnquiry } from "../clients/contact";
-import { selectDeclarationWording, declarationScopeForMode } from "../declarations/wording";
+import {
+  selectDeclarationWording,
+  declarationScopeForMode,
+  scopeFromDeclarationScope,
+} from "../declarations/wording";
 import { declarationFieldsSchema } from "../declarations/fields";
 import { config } from "../config";
 
@@ -108,13 +112,14 @@ export function buildSessionParams(
     ageConfirmed: String(body.ageConfirmed ?? false),
   };
 
-  // Default the declaration scope from the gift's frequency (REQ-041): monthly is
-  // enduring — one declaration covers all the donor's gifts — while a one-off covers
-  // just this donation. Stamped on EVERY session as the concrete "monthly pairs with an
-  // enduring declaration" default the full capture flow (REQ-043/044) will build on.
-  // declarationScopeForMode is the SINGLE source of this decision, reused below to pick
-  // the matching verbatim wording so scope selection is never duplicated.
-  const declarationScope = declarationScopeForMode(body.mode);
+  // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
+  // enduring — one declaration covers all the donor's gifts — while a one-off covers just
+  // this donation. When the donor makes an explicit choice (REQ-044, TASK-065), that value
+  // OVERRIDES the mode default so a one-off donor can opt into an enduring, all-donations
+  // declaration; absent it, requests without JS/scope choice keep the mode-derived default.
+  // Stamped on EVERY session and reused below (via scopeFromDeclarationScope) to pick the
+  // matching verbatim wording, so scope selection is never duplicated.
+  const declarationScope = body.declaration?.scope ?? declarationScopeForMode(body.mode);
   metadata.declarationScope = declarationScope;
 
   // When Gift Aid is affirmatively opted in, bind the consent to the EXACT verbatim
@@ -125,7 +130,7 @@ export function buildSessionParams(
   if (body.giftAid) {
     const wording = selectDeclarationWording({
       mode: body.mode,
-      scope: declarationScope === "enduring" ? "all_donations" : "this_donation",
+      scope: scopeFromDeclarationScope(declarationScope),
     });
     metadata.giftAidWordingVersion = wording.wording_version;
     metadata.giftAidWording = wording.wording_snapshot;

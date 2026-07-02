@@ -129,6 +129,17 @@ describe("processWebhookEvent — checkout.session.completed with a Gift Aid dec
     expect(commitIdx).toBeGreaterThan(donationIdx);
   });
 
+  it("persists the donor-overridden scope='all_donations' from metadata (REQ-044 / TASK-065)", async () => {
+    const overridden = event();
+    // The checkout endpoint stamps the donor's explicit choice on a one-off gift, overriding
+    // the once→this_donation default (metadata.declarationScope='all_donations').
+    (overridden.data.object as unknown as { metadata: Record<string, string> }).metadata.declarationScope =
+      "all_donations";
+    await processWebhookEvent(overridden);
+    const declCall = call(/insert into declarations/i);
+    expect(declCall?.[1][8]).toBe("all_donations"); // scope (9th param)
+  });
+
   it("audits the declaration inside the same transaction", async () => {
     await processWebhookEvent(event());
     const auditCalls = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0])));

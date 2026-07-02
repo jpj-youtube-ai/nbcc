@@ -401,6 +401,65 @@ describe("POST /api/checkout-session — Gift Aid declaration (REQ-043 / TASK-06
   });
 });
 
+describe("POST /api/checkout-session — explicit declaration scope override (REQ-044 / TASK-065)", () => {
+  const decl = {
+    firstName: "Ada",
+    lastName: "Lovelace",
+    houseNameNumber: "12",
+    address: "Analytical Avenue, London",
+    postcode: "SW1A 1AA",
+    nonUk: false,
+  };
+
+  it("lets an explicit declaration.scope='all_donations' override the once→this_donation default", async () => {
+    await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      declaration: { ...decl, scope: "all_donations" },
+    });
+    // The donor's explicit choice wins over the mode-derived default (once → this_donation).
+    expect(lastParams().metadata.declarationScope).toBe("all_donations");
+  });
+
+  it("binds the all-donations wording when the donor overrides a one-off to all_donations", async () => {
+    await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      declaration: { ...decl, scope: "all_donations" },
+    });
+    const md = lastParams().metadata;
+    const wording = selectDeclarationWording({ mode: "once", scope: "all_donations" });
+    expect(md.giftAidWordingVersion).toBe(wording.wording_version);
+    expect(md.giftAidWording).toBe(wording.wording_snapshot);
+  });
+
+  it("honours an explicit declaration.scope='this_donation' on a one-off", async () => {
+    await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      declaration: { ...decl, scope: "this_donation" },
+    });
+    expect(lastParams().metadata.declarationScope).toBe("this_donation");
+  });
+
+  it("falls back to the mode-derived default when declaration.scope is absent", async () => {
+    await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: true,
+      declaration: decl,
+    });
+    expect(lastParams().metadata.declarationScope).toBe("this_donation");
+  });
+});
+
 describe("POST /api/checkout-session — invalid bodies return 400", () => {
   it.each([
     ["monthly without a plan", { mode: "monthly", plan: null, amount: 1000, giftAid: false }],

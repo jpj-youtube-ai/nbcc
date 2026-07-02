@@ -623,10 +623,12 @@ values — `all_donations` (this gift plus the past 4 years and future) vs `this
 re-syncs it (`all_donations` for monthly, `this_donation` for once, alongside the tier and
 Gift Aid statement swap) until the donor picks one, after which their choice sticks. The
 field validation + declarations-row builder it feeds is `src/declarations/fields.ts`
-(REQ-043 · TASK-061), which now also **accepts** the explicit `scope` (so the strict schema
-does not reject it); the checkout endpoint validates + stamps the declaration and the webhook
-persists an immutable `declarations` row (TASK-063), still deriving the persisted scope from
-the give mode for now (switching to the sent value is a later task). Token-only colours
+(REQ-043 · TASK-061), which **accepts** the explicit `scope` (so the strict schema does not
+reject it); the checkout endpoint validates + stamps the declaration and the webhook persists
+an immutable `declarations` row (TASK-063). The donor's explicit `scope` now **overrides** the
+give-mode default when present (REQ-044 · TASK-065) — a one-off donor can opt into an enduring
+`all_donations` declaration — and requests that omit it fall back to the mode-derived default,
+so the no-JS/no-choice path is unchanged. Token-only colours
 (slate body, maroon legend, crimson accents). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/declaration-capture.test.ts`.
 
@@ -820,11 +822,13 @@ version id + full snapshot from `selectDeclarationWording({ mode, scope })` in
 the single-donation statement for a one-off), so the REQ-036 webhook can persist them
 onto the immutable declaration. A `giftAid=false` gift stamps **no** wording metadata.
 Independently of Gift Aid, **every** session also carries `metadata.declarationScope`
-— `enduring` for a monthly gift, `this_donation` for a one-off (REQ-041 · TASK-060) —
-the concrete "monthly pairs with an enduring declaration" default the full
-declaration-capture flow (REQ-043/044) will build on. It is derived once via
-`declarationScopeForMode` in `src/declarations/wording.ts` and reused to pick the
-matching verbatim wording, so the mode→scope decision is never duplicated. The
+— defaulting to `enduring` for a monthly gift, `this_donation` for a one-off (REQ-041 ·
+TASK-060), unless the donor's `declaration.scope` **overrides** it (REQ-044 · TASK-065),
+in which case that raw `this_donation`/`all_donations` value is stamped instead. It is
+derived once via `declarationScopeForMode` in `src/declarations/wording.ts` and, along
+with the donor override, collapsed by `scopeFromDeclarationScope` (same module) to pick
+the matching verbatim wording AND the persisted `declarations.scope`, so the mode→scope
+decision is never duplicated. The
 persisted donation itself captures the gift's **amount**, **frequency** (`mode`) and
 **currency** (defaulting to `GBP`) explicitly (REQ-041).
 When Gift Aid is opted in, the give widget (TASK-062) also captures the **HMRC
@@ -981,8 +985,9 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   `email` + `email_consent` **only** when consent was given — otherwise no email is
   stored, so the platform sends nothing. For a gift-aided individual it also **inserts
   an immutable `declarations` row** (REQ-043/TASK-063) from the `decl*` metadata — paired
-  with the stamped wording snapshot (REQ-042) and scope (REQ-044, the enduring monthly
-  default mapping to `all_donations`) — and links the donation's `declaration_id` to it,
+  with the stamped wording snapshot (REQ-042) and scope (REQ-044 — the enduring monthly
+  default maps to `all_donations`, and a donor's explicit override is carried through
+  verbatim) — and links the donation's `declaration_id` to it,
   in the **same** transaction with its own `declaration.created` audit row, so the
   donation derives `claim_status='eligible'` (REQ-037).
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring

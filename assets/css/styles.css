@@ -2019,3 +2019,39 @@ a.contact-value:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* =================================================================
+   CONFIRMATION (REQ-035) — thank-you.html, the post-payment landing page
+   Stripe returns the donor to (STRIPE_SUCCESS_URL). A centred intro
+   mirroring .contact-intro/.supporters-intro, above a single reassurance
+   .card in the page-sections slot. Reuses .eyebrow / base h1 / .rule /
+   .lede / .card / .btn and the tokens; token-only colours, no image tags.
+   ================================================================= */
+.thankyou-intro {
+  text-align: center;
+  max-width: 760px;
+  margin-inline: auto;
+  padding-block: clamp(8px, 3vw, 40px);
+}
+.thankyou-intro .rule,
+.thankyou-intro .lede {
+  margin-inline: auto;
+}
+.thankyou-next {
+  max-width: 680px;
+  margin-inline: auto;
+  text-align: center;
+}
+.thankyou-next h2 {
+  color: var(--maroon);
+}
+.thankyou-next p {
+  margin-top: 12px;
+}
+.thankyou-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: clamp(20px, 3vw, 28px);
+}

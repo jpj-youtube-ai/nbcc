@@ -52,6 +52,11 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/donate`     | `donate.html`     |
 | `/contact`    | `contact.html`    |
 | `/supporters` | `supporters.html` |
+| `/donate/thank-you` | `thank-you.html` |
+
+`/donate/thank-you` is the post-payment confirmation page Stripe returns the
+donor to on a successful checkout (`STRIPE_SUCCESS_URL`, REQ-028/REQ-029); it is a
+landing page, not a primary nav destination.
 
 The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
 Netlify-style format. The Express site router (`src/routes/site.ts`) parses it
@@ -63,11 +68,13 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /donate           /donate.html      200
 /contact          /contact.html     200
 /supporters       /supporters.html  200
+/donate/thank-you /thank-you.html   200
 /index.html       /                 301!   # canonicalise raw .html onto the clean URL
 /about.html       /about-us         301!   # ! forces the redirect over the real file
 /donate.html      /donate           301!
 /contact.html     /contact          301!
 /supporters.html  /supporters       301!
+/thank-you.html   /donate/thank-you 301!
 ```
 
 `200` is a *rewrite* (content served, address bar unchanged); `301!` is a forced
@@ -757,6 +764,24 @@ and the rejected alternatives are recorded in
 person + organisation both render); `copy-rules`/`accessibility`/`brand-colours`
 auto-cover the page and stay green.
 
+### Confirmation page (REQ-035)
+
+`thank-you.html` is the post-payment confirmation page Stripe redirects the donor
+to on a successful checkout — it is the target of `STRIPE_SUCCESS_URL` at the clean
+URL `/donate/thank-you`. It is the fifth clean-URL page and shares the same nav /
+footer / `assets/css/styles.css` / `assets/js/main.js` as the rest of the site,
+with its own unique SEO + social metadata (`test/unit/seo-metadata.test.ts`). A
+centred intro (the `CONFIRMATION` CSS block, mirroring the About/Donate/Contact/
+Supporters intros) sits above a single reassurance `.card` in the `.page-sections`
+slot. The copy thanks the donor, **notes that a confirmation email follows when an
+email address was provided** (the email-send task owns actually sending it),
+explains how a monthly gift continues, and links back into the site. Being a
+landing page rather than a nav destination, no nav link is marked active. Dash-free
+copy, "NBCC" in full (REQ-031); skip-link + landmarks (REQ-032). Online declarations
+need **no 30-day confirmation letter**, so this page and its email are the whole of
+the post-gift confirmation. `clean-urls` / `site` / `seo-metadata` / `copy-rules` /
+`accessibility` auto-cover the page and stay green.
+
 ### Checkout contract (REQ-028)
 
 Every amount control wires the one front-end → backend integration point. Each
@@ -1341,7 +1366,8 @@ The **Stripe checkout** keys (TASK-037, REQ-028/REQ-029) follow this pattern:
 `STRIPE_SECRET_KEY` is a secret (SSM `SecureString`, required, never defaulted);
 `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` are plain redirect URLs (task-def
 `environment`, backed by the `stripe_success_url` / `stripe_cancel_url` module
-variables); and the four `STRIPE_PRICE_*` IDs (one per donate tier, REQ-022) are
+variables) — `STRIPE_SUCCESS_URL` now resolves to the live `/donate/thank-you`
+confirmation page (see **Confirmation page**), `STRIPE_CANCEL_URL` back to `/donate`; and the four `STRIPE_PRICE_*` IDs (one per donate tier, REQ-022) are
 SSM-held `String`s injected via `valueFrom` like a secret, so their ARNs are in
 the `exec_secrets` IAM policy too. `src/clients/stripe.ts` wraps the SDK, reading
 the key and price IDs **only** through `src/config`. The live checkout-session

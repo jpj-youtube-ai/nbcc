@@ -274,3 +274,72 @@ describe("processWebhookEvent — partnership checkout.session.completed (REQ-05
     expect(seq.some((s) => /^commit/i.test(s))).toBe(false);
   });
 });
+
+// A COMPANY checkout session (REQ-038 / TASK-085): the checkout endpoint stamps the validated
+// company* fields on metadata; the webhook maps them onto the donor row (business_name /
+// company_number / full_name / email / billing_address / billing_postcode) and persists a
+// not-eligible donation with NO declaration.
+const companySession = () =>
+  ({
+    id: "cs_test_company",
+    object: "checkout.session",
+    amount_total: 5000,
+    currency: "gbp",
+    mode: "payment",
+    payment_intent: "pi_test_company",
+    subscription: null,
+    customer_details: { name: "Card Holder", email: null },
+    metadata: {
+      mode: "once",
+      plan: "",
+      giftAid: "false",
+      donorType: "company",
+      businessName: "Acme Ltd",
+      companyLegalName: "Acme Ltd",
+      companyRegistrationNumber: "SC123456",
+      companyContactName: "Ada Lovelace",
+      companyContactEmail: "finance@acme.test",
+      companyBillingAddress: "1 Office Park, London",
+      companyBillingPostcode: "SW1A 1AA",
+    },
+  }) as unknown as import("stripe").Checkout.Session;
+
+const companyEvent = () =>
+  ({
+    id: "evt_company_1",
+    type: "checkout.session.completed",
+    data: { object: companySession() },
+  }) as unknown as import("stripe").Event;
+
+describe("processWebhookEvent — company checkout.session.completed (REQ-038 / TASK-085)", () => {
+  it("persists the company donor (billing/contact fields) and a not-eligible donation with no declaration", async () => {
+    const result = await processWebhookEvent(companyEvent());
+    expect(result).toEqual({ processed: true, action: "donation.created" });
+
+    // The donor row carries the mapped company fields. INSERT params order:
+    // donor_type, full_name, business_name, company_number, email, email_consent, anonymous,
+    // billing_address, billing_postcode.
+    const donorCall = call(/insert into donors/i);
+    expect(donorCall?.[1][0]).toBe("company"); // donor_type
+    expect(donorCall?.[1][1]).toBe("Ada Lovelace"); // full_name = contact name
+    expect(donorCall?.[1][2]).toBe("Acme Ltd"); // business_name = legal name
+    expect(donorCall?.[1][3]).toBe("SC123456"); // company_number = registration number
+    expect(donorCall?.[1][4]).toBe("finance@acme.test"); // email = contact email
+    expect(donorCall?.[1][5]).toBe(false); // email_consent (operational email, not marketing)
+    expect(donorCall?.[1][7]).toBe("1 Office Park, London"); // billing_address
+    expect(donorCall?.[1][8]).toBe("SW1A 1AA"); // billing_postcode
+
+    // The donation is not claimable and has no declaration.
+    const donationCall = call(/insert into donations/i);
+    expect(donationCall?.[1][1]).toBeNull(); // declaration_id
+    expect(donationCall?.[1][6]).toBe(false); // gift_aid
+    expect(donationCall?.[1][9]).toBe("not_eligible"); // claim_status
+
+    // No declarations row is inserted for a company.
+    expect(queryMock.mock.calls.some((c) => /insert into declarations/i.test(String(c[0])))).toBe(false);
+    // Committed in one transaction.
+    const seq = sqls();
+    expect(seq[seq.length - 1]).toMatch(/^commit/i);
+    expect(seq.some((s) => /rollback/i.test(s))).toBe(false);
+  });
+});

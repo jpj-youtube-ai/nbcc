@@ -189,8 +189,9 @@ export async function insertDonorAndDonation(
 }> {
   const donorRes = await client.query<{ id: number }>(
     `INSERT INTO donors
-       (donor_type, full_name, business_name, company_number, email, email_consent, anonymous)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (donor_type, full_name, business_name, company_number, email, email_consent, anonymous,
+        billing_address, billing_postcode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       donation.donorType,
@@ -200,6 +201,8 @@ export async function insertDonorAndDonation(
       donor.email ?? null,
       donor.emailConsent ?? false,
       donor.anonymous ?? false,
+      donor.billingAddress ?? null,
+      donor.billingPostcode ?? null,
     ],
   );
   const donorId = donorRes.rows[0].id;

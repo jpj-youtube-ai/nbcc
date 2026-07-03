@@ -58,6 +58,9 @@ export interface DonorInput {
   email?: string | null;
   emailConsent?: boolean;
   anonymous?: boolean;
+  // Company billing details (REQ-038, donor_type='company' only); null for individuals.
+  billingAddress?: string | null;
+  billingPostcode?: string | null;
 }
 
 // A row ready to INSERT into donations (snake_case columns). created_at is left to

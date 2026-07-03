@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (61)
+## Shipped (62)
 
 ### REQ-001 — Multi-page site structure
 
@@ -461,16 +461,6 @@ Tasks:
 - TASK-098 — Enrich the post-payment confirmation email with a Gift Aid confirmation and manage/cancel instructions for individuals
 - TASK-099 — Send a refund/dispute confirmation email to consenting individual donors from the refund webhook path
 
-### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
-
-A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
-
-Tasks:
-- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
-- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
-
-## Planned (4)
-
 ### REQ-061 — Self-serve donor portal
 
 Let donors edit their details, downgrade, manage or cancel Gift Aid and cancel their subscription, making cancellation easy as required but offering a reduce-instead option first, with cancelling Gift Aid setting the declaration inactive and stopping future claims. *Accept:* cancellation is reachable without contacting staff and a reduce-instead option is offered before cancel.
@@ -481,6 +471,16 @@ Tasks:
 - TASK-102 — Add reduce-instead-then-cancel subscription flow
 - TASK-103 — Add Gift Aid cancellation (declaration revoke) endpoint
 - TASK-104 — Build the self-serve donor portal page
+
+### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
+
+A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
+
+Tasks:
+- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
+- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
+
+## Planned (3)
 
 ### REQ-062 — Role-based admin mirroring self-serve
 

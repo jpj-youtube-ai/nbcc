@@ -45,5 +45,8 @@ describe("parseRedirects", () => {
     expect(rules).toContainEqual({ from: "/contact", to: "/contact.html", status: "200" });
     expect(rules).toContainEqual({ from: "/index.html", to: "/", status: "301!" });
     expect(rules).toContainEqual({ from: "/about.html", to: "/about-us", status: "301!" });
+    // Privacy notice (TASK-111): its clean-URL rewrite + canonical redirect.
+    expect(rules).toContainEqual({ from: "/privacy", to: "/privacy.html", status: "200" });
+    expect(rules).toContainEqual({ from: "/privacy.html", to: "/privacy", status: "301!" });
   });
 });

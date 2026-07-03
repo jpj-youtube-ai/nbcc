@@ -20,6 +20,7 @@ const PAGES = [
   { file: "supporters.html", label: "Supporters", url: `${BASE}/supporters` },
   { file: "thank-you.html", label: "Thank you", url: `${BASE}/donate/thank-you` },
   { file: "portal.html", label: "Donor portal", url: `${BASE}/donor-portal` },
+  { file: "privacy.html", label: "Privacy notice", url: `${BASE}/privacy` },
 ] as const;
 
 function read(file: string): string {

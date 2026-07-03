@@ -19,6 +19,11 @@ vi.mock("../../src/config", () => ({
 
 import { sendConfirmation } from "../../src/db/stripe-webhook";
 import { confirmationEmailFromCheckoutSession } from "../../src/db/stripe-webhook-model";
+import {
+  buildDonationConfirmation,
+  GIFT_AID_CONFIRMATION_LINE,
+  MANAGE_CANCEL_LINE,
+} from "../../src/donors/confirmation";
 
 const session = (metadata: Record<string, string>): Stripe.Checkout.Session =>
   ({
@@ -48,12 +53,16 @@ describe("donation-confirmation email trigger (TASK-070)", () => {
   it("sends exactly one email when the donor gave an email AND email_consent=true", async () => {
     await trigger({ email: "ada@example.com", emailConsent: "true" });
     expect(sendDonationConfirmation).toHaveBeenCalledOnce();
-    expect(sendDonationConfirmation).toHaveBeenCalledWith({
-      email: "ada@example.com",
-      fullName: "Ada Lovelace",
-      amountPence: 5000,
-      currency: "GBP",
-    });
+    expect(sendDonationConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "ada@example.com",
+        fullName: "Ada Lovelace",
+        amountPence: 5000,
+        currency: "GBP",
+        text: expect.any(String),
+        html: expect.any(String),
+      }),
+    );
   });
 
   it("sends NOTHING when email_consent is false (even though an email is present)", async () => {
@@ -83,6 +92,60 @@ describe("confirmationEmailFromCheckoutSession — pure event→payload mapping"
   it("returns the payload for a consenting donor", () => {
     expect(
       confirmationEmailFromCheckoutSession(session({ email: "ada@example.com", emailConsent: "true" })),
-    ).toEqual({ email: "ada@example.com", fullName: "Ada Lovelace", amountPence: 5000, currency: "GBP" });
+    ).toEqual({
+      email: "ada@example.com",
+      fullName: "Ada Lovelace",
+      amountPence: 5000,
+      currency: "GBP",
+      giftAid: false,
+      mode: "once",
+    });
+  });
+
+  it("returns null for a company donation (untouched — it uses the corporation-tax receipt path)", () => {
+    // A company's contact email is not marketing consent (emailConsent stays false), so no
+    // confirmation email is produced — the Corporation Tax receipt is its email (TASK-088).
+    expect(
+      confirmationEmailFromCheckoutSession(
+        session({
+          donorType: "company",
+          companyLegalName: "Acme Ltd",
+          companyContactName: "Ada Lovelace",
+          companyContactEmail: "finance@acme.test",
+          companyBillingAddress: "1 Office Park",
+          companyBillingPostcode: "SW1A 1AA",
+          companyConsiderationGiven: "false",
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("buildDonationConfirmation (pure content) — REQ-060 · TASK-098", () => {
+  const base = { fullName: "Ada Lovelace", amountPence: 5000, currency: "GBP" } as const;
+
+  it("includes a Gift Aid confirmation line for a gift-aided donation, and manage/cancel copy for a monthly gift", () => {
+    const content = buildDonationConfirmation({ ...base, giftAid: true, mode: "monthly" });
+    expect(content.text).toContain(GIFT_AID_CONFIRMATION_LINE);
+    expect(content.text).toContain("Jaimie Wakefield"); // the REQ-026 manage/cancel contact
+    expect(content.text.toLowerCase()).toContain("cancel");
+    expect(content.html).toContain("Gift Aid");
+    expect(content.text).toContain("£50.00");
+  });
+
+  it("includes the Gift Aid line but NO manage/cancel copy for a one-off gift-aided donation", () => {
+    const content = buildDonationConfirmation({ ...base, giftAid: true, mode: "once" });
+    expect(content.text).toContain(GIFT_AID_CONFIRMATION_LINE);
+    expect(content.text).not.toContain(MANAGE_CANCEL_LINE);
+  });
+
+  it("omits the Gift Aid line for a non-Gift-Aid donation", () => {
+    const once = buildDonationConfirmation({ ...base, giftAid: false, mode: "once" });
+    expect(once.text).not.toContain("Gift Aid");
+    expect(once.text).not.toContain(MANAGE_CANCEL_LINE);
+    // A non-Gift-Aid MONTHLY gift still gets manage/cancel copy but no Gift Aid line.
+    const monthly = buildDonationConfirmation({ ...base, giftAid: false, mode: "monthly" });
+    expect(monthly.text).not.toContain("Gift Aid");
+    expect(monthly.text).toContain(MANAGE_CANCEL_LINE);
   });
 });

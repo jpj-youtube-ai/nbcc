@@ -41,6 +41,7 @@ import {
   buildCompanyRefundNotice,
   type CompanyRefundAction,
 } from "../donors/receipt";
+import { buildDonationConfirmation } from "../donors/confirmation";
 import {
   applyDunningEvent,
   canApplyDunningEvent,
@@ -291,7 +292,24 @@ export async function sendDeclarationConfirmation(decl: DeclarationSend | null):
 export async function sendConfirmation(email: DonationConfirmationEmail | null): Promise<void> {
   if (!email) return;
   try {
-    await sendDonationConfirmation(email);
+    // Build the enriched content (Gift Aid line + manage/cancel copy where they apply) from the
+    // pure builder, then send. The consent gate stays in confirmationEmailFor: a null email (no
+    // consented address) already short-circuited above, so no email is sent without consent.
+    const content = buildDonationConfirmation({
+      fullName: email.fullName,
+      amountPence: email.amountPence,
+      currency: email.currency,
+      giftAid: email.giftAid,
+      mode: email.mode,
+    });
+    await sendDonationConfirmation({
+      email: email.email,
+      fullName: email.fullName,
+      amountPence: email.amountPence,
+      currency: email.currency,
+      text: content.text,
+      html: content.html,
+    });
   } catch {
     // best-effort: the donation is durably recorded; a failed email must not fail
     // the webhook (which would make Stripe redeliver and re-run the whole handler).
@@ -539,7 +557,8 @@ async function handleRecurring(
     action: "donation.recurring",
     email: confirmationEmailFor(
       { email: parent.email, emailConsent: parent.email_consent, fullName: parent.full_name },
-      { amountPence: rec.amountPence, currency: rec.currency },
+      // A recurring charge is a monthly gift; Gift Aid is carried from the parent donation.
+      { amountPence: rec.amountPence, currency: rec.currency, giftAid: parent.gift_aid, mode: "monthly" },
     ),
   };
 }

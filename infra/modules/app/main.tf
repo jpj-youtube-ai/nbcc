@@ -185,3 +185,14 @@ resource "aws_ssm_parameter" "portal_base_url" {
   value = "https://nbcc.example"
   lifecycle { ignore_changes = [value] }
 }
+
+# Admin session token signing key (TASK-105/REQ-062) — HMAC key the admin login
+# endpoint signs session tokens with. A SecureString like the Stripe secrets; the
+# real long random value is set out of band (ignore_changes keeps Terraform from
+# overwriting it).
+resource "aws_ssm_parameter" "admin_session_secret" {
+  name  = "/${var.project}/${var.environment}/ADMIN_SESSION_SECRET"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}

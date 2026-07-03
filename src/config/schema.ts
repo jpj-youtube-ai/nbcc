@@ -67,6 +67,13 @@ export const configSchema = z.object({
   // secret (it ships in the email), but AWS-injected like DECLARATION_FORM_BASE_URL (SSM String →
   // task-def env). Validated as a URL (mirrors STRIPE_SUCCESS_URL).
   PORTAL_BASE_URL: z.string().url(),
+
+  // HMAC signing key for admin session tokens (TASK-105/REQ-062). The admin login endpoint signs a
+  // short-lived session token with this key (crypto.createHmac), and admin routes verify it — the
+  // bearer-token analogue of the donor portal's magic link. A secret — required, non-empty, NEVER
+  // defaulted (a default would mask a missing key and let anyone forge a session); a placeholder
+  // locally/CI, a SecureString in SSM in staging/prod. Kept long/random in real environments.
+  ADMIN_SESSION_SECRET: z.string().min(1),
 });
 
 export type Config = z.infer<typeof configSchema>;

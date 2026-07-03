@@ -4,6 +4,9 @@ import {
   findUserByEmail,
   adminCancelGiftAid,
   recordAdminSubscriptionCancellation,
+  searchDonors,
+  searchDeclarations,
+  searchDonations,
 } from "../db/admin";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
@@ -230,3 +233,59 @@ adminRouter.get("/api/admin/donors/:id", getAdminDonor);
 adminRouter.patch("/api/admin/donors/:id", patchAdminDonor);
 adminRouter.post("/api/admin/donors/:id/subscription/cancel", postAdminCancelSubscription);
 adminRouter.post("/api/admin/donors/:id/gift-aid/cancel", postAdminCancelGiftAid);
+
+// --- Admin search (REQ-062 · TASK-108) ----------------------------------------------------------
+// Read-only lookups over donors / declarations / donations by a free `?q=` query (name, email, id or
+// postcode). Read-only, so any authenticated role (Viewer and up) may call them. A missing/blank `q`
+// is a 400; the results are capped in the db layer so an over-broad query stays bounded.
+const searchQuerySchema = z.object({ q: z.string().trim().min(1) });
+
+// Pull and validate the `?q=` query string; sends a 400 and returns null when it is missing/blank.
+function searchQuery(req: Request, res: Response): string | null {
+  const parsed = searchQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "A non-empty search query (?q=) is required" });
+    return null;
+  }
+  return parsed.data.q;
+}
+
+export async function getAdminSearchDonors(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  const q = searchQuery(req, res);
+  if (q == null) return;
+  try {
+    return res.status(200).json({ results: await searchDonors(q) });
+  } catch (err) {
+    console.error("admin donor search failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Search is temporarily unavailable" });
+  }
+}
+
+export async function getAdminSearchDeclarations(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  const q = searchQuery(req, res);
+  if (q == null) return;
+  try {
+    return res.status(200).json({ results: await searchDeclarations(q) });
+  } catch (err) {
+    console.error("admin declaration search failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Search is temporarily unavailable" });
+  }
+}
+
+export async function getAdminSearchDonations(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  const q = searchQuery(req, res);
+  if (q == null) return;
+  try {
+    return res.status(200).json({ results: await searchDonations(q) });
+  } catch (err) {
+    console.error("admin donation search failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Search is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/search/donors", getAdminSearchDonors);
+adminRouter.get("/api/admin/search/declarations", getAdminSearchDeclarations);
+adminRouter.get("/api/admin/search/donations", getAdminSearchDonations);

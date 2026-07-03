@@ -919,6 +919,9 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `PATCH /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor update) |
 | `POST /api/admin/donors/:id/subscription/cancel` | **implemented** | REQ-062 (admin cancel subscription) |
 | `POST /api/admin/donors/:id/gift-aid/cancel` | **implemented** | REQ-062 (admin cancel Gift Aid) |
+| `GET /api/admin/search/donors?q=` | **implemented** | REQ-062 (admin donor search) |
+| `GET /api/admin/search/declarations?q=` | **implemented** | REQ-062 (admin declaration search) |
+| `GET /api/admin/search/donations?q=` | **implemented** | REQ-062 (admin donation search) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1008,6 +1011,19 @@ appends its audit_log row in the same transaction as the state change** (the tru
 which admin acted. No active declaration → 404; a concurrent revoke → 409; a non-numeric id → 400.
 Proven by `test/unit/admin-api.test.ts` (mocked pool — the full 401/403/200 role matrix and that each
 successful write is audited) and end to end by the `@db` `features/admin-api.feature`.
+
+**`GET /api/admin/search/{donors,declarations,donations}?q=` (REQ-062 · TASK-108).** Read-only admin
+search over the three core tables by a free `?q=` query — a name, email, id or postcode. Each is
+authorised by the same `authorizeAdmin` gate at **`viewer`** (read-only, so any staff role may search),
+so a **missing/invalid token is 401**; a **missing/blank `q` is 400**. The queries live in
+`src/db/admin.ts` (`searchDonors`/`searchDeclarations`/`searchDonations`, read-only `pool.query` like
+the other admin reads): each matches the query case-insensitively (`ILIKE '%q%'`) across the relevant
+text columns — donor name/business/email; declaration first/last name + postcode; donation donor
+name/email + Stripe ids — and additionally by numeric **id** when the query is all digits (declarations
+and donations also match a numeric **donor id**; donations join the donor for the name/email match).
+Results are **capped** (`LIMIT 50`) so an over-broad query stays bounded. Proven by the search block in
+`test/unit/admin-api.test.ts` (401 + the viewer/editor/admin 200 matrix, the ILIKE/numeric params, and
+the blank-`q` 400) and end to end by the `@db` `features/admin-api.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`

@@ -32,6 +32,9 @@ import {
   patchAdminDonor,
   postAdminCancelSubscription,
   postAdminCancelGiftAid,
+  getAdminSearchDonors,
+  getAdminSearchDeclarations,
+  getAdminSearchDonations,
 } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
@@ -52,17 +55,20 @@ function mockRes(): MockRes {
   res.json = (b) => { res.body = b; return res; };
   return res;
 }
-function req(opts: { id?: string; role?: string; token?: string; body?: unknown }) {
+function req(opts: { id?: string; role?: string; token?: string; body?: unknown; query?: unknown }) {
   const headers: Record<string, string> = {};
   const token = opts.token !== undefined ? opts.token : opts.role ? tokenFor(opts.role) : undefined;
   if (token) headers.authorization = `Bearer ${token}`;
-  return { params: { id: opts.id ?? "42" }, headers, body: opts.body ?? {} };
+  return { params: { id: opts.id ?? "42" }, headers, body: opts.body ?? {}, query: opts.query ?? {} };
 }
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const runGet = async (o: any) => { const res = mockRes(); await getAdminDonor(req(o) as any, res as any); return res; };
 const runPatch = async (o: any) => { const res = mockRes(); await patchAdminDonor(req(o) as any, res as any); return res; };
 const runCancelSub = async (o: any) => { const res = mockRes(); await postAdminCancelSubscription(req(o) as any, res as any); return res; };
 const runCancelGa = async (o: any) => { const res = mockRes(); await postAdminCancelGiftAid(req(o) as any, res as any); return res; };
+const runSearchDonors = async (o: any) => { const res = mockRes(); await getAdminSearchDonors(req(o) as any, res as any); return res; };
+const runSearchDeclarations = async (o: any) => { const res = mockRes(); await getAdminSearchDeclarations(req(o) as any, res as any); return res; };
+const runSearchDonations = async (o: any) => { const res = mockRes(); await getAdminSearchDonations(req(o) as any, res as any); return res; };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const donorRow = {
@@ -83,9 +89,12 @@ beforeEach(() => {
   cancelSubscriptionMock.mockClear();
 
   queryMock.mockImplementation(async (sql: string) => {
+    // `from donors` (getDonorPortalSnapshot, searchDonors) is checked before `from donations` so the
+    // snapshot query — which references `from donations` only in a subquery — isn't misrouted.
     if (/from donors/i.test(sql)) return { rows: [donorRow], rowCount: 1 };
-    // findActiveDeclarationIdForDonor: the donor's active (non-revoked) declaration.
-    if (/from declarations/i.test(sql)) return { rows: [{ id: 77 }], rowCount: 1 };
+    if (/from donations/i.test(sql)) return { rows: [{ id: 5, donor_id: 42, donor_name: "Ada Lovelace" }], rowCount: 1 };
+    // findActiveDeclarationIdForDonor + searchDeclarations both read declarations.
+    if (/from declarations/i.test(sql)) return { rows: [{ id: 77, donor_id: 42 }], rowCount: 1 };
     return { rows: [], rowCount: 0 };
   });
   clientQueryMock.mockImplementation(async (sql: string) => {
@@ -193,5 +202,53 @@ describe("admin donor id validation", () => {
       return { rows: [donorRow], rowCount: 1 };
     });
     expect((await runCancelGa({ role: "admin" })).statusCode).toBe(404);
+  });
+});
+
+// --- Admin search (REQ-062 · TASK-108) ----------------------------------------------------------
+const SEARCHERS: Array<[string, (o: unknown) => Promise<MockRes>]> = [
+  ["donors", runSearchDonors],
+  ["declarations", runSearchDeclarations],
+  ["donations", runSearchDonations],
+];
+
+describe("admin search endpoints require a valid token (401)", () => {
+  it.each(SEARCHERS)("401s /search/%s with no token", async (_name, run) => {
+    expect((await run({ token: "", query: { q: "ada" } })).statusCode).toBe(401);
+  });
+
+  it.each(SEARCHERS)("401s /search/%s with a token signed with the wrong key", async (_name, run) => {
+    const forged = signAdminSession({ sub: 1, email: "x@y.co", role: "admin", now: new Date(), secret: "wrong" }).token;
+    expect((await run({ token: forged, query: { q: "ada" } })).statusCode).toBe(401);
+  });
+});
+
+describe.each(["viewer", "editor", "admin"])("admin search: role %s (viewer-or-above) gets results", (role) => {
+  it.each(SEARCHERS)("200s /search/%s and returns matching rows", async (_name, run) => {
+    const res = await run({ role, query: { q: "ada" } });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { results: unknown[] };
+    expect(Array.isArray(body.results)).toBe(true);
+    expect(body.results.length).toBeGreaterThan(0);
+  });
+});
+
+describe("admin search query validation", () => {
+  it.each(SEARCHERS)("400s /search/%s with a missing / blank q", async (_name, run) => {
+    expect((await run({ role: "admin", query: {} })).statusCode).toBe(400);
+    expect((await run({ role: "admin", query: { q: "   " } })).statusCode).toBe(400);
+  });
+
+  it("passes the query to the db layer as an ILIKE pattern (donors)", async () => {
+    await runSearchDonors({ role: "admin", query: { q: "Ada" } });
+    const call = queryMock.mock.calls.find((c) => /from donors/i.test(String(c[0])));
+    expect(call?.[1]?.[0]).toBe("%Ada%");
+  });
+
+  it("matches an all-digits query by id too (numeric param non-null)", async () => {
+    await runSearchDonors({ role: "admin", query: { q: "42" } });
+    const call = queryMock.mock.calls.find((c) => /from donors/i.test(String(c[0])));
+    expect(call?.[1]?.[0]).toBe("%42%");
+    expect(call?.[1]?.[1]).toBe(42);
   });
 });

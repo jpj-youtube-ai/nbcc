@@ -1100,6 +1100,22 @@ charges) each get their own independent row. Pure like `src/declarations/fields.
 (`test/unit/charities-online-export.test.ts`). The *submission* of the file to HMRC (and the
 admin/RBAC that triggers it) are REQ-052/REQ-062 follow-ups.
 
+**Refund/dispute claim recalculation (REQ-037/REQ-063 · TASK-093).** `src/claims/refund.ts` is the
+**pure**, DB-free calculator that recomputes a donation's claim state after a refund or dispute.
+`recalculateClaimOnRefund({ donorType, giftAid, hasDeclaration, amountPence, refundedPence,
+claimStatus })` returns `{ claimStatus, adjustmentPence, receiptAction }`, extending the shared
+`deriveClaimStatus` invariant with refund awareness: a **not-yet-claimed** individual gift
+re-derives eligibility from the **retained** (post-refund) amount (a full refund → `not_eligible`,
+a partial one keeps `eligible`); an **already-batched/claimed** gift cannot un-claim what HMRC has,
+so it returns `claimStatus: 'adjustment_due'` with `adjustmentPence` = the refunded portion of the
+already-claimed amount; and a **company** gift never claims Gift Aid, so its `claim_status` is left
+untouched and only the Corporation Tax receipt is actioned (`receiptAction` `'void'` on a full
+refund, `'correct'` on a partial). A refund exceeding the donation throws a typed `RefundError`.
+Pure like `src/benefits/caps.ts` / `src/subscriptions/dunning.ts` (no pool/config/clock),
+unit-tested DB-free (`test/unit/refund-calculator.test.ts`). Wiring it into the
+`charge.refunded` / `charge.dispute.*` webhook (which today re-derives only the not-yet-claimed
+case) is a follow-up.
+
 **Charities Online export query + CLI (REQ-052 · TASK-083).**
 `listClaimableDonationsForExport(claimBatchId?)` in `src/db/donations.ts` is the read that
 *selects* those eligible rows: every `claim_status = 'eligible'` donation INNER-joined to its

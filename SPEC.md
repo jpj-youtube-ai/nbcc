@@ -503,3 +503,8 @@ Tasks:
 ### REQ-064 — Data protection and anonymity
 
 Store personal data securely, enforce retention per the audit-record rule, link the privacy notice in the form, and treat anonymity as a public-display setting only while the HMRC claim still uses the donor's real name and address. *Accept:* anonymous donors are hidden on the public page yet fully recorded for claiming.
+
+Tasks:
+- TASK-111 — Add a Privacy Notice page and link it from the contact form and give-widget consent fields
+- TASK-112 — Add an audited retention-expiry personal-data anonymization write helper
+- TASK-113 — Guard the anonymity display-only invariant across the public page and the HMRC claim export

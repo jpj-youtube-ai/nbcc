@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (53)
+## Shipped (54)
 
 ### REQ-001 — Multi-page site structure
 
@@ -387,6 +387,14 @@ Tasks:
 - TASK-080 — Add a partnership donor path with repeatable per-partner declaration capture to the give widget
 - TASK-081 — Thread partnership shares through the checkout endpoint and persist one declaration per partner via the webhook
 
+### REQ-052 — Charities Online claim export
+
+Produce a correctly formatted export (Title, First name, Last name, House name/number, Postcode, Donation date, Amount; one row per successful charge, with OSCR as regulator, charity number SC047995 and NBCC's HMRC reference) for finance to upload to Charities Online, with the direct HMRC API deferred to phase two. *Accept:* each successful charge under an enduring monthly declaration produces its own claimable row.
+
+Tasks:
+- TASK-082 — Add a pure Charities Online export row builder and CSV formatter
+- TASK-083 — Add a claimable-donations export query and Charities Online CSV export script
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -403,15 +411,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (12)
-
-### REQ-052 — Charities Online claim export
-
-Produce a correctly formatted export (Title, First name, Last name, House name/number, Postcode, Donation date, Amount; one row per successful charge, with OSCR as regulator, charity number SC047995 and NBCC's HMRC reference) for finance to upload to Charities Online, with the direct HMRC API deferred to phase two. *Accept:* each successful charge under an enduring monthly declaration produces its own claimable row.
-
-Tasks:
-- TASK-082 — Add a pure Charities Online export row builder and CSV formatter
-- TASK-083 — Add a claimable-donations export query and Charities Online CSV export script
+## Planned (11)
 
 ### REQ-053 — Company donation flow
 

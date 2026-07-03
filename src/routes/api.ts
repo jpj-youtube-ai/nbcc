@@ -218,6 +218,9 @@ export function buildSessionParams(
     metadata.companyContactEmail = c.contactEmail;
     metadata.companyBillingAddress = c.billingAddress;
     metadata.companyBillingPostcode = c.billingPostcode;
+    // Whether NBCC gave anything of value in return (REQ-053 · TASK-088): the webhook sends a
+    // Corporation Tax receipt when false, or flags the gift for the trustees when true.
+    metadata.companyConsiderationGiven = String(c.considerationGiven);
   }
 
   const base: StripeNS.Checkout.SessionCreateParams = {

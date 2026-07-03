@@ -15,6 +15,7 @@ const validFields = {
   contactEmail: "finance@acme.test",
   billingAddress: "1 Office Park, London",
   billingPostcode: "SW1A 1AA",
+  considerationGiven: false,
 };
 
 describe("companyFieldsSchema (REQ-038)", () => {
@@ -44,6 +45,13 @@ describe("companyFieldsSchema (REQ-038)", () => {
       void _omit;
       expect(companyFieldsSchema.safeParse(without).success, `missing ${field} should fail`).toBe(false);
     }
+  });
+
+  it("requires the considerationGiven boolean (REQ-053 · TASK-088)", () => {
+    const { considerationGiven, ...without } = validFields;
+    void considerationGiven;
+    expect(companyFieldsSchema.safeParse(without).success).toBe(false);
+    expect(companyFieldsSchema.parse({ ...validFields, considerationGiven: true }).considerationGiven).toBe(true);
   });
 
   it("rejects an invalid contact email", () => {

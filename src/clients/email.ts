@@ -72,3 +72,31 @@ export async function sendDeclarationEmail(message: DeclarationEmail): Promise<v
     throw new Error(`Declaration email send responded ${res.status}`);
   }
 }
+
+// The Corporation Tax receipt email for a COMPANY donation (REQ-053, TASK-088). A company gift
+// is relieved via Corporation Tax, not Gift Aid, so after a company checkout with NO
+// consideration given the donor's billing contact is emailed a receipt. The verbatim content
+// (text + html) is built by the pure src/donors/receipt.ts and passed in, so this client only
+// ships the payload. Same stub-seam + best-effort contract as sendDonationConfirmation.
+export interface CompanyReceiptEmail {
+  email: string; // the company's billing contact email
+  legalName: string;
+  amountPence: number;
+  currency: string;
+  text: string; // the receipt as plain text
+  html: string; // the receipt as HTML
+}
+
+export async function sendCompanyReceipt(message: CompanyReceiptEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Company receipt email send responded ${res.status}`);
+  }
+}

@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (55)
+## Shipped (56)
 
 ### REQ-001 — Multi-page site structure
 
@@ -403,6 +403,15 @@ Tasks:
 - TASK-084 — Add company-specific field capture (registration number, contact name, contact email, billing address) to the give widget's company path
 - TASK-085 — Persist company donation fields and enforce permanent non-claimability through checkout and the webhook
 
+### REQ-054 — Corporation-tax receipt for companies
+
+Email a dated receipt in place of a declaration stating NBCC's name and OSCR SC047995, the amount and date, that it is a genuine donation with nothing of value given in return, and that NBCC has not and will not claim Gift Aid on it. *Accept:* genuine sponsorship where consideration is given is flagged for trustees as a separate flow rather than processed as a donation.
+
+Tasks:
+- TASK-086 — Add a pure corporation-tax receipt content builder and sponsorship-consideration guard
+- TASK-087 — Add a sponsorship-consideration question to the company give-widget path
+- TASK-088 — Send the corporation-tax receipt (or flag sponsorship for trustees) from the company webhook path
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -419,16 +428,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (10)
-
-### REQ-054 — Corporation-tax receipt for companies
-
-Email a dated receipt in place of a declaration stating NBCC's name and OSCR SC047995, the amount and date, that it is a genuine donation with nothing of value given in return, and that NBCC has not and will not claim Gift Aid on it. *Accept:* genuine sponsorship where consideration is given is flagged for trustees as a separate flow rather than processed as a donation.
-
-Tasks:
-- TASK-086 — Add a pure corporation-tax receipt content builder and sponsorship-consideration guard
-- TASK-087 — Add a sponsorship-consideration question to the company give-widget path
-- TASK-088 — Send the corporation-tax receipt (or flag sponsorship for trustees) from the company webhook path
+## Planned (9)
 
 ### REQ-056 — One-off, BACS and card payments
 

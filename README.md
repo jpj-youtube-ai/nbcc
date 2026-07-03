@@ -1176,6 +1176,15 @@ front-end degrades to its preview.
 > exercised end to end (see `features/checkout.feature`) without a Stripe account.
 > Production **never** stubs, so a missing real key surfaces loudly. Verified by
 > `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios.
+>
+> **Pinned API version.** Both real SDK clients (the checkout/subscription client
+> and the webhook verifier) are constructed with an explicit `apiVersion`
+> (`STRIPE_API_VERSION`, `src/clients/stripe.ts`) instead of the SDK's implicit
+> default, which shifts on every `stripe` package bump. The literal is type-checked
+> against the SDK's `LatestApiVersion` at the `new Stripe(...)` call site, so an
+> out-of-date pin fails the build — bump it in lockstep when upgrading `stripe`, and
+> align the webhook endpoint's API version in the Stripe dashboard so delivered
+> events match the pinned types. Verified by `test/unit/stripe-api-version.test.ts`.
 
 **`POST /api/subscription/change-plan` (REQ-055).** Moves a monthly subscription up
 or down a tier. The body `{ subscriptionId, plan }` is validated zod-first (same

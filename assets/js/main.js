@@ -715,6 +715,158 @@
     });
   }
 
+  // Self-serve donor portal (REQ-061): portal.html is reached via a one-time magic-link
+  // token in the URL query string (?token=…). On load initPortal reads that token, calls
+  // GET /api/portal/:token and renders the donor's details, monthly-gift plan and Gift Aid
+  // state. Cancelling the monthly gift is gated behind a reduce-instead choice (REQ-055) —
+  // the cancel action lives inside #reduceChoice, which is revealed only when the donor asks
+  // to cancel, so reducing is always offered first. Cancelling Gift Aid posts to
+  // /api/portal/:token/gift-aid/cancel (TASK-103). Best-effort, mirroring initContactForm /
+  // startCheckout: it only runs where fetch exists, and no-ops on any page without #portalContent.
+  function initPortal(doc, win) {
+    var content = doc.getElementById("portalContent");
+    if (!content) return; // not the portal page
+    win = win || (doc && doc.defaultView) || window;
+
+    var statusEl = doc.getElementById("portalStatus");
+    var errorEl = doc.getElementById("portalError");
+    var actionStatus = doc.getElementById("portalActionStatus");
+
+    function setStatus(el, msg) {
+      if (el) el.textContent = msg || "";
+    }
+    function showError(msg) {
+      if (statusEl) statusEl.hidden = true;
+      content.hidden = true;
+      if (errorEl) {
+        errorEl.hidden = false;
+        if (msg) {
+          var p = errorEl.querySelector("p");
+          if (p) p.textContent = msg;
+        }
+      }
+    }
+
+    // The magic-link token from the query string; no token means the link is unusable.
+    var search = (win.location && win.location.search) || "";
+    var match = search.match(/[?&]token=([^&]+)/);
+    var token = match ? decodeURIComponent(match[1]) : "";
+    if (!token) {
+      showError();
+      return;
+    }
+
+    var base = "/api/portal/" + encodeURIComponent(token);
+
+    // Cancelling the monthly gift: the cancel action (#confirmCancelSub) lives inside the
+    // reduce-instead choice, which stays hidden until the donor asks to cancel — so reducing is
+    // always offered first (REQ-055). We remember the subscription id from the snapshot to send.
+    var subscriptionId = null;
+
+    var cancelSubStart = doc.getElementById("cancelSubStart");
+    var reduceChoice = doc.getElementById("reduceChoice");
+    if (cancelSubStart && reduceChoice) {
+      cancelSubStart.addEventListener("click", function () {
+        reduceChoice.hidden = false;
+        var confirmBtn = doc.getElementById("confirmCancelSub");
+        if (confirmBtn && confirmBtn.focus) confirmBtn.focus();
+      });
+    }
+
+    // A best-effort POST that reports its outcome into the action-status region. Returns the
+    // fetch promise so callers (and tests) can await it; no-ops without fetch.
+    function post(path, body, okMsg, failMsg) {
+      if (typeof win.fetch !== "function") return;
+      return win
+        .fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        })
+        .then(function (res) {
+          setStatus(actionStatus, res && res.ok ? okMsg : failMsg);
+        })
+        .catch(function () {
+          setStatus(actionStatus, failMsg);
+        });
+    }
+
+    var confirmCancelSub = doc.getElementById("confirmCancelSub");
+    if (confirmCancelSub) {
+      confirmCancelSub.addEventListener("click", function () {
+        post(
+          base + "/subscription/cancel",
+          { subscriptionId: subscriptionId, accepted: "cancel" },
+          "Your monthly gift has been cancelled. Thank you for all your support.",
+          "We could not cancel your monthly gift just now. Please try again later.",
+        );
+      });
+    }
+
+    var cancelGiftAid = doc.getElementById("cancelGiftAid");
+    if (cancelGiftAid) {
+      cancelGiftAid.addEventListener("click", function () {
+        post(
+          base + "/gift-aid/cancel",
+          {},
+          "Your Gift Aid has been cancelled.",
+          "We could not cancel your Gift Aid just now. Please try again later.",
+        );
+      });
+    }
+
+    // Render the donor snapshot returned by GET /api/portal/:token.
+    function render(data) {
+      subscriptionId = data.subscriptionId || null;
+
+      var nameEl = doc.getElementById("portalName");
+      if (nameEl) nameEl.textContent = data.fullName || "Not on file";
+      var emailEl = doc.getElementById("portalEmail");
+      if (emailEl) emailEl.textContent = data.email || "No email on file";
+
+      // Monthly gift: show the plan, or the no-subscription note (and hide the manage actions).
+      var planEl = doc.getElementById("portalPlan");
+      var noSub = doc.getElementById("portalNoSub");
+      var subActions = doc.getElementById("portalSubActions");
+      if (data.subscriptionPlan) {
+        var plan = String(data.subscriptionPlan);
+        if (planEl) planEl.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+        if (noSub) noSub.hidden = true;
+      } else {
+        if (planEl) planEl.textContent = "No monthly gift";
+        if (noSub) noSub.hidden = false;
+        if (subActions) subActions.hidden = true;
+        if (reduceChoice) reduceChoice.hidden = true;
+      }
+
+      // Gift Aid: show the status and reveal the cancel control only when it is active.
+      var giftAidEl = doc.getElementById("portalGiftAid");
+      if (giftAidEl) giftAidEl.textContent = data.giftAid ? "Active" : "Not active";
+      if (cancelGiftAid) cancelGiftAid.hidden = !data.giftAid;
+
+      if (statusEl) statusEl.hidden = true;
+      if (errorEl) errorEl.hidden = true;
+      content.hidden = false;
+    }
+
+    // Load the donor snapshot. Best-effort: without fetch (e.g. a preview) the page shows its
+    // loading state; a failed load shows the error panel.
+    setStatus(statusEl, "Loading your details…");
+    if (typeof win.fetch !== "function") return;
+    win
+      .fetch(base, { headers: { Accept: "application/json" } })
+      .then(function (res) {
+        return res && res.ok ? res.json() : null;
+      })
+      .then(function (data) {
+        if (data) render(data);
+        else showError();
+      })
+      .catch(function () {
+        showError();
+      });
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       initNav,
@@ -727,6 +879,7 @@
       initContactForm,
       startCheckout,
       initCheckout,
+      initPortal,
     };
   } else {
     initNav(document, window);
@@ -738,5 +891,6 @@
     initContactCapture(document);
     initContactForm(document, window);
     initCheckout(document, window);
+    initPortal(document, window);
   }
 })();

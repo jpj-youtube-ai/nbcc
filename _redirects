@@ -14,6 +14,7 @@
 /contact       /contact.html     200
 /supporters    /supporters.html  200
 /donate/thank-you  /thank-you.html   200
+/donor-portal  /portal.html      200
 
 # Canonicalise the raw .html paths onto the clean URL so each page has exactly
 # one address. The `!` force flag is required because the .html files physically
@@ -24,3 +25,4 @@
 /contact.html     /contact           301!
 /supporters.html  /supporters        301!
 /thank-you.html   /donate/thank-you  301!
+/portal.html      /donor-portal      301!

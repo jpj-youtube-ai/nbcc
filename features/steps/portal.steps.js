@@ -12,9 +12,11 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 // Fresh start: remove any donors/tokens seeded by a previous run (tokens first — they reference the
 // donor, though the FK is ON DELETE CASCADE anyway).
 Before({ tags: "@portal" }, async function () {
-  await pool.query(
-    "DELETE FROM portal_access_tokens WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%portal.bdd@example.com')",
-  );
+  const donorFilter =
+    "donor_id IN (SELECT id FROM donors WHERE email LIKE '%portal.bdd@example.com')";
+  await pool.query(`DELETE FROM portal_access_tokens WHERE ${donorFilter}`);
+  // declarations FK to donors is ON DELETE RESTRICT, so clear the donor's declarations first (TASK-103).
+  await pool.query(`DELETE FROM declarations WHERE ${donorFilter}`);
   await pool.query("DELETE FROM donors WHERE email LIKE '%portal.bdd@example.com'");
 });
 
@@ -69,6 +71,43 @@ When("I POST to cancel the donor subscription:", async function (docString) {
   });
   this.portalStatus = res.status;
   this.portalBody = await res.json().catch(() => ({}));
+});
+
+// Seed an active (revoked_at NULL) Gift Aid declaration for the token's donor (REQ-061 · TASK-103),
+// with the minimal NOT NULL columns. The donor is resolved from the seeded token.
+Given("the donor has an active Gift Aid declaration", async function () {
+  const donor = await pool.query(
+    "SELECT donor_id FROM portal_access_tokens WHERE token = $1",
+    [this.portalToken],
+  );
+  this.portalDonorId = donor.rows[0].donor_id;
+  const decl = await pool.query(
+    `INSERT INTO declarations
+       (donor_id, first_name, last_name, house_name_number, address, non_uk, scope,
+        wording_version, wording_snapshot, confirmed_taxpayer)
+     VALUES ($1, 'Cara', 'Portal', '1', 'Test Street, London', false, 'all_donations',
+             'v1', 'I want to Gift Aid my donations.', true)
+     RETURNING id`,
+    [this.portalDonorId],
+  );
+  this.declarationId = decl.rows[0].id;
+});
+
+When("I POST to cancel the donor's Gift Aid", async function () {
+  const res = await fetch(`${BASE_URL}/api/portal/${this.portalToken}/gift-aid/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  this.portalStatus = res.status;
+  this.portalBody = await res.json().catch(() => ({}));
+});
+
+Then("the donor's active declaration is revoked", async function () {
+  const row = await pool.query("SELECT revoked_at FROM declarations WHERE id = $1", [
+    this.declarationId,
+  ]);
+  assert.ok(row.rows[0].revoked_at != null, "expected revoked_at to be set");
 });
 
 Then("the portal response status should be {int}", function (code) {

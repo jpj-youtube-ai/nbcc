@@ -7,6 +7,11 @@ import {
   updateDonorPortal,
 } from "../db/portal";
 import { cancelSubscription } from "../clients/stripe";
+import {
+  cancelDeclaration,
+  findActiveDeclarationIdForDonor,
+  DeclarationCancellationError,
+} from "../db/declarations";
 
 // The self-serve donor portal API (REQ-061 · TASK-101). A donor reaches it via a one-time, expiring
 // magic-link token (TASK-100); EVERY route authenticates that token with verifyPortalToken and
@@ -111,6 +116,33 @@ export async function postCancelSubscription(req: Request, res: Response): Promi
   }
 }
 
+// Cancel Gift Aid (REQ-061 · TASK-103) — revoke the donor's active declaration, stopping future
+// claims, WITHOUT a superseding replacement (unlike an edit, REQ-059). The token authenticates the
+// donor; we resolve their currently-active declaration and cancel it in one audited transaction
+// (cancelDeclaration → sets revoked_at + a `declaration.revoked` audit row, no new declaration). No
+// active declaration → 404; a concurrent cancel that already revoked it → 409.
+export async function postCancelGiftAid(req: Request, res: Response): Promise<Response | void> {
+  const donorId = await authOrReject(req, res);
+  if (donorId == null) return;
+
+  try {
+    const declarationId = await findActiveDeclarationIdForDonor(donorId);
+    if (declarationId == null) {
+      return res.status(404).json({ error: "No active Gift Aid declaration to cancel" });
+    }
+    const result = await cancelDeclaration(declarationId, "donor");
+    return res.status(200).json({ cancelled: true, declarationId: result.declarationId });
+  } catch (err) {
+    // A concurrent cancel revoked it between the lookup and the FOR UPDATE lock → nothing to cancel.
+    if (err instanceof DeclarationCancellationError) {
+      return res.status(409).json({ error: "Gift Aid is already cancelled" });
+    }
+    console.error("gift-aid cancel failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Gift Aid cancellation is temporarily unavailable" });
+  }
+}
+
 portalRouter.get("/api/portal/:token", getPortal);
 portalRouter.patch("/api/portal/:token", patchPortal);
 portalRouter.post("/api/portal/:token/subscription/cancel", postCancelSubscription);
+portalRouter.post("/api/portal/:token/gift-aid/cancel", postCancelGiftAid);

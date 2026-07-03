@@ -912,8 +912,9 @@ A one-off is a `mode: payment` session with inline GBP
 `STRIPE_DONATION_PRODUCT` product when that optional id is set, otherwise an inline
 product is named — and a monthly is a `mode: subscription` session using the
 recurring `STRIPE_PRICE_*` id keyed by plan. `payment_method_types` is
-`['card']` (Apple Pay / Google Pay ride on the card method; BACS Direct Debit was
-dropped pending Stripe account activation).
+`['card', 'bacs_debit']` on **both** session shapes (Apple Pay / Google Pay ride on
+the card method; BACS Direct Debit is offered for our GBP-only UK donations, which
+satisfy Stripe's BACS currency/country requirement — REQ-029 · TASK-089).
 `success_url` / `cancel_url` come from config. When
 `giftAid` is affirmatively true the consent is bound to the **exact verbatim HMRC
 statement** the donor saw (REQ-042 · TASK-053): alongside `metadata.giftAid='true'`,

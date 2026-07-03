@@ -85,7 +85,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
 
     const p = lastParams();
     expect(p.mode).toBe("payment");
-    expect(p.payment_method_types).toEqual(["card"]);
+    expect(p.payment_method_types).toEqual(["card", "bacs_debit"]);
     expect(p.line_items[0].quantity).toBe(1);
     expect(p.line_items[0].price_data.currency).toBe("gbp");
     expect(p.line_items[0].price_data.unit_amount).toBe(5000);
@@ -133,6 +133,22 @@ describe("POST /api/checkout-session — monthly (REQ-029)", () => {
       await run({ mode: "monthly", plan, amount: 1000, giftAid: false, ageConfirmed: true });
       expect(lastParams().line_items[0].price).toBe(price);
     }
+  });
+});
+
+describe("POST /api/checkout-session — payment methods (REQ-029 / TASK-089)", () => {
+  it("offers both card and BACS Direct Debit on a one-off (payment) session", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const methods = lastParams().payment_method_types;
+    expect(methods).toContain("card");
+    expect(methods).toContain("bacs_debit");
+  });
+
+  it("offers both card and BACS Direct Debit on a monthly (subscription) session", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true });
+    const methods = lastParams().payment_method_types;
+    expect(methods).toContain("card");
+    expect(methods).toContain("bacs_debit");
   });
 });
 

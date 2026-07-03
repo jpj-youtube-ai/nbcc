@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (59)
+## Shipped (60)
 
 ### REQ-001 — Multi-page site structure
 
@@ -445,6 +445,14 @@ Tasks:
 - TASK-094 — Add additive migration for adjustment_due claim status and a claim_adjustments table
 - TASK-095 — Wire refund and dispute events through the single Stripe webhook to update claim status and adjustments
 
+### REQ-059 — Editing a declaration creates a new one
+
+Treat declarations as immutable so that any change to name, address, scope or taxpayer confirmation deactivates the old declaration with a revoked timestamp and creates a new one with the current wording, linking future charges to the new declaration while past claimed donations keep their original. *Accept:* each donation's claim references the declaration that was valid at the time of that donation.
+
+Tasks:
+- TASK-096 — Add additive migration for declaration revocation and lineage columns
+- TASK-097 — Add a pure declaration-revision builder and an audited revoke-and-create write helper
+
 ### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
 
 A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
@@ -453,15 +461,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (6)
-
-### REQ-059 — Editing a declaration creates a new one
-
-Treat declarations as immutable so that any change to name, address, scope or taxpayer confirmation deactivates the old declaration with a revoked timestamp and creates a new one with the current wording, linking future charges to the new declaration while past claimed donations keep their original. *Accept:* each donation's claim references the declaration that was valid at the time of that donation.
-
-Tasks:
-- TASK-096 — Add additive migration for declaration revocation and lineage columns
-- TASK-097 — Add a pure declaration-revision builder and an audited revoke-and-create write helper
+## Planned (5)
 
 ### REQ-060 — Consent-based emails and thank-yous
 

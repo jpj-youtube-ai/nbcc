@@ -450,6 +450,11 @@ Tasks:
 
 On a refund or dispute update the refunded amount, set the donation not-claimable (or recalculate for a partial) when it has not yet been claimed, and when it has already been claimed set claim_status to adjustment_due and net the over-claim off the next submission, always recalculating partial refunds on the retained amount. *Accept:* Gift Aid is never kept on returned money, adjustments are recorded against the claim batch for auditability, and a company refund voids or corrects the receipt only.
 
+Tasks:
+- TASK-093 — Add a pure refund/dispute claim recalculation module
+- TASK-094 — Add additive migration for adjustment_due claim status and a claim_adjustments table
+- TASK-095 — Wire refund and dispute events through the single Stripe webhook to update claim status and adjustments
+
 ### REQ-059 — Editing a declaration creates a new one
 
 Treat declarations as immutable so that any change to name, address, scope or taxpayer confirmation deactivates the old declaration with a revoked timestamp and creates a new one with the current wording, linking future charges to the new declaration while past claimed donations keep their original. *Accept:* each donation's claim references the declaration that was valid at the time of that donation.

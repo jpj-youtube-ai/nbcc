@@ -434,6 +434,10 @@ Tasks:
 
 Support one-off single charges via PaymentIntents and both BACS Direct Debit (bacs_debit, handling the setup/confirmation lead time) and card for monthly and one-off giving. *Accept:* the pending BACS mandate state is handled and the Direct Debit Guarantee is honoured.
 
+Tasks:
+- TASK-089 — Re-enable BACS Direct Debit as a checkout payment method alongside card
+- TASK-090 — Track a pending BACS payment state and handle Stripe's async payment confirmation events
+
 ### REQ-057 — Dunning and failed-payment retries
 
 Configure Stripe Smart Retries for three attempts over roughly two weeks, then mark the subscription lapsed, stop future claims and notify the donor and admin. *Accept:* a lapsed subscription produces no further claimable donations.

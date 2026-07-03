@@ -187,7 +187,10 @@ describe("donor type behaviour (jsdom)", () => {
     selectDonor("business");
     businessInput().value = "Acme Ltd";
     onceTier(0).click(); // £10 one-off
-    expect(lastPayload()).toEqual({
+    // The default business sub-type is company, so the payload also folds the REQ-038
+    // company object with giftAid:false (covered precisely in give-company-capture.test.ts);
+    // here we assert the donor-type routing carries donorType + businessName.
+    expect(lastPayload()).toMatchObject({
       mode: "once",
       plan: null,
       amount: 1000,

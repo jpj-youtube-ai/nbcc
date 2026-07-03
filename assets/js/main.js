@@ -182,6 +182,7 @@
     var businessTypeField = doc.getElementById("businessTypeField");
     var declaration = doc.querySelector(".give-declaration");
     var partners = doc.querySelector(".give-partners");
+    var company = doc.querySelector(".give-company");
 
     function apply() {
       var donorRadio = control.querySelector('input[name="donorType"]:checked');
@@ -201,6 +202,15 @@
       // declaration per partner in .give-partners instead.
       if (declaration) declaration.hidden = path !== "individual";
       if (partners) partners.hidden = path !== "partnership";
+      // The company-specific fields show ONLY on the company path; disable their inputs
+      // otherwise so a hidden required field never blocks submission or leaks a value.
+      if (company) {
+        var isCompany = path === "company";
+        company.hidden = !isCompany;
+        Array.prototype.forEach.call(company.querySelectorAll("input"), function (el) {
+          el.disabled = !isCompany;
+        });
+      }
     }
 
     radios.forEach(function (btn) {
@@ -626,6 +636,29 @@
       });
       payload.partners = partners;
       // The partnership path uses partners, not the single declaration object.
+      delete payload.declaration;
+    }
+
+    // Company capture (REQ-038): on the company path fold a `company` object with the
+    // company-specific fields, and GUARANTEE giftAid is never sent true — an incorporated
+    // company can never claim Gift Aid (its callout is already hidden/cleared by
+    // initDonorType). The legal name reuses the existing #businessName field. Gated on the
+    // donor control being wired so the no-JS base contract is unchanged.
+    if (donorControl && currentDonorPath(doc) === "company") {
+      payload.giftAid = false;
+      var compVal = function (id) {
+        var el = doc.getElementById(id);
+        return el ? (el.value || "").trim() : "";
+      };
+      payload.company = {
+        legalName: businessName,
+        registrationNumber: compVal("companyRegNumber"),
+        contactName: compVal("companyContactName"),
+        contactEmail: compVal("companyContactEmail"),
+        billingAddress: compVal("companyBillingAddress"),
+        billingPostcode: compVal("companyBillingPostcode"),
+      };
+      // A company makes no Gift Aid declaration.
       delete payload.declaration;
     }
 

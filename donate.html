@@ -415,6 +415,39 @@
                   </fieldset>
                 </template>
               </fieldset>
+              <!-- COMPANY CAPTURE (REQ-038): the company-specific fields for an incorporated
+                   company (no Gift Aid). Like .give-partners it ships hidden and is revealed by
+                   initDonorType ONLY on the company path (and its inputs are disabled otherwise,
+                   so a hidden required field never blocks). The optional registration number,
+                   plus a required contact name/email and billing address/postcode; every field
+                   is a real <label for> (REQ-032). The company's legal name is the existing
+                   #businessName field above. startCheckout folds a `company` object into the
+                   REQ-028 payload on the company path, always with giftAid:false. Copy is
+                   dash-free and names "NBCC" (REQ-031). -->
+              <fieldset class="give-company" id="companyCapture" hidden>
+                <legend class="give-company-legend">Your company details</legend>
+                <p class="give-company-help">A company gift is not Gift Aided. We use these details for your receipt and our records.</p>
+                <div class="give-field">
+                  <label for="companyRegNumber">Company registration number <span class="give-optional">(optional)</span></label>
+                  <input type="text" id="companyRegNumber" name="companyRegNumber" class="give-field-input" autocomplete="off" placeholder="e.g. SC123456" />
+                </div>
+                <div class="give-field">
+                  <label for="companyContactName">Contact name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="companyContactName" name="companyContactName" class="give-field-input" autocomplete="name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="companyContactEmail">Contact email <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="email" id="companyContactEmail" name="companyContactEmail" class="give-field-input" autocomplete="email" required aria-required="true" placeholder="finance@yourcompany.co.uk" />
+                </div>
+                <div class="give-field">
+                  <label for="companyBillingAddress">Billing address <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="companyBillingAddress" name="companyBillingAddress" class="give-field-input" autocomplete="street-address" required aria-required="true" placeholder="Street and town" />
+                </div>
+                <div class="give-field">
+                  <label for="companyBillingPostcode">Billing postcode <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="companyBillingPostcode" name="companyBillingPostcode" class="give-field-input" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" />
+                </div>
+              </fieldset>
             </div>
             <!-- Holly Green side panel (REQ-024): the inverted cream-on-holly
                  "where your gift goes" content. Cream tints only (never holly/tan

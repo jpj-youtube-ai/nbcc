@@ -661,6 +661,24 @@ TASK-079) enforces server-side. Without JS the base `{ mode, plan, amount, giftA
 is unchanged. Token-only colours; dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-partnership.test.ts`.
 
+### Company capture (REQ-038 · TASK-084)
+
+On the **incorporated-company** path a `.give-company` `<fieldset>` (`#companyCapture`)
+captures the company-specific fields: an **optional** registration number
+(`#companyRegNumber`) plus a **required** contact name (`#companyContactName`), contact email
+(`#companyContactEmail`, a real email input), billing address (`#companyBillingAddress`) and
+billing postcode (`#companyBillingPostcode`) — each `required` + `aria-required` with a real
+`<label for>` (REQ-032); the company's legal name is the existing `#businessName` field.
+`initDonorType` reveals `.give-company` **only** on the company path (the `.give-company[hidden]`
+rule collapses the flex/grid box) and **disables** its inputs otherwise, so a hidden required
+field never blocks submission or leaks a value. `startCheckout` folds a **`company`** object
+(`{ legalName, registrationNumber, contactName, contactEmail, billingAddress, billingPostcode }`)
+into the REQ-028 payload on the company path and **forces `giftAid: false`** (an incorporated
+company can never claim Gift Aid — its callout is already hidden by REQ-038). The individual and
+partnership paths are unaffected (no `company` object). The consent-based
+`#anonymousDonor`/contact capture (REQ-039) is reused as-is. Token-only colours; dash-free copy,
+"NBCC" (REQ-031). Verified by `test/unit/give-company-capture.test.ts`.
+
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE

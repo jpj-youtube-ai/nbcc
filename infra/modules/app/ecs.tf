@@ -46,6 +46,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Declaration form base URL (TASK-075): injected via valueFrom, so the exec role
       # must be able to read it.
       aws_ssm_parameter.declaration_form_base_url.arn,
+      # Admin notification recipient (TASK-092): injected via valueFrom, so the exec role
+      # must be able to read it.
+      aws_ssm_parameter.admin_notification_email.arn,
     ]
   }
   statement {
@@ -120,6 +123,9 @@ resource "aws_ecs_task_definition" "app" {
       # Declaration form base URL (TASK-075): non-secret SSM String, injected via valueFrom
       # like the price IDs — so its ARN must also appear in exec_secrets below.
       { name = "DECLARATION_FORM_BASE_URL", valueFrom = aws_ssm_parameter.declaration_form_base_url.arn },
+      # Admin notification recipient (TASK-092): non-secret SSM String, injected via valueFrom
+      # like DECLARATION_FORM_BASE_URL — so its ARN must also appear in exec_secrets below.
+      { name = "ADMIN_NOTIFICATION_EMAIL", valueFrom = aws_ssm_parameter.admin_notification_email.arn },
     ]
 
     logConfiguration = {

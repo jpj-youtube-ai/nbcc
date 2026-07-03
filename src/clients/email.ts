@@ -100,3 +100,48 @@ export async function sendCompanyReceipt(message: CompanyReceiptEmail): Promise<
     throw new Error(`Company receipt email send responded ${res.status}`);
   }
 }
+
+// Subscription-lapsed notices (TASK-092/REQ-065). When a monthly subscription lapses (Stripe
+// Smart Retries exhausted) the platform sends, post-commit and best-effort, two messages: a
+// notice to the donor (only when they gave an email + consent — gated by the caller) and a fixed
+// operational notice to the NBCC admin inbox (config.ADMIN_NOTIFICATION_EMAIL). Same stub-seam +
+// best-effort contract as the other sends.
+export interface SubscriptionLapsedDonorEmail {
+  email: string; // the donor's contact email
+  fullName: string;
+  subscriptionId: string;
+}
+
+export async function sendSubscriptionLapsedDonor(message: SubscriptionLapsedDonorEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Subscription lapsed (donor) email send responded ${res.status}`);
+  }
+}
+
+export interface SubscriptionLapsedAdminEmail {
+  email: string; // the admin inbox (config.ADMIN_NOTIFICATION_EMAIL)
+  donorName: string;
+  subscriptionId: string;
+}
+
+export async function sendSubscriptionLapsedAdmin(message: SubscriptionLapsedAdminEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Subscription lapsed (admin) email send responded ${res.status}`);
+  }
+}

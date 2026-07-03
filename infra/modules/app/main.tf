@@ -163,3 +163,14 @@ resource "aws_ssm_parameter" "declaration_form_base_url" {
   value = "https://nbcc.example"
   lifecycle { ignore_changes = [value] }
 }
+
+# Admin notification recipient (TASK-092). NOT a secret (an internal inbox), but SSM-held and
+# injected like DECLARATION_FORM_BASE_URL so it varies per environment. A plain String; the
+# placeholder is a valid email so app validation passes on a fresh apply. Set the real inbox
+# with put-parameter (see README).
+resource "aws_ssm_parameter" "admin_notification_email" {
+  name  = "/${var.project}/${var.environment}/ADMIN_NOTIFICATION_EMAIL"
+  type  = "String"
+  value = "admin@nbcc.example"
+  lifecycle { ignore_changes = [value] }
+}

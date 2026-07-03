@@ -1032,7 +1032,14 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   the Gift Aid declaration-confirmation lifecycle — see **Declaration confirmation lifecycle**
   below (REQ-057). A NOT-NULL-defaulted `gasds_eligible` boolean (default `false`, added by
   migration `1783014186353_gasds-eligible.js`) marks a small gift claimable under the Gift
-  Aid Small Donations Scheme — see **GASDS eligibility** below (REQ-058).
+  Aid Small Donations Scheme — see **GASDS eligibility** below (REQ-058). A NOT-NULL-defaulted
+  `payment_status` (`text`, CHECK `pending`/`paid`/`failed`, default `paid`, added by migration
+  `1783062309816_donation-payment-status.js`) tracks settlement for the async **BACS Direct Debit**
+  method (REQ-065 · TASK-090): a card gift is `paid` at checkout, a BACS gift lands `pending`
+  (Stripe's `payment_status='unpaid'`) and flips to `paid`/`failed` on the async payment events. It
+  **gates claimability** — `deriveClaimStatus` returns `eligible` only when `payment_status='paid'`,
+  so a pending or failed BACS gift is never claimable regardless of Gift Aid + declaration — see
+  **BACS pending payments** below.
 - **`audit_log`** — an **append-only** trail (`actor`, `action`, `entity`,
   `entity_id`, `data` jsonb); a DB trigger rejects any `UPDATE`/`DELETE`.
 - **`donation_partner_shares`** — the many-declarations-per-donation join for a
@@ -1281,6 +1288,24 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
 - **`charge.refunded` / `charge.dispute.*`** → updates the SAME donation record's
   `refunded_amount_pence` (absolute, so replay-safe) and recomputes `claim_status`
   — never a duplicate row.
+- **`checkout.session.async_payment_succeeded` / `checkout.session.async_payment_failed`**
+  (REQ-065 · TASK-090) → settle a pending **BACS** gift. Found by its **session id** (never a new
+  row), the SAME donation's `payment_status` flips to `paid`/`failed` and `claim_status` is
+  re-derived through `deriveClaimStatus`: a succeeded gift becomes `eligible` only if it is an
+  individual, gift-aided, declared and not refunded; a failed gift is permanently `not_eligible`.
+  Each writes a `donation.payment_succeeded` / `donation.payment_failed` audit row in the same
+  `writeWithAudit` transaction. Idempotent by event id like every branch, so a resent event applies
+  no second time.
+
+**BACS pending payments (REQ-065 · TASK-090).** BACS Direct Debit settles asynchronously, so a
+`checkout.session.completed` for a BACS gift arrives with Stripe `payment_status='unpaid'` — the
+pure `donationFromCheckoutSession` maps that onto `payment_status='pending'` (a card gift is
+`paid`). Because `deriveClaimStatus` only returns `eligible` when `payment_status='paid'`, a
+pending gift persists **non-claimable even with Gift Aid + a valid declaration** (the declaration
+row is still inserted). When the mandate confirms, `async_payment_succeeded` flips it to `paid` and
+re-derives `eligible`; `async_payment_failed` sets `failed` (permanently non-claimable). Covered
+DB-free in `test/unit/stripe-webhook-bacs.test.ts` and end to end in the `@db`
+`features/stripe-webhook.feature` BACS scenario.
 
 **Donation-confirmation email (TASK-070).** After a `checkout.session.completed`
 (and each recurring `invoice.paid`) donation row **commits**, the processor sends a

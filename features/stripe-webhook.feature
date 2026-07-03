@@ -210,6 +210,53 @@ Feature: Stripe webhook handler (REQ-036)
     And the donation with payment intent "pi_bdd_gasds_1" should have gasds eligible true
     And the donation with payment intent "pi_bdd_gasds_1" should have claim status "not_eligible"
 
+  Scenario: a BACS gift becomes claim-eligible only after the mandate confirms (REQ-065)
+    # A BACS checkout completes with payment_status 'unpaid' (mandate pending): the donation is
+    # persisted with a Gift Aid declaration but is NOT claimable yet.
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_bacs",
+        "object": "checkout.session",
+        "amount_total": 5000,
+        "currency": "gbp",
+        "mode": "payment",
+        "payment_status": "unpaid",
+        "payment_intent": "pi_bdd_bacs",
+        "subscription": null,
+        "metadata": {
+          "mode": "once",
+          "plan": "",
+          "giftAid": "true",
+          "donorType": "individual",
+          "declarationScope": "this_donation",
+          "giftAidWordingVersion": "hmrc-single-2024-01",
+          "giftAidWording": "I want to Gift Aid my donation ...",
+          "declFirstName": "Ada",
+          "declLastName": "BACS",
+          "declHouseNameNumber": "12",
+          "declAddress": "Analytical Avenue, London",
+          "declPostcode": "SW1A 1AA",
+          "declNonUk": "false"
+        },
+        "customer_details": { "name": "Ada BACS", "email": "ada.bacs@example.com" }
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_bacs"
+    And the donation with payment intent "pi_bdd_bacs" should have gift aid true
+    And the donation with payment intent "pi_bdd_bacs" should have a linked declaration
+    And the donation with payment intent "pi_bdd_bacs" should have claim status "not_eligible"
+
+    # The mandate confirms asynchronously: the SAME donation flips to paid and re-derives eligible.
+    When I POST a signed Stripe "checkout.session.async_payment_succeeded" webhook event:
+      """
+      { "id": "cs_bdd_bacs", "object": "checkout.session" }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_bdd_bacs"
+    And the donation with payment intent "pi_bdd_bacs" should have claim status "eligible"
+
   Scenario: an invalid signature is rejected
     When I POST a Stripe "charge.refunded" webhook event with an invalid signature:
       """

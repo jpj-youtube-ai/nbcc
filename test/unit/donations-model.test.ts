@@ -47,6 +47,18 @@ describe("deriveClaimStatus (REQ-037)", () => {
       }),
     ).toBe("not_eligible");
   });
+
+  it("is not_eligible while the payment is pending or failed, even with Gift Aid + a declaration (REQ-065 · TASK-090)", () => {
+    for (const paymentStatus of ["pending", "failed"] as const) {
+      expect(
+        deriveClaimStatus({ donorType: "individual", giftAid: true, hasDeclaration: true, paymentStatus }),
+      ).toBe("not_eligible");
+    }
+    // A settled ('paid') gift derives per the usual rule; the default (no paymentStatus) is 'paid'.
+    expect(
+      deriveClaimStatus({ donorType: "individual", giftAid: true, hasDeclaration: true, paymentStatus: "paid" }),
+    ).toBe("eligible");
+  });
 });
 
 describe("donationInputSchema", () => {
@@ -125,6 +137,29 @@ describe("buildDonationRow", () => {
     expect(row.gift_aid).toBe(false);
     expect(row.declaration_id).toBeNull();
     expect(row.claim_status).toBe("not_eligible");
+  });
+
+  it("defaults payment_status to 'paid'; a pending BACS gift is stored pending and not_eligible (REQ-065 · TASK-090)", () => {
+    const paid = buildDonationRow(
+      donationInputSchema.parse({ donorType: "individual", mode: "once", amountPence: 5000, giftAid: true, declarationId: 9 }),
+      donorId,
+    );
+    expect(paid.payment_status).toBe("paid");
+    expect(paid.claim_status).toBe("eligible");
+
+    const pending = buildDonationRow(
+      donationInputSchema.parse({
+        donorType: "individual",
+        mode: "once",
+        amountPence: 5000,
+        giftAid: true,
+        declarationId: 9,
+        paymentStatus: "pending",
+      }),
+      donorId,
+    );
+    expect(pending.payment_status).toBe("pending");
+    expect(pending.claim_status).toBe("not_eligible"); // pending payment blocks claiming
   });
 
   it("normalises the currency to upper case", () => {

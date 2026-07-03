@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (58)
+## Shipped (59)
 
 ### REQ-001 — Multi-page site structure
 
@@ -436,16 +436,6 @@ Tasks:
 - TASK-091 — Add subscription dunning-state tracking table and pure lapse state machine
 - TASK-092 — Wire dunning webhook handling and lapsed-subscription donor/admin notifications
 
-### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
-
-A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
-
-Tasks:
-- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
-- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
-
-## Planned (7)
-
 ### REQ-058 — Refund and chargeback handling
 
 On a refund or dispute update the refunded amount, set the donation not-claimable (or recalculate for a partial) when it has not yet been claimed, and when it has already been claimed set claim_status to adjustment_due and net the over-claim off the next submission, always recalculating partial refunds on the retained amount. *Accept:* Gift Aid is never kept on returned money, adjustments are recorded against the claim batch for auditability, and a company refund voids or corrects the receipt only.
@@ -454,6 +444,16 @@ Tasks:
 - TASK-093 — Add a pure refund/dispute claim recalculation module
 - TASK-094 — Add additive migration for adjustment_due claim status and a claim_adjustments table
 - TASK-095 — Wire refund and dispute events through the single Stripe webhook to update claim status and adjustments
+
+### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
+
+A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
+
+Tasks:
+- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
+- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
+
+## Planned (6)
 
 ### REQ-059 — Editing a declaration creates a new one
 

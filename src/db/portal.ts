@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "./pool";
-import { insertAudit } from "./donations";
+import { insertAudit, writeWithAudit } from "./donations";
 import {
   issuePortalToken,
   verifyPortalToken,
@@ -92,4 +92,115 @@ export async function consumePortalToken(
   } finally {
     client.release();
   }
+}
+
+// Authenticate a portal request by its magic-link token (REQ-061/TASK-101): reads the token row and
+// verifies it (verifyPortalToken — throws PortalTokenError for a missing / expired / already-used
+// token) WITHOUT marking it used, so it stays valid for repeated read/update requests within its
+// life. The route maps PortalTokenError → 401. (Consuming a token, marking it used, is the separate
+// consumePortalToken flow.)
+export async function authenticatePortalToken(token: string): Promise<{ donorId: number }> {
+  const row = (
+    await pool.query<PortalTokenRecord>(
+      `SELECT token, donor_id, expires_at, used_at FROM portal_access_tokens WHERE token = $1`,
+      [token],
+    )
+  ).rows[0];
+  return verifyPortalToken(row, new Date());
+}
+
+// The donor's self-serve portal view (REQ-061): their editable details plus read-only status — the
+// current monthly subscription plan (the most recent subscription donation's plan, or null) and
+// whether they Gift Aid (any gift_aid donation on file). Read-only (pool.query, no transaction —
+// mirrors listClaimableDonationsForExport).
+export interface DonorPortalSnapshot {
+  donorId: number;
+  fullName: string;
+  email: string | null;
+  emailConsent: boolean;
+  anonymous: boolean;
+  subscriptionPlan: string | null;
+  giftAid: boolean;
+}
+
+export async function getDonorPortalSnapshot(donorId: number): Promise<DonorPortalSnapshot | null> {
+  const row = (
+    await pool.query<{
+      full_name: string;
+      email: string | null;
+      email_consent: boolean;
+      anonymous: boolean;
+      subscription_plan: string | null;
+      gift_aid: boolean;
+    }>(
+      `SELECT dn.full_name, dn.email, dn.email_consent, dn.anonymous,
+              (SELECT d.plan FROM donations d
+                 WHERE d.donor_id = dn.id AND d.stripe_subscription_id IS NOT NULL
+                 ORDER BY d.id DESC LIMIT 1) AS subscription_plan,
+              EXISTS (SELECT 1 FROM donations d WHERE d.donor_id = dn.id AND d.gift_aid = true) AS gift_aid
+         FROM donors dn
+        WHERE dn.id = $1`,
+      [donorId],
+    )
+  ).rows[0];
+  if (!row) return null;
+  return {
+    donorId,
+    fullName: row.full_name,
+    email: row.email,
+    emailConsent: row.email_consent,
+    anonymous: row.anonymous,
+    subscriptionPlan: row.subscription_plan,
+    giftAid: row.gift_aid,
+  };
+}
+
+// The editable portal fields (PATCH). All optional — a caller sends only what changed.
+export interface DonorPortalUpdate {
+  fullName?: string;
+  email?: string | null;
+  emailConsent?: boolean;
+  anonymous?: boolean;
+}
+
+// Update the donor's editable details + append a `donor.updated` audit_log row in the SAME
+// transaction (writeWithAudit — the truth model in CLAUDE.md), so the change and its audit commit or
+// roll back together. Only the supplied columns are written. Returns the donor id.
+export async function updateDonorPortal(
+  donorId: number,
+  updates: DonorPortalUpdate,
+  actor = "donor",
+): Promise<{ donorId: number; fields: string[] }> {
+  const columns: Record<keyof DonorPortalUpdate, string> = {
+    fullName: "full_name",
+    email: "email",
+    emailConsent: "email_consent",
+    anonymous: "anonymous",
+  };
+  return writeWithAudit(
+    async (client) => {
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      const fields: string[] = [];
+      (Object.keys(columns) as (keyof DonorPortalUpdate)[]).forEach((key) => {
+        if (updates[key] !== undefined) {
+          params.push(updates[key]);
+          sets.push(`${columns[key]} = $${params.length}`);
+          fields.push(key);
+        }
+      });
+      if (sets.length > 0) {
+        params.push(donorId);
+        await client.query(`UPDATE donors SET ${sets.join(", ")} WHERE id = $${params.length}`, params);
+      }
+      return { donorId, fields };
+    },
+    (r) => ({
+      actor,
+      action: "donor.updated",
+      entity: "donor",
+      entityId: r.donorId,
+      data: { fields: r.fields },
+    }),
+  );
 }

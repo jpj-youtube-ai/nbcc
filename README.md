@@ -879,8 +879,24 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/subscription/change-plan` | **implemented** | REQ-055 (tier up/down) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form) |
+| `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
+| `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
 
-They live in `src/routes/api.ts`.
+They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`).
+
+**`GET` / `PATCH /api/portal/:token` (REQ-061 · TASK-101).** The self-serve donor portal, entered
+via the one-time, expiring magic-link token (TASK-100). **Every** route authenticates the token with
+`authenticatePortalToken` → `verifyPortalToken` and rejects an invalid / expired / used token with
+**401** (it does *not* mark the token used, so it stays valid for repeated requests within its
+life). **`GET`** returns the donor's `getDonorPortalSnapshot` (`src/db/portal.ts`, a read-only
+`pool.query` like `listClaimableDonationsForExport`): `fullName`, `email`, `emailConsent`,
+`anonymous`, the current `subscriptionPlan` (the most recent monthly subscription donation's plan,
+or null) and `giftAid` (whether any gift-aided donation is on file). **`PATCH`** validates a
+zod-first `{ fullName?, email?, emailConsent?, anonymous? }` (`.strict()`, at least one field, valid
+email) and calls `updateDonorPortal`, which updates only the supplied `donors` columns **and appends
+a `donor.updated` audit_log row in the SAME `writeWithAudit` transaction** (the truth model), then
+returns the fresh snapshot. Proven DB-free by `test/unit/portal-api.test.ts` (mocked pool) and end to
+end by the `@db` `features/portal.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`
@@ -1198,8 +1214,8 @@ audit) and `consumePortalToken` (lock `FOR UPDATE`, `verifyPortalToken`, stamp `
 throws `already_used`. The send is `sendPortalMagicLink` (`src/clients/email.ts`, same best-effort
 stub-seam). `PORTAL_BASE_URL` is a required config value (schema + `.env.example` + CI env + SSM
 `String` + ECS task-def env — golden rule 3). Proven DB-free by `test/unit/portal-tokens.test.ts`
-(pure verify + mocked-pool issue/consume). The portal routes/pages that *call* these are a REQ-061
-follow-up.
+(pure verify + mocked-pool issue/consume). The portal **read/update API** that authenticates with
+these tokens is wired in TASK-101 — see **`GET`/`PATCH /api/portal/:token`** under the API section.
 
 **Subscription dunning lifecycle (REQ-065 · TASK-091).** A monthly (subscription) donor's card
 renewal can fail; Stripe Smart Retries re-attempts it (~3 attempts over ~2 weeks) before giving

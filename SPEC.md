@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (63)
+## Shipped (64)
 
 ### REQ-001 — Multi-page site structure
 
@@ -481,16 +481,6 @@ Tasks:
 - TASK-106 — Add role-gated admin endpoints mirroring self-serve donor actions
 - TASK-107 — Grant Kenny and Isabel the Admin role
 
-### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
-
-A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
-
-Tasks:
-- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
-- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
-
-## Planned (2)
-
 ### REQ-063 — Admin queues and claim operations
 
 Give admins donor, declaration and donation search, the Charities Online export, batch-submitted marking, the adjustment-due queue, retention-expiry flags and an awaiting-declaration queue for in-person links that were sent but not completed (including bounced emails). *Accept:* every admin write (edit, submit, adjust) appends to the audit log to form the HMRC-claim and governance trail.
@@ -499,6 +489,16 @@ Tasks:
 - TASK-108 — Add admin donor, declaration and donation search endpoints
 - TASK-109 — Add admin claim-batch submission marking and adjustment-due queue endpoints
 - TASK-110 — Add admin retention-expiry flags and awaiting-declaration queue endpoints
+
+### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
+
+A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
+
+Tasks:
+- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
+- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
+
+## Planned (1)
 
 ### REQ-064 — Data protection and anonymity
 

@@ -10,6 +10,8 @@ import {
   submitClaimBatch,
   listAdjustmentDueDonations,
   ClaimBatchSubmitError,
+  listRetentionExpiryDeclarations,
+  listAwaitingDeclarationDonations,
 } from "../db/admin";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
@@ -340,3 +342,30 @@ export async function getAdminAdjustmentDue(req: Request, res: Response): Promis
 
 adminRouter.post("/api/admin/claim-batches/:id/submit", postAdminSubmitClaimBatch);
 adminRouter.get("/api/admin/claims/adjustment-due", getAdminAdjustmentDue);
+
+// --- Admin retention + awaiting-declaration queues (REQ-046/REQ-049 · TASK-110) -----------------
+// Two read-only admin queues (Viewer and up): declarations whose HMRC six-year retention window is
+// expired/expiring, and donations whose in-person Gift Aid confirmation was sent but not completed.
+
+export async function getAdminRetentionExpiry(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listRetentionExpiryDeclarations() });
+  } catch (err) {
+    console.error("admin retention-expiry queue failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+export async function getAdminAwaitingDeclaration(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listAwaitingDeclarationDonations() });
+  } catch (err) {
+    console.error("admin awaiting-declaration queue failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/queues/retention-expiry", getAdminRetentionExpiry);
+adminRouter.get("/api/admin/queues/awaiting-declaration", getAdminAwaitingDeclaration);

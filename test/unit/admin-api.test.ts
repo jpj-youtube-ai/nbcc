@@ -37,6 +37,8 @@ import {
   getAdminSearchDonations,
   postAdminSubmitClaimBatch,
   getAdminAdjustmentDue,
+  getAdminRetentionExpiry,
+  getAdminAwaitingDeclaration,
 } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
@@ -73,6 +75,8 @@ const runSearchDeclarations = async (o: any) => { const res = mockRes(); await g
 const runSearchDonations = async (o: any) => { const res = mockRes(); await getAdminSearchDonations(req(o) as any, res as any); return res; };
 const runSubmitBatch = async (o: any) => { const res = mockRes(); await postAdminSubmitClaimBatch(req(o) as any, res as any); return res; };
 const runAdjustmentDue = async (o: any) => { const res = mockRes(); await getAdminAdjustmentDue(req(o) as any, res as any); return res; };
+const runRetentionExpiry = async (o: any) => { const res = mockRes(); await getAdminRetentionExpiry(req(o) as any, res as any); return res; };
+const runAwaitingDeclaration = async (o: any) => { const res = mockRes(); await getAdminAwaitingDeclaration(req(o) as any, res as any); return res; };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const donorRow = {
@@ -326,6 +330,70 @@ describe("GET /api/admin/claims/adjustment-due", () => {
     expect(Array.isArray(body.results)).toBe(true);
     // The query filters on claim_status='adjustment_due'.
     const call = queryMock.mock.calls.find((c) => /adjustment_due/i.test(String(c[0])));
+    expect(call).toBeTruthy();
+  });
+});
+
+// --- Retention-expiry + awaiting-declaration queues (REQ-046/REQ-049 · TASK-110) ----------------
+describe("GET /api/admin/queues/retention-expiry", () => {
+  it("401s with no token", async () => {
+    expect((await runRetentionExpiry({ token: "" })).statusCode).toBe(401);
+  });
+
+  it.each(["viewer", "editor", "admin"])("lets %s list declarations the calculator flags as expired", async (role) => {
+    // A revoked, this-donation declaration whose final claimed charge is >6 years old → expired.
+    queryMock.mockImplementation(async (sql: string) => {
+      if (/from declarations/i.test(sql)) {
+        return {
+          rows: [{
+            id: 1, donor_id: 42, first_name: "Ada", last_name: "Lovelace",
+            scope: "this_donation", revoked_at: new Date("2018-01-01T00:00:00Z"),
+            last_claimed_at: new Date("2017-01-01T00:00:00Z"),
+          }],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await runRetentionExpiry({ role });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { results: Array<{ id: number; flag: string; retentionExpiry: string }> };
+    expect(body.results.length).toBe(1);
+    expect(body.results[0]).toMatchObject({ id: 1, flag: "expired" });
+    // 2017-01-01 + 6 years = 2023-01-01, in the past → expired.
+    expect(new Date(body.results[0].retentionExpiry).getUTCFullYear()).toBe(2023);
+  });
+
+  it("omits declarations retained indefinitely (a live enduring declaration)", async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (/from declarations/i.test(sql)) {
+        return {
+          rows: [{
+            id: 2, donor_id: 42, first_name: "Ada", last_name: "Lovelace",
+            scope: "all_donations", revoked_at: null, last_claimed_at: new Date("2020-01-01T00:00:00Z"),
+          }],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await runRetentionExpiry({ role: "viewer" });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { results: unknown[] }).results).toHaveLength(0);
+  });
+});
+
+describe("GET /api/admin/queues/awaiting-declaration", () => {
+  it("401s with no token", async () => {
+    expect((await runAwaitingDeclaration({ token: "" })).statusCode).toBe(401);
+  });
+
+  it.each(["viewer", "editor", "admin"])("lets %s list sent/undelivered donations (bounced included)", async (role) => {
+    const res = await runAwaitingDeclaration({ role });
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray((res.body as { results: unknown[] }).results)).toBe(true);
+    // The query filters declaration_status to 'sent'/'undelivered' (bounced emails included).
+    const call = queryMock.mock.calls.find((c) => /declaration_status\s+in\s*\(\s*'sent'\s*,\s*'undelivered'\s*\)/i.test(String(c[0])));
     expect(call).toBeTruthy();
   });
 });

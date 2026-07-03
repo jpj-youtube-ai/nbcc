@@ -185,6 +185,15 @@ describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", (
 });
 
 describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
+  // A company payload now requires a valid company object (TASK-085); reused by the tests below.
+  const companyDetails = {
+    legalName: "Acme Ltd",
+    contactName: "Ada Lovelace",
+    contactEmail: "finance@acme.test",
+    billingAddress: "1 Office Park, London",
+    billingPostcode: "SW1A 1AA",
+  };
+
   it("stamps donorType and businessName onto the session metadata for a company", async () => {
     await run({
       mode: "once",
@@ -193,6 +202,7 @@ describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
       giftAid: false,
       donorType: "company",
       businessName: "Acme Ltd",
+      company: companyDetails,
     });
     const md = lastParams().metadata;
     expect(md.donorType).toBe("company");
@@ -219,6 +229,7 @@ describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
       giftAid: false,
       donorType: "company",
       businessName: "Acme Ltd",
+      company: companyDetails,
     });
     expect(res.statusCode).toBe(200);
     expect(create).toHaveBeenCalledOnce();
@@ -520,6 +531,69 @@ describe("POST /api/checkout-session — partnership shares (REQ-051 / TASK-081)
     });
     expect(res.statusCode).toBe(200);
     expect(lastParams().metadata.partners).toBeUndefined();
+  });
+});
+
+describe("POST /api/checkout-session — company details (REQ-038 / TASK-085)", () => {
+  const company = {
+    legalName: "Acme Ltd",
+    registrationNumber: "SC123456",
+    contactName: "Ada Lovelace",
+    contactEmail: "finance@acme.test",
+    billingAddress: "1 Office Park, London",
+    billingPostcode: "SW1A 1AA",
+  };
+  const companyBody = (overrides = {}) => ({
+    mode: "once" as const,
+    plan: null,
+    amount: 5000,
+    giftAid: false,
+    donorType: "company" as const,
+    businessName: "Acme Ltd",
+    company: { ...company, ...overrides },
+  });
+
+  it("accepts a valid company payload and stamps the company fields onto metadata", async () => {
+    const res = await run(companyBody());
+    expect(res.statusCode).toBe(200);
+    const md = lastParams().metadata;
+    expect(md.donorType).toBe("company");
+    expect(md.companyLegalName).toBe("Acme Ltd");
+    expect(md.companyRegistrationNumber).toBe("SC123456");
+    expect(md.companyContactName).toBe("Ada Lovelace");
+    expect(md.companyContactEmail).toBe("finance@acme.test");
+    expect(md.companyBillingAddress).toBe("1 Office Park, London");
+    expect(md.companyBillingPostcode).toBe("SW1A 1AA");
+  });
+
+  it("rejects a company payload missing the contactEmail with 400 and never calls Stripe", async () => {
+    const { contactEmail, ...noEmail } = company;
+    void contactEmail;
+    const res = await run({ ...companyBody(), company: noEmail });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a company payload missing the billingAddress with 400", async () => {
+    const { billingAddress, ...noAddr } = company;
+    void billingAddress;
+    const res = await run({ ...companyBody(), company: noAddr });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a company payload with no company object at all with 400", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "company", businessName: "Acme Ltd" });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a company without a registration number (optional)", async () => {
+    const { registrationNumber, ...noReg } = company;
+    void registrationNumber;
+    const res = await run({ ...companyBody(), company: noReg });
+    expect(res.statusCode).toBe(200);
+    expect(lastParams().metadata.companyRegistrationNumber).toBe("");
   });
 });
 

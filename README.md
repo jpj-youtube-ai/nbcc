@@ -885,7 +885,21 @@ folded in by the give widget — into a Stripe Checkout session and returns its
 a non-positive amount, an unknown `donorType`, a `company` payload that also
 asserts `giftAid=true` — companies take the no-Gift-Aid path — or a **monthly** gift
 that does not confirm 18 or over (`ageConfirmed`, REQ-039)). All captured contact
-fields are stamped onto the session metadata for the webhook. A one-off is a `mode: payment` session with inline GBP
+fields are stamped onto the session metadata for the webhook.
+
+A **company** payload (`donorType: 'company'`, REQ-038/REQ-053 · TASK-085) must also carry a
+valid `company` object `{ legalName, registrationNumber?, contactName, contactEmail,
+billingAddress, billingPostcode }`, validated by `companyFieldsSchema` in `src/donors/company.ts`
+(`.strict()`; registration number optional, the rest required, `contactEmail` a valid email,
+`billingPostcode` a valid UK postcode). A **missing or invalid** company object on the company
+path is rejected with **400** (e.g. no `contactEmail` or `billingAddress`). On success the fields
+are stamped onto the session metadata (`companyLegalName`/`companyRegistrationNumber`/
+`companyContactName`/`companyContactEmail`/`companyBillingAddress`/`companyBillingPostcode`)
+alongside `donorType`/`businessName`; the webhook maps them onto the donor row via
+`buildCompanyDonorRow` (see **Company donations** under the data model). A company makes no Gift
+Aid declaration.
+
+A one-off is a `mode: payment` session with inline GBP
 `price_data` built from the amount in **pence** — attached to the
 `STRIPE_DONATION_PRODUCT` product when that optional id is set, otherwise an inline
 product is named — and a monthly is a `mode: subscription` session using the
@@ -958,13 +972,21 @@ channel writes through. Added by the additive, expand-contract migration
 table touched, so a code-level rollback stays safe — golden rule 2):
 
 - **`donors`** — an individual or a company (`donor_type`), a `full_name`, optional
-  business name / registration number, an optional consent-based `email` +
-  `email_consent`, and an `anonymous` flag (REQ-038/REQ-039/REQ-053). The contact
+  business name / registration number (`company_number`), an optional consent-based `email` +
+  `email_consent`, an `anonymous` flag, and nullable `billing_address` / `billing_postcode`
+  (REQ-038/REQ-039/REQ-053). The contact
   fields are captured by the give widget (TASK-058), carried through the checkout
   session metadata and mapped on by the webhook: `email` + `email_consent` are stored
   **only** when the donor opted in — otherwise no email, so the platform sends nothing —
   and `anonymous` drives `isPubliclyListable` (an anonymous donor is paid through but
-  never shown on the public donors page, REQ-047).
+  never shown on the public donors page, REQ-047). **Company donations** (REQ-038/REQ-053 ·
+  TASK-085) fill `business_name` (legal name), `company_number` (registration number, optional),
+  `full_name` + `email` (the billing contact) and the two `billing_*` columns (added by the
+  additive migration `1783054395270_donor-billing-address.js`, nullable — individuals/partnerships
+  leave them NULL). The pure `src/donors/company.ts` (`companyFieldsSchema` + `buildCompanyDonorRow`)
+  validates + maps them; the webhook writes the donor in the **same** `writeWithAudit` transaction
+  as the donation, with **no** declarations row and `claim_status='not_eligible'`, `declaration_id`
+  null (`buildDonationRow`/`deriveClaimStatus` force a company non-claimable — REQ-053).
 - **`declarations`** — the immutable Gift Aid / HMRC declaration: the matching
   fields (title, names, `house_name_number`, address, `postcode`, `non_uk`), the
   `scope` (this-donation vs enduring), and the versioned wording the donor saw

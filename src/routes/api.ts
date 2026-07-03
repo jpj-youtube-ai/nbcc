@@ -12,6 +12,7 @@ import {
 } from "../declarations/wording";
 import { declarationFieldsSchema } from "../declarations/fields";
 import { partnerShareSchema, validatePartnerShares } from "../declarations/partnership";
+import { companyFieldsSchema } from "../donors/company";
 import { getGiftAidDeclarationContext, completeDeclaration, GiftAidCompletionError } from "../db/donations";
 import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render";
 import { config } from "../config";
@@ -68,6 +69,11 @@ const checkoutBodySchema = z
     // amount, enforced below. Optional so the base contract and the individual/company paths
     // are unchanged.
     partners: z.array(partnerShareSchema).optional(),
+    // REQ-038/REQ-053: an incorporated company supplies company-specific fields instead of a
+    // Gift Aid declaration (validated by the shared donors module, TASK-085). Required on the
+    // company path (enforced in the superRefine below); optional here so the individual /
+    // partnership and no-JS base contracts are unchanged.
+    company: companyFieldsSchema.optional(),
   })
   .refine((b) => b.mode !== "monthly" || b.plan !== null, {
     message: "monthly giving requires a plan",
@@ -102,6 +108,19 @@ const checkoutBodySchema = z
         code: z.ZodIssueCode.custom,
         message: err instanceof Error ? err.message : "invalid partner shares",
         path: ["partners"],
+      });
+    }
+  })
+  // REQ-038/REQ-053: a company donation MUST carry a valid company object — a missing or
+  // invalid one (bad email, missing billing address/postcode, …) is rejected with 400. A
+  // present-but-invalid `company` already fails the field-level companyFieldsSchema above; this
+  // catches an absent one on the company path.
+  .superRefine((b, ctx) => {
+    if (b.donorType === "company" && b.company === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "a company donation requires company details",
+        path: ["company"],
       });
     }
   });
@@ -185,6 +204,20 @@ export function buildSessionParams(
   // metadata value limit, which a later task can revisit if it bites.
   if (body.giftAid && body.donorType === "partnership" && body.partners) {
     metadata.partners = JSON.stringify(body.partners);
+  }
+
+  // Stamp the validated company fields onto the session (REQ-038/REQ-053) so the webhook can
+  // map them onto the donor row (business_name/company_number/full_name/email + billing
+  // address/postcode) — only for a company donor. A company is never Gift Aided, so there is
+  // no declaration to stamp.
+  if (body.donorType === "company" && body.company) {
+    const c = body.company;
+    metadata.companyLegalName = c.legalName;
+    metadata.companyRegistrationNumber = c.registrationNumber ?? "";
+    metadata.companyContactName = c.contactName;
+    metadata.companyContactEmail = c.contactEmail;
+    metadata.companyBillingAddress = c.billingAddress;
+    metadata.companyBillingPostcode = c.billingPostcode;
   }
 
   const base: StripeNS.Checkout.SessionCreateParams = {

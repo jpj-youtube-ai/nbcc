@@ -8,6 +8,7 @@ import {
   type ClaimStatus,
 } from "./donations-model";
 import type { DeclarationFields } from "../declarations/fields";
+import { buildCompanyDonorRow, type CompanyFields } from "../donors/company";
 import { scopeFromDeclarationScope, type Scope, type DeclarationWording } from "../declarations/wording";
 import { isGasdsEligibleAmount } from "../gasds/caps";
 
@@ -65,6 +66,29 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
   // persist no email so the platform sends nothing (Stripe's receipt email is separate).
   const cardholderName = session.customer_details?.name ?? null;
   const consented = md.emailConsent === "true";
+
+  // A company donation (REQ-038/REQ-053) carries its own captured company fields, stamped on
+  // metadata by the checkout endpoint and validated there. Map them onto the donor row
+  // (business_name/company_number/full_name/email + the new billing columns) via
+  // buildCompanyDonorRow. The contact email is an operational billing contact, so it is stored
+  // regardless of marketing consent (emailConsent stays false, so no marketing email is sent).
+  const companyRow = companyDonorFromCheckoutSession(session);
+  if (companyRow) {
+    return {
+      donor: {
+        fullName: companyRow.full_name,
+        businessName: companyRow.business_name,
+        companyNumber: companyRow.company_number,
+        email: companyRow.email,
+        emailConsent: false,
+        anonymous: md.anonymous === "true",
+        billingAddress: companyRow.billing_address,
+        billingPostcode: companyRow.billing_postcode,
+      },
+      donation,
+    };
+  }
+
   return {
     donor: {
       fullName: md.fullName ? md.fullName : (cardholderName ?? "Anonymous donor"),
@@ -75,6 +99,29 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
     },
     donation,
   };
+}
+
+// checkout.session.completed → the company donor columns, or null when this is not a company
+// donation with company metadata. The checkout endpoint stamps + validates the company object
+// (REQ-038) as metadata.company* keys; this reconstructs the fields and maps them via
+// buildCompanyDonorRow (no re-validation — the metadata is trusted, mirroring
+// declarationFromCheckoutSession). No declaration row and no claim_status change:
+// buildDonationRow/deriveClaimStatus already force not_eligible for a company.
+export function companyDonorFromCheckoutSession(
+  session: Stripe.Checkout.Session,
+): ReturnType<typeof buildCompanyDonorRow> | null {
+  const md = session.metadata ?? {};
+  if (md.donorType !== "company") return null;
+  if (!md.companyLegalName) return null; // no company object was captured/stamped
+  const fields: CompanyFields = {
+    legalName: md.companyLegalName,
+    registrationNumber: md.companyRegistrationNumber ? md.companyRegistrationNumber : undefined,
+    contactName: md.companyContactName ?? "",
+    contactEmail: md.companyContactEmail ?? "",
+    billingAddress: md.companyBillingAddress ?? "",
+    billingPostcode: md.companyBillingPostcode ?? "",
+  };
+  return buildCompanyDonorRow(fields);
 }
 
 // The Gift Aid declaration to persist alongside a checkout donation (REQ-043). Carries

@@ -1147,6 +1147,26 @@ completed. An illegal transition throws a typed `DeclarationTransitionError`. Un
 DB-free (`test/unit/declaration-status.test.ts`). This lays the column + rules only; the
 letter/link sending and the token-driven persistence that *call* the helper are a later task.
 
+**Subscription dunning lifecycle (REQ-065 · TASK-091).** A monthly (subscription) donor's card
+renewal can fail; Stripe Smart Retries re-attempts it (~3 attempts over ~2 weeks) before giving
+up. The additive `subscription_dunning` table (migration
+`1783063189615_subscription-dunning.js` — one row per subscription: `donor_id` FK, unique
+`stripe_subscription_id`, `status` CHECK `active`/`past_due`/`lapsed` default `active`,
+`failed_attempts`, nullable `lapsed_at`, `created_at`/`updated_at`) records where a subscription
+is in that lifecycle. The **pure** state machine in `src/subscriptions/dunning.ts`
+(`nextDunningStatus` / `canApplyDunningEvent` / `applyDunningEvent`, no pool/config/clock) owns the
+legal transitions across three events: `payment_failed` (`active→past_due`, and `past_due→past_due`
+on a further failure), `payment_succeeded` (`past_due→active`, and a no-op on `active`), and
+`retries_exhausted` (`past_due→lapsed`). `lapsed` is **terminal** and reachable **only** via an
+explicit `retries_exhausted` (driven by Stripe's `invoice.payment_failed` with
+`next_payment_attempt: null`, or the subscription reaching `unpaid`/`canceled` — never a bare
+webhook replay); any event on a `lapsed` row throws a typed `DunningTransitionError`. The
+`nextFailedAttempts` helper increments/resets the counter alongside the status. **The retry cadence
+itself (~3 attempts / ~2 weeks) is a Stripe Dashboard "Smart Retries" setting, not an API/config
+value this service sets** — the table only records the outcome Stripe reports. Unit-tested DB-free
+(`test/unit/subscription-dunning.test.ts`); this lays the table + rules only, the webhook that
+reads Stripe's events and persists the status is a later task.
+
 **Declaration wording (REQ-040).** `src/declarations/wording.ts` is the versioned,
 verbatim source of truth for HMRC's Gift Aid liability statements — a
 single-donation template (`hmrc-single-…`) and a multiple/all-donations template

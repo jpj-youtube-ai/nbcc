@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (57)
+## Shipped (58)
 
 ### REQ-001 — Multi-page site structure
 
@@ -428,6 +428,14 @@ Tasks:
 - TASK-089 — Re-enable BACS Direct Debit as a checkout payment method alongside card
 - TASK-090 — Track a pending BACS payment state and handle Stripe's async payment confirmation events
 
+### REQ-057 — Dunning and failed-payment retries
+
+Configure Stripe Smart Retries for three attempts over roughly two weeks, then mark the subscription lapsed, stop future claims and notify the donor and admin. *Accept:* a lapsed subscription produces no further claimable donations.
+
+Tasks:
+- TASK-091 — Add subscription dunning-state tracking table and pure lapse state machine
+- TASK-092 — Wire dunning webhook handling and lapsed-subscription donor/admin notifications
+
 ### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
 
 A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
@@ -436,15 +444,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (8)
-
-### REQ-057 — Dunning and failed-payment retries
-
-Configure Stripe Smart Retries for three attempts over roughly two weeks, then mark the subscription lapsed, stop future claims and notify the donor and admin. *Accept:* a lapsed subscription produces no further claimable donations.
-
-Tasks:
-- TASK-091 — Add subscription dunning-state tracking table and pure lapse state machine
-- TASK-092 — Wire dunning webhook handling and lapsed-subscription donor/admin notifications
+## Planned (7)
 
 ### REQ-058 — Refund and chargeback handling
 

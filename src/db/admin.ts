@@ -278,6 +278,99 @@ export async function listAwaitingDeclarationDonations(): Promise<AwaitingDeclar
   return res.rows;
 }
 
+// The value written over a redacted text field (personal-data fields that are NOT NULL cannot be set
+// to NULL, so they are overwritten with this sentinel; nullable ones are set to NULL).
+const REDACTED = "Redacted";
+
+export interface AnonymizeResult {
+  anonymized: boolean;
+  declarationId: number;
+  donorId?: number;
+}
+
+// Anonymise a donor's captured personal data once a declaration's HMRC retention window has CLOSED
+// (REQ-064). It reuses the pure computeRetentionExpiry calculator VERBATIM (src/declarations/
+// retention.ts — six years after the final claimed charge, indefinite while an enduring declaration
+// is live) to classify the declaration; ONLY an 'expired' declaration (expiry ≤ now) is touched — an
+// 'expiring' or indefinitely-retained one is left completely untouched (no write, no audit row).
+//
+// For an expired declaration it, in ONE audited transaction (writeWithAudit — the truth model,
+// mirroring updateDonorPortal / cancelDeclaration): nulls/redacts the donor's name + contact fields
+// and the declaration's captured personal fields (name, address, postcode), and appends EXACTLY ONE
+// `donor.personal_data_anonymized` audit row. Any throw rolls back BOTH. `now` is injectable so the
+// classification is deterministic under test. The immutable declaration row keeps its
+// wording_version/snapshot + scope (the audit-relevant shape); only the personal identifiers go.
+export async function anonymizeDonorPersonalData(
+  declarationId: number,
+  options: { now?: Date; actor?: string } = {},
+): Promise<AnonymizeResult> {
+  const now = options.now ?? new Date();
+  const actor = options.actor ?? "system";
+
+  // Read the declaration's retention inputs (same shape listRetentionExpiryDeclarations derives).
+  const row = (
+    await pool.query<{
+      id: number;
+      donor_id: number;
+      scope: Scope;
+      revoked_at: Date | null;
+      last_claimed_at: Date | null;
+    }>(
+      `SELECT dec.id, dec.donor_id, dec.scope, dec.revoked_at,
+              (SELECT MAX(dn.created_at) FROM donations dn
+                 WHERE dn.declaration_id = dec.id
+                   AND dn.claim_status IN ('claimed','adjustment_due')) AS last_claimed_at
+         FROM declarations dec
+        WHERE dec.id = $1`,
+      [declarationId],
+    )
+  ).rows[0];
+  if (!row) return { anonymized: false, declarationId };
+
+  const expiry = computeRetentionExpiry({
+    scope: row.scope,
+    subscriptionActive: row.revoked_at == null,
+    lastClaimedDonationAt: row.last_claimed_at,
+    cancelledAt: row.revoked_at,
+  });
+  // Untouched unless the retention window has actually closed. null (retained indefinitely / no
+  // anchor) or a future expiry (still 'expiring') → no write, no audit row.
+  if (expiry == null || expiry.getTime() > now.getTime()) {
+    return { anonymized: false, declarationId, donorId: row.donor_id };
+  }
+
+  const donorId = row.donor_id;
+  await writeWithAudit(
+    async (client) => {
+      // Donor identity: redact the NOT NULL name, null the nullable contact/business fields.
+      await client.query(
+        `UPDATE donors
+            SET full_name = $1, email = NULL, business_name = NULL, company_number = NULL
+          WHERE id = $2`,
+        [REDACTED, donorId],
+      );
+      // Declaration captured personal fields: redact the NOT NULL name/address/house fields, null the
+      // nullable title + postcode. wording_version/snapshot + scope stay (not personal data).
+      await client.query(
+        `UPDATE declarations
+            SET title = NULL, first_name = $1, last_name = $1, house_name_number = $1,
+                address = $1, postcode = NULL
+          WHERE id = $2`,
+        [REDACTED, declarationId],
+      );
+      return { donorId, declarationId };
+    },
+    (r) => ({
+      actor,
+      action: "donor.personal_data_anonymized",
+      entity: "donor",
+      entityId: r.donorId,
+      data: { declarationId: r.declarationId, retentionExpiry: expiry.toISOString() },
+    }),
+  );
+  return { anonymized: true, declarationId, donorId };
+}
+
 // --- Admin search (REQ-062 · TASK-108) ----------------------------------------------------------
 // Read-only lookups an admin (Viewer and up) runs to find a donor, declaration or donation by a free
 // query — a name, email, id or postcode. Each matches the query case-insensitively (ILIKE) across the

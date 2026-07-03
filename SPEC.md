@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (56)
+## Shipped (57)
 
 ### REQ-001 — Multi-page site structure
 
@@ -420,6 +420,14 @@ Tasks:
 - TASK-050 — Add a subscription plan-change endpoint that up/downgrades a monthly tier via Stripe proration
 - TASK-051 — Ensure the Stripe webhook records the actual charged amount on every recurring/prorated invoice so Gift Aid claims the real amount
 
+### REQ-056 — One-off, BACS and card payments
+
+Support one-off single charges via PaymentIntents and both BACS Direct Debit (bacs_debit, handling the setup/confirmation lead time) and card for monthly and one-off giving. *Accept:* the pending BACS mandate state is handled and the Direct Debit Guarantee is honoured.
+
+Tasks:
+- TASK-089 — Re-enable BACS Direct Debit as a checkout payment method alongside card
+- TASK-090 — Track a pending BACS payment state and handle Stripe's async payment confirmation events
+
 ### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
 
 A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
@@ -428,15 +436,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (9)
-
-### REQ-056 — One-off, BACS and card payments
-
-Support one-off single charges via PaymentIntents and both BACS Direct Debit (bacs_debit, handling the setup/confirmation lead time) and card for monthly and one-off giving. *Accept:* the pending BACS mandate state is handled and the Direct Debit Guarantee is honoured.
-
-Tasks:
-- TASK-089 — Re-enable BACS Direct Debit as a checkout payment method alongside card
-- TASK-090 — Track a pending BACS payment state and handle Stripe's async payment confirmation events
+## Planned (8)
 
 ### REQ-057 — Dunning and failed-payment retries
 

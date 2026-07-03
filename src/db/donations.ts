@@ -344,6 +344,26 @@ export async function listClaimableDonationsForExport(
   }));
 }
 
+// Insert one claim_adjustments row (donation FK + its claim batch FK + the owed pence + reason)
+// using the given client, so it joins the caller's transaction; returns its id. Recorded when a
+// refund/dispute hits an ALREADY-CLAIMED donation and owes HMRC an adjustment (REQ-063/TASK-095,
+// migration 1783067859348). The amount comes from the pure recalculateClaimOnRefund.
+export async function insertClaimAdjustment(
+  client: PoolClient,
+  donationId: number,
+  claimBatchId: number,
+  adjustmentPence: number,
+  reason: string,
+): Promise<number> {
+  const res = await client.query<{ id: number }>(
+    `INSERT INTO claim_adjustments (donation_id, claim_batch_id, adjustment_pence, reason)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id`,
+    [donationId, claimBatchId, adjustmentPence, reason],
+  );
+  return res.rows[0].id;
+}
+
 export interface RecordDonationInput {
   donor: DonorInput;
   donation: DonationInput; // carries donorType, mode, amount, giftAid, stripe/declaration refs

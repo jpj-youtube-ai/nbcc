@@ -447,6 +447,23 @@
                   <label for="companyBillingPostcode">Billing postcode <span class="give-req" aria-hidden="true">*</span></label>
                   <input type="text" id="companyBillingPostcode" name="companyBillingPostcode" class="give-field-input" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" />
                 </div>
+                <!-- CONSIDERATION (REQ-053): a company gift only qualifies for a Corporation Tax
+                     receipt if it is a genuine donation with NOTHING of value given in return. A
+                     required Yes/No pair captures this; the default is "No" (a plain donation).
+                     startCheckout folds it as company.considerationGiven, and the receipt guard
+                     (classifyCompanyGift, TASK-086) flags a "Yes" for the trustees instead of
+                     issuing a receipt. Real labels per REQ-032; dash-free copy (REQ-031). -->
+                <fieldset class="give-field give-consideration" id="companyConsideration">
+                  <legend class="give-scope-legend">Did NBCC give anything of value in return for this gift, such as advertising or logo placement? <span class="give-req" aria-hidden="true">*</span></legend>
+                  <label class="give-check" for="companyConsiderationNo">
+                    <input type="radio" id="companyConsiderationNo" name="companyConsideration" value="no" class="give-check-box" required aria-required="true" checked />
+                    <span class="give-check-text">No, nothing of value was given in return</span>
+                  </label>
+                  <label class="give-check" for="companyConsiderationYes">
+                    <input type="radio" id="companyConsiderationYes" name="companyConsideration" value="yes" class="give-check-box" required aria-required="true" />
+                    <span class="give-check-text">Yes, for example advertising or logo placement</span>
+                  </label>
+                </fieldset>
               </fieldset>
             </div>
             <!-- Holly Green side panel (REQ-024): the inverted cream-on-holly

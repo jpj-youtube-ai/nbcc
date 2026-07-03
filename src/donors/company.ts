@@ -29,6 +29,12 @@ export const companyFieldsSchema = z
       .trim()
       .min(1)
       .refine(isValidUkPostcode, { message: "a valid UK postcode is required" }),
+    // REQ-053 (TASK-087): whether NBCC gave anything of value in return (advertising, logo
+    // placement). Captured by the give widget as a required Yes/No; accepted here (optional so
+    // the base contract is unchanged) so the strict schema does not reject the widget's payload.
+    // A gift with consideration is not a plain donation — the receipt guard (classifyCompanyGift,
+    // TASK-086) flags it for the trustees instead of issuing a Corporation Tax receipt.
+    considerationGiven: z.boolean().optional(),
   })
   .strict();
 

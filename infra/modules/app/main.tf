@@ -174,3 +174,14 @@ resource "aws_ssm_parameter" "admin_notification_email" {
   value = "admin@nbcc.example"
   lifecycle { ignore_changes = [value] }
 }
+
+# Donor portal base URL (TASK-100). NOT a secret (it ships in the magic-link email), but SSM-held
+# and injected like DECLARATION_FORM_BASE_URL so it varies per environment. A plain String; the
+# placeholder is a valid URL so app validation passes on a fresh apply. Set the real public site URL
+# with put-parameter (see README).
+resource "aws_ssm_parameter" "portal_base_url" {
+  name  = "/${var.project}/${var.environment}/PORTAL_BASE_URL"
+  type  = "String"
+  value = "https://nbcc.example"
+  lifecycle { ignore_changes = [value] }
+}

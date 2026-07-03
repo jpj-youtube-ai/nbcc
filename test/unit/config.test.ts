@@ -23,6 +23,7 @@ const validEnv = (): Record<string, string> => ({
   EMAIL_SEND_URL: "https://email.example/send",
   DECLARATION_FORM_BASE_URL: "https://nbcc.example",
   ADMIN_NOTIFICATION_EMAIL: "admin@nbcc.example",
+  PORTAL_BASE_URL: "https://nbcc.example",
 });
 
 describe("config schema", () => {
@@ -82,6 +83,13 @@ describe("config schema — contact forwarding key (REQ-030)", () => {
     void ADMIN_NOTIFICATION_EMAIL;
     expect(configSchema.safeParse(without).success).toBe(false); // required
     expect(configSchema.safeParse({ ...validEnv(), ADMIN_NOTIFICATION_EMAIL: "not-an-email" }).success).toBe(false);
+  });
+
+  it("requires PORTAL_BASE_URL and validates it as a URL (TASK-100)", () => {
+    const { PORTAL_BASE_URL, ...without } = validEnv();
+    void PORTAL_BASE_URL;
+    expect(configSchema.safeParse(without).success).toBe(false); // required
+    expect(configSchema.safeParse({ ...validEnv(), PORTAL_BASE_URL: "not-a-url" }).success).toBe(false);
   });
 
   it("treats STRIPE_DONATION_PRODUCT as optional", () => {

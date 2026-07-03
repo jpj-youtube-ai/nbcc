@@ -133,6 +133,29 @@ export async function sendRefundConfirmation(message: RefundConfirmationEmail): 
   }
 }
 
+// The self-serve portal magic-link email (TASK-100/REQ-061). A passwordless, one-time, expiring
+// link (built by portalMagicLink on PORTAL_BASE_URL) is emailed so the donor can access the portal
+// without a password. Same stub-seam + best-effort contract as the other sends.
+export interface PortalMagicLinkEmail {
+  email: string;
+  fullName: string;
+  link: string; // the one-time, expiring magic-link URL
+}
+
+export async function sendPortalMagicLink(message: PortalMagicLinkEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Portal magic-link email send responded ${res.status}`);
+  }
+}
+
 // Subscription-lapsed notices (TASK-092/REQ-065). When a monthly subscription lapses (Stripe
 // Smart Retries exhausted) the platform sends, post-commit and best-effort, two messages: a
 // notice to the donor (only when they gave an email + consent — gated by the caller) and a fixed

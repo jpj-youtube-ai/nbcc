@@ -61,6 +61,12 @@ export const configSchema = z.object({
   // secret (an internal address), but AWS-injected like DECLARATION_FORM_BASE_URL (SSM String →
   // task-def env). Validated as an email address.
   ADMIN_NOTIFICATION_EMAIL: z.string().email(),
+
+  // Public site base URL for the self-serve donor portal magic link (TASK-100/REQ-061). The
+  // passwordless access email builds `${PORTAL_BASE_URL}/portal/access?token=…` on this base. NOT a
+  // secret (it ships in the email), but AWS-injected like DECLARATION_FORM_BASE_URL (SSM String →
+  // task-def env). Validated as a URL (mirrors STRIPE_SUCCESS_URL).
+  PORTAL_BASE_URL: z.string().url(),
 });
 
 export type Config = z.infer<typeof configSchema>;

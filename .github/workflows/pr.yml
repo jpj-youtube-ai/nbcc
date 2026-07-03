@@ -47,6 +47,8 @@ jobs:
       DECLARATION_FORM_BASE_URL: http://localhost:3000
       # Admin notification recipient (TASK-092): required by the schema so the app boots.
       ADMIN_NOTIFICATION_EMAIL: admin@example.org
+      # Donor portal base URL (TASK-100): required by the schema so the app boots.
+      PORTAL_BASE_URL: http://localhost:3000
       BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

@@ -14,7 +14,8 @@
     "lint": "eslint . --ext .ts",
     "test:unit": "vitest run",
     "test:bdd": "cucumber-js",
-    "images": "node scripts/process-images.mjs"
+    "images": "node scripts/process-images.mjs",
+    "export:charities-online": "tsx scripts/export-charities-online.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",

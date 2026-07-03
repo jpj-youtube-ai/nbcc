@@ -1027,9 +1027,36 @@ decimal GBP string (`amount_pence / 100`, two places — never pence); Title pas
 CRLF-joined), so two gifts sharing one enduring monthly declaration (e.g. two `invoice.paid`
 charges) each get their own independent row. Pure like `src/declarations/fields.ts` /
 `src/declarations/render.ts` (no pool/config/clock), unit-tested DB-free
-(`test/unit/charities-online-export.test.ts`). The pipeline that *selects* the eligible rows
-and *submits* the file to HMRC (and the admin/RBAC that triggers it) are REQ-052/REQ-062
-follow-ups.
+(`test/unit/charities-online-export.test.ts`). The *submission* of the file to HMRC (and the
+admin/RBAC that triggers it) are REQ-052/REQ-062 follow-ups.
+
+**Charities Online export query + CLI (REQ-052 · TASK-083).**
+`listClaimableDonationsForExport(claimBatchId?)` in `src/db/donations.ts` is the read that
+*selects* those eligible rows: every `claim_status = 'eligible'` donation INNER-joined to its
+immutable `declarations` row and its `donor`, optionally scoped to one `claim_batch_id`,
+ordered by donation id. Read-only (`pool.query`, no transaction/audit — mirrors
+`listPublicSupporters`), and it does **not** re-derive eligibility: `claim_status` is set at
+write time by `deriveClaimStatus` (individual donor + Gift Aid + an active declaration, not
+refunded — REQ-037), so the filter alone excludes company and otherwise non-claimable gifts and
+the inner join drops any eligible row without a declaration. Its results feed straight into the
+pure `toCharitiesOnlineCsv` above. The thin CLI **`scripts/export-charities-online.mjs`**
+(`npm run export:charities-online`, run via `tsx`, going through `src/db/pool.ts`) writes the
+CSV to **stdout** or, with `-- --out claim.csv`, to a file, and accepts `-- --batch <id>` to
+scope to one claim batch:
+
+```bash
+npm run export:charities-online                  # all eligible donations -> stdout
+npm run export:charities-online -- --batch 7     # only claim_batch_id = 7
+npm run export:charities-online -- --out claim.csv
+```
+
+The produced CSV is a header row of the seven Charities Online columns —
+`Title,First name,Last name,House name/number,Postcode,Donation date,Amount` — then one row per
+eligible donation (`DD/MM/YYYY` date, plain-decimal GBP amount). No admin auth/UI is in scope:
+this only produces the correct file for **finance to run and upload manually** (needs the app
+config env the service boots with, since the query goes through `pool.ts`); the authenticated
+trigger surface is REQ-062/REQ-063. The DB-free query shape is proven by
+`test/unit/charities-online-query.test.ts` (mocked pool).
 
 **Declaration confirmation lifecycle (REQ-057 · TASK-074).** A Gift Aid declaration
 captured without a wet/online signature (in-person, telephone) must be confirmed by the

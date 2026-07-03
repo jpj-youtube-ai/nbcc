@@ -27,6 +27,7 @@ import {
 import { applyDeclarationEvent, type DeclarationStatus } from "../declarations/status";
 import { deriveClaimStatus } from "./donations-model";
 import type { DeclarationWrite, PartnerShareWrite } from "./stripe-webhook-model";
+import type { ClaimRowInput } from "../claims/charities-online";
 import {
   annualisePence,
   deriveBenefitCapBreach,
@@ -274,6 +275,69 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
     amountPence: Number(r.max_amount),
   }));
   return groupPublicSupporters(rows);
+}
+
+// One claimable donation + its declaration, shaped for the Charities Online row builder
+// (src/claims/charities-online.ts). Extends ClaimRowInput (donation + declaration) with the
+// donation id and donor name for logging/traceability — the CSV itself uses only the nested
+// donation + declaration fields.
+export interface ClaimableExportRow extends ClaimRowInput {
+  donationId: number;
+  donorFullName: string;
+}
+
+interface ClaimableExportDbRow {
+  id: number;
+  full_name: string;
+  title: string | null;
+  first_name: string;
+  last_name: string;
+  house_name_number: string;
+  postcode: string | null;
+  created_at: Date;
+  amount_pence: number;
+}
+
+// Read the donations ready for a Charities Online Gift Aid claim (REQ-052): every
+// claim_status='eligible' donation joined to its immutable declarations row and its donor.
+// Read-only (pool.query, no transaction/audit — mirrors listPublicSupporters). Eligibility is
+// NOT re-derived here: claim_status='eligible' is set at write time by deriveClaimStatus
+// (individual donor + Gift Aid + an active declaration, not refunded — REQ-037), so the filter
+// alone excludes company and otherwise non-claimable gifts, and the INNER JOIN to declarations
+// excludes any eligible row without a declaration. Optionally scoped to a single claim batch
+// (claim_batch_id). Ordered by donation id for a stable file. The pure row builder / CSV
+// serializer (src/claims/charities-online.ts) formats the result.
+export async function listClaimableDonationsForExport(
+  claimBatchId?: number,
+): Promise<ClaimableExportRow[]> {
+  const filterByBatch = claimBatchId != null;
+  const res = await pool.query<ClaimableExportDbRow>(
+    `SELECT d.id, dn.full_name,
+            dec.title, dec.first_name, dec.last_name, dec.house_name_number, dec.postcode,
+            d.created_at, d.amount_pence
+       FROM donations d
+       JOIN declarations dec ON dec.id = d.declaration_id
+       JOIN donors dn ON dn.id = d.donor_id
+      WHERE d.claim_status = 'eligible'
+        ${filterByBatch ? "AND d.claim_batch_id = $1" : ""}
+      ORDER BY d.id ASC`,
+    filterByBatch ? [claimBatchId] : [],
+  );
+  return res.rows.map((r) => ({
+    donationId: r.id,
+    donorFullName: r.full_name,
+    declaration: {
+      title: r.title,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      house_name_number: r.house_name_number,
+      postcode: r.postcode,
+    },
+    donation: {
+      created_at: r.created_at,
+      amount_pence: r.amount_pence,
+    },
+  }));
 }
 
 export interface RecordDonationInput {

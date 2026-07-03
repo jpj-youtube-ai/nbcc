@@ -1350,8 +1350,12 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   `claim_batch_id`, amount = the refunded portion of the claimed gift) + a `claim.adjustment_recorded`
   audit row **in the same transaction**; a **company** gift leaves `claim_status` untouched and
   sends a **void/correction Corporation Tax receipt notice** (`buildCompanyRefundNotice`) to its
-  billing contact **post-commit** (best-effort, via the company-receipt channel). Idempotent by
-  event id. Covered DB-free in `test/unit/stripe-webhook-refund.test.ts`.
+  billing contact **post-commit** (best-effort, via the company-receipt channel). An **individual**
+  donor is also emailed a **refund confirmation** (REQ-063 · TASK-099 — `buildRefundConfirmation` /
+  `sendRefundConfirmation`) stating the refunded amount + date (full vs partial), **post-commit,
+  best-effort**, and **only** when a consented donor email is on file (the same
+  `email` + `email_consent` gate as the donation-confirmation send); a company never gets this email.
+  Idempotent by event id. Covered DB-free in `test/unit/stripe-webhook-refund.test.ts`.
 - **`checkout.session.async_payment_succeeded` / `checkout.session.async_payment_failed`**
   (REQ-065 · TASK-090) → settle a pending **BACS** gift. Found by its **session id** (never a new
   row), the SAME donation's `payment_status` flips to `paid`/`failed` and `claim_status` is

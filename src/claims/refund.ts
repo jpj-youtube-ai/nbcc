@@ -26,6 +26,13 @@ import {
 export const REFUND_RECEIPT_ACTIONS = ["void", "correct"] as const;
 export type RefundReceiptAction = (typeof REFUND_RECEIPT_ACTIONS)[number];
 
+// Whether (and how) an INDIVIDUAL donor should be emailed a refund confirmation (REQ-063 · TASK-099):
+// 'full' for a full refund, 'partial' for a partial one. Null for a company (which gets the
+// Corporation Tax receipt void/correct action instead — never this donor email). The email itself
+// is still gated on a consented donor email on file, in the webhook.
+export const REFUND_DONOR_OUTCOMES = ["full", "partial"] as const;
+export type RefundDonorOutcome = (typeof REFUND_DONOR_OUTCOMES)[number];
+
 // The recomputed claim state. 'adjustment_due' is NOT a donations.claim_status value (that column
 // stays not_eligible/eligible/batched/claimed) — it is a computed outcome the caller acts on (it
 // mirrors the claim_batches.adjustment_due status), so this module's output type is its own.
@@ -38,6 +45,9 @@ export interface RefundRecalculation {
   adjustmentPence: number;
   // Set ONLY for a company refund (void/correct the Corporation Tax receipt); null otherwise.
   receiptAction: RefundReceiptAction | null;
+  // Set ONLY for an INDIVIDUAL donor (full/partial refund → the donor confirmation email); null for
+  // a company. The send is still gated on a consented email in the webhook.
+  donorRefund: RefundDonorOutcome | null;
 }
 
 // A refund whose absolute refunded amount exceeds the donation — a data inconsistency. A typed
@@ -81,13 +91,18 @@ export function recalculateClaimOnRefund(input: RefundInput): RefundRecalculatio
       claimStatus: p.claimStatus,
       adjustmentPence: 0,
       receiptAction: fullyRefunded ? "void" : "correct",
+      donorRefund: null, // a company gets the receipt action, never the donor confirmation email
     };
   }
+
+  // An individual donor is emailed a refund confirmation (full/partial), gated on consent in the
+  // webhook — the same for the claimed and not-yet-claimed branches below.
+  const donorRefund: RefundDonorOutcome = fullyRefunded ? "full" : "partial";
 
   // Already batched/claimed: the Gift Aid is locked in with HMRC and cannot be un-claimed, so a
   // refund owes an adjustment for the refunded portion of the already-claimed amount.
   if (p.claimStatus === "batched" || p.claimStatus === "claimed") {
-    return { claimStatus: "adjustment_due", adjustmentPence: p.refundedPence, receiptAction: null };
+    return { claimStatus: "adjustment_due", adjustmentPence: p.refundedPence, receiptAction: null, donorRefund };
   }
 
   // Not yet claimed (eligible / not_eligible): re-derive eligibility from the RETAINED amount — a
@@ -99,5 +114,5 @@ export function recalculateClaimOnRefund(input: RefundInput): RefundRecalculatio
     hasDeclaration: p.hasDeclaration,
     fullyRefunded,
   });
-  return { claimStatus, adjustmentPence: 0, receiptAction: null };
+  return { claimStatus, adjustmentPence: 0, receiptAction: null, donorRefund };
 }

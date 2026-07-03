@@ -105,6 +105,34 @@ export async function sendCompanyReceipt(message: CompanyReceiptEmail): Promise<
   }
 }
 
+// The refund-confirmation email for an INDIVIDUAL donor (REQ-063 · TASK-099). After a
+// refund/dispute on an individual's donation, a consented donor is emailed a confirmation stating
+// the refunded amount + date. The verbatim content (text + html) is built by the pure
+// src/donors/confirmation.ts (buildRefundConfirmation) and passed in. Same stub-seam + best-effort
+// contract as the other sends.
+export interface RefundConfirmationEmail {
+  email: string;
+  fullName: string;
+  refundedPence: number;
+  currency: string;
+  text: string;
+  html: string;
+}
+
+export async function sendRefundConfirmation(message: RefundConfirmationEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Refund confirmation email send responded ${res.status}`);
+  }
+}
+
 // Subscription-lapsed notices (TASK-092/REQ-065). When a monthly subscription lapses (Stripe
 // Smart Retries exhausted) the platform sends, post-commit and best-effort, two messages: a
 // notice to the donor (only when they gave an email + consent — gated by the caller) and a fixed

@@ -475,6 +475,13 @@ Tasks:
 
 Let donors edit their details, downgrade, manage or cancel Gift Aid and cancel their subscription, making cancellation easy as required but offering a reduce-instead option first, with cancelling Gift Aid setting the declaration inactive and stopping future claims. *Accept:* cancellation is reachable without contacting staff and a reduce-instead option is offered before cancel.
 
+Tasks:
+- TASK-100 — Add portal access token model and magic-link email
+- TASK-101 — Add self-serve donor portal read/update API endpoints
+- TASK-102 — Add reduce-instead-then-cancel subscription flow
+- TASK-103 — Add Gift Aid cancellation (declaration revoke) endpoint
+- TASK-104 — Build the self-serve donor portal page
+
 ### REQ-062 — Role-based admin mirroring self-serve
 
 Provide a standalone admin back-end with Viewer (read-only), Editor (view, edit, cancellations and queues) and Admin (all that plus user management, running and submitting claims, recording adjustments and settings) roles, able to perform any self-serve action on a donor's behalf. *Accept:* Kenny and Isabel hold the Admin/Claims permission and roles enforce read-only versus edit versus claim.

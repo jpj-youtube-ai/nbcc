@@ -882,6 +882,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
+| `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`).
 
@@ -910,6 +911,19 @@ stub so it runs without a Stripe account) and returns the cancelled subscription
 failure is **502**. Reducing itself reuses the existing `POST /api/subscription/change-plan`
 unchanged. Proven by `test/unit/subscription-cancel.test.ts` (mocked SDK + pool) and end to end by
 the `@db` `features/subscription-cancel.feature`.
+
+**`POST /api/portal/:token/gift-aid/cancel` (REQ-061 · TASK-103).** Cancel Gift Aid — the donor
+revokes their **active** declaration, stopping future claims, with **no superseding replacement**
+(unlike an *edit*, REQ-059, which revokes-and-supersedes). Token-authenticated like the other portal
+routes. It resolves the donor's currently-active declaration (`findActiveDeclarationIdForDonor` —
+`revoked_at IS NULL`, most recent) and calls `cancelDeclaration` (`src/db/declarations.ts`), which in
+ONE transaction locks the row `FOR UPDATE`, sets `revoked_at` and appends a single
+`declaration.revoked` audit_log row — inserting **no** new declaration and setting **no**
+`superseded_by_declaration_id`. No active declaration → **404**; a concurrent cancel that already
+revoked it → **409** (the `FOR UPDATE` re-check throws `DeclarationCancellationError`). The pure
+revoke+audit decision lives in `src/declarations/cancellation.ts` (`buildDeclarationCancellation`,
+DB-free, clock injected — like `buildDeclarationRevision`). Proven DB-free by
+`test/unit/gift-aid-cancel.test.ts` (mocked pool) and end to end by the `@db` `features/portal.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`

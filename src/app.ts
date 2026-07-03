@@ -2,6 +2,7 @@ import express from "express";
 import { resolve } from "node:path";
 import { healthRouter } from "./routes/health";
 import { apiRouter } from "./routes/api";
+import { portalRouter } from "./routes/portal";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { createSiteRouter } from "./routes/site";
 
@@ -13,6 +14,7 @@ export function createApp() {
   app.use(stripeWebhookRouter);
   app.use(express.json());
   app.use(apiRouter);
+  app.use(portalRouter);
   app.use(healthRouter);
   // Static marketing site: the four pages, their clean URLs, and /assets.
   // siteRoot resolves relative to this module — the repo root locally and under

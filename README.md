@@ -54,13 +54,16 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/supporters` | `supporters.html` |
 | `/donate/thank-you` | `thank-you.html` |
 | `/donor-portal` | `portal.html` |
+| `/privacy` | `privacy.html` |
 
 `/donate/thank-you` is the post-payment confirmation page Stripe returns the
 donor to on a successful checkout (`STRIPE_SUCCESS_URL`, REQ-028/REQ-029); it is a
 landing page, not a primary nav destination. `/donor-portal` is the self-serve
 donor portal page (REQ-061), reached via the magic-link token in the URL query
 string (`?token=…`); it is a private landing page (`noindex`), not a nav
-destination.
+destination. `/privacy` is the data-protection privacy notice (REQ-064), linked
+from the footer and from the consent controls on the contact and donate pages,
+not a primary nav destination.
 
 The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
 Netlify-style format. The Express site router (`src/routes/site.ts`) parses it
@@ -74,6 +77,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /supporters       /supporters.html  200
 /donate/thank-you /thank-you.html   200
 /donor-portal     /portal.html      200
+/privacy          /privacy.html     200
 /index.html       /                 301!   # canonicalise raw .html onto the clean URL
 /about.html       /about-us         301!   # ! forces the redirect over the real file
 /donate.html      /donate           301!
@@ -81,6 +85,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /supporters.html  /supporters       301!
 /thank-you.html   /donate/thank-you 301!
 /portal.html      /donor-portal     301!
+/privacy.html     /privacy          301!
 ```
 
 `200` is a *rewrite* (content served, address bar unchanged); `301!` is a forced
@@ -874,6 +879,22 @@ null). Being a private landing page, no nav link is marked active. Dash-free cop
 `test/unit/donor-portal.test.ts` (static markup + jsdom against the real `initPortal`)
 and the `@db`-free `features/site.feature` clean-URL rows; `seo-metadata` /
 `copy-rules` / `accessibility` register the page and stay green.
+
+### Privacy notice page (REQ-064 · TASK-111)
+
+`privacy.html` is the data-protection **privacy notice**, served at the clean URL `/privacy` and
+sharing the same nav / footer / `assets/css/styles.css` / `assets/js/main.js` shell as the rest of the
+site, with its own unique SEO metadata. A centred intro (the `PRIVACY NOTICE` CSS block) sits above a
+single readable `.card` of prose covering what NBCC collects, why, the legal basis, sharing (never
+sold), the six-year Gift Aid retention window, and the donor's rights. It is linked from the **footer**
+and, per REQ-039/REQ-064, from **next to the consent controls** on the two pages that capture personal
+data: the contact enquiry form (`contact.html`) and the donate give-widget contact-capture fieldset
+(`donate.html`, alongside `#emailConsent`/`#anonymousDonor`). Being a reference page rather than a nav
+destination, no nav link is marked active. Dash-free copy, "NBCC" in full (REQ-031); skip-link +
+landmarks (REQ-032). Registered in the sitewide `seo-metadata` / `accessibility` / `copy-rules` /
+`clean-urls` / `site` guards and the `dockerfile-site-assets` COPY check; the two consent-adjacent
+links and the clean-URL wiring are proven by `test/unit/privacy-links.test.ts`, and `/privacy` serving
+end to end by the `features/site.feature` clean-URL rows.
 
 ### Checkout contract (REQ-028)
 

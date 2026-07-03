@@ -30,6 +30,7 @@ const PAGES = [
   "thank-you.html",
   "gift-aid.html",
   "portal.html",
+  "privacy.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];

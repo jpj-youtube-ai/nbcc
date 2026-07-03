@@ -35,6 +35,8 @@ import {
   getAdminSearchDonors,
   getAdminSearchDeclarations,
   getAdminSearchDonations,
+  postAdminSubmitClaimBatch,
+  getAdminAdjustmentDue,
 } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
@@ -69,6 +71,8 @@ const runCancelGa = async (o: any) => { const res = mockRes(); await postAdminCa
 const runSearchDonors = async (o: any) => { const res = mockRes(); await getAdminSearchDonors(req(o) as any, res as any); return res; };
 const runSearchDeclarations = async (o: any) => { const res = mockRes(); await getAdminSearchDeclarations(req(o) as any, res as any); return res; };
 const runSearchDonations = async (o: any) => { const res = mockRes(); await getAdminSearchDonations(req(o) as any, res as any); return res; };
+const runSubmitBatch = async (o: any) => { const res = mockRes(); await postAdminSubmitClaimBatch(req(o) as any, res as any); return res; };
+const runAdjustmentDue = async (o: any) => { const res = mockRes(); await getAdminAdjustmentDue(req(o) as any, res as any); return res; };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 const donorRow = {
@@ -101,8 +105,11 @@ beforeEach(() => {
     if (/^\s*(begin|commit|rollback)/i.test(sql)) return {};
     // the FOR UPDATE lock inside adminCancelGiftAid's transaction
     if (/select[\s\S]*from declarations/i.test(sql)) return { rows: [{ id: 77, donor_id: 42, revoked_at: null }], rowCount: 1 };
+    // the FOR UPDATE lock inside submitClaimBatch's transaction — an open batch by default
+    if (/select[\s\S]*from claim_batches/i.test(sql)) return { rows: [{ id: 9, status: "open" }], rowCount: 1 };
     if (/update donors/i.test(sql)) return { rowCount: 1, rows: [] };
     if (/update declarations/i.test(sql)) return { rowCount: 1, rows: [] };
+    if (/update claim_batches/i.test(sql)) return { rowCount: 1, rows: [] };
     if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };
     return { rows: [], rowCount: 0 };
   });
@@ -250,5 +257,75 @@ describe("admin search query validation", () => {
     const call = queryMock.mock.calls.find((c) => /from donors/i.test(String(c[0])));
     expect(call?.[1]?.[0]).toBe("%42%");
     expect(call?.[1]?.[1]).toBe(42);
+  });
+});
+
+// --- Admin claim operations (REQ-052/REQ-063 · TASK-109) ----------------------------------------
+describe("POST /api/admin/claim-batches/:id/submit", () => {
+  it("401s with no token", async () => {
+    expect((await runSubmitBatch({ token: "", id: "9" })).statusCode).toBe(401);
+  });
+
+  it("403s a Viewer (submitting is a write)", async () => {
+    const res = await runSubmitBatch({ role: "viewer", id: "9" });
+    expect(res.statusCode).toBe(403);
+    // No write happened.
+    expect(clientQueryMock.mock.calls.some((c) => /update claim_batches/i.test(String(c[0])))).toBe(false);
+  });
+
+  it.each(["editor", "admin"])("lets %s submit: marks submitted + one audit row in one transaction", async (role) => {
+    const res = await runSubmitBatch({ role, id: "9" });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ submitted: true, batchId: 9 });
+
+    const seq = clientQueryMock.mock.calls.map((c) => String(c[0]).trim());
+    expect(seq[0]).toMatch(/^begin/i);
+    expect(seq[seq.length - 1]).toMatch(/^commit/i);
+    // Locked FOR UPDATE, set status='submitted', and appended exactly one audit row, all in-tx.
+    expect(seq.some((s) => /select[\s\S]*from claim_batches[\s\S]*for update/i.test(s))).toBe(true);
+    const update = clientQueryMock.mock.calls.find((c) => /update claim_batches/i.test(String(c[0])));
+    expect(update?.[0]).toMatch(/status\s*=\s*'submitted'/i);
+    expect(update?.[0]).toMatch(/submitted_at/i);
+    const audits = clientQueryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0])));
+    expect(audits).toHaveLength(1);
+    expect(audits[0][1][1]).toBe("claim_batch.submitted");
+  });
+
+  it("404s an unknown batch and 409s a non-open batch, writing nothing", async () => {
+    clientQueryMock.mockImplementation(async (sql: string) => {
+      if (/^\s*(begin|commit|rollback)/i.test(sql)) return {};
+      if (/select[\s\S]*from claim_batches/i.test(sql)) return { rows: [], rowCount: 0 };
+      return { rows: [], rowCount: 0 };
+    });
+    expect((await runSubmitBatch({ role: "editor", id: "9" })).statusCode).toBe(404);
+
+    clientQueryMock.mockImplementation(async (sql: string) => {
+      if (/^\s*(begin|commit|rollback)/i.test(sql)) return {};
+      if (/select[\s\S]*from claim_batches/i.test(sql)) return { rows: [{ id: 9, status: "submitted" }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await runSubmitBatch({ role: "editor", id: "9" });
+    expect(res.statusCode).toBe(409);
+    expect(clientQueryMock.mock.calls.some((c) => /update claim_batches/i.test(String(c[0])))).toBe(false);
+  });
+
+  it("400s a non-numeric batch id", async () => {
+    expect((await runSubmitBatch({ role: "admin", id: "abc" })).statusCode).toBe(400);
+  });
+});
+
+describe("GET /api/admin/claims/adjustment-due", () => {
+  it("401s with no token", async () => {
+    expect((await runAdjustmentDue({ token: "" })).statusCode).toBe(401);
+  });
+
+  it.each(["viewer", "editor", "admin"])("lets %s (viewer-or-above) list adjustment-due donations", async (role) => {
+    const res = await runAdjustmentDue({ role });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { results: unknown[] };
+    expect(Array.isArray(body.results)).toBe(true);
+    // The query filters on claim_status='adjustment_due'.
+    const call = queryMock.mock.calls.find((c) => /adjustment_due/i.test(String(c[0])));
+    expect(call).toBeTruthy();
   });
 });

@@ -95,6 +95,38 @@ When(
   },
 );
 
+Given("an open claim batch", async function () {
+  const batch = await pool.query(
+    "INSERT INTO claim_batches (status) VALUES ('open') RETURNING id",
+  );
+  this.claimBatchId = batch.rows[0].id;
+});
+
+When(
+  "I submit the claim batch as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(
+      `${BASE_URL}/api/admin/claim-batches/${this.claimBatchId}/submit`,
+      { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+    );
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When(
+  "I GET the admin adjustment-due queue as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/claims/adjustment-due`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
 When("I search admin {string} for {string} without a token", async function (kind, q) {
   const res = await fetch(`${BASE_URL}/api/admin/search/${kind}?q=${encodeURIComponent(q)}`);
   this.adminStatus = res.status;

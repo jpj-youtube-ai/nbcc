@@ -1164,8 +1164,9 @@ webhook replay); any event on a `lapsed` row throws a typed `DunningTransitionEr
 `nextFailedAttempts` helper increments/resets the counter alongside the status. **The retry cadence
 itself (~3 attempts / ~2 weeks) is a Stripe Dashboard "Smart Retries" setting, not an API/config
 value this service sets** — the table only records the outcome Stripe reports. Unit-tested DB-free
-(`test/unit/subscription-dunning.test.ts`); this lays the table + rules only, the webhook that
-reads Stripe's events and persists the status is a later task.
+(`test/unit/subscription-dunning.test.ts`). The webhook that reads Stripe's invoice/subscription
+events and persists the status (plus the lapsed-subscription notifications) is wired in TASK-092 —
+see **Lapsed-subscription notifications** under the webhook section below.
 
 **Declaration wording (REQ-040).** `src/declarations/wording.ts` is the versioned,
 verbatim source of truth for HMRC's Gift Aid liability statements — a
@@ -1316,6 +1317,28 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   Each writes a `donation.payment_succeeded` / `donation.payment_failed` audit row in the same
   `writeWithAudit` transaction. Idempotent by event id like every branch, so a resent event applies
   no second time.
+- **`invoice.payment_failed` / `customer.subscription.updated` / `customer.subscription.deleted`**,
+  and the dunning side of **`invoice.paid` / `invoice.payment_succeeded`** (REQ-065 · TASK-092) →
+  advance the **subscription dunning** lifecycle. The pure `dunningFromStripeEvent` maps the Stripe
+  event to a dunning event — `invoice.payment_failed` is `payment_failed` while a retry is still
+  scheduled (`next_payment_attempt` set) or `retries_exhausted` once Stripe gives up
+  (`next_payment_attempt: null`); a successful invoice is `payment_succeeded` (recovers dunning);
+  a subscription reaching `unpaid`/`canceled` (updated/deleted) is `retries_exhausted`. `handleDunning`
+  finds the donor by subscription id, applies the transition via the pure `src/subscriptions/dunning.ts`
+  state machine, and **UPSERTs the `subscription_dunning` row + a `subscription.payment_failed` /
+  `subscription.payment_recovered` / `subscription.lapsed` audit row in the SAME transaction**. A
+  legal-but-no-op event (a success with no open dunning, or a voluntary cancel while active) is
+  ignored, never applied. Idempotent by event id.
+
+**Lapsed-subscription notifications (REQ-065 · TASK-092).** When a subscription **lapses** (Smart
+Retries exhausted → `subscription_dunning.status='lapsed'`, `lapsed_at` set), the processor sends —
+**post-commit, best-effort** (mirroring the confirmation-email send) — two notices via
+`src/clients/email.ts`: an **admin** notice to the fixed `ADMIN_NOTIFICATION_EMAIL` inbox (**always**),
+and a **donor** notice **only** when the donor gave us an `email` + `email_consent` (the same consent
+gate as the confirmation email). Because the sends are after the transaction commits and gated by the
+event-id ledger, a resent lapse event applies the transition and sends the emails **at most once**.
+`ADMIN_NOTIFICATION_EMAIL` is a required config value (schema + `.env.example` + CI env + SSM `String`
++ ECS task-def env — golden rule 3). Covered DB-free in `test/unit/stripe-webhook-dunning.test.ts`.
 
 **BACS pending payments (REQ-065 · TASK-090).** BACS Direct Debit settles asynchronously, so a
 `checkout.session.completed` for a BACS gift arrives with Stripe `payment_status='unpaid'` — the

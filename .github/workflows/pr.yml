@@ -45,6 +45,8 @@ jobs:
       EMAIL_SEND_URL: https://email.example/send
       # Declaration form base URL (TASK-075) for the in-person confirmation link/QR.
       DECLARATION_FORM_BASE_URL: http://localhost:3000
+      # Admin notification recipient (TASK-092): required by the schema so the app boots.
+      ADMIN_NOTIFICATION_EMAIL: admin@example.org
       BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

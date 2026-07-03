@@ -10,6 +10,7 @@ import {
   declarationFromCheckoutSession,
   partnerSharesFromCheckoutSession,
   companyDonorFromCheckoutSession,
+  dunningFromStripeEvent,
   recurringChargeFromInvoice,
   recurringDonationInput,
   cardPresentDonationInput,
@@ -20,9 +21,21 @@ import {
   confirmationEmailFor,
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
-import { sendDonationConfirmation, sendDeclarationEmail, sendCompanyReceipt } from "../clients/email";
+import {
+  sendDonationConfirmation,
+  sendDeclarationEmail,
+  sendCompanyReceipt,
+  sendSubscriptionLapsedDonor,
+  sendSubscriptionLapsedAdmin,
+} from "../clients/email";
 import { applyDeclarationEvent } from "../declarations/status";
 import { buildCorporationTaxReceipt, classifyCompanyGift } from "../donors/receipt";
+import {
+  applyDunningEvent,
+  canApplyDunningEvent,
+  nextFailedAttempts,
+  type DunningStatus,
+} from "../subscriptions/dunning";
 
 // The SINGLE Stripe webhook processor for the unified platform (REQ-036) — no
 // other module handles donor/donation events. Every event is processed in ONE
@@ -49,7 +62,7 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration, receipt } = await dispatch(client, event);
+    const { action, email, declaration, receipt, lapse } = await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
     // donation row has committed, and OUTSIDE the transaction: a slow or failing
@@ -64,6 +77,9 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     // company donation with NO consideration given; a gift WITH consideration was flagged for
     // the trustees inside the transaction instead (no receipt).
     await sendCompanyReceiptEmail(receipt ?? null);
+    // Lapsed-subscription notices (TASK-092): post-commit, best-effort. Present only when this
+    // event lapsed a subscription (donor notice gated on email + consent, admin notice always).
+    await sendLapseNotifications(lapse ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -85,6 +101,48 @@ interface DispatchResult {
   // The Corporation Tax receipt to send post-commit (TASK-088), or null when there is none
   // (not a company gift, or one flagged for the trustees because consideration was given).
   receipt?: CompanyReceiptSend | null;
+  // The lapsed-subscription notifications to send post-commit (TASK-092), or null when the event
+  // did not lapse a subscription.
+  lapse?: LapseNotify | null;
+}
+
+// A committed subscription lapse whose notices must be sent AFTER commit (TASK-092/REQ-065): a
+// donor notice (only when they gave an email + consent) and an admin notice (always). Carries the
+// donor contact + the subscription id for the email bodies.
+interface LapseNotify {
+  donorEmail: string | null;
+  donorEmailConsent: boolean;
+  donorName: string;
+  subscriptionId: string;
+}
+
+// Post-commit, best-effort lapsed-subscription notifications (TASK-092/REQ-065). Always emails the
+// fixed admin inbox (config.ADMIN_NOTIFICATION_EMAIL); emails the donor ONLY when they gave us an
+// email and consent (mirroring the confirmation-email gate). Each send is best-effort — the lapse
+// is already durably recorded, so a failed/late send must not fail the webhook. Exported so the
+// trigger is unit-testable with a mocked email client.
+export async function sendLapseNotifications(lapse: LapseNotify | null): Promise<void> {
+  if (!lapse) return;
+  try {
+    await sendSubscriptionLapsedAdmin({
+      email: config.ADMIN_NOTIFICATION_EMAIL,
+      donorName: lapse.donorName,
+      subscriptionId: lapse.subscriptionId,
+    });
+  } catch {
+    // best-effort: the lapse is committed; a failed admin notice must not fail the webhook.
+  }
+  if (lapse.donorEmail && lapse.donorEmailConsent) {
+    try {
+      await sendSubscriptionLapsedDonor({
+        email: lapse.donorEmail,
+        fullName: lapse.donorName,
+        subscriptionId: lapse.subscriptionId,
+      });
+    } catch {
+      // best-effort: the donor notice is a courtesy; a failed send must not fail the webhook.
+    }
+  }
 }
 
 // A committed company donation whose Corporation Tax receipt must be sent AFTER commit. Carries
@@ -189,10 +247,22 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<Dispat
     case "checkout.session.completed":
       return handleCheckoutCompleted(client, event);
     case "invoice.paid":
-    case "invoice.payment_succeeded":
-      return handleRecurring(client, event);
+    case "invoice.payment_succeeded": {
+      // A successful invoice both records the recurring donation AND recovers any dunning on the
+      // subscription (payment_succeeded → active). Both writes join THIS transaction.
+      const recurring = await handleRecurring(client, event);
+      await handleDunning(client, event);
+      return recurring;
+    }
     case "charge.succeeded":
       return handleChargeSucceeded(client, event);
+    // Subscription dunning (REQ-065/TASK-092): a failed renewal advances the dunning lifecycle,
+    // and a terminal subscription state lapses it. All go through handleDunning + the same
+    // writeWithAudit-style transaction, and are idempotent via the event-id claim above.
+    case "invoice.payment_failed":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted":
+      return handleDunning(client, event);
     // BACS settlement (REQ-065/TASK-090): a pending BACS gift's mandate confirms or fails
     // asynchronously. Flip payment_status + re-derive claim_status on the SAME donation
     // (found by session id) — never a new row. Idempotent via the event-id claim above.
@@ -535,4 +605,99 @@ async function handleAsyncPayment(
     data: { eventId: event.id, sessionId, paymentStatus: newStatus, claimStatus },
   });
   return action;
+}
+
+interface DunningTarget {
+  dunning_id: number | null;
+  status: DunningStatus | null;
+  failed_attempts: number | null;
+  donor_id: number;
+  full_name: string;
+  email: string | null;
+  email_consent: boolean;
+}
+
+// invoice.payment_failed / invoice.payment_succeeded / customer.subscription.updated|deleted →
+// advance the subscription_dunning lifecycle (REQ-065/TASK-092). Maps the Stripe event to a
+// dunning event (dunningFromStripeEvent), then applies it via the pure state machine and
+// UPSERTs the dunning row + a matching audit row in THIS transaction. Idempotent via the
+// event-id claim in processWebhookEvent. On a lapse, returns the donor contact so the post-commit
+// caller can send the donor + admin notices. Never throws for a legal-but-no-op event (e.g. a
+// success with no open dunning, or a cancel while already active) — it simply ignores it.
+async function handleDunning(client: PoolClient, event: Stripe.Event): Promise<DispatchResult> {
+  const mapping = dunningFromStripeEvent(event);
+  if (!mapping) return { action: "ignored.not_dunning", email: null };
+  const { subscriptionId, dunningEvent } = mapping;
+
+  // Find the donor for this subscription (from its recurring donation) + any existing dunning row.
+  const target = (
+    await client.query<DunningTarget>(
+      `SELECT sd.id AS dunning_id, sd.status, sd.failed_attempts,
+              dn.id AS donor_id, dn.full_name, dn.email, dn.email_consent
+         FROM donations d
+         JOIN donors dn ON dn.id = d.donor_id
+         LEFT JOIN subscription_dunning sd ON sd.stripe_subscription_id = $1
+        WHERE d.stripe_subscription_id = $1
+        ORDER BY d.id ASC LIMIT 1`,
+      [subscriptionId],
+    )
+  ).rows[0];
+  if (!target) return { action: "ignored.no_subscription", email: null };
+
+  const current: DunningStatus = target.status ?? "active";
+  const attempts = target.failed_attempts ?? 0;
+
+  // Nothing to reset when a success arrives with no open dunning; and ignore any illegal
+  // transition (e.g. retries_exhausted on a healthy active subscription = a voluntary cancel, or
+  // any event on an already-lapsed row) rather than throwing.
+  if (dunningEvent === "payment_succeeded" && target.dunning_id === null) {
+    return { action: "ignored.dunning_noop", email: null };
+  }
+  if (!canApplyDunningEvent(current, dunningEvent)) {
+    return { action: "ignored.dunning_noop", email: null };
+  }
+
+  const nextStatus = applyDunningEvent(current, dunningEvent);
+  const nextAttempts = nextFailedAttempts(dunningEvent, attempts);
+  const lapsed = nextStatus === "lapsed";
+
+  if (target.dunning_id === null) {
+    await client.query(
+      `INSERT INTO subscription_dunning
+         (donor_id, stripe_subscription_id, status, failed_attempts, lapsed_at, updated_at)
+       VALUES ($1, $2, $3, $4, ${lapsed ? "now()" : "NULL"}, now())`,
+      [target.donor_id, subscriptionId, nextStatus, nextAttempts],
+    );
+  } else {
+    await client.query(
+      `UPDATE subscription_dunning
+          SET status = $1, failed_attempts = $2,
+              lapsed_at = ${lapsed ? "now()" : "lapsed_at"}, updated_at = now()
+        WHERE id = $3`,
+      [nextStatus, nextAttempts, target.dunning_id],
+    );
+  }
+
+  const action = lapsed
+    ? "subscription.lapsed"
+    : dunningEvent === "payment_failed"
+      ? "subscription.payment_failed"
+      : "subscription.payment_recovered";
+  await insertAudit(client, {
+    actor: "stripe",
+    action,
+    entity: "subscription",
+    entityId: target.donor_id,
+    data: { eventId: event.id, subscriptionId, status: nextStatus, failedAttempts: nextAttempts },
+  });
+
+  const lapse: LapseNotify | null = lapsed
+    ? {
+        donorEmail: target.email,
+        donorEmailConsent: target.email_consent,
+        donorName: target.full_name,
+        subscriptionId,
+      }
+    : null;
+  return { action, email: null, lapse };
 }

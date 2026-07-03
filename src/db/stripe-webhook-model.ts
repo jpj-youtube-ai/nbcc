@@ -11,6 +11,7 @@ import type { DeclarationFields } from "../declarations/fields";
 import { buildCompanyDonorRow, type CompanyFields } from "../donors/company";
 import { scopeFromDeclarationScope, type Scope, type DeclarationWording } from "../declarations/wording";
 import { isGasdsEligibleAmount } from "../gasds/caps";
+import type { DunningEvent } from "../subscriptions/dunning";
 
 // PURE event→record mapping for the single Stripe webhook handler (REQ-036). No
 // pool/config/network/clock — imports only the pure donation model, so it is
@@ -415,4 +416,53 @@ export function claimStatusAfterRefund(
     hasDeclaration: existing.hasDeclaration,
     fullyRefunded: refundedPence >= existing.amountPence,
   });
+}
+
+// The subscription id an invoice belongs to, read defensively across Stripe API versions (a flat
+// `subscription` field on older versions, `parent.subscription_details.subscription` on newer).
+function subscriptionIdFromInvoice(invoice: Stripe.Invoice): string | null {
+  const inv = invoice as unknown as {
+    subscription?: string | { id: string } | null;
+    parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null } | null;
+  };
+  return asString(inv.subscription) ?? asString(inv.parent?.subscription_details?.subscription);
+}
+
+// Map a Stripe subscription/invoice event onto a dunning event (TASK-092/REQ-065), or null when
+// it does not affect dunning. PURE (type-only Stripe import): the persistence + audit live in
+// ./stripe-webhook.ts. A failed renewal is `payment_failed` while Stripe still has a retry
+// scheduled (invoice.next_payment_attempt set), or `retries_exhausted` once it gives up
+// (next_payment_attempt null). A successful invoice recovers dunning (`payment_succeeded`). A
+// subscription reaching a terminal unpaid/canceled state (customer.subscription.updated/deleted)
+// exhausts retries. `retries_exhausted` is the ONLY mapping that can lapse a subscription.
+export function dunningFromStripeEvent(
+  event: Stripe.Event,
+): { subscriptionId: string; dunningEvent: DunningEvent } | null {
+  switch (event.type) {
+    case "invoice.payment_failed": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId = subscriptionIdFromInvoice(invoice);
+      if (!subscriptionId) return null;
+      // next_payment_attempt is null once Stripe has exhausted its Smart Retries.
+      const exhausted = (invoice as unknown as { next_payment_attempt?: number | null }).next_payment_attempt == null;
+      return { subscriptionId, dunningEvent: exhausted ? "retries_exhausted" : "payment_failed" };
+    }
+    case "invoice.paid":
+    case "invoice.payment_succeeded": {
+      const subscriptionId = subscriptionIdFromInvoice(event.data.object as Stripe.Invoice);
+      if (!subscriptionId) return null;
+      return { subscriptionId, dunningEvent: "payment_succeeded" };
+    }
+    case "customer.subscription.deleted": {
+      const sub = event.data.object as Stripe.Subscription;
+      return sub.id ? { subscriptionId: sub.id, dunningEvent: "retries_exhausted" } : null;
+    }
+    case "customer.subscription.updated": {
+      const sub = event.data.object as Stripe.Subscription;
+      const lapsed = sub.status === "unpaid" || sub.status === "canceled" || sub.status === "incomplete_expired";
+      return lapsed && sub.id ? { subscriptionId: sub.id, dunningEvent: "retries_exhausted" } : null;
+    }
+    default:
+      return null;
+  }
 }

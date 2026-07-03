@@ -22,6 +22,7 @@ const validEnv = (): Record<string, string> => ({
   CONTACT_FORWARD_URL: "https://formspree.io/f/test",
   EMAIL_SEND_URL: "https://email.example/send",
   DECLARATION_FORM_BASE_URL: "https://nbcc.example",
+  ADMIN_NOTIFICATION_EMAIL: "admin@nbcc.example",
 });
 
 describe("config schema", () => {
@@ -74,6 +75,13 @@ describe("config schema — contact forwarding key (REQ-030)", () => {
     expect(configSchema.safeParse({ ...validEnv(), CONTACT_FORWARD_URL: "not-a-url" }).success).toBe(
       false,
     );
+  });
+
+  it("requires ADMIN_NOTIFICATION_EMAIL and validates it as an email (TASK-092)", () => {
+    const { ADMIN_NOTIFICATION_EMAIL, ...without } = validEnv();
+    void ADMIN_NOTIFICATION_EMAIL;
+    expect(configSchema.safeParse(without).success).toBe(false); // required
+    expect(configSchema.safeParse({ ...validEnv(), ADMIN_NOTIFICATION_EMAIL: "not-an-email" }).success).toBe(false);
   });
 
   it("treats STRIPE_DONATION_PRODUCT as optional", () => {

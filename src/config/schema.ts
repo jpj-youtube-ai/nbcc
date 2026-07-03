@@ -55,6 +55,12 @@ export const configSchema = z.object({
   // walk-in donor can add Gift Aid afterwards. NOT a secret (it ships in emails/QR codes),
   // but AWS-injected like the price IDs (SSM String → task-def secrets). Validated as a URL.
   DECLARATION_FORM_BASE_URL: z.string().url(),
+
+  // Admin notification recipient (TASK-092/REQ-065). The fixed NBCC inbox that receives an
+  // operational notice when a monthly subscription lapses (Smart Retries exhausted). NOT a
+  // secret (an internal address), but AWS-injected like DECLARATION_FORM_BASE_URL (SSM String →
+  // task-def env). Validated as an email address.
+  ADMIN_NOTIFICATION_EMAIL: z.string().email(),
 });
 
 export type Config = z.infer<typeof configSchema>;

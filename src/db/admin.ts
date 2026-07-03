@@ -90,3 +90,106 @@ export async function recordAdminSubscriptionCancellation(
     }),
   );
 }
+
+// --- Admin search (REQ-062 · TASK-108) ----------------------------------------------------------
+// Read-only lookups an admin (Viewer and up) runs to find a donor, declaration or donation by a free
+// query — a name, email, id or postcode. Each matches the query case-insensitively (ILIKE) across the
+// relevant text columns, and additionally by numeric id when the query is all digits. Read-only
+// (pool.query, no transaction — mirrors getDonorPortalSnapshot / listClaimableDonationsForExport).
+// Results are capped (LIMIT) so an over-broad query can never return an unbounded set.
+
+const SEARCH_LIMIT = 50;
+
+// The query as an ILIKE pattern, plus its numeric value (or null) so an all-digits query also matches
+// an id. Trims the input; a blank query is the route's concern (400 before we get here).
+function searchArgs(q: string): [string, number | null] {
+  const trimmed = q.trim();
+  const numeric = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
+  return [`%${trimmed}%`, numeric];
+}
+
+export interface DonorSearchRow {
+  id: number;
+  donor_type: string;
+  full_name: string;
+  business_name: string | null;
+  email: string | null;
+  anonymous: boolean;
+}
+
+// Find donors by name, business name, email, or id.
+export async function searchDonors(q: string): Promise<DonorSearchRow[]> {
+  const [pattern, numeric] = searchArgs(q);
+  const res = await pool.query<DonorSearchRow>(
+    `SELECT id, donor_type, full_name, business_name, email, anonymous
+       FROM donors
+      WHERE full_name ILIKE $1 OR business_name ILIKE $1 OR email ILIKE $1
+         OR ($2::int IS NOT NULL AND id = $2::int)
+      ORDER BY id DESC
+      LIMIT ${SEARCH_LIMIT}`,
+    [pattern, numeric],
+  );
+  return res.rows;
+}
+
+export interface DeclarationSearchRow {
+  id: number;
+  donor_id: number;
+  first_name: string;
+  last_name: string;
+  postcode: string | null;
+  scope: string;
+  revoked_at: Date | null;
+  created_at: Date;
+}
+
+// Find declarations by donor name, postcode, declaration id or donor id.
+export async function searchDeclarations(q: string): Promise<DeclarationSearchRow[]> {
+  const [pattern, numeric] = searchArgs(q);
+  const res = await pool.query<DeclarationSearchRow>(
+    `SELECT id, donor_id, first_name, last_name, postcode, scope, revoked_at, created_at
+       FROM declarations
+      WHERE first_name ILIKE $1 OR last_name ILIKE $1 OR postcode ILIKE $1
+         OR ($2::int IS NOT NULL AND (id = $2::int OR donor_id = $2::int))
+      ORDER BY id DESC
+      LIMIT ${SEARCH_LIMIT}`,
+    [pattern, numeric],
+  );
+  return res.rows;
+}
+
+export interface DonationSearchRow {
+  id: number;
+  donor_id: number;
+  donor_name: string;
+  donor_email: string | null;
+  mode: string;
+  plan: string | null;
+  amount_pence: number;
+  currency: string;
+  gift_aid: boolean;
+  claim_status: string;
+  payment_channel: string;
+  created_at: Date;
+}
+
+// Find donations by donor name/email, Stripe id, donation id or donor id (joins the donor for the
+// name/email match — donations carry no name/email of their own).
+export async function searchDonations(q: string): Promise<DonationSearchRow[]> {
+  const [pattern, numeric] = searchArgs(q);
+  const res = await pool.query<DonationSearchRow>(
+    `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
+            d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
+            d.payment_channel, d.created_at
+       FROM donations d
+       JOIN donors dn ON dn.id = d.donor_id
+      WHERE dn.full_name ILIKE $1 OR dn.email ILIKE $1
+         OR d.stripe_session_id ILIKE $1 OR d.stripe_payment_intent_id ILIKE $1
+         OR d.stripe_subscription_id ILIKE $1
+         OR ($2::int IS NOT NULL AND (d.id = $2::int OR d.donor_id = $2::int))
+      ORDER BY d.id DESC
+      LIMIT ${SEARCH_LIMIT}`,
+    [pattern, numeric],
+  );
+  return res.rows;
+}

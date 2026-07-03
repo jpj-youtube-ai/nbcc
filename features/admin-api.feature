@@ -23,3 +23,13 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     When I PATCH the admin donor full name to "Ada Edited" as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the admin response status should be 200
     And the admin response field "fullName" should be "Ada Edited"
+
+  Scenario: a Viewer can search donors and finds the seeded donor
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    When I search admin "donors" for "Ada Behalf" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+    And the admin search results are not empty
+
+  Scenario: search without a token is rejected with 401
+    When I search admin "donors" for "Ada Behalf" without a token
+    Then the admin response status should be 401

@@ -82,6 +82,30 @@ When(
 
 // "the admin response status should be {int}" is defined in admin-auth.steps.js (shared @admin).
 
+When(
+  "I search admin {string} for {string} as {string} with password {string}",
+  async function (kind, q, email, password) {
+    const token = await login(email, password);
+    const res = await fetch(
+      `${BASE_URL}/api/admin/search/${kind}?q=${encodeURIComponent(q)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When("I search admin {string} for {string} without a token", async function (kind, q) {
+  const res = await fetch(`${BASE_URL}/api/admin/search/${kind}?q=${encodeURIComponent(q)}`);
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+Then("the admin search results are not empty", function () {
+  assert.ok(Array.isArray(this.adminBody.results), "expected a results array");
+  assert.ok(this.adminBody.results.length > 0, "expected at least one search result");
+});
+
 Then("the admin response field {string} should be {string}", function (field, value) {
   assert.equal(String(this.adminBody[field]), value);
 });

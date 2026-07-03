@@ -650,6 +650,9 @@
         var el = doc.getElementById(id);
         return el ? (el.value || "").trim() : "";
       };
+      // Whether NBCC gave anything of value in return (REQ-053): the checked radio, default
+      // "no" (a genuine donation). true only when the donor picked "yes".
+      var considerationEl = doc.querySelector('input[name="companyConsideration"]:checked');
       payload.company = {
         legalName: businessName,
         registrationNumber: compVal("companyRegNumber"),
@@ -657,6 +660,7 @@
         contactEmail: compVal("companyContactEmail"),
         billingAddress: compVal("companyBillingAddress"),
         billingPostcode: compVal("companyBillingPostcode"),
+        considerationGiven: !!(considerationEl && considerationEl.value === "yes"),
       };
       // A company makes no Gift Aid declaration.
       delete payload.declaration;

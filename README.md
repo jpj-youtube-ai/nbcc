@@ -679,6 +679,14 @@ partnership paths are unaffected (no `company` object). The consent-based
 `#anonymousDonor`/contact capture (REQ-039) is reused as-is. Token-only colours; dash-free copy,
 "NBCC" (REQ-031). Verified by `test/unit/give-company-capture.test.ts`.
 
+The fieldset also asks (REQ-053 · TASK-087) whether **NBCC gave anything of value in return**
+(advertising, logo placement) — a **required** Yes/No radio pair (`#companyConsideration`, real
+labels) defaulting to **No** (a genuine donation). `startCheckout` folds it as
+`company.considerationGiven` (true only on "Yes"); `companyFieldsSchema` accepts the flag (so the
+`.strict()` schema does not reject the widget's payload). A gift **with** consideration is not a
+plain donation — the receipt guard `classifyCompanyGift` (`src/donors/receipt.ts`, TASK-086)
+returns `flag_for_trustees` for it instead of issuing a Corporation Tax receipt.
+
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE

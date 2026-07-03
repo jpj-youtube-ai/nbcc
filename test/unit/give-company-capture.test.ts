@@ -61,6 +61,24 @@ describe("company capture markup (REQ-038)", () => {
     expect((company?.querySelector("#companyContactEmail") as HTMLInputElement)?.getAttribute("type")).toBe("email");
   });
 
+  it("asks whether NBCC gave anything of value in return, a #companyConsideration control with real labels, defaulting to NO (REQ-053)", () => {
+    const control = company?.querySelector("#companyConsideration");
+    expect(control, "#companyConsideration present in .give-company").not.toBeNull();
+    // A required Yes/No radio pair, each with a real <label for> (REQ-032).
+    const radios = [...(control?.querySelectorAll('input[type="radio"][name="companyConsideration"]') ?? [])] as HTMLInputElement[];
+    expect(radios).toHaveLength(2);
+    expect(radios.map((r) => r.getAttribute("value")).sort()).toEqual(["no", "yes"]);
+    for (const r of radios) {
+      expect(r.hasAttribute("required")).toBe(true);
+      const label = control?.querySelector(`label[for="${r.getAttribute("id")}"]`);
+      expect(label, `label for #${r.getAttribute("id")}`).not.toBeNull();
+      expect(norm(label?.textContent).length).toBeGreaterThan(0);
+    }
+    // Defaults to "no consideration given" so a plain donation is the base case.
+    expect(control?.querySelector('input[value="no"]')?.hasAttribute("checked")).toBe(true);
+    expect(control?.querySelector('input[value="yes"]')?.hasAttribute("checked")).toBe(false);
+  });
+
   it("writes the company copy without dashes (REQ-031)", () => {
     expect(norm(company?.textContent)).not.toMatch(/[–—-]/);
   });
@@ -143,9 +161,19 @@ describe("company capture behaviour (jsdom)", () => {
       contactEmail: "finance@acme.test",
       billingAddress: "1 Office Park, London",
       billingPostcode: "SW1A 1AA",
+      considerationGiven: false, // defaults to no consideration given (REQ-053)
     });
     // A company makes no Gift Aid declaration.
     expect("declaration" in payload).toBe(false);
+  });
+
+  it("folds considerationGiven:true when the donor says NBCC gave something of value in return (REQ-053)", () => {
+    selectDonor("business");
+    selectBusinessType("company");
+    fillCompany();
+    (document.getElementById("companyConsiderationYes") as HTMLElement).click();
+    onceTier(0).click();
+    expect(lastPayload().company.considerationGiven).toBe(true);
   });
 
   it("omits the company object on the individual path (unaffected)", () => {

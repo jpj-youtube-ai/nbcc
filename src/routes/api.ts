@@ -127,11 +127,15 @@ const checkoutBodySchema = z
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
 
-// Card only. Apple Pay / Google Pay are offered automatically by Stripe Checkout
-// when the card method is enabled, so they need no entry here. BACS Direct Debit
-// was dropped because it needs a separate Stripe account activation; re-add
-// "bacs_debit" here once it is enabled in the Stripe dashboard.
-const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_types"] = ["card"];
+// Card + BACS Direct Debit. Apple Pay / Google Pay are offered automatically by Stripe
+// Checkout when the card method is enabled, so they need no entry here. BACS Direct Debit
+// (REQ-029 · TASK-089) is offered for our GBP-only UK donations, which satisfy Stripe's
+// BACS currency (GBP) + country (GB) requirement; it applies to both the one-off
+// (mode: payment) and monthly (mode: subscription) sessions via `base` below.
+const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_types"] = [
+  "card",
+  "bacs_debit",
+];
 
 // Assemble the Stripe Checkout session parameters from a validated body.
 export function buildSessionParams(

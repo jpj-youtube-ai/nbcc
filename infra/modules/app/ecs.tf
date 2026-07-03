@@ -51,6 +51,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       aws_ssm_parameter.admin_notification_email.arn,
       # Donor portal base URL (TASK-100): injected via valueFrom, so the exec role must read it.
       aws_ssm_parameter.portal_base_url.arn,
+      # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
+      # role must be able to read it.
+      aws_ssm_parameter.admin_session_secret.arn,
     ]
   }
   statement {
@@ -131,6 +134,9 @@ resource "aws_ecs_task_definition" "app" {
       # Donor portal base URL (TASK-100): non-secret SSM String, injected via valueFrom — so its
       # ARN must also appear in exec_secrets below.
       { name = "PORTAL_BASE_URL", valueFrom = aws_ssm_parameter.portal_base_url.arn },
+      # Admin session signing key (TASK-105): a SecureString, injected like a secret — so its ARN
+      # must also appear in exec_secrets above.
+      { name = "ADMIN_SESSION_SECRET", valueFrom = aws_ssm_parameter.admin_session_secret.arn },
     ]
 
     logConfiguration = {

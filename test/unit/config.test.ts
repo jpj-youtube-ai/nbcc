@@ -24,6 +24,7 @@ const validEnv = (): Record<string, string> => ({
   DECLARATION_FORM_BASE_URL: "https://nbcc.example",
   ADMIN_NOTIFICATION_EMAIL: "admin@nbcc.example",
   PORTAL_BASE_URL: "https://nbcc.example",
+  ADMIN_SESSION_SECRET: "test-admin-session-secret",
 });
 
 describe("config schema", () => {
@@ -90,6 +91,13 @@ describe("config schema — contact forwarding key (REQ-030)", () => {
     void PORTAL_BASE_URL;
     expect(configSchema.safeParse(without).success).toBe(false); // required
     expect(configSchema.safeParse({ ...validEnv(), PORTAL_BASE_URL: "not-a-url" }).success).toBe(false);
+  });
+
+  it("requires ADMIN_SESSION_SECRET and never defaults it (TASK-105)", () => {
+    const { ADMIN_SESSION_SECRET, ...without } = validEnv();
+    void ADMIN_SESSION_SECRET;
+    expect(configSchema.safeParse(without).success).toBe(false); // required
+    expect(configSchema.safeParse({ ...validEnv(), ADMIN_SESSION_SECRET: "" }).success).toBe(false); // non-empty
   });
 
   it("treats STRIPE_DONATION_PRODUCT as optional", () => {

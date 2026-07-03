@@ -914,8 +914,10 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
+| `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login) |
 
-They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`).
+They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
+routes in `src/routes/admin.ts`).
 
 **`GET` / `PATCH /api/portal/:token` (REQ-061 · TASK-101).** The self-serve donor portal, entered
 via the one-time, expiring magic-link token (TASK-100). **Every** route authenticates the token with
@@ -957,6 +959,23 @@ revoked it → **409** (the `FOR UPDATE` re-check throws `DeclarationCancellatio
 revoke+audit decision lives in `src/declarations/cancellation.ts` (`buildDeclarationCancellation`,
 DB-free, clock injected — like `buildDeclarationRevision`). Proven DB-free by
 `test/unit/gift-aid-cancel.test.ts` (mocked pool) and end to end by the `@db` `features/portal.feature`.
+
+**`POST /api/admin/login` (REQ-062 · TASK-105).** The role-based admin login. The `users` table
+(TASK-056) already carries the `role` enum (`viewer`/`editor`/`admin`, NOT NULL default `viewer`); an
+additive, nullable `password_hash` column (migration `1783078996722`) adds the missing credential — a
+salted **scrypt** hash (`scrypt$salt$key`, `src/admin/password.ts`, Node's built-in crypto, no
+dependency; the plaintext never hits the DB or logs). The endpoint validates a zod-first `{ email,
+password }`, looks the user up (`findUserByEmail`, `src/db/admin.ts`), verifies the password in
+constant time (and against a dummy hash when the email is unknown, so timing does not reveal whether
+an account exists), and on success returns a **signed session token** — the bearer-token analogue of
+the donor portal's magic link. The token is stateless: `base64url(claims).base64url(hmac)`, HMAC-signed
+with `ADMIN_SESSION_SECRET` over `{ sub, email, role, iat, exp }` (`signAdminSession` /
+`verifyAdminSession`, `src/admin/session.ts`, pure with an injected clock like `src/portal/tokens.ts`),
+default 8h TTL. Invalid credentials (unknown email, wrong password, or a null-hash account) all return a
+generic **401**; a malformed body is **400**. The role-gated admin actions that consume the token are
+**TASK-106**. Proven by `test/unit/admin-auth.test.ts` (mocked pool — both paths, the pure
+password/session helpers, and that the migration is additive-only) and end to end by the `@db`
+`features/admin-auth.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`
@@ -1980,6 +1999,13 @@ as a URL, with a valid placeholder so a fresh apply passes.
 built on (`portalMagicLink`). Same treatment as `DECLARATION_FORM_BASE_URL`: **not** a secret (it
 ships in the access email), an SSM `String` injected via `valueFrom` with its ARN in
 `exec_secrets`, validated as a URL, with a valid placeholder so a fresh apply passes.
+
+`ADMIN_SESSION_SECRET` (TASK-105) is the HMAC signing key for admin session tokens
+(`signAdminSession`). It **is** a secret — a `SecureString` in SSM (`REPLACE_ME`, `ignore_changes`),
+injected via `valueFrom` with its ARN in `exec_secrets`, required and **never defaulted** in the
+schema (`z.string().min(1)`) so a missing key fails boot rather than letting anyone forge a session,
+with a placeholder in `.env.example` and the CI env. Wired through all six touch-points (schema,
+`.env.example`, `pr.yml` env, SSM param, task-def `secrets`, `exec_secrets` IAM).
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

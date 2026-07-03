@@ -21,6 +21,7 @@ vi.mock("../../src/db/pool", () => ({ pool: { connect } }));
 vi.mock("../../src/clients/email", () => ({
   sendDonationConfirmation: vi.fn(),
   sendDeclarationEmail: vi.fn(),
+  sendCompanyReceipt: vi.fn(),
 }));
 // The processor reads config directly (DECLARATION_FORM_BASE_URL, TASK-075); mock config so
 // the real one never validates process.env and exits.
@@ -301,6 +302,7 @@ const companySession = () =>
       companyContactEmail: "finance@acme.test",
       companyBillingAddress: "1 Office Park, London",
       companyBillingPostcode: "SW1A 1AA",
+      companyConsiderationGiven: "false",
     },
   }) as unknown as import("stripe").Checkout.Session;
 

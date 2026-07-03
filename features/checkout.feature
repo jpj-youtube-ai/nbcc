@@ -41,7 +41,7 @@ Feature: Checkout session endpoint (REQ-029)
   Scenario: a company donation is accepted (companies take the no-Gift-Aid path, REQ-038)
     When I POST "/api/checkout-session" with JSON:
       """
-      { "mode": "once", "plan": null, "amount": 100000, "giftAid": false, "donorType": "company", "businessName": "Acme Ltd", "company": { "legalName": "Acme Ltd", "contactName": "Ada Lovelace", "contactEmail": "finance@acme.test", "billingAddress": "1 Office Park, London", "billingPostcode": "SW1A 1AA" } }
+      { "mode": "once", "plan": null, "amount": 100000, "giftAid": false, "donorType": "company", "businessName": "Acme Ltd", "company": { "legalName": "Acme Ltd", "contactName": "Ada Lovelace", "contactEmail": "finance@acme.test", "billingAddress": "1 Office Park, London", "billingPostcode": "SW1A 1AA", "considerationGiven": false } }
       """
     Then the response status should be 200
     And the response field "url" should start with "https://"

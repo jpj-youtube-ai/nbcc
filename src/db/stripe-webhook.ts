@@ -9,6 +9,7 @@ import {
   donationFromCheckoutSession,
   declarationFromCheckoutSession,
   partnerSharesFromCheckoutSession,
+  companyDonorFromCheckoutSession,
   recurringChargeFromInvoice,
   recurringDonationInput,
   cardPresentDonationInput,
@@ -19,8 +20,9 @@ import {
   confirmationEmailFor,
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
-import { sendDonationConfirmation, sendDeclarationEmail } from "../clients/email";
+import { sendDonationConfirmation, sendDeclarationEmail, sendCompanyReceipt } from "../clients/email";
 import { applyDeclarationEvent } from "../declarations/status";
+import { buildCorporationTaxReceipt, classifyCompanyGift } from "../donors/receipt";
 
 // The SINGLE Stripe webhook processor for the unified platform (REQ-036) — no
 // other module handles donor/donation events. Every event is processed in ONE
@@ -47,7 +49,7 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration } = await dispatch(client, event);
+    const { action, email, declaration, receipt } = await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
     // donation row has committed, and OUTSIDE the transaction: a slow or failing
@@ -58,6 +60,10 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     // outcome flips declaration_status to 'sent' or 'undelivered' via a SEPARATE write, so
     // neither the send nor its status stamp can roll back the committed donation.
     await sendDeclarationConfirmation(declaration ?? null);
+    // Company Corporation Tax receipt (TASK-088): post-commit, best-effort. Only present for a
+    // company donation with NO consideration given; a gift WITH consideration was flagged for
+    // the trustees inside the transaction instead (no receipt).
+    await sendCompanyReceiptEmail(receipt ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -76,6 +82,47 @@ interface DispatchResult {
   // The in-person declaration email to send + stamp post-commit (TASK-075), or null when
   // there is nothing to confirm (non-card-present, or no receipt_email to send to).
   declaration?: DeclarationSend | null;
+  // The Corporation Tax receipt to send post-commit (TASK-088), or null when there is none
+  // (not a company gift, or one flagged for the trustees because consideration was given).
+  receipt?: CompanyReceiptSend | null;
+}
+
+// A committed company donation whose Corporation Tax receipt must be sent AFTER commit. Carries
+// the billing-contact email and the values the pure receipt builder needs. donationDate is the
+// gift's timestamp (from the Stripe session), so the builder needs no clock.
+interface CompanyReceiptSend {
+  email: string;
+  legalName: string;
+  amountPence: number;
+  currency: string;
+  donationDate: Date;
+}
+
+// Post-commit, best-effort Corporation Tax receipt email (TASK-088/REQ-053). Builds the verbatim
+// receipt content (src/donors/receipt.ts) and sends it to the company's billing contact; a null
+// send (a non-company gift, or one flagged for the trustees) or a provider failure is a no-op, so
+// a failed/late send never rolls back the committed donation. Exported so the trigger is
+// unit-testable with a mocked email client.
+export async function sendCompanyReceiptEmail(send: CompanyReceiptSend | null): Promise<void> {
+  if (!send) return;
+  try {
+    const receipt = buildCorporationTaxReceipt({
+      legalName: send.legalName,
+      amountPence: send.amountPence,
+      currency: send.currency,
+      donationDate: send.donationDate,
+    });
+    await sendCompanyReceipt({
+      email: send.email,
+      legalName: send.legalName,
+      amountPence: send.amountPence,
+      currency: send.currency,
+      text: receipt.text,
+      html: receipt.html,
+    });
+  } catch {
+    // best-effort: the donation is durably recorded; a failed receipt must not fail the webhook.
+  }
 }
 
 // A pending in-person declaration whose confirmation email must be sent AFTER commit; its
@@ -208,10 +255,40 @@ async function handleCheckoutCompleted(
     entityId: donationId,
     data: { eventId: event.id, donorId, giftAid: donation.giftAid, declarationId },
   });
+
+  // Company donation (REQ-053, TASK-088): decide receipt vs trustee-flag from whether NBCC gave
+  // anything of value in return. A CLEAN gift (no consideration) gets a Corporation Tax receipt
+  // emailed to the billing contact AFTER commit; a gift WITH consideration is NOT a plain
+  // donation, so it is flagged for the trustees via an audit row inside THIS transaction (no
+  // receipt). The donation itself already persisted non-claimable (donor_type='company').
+  let receipt: CompanyReceiptSend | null = null;
+  const companyRow = companyDonorFromCheckoutSession(event.data.object);
+  if (companyRow) {
+    const considerationGiven = event.data.object.metadata?.companyConsiderationGiven === "true";
+    if (classifyCompanyGift({ considerationGiven }) === "flag_for_trustees") {
+      await insertAudit(client, {
+        actor: "stripe",
+        action: "donation.flagged_for_trustees",
+        entity: "donation",
+        entityId: donationId,
+        data: { eventId: event.id, donorId, reason: "consideration_given", legalName: companyRow.business_name },
+      });
+    } else {
+      receipt = {
+        email: companyRow.email,
+        legalName: companyRow.business_name,
+        amountPence: donation.amountPence,
+        currency: donation.currency,
+        donationDate: new Date((event.data.object.created ?? 0) * 1000),
+      };
+    }
+  }
+
   // Confirm the gift by email only when the donor gave us their email AND consent
   // (confirmationEmailFor gates this; donationFromCheckoutSession already suppresses
-  // the email otherwise). Sent after COMMIT by the caller.
-  return { action: "donation.created", email: confirmationEmailFor(donor, donation) };
+  // the email otherwise). A company's contact email is not marketing consent, so this is
+  // null for a company — the Corporation Tax receipt above is its email. Sent after COMMIT.
+  return { action: "donation.created", email: confirmationEmailFor(donor, donation), receipt };
 }
 
 // charge.succeeded → record an IN-PERSON (Stripe Terminal / card_present) donation

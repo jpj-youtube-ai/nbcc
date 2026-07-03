@@ -1001,8 +1001,14 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   genuine-donation (nothing given in return) and no-Gift-Aid statements. Its guard
   `classifyCompanyGift({ considerationGiven })` returns `flag_for_trustees` (not a receipt) when
   the company received anything of value in return. Pure/DB-free (no pool/config/clock), unit-tested
-  in `test/unit/corporation-tax-receipt.test.ts`; wiring the content into a send (email/PDF) is a
-  later task.
+  in `test/unit/corporation-tax-receipt.test.ts`. The webhook wires this up (REQ-053 · TASK-088):
+  the required `company.considerationGiven` flag (validated by `companyFieldsSchema`, stamped as
+  `metadata.companyConsiderationGiven`) drives the choice — a **clean** gift (no consideration)
+  emails the Corporation Tax receipt to the billing contact **after commit** (best-effort, via
+  `sendCompanyReceipt`, mirroring the donation-confirmation send); a gift **with** consideration
+  appends a `donation.flagged_for_trustees` `audit_log` row **inside** the same transaction and
+  sends **no** receipt. Either way the donation stays non-claimable. Verified DB-free against a
+  mocked pool + email client in `test/unit/company-receipt-webhook.test.ts`.
 - **`declarations`** — the immutable Gift Aid / HMRC declaration: the matching
   fields (title, names, `house_name_number`, address, `postcode`, `non_uk`), the
   `scope` (this-donation vs enduring), and the versioned wording the donor saw

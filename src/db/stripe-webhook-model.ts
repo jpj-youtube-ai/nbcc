@@ -120,6 +120,7 @@ export function companyDonorFromCheckoutSession(
     contactEmail: md.companyContactEmail ?? "",
     billingAddress: md.companyBillingAddress ?? "",
     billingPostcode: md.companyBillingPostcode ?? "",
+    considerationGiven: md.companyConsiderationGiven === "true",
   };
   return buildCompanyDonorRow(fields);
 }

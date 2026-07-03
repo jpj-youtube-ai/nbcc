@@ -192,6 +192,7 @@ describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
     contactEmail: "finance@acme.test",
     billingAddress: "1 Office Park, London",
     billingPostcode: "SW1A 1AA",
+    considerationGiven: false,
   };
 
   it("stamps donorType and businessName onto the session metadata for a company", async () => {
@@ -542,6 +543,7 @@ describe("POST /api/checkout-session — company details (REQ-038 / TASK-085)", 
     contactEmail: "finance@acme.test",
     billingAddress: "1 Office Park, London",
     billingPostcode: "SW1A 1AA",
+    considerationGiven: false,
   };
   const companyBody = (overrides = {}) => ({
     mode: "once" as const,

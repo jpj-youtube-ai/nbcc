@@ -425,6 +425,11 @@ Tasks:
 
 Email a dated receipt in place of a declaration stating NBCC's name and OSCR SC047995, the amount and date, that it is a genuine donation with nothing of value given in return, and that NBCC has not and will not claim Gift Aid on it. *Accept:* genuine sponsorship where consideration is given is flagged for trustees as a separate flow rather than processed as a donation.
 
+Tasks:
+- TASK-086 — Add a pure corporation-tax receipt content builder and sponsorship-consideration guard
+- TASK-087 — Add a sponsorship-consideration question to the company give-widget path
+- TASK-088 — Send the corporation-tax receipt (or flag sponsorship for trustees) from the company webhook path
+
 ### REQ-056 — One-off, BACS and card payments
 
 Support one-off single charges via PaymentIntents and both BACS Direct Debit (bacs_debit, handling the setup/confirmation lead time) and card for monthly and one-off giving. *Accept:* the pending BACS mandate state is handled and the Direct Debit Guarantee is honoured.

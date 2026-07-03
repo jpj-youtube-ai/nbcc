@@ -486,6 +486,11 @@ Tasks:
 
 Provide a standalone admin back-end with Viewer (read-only), Editor (view, edit, cancellations and queues) and Admin (all that plus user management, running and submitting claims, recording adjustments and settings) roles, able to perform any self-serve action on a donor's behalf. *Accept:* Kenny and Isabel hold the Admin/Claims permission and roles enforce read-only versus edit versus claim.
 
+Tasks:
+- TASK-105 — Add role-based admin user model and admin login endpoint
+- TASK-106 — Add role-gated admin endpoints mirroring self-serve donor actions
+- TASK-107 — Grant Kenny and Isabel the Admin role
+
 ### REQ-063 — Admin queues and claim operations
 
 Give admins donor, declaration and donation search, the Charities Online export, batch-submitted marking, the adjustment-due queue, retention-expiry flags and an awaiting-declaration queue for in-person links that were sent but not completed (including bounced emails). *Accept:* every admin write (edit, submit, adjust) appends to the audit log to form the HMRC-claim and governance trail.

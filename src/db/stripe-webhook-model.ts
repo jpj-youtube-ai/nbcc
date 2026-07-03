@@ -52,6 +52,11 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
     amountPence: session.amount_total ?? 0,
     currency: (session.currency ?? "gbp").toUpperCase(),
     giftAid: giftAidFromMetadata(session.metadata),
+    // Settlement state (REQ-065/TASK-090): Stripe reports payment_status='unpaid' while a BACS
+    // mandate is pending confirmation — persist that as 'pending' (not claimable until it
+    // settles). Anything else (a card gift's 'paid', 'no_payment_required', or an absent value
+    // in a test fixture) is treated as settled 'paid', so card checkouts are unchanged.
+    paymentStatus: session.payment_status === "unpaid" ? "pending" : "paid",
     declarationId: null,
     paymentChannel: "online",
     stripeSessionId: session.id,

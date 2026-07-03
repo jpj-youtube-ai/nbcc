@@ -3,7 +3,7 @@ import type { PoolClient } from "pg";
 import type Stripe from "stripe";
 import { pool } from "./pool";
 import { config } from "../config";
-import { buildDonationRow, type DonorInput } from "./donations-model";
+import { buildDonationRow, deriveClaimStatus, type DonorInput, type PaymentStatus } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation } from "./donations";
 import {
   donationFromCheckoutSession,
@@ -193,6 +193,13 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<Dispat
       return handleRecurring(client, event);
     case "charge.succeeded":
       return handleChargeSucceeded(client, event);
+    // BACS settlement (REQ-065/TASK-090): a pending BACS gift's mandate confirms or fails
+    // asynchronously. Flip payment_status + re-derive claim_status on the SAME donation
+    // (found by session id) — never a new row. Idempotent via the event-id claim above.
+    case "checkout.session.async_payment_succeeded":
+      return { action: await handleAsyncPayment(client, event, "paid"), email: null };
+    case "checkout.session.async_payment_failed":
+      return { action: await handleAsyncPayment(client, event, "failed"), email: null };
     case "charge.refunded":
       return {
         action: await handleRefund(client, event, refundedPenceFromCharge(event.data.object)),
@@ -474,4 +481,58 @@ async function handleRefund(
     data: { eventId: event.id, refundedPence, claimStatus, eventType: event.type },
   });
   return "donation.refunded";
+}
+
+interface PaymentTarget {
+  id: number;
+  gift_aid: boolean;
+  declaration_id: number | null;
+  amount_pence: number;
+  refunded_amount_pence: number;
+  donor_type: "individual" | "company";
+}
+
+// checkout.session.async_payment_succeeded / async_payment_failed → settle a pending BACS gift
+// (REQ-065/TASK-090). Finds the SAME donation by its session id, flips payment_status, and
+// re-derives claim_status through the existing rule (deriveClaimStatus): a succeeded gift becomes
+// claimable only if it is an individual, gift-aided, declared and not refunded; a failed gift is
+// permanently not_eligible (paymentStatus='failed'). Never inserts a new row. Idempotent via the
+// event-id claim in processWebhookEvent, so a resent event is a no-op.
+async function handleAsyncPayment(
+  client: PoolClient,
+  event: Stripe.Event & { data: { object: Stripe.Checkout.Session } },
+  newStatus: PaymentStatus,
+): Promise<string> {
+  const sessionId = event.data.object.id;
+  const target = (
+    await client.query<PaymentTarget>(
+      `SELECT d.id, d.gift_aid, d.declaration_id, d.amount_pence, d.refunded_amount_pence, dn.donor_type
+         FROM donations d JOIN donors dn ON dn.id = d.donor_id
+        WHERE d.stripe_session_id = $1
+        ORDER BY d.id ASC LIMIT 1`,
+      [sessionId],
+    )
+  ).rows[0];
+  if (!target) return "ignored.no_donation";
+
+  const claimStatus = deriveClaimStatus({
+    donorType: target.donor_type,
+    giftAid: target.gift_aid,
+    hasDeclaration: target.declaration_id != null,
+    fullyRefunded: target.refunded_amount_pence >= target.amount_pence,
+    paymentStatus: newStatus,
+  });
+  await client.query(
+    `UPDATE donations SET payment_status = $1, claim_status = $2 WHERE id = $3`,
+    [newStatus, claimStatus, target.id],
+  );
+  const action = newStatus === "paid" ? "donation.payment_succeeded" : "donation.payment_failed";
+  await insertAudit(client, {
+    actor: "stripe",
+    action,
+    entity: "donation",
+    entityId: target.id,
+    data: { eventId: event.id, sessionId, paymentStatus: newStatus, claimStatus },
+  });
+  return action;
 }

@@ -14,9 +14,13 @@ export const MODES = ["once", "monthly"] as const;
 export const PLANS = ["bronze", "silver", "gold", "platinum"] as const;
 export const PAYMENT_CHANNELS = ["online", "in_person"] as const;
 export const CLAIM_STATUSES = ["not_eligible", "eligible", "batched", "claimed"] as const;
+// Payment settlement state (REQ-065/TASK-090): a card gift is 'paid' at checkout; a BACS gift is
+// 'pending' until Stripe confirms the mandate ('paid') or reports failure ('failed').
+export const PAYMENT_STATUSES = ["pending", "paid", "failed"] as const;
 
 export type DonorType = (typeof DONOR_TYPES)[number];
 export type ClaimStatus = (typeof CLAIM_STATUSES)[number];
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
 // The normalised input a caller hands to recordDonation. Mirrors the front-end
 // checkout payload { mode, plan, amount, giftAid } (REQ-028) plus the donor type
@@ -34,6 +38,9 @@ export const donationInputSchema = z
     // online/declared/Gift-Aided gift goes the Gift Aid route, never GASDS).
     gasdsEligible: z.boolean().default(false),
     paymentChannel: z.enum(PAYMENT_CHANNELS).default("online"),
+    // Settlement state (REQ-065/TASK-090): defaults to 'paid' (card / in-person), so existing
+    // callers are unchanged; a BACS checkout maps Stripe's 'unpaid' onto 'pending'.
+    paymentStatus: z.enum(PAYMENT_STATUSES).default("paid"),
     declarationId: z.number().int().positive().nullable().default(null),
     stripeSessionId: z.string().nullable().default(null),
     stripePaymentIntentId: z.string().nullable().default(null),
@@ -75,6 +82,7 @@ export interface DonationRow {
   gift_aid: boolean;
   gasds_eligible: boolean;
   payment_channel: (typeof PAYMENT_CHANNELS)[number];
+  payment_status: PaymentStatus;
   claim_status: ClaimStatus;
   stripe_session_id: string | null;
   stripe_payment_intent_id: string | null;
@@ -91,9 +99,14 @@ export function deriveClaimStatus(input: {
   giftAid: boolean;
   hasDeclaration: boolean;
   fullyRefunded?: boolean;
+  // Settlement gate (REQ-065/TASK-090): only a settled ('paid') gift is ever claimable. A BACS
+  // mandate awaiting confirmation ('pending') or a failed one ('failed') is never eligible,
+  // regardless of Gift Aid + declaration. Defaults to 'paid' so existing callers are unchanged.
+  paymentStatus?: PaymentStatus;
 }): ClaimStatus {
   if (input.donorType === "company") return "not_eligible";
   if (input.fullyRefunded) return "not_eligible";
+  if (input.paymentStatus !== undefined && input.paymentStatus !== "paid") return "not_eligible";
   return input.giftAid && input.hasDeclaration ? "eligible" : "not_eligible";
 }
 
@@ -116,10 +129,12 @@ export function buildDonationRow(input: DonationInput, donorId: number): Donatio
     // flag the mapper computed (isGasdsEligibleAmount already rules out any Gift-Aided gift).
     gasds_eligible: isCompany ? false : input.gasdsEligible,
     payment_channel: input.paymentChannel,
+    payment_status: input.paymentStatus,
     claim_status: deriveClaimStatus({
       donorType: input.donorType,
       giftAid,
       hasDeclaration: declarationId !== null,
+      paymentStatus: input.paymentStatus,
     }),
     stripe_session_id: input.stripeSessionId,
     stripe_payment_intent_id: input.stripePaymentIntentId,

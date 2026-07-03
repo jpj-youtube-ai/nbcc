@@ -95,8 +95,8 @@ export async function insertDonation(client: PoolClient, row: DonationRow): Prom
     `INSERT INTO donations
        (donor_id, declaration_id, mode, plan, amount_pence, currency, gift_aid,
         gasds_eligible, payment_channel, claim_status, stripe_session_id,
-        stripe_payment_intent_id, stripe_subscription_id, stripe_charge_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        stripe_payment_intent_id, stripe_subscription_id, stripe_charge_id, payment_status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
      RETURNING id`,
     [
       row.donor_id,
@@ -113,6 +113,7 @@ export async function insertDonation(client: PoolClient, row: DonationRow): Prom
       row.stripe_payment_intent_id,
       row.stripe_subscription_id,
       row.stripe_charge_id,
+      row.payment_status,
     ],
   );
   return res.rows[0].id;

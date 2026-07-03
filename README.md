@@ -981,6 +981,14 @@ generic **401**; a malformed body is **400**. The role-gated admin actions that 
 password/session helpers, and that the migration is additive-only) and end to end by the `@db`
 `features/admin-auth.feature`.
 
+**Admin seed (REQ-062 · TASK-107).** Kenny and Isabella are the two NBCC staff who hold the
+Admin/Claims permission. The data-only migration `1783080586661_grant-kenny-isabella-admin.js` seeds
+their `users` rows (`kenny@`/`isabella@nightbeforechristmas.co.uk`) with `role='admin'`, idempotent
+via `ON CONFLICT (email) DO UPDATE SET role='admin'` (so a re-run, or a pre-existing row, is upgraded
+rather than duplicated). No `password_hash` is set — the accounts cannot log in until a password is set
+out of band (golden rule 4), the safe default. Additive/expand-contract (a data INSERT, no schema
+change); guarded by `test/unit/admin-seed-migration.test.ts` and applied by CI's migrations job.
+
 **`GET`/`PATCH /api/admin/donors/:id`, `POST …/subscription/cancel`, `POST …/gift-aid/cancel`
 (REQ-062 · TASK-106).** The role-gated admin actions that let an Editor/Admin act on a donor's
 behalf — the mirror of the self-serve donor-portal routes (`src/routes/portal.ts`), but authorised by

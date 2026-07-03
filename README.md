@@ -881,6 +881,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/contact` | **implemented** | REQ-030 (contact form) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
+| `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`).
 
@@ -897,6 +898,18 @@ email) and calls `updateDonorPortal`, which updates only the supplied `donors` c
 a `donor.updated` audit_log row in the SAME `writeWithAudit` transaction** (the truth model), then
 returns the fresh snapshot. Proven DB-free by `test/unit/portal-api.test.ts` (mocked pool) and end to
 end by the `@db` `features/portal.feature`.
+
+**`POST /api/portal/:token/subscription/cancel` (REQ-055 · TASK-102).** The "cancel" end of the
+**reduce-instead-then-cancel** flow. Token-authenticated like the other portal routes. The body must
+carry an **explicit `accepted: 'reduce'|'cancel'` acknowledgement** that reduce-instead was offered —
+a **missing/invalid** one is **400** (the donor cannot cancel without being shown the reduce option
+first). `accepted: 'cancel'` calls `cancelSubscription` (`src/clients/stripe.ts` — a thin
+`subscriptions.cancel` wrapper alongside the existing `changeSubscriptionPlan`, with the same offline
+stub so it runs without a Stripe account) and returns the cancelled subscription; `accepted:
+'reduce'` is refused with **400** (reducing is done via `change-plan`, not here); an upstream Stripe
+failure is **502**. Reducing itself reuses the existing `POST /api/subscription/change-plan`
+unchanged. Proven by `test/unit/subscription-cancel.test.ts` (mocked SDK + pool) and end to end by
+the `@db` `features/subscription-cancel.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`

@@ -59,6 +59,14 @@ function stubStripe(): Stripe {
           ],
         },
       }),
+      // Cancel (REQ-055/TASK-102): echoes the subscription with status 'canceled', so the
+      // reduce-instead-then-cancel flow runs end to end without a live Stripe account.
+      cancel: async (id: string) => ({
+        id,
+        object: "subscription",
+        status: "canceled",
+        items: { data: [{ id: "si_preview", price: { id: "price_preview_current" } }] },
+      }),
     },
   } as unknown as Stripe;
 }
@@ -118,4 +126,12 @@ export async function changeSubscriptionPlan(
     items: [{ id: item.id, price: targetPrice }],
     proration_behavior: "create_prorations",
   });
+}
+
+// Cancel a monthly subscription (REQ-055/TASK-102) — the "cancel" end of the reduce-instead-then-
+// cancel flow. A thin wrapper over the SDK, mirroring changeSubscriptionPlan; the offline stub
+// implements subscriptions.cancel so the portal cancel route runs offline. Returns the cancelled
+// subscription (status 'canceled').
+export async function cancelSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+  return stripe.subscriptions.cancel(subscriptionId);
 }

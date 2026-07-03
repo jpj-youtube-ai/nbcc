@@ -915,6 +915,10 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
 | `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login) |
+| `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read) |
+| `PATCH /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor update) |
+| `POST /api/admin/donors/:id/subscription/cancel` | **implemented** | REQ-062 (admin cancel subscription) |
+| `POST /api/admin/donors/:id/gift-aid/cancel` | **implemented** | REQ-062 (admin cancel Gift Aid) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -976,6 +980,26 @@ generic **401**; a malformed body is **400**. The role-gated admin actions that 
 **TASK-106**. Proven by `test/unit/admin-auth.test.ts` (mocked pool — both paths, the pure
 password/session helpers, and that the migration is additive-only) and end to end by the `@db`
 `features/admin-auth.feature`.
+
+**`GET`/`PATCH /api/admin/donors/:id`, `POST …/subscription/cancel`, `POST …/gift-aid/cancel`
+(REQ-062 · TASK-106).** The role-gated admin actions that let an Editor/Admin act on a donor's
+behalf — the mirror of the self-serve donor-portal routes (`src/routes/portal.ts`), but authorised by
+the **admin session token** (`Authorization: Bearer …`) instead of a magic-link token, and addressing
+a donor by id. A shared `authorizeAdmin(req, res, minRole)` helper (the admin analogue of portal's
+`authOrReject`) rejects a **missing/invalid/expired token with 401** and enforces the role rank
+`viewer < editor < admin`: **GET** needs `viewer` (read-only, any role); the three writes need
+`editor`, so a **Viewer gets 403** on any of them. Each endpoint **reuses the existing audited write
+helpers** rather than duplicating logic: **PATCH** → `updateDonorPortal` (same `donor.updated`
+`writeWithAudit` transaction as self-serve, now with the admin as `actor`); **subscription cancel** →
+the same reduce-instead gate (REQ-055), then `cancelSubscription` (Stripe) + a
+`recordAdminSubscriptionCancellation` audit row via `writeWithAudit`; **gift-aid cancel** →
+`adminCancelGiftAid` (`src/db/admin.ts`), which reuses the pure `buildDeclarationCancellation` and, in
+one `writeWithAudit` transaction, locks the donor's active declaration, sets `revoked_at` and appends
+the `declaration.revoked` audit row (no new declaration, no `superseded_by`). So **every admin write
+appends its audit_log row in the same transaction as the state change** (the truth model), recording
+which admin acted. No active declaration → 404; a concurrent revoke → 409; a non-numeric id → 400.
+Proven by `test/unit/admin-api.test.ts` (mocked pool — the full 401/403/200 role matrix and that each
+successful write is audited) and end to end by the `@db` `features/admin-api.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`

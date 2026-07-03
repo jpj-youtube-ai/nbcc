@@ -1183,6 +1183,24 @@ completed. An illegal transition throws a typed `DeclarationTransitionError`. Un
 DB-free (`test/unit/declaration-status.test.ts`). This lays the column + rules only; the
 letter/link sending and the token-driven persistence that *call* the helper are a later task.
 
+**Donor portal magic-link tokens (REQ-061 · TASK-100).** The self-serve donor portal is entered
+passwordlessly via a **one-time, expiring magic link**. The additive `portal_access_tokens` table
+(migration `1783074071570_portal-access-tokens.js`: `donor_id` FK **`onDelete CASCADE`** — a token
+is worthless once its donor is gone — a unique `token`, `expires_at`, a nullable `used_at`,
+`created_at`) stores the grants. The **pure**, DB-free `src/portal/tokens.ts` owns the rules:
+`issuePortalToken` builds the record (`expires_at = now + ttl`, ~30 min; clock injected),
+`verifyPortalToken` throws a typed `PortalTokenError` for a missing / **expired** / **already-used**
+token or returns the granted `donorId`, and `portalMagicLink(base, token)` builds the URL on
+`PORTAL_BASE_URL`. The audited writes are `src/db/portal.ts` (mirroring `reviseDeclaration`): a
+`BEGIN…COMMIT` `issuePortalAccessToken` (generate a random token, INSERT, `portal.token_issued`
+audit) and `consumePortalToken` (lock `FOR UPDATE`, `verifyPortalToken`, stamp `used_at`,
+`portal.token_used` audit) — `used_at` is the one-time-use enforcement, so a replay finds it set and
+throws `already_used`. The send is `sendPortalMagicLink` (`src/clients/email.ts`, same best-effort
+stub-seam). `PORTAL_BASE_URL` is a required config value (schema + `.env.example` + CI env + SSM
+`String` + ECS task-def env — golden rule 3). Proven DB-free by `test/unit/portal-tokens.test.ts`
+(pure verify + mocked-pool issue/consume). The portal routes/pages that *call* these are a REQ-061
+follow-up.
+
 **Subscription dunning lifecycle (REQ-065 · TASK-091).** A monthly (subscription) donor's card
 renewal can fail; Stripe Smart Retries re-attempts it (~3 attempts over ~2 weeks) before giving
 up. The additive `subscription_dunning` table (migration
@@ -1881,6 +1899,11 @@ declaration link + QR short link are built on (`declarationLinks`). **Not** a se
 ships in the email/QR), but SSM-held and injected via `valueFrom` like the price IDs — a
 plain SSM `String` with its ARN in `exec_secrets` — so it varies per environment; validated
 as a URL, with a valid placeholder so a fresh apply passes.
+
+`PORTAL_BASE_URL` (TASK-100) is the public site base the self-serve donor-portal magic link is
+built on (`portalMagicLink`). Same treatment as `DECLARATION_FORM_BASE_URL`: **not** a secret (it
+ships in the access email), an SSM `String` injected via `valueFrom` with its ARN in
+`exec_secrets`, validated as a URL, with a valid placeholder so a fresh apply passes.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

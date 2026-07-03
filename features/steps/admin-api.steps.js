@@ -127,6 +127,24 @@ When(
   },
 );
 
+When(
+  "I GET the admin queue {string} as {string} with password {string}",
+  async function (queue, email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/queues/${queue}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When("I GET the admin queue {string} without a token", async function (queue) {
+  const res = await fetch(`${BASE_URL}/api/admin/queues/${queue}`);
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
 When("I search admin {string} for {string} without a token", async function (kind, q) {
   const res = await fetch(`${BASE_URL}/api/admin/search/${kind}?q=${encodeURIComponent(q)}`);
   this.adminStatus = res.status;

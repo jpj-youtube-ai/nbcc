@@ -2,6 +2,8 @@ import { pool } from "./pool";
 import { writeWithAudit } from "./donations";
 import { findActiveDeclarationIdForDonor, DeclarationCancellationError } from "./declarations";
 import { buildDeclarationCancellation } from "../declarations/cancellation";
+import { computeRetentionExpiry } from "../declarations/retention";
+import type { Scope } from "../declarations/wording";
 
 // Read access to admin/staff `users` (TASK-105/REQ-062). Read-only (pool.query, no transaction —
 // mirrors getDonorPortalSnapshot in src/db/portal.ts). The login endpoint looks a user up by email
@@ -169,6 +171,108 @@ export async function listAdjustmentDueDonations(): Promise<AdjustmentDueRow[]> 
        JOIN donors dn ON dn.id = d.donor_id
        LEFT JOIN claim_adjustments ca ON ca.donation_id = d.id
       WHERE d.claim_status = 'adjustment_due'
+      ORDER BY d.id DESC`,
+  );
+  return res.rows;
+}
+
+// --- Admin retention + awaiting-declaration queues (REQ-046/REQ-049/REQ-057 · TASK-110) ---------
+
+// How far ahead of `now` a declaration counts as "expiring" (versus already "expired"). A six-month
+// horizon gives staff notice before HMRC's six-year retention window closes.
+const RETENTION_EXPIRING_WINDOW_MS = 180 * 24 * 60 * 60 * 1000;
+
+export interface RetentionExpiryRow {
+  id: number;
+  donor_id: number;
+  first_name: string;
+  last_name: string;
+  scope: string;
+  retentionExpiry: string; // ISO date the six-year window closes
+  flag: "expired" | "expiring";
+}
+
+// List declarations whose retention window has closed ("expired") or closes within the horizon
+// ("expiring"), per the pure computeRetentionExpiry calculator (REQ-046 — six years after the final
+// claimed charge, indefinite while an enduring declaration is still live). Read-only (pool.query, no
+// transaction). `now` is injectable so the classification is deterministic under test. Maps each
+// declaration's inputs from the row: cancelledAt = revoked_at (a revoked declaration is inactive), so
+// subscriptionActive = (revoked_at IS NULL); the anchor is the most recent claimed donation's date.
+// Only declarations that HAVE a claimed donation are read (without one the calculator returns null).
+export async function listRetentionExpiryDeclarations(
+  now: Date = new Date(),
+): Promise<RetentionExpiryRow[]> {
+  const res = await pool.query<{
+    id: number;
+    donor_id: number;
+    first_name: string;
+    last_name: string;
+    scope: Scope;
+    revoked_at: Date | null;
+    last_claimed_at: Date | null;
+  }>(
+    `SELECT dec.id, dec.donor_id, dec.first_name, dec.last_name, dec.scope, dec.revoked_at,
+            (SELECT MAX(dn.created_at) FROM donations dn
+               WHERE dn.declaration_id = dec.id
+                 AND dn.claim_status IN ('claimed','adjustment_due')) AS last_claimed_at
+       FROM declarations dec
+      WHERE EXISTS (SELECT 1 FROM donations dn
+                     WHERE dn.declaration_id = dec.id
+                       AND dn.claim_status IN ('claimed','adjustment_due'))
+      ORDER BY dec.id ASC`,
+  );
+
+  const rows: RetentionExpiryRow[] = [];
+  for (const r of res.rows) {
+    const expiry = computeRetentionExpiry({
+      scope: r.scope,
+      subscriptionActive: r.revoked_at == null,
+      lastClaimedDonationAt: r.last_claimed_at,
+      cancelledAt: r.revoked_at,
+    });
+    if (expiry == null) continue; // retained indefinitely / no anchor — not a queue item
+    const flag =
+      expiry.getTime() <= now.getTime()
+        ? "expired"
+        : expiry.getTime() <= now.getTime() + RETENTION_EXPIRING_WINDOW_MS
+          ? "expiring"
+          : null;
+    if (!flag) continue; // closes beyond the horizon — not yet a queue item
+    rows.push({
+      id: r.id,
+      donor_id: r.donor_id,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      scope: r.scope,
+      retentionExpiry: expiry.toISOString(),
+      flag,
+    });
+  }
+  return rows;
+}
+
+export interface AwaitingDeclarationRow {
+  id: number;
+  donor_id: number;
+  donor_name: string;
+  donor_email: string | null;
+  declaration_status: string;
+  declaration_token: string | null;
+  amount_pence: number;
+  created_at: Date;
+}
+
+// List donations whose in-person/postal Gift Aid confirmation was sent but not completed (REQ-049/
+// REQ-057): declaration_status 'sent' (link/letter dispatched) or 'undelivered' (it bounced) — so
+// bounced emails are included. Read-only (pool.query, no transaction). Joins the donor for the
+// name/email an admin needs to follow up, and carries the declaration_token addressing the link.
+export async function listAwaitingDeclarationDonations(): Promise<AwaitingDeclarationRow[]> {
+  const res = await pool.query<AwaitingDeclarationRow>(
+    `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
+            d.declaration_status, d.declaration_token, d.amount_pence, d.created_at
+       FROM donations d
+       JOIN donors dn ON dn.id = d.donor_id
+      WHERE d.declaration_status IN ('sent','undelivered')
       ORDER BY d.id DESC`,
   );
   return res.rows;

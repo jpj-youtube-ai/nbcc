@@ -51,3 +51,22 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
     When I GET the admin adjustment-due queue as "viewer.admin.bdd@example.com" with password "view-pw-123"
     Then the admin response status should be 200
+
+  Scenario Outline: a Viewer can read the retention and awaiting-declaration queues
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    When I GET the admin queue "<queue>" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+
+    Examples:
+      | queue                |
+      | retention-expiry     |
+      | awaiting-declaration |
+
+  Scenario Outline: the admin queues reject a missing token with 401
+    When I GET the admin queue "<queue>" without a token
+    Then the admin response status should be 401
+
+    Examples:
+      | queue                |
+      | retention-expiry     |
+      | awaiting-declaration |

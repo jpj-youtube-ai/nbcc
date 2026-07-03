@@ -924,6 +924,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/search/donations?q=` | **implemented** | REQ-062 (admin donation search) |
 | `POST /api/admin/claim-batches/:id/submit` | **implemented** | REQ-052/REQ-062 (mark claim batch submitted) |
 | `GET /api/admin/claims/adjustment-due` | **implemented** | REQ-063 (adjustment-due queue) |
+| `GET /api/admin/queues/retention-expiry` | **implemented** | REQ-046 (retention-expiry queue) |
+| `GET /api/admin/queues/awaiting-declaration` | **implemented** | REQ-049 (awaiting-declaration queue) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1040,6 +1042,23 @@ joined to their donor and the `claim_adjustments` row (owed amount + reason) for
 queue. Proven by the claim-ops block in `test/unit/admin-api.test.ts` (401/403, the editor/admin
 submit-200 with the audited transaction asserted, 404/409 guards, and the viewer-or-above 200 on the
 queue) and the `@db` `features/admin-api.feature`.
+
+**`GET /api/admin/queues/retention-expiry` + `GET /api/admin/queues/awaiting-declaration` (REQ-046/
+REQ-049 · TASK-110).** Two read-only admin queues (`viewer` and up, so a missing/invalid token is
+**401**). **Retention-expiry** — `listRetentionExpiryDeclarations` (`src/db/admin.ts`) reads every
+declaration that has a claimed donation and runs the pure `computeRetentionExpiry` calculator
+(`src/declarations/retention.ts`, REQ-046: six years after the final claimed charge, indefinite while
+an enduring declaration is live) per row, mapping `cancelledAt = revoked_at` (a revoked declaration is
+inactive, so `subscriptionActive = revoked_at IS NULL`) and the anchor to the most recent claimed
+donation's date. It returns only declarations flagged **`expired`** (window already closed) or
+**`expiring`** (closes within a six-month horizon), with the computed `retentionExpiry`; a live
+enduring declaration (retained indefinitely) is omitted. **Awaiting-declaration** —
+`listAwaitingDeclarationDonations` lists donations whose in-person/postal confirmation was sent but not
+completed: `declaration_status IN ('sent','undelivered')` (REQ-049/REQ-057 — **bounced/undelivered
+emails included**), joined to the donor and carrying the `declaration_token` that addresses the link.
+Proven by the queues block in `test/unit/admin-api.test.ts` (401, the viewer/editor/admin 200s, the
+expired-flag computation, that a live enduring declaration is omitted, and the sent/undelivered filter)
+and the `@db` `features/admin-api.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`

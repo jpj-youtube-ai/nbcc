@@ -459,6 +459,10 @@ Tasks:
 
 Treat declarations as immutable so that any change to name, address, scope or taxpayer confirmation deactivates the old declaration with a revoked timestamp and creates a new one with the current wording, linking future charges to the new declaration while past claimed donations keep their original. *Accept:* each donation's claim references the declaration that was valid at the time of that donation.
 
+Tasks:
+- TASK-096 — Add additive migration for declaration revocation and lineage columns
+- TASK-097 — Add a pure declaration-revision builder and an audited revoke-and-create write helper
+
 ### REQ-060 — Consent-based emails and thank-yous
 
 Send nothing without a captured email, and give every donation that has a, layered with a Gift Aid confirmation and manage/cancel instructions for individuals, a corporation-tax receipt forcompanies, or a refund confirmation where relevant. *Accept:* no email is ever sent without an address.

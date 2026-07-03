@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildCorporationTaxReceipt,
+  buildCompanyRefundNotice,
   classifyCompanyGift,
   OSCR_NUMBER,
   GENUINE_DONATION_STATEMENT,
@@ -77,6 +78,33 @@ describe("buildCorporationTaxReceipt (REQ-053)", () => {
 
   it("throws on an invalid donation date", () => {
     expect(() => buildCorporationTaxReceipt({ ...input, donationDate: "not-a-date" })).toThrow();
+  });
+});
+
+describe("buildCompanyRefundNotice (REQ-063 · TASK-095)", () => {
+  const base = {
+    legalName: "Acme Ltd",
+    originalAmountPence: 100000,
+    currency: "GBP",
+    donationDate: "2025-12-24T00:00:00Z",
+  } as const;
+
+  it("builds a VOID notice for a full refund, naming NBCC + OSCR and the original amount", () => {
+    const notice = buildCompanyRefundNotice({ ...base, action: "void", refundedPence: 100000 });
+    for (const content of [notice.text, notice.html]) {
+      expect(content).toContain("NBCC");
+      expect(content).toContain(OSCR_NUMBER);
+      expect(content).toContain("Acme Ltd");
+    }
+    expect(notice.text.toUpperCase()).toContain("VOID");
+    expect(notice.text).toContain("£1000.00");
+  });
+
+  it("builds a CORRECT notice for a partial refund, stating the retained amount", () => {
+    const notice = buildCompanyRefundNotice({ ...base, action: "correct", refundedPence: 40000 });
+    expect(notice.text.toUpperCase()).toContain("CORRECT");
+    expect(notice.text).toContain("£400.00"); // refunded £400
+    expect(notice.text).toContain("£600.00"); // retained £600
   });
 });
 

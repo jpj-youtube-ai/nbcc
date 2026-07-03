@@ -1322,9 +1322,16 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   — when the charge carried a `receipt_email` — the walk-in donor is emailed a
   token-addressed Gift Aid declaration link + QR short link **post-commit** (TASK-075, see
   **In-person declaration email** below).
-- **`charge.refunded` / `charge.dispute.*`** → updates the SAME donation record's
-  `refunded_amount_pence` (absolute, so replay-safe) and recomputes `claim_status`
-  — never a duplicate row.
+- **`charge.refunded` / `charge.dispute.*`** (REQ-063 · TASK-095) → updates the SAME donation
+  record's `refunded_amount_pence` (absolute, so replay-safe) and recomputes the claim state via
+  the pure `recalculateClaimOnRefund` (TASK-093), never a duplicate row. A **not-yet-claimed** gift
+  re-derives `claim_status` from the retained amount; an **already-batched/claimed** gift is set
+  `claim_status='adjustment_due'` and gets a **`claim_adjustments`** row (tied to its
+  `claim_batch_id`, amount = the refunded portion of the claimed gift) + a `claim.adjustment_recorded`
+  audit row **in the same transaction**; a **company** gift leaves `claim_status` untouched and
+  sends a **void/correction Corporation Tax receipt notice** (`buildCompanyRefundNotice`) to its
+  billing contact **post-commit** (best-effort, via the company-receipt channel). Idempotent by
+  event id. Covered DB-free in `test/unit/stripe-webhook-refund.test.ts`.
 - **`checkout.session.async_payment_succeeded` / `checkout.session.async_payment_failed`**
   (REQ-065 · TASK-090) → settle a pending **BACS** gift. Found by its **session id** (never a new
   row), the SAME donation's `payment_status` flips to `paid`/`failed` and `claim_status` is
@@ -1473,9 +1480,9 @@ persistence: it **widens the `donations.claim_status` CHECK** (DROP + ADD to a s
 an existing row), and adds a **`claim_adjustments`** table — `donation_id` + `claim_batch_id`
 FKs (both `onDelete RESTRICT`, indexed), `adjustment_pence` (`>= 0`, the refunded portion of the
 already-claimed gift) and a `reason` text. Additive/expand-contract, safe on populated data
-(golden rule 2). The audited write that inserts the adjustment row and flips
-`claim_status='adjustment_due'` (extending `writeWithAudit` / `assignDonationToBatch`) is the
-next task; this only lays the constraint + table.
+(golden rule 2). The webhook write that inserts the adjustment row and flips
+`claim_status='adjustment_due'` on a refund/dispute is wired in TASK-095 (see the
+`charge.refunded` / `charge.dispute.*` webhook branch above).
 
 **Benefit tracking (REQ-045 · TASK-066).** The additive migration
 `migrations/1783003547726_benefit-types-and-donation-benefits.js` lays the model for the

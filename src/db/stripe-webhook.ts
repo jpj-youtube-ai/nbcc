@@ -3,8 +3,14 @@ import type { PoolClient } from "pg";
 import type Stripe from "stripe";
 import { pool } from "./pool";
 import { config } from "../config";
-import { buildDonationRow, deriveClaimStatus, type DonorInput, type PaymentStatus } from "./donations-model";
-import { insertAudit, insertDonation, insertDonorAndDonation } from "./donations";
+import {
+  buildDonationRow,
+  deriveClaimStatus,
+  type DonorInput,
+  type PaymentStatus,
+  type ClaimStatus,
+} from "./donations-model";
+import { insertAudit, insertDonation, insertDonorAndDonation, insertClaimAdjustment } from "./donations";
 import {
   donationFromCheckoutSession,
   declarationFromCheckoutSession,
@@ -17,10 +23,10 @@ import {
   declarationLinks,
   refundedPenceFromCharge,
   refundedPenceFromDispute,
-  claimStatusAfterRefund,
   confirmationEmailFor,
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
+import { recalculateClaimOnRefund } from "../claims/refund";
 import {
   sendDonationConfirmation,
   sendDeclarationEmail,
@@ -29,7 +35,12 @@ import {
   sendSubscriptionLapsedAdmin,
 } from "../clients/email";
 import { applyDeclarationEvent } from "../declarations/status";
-import { buildCorporationTaxReceipt, classifyCompanyGift } from "../donors/receipt";
+import {
+  buildCorporationTaxReceipt,
+  classifyCompanyGift,
+  buildCompanyRefundNotice,
+  type CompanyRefundAction,
+} from "../donors/receipt";
 import {
   applyDunningEvent,
   canApplyDunningEvent,
@@ -62,7 +73,7 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration, receipt, lapse } = await dispatch(client, event);
+    const { action, email, declaration, receipt, lapse, refundNotice } = await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
     // donation row has committed, and OUTSIDE the transaction: a slow or failing
@@ -80,6 +91,8 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     // Lapsed-subscription notices (TASK-092): post-commit, best-effort. Present only when this
     // event lapsed a subscription (donor notice gated on email + consent, admin notice always).
     await sendLapseNotifications(lapse ?? null);
+    // Company refund void/correction receipt notice (TASK-095): post-commit, best-effort.
+    await sendRefundNotice(refundNotice ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -104,6 +117,49 @@ interface DispatchResult {
   // The lapsed-subscription notifications to send post-commit (TASK-092), or null when the event
   // did not lapse a subscription.
   lapse?: LapseNotify | null;
+  // The company refund void/correction receipt notice to send post-commit (TASK-095), or null.
+  refundNotice?: RefundNotice | null;
+}
+
+// A committed company refund whose void/correction Corporation Tax receipt notice must be sent
+// AFTER commit (TASK-095/REQ-063). Carries the billing-contact email + the values the pure notice
+// builder needs.
+interface RefundNotice {
+  email: string;
+  legalName: string;
+  action: CompanyRefundAction;
+  originalAmountPence: number;
+  refundedPence: number;
+  currency: string;
+  donationDate: Date;
+}
+
+// Post-commit, best-effort company refund notice (TASK-095/REQ-063). Builds the void/correction
+// content (src/donors/receipt.ts) and sends it via the same company-receipt channel; a null notice
+// (not a company refund, or no contact email) or a provider failure is a no-op, so a failed/late
+// send never rolls back the committed refund. Exported so the trigger is unit-testable.
+export async function sendRefundNotice(notice: RefundNotice | null): Promise<void> {
+  if (!notice) return;
+  try {
+    const content = buildCompanyRefundNotice({
+      legalName: notice.legalName,
+      action: notice.action,
+      originalAmountPence: notice.originalAmountPence,
+      refundedPence: notice.refundedPence,
+      currency: notice.currency,
+      donationDate: notice.donationDate,
+    });
+    await sendCompanyReceipt({
+      email: notice.email,
+      legalName: notice.legalName,
+      amountPence: notice.originalAmountPence,
+      currency: notice.currency,
+      text: content.text,
+      html: content.html,
+    });
+  } catch {
+    // best-effort: the refund is durably recorded; a failed notice must not fail the webhook.
+  }
 }
 
 // A committed subscription lapse whose notices must be sent AFTER commit (TASK-092/REQ-065): a
@@ -271,17 +327,11 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<Dispat
     case "checkout.session.async_payment_failed":
       return { action: await handleAsyncPayment(client, event, "failed"), email: null };
     case "charge.refunded":
-      return {
-        action: await handleRefund(client, event, refundedPenceFromCharge(event.data.object)),
-        email: null,
-      };
+      return handleRefund(client, event, refundedPenceFromCharge(event.data.object));
     case "charge.dispute.created":
     case "charge.dispute.closed":
     case "charge.dispute.funds_withdrawn":
-      return {
-        action: await handleRefund(client, event, refundedPenceFromDispute(event.data.object)),
-        email: null,
-      };
+      return handleRefund(client, event, refundedPenceFromDispute(event.data.object));
     default:
       return { action: "ignored", email: null };
   }
@@ -499,17 +549,26 @@ interface RefundTarget {
   gift_aid: boolean;
   declaration_id: number | null;
   amount_pence: number;
+  currency: string;
+  created_at: Date;
+  claim_status: ClaimStatus;
+  claim_batch_id: number | null;
   donor_type: "individual" | "company";
+  business_name: string | null;
+  email: string | null;
 }
 
-// charge.refunded / charge.dispute.* → update the SAME donation record's
-// refunded_amount_pence (absolute, so replay-safe) and recompute claim_status.
-// Never inserts a new row.
+// charge.refunded / charge.dispute.* → update the SAME donation record's refunded_amount_pence
+// (absolute, so replay-safe) and recompute the claim state via the pure recalculateClaimOnRefund
+// (REQ-063/TASK-093). Never inserts a NEW donation. On an ALREADY-CLAIMED gift it flags
+// claim_status='adjustment_due' and inserts a claim_adjustments row (tied to its claim batch) in
+// THIS transaction; on a COMPANY gift it leaves claim_status untouched and returns a
+// void/correction receipt notice to send post-commit. Idempotent via the event-id claim above.
 async function handleRefund(
   client: PoolClient,
   event: Stripe.Event,
   refundedPence: number,
-): Promise<string> {
+): Promise<DispatchResult> {
   const obj = event.data.object as Stripe.Charge | Stripe.Dispute;
   const paymentIntentId = typeof obj.payment_intent === "string" ? obj.payment_intent : null;
   const chargeId =
@@ -521,36 +580,79 @@ async function handleRefund(
 
   const target = (
     await client.query<RefundTarget>(
-      `SELECT d.id, d.gift_aid, d.declaration_id, d.amount_pence, dn.donor_type
+      `SELECT d.id, d.gift_aid, d.declaration_id, d.amount_pence, d.currency, d.created_at,
+              d.claim_status, d.claim_batch_id, dn.donor_type, dn.business_name, dn.email
          FROM donations d JOIN donors dn ON dn.id = d.donor_id
         WHERE d.stripe_payment_intent_id = $1 OR d.stripe_charge_id = $2
         ORDER BY d.id ASC LIMIT 1`,
       [paymentIntentId, chargeId],
     )
   ).rows[0];
-  if (!target) return "ignored.no_donation";
+  if (!target) return { action: "ignored.no_donation", email: null };
 
-  const claimStatus = claimStatusAfterRefund(
-    {
-      donorType: target.donor_type,
-      giftAid: target.gift_aid,
-      hasDeclaration: target.declaration_id != null,
-      amountPence: target.amount_pence,
-    },
-    refundedPence,
-  );
+  // Cap the reported refund at the donation amount (Stripe reports the cumulative absolute
+  // refunded total, which for a dispute can equal the amount).
+  const cappedRefund = Math.min(refundedPence, target.amount_pence);
+  const recalc = recalculateClaimOnRefund({
+    donorType: target.donor_type,
+    giftAid: target.gift_aid,
+    hasDeclaration: target.declaration_id != null,
+    amountPence: target.amount_pence,
+    refundedPence: cappedRefund,
+    claimStatus: target.claim_status,
+  });
+
+  // The donations.claim_status column now accepts 'adjustment_due' (migration 1783067859348).
   await client.query(
     `UPDATE donations SET refunded_amount_pence = $1, claim_status = $2 WHERE id = $3`,
-    [refundedPence, claimStatus, target.id],
+    [refundedPence, recalc.claimStatus, target.id],
   );
   await insertAudit(client, {
     actor: "stripe",
     action: "donation.refunded",
     entity: "donation",
     entityId: target.id,
-    data: { eventId: event.id, refundedPence, claimStatus, eventType: event.type },
+    data: { eventId: event.id, refundedPence, claimStatus: recalc.claimStatus, eventType: event.type },
   });
-  return "donation.refunded";
+
+  // Already-claimed gift → record the owed HMRC adjustment against its claim batch, same tx.
+  if (recalc.claimStatus === "adjustment_due" && target.claim_batch_id != null) {
+    const adjustmentId = await insertClaimAdjustment(
+      client,
+      target.id,
+      target.claim_batch_id,
+      recalc.adjustmentPence,
+      `refund via ${event.type}`,
+    );
+    await insertAudit(client, {
+      actor: "stripe",
+      action: "claim.adjustment_recorded",
+      entity: "donation",
+      entityId: target.id,
+      data: {
+        eventId: event.id,
+        adjustmentId,
+        claimBatchId: target.claim_batch_id,
+        adjustmentPence: recalc.adjustmentPence,
+      },
+    });
+  }
+
+  // Company gift → a void/correction Corporation Tax receipt notice, sent post-commit.
+  const refundNotice: RefundNotice | null =
+    target.donor_type === "company" && recalc.receiptAction && target.email
+      ? {
+          email: target.email,
+          legalName: target.business_name ?? "",
+          action: recalc.receiptAction,
+          originalAmountPence: target.amount_pence,
+          refundedPence: cappedRefund,
+          currency: target.currency,
+          donationDate: new Date(target.created_at),
+        }
+      : null;
+
+  return { action: "donation.refunded", email: null, refundNotice };
 }
 
 interface PaymentTarget {

@@ -16,9 +16,10 @@ const { queryMock, mockClient, connect } = vi.hoisted(() => {
 
 vi.mock("../../src/db/pool", () => ({ pool: { connect } }));
 
-const { sendCompanyReceipt, sendDonationConfirmation, sendDeclarationEmail, sendSubscriptionLapsedDonor, sendSubscriptionLapsedAdmin } =
+const { sendCompanyReceipt, sendRefundConfirmation, sendDonationConfirmation, sendDeclarationEmail, sendSubscriptionLapsedDonor, sendSubscriptionLapsedAdmin } =
   vi.hoisted(() => ({
     sendCompanyReceipt: vi.fn(),
+    sendRefundConfirmation: vi.fn(),
     sendDonationConfirmation: vi.fn(),
     sendDeclarationEmail: vi.fn(),
     sendSubscriptionLapsedDonor: vi.fn(),
@@ -26,6 +27,7 @@ const { sendCompanyReceipt, sendDonationConfirmation, sendDeclarationEmail, send
   }));
 vi.mock("../../src/clients/email", () => ({
   sendCompanyReceipt,
+  sendRefundConfirmation,
   sendDonationConfirmation,
   sendDeclarationEmail,
   sendSubscriptionLapsedDonor,
@@ -86,7 +88,9 @@ const individual = (overrides: Record<string, unknown> = {}) => ({
   claim_batch_id: null,
   donor_type: "individual",
   business_name: null,
+  full_name: "Ada Lovelace",
   email: null,
+  email_consent: false,
   ...overrides,
 });
 
@@ -94,6 +98,7 @@ const refundEvent = (amountRefunded: number, id = "evt_refund") =>
   ({
     id,
     type: "charge.refunded",
+    created: 1_767_312_000, // 2026-01-02T00:00:00Z
     data: {
       object: {
         id: "ch_x",
@@ -111,8 +116,41 @@ beforeEach(() => {
   connect.mockClear();
   sendCompanyReceipt.mockReset();
   sendCompanyReceipt.mockResolvedValue(undefined);
+  sendRefundConfirmation.mockReset();
+  sendRefundConfirmation.mockResolvedValue(undefined);
   target = individual();
   installQuery();
+});
+
+describe("charge.refunded — individual donor refund confirmation email (REQ-063 · TASK-099)", () => {
+  it("sends exactly one refund confirmation stating the refunded amount + date to a consented donor", async () => {
+    target = individual({ email: "ada@example.com", email_consent: true });
+    const result = await processWebhookEvent(refundEvent(2000)); // partial refund
+    expect(result.processed).toBe(true);
+
+    expect(sendRefundConfirmation).toHaveBeenCalledOnce();
+    const msg = sendRefundConfirmation.mock.calls[0][0];
+    expect(msg.email).toBe("ada@example.com");
+    expect(msg.refundedPence).toBe(2000);
+    expect(msg.text).toContain("£20.00"); // the refunded amount
+    // The event created 2026-01-02 (see refundEvent), formatted DD/MM/YYYY.
+    expect(msg.text).toContain("02/01/2026");
+    // A partial refund says the rest of the gift still stands.
+    expect(msg.text.toLowerCase()).toContain("still stands");
+    expect(sendCompanyReceipt).not.toHaveBeenCalled();
+  });
+
+  it("sends NO refund confirmation when the donor has no consented email", async () => {
+    // email present but consent false...
+    target = individual({ email: "ada@example.com", email_consent: false });
+    await processWebhookEvent(refundEvent(2000));
+    expect(sendRefundConfirmation).not.toHaveBeenCalled();
+    // ...and no email at all.
+    sendRefundConfirmation.mockClear();
+    target = individual({ email: null, email_consent: true });
+    await processWebhookEvent(refundEvent(2000, "evt_refund_2"));
+    expect(sendRefundConfirmation).not.toHaveBeenCalled();
+  });
 });
 
 describe("charge.refunded — not-yet-claimed individual (REQ-063)", () => {
@@ -188,8 +226,9 @@ describe("charge.refunded — company donation (REQ-053)", () => {
     const msg = sendCompanyReceipt.mock.calls[0][0];
     expect(msg.email).toBe("finance@acme.test");
     expect(msg.text.toUpperCase()).toContain("VOID");
-    // No adjustment for a company (never claimed).
+    // No adjustment for a company (never claimed), and NEVER the individual refund confirmation.
     expect(has(/insert into claim_adjustments/i)).toBe(false);
+    expect(sendRefundConfirmation).not.toHaveBeenCalled();
   });
 
   it("sends a 'correct' notice on a partial company refund", async () => {

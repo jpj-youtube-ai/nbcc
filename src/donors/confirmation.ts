@@ -82,3 +82,39 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
     `</section>`;
   return { text, html };
 }
+
+// Format a refund date as DD/MM/YYYY (UTC components — no clock, no timezone drift), matching the
+// receipt/export date format.
+function formatDate(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error("refund confirmation: invalid refund date");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const yyyy = String(date.getUTCFullYear()).padStart(4, "0");
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+export const refundConfirmationInputSchema = z.object({
+  fullName: z.string().trim().min(1),
+  refundedPence: z.number().int().positive(),
+  currency: z.string().trim().min(1).default("GBP"),
+  refundDate: z.union([z.date(), z.string().min(1)]),
+  full: z.boolean(), // a full refund vs a partial one
+});
+export type RefundConfirmationInput = z.input<typeof refundConfirmationInputSchema>;
+
+// Build the refund-confirmation email content for an INDIVIDUAL donor (REQ-063 · TASK-099). Pure —
+// no clock (the refund date is passed in). States the refunded amount + date; a full refund says the
+// gift is cancelled, a partial one says the rest of the gift stands.
+export function buildRefundConfirmation(input: RefundConfirmationInput): DonationConfirmationContent {
+  const { fullName, refundedPence, currency, refundDate, full } = refundConfirmationInputSchema.parse(input);
+  const amount = formatAmount(refundedPence, currency);
+  const date = formatDate(refundDate);
+  const line = full
+    ? `Thank you ${fullName}. Your donation to ${CHARITY_SHORT_NAME} has been refunded in full: ${amount} on ${date}.`
+    : `Thank you ${fullName}. A refund of ${amount} was made to your donation to ${CHARITY_SHORT_NAME} on ${date}; ` +
+      `the rest of your gift still stands.`;
+  const text = line + "\n";
+  const html = `<section class="refund-confirmation"><p>${escapeHtml(line)}</p></section>`;
+  return { text, html };
+}

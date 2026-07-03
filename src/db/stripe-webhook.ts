@@ -31,6 +31,7 @@ import {
   sendDonationConfirmation,
   sendDeclarationEmail,
   sendCompanyReceipt,
+  sendRefundConfirmation,
   sendSubscriptionLapsedDonor,
   sendSubscriptionLapsedAdmin,
 } from "../clients/email";
@@ -41,7 +42,7 @@ import {
   buildCompanyRefundNotice,
   type CompanyRefundAction,
 } from "../donors/receipt";
-import { buildDonationConfirmation } from "../donors/confirmation";
+import { buildDonationConfirmation, buildRefundConfirmation } from "../donors/confirmation";
 import {
   applyDunningEvent,
   canApplyDunningEvent,
@@ -74,7 +75,8 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration, receipt, lapse, refundNotice } = await dispatch(client, event);
+    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation } =
+      await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
     // donation row has committed, and OUTSIDE the transaction: a slow or failing
@@ -94,6 +96,8 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     await sendLapseNotifications(lapse ?? null);
     // Company refund void/correction receipt notice (TASK-095): post-commit, best-effort.
     await sendRefundNotice(refundNotice ?? null);
+    // Individual-donor refund confirmation (TASK-099): post-commit, best-effort.
+    await sendRefundConfirmationEmail(refundConfirmation ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -120,6 +124,46 @@ interface DispatchResult {
   lapse?: LapseNotify | null;
   // The company refund void/correction receipt notice to send post-commit (TASK-095), or null.
   refundNotice?: RefundNotice | null;
+  // The individual-donor refund confirmation email to send post-commit (TASK-099), or null (a
+  // company refund, or no consented donor email).
+  refundConfirmation?: RefundConfirmationSend | null;
+}
+
+// A committed individual-donor refund whose confirmation email must be sent AFTER commit (TASK-099).
+interface RefundConfirmationSend {
+  email: string;
+  fullName: string;
+  refundedPence: number;
+  currency: string;
+  refundDate: Date;
+  full: boolean;
+}
+
+// Post-commit, best-effort individual-donor refund confirmation (TASK-099/REQ-063). Builds the
+// content (src/donors/confirmation.ts) and sends it; a null send (a company refund, or no consented
+// donor email) or a provider failure is a no-op, so a failed/late send never rolls back the
+// committed refund. Exported so the trigger is unit-testable.
+export async function sendRefundConfirmationEmail(send: RefundConfirmationSend | null): Promise<void> {
+  if (!send) return;
+  try {
+    const content = buildRefundConfirmation({
+      fullName: send.fullName,
+      refundedPence: send.refundedPence,
+      currency: send.currency,
+      refundDate: send.refundDate,
+      full: send.full,
+    });
+    await sendRefundConfirmation({
+      email: send.email,
+      fullName: send.fullName,
+      refundedPence: send.refundedPence,
+      currency: send.currency,
+      text: content.text,
+      html: content.html,
+    });
+  } catch {
+    // best-effort: the refund is durably recorded; a failed confirmation must not fail the webhook.
+  }
 }
 
 // A committed company refund whose void/correction Corporation Tax receipt notice must be sent
@@ -574,7 +618,9 @@ interface RefundTarget {
   claim_batch_id: number | null;
   donor_type: "individual" | "company";
   business_name: string | null;
+  full_name: string;
   email: string | null;
+  email_consent: boolean;
 }
 
 // charge.refunded / charge.dispute.* → update the SAME donation record's refunded_amount_pence
@@ -600,7 +646,8 @@ async function handleRefund(
   const target = (
     await client.query<RefundTarget>(
       `SELECT d.id, d.gift_aid, d.declaration_id, d.amount_pence, d.currency, d.created_at,
-              d.claim_status, d.claim_batch_id, dn.donor_type, dn.business_name, dn.email
+              d.claim_status, d.claim_batch_id, dn.donor_type, dn.business_name,
+              dn.full_name, dn.email, dn.email_consent
          FROM donations d JOIN donors dn ON dn.id = d.donor_id
         WHERE d.stripe_payment_intent_id = $1 OR d.stripe_charge_id = $2
         ORDER BY d.id ASC LIMIT 1`,
@@ -671,7 +718,22 @@ async function handleRefund(
         }
       : null;
 
-  return { action: "donation.refunded", email: null, refundNotice };
+  // Individual donor → a refund confirmation email, sent post-commit, ONLY when a consented email is
+  // on file (the same gate as the donation-confirmation send). A company never gets this (it gets the
+  // receipt notice above); recalc.donorRefund is null for a company.
+  const refundConfirmation: RefundConfirmationSend | null =
+    recalc.donorRefund && target.email && target.email_consent
+      ? {
+          email: target.email,
+          fullName: target.full_name,
+          refundedPence: cappedRefund,
+          currency: target.currency,
+          refundDate: new Date((event.created ?? 0) * 1000),
+          full: recalc.donorRefund === "full",
+        }
+      : null;
+
+  return { action: "donation.refunded", email: null, refundNotice, refundConfirmation };
 }
 
 interface PaymentTarget {

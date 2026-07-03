@@ -442,6 +442,10 @@ Tasks:
 
 Configure Stripe Smart Retries for three attempts over roughly two weeks, then mark the subscription lapsed, stop future claims and notify the donor and admin. *Accept:* a lapsed subscription produces no further claimable donations.
 
+Tasks:
+- TASK-091 — Add subscription dunning-state tracking table and pure lapse state machine
+- TASK-092 — Wire dunning webhook handling and lapsed-subscription donor/admin notifications
+
 ### REQ-058 — Refund and chargeback handling
 
 On a refund or dispute update the refunded amount, set the donation not-claimable (or recalculate for a partial) when it has not yet been claimed, and when it has already been claimed set claim_status to adjustment_due and net the over-claim off the next submission, always recalculating partial refunds on the retained amount. *Accept:* Gift Aid is never kept on returned money, adjustments are recorded against the claim batch for auditability, and a company refund voids or corrects the receipt only.

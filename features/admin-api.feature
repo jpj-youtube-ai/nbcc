@@ -33,3 +33,21 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
   Scenario: search without a token is rejected with 401
     When I search admin "donors" for "Ada Behalf" without a token
     Then the admin response status should be 401
+
+  Scenario: an Editor submits an open claim batch
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And an open claim batch
+    When I submit the claim batch as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the admin response field "submitted" should be "true"
+
+  Scenario: a Viewer cannot submit a claim batch
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And an open claim batch
+    When I submit the claim batch as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 403
+
+  Scenario: a Viewer can list the adjustment-due queue
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    When I GET the admin adjustment-due queue as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200

@@ -91,6 +91,89 @@ export async function recordAdminSubscriptionCancellation(
   );
 }
 
+// --- Admin claim operations (REQ-062/REQ-052/REQ-063 · TASK-109) --------------------------------
+
+// A claim-batch submission that cannot proceed: the batch id is unknown, or it is not open (already
+// submitted, or in the adjustment_due state). A typed error like DeclarationCancellationError so a
+// route can branch on it (not_found → 404, not_open → 409).
+export class ClaimBatchSubmitError extends Error {
+  constructor(
+    public readonly reason: "not_found" | "not_open",
+    public readonly batchId: number,
+  ) {
+    super(`claim batch ${batchId} cannot be submitted: ${reason}`);
+    this.name = "ClaimBatchSubmitError";
+  }
+}
+
+// Mark a claim batch submitted (REQ-052/REQ-062). In ONE audited transaction (writeWithAudit,
+// mirroring assignDonationToBatch): lock the batch row (FOR UPDATE), reject an unknown id
+// (not_found) or a batch that is not 'open' (not_open — already submitted, or adjustment_due), set
+// status='submitted' + submitted_at=now(), and append a single `claim_batch.submitted` audit row.
+// Any throw rolls back BOTH the state change and the audit row. The Charities Online export that
+// produces the batch's file is src/claims/charities-online.ts; this only flips its status.
+export async function submitClaimBatch(
+  batchId: number,
+  actor: string,
+): Promise<{ batchId: number }> {
+  return writeWithAudit(
+    async (client) => {
+      const row = (
+        await client.query<{ id: number; status: string }>(
+          `SELECT id, status FROM claim_batches WHERE id = $1 FOR UPDATE`,
+          [batchId],
+        )
+      ).rows[0];
+      if (!row) throw new ClaimBatchSubmitError("not_found", batchId);
+      if (row.status !== "open") throw new ClaimBatchSubmitError("not_open", batchId);
+
+      await client.query(
+        `UPDATE claim_batches SET status = 'submitted', submitted_at = now() WHERE id = $1`,
+        [batchId],
+      );
+      return { batchId };
+    },
+    (r) => ({
+      actor,
+      action: "claim_batch.submitted",
+      entity: "claim_batch",
+      entityId: r.batchId,
+      data: {},
+    }),
+  );
+}
+
+export interface AdjustmentDueRow {
+  id: number;
+  donor_id: number;
+  donor_name: string;
+  donor_email: string | null;
+  amount_pence: number;
+  refunded_amount_pence: number;
+  claim_status: string;
+  claim_batch_id: number | null;
+  adjustment_pence: number | null;
+  adjustment_reason: string | null;
+  created_at: Date;
+}
+
+// List donations owing an HMRC adjustment (claim_status='adjustment_due', REQ-063) for the admin
+// adjustment queue. Read-only (pool.query, no transaction — mirrors listClaimableDonationsForExport).
+// Joins the donor for name/email and LEFT JOINs the claim_adjustments row (the owed amount + reason).
+export async function listAdjustmentDueDonations(): Promise<AdjustmentDueRow[]> {
+  const res = await pool.query<AdjustmentDueRow>(
+    `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
+            d.amount_pence, d.refunded_amount_pence, d.claim_status, d.claim_batch_id, d.created_at,
+            ca.adjustment_pence, ca.reason AS adjustment_reason
+       FROM donations d
+       JOIN donors dn ON dn.id = d.donor_id
+       LEFT JOIN claim_adjustments ca ON ca.donation_id = d.id
+      WHERE d.claim_status = 'adjustment_due'
+      ORDER BY d.id DESC`,
+  );
+  return res.rows;
+}
+
 // --- Admin search (REQ-062 · TASK-108) ----------------------------------------------------------
 // Read-only lookups an admin (Viewer and up) runs to find a donor, declaration or donation by a free
 // query — a name, email, id or postcode. Each matches the query case-insensitively (ILIKE) across the

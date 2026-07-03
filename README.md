@@ -922,6 +922,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/search/donors?q=` | **implemented** | REQ-062 (admin donor search) |
 | `GET /api/admin/search/declarations?q=` | **implemented** | REQ-062 (admin declaration search) |
 | `GET /api/admin/search/donations?q=` | **implemented** | REQ-062 (admin donation search) |
+| `POST /api/admin/claim-batches/:id/submit` | **implemented** | REQ-052/REQ-062 (mark claim batch submitted) |
+| `GET /api/admin/claims/adjustment-due` | **implemented** | REQ-063 (adjustment-due queue) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1024,6 +1026,20 @@ and donations also match a numeric **donor id**; donations join the donor for th
 Results are **capped** (`LIMIT 50`) so an over-broad query stays bounded. Proven by the search block in
 `test/unit/admin-api.test.ts` (401 + the viewer/editor/admin 200 matrix, the ILIKE/numeric params, and
 the blank-`q` 400) and end to end by the `@db` `features/admin-api.feature`.
+
+**`POST /api/admin/claim-batches/:id/submit` + `GET /api/admin/claims/adjustment-due` (REQ-052/REQ-063
+· TASK-109).** The admin claim operations. **Submit** marks a claim batch submitted — a state change,
+so `authorizeAdmin` at **`editor`** (a Viewer gets 403). `submitClaimBatch` (`src/db/admin.ts`) mirrors
+`assignDonationToBatch`: in one `writeWithAudit` transaction it locks the batch row `FOR UPDATE`,
+rejects an unknown id (**404**) or a non-`open` batch (already submitted / adjustment_due → **409**),
+sets `status='submitted', submitted_at=now()` and appends **exactly one `claim_batch.submitted` audit
+row** in the same transaction. The Charities Online export that produces the batch file is
+`src/claims/charities-online.ts`; this only flips its status. **Adjustment-due** is a read (`viewer`
+and up): `listAdjustmentDueDonations` lists the donations with `claim_status='adjustment_due'` (REQ-063),
+joined to their donor and the `claim_adjustments` row (owed amount + reason) for the admin adjustment
+queue. Proven by the claim-ops block in `test/unit/admin-api.test.ts` (401/403, the editor/admin
+submit-200 with the audited transaction asserted, 404/409 guards, and the viewer-or-above 200 on the
+queue) and the `@db` `features/admin-api.feature`.
 
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`

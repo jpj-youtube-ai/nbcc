@@ -7,6 +7,9 @@ import {
   searchDonors,
   searchDeclarations,
   searchDonations,
+  submitClaimBatch,
+  listAdjustmentDueDonations,
+  ClaimBatchSubmitError,
 } from "../db/admin";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
@@ -289,3 +292,51 @@ export async function getAdminSearchDonations(req: Request, res: Response): Prom
 adminRouter.get("/api/admin/search/donors", getAdminSearchDonors);
 adminRouter.get("/api/admin/search/declarations", getAdminSearchDeclarations);
 adminRouter.get("/api/admin/search/donations", getAdminSearchDonations);
+
+// --- Admin claim operations (REQ-052/REQ-063 · TASK-109) ----------------------------------------
+// POST /api/admin/claim-batches/:id/submit marks a claim batch submitted (a state change → Editor/
+// Admin, audited in the same transaction); GET /api/admin/claims/adjustment-due lists the donations
+// owing an HMRC adjustment (a read → Viewer and up).
+
+// Parse and validate the claim-batch id in the path; sends a 400 and returns null when it is not a
+// positive integer.
+function claimBatchId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid claim batch id" });
+    return null;
+  }
+  return id;
+}
+
+export async function postAdminSubmitClaimBatch(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = claimBatchId(req, res);
+  if (id == null) return;
+
+  try {
+    await submitClaimBatch(id, actorOf(claims));
+    return res.status(200).json({ submitted: true, batchId: id });
+  } catch (err) {
+    if (err instanceof ClaimBatchSubmitError) {
+      const status = err.reason === "not_found" ? 404 : 409;
+      return res.status(status).json({ error: `Claim batch cannot be submitted: ${err.reason}` });
+    }
+    console.error("admin claim-batch submit failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Claim batch submit is temporarily unavailable" });
+  }
+}
+
+export async function getAdminAdjustmentDue(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listAdjustmentDueDonations() });
+  } catch (err) {
+    console.error("admin adjustment-due list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/claim-batches/:id/submit", postAdminSubmitClaimBatch);
+adminRouter.get("/api/admin/claims/adjustment-due", getAdminAdjustmentDue);

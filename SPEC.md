@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (54)
+## Shipped (55)
 
 ### REQ-001 — Multi-page site structure
 
@@ -395,6 +395,14 @@ Tasks:
 - TASK-082 — Add a pure Charities Online export row builder and CSV formatter
 - TASK-083 — Add a claimable-donations export query and Charities Online CSV export script
 
+### REQ-053 — Company donation flow
+
+Provide a company path that suppresses all Gift Aid UI and captures the legal company name (required), an optional registration number, a required contact name and email, a billing address and an anonymous flag, recording the donation as permanently not-claimable. *Accept:* no declaration is taken, no Charities Online row is produced, and the donation never enters a claim.
+
+Tasks:
+- TASK-084 — Add company-specific field capture (registration number, contact name, contact email, billing address) to the give widget's company path
+- TASK-085 — Persist company donation fields and enforce permanent non-claimability through checkout and the webhook
+
 ### REQ-055 — Stripe subscriptions for monthly giving
 
 Use Stripe Billing subscriptions for monthly tiers with one Price perice, and support mid-subscription tier up or down via Stripe proration with Gift Aid claimed on each actual charge amount.*Accept:* proration is handled and no special Gift Aid handling is needed beyond claiming the actual amount charged.
@@ -411,15 +419,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (11)
-
-### REQ-053 — Company donation flow
-
-Provide a company path that suppresses all Gift Aid UI and captures the legal company name (required), an optional registration number, a required contact name and email, a billing address and an anonymous flag, recording the donation as permanently not-claimable. *Accept:* no declaration is taken, no Charities Online row is produced, and the donation never enters a claim.
-
-Tasks:
-- TASK-084 — Add company-specific field capture (registration number, contact name, contact email, billing address) to the give widget's company path
-- TASK-085 — Persist company donation fields and enforce permanent non-claimability through checkout and the webhook
+## Planned (10)
 
 ### REQ-054 — Corporation-tax receipt for companies
 

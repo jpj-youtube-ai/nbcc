@@ -1081,6 +1081,29 @@ Proven by the queues block in `test/unit/admin-api.test.ts` (401, the viewer/edi
 expired-flag computation, that a live enduring declaration is omitted, and the sent/undelivered filter)
 and the `@db` `features/admin-api.feature`.
 
+**Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
+(`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
+six-year window has **closed**, it erases the captured personal data. It reuses the pure
+`computeRetentionExpiry` calculator **verbatim** (`src/declarations/retention.ts`) to classify the
+declaration and acts **only on an `expired` row** (expiry ≤ now); an `expiring` or indefinitely-retained
+(live enduring) declaration is **left completely untouched — no write, no audit row**. For an expired
+declaration it, in ONE `writeWithAudit` transaction (the truth model, like `updateDonorPortal` /
+`cancelDeclaration`): redacts the donor's name (`full_name → "Redacted"`, a NOT NULL column) and nulls
+its contact/business fields, redacts the declaration's captured personal fields (name, address,
+house name/number → `"Redacted"`; title, postcode → NULL), and appends **exactly one
+`donor.personal_data_anonymized` audit row** — any throw rolls back both. The immutable declaration
+keeps its `wording_version`/`snapshot` + `scope` (not personal data). The batch job that finds the
+expired rows (via `listRetentionExpiryDeclarations`) and runs the helper is
+`scripts/anonymize-retention-expired.mjs` (`npm run anonymize:retention-expired`, run via `tsx` through
+`src/db/pool.ts`, with a `--dry` preview), intended to run on a schedule. Proven DB-free by
+`test/unit/retention-anonymize.test.ts` (mocked pool — the expired redaction + single audit row in one
+transaction, and that `expiring` / indefinitely-retained / unknown declarations are untouched).
+
+```
+npm run anonymize:retention-expired            # anonymise every expired declaration
+npm run anonymize:retention-expired -- --dry   # list what WOULD be anonymised, write nothing
+```
+
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`
 (`individual`|`company`, defaulting to `individual`), `businessName`, and the REQ-039

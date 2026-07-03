@@ -1013,7 +1013,12 @@ table touched, so a code-level rollback stays safe — golden rule 2):
 - **`declarations`** — the immutable Gift Aid / HMRC declaration: the matching
   fields (title, names, `house_name_number`, address, `postcode`, `non_uk`), the
   `scope` (this-donation vs enduring), and the versioned wording the donor saw
-  (`wording_version` + `wording_snapshot`) (REQ-040/REQ-043/REQ-044/REQ-046).
+  (`wording_version` + `wording_snapshot`) (REQ-040/REQ-043/REQ-044/REQ-046). Two nullable
+  columns record revocation/supersession (REQ-059 · TASK-096, added by migration
+  `1783068943728_declaration-revocation.js`): `revoked_at` (set when the declaration is
+  revoked) and `superseded_by_declaration_id` (a self-FK `onDelete RESTRICT` to the corrected
+  declaration that replaces it — editing never mutates the immutable row, it supersedes it). The
+  pure revocation/supersession logic + audited write are a later task; this only lays the columns.
 - **`donations`** — **THE** one donation record: FK `donor_id`, `mode`
   (once/monthly), `plan`, `amount_pence`, `currency`, the Stripe ids,
   `refunded_amount_pence`, `claim_status`, `payment_channel`, and Gift Aid as a

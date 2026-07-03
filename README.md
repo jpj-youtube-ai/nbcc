@@ -1401,10 +1401,19 @@ single confirmation email via `src/clients/email.ts`
 `src/db/stripe-webhook-model.ts`); a withheld email / no-consent sends nothing. The
 send happens **after COMMIT and outside the transaction**, and is **best-effort**: a
 slow or failing provider is swallowed, never rolling back a recorded gift or forcing
-a Stripe redelivery. This is the single, minimal confirmation — **not** the full
-REQ-060 templated email system (Gift Aid confirmation, manage/cancel, receipts).
-`test/unit/donation-confirmation-email.test.ts` (mocked client) proves exactly one
-send on email+consent and none otherwise.
+a Stripe redelivery. The email **content** is built by the pure, DB-free
+`buildDonationConfirmation` (`src/donors/confirmation.ts`, REQ-060 · TASK-098 —
+mirroring `buildCorporationTaxReceipt`), which reflects **only what the donor actually
+did**: a **Gift Aid confirmation line** is included **only** when Gift Aid was opted in
+(with an enduring clause for a monthly gift), and **manage/cancel instructions** (reusing
+the verbatim REQ-026 reassurance copy — cancel any time, contact Jaimie Wakefield, since no
+self-serve portal REQ-061 exists yet) **only** for a monthly gift; a one-off / non-Gift-Aid
+gift omits the parts that don't apply. It invents **no** new legal wording (the verbatim HMRC
+statement is bound at declaration time in `src/declarations/wording.ts`). The **consent gate is
+unchanged** — no email is sent without a consented address — and a **company** donation is
+untouched (it uses the Corporation Tax receipt path, TASK-088, not this confirmation).
+`test/unit/donation-confirmation-email.test.ts` (mocked client) proves exactly one send on
+email+consent and none otherwise, plus the Gift Aid / manage-cancel content rules.
 
 > **Stub seam (no live email provider needed).** `src/clients/email.ts` POSTs to a
 > real `EMAIL_SEND_URL` when one is configured. **Outside production**, when the URL

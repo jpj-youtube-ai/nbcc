@@ -18,6 +18,10 @@ export interface DonationConfirmation {
   fullName: string;
   amountPence: number;
   currency: string;
+  // The built email content (TASK-098): a Gift Aid line + manage/cancel copy where they apply,
+  // from the pure src/donors/confirmation.ts. Optional so a bare payload still sends.
+  text?: string;
+  html?: string;
 }
 
 function isPlaceholderUrl(url: string): boolean {

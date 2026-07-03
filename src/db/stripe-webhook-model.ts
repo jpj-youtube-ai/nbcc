@@ -238,6 +238,10 @@ export interface DonationConfirmationEmail {
   fullName: string;
   amountPence: number;
   currency: string;
+  // What the donor actually did (TASK-098), so the content builder reflects only that: whether Gift
+  // Aid was opted in, and the gift's frequency (a monthly gift gets manage/cancel instructions).
+  giftAid: boolean;
+  mode: "once" | "monthly";
 }
 
 // Decide whether — and with what payload — to send a donation-confirmation email.
@@ -247,14 +251,16 @@ export interface DonationConfirmationEmail {
 // belt-and-braces the send path checks. Pure: no pool/config/network/clock.
 export function confirmationEmailFor(
   donor: { email?: string | null; emailConsent?: boolean; fullName: string },
-  amount: { amountPence: number; currency: string },
+  gift: { amountPence: number; currency: string; giftAid: boolean; mode: "once" | "monthly" },
 ): DonationConfirmationEmail | null {
   if (!donor.email || donor.emailConsent !== true) return null;
   return {
     email: donor.email,
     fullName: donor.fullName,
-    amountPence: amount.amountPence,
-    currency: amount.currency,
+    amountPence: gift.amountPence,
+    currency: gift.currency,
+    giftAid: gift.giftAid,
+    mode: gift.mode,
   };
 }
 

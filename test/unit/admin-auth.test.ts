@@ -12,7 +12,16 @@ import { fileURLToPath } from "node:url";
 
 const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock } }));
-vi.mock("../../src/config", () => ({ config: { ADMIN_SESSION_SECRET: "test-admin-secret" } }));
+vi.mock("../../src/config", () => ({
+  config: {
+    ADMIN_SESSION_SECRET: "test-admin-secret",
+    // admin.ts imports the stripe client (cancelSubscription for TASK-106), which builds
+    // `new Stripe(...)` at module load — needs a non-empty key + webhook secret even though these
+    // login tests never touch Stripe.
+    STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    STRIPE_WEBHOOK_SECRET: "whsec_placeholder",
+  },
+}));
 
 import { hashPassword, verifyPassword } from "../../src/admin/password";
 import { signAdminSession, verifyAdminSession, AdminSessionError } from "../../src/admin/session";

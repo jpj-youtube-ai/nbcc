@@ -1,8 +1,15 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { findUserByEmail } from "../db/admin";
+import {
+  findUserByEmail,
+  adminCancelGiftAid,
+  recordAdminSubscriptionCancellation,
+} from "../db/admin";
 import { verifyPassword } from "../admin/password";
-import { signAdminSession } from "../admin/session";
+import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
+import { getDonorPortalSnapshot, updateDonorPortal } from "../db/portal";
+import { cancelSubscription } from "../clients/stripe";
+import { DeclarationCancellationError } from "../db/declarations";
 import { config } from "../config";
 
 // The role-based admin login endpoint (REQ-062 · TASK-105). POST /api/admin/login verifies a staff
@@ -60,3 +67,166 @@ export async function postAdminLogin(req: Request, res: Response): Promise<Respo
 }
 
 adminRouter.post("/api/admin/login", postAdminLogin);
+
+// --- Role-gated admin actions on a donor's behalf (REQ-062 · TASK-106) --------------------------
+// These mirror the self-serve donor-portal routes (src/routes/portal.ts) but are authorised by the
+// admin session token instead of a magic-link token, and act on a donor by id. Authorisation is the
+// authOrReject-style helper below (mirroring portal.ts): a missing/invalid token is 401, and the
+// role rank gates writes — Viewer is read-only (403 on any PATCH/POST), Editor and Admin may write.
+// Every write reuses the existing audited helpers (updateDonorPortal / adminCancelGiftAid /
+// recordAdminSubscriptionCancellation), so its audit_log row commits in the same transaction.
+
+const ROLE_RANK: Record<string, number> = { viewer: 1, editor: 2, admin: 3 };
+
+function bearerToken(req: Request): string | null {
+  const header = req.headers?.authorization ?? "";
+  const match = /^Bearer (.+)$/i.exec(header);
+  return match ? match[1] : null;
+}
+
+// Verify the admin session token and enforce the minimum role. On failure it sends the 401/403
+// response and returns null; on success it returns the session claims (mirrors portal's authOrReject).
+function authorizeAdmin(req: Request, res: Response, minRole: string): AdminSessionClaims | null {
+  const token = bearerToken(req);
+  if (!token) {
+    res.status(401).json({ error: "Missing admin session token" });
+    return null;
+  }
+  let claims: AdminSessionClaims;
+  try {
+    claims = verifyAdminSession(token, config.ADMIN_SESSION_SECRET, new Date());
+  } catch {
+    res.status(401).json({ error: "Invalid or expired admin session" });
+    return null;
+  }
+  if ((ROLE_RANK[claims.role] ?? 0) < (ROLE_RANK[minRole] ?? 0)) {
+    res.status(403).json({ error: "Your role does not permit this action" });
+    return null;
+  }
+  return claims;
+}
+
+// Parse and validate the donor id in the path; sends a 400 and returns null when it is not a
+// positive integer.
+function donorId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid donor id" });
+    return null;
+  }
+  return id;
+}
+
+// The admin's audit actor label, so a donor-record change records WHICH admin acted on their behalf.
+const actorOf = (claims: AdminSessionClaims): string => `admin:${claims.email}`;
+
+// GET /api/admin/donors/:id — the donor snapshot (reuses getDonorPortalSnapshot). Read-only, so any
+// authenticated role (Viewer and up) may call it.
+export async function getAdminDonor(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  const id = donorId(req, res);
+  if (id == null) return;
+  try {
+    const snapshot = await getDonorPortalSnapshot(id);
+    if (!snapshot) return res.status(404).json({ error: "Donor not found" });
+    return res.status(200).json(snapshot);
+  } catch (err) {
+    console.error("admin donor read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// The editable donor fields — same shape as the self-serve PATCH (src/routes/portal.ts).
+const adminPatchSchema = z
+  .object({
+    fullName: z.string().trim().min(1).optional(),
+    email: z.string().trim().email().optional(),
+    emailConsent: z.boolean().optional(),
+    anonymous: z.boolean().optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });
+
+// PATCH /api/admin/donors/:id — update the donor's editable fields (reuses updateDonorPortal, which
+// appends a `donor.updated` audit row in the same transaction). Editor/Admin only.
+export async function patchAdminDonor(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = donorId(req, res);
+  if (id == null) return;
+
+  const parsed = adminPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid donor update", details: parsed.error.flatten() });
+  }
+  try {
+    await updateDonorPortal(id, parsed.data, actorOf(claims));
+    const snapshot = await getDonorPortalSnapshot(id);
+    if (!snapshot) return res.status(404).json({ error: "Donor not found" });
+    return res.status(200).json(snapshot);
+  } catch (err) {
+    console.error("admin donor update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+// The subscription cancel body — same reduce-instead acknowledgement as the self-serve route.
+const adminCancelSubSchema = z.object({
+  subscriptionId: z.string().min(1),
+  accepted: z.enum(["reduce", "cancel"]),
+});
+
+// POST /api/admin/donors/:id/subscription/cancel — cancel a donor's monthly gift on their behalf,
+// behind the same reduce-instead gate as the self-serve flow (REQ-055). Editor/Admin only. Cancels
+// in Stripe (cancelSubscription) then records the admin action (recordAdminSubscriptionCancellation).
+export async function postAdminCancelSubscription(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = donorId(req, res);
+  if (id == null) return;
+
+  const parsed = adminCancelSubSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid cancel request", details: parsed.error.flatten() });
+  }
+  if (parsed.data.accepted !== "cancel") {
+    return res.status(400).json({ error: "reduce-instead was chosen; reduce the plan via change-plan" });
+  }
+  try {
+    await cancelSubscription(parsed.data.subscriptionId);
+    await recordAdminSubscriptionCancellation(id, parsed.data.subscriptionId, actorOf(claims));
+    return res.status(200).json({ cancelled: true });
+  } catch (err) {
+    console.error("admin subscription cancel failed:", err instanceof Error ? err.message : err);
+    return res.status(502).json({ error: "Cancellation is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/donors/:id/gift-aid/cancel — revoke the donor's active Gift Aid declaration on
+// their behalf (reuses adminCancelGiftAid → buildDeclarationCancellation + writeWithAudit). No active
+// declaration → 404; a concurrent revoke → 409. Editor/Admin only.
+export async function postAdminCancelGiftAid(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = donorId(req, res);
+  if (id == null) return;
+
+  try {
+    const result = await adminCancelGiftAid(id, actorOf(claims));
+    if (!result.cancelled) {
+      return res.status(404).json({ error: "No active Gift Aid declaration to cancel" });
+    }
+    return res.status(200).json({ cancelled: true, declarationId: result.declarationId });
+  } catch (err) {
+    if (err instanceof DeclarationCancellationError) {
+      return res.status(409).json({ error: "Gift Aid is already cancelled" });
+    }
+    console.error("admin gift-aid cancel failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Gift Aid cancellation is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/donors/:id", getAdminDonor);
+adminRouter.patch("/api/admin/donors/:id", patchAdminDonor);
+adminRouter.post("/api/admin/donors/:id/subscription/cancel", postAdminCancelSubscription);
+adminRouter.post("/api/admin/donors/:id/gift-aid/cancel", postAdminCancelGiftAid);

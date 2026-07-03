@@ -120,6 +120,9 @@ export interface DonorPortalSnapshot {
   emailConsent: boolean;
   anonymous: boolean;
   subscriptionPlan: string | null;
+  // The Stripe subscription id of that most-recent monthly-gift donation, so the portal page can
+  // drive the reduce-instead-then-cancel flow (REQ-055 · TASK-102); null when there is no monthly gift.
+  subscriptionId: string | null;
   giftAid: boolean;
 }
 
@@ -131,12 +134,16 @@ export async function getDonorPortalSnapshot(donorId: number): Promise<DonorPort
       email_consent: boolean;
       anonymous: boolean;
       subscription_plan: string | null;
+      subscription_id: string | null;
       gift_aid: boolean;
     }>(
       `SELECT dn.full_name, dn.email, dn.email_consent, dn.anonymous,
               (SELECT d.plan FROM donations d
                  WHERE d.donor_id = dn.id AND d.stripe_subscription_id IS NOT NULL
                  ORDER BY d.id DESC LIMIT 1) AS subscription_plan,
+              (SELECT d.stripe_subscription_id FROM donations d
+                 WHERE d.donor_id = dn.id AND d.stripe_subscription_id IS NOT NULL
+                 ORDER BY d.id DESC LIMIT 1) AS subscription_id,
               EXISTS (SELECT 1 FROM donations d WHERE d.donor_id = dn.id AND d.gift_aid = true) AS gift_aid
          FROM donors dn
         WHERE dn.id = $1`,
@@ -151,6 +158,7 @@ export async function getDonorPortalSnapshot(donorId: number): Promise<DonorPort
     emailConsent: row.email_consent,
     anonymous: row.anonymous,
     subscriptionPlan: row.subscription_plan,
+    subscriptionId: row.subscription_id,
     giftAid: row.gift_aid,
   };
 }

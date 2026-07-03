@@ -43,6 +43,7 @@ function installPoolQuery() {
             email_consent: true,
             anonymous: false,
             subscription_plan: "gold",
+            subscription_id: "sub_123",
             gift_aid: true,
           },
         ],
@@ -100,6 +101,7 @@ describe("GET /api/portal/:token (REQ-061)", () => {
       emailConsent: true,
       anonymous: false,
       subscriptionPlan: "gold",
+      subscriptionId: "sub_123",
       giftAid: true,
     });
   });

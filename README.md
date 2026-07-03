@@ -53,10 +53,14 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/contact`    | `contact.html`    |
 | `/supporters` | `supporters.html` |
 | `/donate/thank-you` | `thank-you.html` |
+| `/donor-portal` | `portal.html` |
 
 `/donate/thank-you` is the post-payment confirmation page Stripe returns the
 donor to on a successful checkout (`STRIPE_SUCCESS_URL`, REQ-028/REQ-029); it is a
-landing page, not a primary nav destination.
+landing page, not a primary nav destination. `/donor-portal` is the self-serve
+donor portal page (REQ-061), reached via the magic-link token in the URL query
+string (`?token=…`); it is a private landing page (`noindex`), not a nav
+destination.
 
 The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
 Netlify-style format. The Express site router (`src/routes/site.ts`) parses it
@@ -69,12 +73,14 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /contact          /contact.html     200
 /supporters       /supporters.html  200
 /donate/thank-you /thank-you.html   200
+/donor-portal     /portal.html      200
 /index.html       /                 301!   # canonicalise raw .html onto the clean URL
 /about.html       /about-us         301!   # ! forces the redirect over the real file
 /donate.html      /donate           301!
 /contact.html     /contact          301!
 /supporters.html  /supporters       301!
 /thank-you.html   /donate/thank-you 301!
+/portal.html      /donor-portal     301!
 ```
 
 `200` is a *rewrite* (content served, address bar unchanged); `301!` is a forced
@@ -844,6 +850,31 @@ need **no 30-day confirmation letter**, so this page and its email are the whole
 the post-gift confirmation. `clean-urls` / `site` / `seo-metadata` / `copy-rules` /
 `accessibility` auto-cover the page and stay green.
 
+### Donor portal page (REQ-061 · TASK-104)
+
+`portal.html` is the **self-serve donor portal** page, served at the clean URL
+`/donor-portal` and reached via the one-time magic-link token in the URL query
+string (`?token=…`, issued by TASK-100). It shares the same nav / footer /
+`assets/css/styles.css` / `assets/js/main.js` shell as the rest of the site, with
+its own unique SEO metadata and a `noindex` robots tag (it is a private, token-gated
+page). A centred intro (the `DONOR PORTAL` CSS block) sits above a stack of `.card`
+sections. `initPortal` (`assets/js/main.js`, exported + unit-tested like
+`initContactForm`) reads the token from the query string and, on load, calls **`GET
+/api/portal/:token`**, rendering the donor's name/email, monthly-gift plan and Gift
+Aid status from the snapshot. Cancelling the monthly gift is **gated behind a
+reduce-instead choice** (REQ-055): the cancel action lives inside `#reduceChoice`,
+which stays hidden until the donor asks to cancel, so reducing is always offered
+first; confirming posts to **`POST /api/portal/:token/subscription/cancel`** with
+`accepted: 'cancel'` and the snapshot's `subscriptionId`. A Gift Aid cancel control
+posts to **`POST /api/portal/:token/gift-aid/cancel`** (TASK-103). To drive the
+cancel flow, `getDonorPortalSnapshot` (`src/db/portal.ts`) now also returns
+`subscriptionId` (the most-recent monthly-gift donation's Stripe subscription id, or
+null). Being a private landing page, no nav link is marked active. Dash-free copy,
+"NBCC" in full (REQ-031); skip-link + landmarks (REQ-032). Proven by
+`test/unit/donor-portal.test.ts` (static markup + jsdom against the real `initPortal`)
+and the `@db`-free `features/site.feature` clean-URL rows; `seo-metadata` /
+`copy-rules` / `accessibility` register the page and stay green.
+
 ### Checkout contract (REQ-028)
 
 Every amount control wires the one front-end → backend integration point. Each
@@ -893,7 +924,9 @@ via the one-time, expiring magic-link token (TASK-100). **Every** route authenti
 life). **`GET`** returns the donor's `getDonorPortalSnapshot` (`src/db/portal.ts`, a read-only
 `pool.query` like `listClaimableDonationsForExport`): `fullName`, `email`, `emailConsent`,
 `anonymous`, the current `subscriptionPlan` (the most recent monthly subscription donation's plan,
-or null) and `giftAid` (whether any gift-aided donation is on file). **`PATCH`** validates a
+or null), its `subscriptionId` (that donation's Stripe subscription id, or null — added for the
+TASK-104 portal page's reduce-instead-then-cancel flow) and `giftAid` (whether any gift-aided
+donation is on file). **`PATCH`** validates a
 zod-first `{ fullName?, email?, emailConsent?, anonymous? }` (`.strict()`, at least one field, valid
 email) and calls `updateDonorPortal`, which updates only the supplied `donors` columns **and appends
 a `donor.updated` audit_log row in the SAME `writeWithAudit` transaction** (the truth model), then

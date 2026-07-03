@@ -14,7 +14,14 @@ const { queryMock, clientQueryMock, mockClient, connect } = vi.hoisted(() => {
 });
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect } }));
 vi.mock("../../src/config", () => ({
-  config: { NODE_ENV: "development", DATABASE_URL: "postgres://localhost:5432/test" },
+  config: {
+    NODE_ENV: "development",
+    DATABASE_URL: "postgres://localhost:5432/test",
+    // portal.ts imports the stripe client (cancelSubscription), which builds `new Stripe(...)` at
+    // module load — needs a non-empty key + webhook secret even though these tests never cancel.
+    STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    STRIPE_WEBHOOK_SECRET: "whsec_placeholder",
+  },
 }));
 
 import { getPortal, patchPortal } from "../../src/routes/portal";

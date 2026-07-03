@@ -6,6 +6,7 @@ import {
   getDonorPortalSnapshot,
   updateDonorPortal,
 } from "../db/portal";
+import { cancelSubscription } from "../clients/stripe";
 
 // The self-serve donor portal API (REQ-061 · TASK-101). A donor reaches it via a one-time, expiring
 // magic-link token (TASK-100); EVERY route authenticates that token with verifyPortalToken and
@@ -75,5 +76,41 @@ export async function patchPortal(req: Request, res: Response): Promise<Response
   }
 }
 
+// Cancel a monthly subscription (REQ-055 · TASK-102) — the "cancel" end of the
+// reduce-instead-then-cancel flow. `accepted` is a REQUIRED acknowledgement that reduce-instead was
+// offered: 'cancel' proceeds to the cancellation; 'reduce' means the donor took the reduce path
+// (they should use change-plan) so cancellation is refused; a missing/invalid value is a 400 (the
+// donor cannot cancel without being shown the reduce-instead option first). subscriptionId is
+// validated like the change-plan endpoint.
+const cancelBodySchema = z.object({
+  subscriptionId: z.string().min(1),
+  accepted: z.enum(["reduce", "cancel"]),
+});
+
+export async function postCancelSubscription(req: Request, res: Response): Promise<Response | void> {
+  const donorId = await authOrReject(req, res);
+  if (donorId == null) return;
+
+  const parsed = cancelBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    // Missing/invalid `accepted` (the reduce-instead acknowledgement) or subscriptionId → 400.
+    return res.status(400).json({ error: "Invalid cancel request", details: parsed.error.flatten() });
+  }
+  if (parsed.data.accepted !== "cancel") {
+    // The donor chose to reduce instead — reducing is done via change-plan, not here.
+    return res.status(400).json({ error: "reduce-instead was chosen; reduce the plan via change-plan" });
+  }
+
+  try {
+    const subscription = await cancelSubscription(parsed.data.subscriptionId);
+    return res.status(200).json(subscription);
+  } catch (err) {
+    // An upstream Stripe failure → 502, mirroring the change-plan endpoint's shape.
+    console.error("subscription cancel failed:", err instanceof Error ? err.message : err);
+    return res.status(502).json({ error: "Cancellation is temporarily unavailable" });
+  }
+}
+
 portalRouter.get("/api/portal/:token", getPortal);
 portalRouter.patch("/api/portal/:token", patchPortal);
+portalRouter.post("/api/portal/:token/subscription/cancel", postCancelSubscription);

@@ -61,6 +61,16 @@ When("I PATCH the donor portal:", async function (docString) {
   this.portalBody = await res.json().catch(() => ({}));
 });
 
+When("I POST to cancel the donor subscription:", async function (docString) {
+  const res = await fetch(`${BASE_URL}/api/portal/${this.portalToken}/subscription/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: docString,
+  });
+  this.portalStatus = res.status;
+  this.portalBody = await res.json().catch(() => ({}));
+});
+
 Then("the portal response status should be {int}", function (code) {
   assert.equal(this.portalStatus, code);
 });

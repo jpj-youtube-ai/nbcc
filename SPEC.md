@@ -417,6 +417,10 @@ Tasks:
 
 Provide a company path that suppresses all Gift Aid UI and captures the legal company name (required), an optional registration number, a required contact name and email, a billing address and an anonymous flag, recording the donation as permanently not-claimable. *Accept:* no declaration is taken, no Charities Online row is produced, and the donation never enters a claim.
 
+Tasks:
+- TASK-084 — Add company-specific field capture (registration number, contact name, contact email, billing address) to the give widget's company path
+- TASK-085 — Persist company donation fields and enforce permanent non-claimability through checkout and the webhook
+
 ### REQ-054 — Corporation-tax receipt for companies
 
 Email a dated receipt in place of a declaration stating NBCC's name and OSCR SC047995, the amount and date, that it is a genuine donation with nothing of value given in return, and that NBCC has not and will not claim Gift Aid on it. *Accept:* genuine sponsorship where consideration is given is flagged for trustees as a separate flow rather than processed as a donation.

@@ -1018,7 +1018,7 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `1783068943728_declaration-revocation.js`): `revoked_at` (set when the declaration is
   revoked) and `superseded_by_declaration_id` (a self-FK `onDelete RESTRICT` to the corrected
   declaration that replaces it — editing never mutates the immutable row, it supersedes it). The
-  pure revocation/supersession logic + audited write are a later task; this only lays the columns.
+  pure revision builder + audited write are wired in TASK-097 (see **Declaration revision** below).
 - **`donations`** — **THE** one donation record: FK `donor_id`, `mode`
   (once/monthly), `plan`, `amount_pence`, `currency`, the Stripe ids,
   `refunded_amount_pence`, `claim_status`, `payment_channel`, and Gift Aid as a
@@ -1148,6 +1148,21 @@ this only produces the correct file for **finance to run and upload manually** (
 config env the service boots with, since the query goes through `pool.ts`); the authenticated
 trigger surface is REQ-062/REQ-063. The DB-free query shape is proven by
 `test/unit/charities-online-query.test.ts` (mocked pool).
+
+**Declaration revision (REQ-059 · TASK-097).** A Gift Aid declaration is immutable (REQ-046), so
+editing it never mutates the saved row: the old row is **revoked** and a new, corrected row
+**supersedes** it. The **pure** `src/declarations/revision.ts` (`buildDeclarationRevision`, no
+pool/config and no ambient clock — the timestamp is injected) diffs the newly captured fields
+against the current declaration on the donor-meaningful columns (name, address, postcode, scope,
+non-UK flag, taxpayer confirmation) and returns either **null** (a no-op — nothing changed) or a
+`{ revokedDeclaration, newDeclaration }` pair whose new row carries the **current** verbatim wording
+(`selectDeclarationWording`). The transactional `reviseDeclaration` (`src/db/declarations.ts`,
+mirroring `assignDonationToBatch`) does it in **one** `BEGIN…COMMIT`: locks the row (`FOR UPDATE`),
+rejects an unknown id / already-revoked row with a typed `DeclarationRevisionError`, inserts the new
+immutable row, sets the old row's `revoked_at` + `superseded_by_declaration_id`, and appends a
+`declaration.revoked` + a `declaration.created` audit row — any throw rolls back **all** of it. It
+**never** touches `donations` (an existing `donation.declaration_id` still points at the revoked
+row; re-linking is a separate concern). Proven DB-free (`test/unit/declaration-revision.test.ts`).
 
 **Declaration confirmation lifecycle (REQ-057 · TASK-074).** A Gift Aid declaration
 captured without a wet/online signature (in-person, telephone) must be confirmed by the

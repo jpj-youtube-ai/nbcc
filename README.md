@@ -1465,6 +1465,18 @@ code-level rollback stays safe (golden rule 2). Still separate follow-ups: the R
 export/submission pipeline and the REQ-062 admin RBAC that assemble and gate batches,
 plus the admin-write audit invariant (every admin write appends an `audit_log` row).
 
+**Claim adjustments (REQ-063 · TASK-094).** A refund/dispute on an ALREADY-CLAIMED donation
+owes HMRC an adjustment (the pure recalculation is `src/claims/refund.ts`, TASK-093). The
+additive migration `migrations/1783067859348_claim-adjustments-and-status.js` lays its
+persistence: it **widens the `donations.claim_status` CHECK** (DROP + ADD to a superset —
+`not_eligible`/`eligible`/`batched`/`claimed` **plus `adjustment_due`**, which can never reject
+an existing row), and adds a **`claim_adjustments`** table — `donation_id` + `claim_batch_id`
+FKs (both `onDelete RESTRICT`, indexed), `adjustment_pence` (`>= 0`, the refunded portion of the
+already-claimed gift) and a `reason` text. Additive/expand-contract, safe on populated data
+(golden rule 2). The audited write that inserts the adjustment row and flips
+`claim_status='adjustment_due'` (extending `writeWithAudit` / `assignDonationToBatch`) is the
+next task; this only lays the constraint + table.
+
 **Benefit tracking (REQ-045 · TASK-066).** The additive migration
 `migrations/1783003547726_benefit-types-and-donation-benefits.js` lays the model for the
 Gift Aid **benefit cap** — the catalogue of donor benefits and the benefits awarded per

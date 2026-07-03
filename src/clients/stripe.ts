@@ -21,6 +21,17 @@ const REAL_KEY = /^(sk|rk)_(test|live)_[A-Za-z0-9]{20,}$/;
 export const stripeConfigured = REAL_KEY.test(config.STRIPE_SECRET_KEY);
 const useStub = !stripeConfigured && config.NODE_ENV !== "production";
 
+// Pin the Stripe API version explicitly rather than relying on the SDK's implicit
+// default, which silently shifts whenever the `stripe` package is bumped. Pinning
+// makes the request version deterministic and keeps it aligned with the TypeScript
+// types shipped by this SDK release. Matches the version the installed SDK targets
+// (node_modules/stripe apiVersion); bump this in lockstep when upgrading `stripe`,
+// and align the webhook endpoint's API version in the Stripe dashboard so delivered
+// events match these types. Passed to `new Stripe(...)` below, where it is
+// type-checked against the SDK's LatestApiVersion, so an out-of-date pin fails the
+// build at the call site (an intentional tripwire when `stripe` is upgraded).
+export const STRIPE_API_VERSION = "2026-06-24.dahlia" as const;
+
 function stubStripe(): Stripe {
   let n = 0;
   return {
@@ -71,14 +82,16 @@ function stubStripe(): Stripe {
   } as unknown as Stripe;
 }
 
-export const stripe: Stripe = useStub ? stubStripe() : new Stripe(config.STRIPE_SECRET_KEY);
+export const stripe: Stripe = useStub
+  ? stubStripe()
+  : new Stripe(config.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION });
 
 // Webhook signature verification (REQ-036/TASK-046). constructEvent is pure
 // HMAC-SHA256 over the raw body — NO network — so it uses a real Stripe instance
 // even when the checkout client above is the stub (placeholder key, no live
 // account). Tests and the BDD sign events with STRIPE_WEBHOOK_SECRET via
 // stripe.webhooks.generateTestHeaderString, so the whole verify path runs offline.
-const webhookVerifier = new Stripe(config.STRIPE_SECRET_KEY);
+const webhookVerifier = new Stripe(config.STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION });
 
 export function constructEvent(payload: Buffer | string, signature: string): Stripe.Event {
   return webhookVerifier.webhooks.constructEvent(payload, signature, config.STRIPE_WEBHOOK_SECRET);

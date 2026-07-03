@@ -986,7 +986,15 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   leave them NULL). The pure `src/donors/company.ts` (`companyFieldsSchema` + `buildCompanyDonorRow`)
   validates + maps them; the webhook writes the donor in the **same** `writeWithAudit` transaction
   as the donation, with **no** declarations row and `claim_status='not_eligible'`, `declaration_id`
-  null (`buildDonationRow`/`deriveClaimStatus` force a company non-claimable — REQ-053).
+  null (`buildDonationRow`/`deriveClaimStatus` force a company non-claimable — REQ-053). A company
+  gift is relieved via **Corporation Tax**, not Gift Aid: the pure `src/donors/receipt.ts`
+  (`buildCorporationTaxReceipt`, REQ-053 · TASK-086) builds the receipt content — text + HTML
+  carrying NBCC's name, the OSCR number `SC047995`, the amount/date, and the verbatim
+  genuine-donation (nothing given in return) and no-Gift-Aid statements. Its guard
+  `classifyCompanyGift({ considerationGiven })` returns `flag_for_trustees` (not a receipt) when
+  the company received anything of value in return. Pure/DB-free (no pool/config/clock), unit-tested
+  in `test/unit/corporation-tax-receipt.test.ts`; wiring the content into a send (email/PDF) is a
+  later task.
 - **`declarations`** — the immutable Gift Aid / HMRC declaration: the matching
   fields (title, names, `house_name_number`, address, `postcode`, `non_uk`), the
   `scope` (this-donation vs enduring), and the versioned wording the donor saw

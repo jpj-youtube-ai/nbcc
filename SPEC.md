@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (60)
+## Shipped (61)
 
 ### REQ-001 — Multi-page site structure
 
@@ -453,6 +453,14 @@ Tasks:
 - TASK-096 — Add additive migration for declaration revocation and lineage columns
 - TASK-097 — Add a pure declaration-revision builder and an audited revoke-and-create write helper
 
+### REQ-060 — Consent-based emails and thank-yous
+
+Send nothing without a captured email, and give every donation that has a, layered with a Gift Aid confirmation and manage/cancel instructions for individuals, a corporation-tax receipt forcompanies, or a refund confirmation where relevant. *Accept:* no email is ever sent without an address.
+
+Tasks:
+- TASK-098 — Enrich the post-payment confirmation email with a Gift Aid confirmation and manage/cancel instructions for individuals
+- TASK-099 — Send a refund/dispute confirmation email to consenting individual donors from the refund webhook path
+
 ### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
 
 A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
@@ -461,15 +469,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (5)
-
-### REQ-060 — Consent-based emails and thank-yous
-
-Send nothing without a captured email, and give every donation that has a, layered with a Gift Aid confirmation and manage/cancel instructions for individuals, a corporation-tax receipt forcompanies, or a refund confirmation where relevant. *Accept:* no email is ever sent without an address.
-
-Tasks:
-- TASK-098 — Enrich the post-payment confirmation email with a Gift Aid confirmation and manage/cancel instructions for individuals
-- TASK-099 — Send a refund/dispute confirmation email to consenting individual donors from the refund webhook path
+## Planned (4)
 
 ### REQ-061 — Self-serve donor portal
 

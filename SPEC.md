@@ -2,7 +2,7 @@
 
 # Throughline — Specification
 
-## Shipped (62)
+## Shipped (63)
 
 ### REQ-001 — Multi-page site structure
 
@@ -472,16 +472,6 @@ Tasks:
 - TASK-103 — Add Gift Aid cancellation (declaration revoke) endpoint
 - TASK-104 — Build the self-serve donor portal page
 
-### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
-
-A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
-
-Tasks:
-- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
-- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
-
-## Planned (3)
-
 ### REQ-062 — Role-based admin mirroring self-serve
 
 Provide a standalone admin back-end with Viewer (read-only), Editor (view, edit, cancellations and queues) and Admin (all that plus user management, running and submitting claims, recording adjustments and settings) roles, able to perform any self-serve action on a donor's behalf. *Accept:* Kenny and Isabel hold the Admin/Claims permission and roles enforce read-only versus edit versus claim.
@@ -491,9 +481,24 @@ Tasks:
 - TASK-106 — Add role-gated admin endpoints mirroring self-serve donor actions
 - TASK-107 — Grant Kenny and Isabel the Admin role
 
+### REQ-065 — Webhook-driven donation state (Stripe as source of truth)
+
+A single signature-verified Stripe webhook endpoint is the only writer of authoritative donation payment state (paid/failed/refunded) — the client never sets it. Every webhook write is idempotent and de-duplicated so a resent Stripe event can never double-create or double-mutate a donation.
+
+Tasks:
+- TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
+- TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
+
+## Planned (2)
+
 ### REQ-063 — Admin queues and claim operations
 
 Give admins donor, declaration and donation search, the Charities Online export, batch-submitted marking, the adjustment-due queue, retention-expiry flags and an awaiting-declaration queue for in-person links that were sent but not completed (including bounced emails). *Accept:* every admin write (edit, submit, adjust) appends to the audit log to form the HMRC-claim and governance trail.
+
+Tasks:
+- TASK-108 — Add admin donor, declaration and donation search endpoints
+- TASK-109 — Add admin claim-batch submission marking and adjustment-due queue endpoints
+- TASK-110 — Add admin retention-expiry flags and awaiting-declaration queue endpoints
 
 ### REQ-064 — Data protection and anonymity
 

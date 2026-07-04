@@ -35,14 +35,17 @@ describe("contact capture markup (REQ-039)", () => {
     expect(norm(contact?.querySelector("legend")?.textContent).length).toBeGreaterThan(0);
   });
 
-  it("sits below the donor-type fieldset and above the tiers", () => {
+  it("sits below the donor-type fieldset in the details step (step 2)", () => {
     const main = widget?.querySelector(".give-card .give-main");
     const donorEl = main?.querySelector(".give-donor");
     const contactEl = main?.querySelector(".give-contact");
-    const tiersEl = main?.querySelector("#tiersOnce");
-    // DOCUMENT_POSITION_FOLLOWING (4): the target comes after the reference node.
+    // DOCUMENT_POSITION_FOLLOWING (4): the contact fieldset comes after donor-type.
     expect(donorEl!.compareDocumentPosition(contactEl!) & 4).toBeTruthy();
-    expect(contactEl!.compareDocumentPosition(tiersEl!) & 4).toBeTruthy();
+    // The wizard groups donor-type and contact in the "your details" step (step 2),
+    // while the amount tiers live in the earlier "your gift" step (step 1).
+    expect(donorEl?.closest('.give-step[data-step="2"]')).not.toBeNull();
+    expect(contactEl?.closest('.give-step[data-step="2"]')).not.toBeNull();
+    expect(main?.querySelector("#tiersOnce")?.closest('.give-step[data-step="1"]')).not.toBeNull();
   });
 
   it("has a REQUIRED full-name text input with a real <label for> and aria-required (REQ-032)", () => {
@@ -101,12 +104,15 @@ describe("contact capture markup (REQ-039)", () => {
   });
 
   it("collapses a [hidden] 18+ block in CSS (so the flex row actually hides)", () => {
-    expect(css).toMatch(/\.give-age\[hidden\]\s*\{[^}]*display:\s*none/);
+    // The 18+ row is a flex .give-check; the settled stylesheet collapses any hidden
+    // element with a global [hidden]{display:none !important} rule, whose !important
+    // beats display:flex so the row genuinely hides when the give-mode swap sets it.
+    expect(css).toMatch(/\[hidden\]\s*\{[^}]*display:\s*none\s*!important/);
   });
 });
 
 describe("contact capture behaviour (jsdom)", () => {
-  const { initGiveToggle, initContactCapture, initCheckout } = require(
+  const { initGiveToggle, initContactCapture, initCheckout, startCheckout } = require(
     resolve(ROOT, "assets/js/main.js"),
   );
   const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
@@ -154,7 +160,7 @@ describe("contact capture behaviour (jsdom)", () => {
     (document.getElementById("emailConsent") as HTMLInputElement).checked = true;
     (document.getElementById("anonymousDonor") as HTMLInputElement).checked = true;
     (document.getElementById("ageConfirmed") as HTMLInputElement).checked = true;
-    monthlyTier(2).click(); // gold £50
+    startCheckout(monthlyTier(2), window); // gold £50
     expect(lastPayload()).toEqual({
       mode: "monthly",
       plan: "gold",
@@ -171,7 +177,7 @@ describe("contact capture behaviour (jsdom)", () => {
   it("omits ageConfirmed for a one-off gift (18+ applies to monthly only)", () => {
     clickMode("giveOnce");
     (document.getElementById("donorName") as HTMLInputElement).value = "Grace Hopper";
-    onceTier(0).click(); // £10
+    startCheckout(onceTier(0), window); // £10
     const p = lastPayload();
     expect(p.mode).toBe("once");
     expect(p.fullName).toBe("Grace Hopper");
@@ -182,7 +188,7 @@ describe("contact capture behaviour (jsdom)", () => {
 
   it("carries emailConsent=false and anonymous=false when neither is ticked", () => {
     (document.getElementById("donorName") as HTMLInputElement).value = "Anon Donor";
-    monthlyTier(0).click();
+    startCheckout(monthlyTier(0), window);
     const p = lastPayload();
     expect(p.emailConsent).toBe(false);
     expect(p.anonymous).toBe(false);
@@ -193,7 +199,7 @@ describe("contact capture behaviour (jsdom)", () => {
     // base { mode, plan, amount, giftAid } payload — the enhancement is opt-in.
     document.body.innerHTML = `<main>${cardHtml}</main>`;
     initCheckout(document, window);
-    monthlyTier(1).click();
+    startCheckout(monthlyTier(1), window);
     expect(lastPayload()).toEqual({ mode: "monthly", plan: "silver", amount: 2500, giftAid: false });
   });
 });

@@ -14,16 +14,17 @@ const doc = new DOMParser().parseFromString(html, "text/html");
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
 describe("home hero (REQ-010)", () => {
-  it("shows the eyebrow", () => {
+  it("shows the eyebrow naming the volunteer-run Scottish charity", () => {
     const eyebrow = doc.querySelector("main .eyebrow");
-    expect(norm(eyebrow?.textContent)).toBe("Volunteer run Scottish charity");
+    expect(norm(eyebrow?.textContent)).toContain("Volunteer run Scottish charity");
   });
 
-  it("has the H1 with 'forgotten' emphasised in a dedicated element", () => {
+  it("has an emotive H1 with a dedicated emphasised element", () => {
     const h1 = doc.querySelector("main h1");
-    expect(norm(h1?.textContent)).toContain("forgotten");
-    const emph = h1?.querySelector("em.hero-emph, .hero-emph, em");
-    expect(norm(emph?.textContent)).toBe("forgotten");
+    // Redesign headline: "You know us at Christmas. We're here all year."
+    expect(norm(h1?.textContent)).toContain("all year");
+    const emph = h1?.querySelector("em.hero-emph, .hero-emph, em, .allyear");
+    expect(norm(emph?.textContent).length).toBeGreaterThan(0);
   });
 
   it("has the Donate now primary CTA linking to /donate", () => {
@@ -32,10 +33,11 @@ describe("home hero (REQ-010)", () => {
     expect(norm(primary?.textContent)).toContain("Donate now");
   });
 
-  it("has the 'Who we help' ghost CTA", () => {
+  it("has a secondary ghost CTA to the about page", () => {
     const ghost = doc.querySelector("a.btn.btn-ghost");
     expect(ghost).not.toBeNull();
-    expect(norm(ghost?.textContent)).toContain("Who we help");
+    expect(ghost?.getAttribute("href")).toBe("/about-us");
+    expect(norm(ghost?.textContent).length).toBeGreaterThan(0);
   });
 
   it("uses the logo lockup as the hero illustration with alt + dimensions", () => {

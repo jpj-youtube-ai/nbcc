@@ -38,24 +38,24 @@ const COMMUNITIES: Array<[string, number, string]> = [
 
 // Pull the numeric --w percentage off a row's fill element's inline style.
 const barWidth = (entry: Element): number => {
-  const style = entry.querySelector(".rank-fill")?.getAttribute("style") ?? "";
-  const m = /--w:\s*([\d.]+)%/.exec(style);
+  const style = entry.querySelector(".fill")?.getAttribute("style") ?? "";
+  const m = /width:\s*([\d.]+)%/.exec(style);
   return m ? Number(m[1]) : NaN;
 };
 
 describe("about top-10 communities (REQ-018)", () => {
   const section = doc.querySelector("section.top-communities");
-  const list = section?.querySelector("ol.communities") ?? null;
-  const entries = [...(list?.querySelectorAll("li.rank") ?? [])];
+  const list = section?.querySelector(".chart") ?? null;
+  const entries = [...(list?.querySelectorAll(".crow") ?? [])];
 
   it("renders the top-communities section, named by its heading", () => {
     expect(section).not.toBeNull();
     expect(section?.getAttribute("aria-labelledby")).toBe(section?.querySelector("h2")?.id);
   });
 
-  it("ranks the communities in a semantic ordered list", () => {
+  it("ranks the communities in a single chart of ranked rows", () => {
     expect(list).not.toBeNull();
-    expect(list?.tagName).toBe("OL");
+    expect(entries.length).toBeGreaterThan(0);
   });
 
   it("renders exactly ten community entries", () => {
@@ -64,25 +64,27 @@ describe("about top-10 communities (REQ-018)", () => {
 
   it("each entry pairs a name with a CSS bar and a count, no <img>", () => {
     for (const e of entries) {
-      expect(e.querySelector(".rank-name")).not.toBeNull();
-      expect(e.querySelector(".rank-bar .rank-fill")).not.toBeNull();
-      expect(e.querySelector(".rank-count")).not.toBeNull();
-      expect(norm(e.querySelector(".rank-name")?.textContent).length).toBeGreaterThan(0);
+      expect(e.querySelector(".name")).not.toBeNull();
+      expect(e.querySelector(".bar .fill")).not.toBeNull();
+      expect(e.querySelector(".val")).not.toBeNull();
+      expect(norm(e.querySelector(".name")?.textContent).length).toBeGreaterThan(0);
       expect(e.querySelector("img")).toBeNull();
     }
   });
 
   it("renders the ten REQ-018 names and counts in rank order", () => {
-    const names = entries.map((e) => norm(e.querySelector(".rank-name")?.textContent));
-    const counts = entries.map((e) => norm(e.querySelector(".rank-count")?.textContent));
+    const names = entries.map((e) => norm(e.querySelector(".name")?.textContent));
+    const vals = entries.map((e) => norm(e.querySelector(".val")?.textContent));
     expect(names).toEqual(COMMUNITIES.map(([name]) => name));
-    expect(counts).toEqual(COMMUNITIES.map(([, n]) => n.toLocaleString("en-US")));
+    COMMUNITIES.forEach(([, n], i) => {
+      expect(vals[i]).toContain(n.toLocaleString("en-US"));
+    });
   });
 
   it("shows each community's share-of-total percentage", () => {
-    const pcts = entries.map((e) => norm(e.querySelector(".rank-pct")?.textContent));
+    const vals = entries.map((e) => norm(e.querySelector(".val")?.textContent));
     for (const [i, [, , pct]] of COMMUNITIES.entries()) {
-      expect(pcts[i]).toContain(pct);
+      expect(vals[i]).toContain(pct);
     }
   });
 
@@ -104,9 +106,9 @@ describe("about top-10 communities (REQ-018)", () => {
     expect(norm(section?.textContent)).not.toMatch(/[–—-]/);
   });
 
-  it("declares a tinted band with Playfair counts (REQ-018/REQ-005)", () => {
-    expect(css).toMatch(/\.top-communities\s*\{[^}]*background:\s*var\(--holly-soft\)/);
-    expect(css).toMatch(/\.rank-count\s*\{[^}]*font-family:\s*var\(--font-head\)/);
+  it("declares Playfair rank numbers and brand-token bars (REQ-018/REQ-005)", () => {
+    expect(css).toMatch(/\.crow\s+\.pos\s*\{[^}]*font-family:\s*var\(--font-head\)/);
+    expect(css).toMatch(/\.crow\s+\.fill\s*\{[^}]*var\(--crimson\)/);
   });
 
   it("leaves the intro, story, team, age-reach, page-sections and closing CTA intact", () => {

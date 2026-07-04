@@ -67,7 +67,8 @@ describe("gift aid callout (REQ-023)", () => {
   });
 
   it("styles the callout token-only (no hex/rgb in the .giftaid rules)", () => {
-    expect(css).toMatch(/GIFT AID CALLOUT \(REQ-023\)/);
+    // The settled stylesheet labels the callout rules with a "gift-aid callout" block header.
+    expect(css).toMatch(/gift-aid callout/i);
     const giftaidCss = [...css.matchAll(/\.giftaid[^{]*\{[^}]*\}/g)].map((m) => m[0]).join("\n");
     expect(giftaidCss).not.toBe("");
     expect(giftaidCss.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);

@@ -108,7 +108,7 @@ describe("Gift Aid declaration capture markup (REQ-043)", () => {
 });
 
 describe("Gift Aid declaration capture behaviour (jsdom)", () => {
-  const { initDeclarationCapture, initCheckout } = require(resolve(ROOT, "assets/js/main.js"));
+  const { initDeclarationCapture, initCheckout, startCheckout } = require(resolve(ROOT, "assets/js/main.js"));
   const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
 
   const onceTier = (i: number) =>
@@ -162,7 +162,7 @@ describe("Gift Aid declaration capture behaviour (jsdom)", () => {
     byId("declHouse").value = "12";
     byId("declAddress").value = "Analytical Avenue, London";
     byId("declPostcode").value = "SW1A 1AA";
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect(lastPayload().declaration).toEqual({
       title: "Dr",
       firstName: "Ada",
@@ -177,7 +177,7 @@ describe("Gift Aid declaration capture behaviour (jsdom)", () => {
 
   it("omits the declaration object entirely when Gift Aid is not checked", () => {
     byId("declFirstName").value = "Ada";
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect("declaration" in lastPayload()).toBe(false);
   });
 
@@ -188,7 +188,7 @@ describe("Gift Aid declaration capture behaviour (jsdom)", () => {
     byId("declHouse").value = "La Rue";
     byId("declAddress").value = "St Helier, Jersey";
     byId("declNonUk").click();
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     const d = lastPayload().declaration;
     expect(d.nonUk).toBe(true);
     expect("postcode" in d).toBe(false);
@@ -202,13 +202,13 @@ describe("Gift Aid declaration capture behaviour (jsdom)", () => {
     byId("declHouse").value = "12";
     byId("declAddress").value = "Analytical Avenue";
     byId("declPostcode").value = "SW1A 1AA";
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect("title" in lastPayload().declaration).toBe(false);
   });
 });
 
 describe("Gift Aid declaration scope (REQ-044 / TASK-064)", () => {
-  const { initGiveToggle, initDeclarationCapture, initCheckout } = require(
+  const { initGiveToggle, initDeclarationCapture, initCheckout, startCheckout } = require(
     resolve(ROOT, "assets/js/main.js"),
   );
   const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
@@ -266,7 +266,7 @@ describe("Gift Aid declaration scope (REQ-044 / TASK-064)", () => {
     byId("declHouse").value = "12";
     byId("declAddress").value = "Analytical Avenue";
     byId("declPostcode").value = "SW1A 1AA";
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect(lastPayload().declaration.scope).toBe("this_donation");
   });
 });

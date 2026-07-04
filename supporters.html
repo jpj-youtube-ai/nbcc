@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <!-- SEO -->
-    <title>Supporters — Charity Site</title>
+    <title>Supporters — Night Before Christmas Campaign</title>
     <meta
       name="description"
       content="Meet the supporters behind NBCC — the individuals, businesses and organisations whose generosity helps bring comfort, dignity and joy at Christmas."
@@ -16,8 +16,8 @@
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Charity Site" />
-    <meta property="og:title" content="Supporters — Charity Site" />
+    <meta property="og:site_name" content="Night Before Christmas Campaign" />
+    <meta property="og:title" content="Supporters — Night Before Christmas Campaign" />
     <meta
       property="og:description"
       content="Meet the supporters behind NBCC — the individuals, businesses and organisations whose generosity helps bring comfort, dignity and joy at Christmas."
@@ -28,7 +28,7 @@
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Supporters — Charity Site" />
+    <meta name="twitter:title" content="Supporters — Night Before Christmas Campaign" />
     <meta
       name="twitter:description"
       content="Meet the supporters behind NBCC — the individuals, businesses and organisations whose generosity helps bring comfort, dignity and joy at Christmas."
@@ -36,6 +36,8 @@
     <meta name="twitter:image" content="https://www.example.org/assets/img/og-image.png" />
 
     <link rel="stylesheet" href="assets/css/styles.css" />
+    <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="assets/js/main.js"></script>
   </head>
   <body>
@@ -61,7 +63,7 @@
       </div>
     </header>
 
-    <main class="site-main" id="main" tabindex="-1">
+    <main class="site-main site-main--boxed" id="main" tabindex="-1">
       <!-- Supporters intro (REQ-035): centred page intro mirroring .about-intro /
            .donate-intro / .contact-intro. Reuses .eyebrow / base h1 / .rule / .lede
            and the tokens; no new fonts and no image tags. Copy carries "NBCC" in
@@ -70,7 +72,7 @@
       <section class="supporters-intro" aria-labelledby="supporters-intro-heading">
         <span class="eyebrow">Supporters</span>
         <h1 id="supporters-intro-heading">The people and businesses behind NBCC</h1>
-        <div class="rule"></div>
+        <div class="rule center"><i></i></div>
         <p class="lede">
           Every gift, big or small, helps NBCC bring comfort, dignity and joy at
           Christmas. We are proud to thank the individuals, businesses and
@@ -161,19 +163,14 @@
     <footer class="site-footer" data-region="footer">
       <div class="wrap">
         <div class="foot-brand">
-          <img class="foot-logo" src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="74" height="74" loading="lazy" />
-          <p>A volunteer run Scottish charity in Annbank, Ayrshire, bringing comfort, dignity and joy to those who need it most at Christmas.</p>
+          <img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="74" height="74" loading="lazy" />
+          <p>A volunteer run Scottish charity in Annbank, Ayrshire, bringing comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland, here all year.</p>
           <div class="socials">
-            <a href="https://www.instagram.com/nightbeforechristmascampaign" target="_blank" rel="noopener" aria-label="Instagram">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg>
-            </a>
-            <a href="https://www.facebook.com/nightbeforechristmascampaign" target="_blank" rel="noopener" aria-label="Facebook">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg>
-            </a>
-            <a href="https://x.com/Nightbeforechr1" target="_blank" rel="noopener" aria-label="X">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M18 2h3l-7 8 8 12h-6l-5-7-5 7H3l8-9L3 2h6l4 6z"/></svg>
-            </a>
+            <a href="https://www.instagram.com/nightbeforechristmascampaign" target="_blank" rel="noopener" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></a>
+            <a href="https://www.facebook.com/nightbeforechristmascampaign" target="_blank" rel="noopener" aria-label="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></a>
+            <a href="https://x.com/Nightbeforechr1" target="_blank" rel="noopener" aria-label="X"><svg width="18" height="18" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M18 2h3l-7 8 8 12h-6l-5-7-5 7H3l8-9L3 2h6l4 6z"/></svg></a>
           </div>
+          <p class="handle">Find us at <b>nbcc.scot</b></p>
         </div>
         <div class="foot-col">
           <h4>Explore</h4>
@@ -189,14 +186,16 @@
           <h4>Ways to give</h4>
           <ul>
             <li><a href="/donate">Donate money</a></li>
+            <li><a href="https://www.amazon.co.uk/hz/wishlist/ls/11D6XE9XTINQO?ref_=wl_share" target="_blank" rel="noopener">Amazon Wishlist</a></li>
             <li><a href="/contact">Donate items</a></li>
+            <li><a href="/contact">Fundraise for us</a></li>
           </ul>
         </div>
       </div>
       <div class="legal">
         <div class="wrap">
-          <span>&copy; 2026 Night Before Christmas Campaign. A Scottish Charitable Incorporated Organisation (SCIO).</span>
-          <span>Charity No. <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-details?number=SC047995" target="_blank" rel="noopener">SC047995</a>, regulated by OSCR</span>
+          <span>&copy; 2026 Night Before Christmas Campaign, a Scottish Charitable Incorporated Organisation.</span>
+          <span>Charity No. <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-details?number=SC047995" target="_blank" rel="noopener">SC047995</a>, regulated by OSCR.</span>
         </div>
       </div>
     </footer>

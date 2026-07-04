@@ -14,11 +14,13 @@ const html = readFileSync(resolve(ROOT, "index.html"), "utf8");
 const doc = new DOMParser().parseFromString(html, "text/html");
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
+// Exact leaflet titles + one-line copy (as rendered in the redesigned pillar cards:
+// an <h3> title and a <p> line, each ending with a full stop).
 const PILLARS: Array<[string, string]> = [
-  ["Volunteer run", "Powered by kindness, driven by community"],
+  ["Volunteer run", "Powered by kindness, driven by community."],
   [
     "South West Scotland",
-    "Supporting children, young people and vulnerable adults from Girvan to Largs",
+    "Supporting children, young people and vulnerable adults from Girvan to Largs.",
   ],
   ["Red Bags Full of Joy", "Thoughtful gifts. Dignity. Comfort. Moments of joy."],
   [
@@ -35,18 +37,18 @@ describe("home pillars (REQ-011)", () => {
   });
 
   it("has the exact pillar titles", () => {
-    const titles = pillars.map((p) => norm(p.querySelector(".pillar-title")?.textContent));
+    const titles = pillars.map((p) => norm(p.querySelector("h3")?.textContent));
     expect(titles).toEqual(PILLARS.map(([t]) => t));
   });
 
   it("has the exact one-line copy", () => {
-    const lines = pillars.map((p) => norm(p.querySelector(".pillar-line")?.textContent));
+    const lines = pillars.map((p) => norm(p.querySelector("p")?.textContent));
     expect(lines).toEqual(PILLARS.map(([, l]) => l));
   });
 
   it("uses decorative aria-hidden inline-SVG icons, no <img>", () => {
     expect(doc.querySelectorAll(".pillars img")).toHaveLength(0);
-    const icons = [...doc.querySelectorAll(".pillar .pillar-icon")];
+    const icons = [...doc.querySelectorAll(".pillar .ic svg")];
     expect(icons).toHaveLength(4);
     for (const icon of icons) {
       expect(icon.tagName.toLowerCase()).toBe("svg");

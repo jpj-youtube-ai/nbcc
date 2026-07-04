@@ -233,16 +233,17 @@ documented below (REQ-005); the logo asset is REQ-034.
 
 ### Typography (REQ-005)
 
-Two families, both **self-hosted** as latin-subset `woff2` in `assets/fonts/` (one
-weight each, to stay within the perf budget's ≤ 2 font files): **Playfair Display
-700** for headings (`--font-head`, set in `var(--crimson)`) and **Poppins 400**
-for body, nav, buttons and labels (`--font-body`). Each token includes a system
-fallback stack. Sizes come from `clamp()` scale tokens — `--fs-hero`,
-`--fs-page-intro`, `--fs-section`, `--fs-lede`, `--fs-body`, `--fs-eyebrow`. The
-two `@font-face` blocks live in the one shared stylesheet (no build step); other
-weights (e.g. nav/footer 500/600) synthesise from the single weight. **Google
-Fonts** (preconnect + a non-`.css` stylesheet link per page) is the documented
-alternative. Enforced by `test/unit/typography.test.ts`.
+Two families, both **self-hosted** as `woff2` in `assets/fonts/` (two files, to
+stay within the perf budget's ≤ 2 font files): a **Playfair Display** variable
+face covering weights 400–800 for headings (`--font-head`, set in `var(--crimson)`)
+and **Poppins 400** for body, nav, buttons and labels (`--font-body`). Each token
+includes a system fallback stack. Sizes come from `clamp()` scale tokens —
+`--fs-hero`, `--fs-page-intro`, `--fs-section`, `--fs-lede`, `--fs-body`,
+`--fs-eyebrow`. The two `@font-face` blocks live in the one shared stylesheet (no
+build step); Poppins' medium/semibold (nav/footer 500/600) and Playfair's italic
+synthesise from the self-hosted faces. **Google Fonts** (preconnect + a non-`.css`
+stylesheet link per page) is the documented alternative. Enforced by
+`test/unit/typography.test.ts`.
 
 ### Layout, radius and shadow tokens (REQ-006)
 
@@ -323,16 +324,17 @@ ships only the system. Verified by `test/unit/ui-components.test.ts`.
 system as content. It **reuses** existing systems only: the `.btn`/`.card`
 components (REQ-009), the `.rule` divider + logo lockup (REQ-007), `.reveal`
 (REQ-008) and the `:root` tokens. A `HOME HERO (REQ-010)` CSS block adds only
-hero-specific layout (two-column grid stacking ≤680px, `.eyebrow`, `.hero-emph`,
-proof-card positioning) — token-only colours.
+hero-specific layout (two-column grid stacking ≤680px, `.eyebrow`, the emphasised
+`em`/`.allyear` headline treatment, proof-card positioning) — token-only colours.
 
-Content: a crimson eyebrow ("Volunteer run Scottish charity"), an H1 with
-"forgotten" emphasised maroon italic (`.hero-emph`), a lede on the volunteer run,
-year round mission, two CTAs (**Donate now** `.btn-primary` → `/donate`, **Who we
-help** `.btn-ghost`), the logo lockup as the illustration, and a floating proof
-card (`.card`) reading "7,657 Red Bags Full of Joy delivered in 2025". Honours
-the copy rules (REQ-031, no dashes) and accessibility floor (REQ-032: alt text,
-keyboard-focusable CTAs). Verified by `test/unit/home-hero.test.ts`.
+Content: a crimson eyebrow ("Volunteer run Scottish charity · Annbank, Ayrshire"),
+an emotive H1 ("You know us at Christmas. We're here all year.") with an emphasised
+element, a lede on the volunteer run, year round mission, two CTAs (**Donate now**
+`.btn-primary` → `/donate`, **What we do all year** `.btn-ghost` → `/about-us`), the
+logo lockup as the illustration, and a floating proof card (`.card`) reading "7,657
+Red Bags Full of Joy delivered in 2025". Honours the copy rules (REQ-031, no dashes)
+and accessibility floor (REQ-032: alt text, keyboard-focusable CTAs). Verified by
+`test/unit/home-hero.test.ts`.
 
 > The eyebrow uses crimson rather than the baseline's holly green because the
 > brand-colours contrast guard forbids holly text on light surfaces; `.hero-emph`

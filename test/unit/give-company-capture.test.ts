@@ -85,7 +85,7 @@ describe("company capture markup (REQ-038)", () => {
 });
 
 describe("company capture behaviour (jsdom)", () => {
-  const { initDonorType, initContactCapture, initCheckout } = require(resolve(ROOT, "assets/js/main.js"));
+  const { initDonorType, initContactCapture, initCheckout, startCheckout } = require(resolve(ROOT, "assets/js/main.js"));
   const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
 
   const giftAidRegion = () => document.querySelector(".giftaid") as HTMLElement;
@@ -151,7 +151,7 @@ describe("company capture behaviour (jsdom)", () => {
     selectBusinessType("company");
     giftAidBox().checked = true; // even if somehow ticked, the company path forces it false
     fillCompany();
-    onceTier(0).click(); // £10
+    startCheckout(onceTier(0), window); // £10
     const payload = lastPayload();
     expect(payload.giftAid).toBe(false);
     expect(payload.company).toEqual({
@@ -172,19 +172,19 @@ describe("company capture behaviour (jsdom)", () => {
     selectBusinessType("company");
     fillCompany();
     (document.getElementById("companyConsiderationYes") as HTMLElement).click();
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect(lastPayload().company.considerationGiven).toBe(true);
   });
 
   it("omits the company object on the individual path (unaffected)", () => {
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect("company" in lastPayload()).toBe(false);
   });
 
   it("omits the company object on the partnership path (unaffected)", () => {
     selectDonor("business");
     selectBusinessType("partnership");
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect("company" in lastPayload()).toBe(false);
   });
 });

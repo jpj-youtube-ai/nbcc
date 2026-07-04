@@ -65,7 +65,8 @@ describe("donate side panel content (REQ-024)", () => {
   });
 
   it("styles the panel cream-on-holly, token-only (no hex/rgb in side rules)", () => {
-    expect(css).toMatch(/GIVE SIDE PANEL \(REQ-024\)/);
+    // The settled stylesheet labels the side-panel rules with a "side panel" block header.
+    expect(css).toMatch(/side panel/i);
     const sideCss = [...css.matchAll(/\.side-[a-z]+[^{]*\{[^}]*\}/g)].map((m) => m[0]).join("\n");
     expect(sideCss).not.toBe("");
     expect(sideCss.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);

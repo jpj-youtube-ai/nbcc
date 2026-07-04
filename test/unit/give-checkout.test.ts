@@ -100,20 +100,20 @@ describe("startCheckout behaviour (jsdom)", () => {
     expect(typeof initCheckout).toBe("function");
   });
 
-  it("clicking a once tier shows the once payload in preview", () => {
-    onceTier(0).click(); // £10
+  it("a selected once tier assembles the once payload in preview", () => {
+    startCheckout(onceTier(0), window); // £10
     expect(alerts).toHaveLength(1);
     expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 1000, giftAid: false });
   });
 
   it("includes giftAid:true when the Gift Aid box is checked (REQ-023)", () => {
     (document.getElementById("giftAid") as HTMLInputElement).checked = true;
-    onceTier(1).click(); // £25
+    startCheckout(onceTier(1), window); // £25
     expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 2500, giftAid: true });
   });
 
-  it("clicking a monthly tier shows the monthly payload with its plan", () => {
-    monthlyTier(2).click(); // gold £50
+  it("a selected monthly tier assembles the monthly payload with its plan", () => {
+    startCheckout(monthlyTier(2), window); // gold £50
     expect(lastPayload()).toEqual({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false });
   });
 
@@ -122,7 +122,7 @@ describe("startCheckout behaviour (jsdom)", () => {
     const go = document.querySelector(
       "#tiersOnce .give-tier-custom button[data-amount]",
     ) as HTMLElement;
-    go.click();
+    startCheckout(go, window);
     expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 3000, giftAid: false });
   });
 

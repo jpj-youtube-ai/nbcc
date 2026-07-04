@@ -157,3 +157,38 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
     And there should be exactly 1 donation with payment intent "pi_journey_monthly_renewal"
     And the donation with payment intent "pi_journey_monthly_renewal" should have amount 2500
     And the donation with payment intent "pi_journey_monthly_renewal" should have gift aid true
+
+  Scenario: a BACS gift is claimable only after the pending mandate settles
+    When I start checkout with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 5000, "giftAid": true, "donorType": "individual",
+        "declaration": { "firstName": "Ada", "lastName": "Bacs", "houseNameNumber": "12",
+          "address": "Analytical Avenue, London", "postcode": "KA1 1AA", "nonUk": false } }
+      """
+    Then the response status should be 200
+    When Stripe completes the checkout with:
+      """
+      { "payment_intent": "pi_journey_bacs", "amount_total": 5000, "payment_status": "unpaid" }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_journey_bacs"
+    And the donation with payment intent "pi_journey_bacs" should have a linked declaration
+    And the donation with payment intent "pi_journey_bacs" should have claim status "not_eligible"
+    When Stripe settles the pending payment as succeeded
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_journey_bacs"
+    And the donation with payment intent "pi_journey_bacs" should have claim status "eligible"
+
+  Scenario: a partnership whose shares do not sum to the amount is rejected before checkout
+    # The other rejects (monthly without 18+, company asserting Gift Aid, company missing
+    # details) are covered by features/checkout.feature; this adds the partnership-sum reject.
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 10000, "giftAid": true, "donorType": "partnership",
+        "partners": [
+          { "firstName": "Ada", "lastName": "Partner", "houseNameNumber": "1",
+            "address": "Partnership House, London", "postcode": "SW1A 1AA", "nonUk": false, "sharePence": 6000 },
+          { "firstName": "Grace", "lastName": "Partner", "houseNameNumber": "1",
+            "address": "Partnership House, London", "postcode": "SW1A 1AA", "nonUk": false, "sharePence": 3000 } ] }
+      """
+    Then the response status should be 400

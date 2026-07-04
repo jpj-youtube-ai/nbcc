@@ -1600,6 +1600,14 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   verbatim) — and links the donation's `declaration_id` to it,
   in the **same** transaction with its own `declaration.created` audit row, so the
   donation derives `claim_status='eligible'` (REQ-037).
+  The whole donor journey — `POST /api/checkout-session` → the signed
+  `checkout.session.completed` Stripe fires → the resulting donor/donation/declaration
+  rows — is exercised end to end for every persona (individual UK / non-UK / anonymous,
+  monthly enduring, company with/without consideration, partnership, BACS pending→settled)
+  by the `@db` `features/donation-journey.feature`. It replays the **real** stamped
+  metadata rather than re-authoring it: in stub mode only, the checkout endpoint echoes
+  the built session on its 200 body, and the step feeds that verbatim into the webhook —
+  so a drift between what the checkout stamps and what the webhook reads fails the test.
 - **`invoice.paid` / `invoice.payment_succeeded`** → records each recurring
   monthly charge as a further donation against the SAME donor (found via the
   subscription id), carrying the Gift Aid flag + declaration from the original.

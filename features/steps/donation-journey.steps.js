@@ -95,7 +95,7 @@ When("Stripe completes the checkout with:", async function (docString) {
   this.text = await res.text();
 });
 
-When("Stripe settles the pending payment as {word}:", async function (outcome) {
+When("Stripe settles the pending payment as {word}", async function (outcome) {
   assert.ok(this.session, "no session echoed from checkout — is the Stripe stub active?");
   const type =
     outcome === "succeeded"

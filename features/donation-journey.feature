@@ -62,3 +62,98 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
     And the donation with payment intent "pi_journey_ind_anon" should have gift aid false
     And the donation with payment intent "pi_journey_ind_anon" should have claim status "not_eligible"
     And the donor for payment intent "pi_journey_ind_anon" should have anonymous true
+
+  Scenario: company one-off (no consideration) is stored non-eligible and gets a CT-receipt path
+    When I start checkout with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 100000, "giftAid": false, "donorType": "company",
+        "businessName": "Acme Ltd",
+        "company": { "legalName": "Acme Ltd", "contactName": "Ada Lovelace",
+          "contactEmail": "finance.journey@example.com", "billingAddress": "1 Office Park, London",
+          "billingPostcode": "SW1A 1AA", "considerationGiven": false } }
+      """
+    Then the response status should be 200
+    When Stripe completes the checkout with:
+      """
+      { "payment_intent": "pi_journey_co_clean", "amount_total": 100000,
+        "customer_details": { "name": "Ada Lovelace", "email": "finance.journey@example.com" } }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_journey_co_clean"
+    And the donation with payment intent "pi_journey_co_clean" should have gift aid false
+    And the donation with payment intent "pi_journey_co_clean" should have claim status "not_eligible"
+    And the donor for payment intent "pi_journey_co_clean" should have donor type "company"
+    And the donor for payment intent "pi_journey_co_clean" should have business name "Acme Ltd"
+
+  Scenario: company one-off WITH consideration is flagged for the trustees (no receipt)
+    When I start checkout with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 100000, "giftAid": false, "donorType": "company",
+        "businessName": "Beta Ltd",
+        "company": { "legalName": "Beta Ltd", "contactName": "Grace Hopper",
+          "contactEmail": "finance2.journey@example.com", "billingAddress": "2 Office Park, London",
+          "billingPostcode": "SW1A 1AA", "considerationGiven": true } }
+      """
+    Then the response status should be 200
+    When Stripe completes the checkout with:
+      """
+      { "payment_intent": "pi_journey_co_consid", "amount_total": 100000 }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_journey_co_consid"
+    And there should be a "donation.flagged_for_trustees" audit row for the donation with payment intent "pi_journey_co_consid"
+
+  Scenario: partnership Gift Aid records one declaration + one share per partner, summing to the amount
+    When I start checkout with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 10000, "giftAid": true, "donorType": "partnership",
+        "partners": [
+          { "firstName": "Ada", "lastName": "Partner", "houseNameNumber": "1",
+            "address": "Partnership House, London", "postcode": "SW1A 1AA", "nonUk": false, "sharePence": 6000 },
+          { "firstName": "Grace", "lastName": "Partner", "houseNameNumber": "1",
+            "address": "Partnership House, London", "postcode": "SW1A 1AA", "nonUk": false, "sharePence": 4000 } ] }
+      """
+    Then the response status should be 200
+    When Stripe completes the checkout with:
+      """
+      { "payment_intent": "pi_journey_partnership", "amount_total": 10000 }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_journey_partnership"
+    And there should be exactly 2 partner share for payment intent "pi_journey_partnership"
+    And the partner shares for payment intent "pi_journey_partnership" should sum to 10000
+
+  Scenario: monthly Gift Aid (enduring) records an enduring declaration, and a later invoice bills a further donation
+    When I start checkout with JSON:
+      """
+      { "mode": "monthly", "plan": "gold", "amount": 2500, "giftAid": true, "ageConfirmed": true,
+        "donorType": "individual", "email": "grace.journey@example.com", "emailConsent": true,
+        "declaration": { "firstName": "Grace", "lastName": "Monthly", "houseNameNumber": "9",
+          "address": "Recurring Road, London", "postcode": "KA1 1AA", "nonUk": false } }
+      """
+    Then the response status should be 200
+    When Stripe completes the checkout with:
+      """
+      { "subscription": "sub_journey_monthly", "amount_total": 2500, "payment_intent": null,
+        "customer_details": { "name": "Grace Monthly", "email": "grace.journey@example.com" } }
+      """
+    Then the response status should be 200
+    And the donation for subscription "sub_journey_monthly" should have gift aid true
+    And the declaration for subscription "sub_journey_monthly" should have scope "all_donations"
+    When I POST a signed Stripe "invoice.paid" webhook event:
+      """
+      {
+        "id": "in_journey_monthly",
+        "object": "invoice",
+        "amount_paid": 2500,
+        "currency": "gbp",
+        "subscription": "sub_journey_monthly",
+        "payment_intent": "pi_journey_monthly_renewal",
+        "charge": "ch_journey_monthly_renewal",
+        "billing_reason": "subscription_cycle"
+      }
+      """
+    Then the response status should be 200
+    And there should be exactly 1 donation with payment intent "pi_journey_monthly_renewal"
+    And the donation with payment intent "pi_journey_monthly_renewal" should have amount 2500
+    And the donation with payment intent "pi_journey_monthly_renewal" should have gift aid true

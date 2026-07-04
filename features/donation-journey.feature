@@ -34,7 +34,7 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
       """
       { "mode": "once", "plan": null, "amount": 5000, "giftAid": true, "donorType": "individual",
         "declaration": { "firstName": "Jean", "lastName": "Journey", "houseNameNumber": "La Rue",
-          "address": "St Helier, Jersey", "nonUk": true } }
+          "address": "St Helier, Jersey", "postcode": "SW1A 1AA", "nonUk": true } }
       """
     Then the response status should be 200
     When Stripe completes the checkout with:
@@ -101,6 +101,7 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
       """
     Then the response status should be 200
     And there should be exactly 1 donation with payment intent "pi_journey_co_consid"
+    And the donation with payment intent "pi_journey_co_consid" should have claim status "not_eligible"
     And there should be a "donation.flagged_for_trustees" audit row for the donation with payment intent "pi_journey_co_consid"
 
   Scenario: partnership Gift Aid records one declaration + one share per partner, summing to the amount

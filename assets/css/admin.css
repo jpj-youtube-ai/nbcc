@@ -1,0 +1,75 @@
+/* =================================================================
+   NBCC ADMIN DASHBOARD (REQ-066) — layout on top of the shared brand
+   tokens/fonts in styles.css (linked first). Private staff tool, so it
+   sits outside the marketing nav/footer. Token-only colours.
+   ================================================================= */
+.admin-body{background:var(--tint);color:var(--slate);min-height:100dvh}
+.admin-main{display:block}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* ---- login ---- */
+.admin-login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:clamp(20px,5vw,48px)}
+.admin-login-card{width:100%;max-width:420px;padding:clamp(28px,4vw,44px);text-align:center}
+.admin-login-logo{display:block;margin:0 auto 14px}
+.admin-login h1{font-size:clamp(1.6rem,1.3rem + 1.4vw,2.1rem)}
+.admin-login-sub{color:var(--slate-soft);margin:6px 0 24px;font-size:.95rem}
+.admin-field{text-align:left;margin-bottom:16px}
+.admin-field label{display:block;font-weight:600;font-size:.9rem;margin-bottom:7px}
+.admin-field input{width:100%;font-family:var(--font-body);font-size:1rem;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:12px 14px}
+.admin-field input:focus{border:1.6px solid var(--holly);outline:none}
+.admin-login-submit{width:100%;justify-content:center;margin-top:6px}
+.admin-login-error{color:var(--maroon);font-weight:600;font-size:.88rem;background:var(--tan-soft);border-radius:10px;padding:10px 12px;margin:0 0 14px}
+
+/* ---- app shell ---- */
+.admin-topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  background:var(--maroon);color:var(--cream);padding:12px clamp(16px,3vw,28px)}
+.admin-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--cream);font-family:var(--font-head);font-weight:700;font-size:1.1rem}
+.admin-user{display:flex;align-items:center;gap:12px;font-size:.9rem}
+.admin-user-email{color:var(--cream-82)}
+.admin-role-badge{text-transform:uppercase;letter-spacing:.08em;font-size:.68rem;font-weight:600;background:var(--cream-16);border:1px solid var(--cream-24);border-radius:999px;padding:3px 10px}
+.admin-logout{background:none;border:1.6px solid var(--cream-24);color:var(--cream);border-radius:999px;padding:7px 16px;font-family:var(--font-body);font-weight:600;font-size:.85rem;cursor:pointer;transition:background .2s}
+.admin-logout:hover{background:var(--cream-12)}
+
+.admin-body-grid{display:grid;grid-template-columns:210px 1fr;align-items:start;max-width:1280px;margin-inline:auto}
+.admin-nav{position:sticky;top:60px;padding:20px 12px}
+.admin-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.admin-nav-link{width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:11px 14px;font-family:var(--font-body);font-weight:600;font-size:.95rem;color:var(--slate);cursor:pointer;transition:background .15s,color .15s}
+.admin-nav-link:hover{background:var(--card)}
+.admin-nav-link.is-active{background:var(--crimson);color:var(--cream)}
+.admin-content{padding:clamp(20px,3vw,36px) clamp(16px,3vw,32px)}
+.admin-view h2{font-size:clamp(1.5rem,1.3rem + 1vw,2rem);margin-bottom:18px}
+.admin-subhead{font-size:1.15rem;color:var(--maroon);margin:28px 0 12px}
+.admin-loading{color:var(--slate-soft);font-size:.92rem}
+
+/* ---- stats ---- */
+.admin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
+.admin-stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:18px 20px}
+.admin-stat .n{font-family:var(--font-head);font-size:2rem;font-weight:800;color:var(--crimson);line-height:1}
+.admin-stat .l{font-size:.85rem;color:var(--slate-soft);margin-top:4px}
+.admin-stat.warn .n{color:var(--maroon)}
+
+/* ---- tables ---- */
+.admin-table-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.admin-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.admin-table th,.admin-table td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+.admin-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-soft);font-weight:600}
+.admin-table tbody tr:last-child td{border-bottom:0}
+.admin-table tbody tr:hover{background:var(--tint)}
+.admin-num{font-variant-numeric:tabular-nums;text-align:right}
+.admin-pill{display:inline-block;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--tan-soft);color:var(--maroon)}
+.admin-empty{padding:22px;color:var(--slate-soft);font-size:.92rem}
+
+/* ---- search ---- */
+.admin-search-bar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:18px}
+.admin-segmented{display:inline-flex;background:var(--tan-soft);border:1px solid var(--line);border-radius:999px;padding:4px;gap:2px}
+.admin-seg{border:0;background:transparent;cursor:pointer;font-family:var(--font-body);font-weight:600;font-size:.88rem;color:var(--slate-soft);padding:8px 16px;border-radius:999px}
+.admin-seg.is-active{background:var(--crimson);color:var(--cream)}
+.admin-search-form{display:flex;gap:8px;flex:1;min-width:240px}
+.admin-search-form input{flex:1;font-family:var(--font-body);font-size:.95rem;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:10px 14px}
+.admin-search-form input:focus{border-color:var(--holly);outline:none}
+
+@media (max-width:760px){
+  .admin-body-grid{grid-template-columns:1fr}
+  .admin-nav{position:static;padding:12px}
+  .admin-nav ul{flex-direction:row;flex-wrap:wrap}
+}

@@ -1101,6 +1101,21 @@ streams the batch's Charities Online CSV as a `text/csv` download. No new config
 `ADMIN_SESSION_SECRET`). Proven by `test/unit/admin-read.test.ts` (the `clampPage` clamp, 401/403/400
 gating and the viewer-200s DB-free) and the `@db` `features/admin-api.feature`.
 
+**Admin dashboard UI (REQ-066 · TASK-115).** `admin.html` is a private, token-authed staff SPA served
+at `/admin` (a clean-URL rewrite in `_redirects`; `noindex`, and outside the marketing nav/footer so it
+is exempt from the marketing guards). It signs in via `POST /api/admin/login`, holds the bearer session
+token in `sessionStorage` (cleared on tab close; the 8h TTL still applies), attaches it as
+`Authorization: Bearer` and, on any `401`, clears it and returns to sign-in. It renders over the
+`/api/admin/*` JSON API: **Overview** (the three operational queue counts + recent donations) and
+**Search** (donors / declarations / donations). The pure formatting / claim-decoding / role-gating
+helpers live in `assets/js/admin/helpers.js` (unit-tested, `test/unit/admin-helpers.test.ts`);
+`assets/js/admin/app.js` is the DOM glue; `assets/css/admin.css` layers the dashboard layout over the
+shared brand tokens in `styles.css`. The shell's own accessibility floor (a skip link to a focusable
+`<main id="admin-main">`, the landmark set, and a labelled required login form) is guarded by
+`test/unit/admin-shell.test.ts`, and `/admin` serving + the `/admin.html` → `/admin` canonical are
+covered by `features/site.feature`. The image bakes `admin.html` in via the Dockerfile COPY (guarded by
+`test/unit/dockerfile-site-assets.test.ts`). No new config.
+
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
 six-year window has **closed**, it erases the captured personal data. It reuses the pure

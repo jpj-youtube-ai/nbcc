@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The admin dashboard is a private, token-authed staff tool: keep it out of search. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Admin — Night Before Christmas Campaign</title>
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <link rel="stylesheet" href="/assets/css/admin.css" />
+    <script defer src="/assets/js/admin/helpers.js"></script>
+    <script defer src="/assets/js/admin/app.js"></script>
+  </head>
+  <body class="admin-body">
+    <a class="skip-link" href="#admin-main">Skip to content</a>
+    <main class="admin-main" id="admin-main" tabindex="-1">
+      <!-- Login (REQ-062): email + password -> POST /api/admin/login -> a bearer session token. -->
+      <section class="admin-login" id="loginView" aria-labelledby="login-heading">
+        <div class="admin-login-card card card-lg">
+          <img class="admin-login-logo" src="/assets/img/nbcc-elf.png" alt="" width="72" height="72" />
+          <h1 id="login-heading">Staff sign in</h1>
+          <p class="admin-login-sub">Manage donations, Gift Aid claims and donors.</p>
+          <form id="loginForm" novalidate>
+            <div class="admin-field">
+              <label for="adminEmail">Email</label>
+              <input id="adminEmail" name="email" type="email" autocomplete="username" required aria-required="true" />
+            </div>
+            <div class="admin-field">
+              <label for="adminPassword">Password</label>
+              <input id="adminPassword" name="password" type="password" autocomplete="current-password" required aria-required="true" />
+            </div>
+            <p class="admin-login-error" id="loginError" role="alert" aria-live="polite" hidden></p>
+            <button class="btn btn-primary admin-login-submit" type="submit">Sign in</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- The authenticated dashboard (revealed by app.js once a session token is held). -->
+      <div class="admin-app" id="appView" hidden>
+        <header class="admin-topbar" data-region="admin-topbar">
+          <a class="admin-brand" href="/admin"><img src="/assets/img/nbcc-elf.png" alt="" width="34" height="34" /><span>NBCC Admin</span></a>
+          <div class="admin-user">
+            <span class="admin-user-email" id="userEmail"></span>
+            <span class="admin-role-badge" id="userRole"></span>
+            <button class="admin-logout" id="logoutBtn" type="button">Sign out</button>
+          </div>
+        </header>
+
+        <div class="admin-body-grid">
+          <nav class="admin-nav" aria-label="Dashboard sections">
+            <ul>
+              <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
+            </ul>
+          </nav>
+
+          <div class="admin-content">
+            <!-- Overview: the three operational queues at a glance + recent donations. -->
+            <section class="admin-view" id="view-overview" aria-labelledby="overview-heading">
+              <h2 id="overview-heading">Overview</h2>
+              <div class="admin-stats" id="overviewStats" aria-live="polite">
+                <p class="admin-loading">Loading…</p>
+              </div>
+              <h3 class="admin-subhead">Recent donations</h3>
+              <div class="admin-table-wrap" id="overviewRecent"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Search: donors / declarations / donations by a free query. -->
+            <section class="admin-view" id="view-search" aria-labelledby="search-heading" hidden>
+              <h2 id="search-heading">Search</h2>
+              <div class="admin-search-bar">
+                <div class="admin-segmented" role="group" aria-label="What to search">
+                  <button class="admin-seg is-active" type="button" data-kind="donors">Donors</button>
+                  <button class="admin-seg" type="button" data-kind="declarations">Declarations</button>
+                  <button class="admin-seg" type="button" data-kind="donations">Donations</button>
+                </div>
+                <form class="admin-search-form" id="searchForm">
+                  <label class="sr-only" for="searchQuery">Search query</label>
+                  <input id="searchQuery" type="search" placeholder="Name, email, id or postcode" />
+                  <button class="btn btn-primary" type="submit">Search</button>
+                </form>
+              </div>
+              <div class="admin-table-wrap" id="searchResults" aria-live="polite"></div>
+            </section>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

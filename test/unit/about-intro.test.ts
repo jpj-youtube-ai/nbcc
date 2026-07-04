@@ -26,7 +26,7 @@ describe("about intro (REQ-014)", () => {
 
   it("has the exact H1", () => {
     expect(norm(intro?.querySelector("h1")?.textContent)).toBe(
-      "Powered by kindness, driven by community",
+      "Powered by kindness, driven by community.",
     );
   });
 

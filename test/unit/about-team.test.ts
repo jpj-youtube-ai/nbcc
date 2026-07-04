@@ -30,10 +30,10 @@ describe("about meet the team (REQ-016)", () => {
 
   it("each card has a name, a role and a lazy 640x800 headshot <img> with alt (REQ-016/034)", () => {
     for (const m of members) {
-      expect(norm(m.querySelector(".member-name")?.textContent).length).toBeGreaterThan(0);
-      expect(norm(m.querySelector(".member-role")?.textContent).length).toBeGreaterThan(0);
-      // The portrait is now a team-<name>.jpg headshot (REQ-034), framed by .photo-slot.
-      const img = m.querySelector(".photo-slot img");
+      expect(norm(m.querySelector(".nm")?.textContent).length).toBeGreaterThan(0);
+      expect(norm(m.querySelector(".rl")?.textContent).length).toBeGreaterThan(0);
+      // The portrait is a team-<name>.jpg headshot (REQ-034) sitting directly in the card.
+      const img = m.querySelector("img");
       expect(img).not.toBeNull();
       expect(img?.getAttribute("src")).toMatch(/^\/assets\/img\/team-[a-z]+\.jpg$/);
       expect(img?.getAttribute("width")).toBe("640");
@@ -44,16 +44,16 @@ describe("about meet the team (REQ-016)", () => {
   });
 
   it("has exactly six 'Volunteer Elf' roles, flagged for confirmation", () => {
-    const roles = members.map((m) => norm(m.querySelector(".member-role")?.textContent));
+    const roles = members.map((m) => norm(m.querySelector(".rl")?.textContent));
     expect(roles.filter((r) => r === "Volunteer Elf")).toHaveLength(6);
     // the placeholders are called out in a content-verification HTML comment
     expect(html).toMatch(/<!--[\s\S]*?Volunteer Elf[\s\S]*?-->/i);
   });
 
   it("declares a 5 / 3 / 2 responsive grid at the documented breakpoints", () => {
-    expect(css).toMatch(/\.team-grid\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*1fr\)/);
-    expect(css).toMatch(/@media\s*\(max-width:\s*900px\)\s*\{[\s\S]*?\.team-grid\s*\{[^}]*repeat\(3,\s*1fr\)/);
-    expect(css).toMatch(/@media\s*\(max-width:\s*680px\)\s*\{[\s\S]*?\.team-grid\s*\{[^}]*repeat\(2,\s*1fr\)/);
+    expect(css).toMatch(/\.team\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*1fr\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*980px\)\s*\{[\s\S]*?\.team\s*\{[^}]*repeat\(3,\s*1fr\)/);
+    expect(css).toMatch(/@media\s*\(max-width:\s*680px\)\s*\{[\s\S]*?\.team\s*\{[^}]*repeat\(2,\s*1fr\)/);
   });
 
   it("leaves the intro, story, page-sections and closing CTA intact", () => {

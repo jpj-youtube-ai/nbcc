@@ -8,12 +8,12 @@ Feature: Marketing site served by the app
     And the response body should contain "<marker>"
 
     Examples:
-      | path        | marker        |
-      | /           | Christmas Eve |
-      | /about-us   | About         |
-      | /donate     | Donate        |
-      | /contact    | Contact       |
-      | /supporters | Supporters    |
+      | path        | marker               |
+      | /           | Red Bags Full of Joy |
+      | /about-us   | About                |
+      | /donate     | Donate               |
+      | /contact    | Contact              |
+      | /supporters | Supporters           |
       | /donate/thank-you | Thank you |
       | /donor-portal | Manage your support |
       | /privacy    | Privacy notice |

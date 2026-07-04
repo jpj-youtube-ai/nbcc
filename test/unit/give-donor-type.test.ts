@@ -35,14 +35,18 @@ describe("donor type control markup (REQ-038)", () => {
     expect(doc.querySelector(".give-card .give-main .give-donor")).not.toBeNull();
   });
 
-  it("places the control above the tiers and the Gift Aid callout", () => {
+  it("places the control above the Gift Aid callout in the details step (step 2)", () => {
     const main = widget?.querySelector(".give-card .give-main");
     const donorEl = main?.querySelector(".give-donor");
-    const tiersEl = main?.querySelector("#tiersOnce");
     const giftaidEl = main?.querySelector(".giftaid");
-    // DOCUMENT_POSITION_FOLLOWING (4): the target comes after the donor control.
-    expect(donorEl!.compareDocumentPosition(tiersEl!) & 4).toBeTruthy();
+    // DOCUMENT_POSITION_FOLLOWING (4): the Gift Aid callout comes after donor-type,
+    // so the individual/business choice that drives the Gift Aid path is asked first.
     expect(donorEl!.compareDocumentPosition(giftaidEl!) & 4).toBeTruthy();
+    // Both share the "your details" wizard step (step 2); the amount tiers are the
+    // earlier "your gift" step (step 1), so the routing question follows the amount.
+    expect(donorEl?.closest('.give-step[data-step="2"]')).not.toBeNull();
+    expect(giftaidEl?.closest('.give-step[data-step="2"]')).not.toBeNull();
+    expect(main?.querySelector("#tiersOnce")?.closest('.give-step[data-step="1"]')).not.toBeNull();
   });
 
   it("is a fieldset whose legend poses the individual/business question (REQ-032)", () => {
@@ -100,7 +104,10 @@ describe("donor type control markup (REQ-038)", () => {
   });
 
   it("collapses a [hidden] Gift Aid callout in CSS (so the flex box actually hides)", () => {
-    expect(css).toMatch(/\.giftaid\[hidden\]\s*\{[^}]*display:\s*none/);
+    // The callout is a flex box; the settled stylesheet collapses any hidden element
+    // with a global [hidden]{display:none !important} rule, whose !important beats
+    // display:flex so the callout genuinely hides on the company path.
+    expect(css).toMatch(/\[hidden\]\s*\{[^}]*display:\s*none\s*!important/);
   });
 });
 
@@ -173,7 +180,7 @@ describe("donor type behaviour (jsdom)", () => {
   });
 
   it("folds donorType into the checkout payload, individual by default", () => {
-    monthlyTier(2).click(); // gold £50
+    startCheckout(monthlyTier(2), window); // gold £50
     expect(lastPayload()).toEqual({
       mode: "monthly",
       plan: "gold",
@@ -186,7 +193,7 @@ describe("donor type behaviour (jsdom)", () => {
   it("carries donorType=business and the businessName when a business donor fills it", () => {
     selectDonor("business");
     businessInput().value = "Acme Ltd";
-    onceTier(0).click(); // £10 one-off
+    startCheckout(onceTier(0), window); // £10 one-off
     // The default business sub-type is company, so the payload also folds the REQ-038
     // company object with giftAid:false (covered precisely in give-company-capture.test.ts);
     // here we assert the donor-type routing carries donorType + businessName.
@@ -202,7 +209,7 @@ describe("donor type behaviour (jsdom)", () => {
 
   it("omits businessName from the payload when the field is empty", () => {
     selectDonor("business");
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     const p = lastPayload();
     expect(p.donorType).toBe("business");
     expect("businessName" in p).toBe(false);

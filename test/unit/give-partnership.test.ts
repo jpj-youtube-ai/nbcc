@@ -85,7 +85,7 @@ describe("partnership markup (REQ-051)", () => {
 });
 
 describe("partnership behaviour (jsdom)", () => {
-  const { initDonorType, initPartnershipCapture, initDeclarationCapture, initCheckout } = require(
+  const { initDonorType, initPartnershipCapture, initDeclarationCapture, initCheckout, startCheckout } = require(
     resolve(ROOT, "assets/js/main.js"),
   );
   const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
@@ -197,7 +197,7 @@ describe("partnership behaviour (jsdom)", () => {
     // £10 one-off = 1000 pence; split £6 + £4.
     fillPartner(rows[0], { firstName: "Ada", lastName: "Lovelace", house: "12", address: "Analytical Ave", postcode: "SW1A 1AA" }, "6");
     fillPartner(rows[1], { firstName: "Grace", lastName: "Hopper", house: "7", address: "Navy Yard", postcode: "M1 1AE" }, "4");
-    onceTier(0).click(); // £10
+    startCheckout(onceTier(0), window); // £10
 
     const payload = lastPayload();
     expect(payload.amount).toBe(1000);
@@ -222,7 +222,7 @@ describe("partnership behaviour (jsdom)", () => {
     selectDonor("business");
     selectBusinessType("partnership");
     giftAidBox().checked = false;
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     expect("partners" in lastPayload()).toBe(false);
   });
 
@@ -233,7 +233,7 @@ describe("partnership behaviour (jsdom)", () => {
     const row = partnerRows()[0];
     fillPartner(row, { firstName: "Jean", lastName: "Le Maistre", house: "La Rue", address: "St Helier, Jersey", postcode: "" }, "10");
     (row.querySelector('[data-field="nonUk"]') as HTMLElement).click();
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     const p = lastPayload().partners[0];
     expect(p.nonUk).toBe(true);
     expect("postcode" in p).toBe(false);
@@ -247,7 +247,7 @@ describe("partnership behaviour (jsdom)", () => {
     (document.getElementById("declHouse") as HTMLInputElement).value = "12";
     (document.getElementById("declAddress") as HTMLInputElement).value = "Analytical Ave";
     (document.getElementById("declPostcode") as HTMLInputElement).value = "SW1A 1AA";
-    onceTier(0).click();
+    startCheckout(onceTier(0), window);
     const payload = lastPayload();
     expect("partners" in payload).toBe(false);
     expect(payload.declaration).toBeTruthy();

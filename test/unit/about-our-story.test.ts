@@ -17,9 +17,9 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 describe("about our story (REQ-015)", () => {
   const story = doc.querySelector("section.our-story");
 
-  it("renders the story section, named by its heading", () => {
+  it("renders the story section, named by its eyebrow label", () => {
     expect(story).not.toBeNull();
-    expect(story?.getAttribute("aria-labelledby")).toBe(story?.querySelector("h2")?.id);
+    expect(story?.getAttribute("aria-labelledby")).toBe(story?.querySelector(".eyebrow")?.id);
   });
 
   it("shows the founding quote and the Tygan / 2015 attribution", () => {
@@ -32,15 +32,15 @@ describe("about our story (REQ-015)", () => {
   });
 
   it("tells the origin narrative across multiple paragraphs", () => {
-    const paras = [...(story?.querySelectorAll(".story-prose p:not(.quote):not(.by)") ?? [])];
+    const paras = [...(story?.querySelectorAll(".prose p:not(.quote):not(.by)") ?? [])];
     expect(paras.length).toBeGreaterThanOrEqual(2);
-    const prose = norm(story?.querySelector(".story-prose")?.textContent);
+    const prose = norm(story?.querySelector(".prose")?.textContent);
     expect(prose).toContain("became the Night Before Christmas Campaign");
     expect(prose).toContain("first year they delivered 90 boxes");
   });
 
   it("has a captioned founding headshot <img> with alt and intrinsic dims (REQ-015/034)", () => {
-    const fig = story?.querySelector("figure.photo-slot");
+    const fig = story?.querySelector("figure.story-photo");
     expect(fig).not.toBeNull();
     expect(norm(fig?.querySelector("figcaption")?.textContent).length).toBeGreaterThan(0);
     const img = fig?.querySelector("img");

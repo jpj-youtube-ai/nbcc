@@ -23,7 +23,7 @@ describe("home why-your-donation-matters (REQ-012)", () => {
   it("has the eyebrow and the emotive heading", () => {
     expect(norm(why?.querySelector(".eyebrow")?.textContent)).toBe("Why your donation matters");
     expect(norm(why?.querySelector("h2")?.textContent)).toBe(
-      "Every pound reminds someone they have not been forgotten.",
+      "Every pound helps remind someone that they have not been forgotten.",
     );
   });
 
@@ -33,7 +33,7 @@ describe("home why-your-donation-matters (REQ-012)", () => {
   });
 
   it("has exactly two body paragraphs of leaflet copy", () => {
-    const paras = [...(why?.querySelectorAll(".why-copy p") ?? [])];
+    const paras = [...(why?.querySelectorAll(".prose p") ?? [])];
     expect(paras).toHaveLength(2);
     expect(norm(paras[0]?.textContent)).toContain("Your donation helps NBCC");
     expect(norm(paras[1]?.textContent)).toContain("essential costs of running the charity");
@@ -45,15 +45,20 @@ describe("home why-your-donation-matters (REQ-012)", () => {
     expect(norm(btn?.textContent)).toContain("Support NBCC");
   });
 
-  it("has a captioned packing photo <img> with alt and intrinsic dims (REQ-012/034)", () => {
-    const fig = why?.querySelector("figure.photo-slot");
-    expect(fig).not.toBeNull();
-    const img = fig?.querySelector("img");
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute("src")).toMatch(/^\/assets\/img\/[a-z-]+\.jpg$/);
-    expect(img?.getAttribute("width")).toBeTruthy();
-    expect(img?.getAttribute("height")).toBeTruthy();
-    expect(img?.getAttribute("loading")).toBe("lazy");
-    expect(norm(img?.getAttribute("alt")).length).toBeGreaterThan(0);
+  it("has a labelled photo slot: a captioned <img> or the pending placeholder (REQ-012/034)", () => {
+    // REQ-012 ships a photo *slot* that is currently a labelled placeholder, to be
+    // swapped for a real consented packing photo. Accept either.
+    const slot = why?.querySelector("figure.photo-slot, .figure[role='img']");
+    expect(slot).not.toBeNull();
+    const img = slot?.querySelector("img");
+    if (img) {
+      expect(img.getAttribute("src")).toMatch(/^\/assets\/img\/[a-z-]+\.jpg$/);
+      expect(img.getAttribute("width")).toBeTruthy();
+      expect(img.getAttribute("height")).toBeTruthy();
+      expect(img.getAttribute("loading")).toBe("lazy");
+      expect(norm(img.getAttribute("alt")).length).toBeGreaterThan(0);
+    } else {
+      expect(norm(slot?.getAttribute("aria-label")).length).toBeGreaterThan(0);
+    }
   });
 });

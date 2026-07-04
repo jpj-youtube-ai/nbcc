@@ -12,7 +12,13 @@ import {
   ClaimBatchSubmitError,
   listRetentionExpiryDeclarations,
   listAwaitingDeclarationDonations,
+  listDonations,
+  listClaimBatches,
+  listAuditLog,
+  listDunning,
 } from "../db/admin";
+import { listClaimableDonationsForExport } from "../db/donations";
+import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
 import { getDonorPortalSnapshot, updateDonorPortal } from "../db/portal";
@@ -369,3 +375,100 @@ export async function getAdminAwaitingDeclaration(req: Request, res: Response): 
 
 adminRouter.get("/api/admin/queues/retention-expiry", getAdminRetentionExpiry);
 adminRouter.get("/api/admin/queues/awaiting-declaration", getAdminAwaitingDeclaration);
+
+// --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
+// Read-only lists that back the admin cockpit UI. Browsing/reads are Viewer and up; the Charities
+// Online CSV export is a claims operation, gated to Editor/Admin like the batch-submit endpoint.
+
+// Parse the optional ?limit / ?offset paging query into integers (or undefined); the db layer
+// clamps them to a safe window (clampPage).
+function pageArgs(req: Request): { limit?: number; offset?: number } {
+  const limit = Number(req.query.limit);
+  const offset = Number(req.query.offset);
+  return {
+    limit: Number.isInteger(limit) ? limit : undefined,
+    offset: Number.isInteger(offset) ? offset : undefined,
+  };
+}
+
+// GET /api/admin/donations?limit&offset&status&channel — browse all donations. Viewer and up.
+export async function getAdminDonations(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const { limit, offset } = pageArgs(req);
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const channel = typeof req.query.channel === "string" ? req.query.channel : undefined;
+    return res.status(200).json(await listDonations({ limit, offset, status, channel }));
+  } catch (err) {
+    console.error("admin donations list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/claim-batches — list claim batches with counts/totals. Viewer and up.
+export async function getAdminClaimBatches(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listClaimBatches() });
+  } catch (err) {
+    console.error("admin claim-batches list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/claim-batches/:id/export — the batch's Charities Online CSV (REQ-052). A claims
+// operation, so Editor/Admin only (mirrors submit). Reuses the existing eligible-donations query +
+// the pure CSV serializer; returns text/csv as a download.
+export async function getAdminClaimBatchExport(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const id = claimBatchId(req, res);
+  if (id == null) return;
+  try {
+    const rows = await listClaimableDonationsForExport(id);
+    const csv = toCharitiesOnlineCsv(
+      rows.map((r) => ({ donation: r.donation, declaration: r.declaration })),
+    );
+    res
+      .status(200)
+      .type("text/csv")
+      .set("Content-Disposition", `attachment; filename="claim-batch-${id}.csv"`)
+      .send(csv);
+    return;
+  } catch (err) {
+    console.error("admin claim-batch export failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Export is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/audit?limit&offset&entity&entityId — the append-only governance trail. Viewer+.
+export async function getAdminAuditLog(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const { limit, offset } = pageArgs(req);
+    const entity = typeof req.query.entity === "string" ? req.query.entity : undefined;
+    const entityIdNum = Number(req.query.entityId);
+    const entityId = Number.isInteger(entityIdNum) ? entityIdNum : undefined;
+    return res.status(200).json(await listAuditLog({ limit, offset, entity, entityId }));
+  } catch (err) {
+    console.error("admin audit list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/subscriptions/dunning?status — at-risk / lapsed monthly gifts. Viewer and up.
+export async function getAdminDunning(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    return res.status(200).json({ results: await listDunning(status) });
+  } catch (err) {
+    console.error("admin dunning list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/donations", getAdminDonations);
+adminRouter.get("/api/admin/claim-batches", getAdminClaimBatches);
+adminRouter.get("/api/admin/claim-batches/:id/export", getAdminClaimBatchExport);
+adminRouter.get("/api/admin/audit", getAdminAuditLog);
+adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);

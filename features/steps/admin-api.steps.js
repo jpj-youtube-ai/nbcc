@@ -160,6 +160,45 @@ Then("the admin response field {string} should be {string}", function (field, va
   assert.equal(String(this.adminBody[field]), value);
 });
 
+// --- Admin dashboard read lists (REQ-066 · TASK-114) ---
+When("I GET the admin path {string} without a token", async function (path) {
+  const res = await fetch(`${BASE_URL}${path}`);
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+When(
+  "I GET the admin path {string} as {string} with password {string}",
+  async function (path, email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When(
+  "I export the claim batch as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(
+      `${BASE_URL}/api/admin/claim-batches/${this.claimBatchId}/export`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    this.adminStatus = res.status;
+    this.adminContentType = res.headers.get("content-type") || "";
+  },
+);
+
+Then("the admin response content type should contain {string}", function (expected) {
+  assert.ok(
+    (this.adminContentType || "").includes(expected),
+    `expected content-type to contain ${expected}, got ${this.adminContentType}`,
+  );
+});
+
 AfterAll(async function () {
   await pool.end();
 });

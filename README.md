@@ -949,6 +949,11 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/claims/adjustment-due` | **implemented** | REQ-063 (adjustment-due queue) |
 | `GET /api/admin/queues/retention-expiry` | **implemented** | REQ-046 (retention-expiry queue) |
 | `GET /api/admin/queues/awaiting-declaration` | **implemented** | REQ-049 (awaiting-declaration queue) |
+| `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated) |
+| `GET /api/admin/claim-batches` | **implemented** | REQ-066 (list claim batches) |
+| `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
+| `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
+| `GET /api/admin/subscriptions/dunning` | **implemented** | REQ-066 (at-risk / lapsed monthly gifts) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1082,6 +1087,19 @@ emails included**), joined to the donor and carrying the `declaration_token` tha
 Proven by the queues block in `test/unit/admin-api.test.ts` (401, the viewer/editor/admin 200s, the
 expired-flag computation, that a live enduring declaration is omitted, and the sent/undelivered filter)
 and the `@db` `features/admin-api.feature`.
+
+**Dashboard read lists (REQ-066 · TASK-114).** The reads that back the admin cockpit UI, all `viewer`
+and up (missing/invalid token → **401**) except the CSV export. `GET /api/admin/donations` browses
+every donation newest-first with optional `?status`/`?channel` filters and a bounded `?limit`/`?offset`
+page (the pure `clampPage` clamps to ≤ 100), returning `{ results, total }`. `GET /api/admin/claim-batches`
+lists the batches with their donation count and summed pence. `GET /api/admin/audit` reads the
+append-only trail newest-first, optionally scoped by `?entity`/`?entityId` and paged the same way.
+`GET /api/admin/subscriptions/dunning` lists at-risk / lapsed monthly gifts (optional `?status`). The
+one **Editor and up** route (a claims op, like submit) is `GET /api/admin/claim-batches/:id/export`: it
+reuses `listClaimableDonationsForExport(batchId)` + the pure `toCharitiesOnlineCsv` serializer and
+streams the batch's Charities Online CSV as a `text/csv` download. No new config (reuses
+`ADMIN_SESSION_SECRET`). Proven by `test/unit/admin-read.test.ts` (the `clampPage` clamp, 401/403/400
+gating and the viewer-200s DB-free) and the `@db` `features/admin-api.feature`.
 
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC

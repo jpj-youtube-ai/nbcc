@@ -473,3 +473,183 @@ export async function searchDonations(q: string): Promise<DonationSearchRow[]> {
   );
   return res.rows;
 }
+
+// --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
+// Read-only, paginated/list reads that back the admin cockpit UI: browse all donations, list claim
+// batches, read the append-only audit trail, and list subscription dunning state. Each is a plain
+// pool.query (no transaction/audit — a read), bounded so an over-broad request can never return an
+// unbounded set. Mirrors searchDonors / listAdjustmentDueDonations above.
+
+const LIST_LIMIT_MAX = 100;
+const LIST_LIMIT_DEFAULT = 50;
+
+// Clamp a caller-supplied limit/offset to a safe, bounded window. Pure — unit-tested DB-free.
+export function clampPage(limit?: number, offset?: number): { limit: number; offset: number } {
+  const l =
+    typeof limit === "number" && Number.isInteger(limit) && limit > 0
+      ? Math.min(limit, LIST_LIMIT_MAX)
+      : LIST_LIMIT_DEFAULT;
+  const o = typeof offset === "number" && Number.isInteger(offset) && offset > 0 ? offset : 0;
+  return { limit: l, offset: o };
+}
+
+export interface AdminDonationRow {
+  id: number;
+  donor_id: number;
+  donor_name: string;
+  donor_email: string | null;
+  mode: string;
+  plan: string | null;
+  amount_pence: number;
+  currency: string;
+  gift_aid: boolean;
+  claim_status: string;
+  payment_channel: string;
+  refunded_amount_pence: number;
+  declaration_status: string | null;
+  created_at: Date;
+}
+
+// Browse ALL donations, newest first, optionally filtered by claim_status and/or payment_channel,
+// with a bounded page window. Returns the page plus the total matching count (for pagination).
+export async function listDonations(opts: {
+  limit?: number;
+  offset?: number;
+  status?: string;
+  channel?: string;
+}): Promise<{ results: AdminDonationRow[]; total: number }> {
+  const { limit, offset } = clampPage(opts.limit, opts.offset);
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (opts.status) {
+    params.push(opts.status);
+    where.push(`d.claim_status = $${params.length}`);
+  }
+  if (opts.channel) {
+    params.push(opts.channel);
+    where.push(`d.payment_channel = $${params.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const totalRes = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM donations d ${whereSql}`,
+    params,
+  );
+  const res = await pool.query<AdminDonationRow>(
+    `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
+            d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
+            d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at
+       FROM donations d
+       JOIN donors dn ON dn.id = d.donor_id
+       ${whereSql}
+      ORDER BY d.id DESC
+      LIMIT ${limit} OFFSET ${offset}`,
+    params,
+  );
+  return { results: res.rows, total: totalRes.rows[0].count };
+}
+
+export interface ClaimBatchRow {
+  id: number;
+  status: string;
+  submitted_at: Date | null;
+  regulator: string;
+  charity_number: string;
+  hmrc_reference: string | null;
+  created_at: Date;
+  donation_count: number;
+  total_pence: number;
+}
+
+// List every claim batch, newest first, with its donation count + summed amount (for the claims
+// screen). LEFT JOIN so an empty batch still lists with a zero count.
+export async function listClaimBatches(): Promise<ClaimBatchRow[]> {
+  const res = await pool.query<ClaimBatchRow>(
+    `SELECT b.id, b.status, b.submitted_at, b.regulator, b.charity_number, b.hmrc_reference,
+            b.created_at,
+            count(d.id)::int AS donation_count,
+            COALESCE(sum(d.amount_pence), 0)::int AS total_pence
+       FROM claim_batches b
+       LEFT JOIN donations d ON d.claim_batch_id = b.id
+      GROUP BY b.id
+      ORDER BY b.id DESC`,
+  );
+  return res.rows;
+}
+
+export interface AdminAuditRow {
+  id: number;
+  actor: string;
+  action: string;
+  entity: string;
+  entity_id: number | null;
+  data: unknown;
+  created_at: Date;
+}
+
+// Read the append-only audit trail, newest first, optionally scoped to an entity and/or entity id,
+// with a bounded page. Returns the page plus the total matching count.
+export async function listAuditLog(opts: {
+  limit?: number;
+  offset?: number;
+  entity?: string;
+  entityId?: number;
+}): Promise<{ results: AdminAuditRow[]; total: number }> {
+  const { limit, offset } = clampPage(opts.limit, opts.offset);
+  const where: string[] = [];
+  const params: unknown[] = [];
+  if (opts.entity) {
+    params.push(opts.entity);
+    where.push(`entity = $${params.length}`);
+  }
+  if (opts.entityId != null) {
+    params.push(opts.entityId);
+    where.push(`entity_id = $${params.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const totalRes = await pool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM audit_log ${whereSql}`,
+    params,
+  );
+  const res = await pool.query<AdminAuditRow>(
+    `SELECT id, actor, action, entity, entity_id, data, created_at
+       FROM audit_log
+       ${whereSql}
+      ORDER BY id DESC
+      LIMIT ${limit} OFFSET ${offset}`,
+    params,
+  );
+  return { results: res.rows, total: totalRes.rows[0].count };
+}
+
+export interface DunningRow {
+  id: number;
+  donor_id: number;
+  donor_name: string;
+  donor_email: string | null;
+  stripe_subscription_id: string;
+  status: string;
+  failed_attempts: number;
+  lapsed_at: Date | null;
+  updated_at: Date;
+}
+
+// List subscription dunning rows (at-risk / lapsed monthly gifts, REQ-057/065), most-recently
+// updated first, optionally filtered by status ('active' | 'past_due' | 'lapsed'). Joins the donor.
+export async function listDunning(status?: string): Promise<DunningRow[]> {
+  const params: unknown[] = [];
+  let whereSql = "";
+  if (status) {
+    params.push(status);
+    whereSql = `WHERE sd.status = $1`;
+  }
+  const res = await pool.query<DunningRow>(
+    `SELECT sd.id, sd.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
+            sd.stripe_subscription_id, sd.status, sd.failed_attempts, sd.lapsed_at, sd.updated_at
+       FROM subscription_dunning sd
+       JOIN donors dn ON dn.id = sd.donor_id
+       ${whereSql}
+      ORDER BY sd.updated_at DESC, sd.id DESC`,
+    params,
+  );
+  return res.rows;
+}

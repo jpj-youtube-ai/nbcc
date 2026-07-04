@@ -70,3 +70,39 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
       | queue                |
       | retention-expiry     |
       | awaiting-declaration |
+
+  Scenario Outline: a Viewer can read the dashboard lists (REQ-066)
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    When I GET the admin path "<path>" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+
+    Examples:
+      | path                             |
+      | /api/admin/donations             |
+      | /api/admin/claim-batches         |
+      | /api/admin/audit                 |
+      | /api/admin/subscriptions/dunning |
+
+  Scenario Outline: the dashboard lists reject a missing token with 401
+    When I GET the admin path "<path>" without a token
+    Then the admin response status should be 401
+
+    Examples:
+      | path                             |
+      | /api/admin/donations             |
+      | /api/admin/claim-batches         |
+      | /api/admin/audit                 |
+      | /api/admin/subscriptions/dunning |
+
+  Scenario: an Editor can export a claim batch as Charities Online CSV (REQ-052/066)
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And an open claim batch
+    When I export the claim batch as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the admin response content type should contain "text/csv"
+
+  Scenario: a Viewer cannot export a claim batch (Editor and up only)
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And an open claim batch
+    When I export the claim batch as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 403

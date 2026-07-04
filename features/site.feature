@@ -17,6 +17,7 @@ Feature: Marketing site served by the app
       | /donate/thank-you | Thank you |
       | /donor-portal | Manage your support |
       | /privacy    | Privacy notice |
+      | /admin      | Staff sign in |
 
   Scenario Outline: raw .html paths canonicalise to the clean URL
     When I GET "<path>" without following redirects
@@ -33,6 +34,7 @@ Feature: Marketing site served by the app
       | /thank-you.html  | /donate/thank-you |
       | /portal.html     | /donor-portal |
       | /privacy.html    | /privacy |
+      | /admin.html      | /admin |
 
   Scenario: the shared stylesheet is served from /assets
     When I GET "/assets/css/styles.css"

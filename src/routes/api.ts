@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type StripeNS from "stripe";
 import { z } from "zod";
-import { stripe, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
+import { stripe, stripeConfigured, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import { forwardEnquiry } from "../clients/contact";
 import {
   selectDeclarationWording,
@@ -276,8 +276,20 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
   }
 
   try {
-    const session = await stripe.checkout.sessions.create(buildSessionParams(parsed.data));
-    return res.status(200).json({ url: session.url });
+    const params = buildSessionParams(parsed.data);
+    const session = await stripe.checkout.sessions.create(params);
+    const body: { url: string | null; session?: { id: string; metadata: typeof params.metadata; mode: typeof params.mode } } = {
+      url: session.url,
+    };
+    // Stub-mode echo (TASK-116): when there is no live Stripe (offline stub) and we are
+    // not in production, hand the built session back so the BDD donation journey can
+    // replay the REAL stamped metadata into the completion webhook — mirroring how Stripe
+    // echoes your session object back in checkout.session.completed. Production NEVER stubs
+    // (see src/clients/stripe.ts), so its response stays { url }. The frontend reads only url.
+    if (!stripeConfigured && config.NODE_ENV !== "production") {
+      body.session = { id: session.id, metadata: params.metadata, mode: params.mode };
+    }
+    return res.status(200).json(body);
   } catch (err) {
     // Upstream Stripe failure: log the real reason (e.g. a payment method not
     // activated, or a key-permission error) so it is visible in CloudWatch, then

@@ -1,2286 +1,571 @@
-/*
- * Charity Site — shared baseline stylesheet (REQ-001 scaffold).
- *
- * Intentionally minimal: a clean, accessible baseline so all four pages render
- * consistently from one file. The real visual design — navigation, footer, page
- * sections, and the colour/type systems — lands in its own requirements
- * (REQ-002, REQ-003, REQ-010+). Add page styling here; never inline a style
- * block in a page.
- */
-
-:root {
-  /* ===== NBCC brand colour system (REQ-004) ===== */
-  /* Six official colours */
-  --crimson: #c02238; /* Deep Crimson */
-  --maroon: #800000; /* Rich Maroon */
-  --cream: #f8f5ee; /* Natural Cream */
-  --tan: #d29c8a; /* Elfin Tan */
-  --slate: #333333; /* Dark Slate */
-  --holly: #1a531a; /* Holly Green */
-
-  /* Derived surfaces */
-  --card: #fffdfa;
-  --line: #e9dfd2; /* warm hairline derived from cream */
-  --tan-soft: #f3e4dd;
-  --holly-soft: #eaf0e7;
-  --slate-soft: #6f6a66; /* muted body text on light surfaces */
-
-  /* Cream alpha tints for dark surfaces/overlays (rgba allowed in :root) */
-  --cream-90: rgba(248, 245, 238, 0.9);
-  --cream-82: rgba(248, 245, 238, 0.82);
-  --cream-24: rgba(248, 245, 238, 0.24);
-  --cream-16: rgba(248, 245, 238, 0.16);
-  --cream-12: rgba(248, 245, 238, 0.12);
-
-  /* Elevation — warm shadows tinted off maroon #800000 (REQ-006) */
-  --shadow-sm: 0 2px 10px rgba(128, 0, 0, 0.06);
-  --shadow: 0 16px 44px -20px rgba(128, 0, 0, 0.28);
-  --shadow-lg: 0 30px 70px -28px rgba(128, 0, 0, 0.4);
-
-  /* Layout / radius / spacing (REQ-006) */
-  --space: 1rem;
-  --nav-h: 78px;
-  --maxw: 1180px;
-  --pad: clamp(20px, 5vw, 48px);
-  --radius: 16px;
-  --radius-lg: 24px;
-  --radius-pill: 999px;
-
-  /* Motion (REQ-008) — token-driven, consistent with the nav timings */
-  --ease: ease;
-  --motion-fast: 0.15s;
-  --motion: 0.3s;
-  --reveal: 0.5s;
-
-  /* Typography (REQ-005) — two-family system; faces self-hosted below */
-  --font-head: "Playfair Display", Georgia, "Times New Roman", serif;
-  --font-body: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  --fs-hero: clamp(2.5rem, 2rem + 4.2vw, 4.4rem);
-  --fs-page-intro: clamp(2rem, 1.6rem + 2.2vw, 3.25rem);
-  --fs-section: clamp(1.5rem, 1.2rem + 1.4vw, 2.2rem);
-  --fs-lede: clamp(1.05rem, 1rem + 0.35vw, 1.28rem);
-  --fs-body: clamp(1rem, 0.97rem + 0.2vw, 1.08rem);
-  --fs-eyebrow: clamp(0.7rem, 0.68rem + 0.1vw, 0.78rem);
-}
-
 /* =================================================================
-   TYPOGRAPHY (REQ-005) — two families, self-hosted latin subset, one
-   weight each to satisfy the <=2 font-file perf budget (Google Fonts is
-   the documented alternative). No build step. Other weights synthesise.
-   ================================================================= */
-@font-face {
-  font-family: "Playfair Display";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url(/assets/fonts/playfair-display-700-latin.woff2) format("woff2");
-}
-@font-face {
-  font-family: "Poppins";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url(/assets/fonts/poppins-400-latin.woff2) format("woff2");
-}
+   NBCC SHARED STYLESHEET — 2026 "Here All Year" refresh
+   Brand kit: Playfair Display + Poppins (self-hosted, latin)
+   Deep Crimson #C02238 · Rich Maroon #800000 · Natural Cream #F8F5EE
+   Elfin Tan #D29C8A · Dark Slate #333333 · Holly Green #1A531A
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html {
-  -webkit-text-size-adjust: 100%;
-}
-
-body {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: var(--fs-body);
-  line-height: 1.6;
-  color: var(--slate);
-  background-color: var(--cream);
-}
-
-.site-main {
-  max-width: var(--maxw);
-  margin-inline: auto;
-  padding: calc(var(--space) * 2) var(--pad);
-}
-
-h1,
-h2,
-h3,
-h4 {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--crimson);
-  line-height: 1.2;
-}
-h1 {
-  margin: 0 0 var(--space);
-  font-size: var(--fs-page-intro);
-}
-
-/* Anchored headings/sections clear the fixed nav (REQ-006). */
-:where(h1, h2, h3, h4, [id]) {
-  scroll-margin-top: calc(var(--nav-h) + 1rem);
-}
-
-/* =================================================================
-   BRAND MARKS (REQ-007) — the signature divider: a thin Holly Green
-   hairline with a centred crimson diamond. Pseudo-elements only (no
-   image); token-only colours. Use sparingly, directly under a heading.
-   ================================================================= */
-.rule {
-  position: relative;
-  height: 12px;
-  max-width: 340px;
-  margin: 14px 0 0;
-}
-.rule::before {
-  content: "";
-  position: absolute;
-  inset: 50% 0 auto 0;
-  height: 2px;
-  transform: translateY(-50%);
-  background: var(--holly);
-  opacity: 0.55;
-  border-radius: 2px;
-}
-.rule::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 9px;
-  height: 9px;
-  transform: translate(-50%, -50%) rotate(45deg);
-  background: var(--crimson);
-  box-shadow: 0 0 0 4px var(--cream); /* halo breaks the hairline around the diamond */
-}
-.rule.center {
-  margin-inline: auto;
-}
-
-/* Brand logo lockup — used whole at the REQ-007 sizes, with clear space. */
-.brand img {
-  display: block;
-  height: 50px;
-  width: auto;
-}
-.foot-brand img {
-  display: block;
-  height: 74px;
-  width: auto;
-  margin-bottom: 14px; /* clear space below the footer lockup */
-}
-
-/* =================================================================
-   MOTION (REQ-008) — restrained scroll reveal + hover lifts. Durations
-   and easing are token-driven and consistent with the nav timings.
-   ================================================================= */
-.reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  transition: opacity var(--reveal) var(--ease), transform var(--reveal) var(--ease);
-}
-.reveal.is-visible {
-  opacity: 1;
-  transform: none;
-}
-
-/* Hover lift for interactive surfaces — follows the .nav-cta pattern.
-   .card / .btn / .tier arrive in REQ-009 and inherit this when added. */
-.card,
-.btn,
-.tier {
-  transition: transform var(--motion-fast) var(--ease);
-}
-.card:hover,
-.btn:hover,
-.tier:hover {
-  transform: translateY(-1px);
-}
-
-/* Reduced-motion off-switch (REQ-032): never animate, never hide content. */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
-    scroll-behavior: auto !important;
-  }
-  .reveal {
-    opacity: 1 !important;
-    transform: none !important;
-  }
-}
-
-/* =================================================================
-   GLOBAL UI COMPONENTS (REQ-009) — shared pill buttons + card surface.
-   Token-only colours. .btn / .card / .tier inherit the hover-lift
-   transition from the MOTION (REQ-008) block — NOT re-declared here.
-   ================================================================= */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5em;
-  cursor: pointer;
-  text-decoration: none;
-  font-family: var(--font-body);
-  font-weight: 600;
-  font-size: 1rem;
-  padding: 11px 24px; /* matches the .nav-cta pill */
-  border: 0;
-  border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-sm);
-}
-/* Animated arrow — pseudo-element gated by the motion tokens, so the
-   prefers-reduced-motion off-switch (MOTION block) disables it. No image. */
-.btn::after {
-  content: "\2192";
-  transition: transform var(--motion-fast) var(--ease);
-}
-.btn:hover::after,
-.btn:focus-visible::after {
-  transform: translateX(3px);
-}
-.btn-primary {
-  background: var(--crimson);
-  color: var(--cream);
-}
-.btn-primary:hover {
-  background: var(--maroon);
-}
-.btn-ghost {
-  background: transparent;
-  color: var(--maroon);
-  border: 1.6px solid var(--maroon);
-  box-shadow: none;
-}
-.btn-ghost:hover {
-  background: var(--maroon);
-  color: var(--cream);
-}
-.btn-holly {
-  background: var(--holly);
-  color: var(--cream);
-}
-
-/* Shared card surface (large figures use .card-lg). Hover-lift is inherited
-   from the MOTION (REQ-008) block — do not re-declare it here. */
-.card {
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-.card-lg {
-  border-radius: var(--radius-lg);
-}
-
-/* =================================================================
-   HOME HERO (REQ-010) — index.html only. Reuses the buttons/.card
-   (REQ-009), .rule + logo (REQ-007), .reveal (REQ-008) and the tokens.
-   Token-only colours. Two-column grid that stacks on mobile.
-   ================================================================= */
-.eyebrow {
-  display: inline-block;
-  font-size: var(--fs-eyebrow);
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-weight: 600;
-  color: var(--crimson);
-  margin-bottom: 14px;
-}
-.hero {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: clamp(28px, 5vw, 64px);
-  align-items: center;
-  padding-block: clamp(8px, 3vw, 40px) clamp(32px, 6vw, 72px);
-}
-.hero h1 {
-  font-size: var(--fs-hero);
-  max-width: 15ch;
-}
-.hero-emph {
-  color: var(--maroon);
-  font-style: italic;
-}
-.lede {
-  font-size: var(--fs-lede);
-  color: var(--slate);
-  max-width: 52ch;
-  margin-top: 1.3rem;
-}
-.hero-cta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-top: 2rem;
-}
-.hero-art {
-  position: relative;
-  display: flex;
-  justify-content: center;
-}
-.hero-art img {
-  width: 100%;
-  max-width: 200px;
-  height: auto;
-}
-.proof {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  text-align: center;
-  padding: 14px 20px;
-}
-.proof-num {
-  display: block;
-  font-family: var(--font-head);
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--crimson);
-  line-height: 1;
-}
-.proof-lbl {
-  display: block;
-  font-size: 0.82rem;
-  color: var(--slate-soft);
-  max-width: 16ch;
-  margin: 4px auto 0;
-}
-
-@media (max-width: 680px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
-  .proof {
-    position: static;
-    margin: 16px auto 0;
-  }
-}
-
-/* =================================================================
-   HOME PILLARS (REQ-011) — index.html. A tinted band of four .card
-   pillars. Reuses .card / .reveal / tokens; token-only colours.
-   ================================================================= */
-.pillars {
-  background: var(--holly-soft);
-  border-radius: var(--radius-lg);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
-  margin-block: clamp(8px, 3vw, 32px);
-}
-.pillar-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: clamp(16px, 2vw, 24px);
-}
-.pillar {
-  padding: clamp(20px, 2.5vw, 28px);
-}
-.pillar-icon {
-  color: var(--crimson);
-  margin-bottom: 12px;
-}
-.pillar-title {
-  font-size: var(--fs-lede);
-  margin: 0 0 6px;
-}
-.pillar-line {
-  font-size: var(--fs-body);
-  color: var(--slate-soft);
-  margin: 0;
-}
-
-@media (max-width: 900px) {
-  .pillar-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 680px) {
-  .pillar-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* =================================================================
-   HOME WHY-YOUR-DONATION-MATTERS (REQ-012) — index.html. Tinted band,
-   two-column copy + photo slot. Reuses .btn/.rule/.reveal/tokens.
-   ================================================================= */
-.why {
-  background: var(--tan-soft);
-  border-radius: var(--radius-lg);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
-  margin-block: clamp(8px, 3vw, 32px);
-}
-.why-grid {
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: clamp(28px, 5vw, 56px);
-  align-items: center;
-}
-.why-copy h2 {
-  font-size: var(--fs-section);
-  max-width: 18ch;
-}
-.why-copy p {
-  font-size: var(--fs-body);
-  color: var(--slate);
-  margin: 0 0 1rem;
-}
-.why-copy .btn {
-  margin-top: 0.5rem;
-}
-.photo-slot {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  text-align: center;
-  min-height: 240px;
-  padding: clamp(20px, 3vw, 32px);
-  background: var(--card);
-  border: 1px dashed var(--line);
-  border-radius: var(--radius);
-  color: var(--slate-soft);
-}
-.photo-slot figcaption {
-  font-size: 0.86rem;
-  color: var(--slate-soft);
-  max-width: 28ch;
-}
-/* Captioned photo figures (REQ-015 founding headshot, REQ-012 packing photo): the
-   img frames itself and the figcaption sits below, overriding the dashed
-   placeholder box. The img's intrinsic width/height set its aspect ratio. */
-figure.photo-slot {
-  min-height: 0;
-  padding: 0;
-  background: none;
-  border: 0;
-}
-figure.photo-slot img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-}
-figure.photo-slot figcaption {
-  margin-top: 12px;
-  font-style: italic;
-}
-
-@media (max-width: 680px) {
-  .why-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-p {
-  margin: 0 0 var(--space);
-  color: var(--slate-soft);
-}
-
-a {
-  color: var(--maroon);
-}
-
-:focus-visible {
-  outline: 3px solid var(--holly);
-  outline-offset: 2px;
-}
-
-/* ---- ACCESSIBILITY FLOOR (REQ-032) ----
-   Skip link: the first focusable element on every page. Off-screen until it
-   takes focus, then it drops into the top-left over the fixed nav so keyboard
-   and screen-reader users can jump straight to <main id="main">. Token-only
-   colours (cream on maroon); the global :focus-visible holly ring above applies
-   on top, and the prefers-reduced-motion block below zeroes the slide. */
-.skip-link {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 1000;
-  transform: translateY(calc(-100% - 24px));
-  background: var(--maroon);
-  color: var(--cream);
-  padding: 10px 18px;
-  border-radius: 10px;
-  font-weight: 600;
-  text-decoration: none;
-  box-shadow: var(--shadow);
-  transition: transform 0.2s ease;
-}
-.skip-link:focus,
-.skip-link:focus-visible {
-  transform: translateY(0);
-}
-
-/* =================================================================
-   NAV (TASK-007 / REQ-002) — ported from the NBCC baseline.
-   Colour/layout tokens live in the canonical :root block above (REQ-004).
+   Served by the Express app to every marketing page. One shared file,
+   no build step, no inline styles. Fonts are self-hosted woff2 (no CDN):
+   Playfair Display as a variable face (weights 400–800 + italic), Poppins
+   at 400/500/600.
    ================================================================= */
 
-/* keep placeholder page content clear of the fixed nav */
-.site-main {
-  padding-top: var(--nav-h);
+/* ---- self-hosted type (REQ-005) ---- */
+@font-face{font-family:"Playfair Display";font-style:normal;font-weight:400 800;font-display:swap;src:url(/assets/fonts/playfair-var.woff2) format("woff2")}
+@font-face{font-family:"Playfair Display";font-style:italic;font-weight:400 600;font-display:swap;src:url(/assets/fonts/playfair-var-italic.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:400;font-display:swap;src:url(/assets/fonts/poppins-400.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:500;font-display:swap;src:url(/assets/fonts/poppins-500.woff2) format("woff2")}
+@font-face{font-family:"Poppins";font-style:normal;font-weight:600;font-display:swap;src:url(/assets/fonts/poppins-600.woff2) format("woff2")}
+
+:root{
+  /* ===== NBCC brand colour system (REQ-004) — six official colours ===== */
+  --crimson:#C02238;
+  --maroon:#800000;
+  --cream:#F8F5EE;
+  --tan:#D29C8A;
+  --slate:#333333;
+  --holly:#1A531A;
+
+  /* derived surfaces */
+  --card:#FFFDFA;
+  --line:#E9DFD2;          /* soft warm hairline derived from cream */
+  --tint:#F3EEE3;          /* deeper cream for alternating sections */
+  --tan-soft:#F3E4DD;      /* tan tint for fills */
+  --tan-light:#E8C4B4;     /* lighter tan for on-maroon chart fills */
+  --holly-soft:#EAF0E7;    /* holly tint for fills */
+  --slate-soft:#6F6A66;    /* muted body */
+
+  --nav-h:78px;
+  --maxw:1180px;
+  --radius:16px;
+  --radius-lg:24px;
+  --shadow-sm:0 2px 10px rgba(51,51,51,.06);
+  --shadow:0 16px 44px -20px rgba(128,0,0,.28);
+  --shadow-lg:0 30px 70px -28px rgba(128,0,0,.40);
+
+  --display:"Playfair Display", Georgia, "Times New Roman", serif;
+  --body:"Poppins", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  /* legacy aliases used by some pages/tests */
+  --font-head:var(--display);
+  --font-body:var(--body);
 }
 
-.nav {
-  position: fixed;
-  inset: 0 0 auto 0;
-  z-index: 100;
-  height: var(--nav-h);
-  display: flex;
-  align-items: center;
-  background: transparent; /* transparent over-hero by default */
-  transition: background 0.3s, box-shadow 0.3s, border-color 0.3s;
+*,*::before,*::after{box-sizing:border-box}
+/* the hidden attribute must always win over component display rules
+   (e.g. .give-tiers{display:grid}) so toggles/steps hide correctly */
+[hidden]{display:none !important}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{
+  margin:0;font-family:var(--body);color:var(--slate);background:var(--cream);
+  font-size:clamp(1rem,.97rem + .2vw,1.08rem);line-height:1.7;-webkit-font-smoothing:antialiased;
 }
-.nav.scrolled {
-  background: var(--cream-90); /* cream */
-  backdrop-filter: saturate(150%) blur(10px);
-  -webkit-backdrop-filter: saturate(150%) blur(10px);
-  box-shadow: var(--shadow-sm);
-  border-bottom: 1px solid var(--line);
-}
-.nav .wrap {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  width: 100%;
-  max-width: var(--maxw);
-  margin-inline: auto;
-  padding-inline: var(--pad);
-}
-.brand {
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 1.15rem;
-  letter-spacing: 0.04em;
-  color: var(--maroon);
-}
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.nav-links a {
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.98rem;
-  color: var(--slate);
-  padding: 9px 15px;
-  border-radius: var(--radius-pill);
-  position: relative;
-  transition: color 0.2s;
-}
-.nav-links a:hover {
-  color: var(--crimson);
-}
-.nav-links a.active {
-  color: var(--crimson);
-  font-weight: 600;
-}
-.nav-links a.active::after {
-  content: "";
-  position: absolute;
-  left: 15px;
-  right: 15px;
-  bottom: 4px;
-  height: 2px;
-  background: var(--crimson);
-  border-radius: 2px;
-}
-.nav-cta {
-  text-decoration: none;
-  background: var(--crimson);
-  color: var(--cream);
-  font-weight: 600;
-  padding: 11px 24px;
-  border-radius: var(--radius-pill);
-  font-size: 0.96rem;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.15s, background 0.2s;
-}
-.nav-cta:hover {
-  background: var(--maroon);
-  transform: translateY(-1px);
-}
-.burger {
-  display: none;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  padding: 8px;
-  border-radius: 10px;
-}
-.burger span {
-  display: block;
-  width: 24px;
-  height: 2px;
-  background: var(--maroon);
-  margin: 5px 0;
-  border-radius: 2px;
-  transition: transform 0.25s, opacity 0.25s;
-}
+::selection{background:var(--crimson);color:var(--cream)}
+img{max-width:100%;display:block;height:auto}
+a{color:var(--maroon)}
+h1,h2,h3,h4{font-family:var(--display);color:var(--crimson);margin:0;line-height:1.1;font-weight:800;letter-spacing:-.01em}
+p{margin:0 0 1rem}
+.wrap{width:100%;max-width:var(--maxw);margin-inline:auto;padding-inline:clamp(20px,5vw,48px)}
+.num{font-variant-numeric:tabular-nums}
+/* keep anchored headings clear of the fixed nav */
+:where(h1,h2,h3,h4,[id]){scroll-margin-top:calc(var(--nav-h) + 1rem)}
 
-/* Collapse links into the burger menu at narrow widths (REQ-032 mobile). */
-@media (max-width: 680px) {
-  .nav-links,
-  .nav-cta {
-    display: none;
-  }
-  .nav.open .nav-links {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-    position: absolute;
-    top: var(--nav-h);
-    left: 0;
-    right: 0;
-    background: var(--cream);
-    border-bottom: 1px solid var(--line);
-    padding: 14px var(--pad) 20px;
-    box-shadow: var(--shadow);
-  }
-  .nav.open .nav-links a {
-    padding: 13px 8px;
-    font-size: 1.05rem;
-  }
-  .nav.open .nav-links a.active::after {
-    display: none;
-  }
-  .burger {
-    display: block;
-  }
-  .nav.open .burger span:nth-child(1) {
-    transform: translateY(7px) rotate(45deg);
-  }
-  .nav.open .burger span:nth-child(2) {
-    opacity: 0;
-  }
-  .nav.open .burger span:nth-child(3) {
-    transform: translateY(-7px) rotate(-45deg);
-  }
+/* ---- shared bits ---- */
+.eyebrow{
+  font-family:var(--body);text-transform:uppercase;letter-spacing:.2em;font-size:.72rem;
+  font-weight:600;color:var(--holly);display:inline-block;margin-bottom:14px;
 }
+.eyebrow.on-dark{color:var(--tan)}
+
+/* signature divider (REQ-007): holly line with a crimson diamond, from the print brand */
+.rule{display:flex;align-items:center;gap:14px;margin:18px 0 0;max-width:340px}
+.rule::before,.rule::after{content:"";height:2px;flex:1;background:var(--holly);opacity:.55;border-radius:2px}
+.rule i{width:9px;height:9px;background:var(--crimson);transform:rotate(45deg);display:block;flex:0 0 auto}
+.rule.center{margin-inline:auto}
+.rule.on-dark::before,.rule.on-dark::after{background:var(--tan);opacity:.6}
+
+.lede{font-size:clamp(1.05rem,1rem + .35vw,1.28rem);color:var(--slate);max-width:54ch}
+
+/* the "twelve months" strip — eleven holly dots, one crimson diamond on December */
+.months{display:flex;gap:clamp(8px,1.6vw,16px);margin-top:26px}
+.months span{
+  position:relative;font-weight:600;font-size:.62rem;letter-spacing:.06em;
+  color:var(--slate-soft);padding-top:13px;line-height:1;
+}
+.months span::before{
+  content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+  width:5px;height:5px;border-radius:50%;background:var(--holly);opacity:.55;
+}
+.months .dec{color:var(--crimson);font-weight:700}
+.months .dec::before{
+  width:8px;height:8px;border-radius:0;background:var(--crimson);opacity:1;
+  transform:translateX(-50%) rotate(45deg);top:-1px;
+}
+.months-cap{font-family:var(--display);font-style:italic;font-size:.98rem;color:var(--slate-soft);margin:10px 0 0}
+
+/* ---- buttons (REQ-009) ---- */
+.btn{
+  --bg:var(--crimson);--fg:#fff;display:inline-flex;align-items:center;gap:.55em;cursor:pointer;
+  text-decoration:none;font-family:var(--body);font-weight:600;font-size:1rem;
+  background:var(--bg);color:var(--fg);border:0;padding:14px 28px;border-radius:999px;
+  box-shadow:var(--shadow);transition:transform .15s ease, background .2s ease, color .2s ease;
+}
+.btn:hover{transform:translateY(-2px)}
+.btn.primary:hover{background:var(--maroon)}
+.btn.ghost{--bg:transparent;--fg:var(--maroon);box-shadow:none;border:1.6px solid var(--maroon)}
+.btn.ghost:hover{--bg:var(--maroon);--fg:#fff}
+.btn.holly{--bg:var(--holly)}.btn.holly:hover{--bg:#123c12}
+.btn.on-dark{--bg:transparent;--fg:#fff;box-shadow:none;border:1.6px solid rgba(248,245,238,.7)}
+.btn.on-dark:hover{--bg:var(--cream);--fg:var(--maroon);border-color:var(--cream)}
+.btn .arrow{transition:transform .2s}.btn:hover .arrow{transform:translateX(3px)}
+
+/* ---- accessibility floor (REQ-032): skip link + visible focus ring ---- */
+.skip-link{position:absolute;left:12px;top:-60px;background:var(--maroon);color:var(--cream);padding:10px 16px;border-radius:10px;z-index:1000;transition:top .2s;text-decoration:none;font-weight:600}
+.skip-link:focus,.skip-link:focus-visible{top:12px}
+:focus-visible{outline:3px solid var(--holly);outline-offset:3px;border-radius:6px}
 
 /* =================================================================
-   FOOTER (REQ-003) — ported from the NBCC baseline.
-   Reuses the canonical brand tokens; cream-on-maroon tints use the
-   --cream-NN alpha tint tokens.
+   NAV (REQ-002) — sticky, scroll state, per-page active link
    ================================================================= */
-.site-footer {
-  background: var(--maroon);
-  color: var(--cream-82); /* cream at 82% */
-  margin-top: clamp(48px, 8vw, 96px);
-}
-.site-footer .wrap {
-  max-width: var(--maxw);
-  margin-inline: auto;
-  padding: clamp(46px, 6vw, 68px) var(--pad);
-  display: grid;
-  grid-template-columns: 1.5fr 1fr 1fr;
-  gap: 36px;
-}
-.site-footer h4 {
-  color: var(--cream);
-  font-size: 1.05rem;
-  margin: 0 0 14px;
-}
-.site-footer a {
-  color: var(--cream-82);
-  text-decoration: none;
-}
-.site-footer a:hover {
-  color: var(--cream);
-}
-.site-footer ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  font-size: 0.94rem;
-}
-.foot-brand p {
-  font-size: 0.92rem;
-  max-width: 36ch;
-}
-.socials {
-  display: flex;
-  gap: 10px;
-  margin-top: 16px;
-}
-.socials a {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--cream-12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.2s;
-}
-.socials a:hover {
-  background: var(--cream-24);
-}
-.site-footer .legal {
-  border-top: 1px solid var(--cream-16);
-}
-.site-footer .legal .wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 22px;
-  justify-content: space-between;
-  padding-block: 18px;
-  font-size: 0.82rem;
-}
-
-/* Stack the footer columns on narrow screens (REQ-032). */
-@media (max-width: 680px) {
-  .site-footer .wrap {
-    grid-template-columns: 1fr;
-  }
-}
+.nav{position:fixed;inset:0 0 auto 0;z-index:100;height:var(--nav-h);display:flex;align-items:center;
+  background:rgba(248,245,238,0);transition:background .3s,box-shadow .3s,border-color .3s}
+.nav.scrolled{background:rgba(248,245,238,.9);backdrop-filter:saturate(150%) blur(10px);
+  -webkit-backdrop-filter:saturate(150%) blur(10px);box-shadow:var(--shadow-sm);border-bottom:1px solid var(--line)}
+.nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:18px;width:100%}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none}
+.brand img{height:50px;width:auto}
+.nav-links{display:flex;align-items:center;gap:4px;list-style:none;margin:0;padding:0}
+.nav-links a{text-decoration:none;font-weight:500;font-size:.98rem;color:var(--slate);padding:9px 15px;border-radius:999px;position:relative;transition:color .2s}
+.nav-links a:hover{color:var(--crimson)}
+.nav-links a.active{color:var(--crimson);font-weight:600}
+.nav-links a.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%) rotate(45deg);bottom:2px;width:6px;height:6px;background:var(--crimson)}
+.nav-cta{text-decoration:none;background:var(--crimson);color:#fff;font-weight:600;padding:11px 24px;border-radius:999px;font-size:.96rem;box-shadow:var(--shadow-sm);transition:transform .15s,background .2s}
+.nav-cta:hover{background:var(--maroon);transform:translateY(-1px)}
+.burger{display:none;background:none;border:0;cursor:pointer;padding:8px;border-radius:10px}
+.burger span{display:block;width:24px;height:2px;background:var(--maroon);margin:5px 0;border-radius:2px;transition:transform .25s,opacity .25s}
 
 /* =================================================================
-   CLOSING CTA STRIP (REQ-013) — index.html + about.html. A reusable
-   crimson conversion panel at the foot of <main>. Token-only; reuses
-   the .btn .btn-primary component and .reveal.
+   PAGE HEADER / HERO
    ================================================================= */
-.closing-cta {
-  background: var(--crimson);
-  color: var(--cream);
-  text-align: center;
-  border-radius: var(--radius-lg);
-  padding: clamp(36px, 5vw, 60px) clamp(24px, 4vw, 48px);
-  margin-block: clamp(8px, 3vw, 32px);
-}
-.closing-cta h2 {
-  color: var(--cream);
-  font-size: var(--fs-section);
-  max-width: 24ch;
-  margin-inline: auto;
-}
-.closing-cta p {
-  color: var(--cream);
-  max-width: 50ch;
-  margin: 14px auto 26px;
-}
-/* Invert the Donate button for contrast on the crimson strip (matches the
-   prototype): cream fill, crimson text. The global .btn-primary is unchanged. */
-.closing-cta .btn-primary {
-  background: var(--cream);
-  color: var(--crimson);
-}
-.closing-cta .btn-primary:hover {
-  background: var(--tan-soft);
-}
+.site-main{display:block}
+/* Pages whose sections hold content directly (donate/supporters/utility) rather
+   than the full-bleed .section > .wrap pattern get a boxed, padded, nav-cleared
+   main so content never runs to the screen edge or under the fixed nav. */
+.site-main--boxed{max-width:var(--maxw);margin-inline:auto;padding:calc(var(--nav-h) + clamp(28px,4vw,56px)) clamp(20px,5vw,48px) clamp(48px,7vw,88px)}
+.site-main--boxed > section + section{margin-top:clamp(40px,6vw,72px)}
+.site-main--boxed .donate-intro,.site-main--boxed .supporters-intro,.site-main--boxed .contact-intro{text-align:center;max-width:780px;margin-inline:auto}
+.site-main--boxed .donate-intro h1,.site-main--boxed .supporters-intro h1{font-size:clamp(2.3rem,1.8rem + 3.4vw,3.8rem)}
+.site-main--boxed .donate-intro .rule,.site-main--boxed .supporters-intro .rule,.site-main--boxed .intro-hero .rule{margin-inline:auto}
+.site-main--boxed .donate-intro .lede,.site-main--boxed .supporters-intro .lede{margin-inline:auto}
+.site-main--boxed .donor-benefits,.site-main--boxed .reassure{background:none;padding-block:0}
+.page-top{padding:calc(var(--nav-h) + clamp(36px,6vw,76px)) 0 clamp(36px,5vw,64px)}
+.hero{position:relative;overflow:hidden;padding:calc(var(--nav-h) + clamp(44px,6vw,88px)) 0 clamp(56px,7vw,100px)}
+.hero::before{content:"";position:absolute;z-index:0;width:min(820px,115vw);height:min(820px,115vw);
+  right:-16%;top:-30%;border-radius:50%;
+  background:radial-gradient(circle, rgba(210,156,138,.28), rgba(210,156,138,0) 62%);pointer-events:none}
+.hero .wrap{position:relative;z-index:1;display:grid;grid-template-columns:1.08fr .92fr;gap:clamp(28px,5vw,64px);align-items:center}
+.hero h1{font-size:clamp(2.6rem,2rem + 4.4vw,4.6rem);max-width:14ch}
+.hero h1 .beat{display:block}
+.hero h1 em{font-style:italic;font-weight:500;color:var(--maroon)}
+.hero h1 .allyear{white-space:nowrap;background:linear-gradient(rgba(26,83,26,.45),rgba(26,83,26,.45)) no-repeat left 96% / 100% .09em}
+.hero .lede{margin-top:1.3rem}
+.hero-cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:2rem}
+.hero-art{display:flex;justify-content:center;position:relative}
+.hero-art .logo-big{width:min(78%,330px);filter:drop-shadow(0 24px 40px rgba(128,0,0,.18))}
+.proof{position:absolute;right:2%;bottom:2%;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 20px;box-shadow:var(--shadow-lg);text-align:center}
+.proof .n{font-family:var(--display);font-size:2.3rem;font-weight:800;color:var(--crimson);line-height:1}
+.proof .lbl{font-size:.82rem;color:var(--slate-soft);margin-top:2px;font-weight:500;max-width:14ch}
+
+/* generic page intro (about/donate/contact) */
+.intro-hero{text-align:center;max-width:780px;margin-inline:auto}
+.intro-hero h1{font-size:clamp(2.3rem,1.8rem + 3.4vw,3.8rem)}
+.intro-hero .lede{margin:20px auto 0}
+.intro-hero .rule{margin-inline:auto}
 
 /* =================================================================
-   ABOUT INTRO (REQ-014) — about.html. Centred page intro; reuses
-   .eyebrow / base h1 / .rule.center / .lede and the tokens.
+   SECTIONS
    ================================================================= */
-.about-intro {
-  text-align: center;
-  max-width: 760px;
-  margin-inline: auto;
-  padding-block: clamp(8px, 3vw, 40px);
-}
-.about-intro .rule,
-.about-intro .lede {
-  margin-inline: auto;
-}
+.section{padding-block:clamp(58px,8.5vw,112px)}
+.section.tint{background:linear-gradient(180deg,var(--cream),var(--tint))}
+.section.holly-tint{background:var(--holly-soft)}
+/* bold crimson band, matching the home "Donate now" cta-strip colour */
+.section.brand-band{background:var(--crimson)}
+.section.brand-band .eyebrow{color:var(--cream);opacity:.85}
+.section.brand-band .donor-benefits h2{color:var(--cream)}
+.section.brand-band .donor-benefits-intro{color:rgba(248,245,238,.9)}
+.section.brand-band .rule::before,.section.brand-band .rule::after{background:var(--cream);opacity:.5}
+.section.brand-band .rule i{background:var(--cream)}
+.section.flush-top{padding-top:0}
+.section-head{text-align:center;max-width:700px;margin:0 auto clamp(34px,5vw,56px)}
+.section-head h2{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
+.section-head p{color:var(--slate-soft);margin-top:16px}
+h2.h-lg{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
+
+/* generic card surface (benefit groups, supporters, contact points, tiers, ...) */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+.card-lg{border-radius:var(--radius-lg)}
+
+/* trust pillars (the four booklet cards) */
+.pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
+.pillar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:32px 26px;text-align:center;box-shadow:var(--shadow-sm)}
+.pillar .ic{width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px}
+.pillar .ic.crimson{background:var(--crimson)}.pillar .ic.holly{background:var(--holly)}.pillar .ic.tan{background:var(--tan)}
+.pillar h3{font-size:1.2rem;margin-bottom:6px;font-weight:700}
+.pillar.c-crimson h3{color:var(--crimson)}.pillar.c-holly h3{color:var(--holly)}.pillar.c-slate h3{color:var(--slate)}
+.pillar p{color:var(--slate-soft);font-size:.95rem;margin:0}
+.pillar .mini-rule{width:34px;height:2px;background:var(--tan);margin:10px auto 14px}
+
+/* duo — "Known at Christmas" / "the other eleven months" */
+.duo{display:grid;grid-template-columns:.92fr 1.08fr;gap:clamp(24px,4vw,48px);align-items:stretch}
+.xmas-card{position:relative;background:linear-gradient(170deg,#fff, var(--tan-soft));border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:clamp(28px,4vw,44px);display:flex;flex-direction:column;align-items:flex-start}
+.xmas-card::before{content:"";position:absolute;top:0;left:clamp(28px,4vw,44px);width:52px;height:4px;background:var(--crimson);border-radius:0 0 4px 4px}
+.xmas-card .ic{width:60px;height:60px;border-radius:50%;background:var(--crimson);display:flex;align-items:center;justify-content:center;margin-bottom:18px;box-shadow:var(--shadow-sm)}
+.xmas-card h3{font-size:clamp(1.5rem,1.3rem + .8vw,1.9rem);color:var(--maroon)}
+.xmas-card .prog{font-family:var(--display);font-style:italic;font-weight:500;font-size:1.2rem;color:var(--crimson);margin:6px 0 12px}
+.xmas-card p{color:var(--slate);font-size:.98rem}
+.xmas-card .btn{margin-top:auto}
+.ylist h3{font-size:clamp(1.5rem,1.3rem + .8vw,1.9rem);color:var(--holly)}
+.ylist > p{margin-top:12px;color:var(--slate)}
+.yrow{display:flex;gap:18px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow-sm)}
+.yrow + .yrow{margin-top:14px}
+.yrow .ic{width:46px;height:46px;flex:0 0 auto;border-radius:14px;background:var(--holly-soft);color:var(--holly);display:flex;align-items:center;justify-content:center}
+.yrow b{display:block;font-family:var(--display);font-weight:700;font-size:1.1rem;color:var(--slate);line-height:1.25}
+.yrow span{color:var(--slate-soft);font-size:.93rem}
+
+/* maroon bands (Freddie pull-quote, age data) */
+.band{background:var(--maroon);color:var(--cream)}
+.band h2{color:#fff}
+.band-quote{max-width:880px;margin-inline:auto;text-align:center}
+.band-quote blockquote{margin:0;font-family:var(--display);font-style:italic;font-weight:500;font-size:clamp(1.6rem,1.2rem + 2.2vw,2.7rem);line-height:1.25;color:var(--cream)}
+.band-quote .btn{margin-top:30px}
+
+/* split (text + figure) */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:clamp(30px,5vw,72px);align-items:center}
+.split.narrow-img{grid-template-columns:1.1fr .9fr}
+.figure{background:linear-gradient(135deg,rgba(192,34,56,.08),rgba(26,83,26,.10)),var(--card);border:1px dashed var(--tan);border-radius:var(--radius-lg);aspect-ratio:4/5;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--slate-soft);padding:26px;box-shadow:var(--shadow-sm)}
+.figure small{display:block;margin-top:10px;font-size:.78rem;line-height:1.5;opacity:.85}
+.figure strong{color:var(--crimson)}
+.prose p{color:var(--slate);margin-bottom:1rem}
+.prose .strongline{font-weight:600;color:var(--maroon)}
+.prose .quote{font-family:var(--display);font-style:italic;font-weight:500;font-size:clamp(1.4rem,1.1rem + 1.4vw,2.1rem);color:var(--crimson);line-height:1.25;margin:6px 0 6px}
+.prose .by{color:var(--slate-soft);font-weight:600;font-size:.92rem;margin-bottom:1.2rem}
+
+/* Freddie story card (About) */
+.story-card{max-width:880px;margin-inline:auto;background:var(--card);border:1px solid var(--line);border-left:5px solid var(--crimson);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:clamp(28px,5vw,52px)}
+.story-card p{font-size:clamp(1.02rem,1rem + .2vw,1.14rem);color:var(--slate)}
+.story-card p:last-child{margin-bottom:0}
+.story-card .fname{color:var(--crimson);font-weight:600}
+
+/* impact — horizontal bar charts */
+.chart{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:13px}
+.crow{display:grid;grid-template-columns:26px 132px 1fr auto;gap:14px;align-items:center}
+.crow.no-pos{grid-template-columns:132px 1fr auto}
+.crow .pos{font-family:var(--display);font-weight:700;color:var(--maroon);text-align:right}
+.crow .name{font-weight:600;color:var(--slate);font-size:.93rem;line-height:1.3}
+.crow .bar{position:relative;background:var(--tan-soft);border-radius:8px;height:32px;overflow:hidden}
+.crow .fill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--crimson),var(--maroon));border-radius:8px;min-width:6px}
+.crow .val{font-weight:600;color:var(--slate);font-size:.92rem;min-width:112px;text-align:right;font-variant-numeric:tabular-nums}
+.band .crow .name{color:var(--cream)}
+.band .crow .bar{background:rgba(248,245,238,.1)}
+.band .crow .fill{background:linear-gradient(90deg,var(--tan),var(--tan-light))}
+.band .crow .val{color:var(--cream)}
+.map-duo{display:grid;grid-template-columns:minmax(300px,460px) 1fr;gap:clamp(26px,4vw,54px);align-items:center}
+.mapfig{margin:0}
+.map{width:100%;height:auto;display:block}
+.map text{font-family:var(--body)}
+.map .mnum{fill:#fff;font-size:13px;font-weight:700}
+.map .mlbl{fill:#4A3D38;font-size:12.5px;font-weight:600}
+.map .mlbl.muted{fill:#6B5A53;font-weight:500}
+.map .msea{fill:#A39289;font-size:12.5px;font-style:italic}
+.map .msea.small{font-size:11px}
+.chart-note{max-width:820px;margin:22px auto 0;text-align:center;font-size:.88rem;color:var(--slate-soft)}
+.band .chart-note{color:rgba(248,245,238,.75)}
 
 /* =================================================================
-   ABOUT OUR STORY (REQ-015) — about.html. Two-column founding
-   narrative + headshot placeholder. Reuses .photo-slot / .reveal /
-   tokens; token-only colours.
+   DONATE
    ================================================================= */
-.our-story {
-  margin-block: clamp(8px, 3vw, 32px);
-}
-.story-grid {
-  display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  gap: clamp(28px, 5vw, 56px);
-  align-items: center;
-}
-/* "Our story" is an <h2> but reads as the eyebrow — keep the body font. */
-.our-story .eyebrow {
-  font-family: var(--font-body);
-}
-.story-prose .quote {
-  font-family: var(--font-head);
-  font-style: italic;
-  font-size: clamp(1.4rem, 1.1rem + 1.4vw, 2.1rem);
-  color: var(--crimson);
-  line-height: 1.25;
-  margin: 6px 0;
-}
-.story-prose .by {
-  color: var(--slate-soft);
-  font-weight: 600;
-  font-size: 0.92rem;
-  margin-bottom: 1.2rem;
-}
-.story-prose p {
-  color: var(--slate);
-  margin-bottom: 1rem;
-}
-.story-prose .story-close {
-  font-weight: 600;
-}
-
-@media (max-width: 680px) {
-  .story-grid {
-    grid-template-columns: 1fr;
-  }
-}
+.give{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);overflow:hidden}
+.give-inner{display:grid;grid-template-columns:1.35fr .65fr}
+.give-main{padding:clamp(26px,4vw,42px)}
+.give-side{background:var(--holly);color:var(--cream);padding:clamp(26px,4vw,42px);display:flex;flex-direction:column;gap:16px}
+.toggle,.give-toggle{display:inline-flex;background:var(--tan-soft);border:1px solid var(--line);border-radius:999px;padding:5px;gap:4px}
+.toggle button,.give-mode{border:0;background:transparent;cursor:pointer;font-family:var(--body);font-weight:600;font-size:.95rem;color:var(--slate-soft);padding:10px 24px;border-radius:999px;transition:.2s}
+.toggle button[aria-pressed="true"],.give-mode[aria-pressed="true"],.give-mode.is-active{background:var(--crimson);color:#fff;box-shadow:var(--shadow-sm)}
+.mode-line{margin:18px 0 0;font-size:.95rem;color:var(--slate)}
+.mode-line b{color:var(--maroon)}
+.tiers,.give-tiers{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:22px}
+.tier,.give-tier{position:relative;border:1.6px solid var(--line);border-radius:var(--radius);padding:22px;background:var(--cream);transition:border-color .18s,transform .15s,box-shadow .18s;display:flex;flex-direction:column;gap:6px;cursor:pointer;text-align:left;width:100%;font:inherit}
+.tier:hover,.give-tier:hover{border-color:var(--crimson);transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+.tier .name,.give-tier-name{font-family:var(--display);font-size:1.35rem;font-weight:700}
+.tier .price,.give-amount{font-family:var(--display);font-size:1.7rem;font-weight:800;color:var(--crimson);line-height:1}
+.tier .price span,.give-amount span{font-family:var(--body);font-size:.85rem;font-weight:500;color:var(--slate-soft)}
+.tier .head-line,.give-tier-head{font-weight:600;color:var(--maroon);font-size:.92rem}
+.tier .desc,.give-tier-desc{color:var(--slate-soft);font-size:.88rem}
+.tier.bronze .name{color:#A56A43}
+.tier.silver .name{color:#7C7C82}
+.tier.gold .name{color:#B8862B}
+.tier.platinum .name{color:var(--slate)}
+.tier.feature,.give-tier.is-featured{border-color:var(--crimson)}
+.tier .flag,.give-flag{position:absolute;top:-11px;right:16px;background:var(--crimson);color:#fff;font-size:.66rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:4px 12px;border-radius:999px}
+.fineprint{grid-column:1 / -1;font-family:var(--display);font-style:italic;font-size:.95rem;color:var(--slate-soft);margin:6px 2px 0;line-height:1.6}
+.giftaid,.giftaid-callout{display:flex;gap:14px;align-items:flex-start;background:var(--holly-soft);border:1px solid var(--holly);border-radius:var(--radius);padding:16px 18px;margin-top:22px}
+.giftaid input{width:22px;height:22px;flex:0 0 auto;margin-top:1px;accent-color:var(--holly)}
+.giftaid p{margin:0;font-size:.9rem;color:var(--slate)}
+.giftaid b{color:var(--holly)}
+.give-note{font-size:.84rem;color:var(--slate-soft);margin-top:16px}
+.side-h{font-family:var(--display);font-size:1.25rem;font-weight:700;color:#fff}
+.side-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:13px}
+.side-list li{display:flex;gap:12px;font-size:.93rem;line-height:1.5;color:rgba(248,245,238,.92)}
+.side-list svg{flex:0 0 auto;margin-top:3px}
+.side-share{border-top:1px solid rgba(248,245,238,.2);padding-top:16px}
+.side-share .lbl{font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;font-weight:600;color:var(--tan)}
+.side-share .url{font-weight:600;font-size:1.05rem;color:#fff;letter-spacing:.02em}
+.side-foot{margin-top:auto;border-top:1px solid rgba(248,245,238,.2);padding-top:16px;font-size:.82rem;color:rgba(248,245,238,.8)}
+.pay{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.pay .chip{background:rgba(248,245,238,.14);border:1px solid rgba(248,245,238,.26);border-radius:8px;padding:5px 10px;font-size:.76rem;font-weight:500}
+.benefits{display:grid;grid-template-columns:1fr 1fr;gap:26px;margin-top:14px}
+.benefits h3{font-size:1.3rem;color:var(--maroon);margin-bottom:14px}
+.benefits ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.benefits li{display:flex;gap:12px;font-size:.95rem;color:var(--slate)}
+.benefits svg{flex:0 0 auto;margin-top:4px}
+/* .reassure is a SECTION (head + intro + .reassure-grid); only the grid is columnar */
+.reassure{text-align:center}
+.reassure-intro{max-width:56ch;margin:0 auto clamp(24px,4vw,36px);color:var(--slate-soft)}
+.reassure-item{padding:24px 26px;text-align:left}
+.reassure-icon{color:var(--crimson);margin-bottom:12px}
+.reassure-item h3,.reassure-item h4{font-size:1.05rem;color:var(--maroon);margin:0 0 6px;font-weight:700}
+.reassure-item p{font-size:.9rem;color:var(--slate-soft);margin:0}
 
 /* =================================================================
-   ABOUT MEET THE TEAM (REQ-016) — about.html. Tinted band with a
-   responsive grid of member cards (portrait placeholder + name + role).
-   Reuses the tinted-band pattern, .photo-slot, .reveal and tokens.
+   FORMS (contact + donate capture)
    ================================================================= */
-.meet-team {
-  background: var(--holly-soft);
-  border-radius: var(--radius-lg);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
-  margin-block: clamp(8px, 3vw, 32px);
-  text-align: center;
-}
-.meet-team .team-intro {
-  font-size: var(--fs-lede);
-  color: var(--slate);
-  max-width: 52ch;
-  margin: 0.6rem auto 0;
-}
-.team-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: clamp(16px, 2vw, 24px);
-  margin-top: clamp(24px, 4vw, 40px);
-}
-.member {
-  text-align: center;
-}
-/* The member portrait: a 4:5 .photo-slot framing the team-<name>.jpg headshot
-   (640x800, generated by scripts/process-images.mjs). The img covers the slot. */
-.member .photo-slot {
-  min-height: 0;
-  aspect-ratio: 4 / 5;
-  padding: 0;
-  border-style: solid;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-.member .photo-slot img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: inherit;
-}
-.member-name {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--crimson);
-  font-size: 1.15rem;
-  line-height: 1.1;
-  margin: 14px 0 0;
-}
-.member-role {
-  font-size: 0.84rem;
-  color: var(--slate-soft);
-  margin: 3px 0 0;
-}
+.contact-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:clamp(30px,5vw,64px);align-items:start}
+.contact-points{list-style:none;margin:24px 0 0;padding:0;display:flex;flex-direction:column;gap:16px}
+.contact-points li{display:flex;gap:14px;align-items:center}
+.contact-points .ic{width:44px;height:44px;flex:0 0 auto;background:var(--tan-soft);border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--crimson)}
+.contact-points a{color:var(--slate);text-decoration:none;font-weight:600}
+.contact-points a:hover{color:var(--crimson)}
+.contact-points small{display:block;color:var(--slate-soft);font-weight:400;font-size:.82rem}
+form{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:clamp(24px,4vw,38px);box-shadow:var(--shadow-sm)}
+.field{margin-bottom:18px}.row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+label{display:block;font-weight:600;font-size:.9rem;margin-bottom:7px;color:var(--slate)}
+label .req{color:var(--crimson)}
+input,textarea,select{width:100%;font-family:var(--body);font-size:1rem;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:13px 15px;transition:border-color .18s}
+input:focus,textarea:focus,select:focus{border-color:var(--holly)}
+textarea{resize:vertical;min-height:130px}
+.err{color:var(--maroon);font-size:.82rem;margin-top:6px;display:none;font-weight:600}
+.field.invalid input,.field.invalid textarea{border-color:var(--crimson)}
+.field.invalid .err{display:block}
+.form-status{margin-top:16px;font-weight:600;display:none;border-radius:12px;padding:14px 16px}
+.form-status.ok,.form-status.is-success{display:block;background:var(--holly-soft);color:var(--holly);border:1px solid var(--holly)}
 
-@media (max-width: 900px) {
-  .team-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-@media (max-width: 680px) {
-  .team-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
+/* CTA strip */
+.cta-strip{background:var(--crimson);color:#fff;text-align:center;border-radius:var(--radius-lg);padding:clamp(38px,5vw,64px) clamp(24px,4vw,48px);box-shadow:var(--shadow)}
+.cta-strip h2{color:#fff;font-size:clamp(1.8rem,1.4rem + 1.6vw,2.6rem)}
+.cta-strip p{color:rgba(255,255,255,.92);max-width:52ch;margin:14px auto 26px}
+.cta-strip .btn{--bg:#fff;--fg:var(--crimson);box-shadow:none}.cta-strip .btn:hover{--bg:var(--cream)}
 
 /* =================================================================
-   ABOUT AGE-REACH FIGURES (REQ-017) — about.html. A maroon band of
-   eight 2025 age-band counts (totalling 7,657) rendered as a semantic
-   <dl>. Cream-on-maroon tints only — never tan/holly body text — with
-   the figures in Playfair (REQ-005). Reuses the tinted-band pattern,
-   .rule (REQ-007), .reveal (REQ-008) and the tokens; token-only colours.
+   FOOTER (REQ-003)
    ================================================================= */
-.age-reach {
-  background: var(--maroon);
-  color: var(--cream-82);
-  border-radius: var(--radius-lg);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
-  margin-block: clamp(8px, 3vw, 32px);
-  text-align: center;
-}
-/* Invert the eyebrow + heading to cream for contrast on the maroon band. */
-.age-reach .eyebrow {
-  color: var(--cream-82);
-}
-.age-reach h2 {
-  color: var(--cream);
-  font-size: var(--fs-section);
-}
-.age-reach-intro {
-  font-size: var(--fs-lede);
-  color: var(--cream-82);
-  max-width: 56ch;
-  margin: 1rem auto 0;
-}
-.ages {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: clamp(12px, 1.5vw, 20px);
-  margin-top: clamp(24px, 4vw, 40px);
-}
-/* Each band shows the figure on top, label beneath. column-reverse lets the
-   markup keep a valid dt-before-dd pair while putting the number first. */
-.age {
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 6px;
-  padding: 18px 8px;
-  background: var(--cream-12);
-  border: 1px solid var(--cream-16);
-  border-radius: var(--radius);
-}
-.age-num {
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: clamp(1.3rem, 1rem + 1vw, 1.9rem);
-  line-height: 1;
-  color: var(--cream);
-  margin: 0;
-}
-.age-label {
-  font-size: 0.74rem;
-  letter-spacing: 0.02em;
-  color: var(--cream-82);
-  margin: 0;
-}
+footer{background:var(--maroon);color:rgba(248,245,238,.82)}
+footer .wrap{padding-block:clamp(46px,6vw,68px);display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:36px}
+footer h4{color:var(--cream);font-size:1.05rem;margin-bottom:14px;font-weight:700}
+footer a{color:rgba(248,245,238,.82);text-decoration:none}
+footer a:hover{color:var(--tan)}
+footer ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;font-size:.94rem}
+.foot-brand img{height:74px;margin-bottom:14px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.2))}
+.foot-brand p{font-size:.92rem;max-width:36ch}
+.socials{display:flex;gap:10px;margin-top:16px}
+.socials a{width:40px;height:40px;border-radius:10px;background:rgba(248,245,238,.12);display:flex;align-items:center;justify-content:center;transition:background .2s}
+.socials a:hover{background:rgba(248,245,238,.24)}
+.handle{margin:14px 0 0;font-size:.9rem}
+.handle b{color:var(--cream);font-weight:600}
+.legal{border-top:1px solid rgba(248,245,238,.16)}
+.legal .wrap{display:flex;flex-wrap:wrap;gap:8px 22px;justify-content:space-between;padding-block:18px;font-size:.82rem}
+.legal a{text-decoration:underline;text-underline-offset:2px}
 
-@media (max-width: 900px) {
-  .ages {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-@media (max-width: 680px) {
-  .ages {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
+/* team grid */
+.team{display:grid;grid-template-columns:repeat(5,1fr);gap:24px}
+.member{text-align:center}
+.member img{width:100%;aspect-ratio:4/5;object-fit:cover;border-radius:var(--radius-lg);border:1px solid var(--line);box-shadow:var(--shadow-sm);transition:transform .16s ease,box-shadow .18s ease}
+.member:hover img{transform:translateY(-4px);box-shadow:var(--shadow)}
+.member .nm{font-family:var(--display);font-weight:700;color:var(--crimson);font-size:1.15rem;margin-top:14px;line-height:1.1}
+.member .rl{font-size:.84rem;color:var(--slate-soft);margin-top:3px}
+figure.story-photo{margin:0}
+figure.story-photo img{width:100%;border-radius:var(--radius-lg);border:1px solid var(--line);box-shadow:var(--shadow);aspect-ratio:4/5;object-fit:cover}
+figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate-soft);font-style:italic}
 
 /* =================================================================
-   ABOUT TOP-10 COMMUNITIES (REQ-018) — about.html. A tinted band
-   ranking the ten 2025 communities as a semantic <ol> of horizontal
-   bars, each bar's width proportional to Ayr at 100% via the --w
-   custom property (bars are CSS, not images, so the perf budget holds).
-   Reuses the tinted-band pattern (.meet-team/.pillars holly-soft),
-   .rule (REQ-007), .reveal (REQ-008) and the tokens; token-only
-   colours. A geographic map is a later enhancement, out of scope.
+   REVEAL + MOTION (REQ-008) — main.js adds .is-visible on scroll
    ================================================================= */
-.top-communities {
-  background: var(--holly-soft);
-  border-radius: var(--radius-lg);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
-  margin-block: clamp(8px, 3vw, 32px);
-  text-align: center;
-}
-.top-communities-intro {
-  font-size: var(--fs-lede);
-  color: var(--slate);
-  max-width: 56ch;
-  margin: 0.6rem auto 0;
-}
-/* The ranked list: name | bar | value rows, left-aligned within a
-   centred, readable column. <ol> carries the rank order semantically. */
-.communities {
-  list-style: none;
-  margin: clamp(24px, 4vw, 40px) auto 0;
-  padding: 0;
-  max-width: 760px;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(10px, 1.5vw, 16px);
-  text-align: left;
-}
-.rank {
-  display: grid;
-  grid-template-columns: 1.75rem minmax(6.5rem, 10rem) 1fr auto;
-  align-items: center;
-  gap: clamp(10px, 1.6vw, 18px);
-}
-.rank-pos {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-  text-align: right;
-}
-.rank-name {
-  font-weight: 600;
-  color: var(--slate);
-}
-/* Bar track + proportional fill. Track is tan-soft for warm contrast on
-   the holly-soft band; the fill grows to its --w (count ÷ Ayr's 2,096). */
-.rank-bar {
-  height: clamp(26px, 4.5vw, 34px);
-  background: var(--tan-soft);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-}
-.rank-fill {
-  display: block;
-  width: var(--w);
-  height: 100%;
-  background: linear-gradient(90deg, var(--crimson), var(--maroon));
-  border-radius: var(--radius-pill);
-}
-.rank-val {
-  white-space: nowrap;
-  text-align: right;
-}
-.rank-count {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-}
-.rank-pct {
-  font-size: 0.86rem;
-  color: var(--slate-soft);
-}
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .65s ease var(--d,0ms),transform .65s ease var(--d,0ms)}
+.reveal.is-visible{opacity:1;transform:none}
 
-/* Narrow screens (down to ~360px): drop the bar onto its own full-width
-   row beneath the name/value so nothing is squeezed. */
-@media (max-width: 560px) {
-  .rank {
-    grid-template-columns: 1.5rem 1fr auto;
-    row-gap: 8px;
-  }
-  .rank-bar {
-    grid-column: 1 / -1;
-    order: 3;
-  }
-}
+/* ---- legacy class aliases: some served pages (contact/donate/gift-aid/portal)
+   use hyphenated button modifiers + .field-error/.form-row; keep them styled. ---- */
+.btn.btn-primary:hover{background:var(--maroon)}
+.btn.btn-ghost{--bg:transparent;--fg:var(--maroon);box-shadow:none;border:1.6px solid var(--maroon)}
+.btn.btn-ghost:hover{--bg:var(--maroon);--fg:#fff}
+.btn.btn-holly{--bg:var(--holly)}.btn.btn-holly:hover{--bg:#123c12}
+.field-error{color:var(--maroon);font-size:.82rem;margin-top:6px;font-weight:600;display:none}
+.field.invalid .field-error{display:block}
+.field.invalid input,.field.invalid textarea,.field.invalid select{border-color:var(--crimson)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:680px){.form-row{grid-template-columns:1fr}}
 
 /* =================================================================
-   DONATE INTRO (REQ-019) — donate.html. Centred page intro matching
-   .about-intro; reuses .eyebrow / base h1 / .rule.center / .lede and
-   the tokens. Token-only, no new type rules (those come from existing
-   element styles).
+   DONATE STEP WIZARD + give-* form fields (real donate.html form)
    ================================================================= */
-.donate-intro {
-  text-align: center;
-  max-width: 760px;
-  margin-inline: auto;
-  padding-block: clamp(8px, 3vw, 40px);
+.give-widget h2{font-size:clamp(1.8rem,1.4rem + 1.4vw,2.4rem);margin-bottom:6px}
+.give-widget > h2{text-align:center;margin-bottom:clamp(20px,3vw,32px)}
+.give-card{padding:0;overflow:hidden}
+/* the give card is a gift box: a small bow peeks over its top edge (decorative) */
+.give-box{position:relative;margin-top:14px}
+.give-ribbon{position:absolute;top:0;left:50%;transform:translate(-50%,-44%);z-index:3;pointer-events:none;filter:drop-shadow(0 5px 9px rgba(128,0,0,.20))}
+.give-ribbon svg{display:block}
+/* faint vertical ribbon down the card centre (behind the bow), like wrapping */
+.give-ribbon-band{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:34px;z-index:2;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(192,34,56,.11) 22%,rgba(192,34,56,.11) 78%,transparent);box-shadow:inset 1px 0 0 rgba(128,0,0,.10),inset -1px 0 0 rgba(128,0,0,.10)}
+.give-card .give-inner{display:grid;grid-template-columns:1.4fr .6fr}
+@media(max-width:980px){.give-card .give-inner{grid-template-columns:1fr}}
+.give-card .give-main{padding:clamp(24px,4vw,42px)}
+
+/* progress indicator */
+.give-progress{display:flex;gap:10px;list-style:none;margin:0 0 clamp(22px,3vw,30px);padding:0}
+.give-progress li{flex:1;display:flex;flex-direction:column;gap:7px;font-size:.76rem;font-weight:600;color:var(--slate-soft);letter-spacing:.01em}
+.give-progress li::before{content:"";height:5px;border-radius:999px;background:var(--tan-soft);transition:background .25s}
+.give-progress li.is-active{color:var(--crimson)}
+.give-progress li.is-active::before,.give-progress li.is-done::before{background:var(--crimson)}
+.give-progress .p-n{font-variant-numeric:tabular-nums}
+
+/* step panels */
+.give-steps{position:relative}
+.give-step[hidden]{display:none}
+.give-step-title{font-family:var(--display);font-weight:700;font-size:1.5rem;color:var(--maroon);margin:0 0 4px}
+.give-step-sub{color:var(--slate-soft);font-size:.95rem;margin:0 0 20px}
+@media(prefers-reduced-motion:no-preference){
+  .give-step.slide-in{animation:giveIn .32s cubic-bezier(.22,1,.36,1)}
+  .give-step.slide-back{animation:giveBack .32s cubic-bezier(.22,1,.36,1)}
+  @keyframes giveIn{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+  @keyframes giveBack{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:none}}
 }
-.donate-intro .rule,
-.donate-intro .lede {
-  margin-inline: auto;
-}
+.give-nav{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:26px;flex-wrap:wrap}
+.give-nav .spacer{margin-right:auto}
+.give-back{background:none;border:1.6px solid var(--line);border-radius:999px;color:var(--maroon);font-family:var(--body);font-weight:600;font-size:.95rem;cursor:pointer;padding:11px 22px;display:inline-flex;align-items:center;gap:.45em;transition:border-color .18s,color .18s}
+.give-back:hover{border-color:var(--maroon);color:var(--crimson)}
+.give-step-err{color:var(--maroon);font-weight:600;font-size:.9rem;margin:14px 0 0;display:none}
+.give-step-err.show{display:block}
+
+/* tier selection (wizard: select, not immediate checkout) */
+.give-tier.is-selected{border-color:var(--crimson);box-shadow:0 0 0 2px var(--crimson) inset,var(--shadow-sm)}
+.give-tier{padding-right:46px}
+.give-tier.is-selected::after{content:"\2713";position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:50%;background:var(--crimson);color:#fff;font-size:.8rem;display:flex;align-items:center;justify-content:center}
+/* nudge the checkmark below the "Most chosen" flag on featured tiers */
+.give-tier.is-featured.is-selected::after{top:20px}
+.give-tier-custom{position:relative;border:1.6px dashed var(--line);border-radius:var(--radius);padding:20px;background:var(--cream);grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.give-custom-label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px;width:100%}
+.give-custom-field{display:flex;align-items:center;gap:6px;flex:1;min-width:160px}
+.give-custom-currency{font-family:var(--display);font-weight:700;font-size:1.3rem;color:var(--crimson)}
+.give-price{display:flex;align-items:baseline;gap:6px}.give-cadence{font-size:.85rem;color:var(--slate-soft);font-weight:500}
+.give-other{grid-column:1 / -1;font-family:var(--display);font-style:italic;color:var(--slate-soft);font-size:.95rem;margin:4px 0 0}
+
+/* fieldset resets + labels + options + checks */
+.give-donor,.give-contact,.give-declaration,.give-partners,.give-company,.give-consideration{border:0;margin:0 0 6px;padding:0;min-width:0}
+.give-donor-legend,.give-contact-legend,.give-declaration-legend,.give-company-legend,.give-partners-legend,.give-partner-legend,.give-business-type-legend,.give-scope-legend{display:block;font-family:var(--display);font-weight:700;font-size:1.15rem;color:var(--maroon);margin:0 0 12px;padding:0;line-height:1.25}
+.give-donor-options{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.give-donor-option{display:inline-flex;align-items:center;gap:9px;border:1.6px solid var(--line);border-radius:12px;padding:11px 16px;cursor:pointer;font-weight:600;transition:border-color .18s}
+.give-donor-option:hover{border-color:var(--crimson)}
+.give-donor-option input{width:18px;height:18px;accent-color:var(--crimson);margin:0}
+.give-donor-option label{margin:0;font-weight:600;cursor:pointer}
+.give-field{margin-bottom:16px}
+.give-req{color:var(--crimson)}.give-optional{color:var(--slate-soft);font-weight:400;font-size:.86em}
+.give-check{display:flex;gap:11px;align-items:flex-start;margin:12px 0;font-size:.93rem;color:var(--slate);cursor:pointer;line-height:1.5}
+.give-check-box{width:20px;height:20px;flex:0 0 auto;margin:2px 0 0;accent-color:var(--holly)}
+.give-help,.give-field-help,.give-donor-help,.give-business-help,.give-declaration-help,.give-company-help,.give-partners-help,.give-privacy{font-size:.84rem;color:var(--slate-soft);margin:6px 0 0}
+.give-scope{background:var(--tan-soft);border-radius:12px;padding:14px 16px}
+.give-partner{border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px}
+.give-partner-remove,.give-partner-add{background:none;border:1.6px solid var(--line);border-radius:999px;padding:9px 18px;font-family:var(--body);font-weight:600;color:var(--maroon);cursor:pointer;margin-top:8px}
+.give-partner-remove:hover,.give-partner-add:hover{border-color:var(--crimson);color:var(--crimson)}
+
+/* gift-aid callout (real donate uses .giftaid with nested label) */
+.giftaid-label{margin:0;font-size:.9rem;color:var(--slate);cursor:pointer}
+.giftaid-label strong{display:block;color:var(--holly);margin-bottom:3px}
+.giftaid-statement{display:block;margin-top:8px;font-size:.82rem;color:var(--slate-soft);font-style:italic}
+
+/* review summary (final step) */
+.give-review{background:var(--tan-soft);border-radius:var(--radius);padding:18px 20px;margin-bottom:8px}
+.give-review dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;color:var(--slate-soft);font-weight:600}
+.give-review dd{margin:0 0 10px;font-family:var(--display);font-weight:700;color:var(--maroon);font-size:1.15rem}
+.give-review dd:last-child{margin-bottom:0}
+
+/* side panel (real donate .give-side already holly via base rule) */
+.give-side .eyebrow{color:var(--tan)}
+.give-side-note{font-size:.95rem;color:rgba(248,245,238,.9);margin:0}
+.side-check{flex:0 0 auto;margin-top:3px}
+.side-charity a{color:var(--cream);text-decoration:underline}
+.side-pay{list-style:none;display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0;padding:0}
+.side-pay .chip{background:rgba(248,245,238,.14);border:1px solid rgba(248,245,238,.26);border-radius:8px;padding:5px 10px;font-size:.76rem;font-weight:500}
+
+/* monthly benefits + reassurance (below the widget) */
+.donor-benefits,.reassure{text-align:center}
+.donor-benefits-intro{max-width:60ch;margin:0 auto clamp(28px,4vw,40px);color:var(--slate-soft)}
+.benefit-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;max-width:920px;margin-inline:auto;text-align:left}
+@media(max-width:720px){.benefit-grid{grid-template-columns:1fr}}
+.benefit-group{padding:26px 28px}
+.benefit-title{font-size:1.25rem;color:var(--maroon);margin-bottom:14px}
+.benefit-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.benefit-list li{display:flex;gap:12px;font-size:.94rem;color:var(--slate)}
+.benefit-check{flex:0 0 auto;margin-top:3px;color:var(--holly)}
+.reassure-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:980px;margin-inline:auto}
+@media(max-width:720px){.reassure-grid{grid-template-columns:1fr}}
 
 /* =================================================================
-   GIVE WIDGET (REQ-020) — donate.html. The conversion card: a two-column
-   grid (main column + Holly Green side panel) on the shared .card/.card-lg
-   surface (REQ-009), stacking <=680px, plus the once/monthly segmented
-   toggle. Cream-on-holly text only on the panel — inverted like the
-   .age-reach/footer cream tints, never holly body text (brand-colours
-   guard). Token-only colours. Tier content is REQ-021/022; the side-panel
-   content is REQ-024.
+   SUPPORTERS (server-rendered tiers; keep the class structure)
    ================================================================= */
-.give-widget {
-  margin-block: clamp(8px, 3vw, 32px);
-}
-.give-widget > h2 {
-  text-align: center;
-  font-size: var(--fs-section);
-  margin-bottom: clamp(16px, 3vw, 28px);
-}
-.give-card {
-  display: grid;
-  grid-template-columns: 1.4fr 0.6fr;
-  /* Children pad themselves; overflow clips the holly panel to the radius. */
-  padding: 0;
-  overflow: hidden;
-}
-/* The card is a large surface, not a clickable tile — opt out of the shared
-   .card hover-lift (small tiers inside keep their own). */
-.give-card:hover {
-  transform: none;
-}
-.give-main {
-  padding: clamp(22px, 4vw, 40px);
-}
-.give-side {
-  background: var(--holly);
-  color: var(--cream-82);
-  padding: clamp(22px, 4vw, 40px);
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-/* Invert the eyebrow to cream for contrast on the holly panel. */
-.give-side .eyebrow {
-  color: var(--cream-82);
-}
-.give-side-note {
-  margin: 0;
-  color: var(--cream-82);
-}
+.supporter-tiers{display:flex;flex-direction:column;gap:clamp(36px,5vw,56px);margin-top:clamp(32px,5vw,52px)}
+.supporter-tier-name{text-align:center;font-size:clamp(1.55rem,1.3rem + 1.1vw,2.1rem);margin:0}
+.supporter-tier-name::after{content:"";display:block;width:44px;height:3px;background:var(--tan);border-radius:3px;margin:12px auto 0}
+.supporter-grid{list-style:none;margin:clamp(20px,3vw,30px) 0 0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.supporter{display:flex;align-items:center;gap:14px;padding:18px 20px}
+.supporter-icon{flex:0 0 auto;width:44px;height:44px;border-radius:12px;background:var(--tan-soft);color:var(--crimson);display:flex;align-items:center;justify-content:center}
+.supporter-meta{display:flex;flex-direction:column;min-width:0}
+.supporter-name{font-family:var(--display);font-weight:700;color:var(--maroon);font-size:1.05rem;line-height:1.2}
+.supporter-kind{font-size:.8rem;color:var(--slate-soft)}
 
-/* Segmented once/monthly toggle (pill control), mirroring the prototype. */
-.give-toggle {
-  display: inline-flex;
-  gap: 4px;
-  padding: 5px;
-  margin-bottom: clamp(18px, 3vw, 28px);
-  background: var(--tan-soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-}
-.give-mode {
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-weight: 600;
-  color: var(--slate-soft);
-  padding: 10px 22px;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-.give-mode.is-active {
-  background: var(--crimson);
-  color: var(--cream);
-  box-shadow: var(--shadow-sm);
-}
-
-@media (max-width: 680px) {
-  .give-card {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* =================================================================
-   GIVE SIDE PANEL (REQ-024) — donate.html. Fills the .give-side holly
-   panel (GIVE WIDGET block above) with the where-your-gift-goes points,
-   the charity number, and the payment chips. Inverted cream-on-holly
-   tints only: text in --cream/--cream-82/--cream-90, surfaces in
-   --cream-12/--cream-16 — never holly/tan body text (brand-colours
-   guard). Chips are pure CSS pills (--radius-pill), check icons inline
-   SVG via currentColor, no image tags (perf budget). Token-only colours.
-   ================================================================= */
-.side-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.side-list li {
-  display: flex;
-  gap: 12px;
-  font-size: 0.92rem;
-  line-height: 1.5;
-  color: var(--cream-90);
-}
-.side-check {
-  flex: 0 0 auto;
-  margin-top: 3px;
-  color: var(--cream);
-}
-.side-foot {
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--cream-16);
-}
-.side-charity {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--cream-82);
-}
-.side-charity a {
-  color: var(--cream);
-  font-weight: 600;
-}
-.side-pay {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.side-pay .chip {
-  padding: 5px 10px;
-  font-size: 0.76rem;
-  font-weight: 500;
-  color: var(--cream-82);
-  background: var(--cream-12);
-  border: 1px solid var(--cream-16);
-  border-radius: var(--radius-pill);
-}
-
-/* =================================================================
-   GIVE ONCE TIERS (REQ-021) — donate.html. The one-off suggested amounts
-   mounted into #tiersOnce: four selectable amount tiles plus a full-width
-   choose-your-own-amount field, on the shared .card/.tier surface (REQ-009)
-   with the hover-lift (REQ-008). The .give-tiers grid (shared with the
-   monthly tiers, REQ-022) is two columns, collapsing to one ~360px.
-   Token-only colours.
-   ================================================================= */
-.give-tiers {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: clamp(12px, 1.5vw, 16px);
-}
-/* Each amount is a selectable tile: the .card surface + .tier hover-lift,
-   with a button reset so it reads as a control. */
-.give-tier {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: clamp(18px, 2.5vw, 24px);
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-.give-tier:hover,
-.give-tier:focus-visible {
-  border-color: var(--crimson);
-}
-.give-amount {
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: clamp(1.4rem, 1.1rem + 1vw, 1.8rem);
-  line-height: 1;
-  color: var(--crimson);
-}
-.give-tier-desc {
-  font-size: 0.9rem;
-  color: var(--slate-soft);
-}
-/* The "Most chosen" tile: crimson outline + the floating pill marker. */
-.give-tier.is-featured {
-  border-color: var(--crimson);
-}
-.give-flag {
-  position: absolute;
-  top: -11px;
-  right: 16px;
-  padding: 4px 12px;
-  background: var(--crimson);
-  color: var(--cream);
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border-radius: var(--radius-pill);
-}
-/* Choose your own amount: a full-width labelled field, not a clickable tile. */
-.give-tier-custom {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 16px;
-  padding: clamp(16px, 2.5vw, 22px);
-}
-.give-custom-label {
-  font-weight: 600;
-  color: var(--maroon);
-}
-.give-custom-field {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1 1 160px;
-  padding: 10px 14px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-}
-.give-custom-field:focus-within {
-  border-color: var(--crimson);
-}
-.give-custom-currency {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--crimson);
-}
-.give-custom-input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  color: var(--slate);
-}
-
-@media (max-width: 420px) {
-  .give-tiers {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* =================================================================
-   GIVE MONTHLY TIERS (REQ-022) — donate.html. The Bronze/Silver/Gold/
-   Platinum plans mounted into #tiersMonthly reuse the GIVE ONCE TIERS
-   surface (.give-tiers grid, .card.tier.give-tier, .give-amount,
-   .give-tier-desc, .is-featured/.give-flag). This block adds only the
-   monthly-specific pieces: the plan name, the per-month cadence label,
-   the headline, and the other-amount contact line. Token-only colours.
-   ================================================================= */
-.give-tier-name {
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: 1.15rem;
-  line-height: 1;
-  color: var(--slate);
-}
-/* Amount + cadence sit on one baseline row ("£10  per month"). */
-.give-price {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.give-cadence {
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--slate-soft);
-}
-.give-tier-head {
-  font-weight: 600;
-  font-size: 0.95rem;
-  color: var(--maroon);
-}
-/* Other monthly amounts: a full-width contact line under the tiers. */
-.give-other {
-  grid-column: 1 / -1;
-  margin: 4px 0 0;
-  text-align: center;
-  font-size: 0.9rem;
-  color: var(--slate-soft);
-}
-.give-other a {
-  color: var(--crimson);
-  font-weight: 600;
-}
-
-/* =================================================================
-   DONOR TYPE (REQ-038) — donate.html. The individual/business routing
-   question at the top of .give-main. Native radios (they keep the global
-   :focus-visible holly ring, REQ-032) drive the Gift Aid path in main.js;
-   the optional business-name field is a Donors Page display label only and
-   never switches the path. Token-only colours: on this light surface body
-   text stays slate with a maroon legend and crimson radio accents (the
-   brand-colours guard forbids holly/tan text here). The [hidden] rules let
-   the toggled Gift Aid callout and business field actually collapse — they
-   set display, so the bare hidden attribute is not enough on its own.
-   ================================================================= */
-.give-donor {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: clamp(16px, 2.5vw, 22px);
-  margin-bottom: clamp(18px, 3vw, 28px);
-  background: var(--card);
-}
-.give-donor-legend {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-  font-size: 1.05rem;
-  padding: 0;
-  margin-bottom: 12px;
-}
-.give-donor-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.give-donor-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: var(--tan-soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-}
-.give-donor-option input {
-  accent-color: var(--crimson);
-  cursor: pointer;
-}
-.give-donor-option label {
-  font-weight: 600;
-  color: var(--slate);
-  cursor: pointer;
-}
-.give-donor-help {
-  margin: 12px 0 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--slate-soft);
-}
-.give-business {
-  margin-top: 14px;
-}
-.give-business label {
-  display: block;
-  font-weight: 600;
-  color: var(--slate);
-  margin-bottom: 6px;
-}
-.give-business-input {
-  width: 100%;
-  padding: 10px 12px;
-  font: inherit;
-  color: var(--slate);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.give-business-help {
-  margin: 8px 0 0;
-  font-size: 0.85rem;
-  color: var(--slate-soft);
-}
-/* The business field sets no display of its own, but the Gift Aid callout is
-   display:flex, so the bare [hidden] attribute cannot hide it — collapse both
-   explicitly when initDonorType toggles them. */
-.giftaid[hidden] {
-  display: none;
-}
-.give-business[hidden] {
-  display: none;
-}
-
-/* =================================================================
-   CONTACT CAPTURE (REQ-039) — donate.html. Consent-based contact
-   details below the donor-type question in .give-main: a required full
-   name, an optional email with a never-pre-ticked consent tick, an
-   anonymous option, and a monthly-only 18-or-over confirmation. Same
-   card treatment as the DONOR TYPE block; token-only colours — slate
-   body, a maroon legend and crimson accents (the brand-colours guard
-   forbids holly/tan text on this light surface). The 18+ row is a flex
-   row shown only in give-monthly mode, so .give-age[hidden] collapses
-   it (a bare hidden attribute cannot hide a flex box) — the same
-   pattern as .giftaid[hidden].
-   ================================================================= */
-.give-contact,
-.give-declaration {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: clamp(16px, 2.5vw, 22px);
-  margin-bottom: clamp(18px, 3vw, 28px);
-  background: var(--card);
-}
-.give-contact-legend,
-.give-declaration-legend {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-  font-size: 1.05rem;
-  padding: 0;
-  margin-bottom: 12px;
-}
-/* Intro line under the Gift Aid declaration legend (REQ-043); slate-soft, like the
-   donor-type helper — never holly/tan text, so the brand-colours guard holds. */
-.give-declaration-help {
-  margin: 0 0 14px;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--slate-soft);
-}
-/* Heading for the declaration-scope radio group (REQ-044); slate, like a field label. */
-.give-scope-legend {
-  display: block;
-  font-weight: 600;
-  color: var(--slate);
-  margin-bottom: 6px;
-}
-.give-field {
-  margin-bottom: 14px;
-}
-.give-field label {
-  display: block;
-  font-weight: 600;
-  color: var(--slate);
-  margin-bottom: 6px;
-}
-.give-req {
-  color: var(--crimson);
-}
-.give-optional {
-  font-weight: 400;
-  color: var(--slate-soft);
-}
-.give-field-input {
-  width: 100%;
-  padding: 10px 12px;
-  font: inherit;
-  color: var(--slate);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.give-field-help {
-  margin: 8px 0 0;
-  font-size: 0.85rem;
-  color: var(--slate-soft);
-}
-.give-check {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 12px;
-  color: var(--slate);
-  cursor: pointer;
-}
-.give-check-box {
-  margin-top: 3px;
-  accent-color: var(--crimson);
-  cursor: pointer;
-}
-.give-check-text {
-  font-size: 0.92rem;
-  line-height: 1.5;
-}
-/* The 18+ row is display:flex, so the bare [hidden] attribute cannot hide it —
-   collapse it explicitly when initGiveToggle reveals/hides it by give mode
-   (the same pattern as the Gift Aid callout's .giftaid[hidden]). */
-.give-age[hidden] {
-  display: none;
-}
-
-/* =================================================================
-   BUSINESS SUB-TYPE + PARTNERSHIP DECLARATIONS (REQ-051) — donate.html.
-   The company/partnership sub-question reuses the donor-type radio row;
-   the .give-partners fieldset is the repeatable one-declaration-per-partner
-   capture on the partnership path, sharing the .give-declaration card
-   treatment. Token-only colours (slate body, maroon legend, crimson
-   accents), so the brand-colours guard holds. Both ship hidden and are
-   revealed by initDonorType, so a bare [hidden] must collapse them.
-   ================================================================= */
-.give-business-type {
-  margin-top: 14px;
-}
-.give-business-type-legend {
-  display: block;
-  font-weight: 600;
-  color: var(--slate);
-  margin-bottom: 8px;
-}
-.give-partners {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: clamp(16px, 2.5vw, 22px);
-  margin-bottom: clamp(18px, 3vw, 28px);
-  background: var(--card);
-}
-.give-partners[hidden] {
-  display: none;
-}
-.give-partners-legend {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-  font-size: 1.05rem;
-  padding: 0;
-  margin-bottom: 12px;
-}
-.give-partners-help {
-  margin: 0 0 14px;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--slate-soft);
-}
-/* Each partner is a bordered sub-card so the repeated rows read as distinct people. */
-.give-partner {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: clamp(14px, 2vw, 18px);
-  margin-bottom: 14px;
-}
-.give-partner-legend {
-  font-weight: 700;
-  color: var(--maroon);
-  padding: 0;
-  margin-bottom: 10px;
-}
-.give-partner-share .give-custom-field {
-  max-width: 220px;
-}
-.give-partner-remove {
-  margin-top: 4px;
-  padding: 0;
-  font: inherit;
-  font-size: 0.9rem;
-  color: var(--crimson);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
-}
-.give-partner-remove[hidden] {
-  display: none;
-}
-.give-partner-add {
-  margin-top: 4px;
-}
-
-/* =================================================================
-   COMPANY CAPTURE (REQ-038) — donate.html. The company-specific fields
-   shown only on the incorporated-company path (no Gift Aid). Shares the
-   .give-declaration / .give-partners card treatment; token-only colours
-   (slate body, maroon legend). Ships hidden and is revealed by
-   initDonorType, so a bare [hidden] must collapse the flex/grid box (the
-   same pattern as .giftaid[hidden] / .give-business[hidden]).
-   ================================================================= */
-.give-company {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: clamp(16px, 2.5vw, 22px);
-  margin-bottom: clamp(18px, 3vw, 28px);
-  background: var(--card);
-}
-.give-company[hidden] {
-  display: none;
-}
-.give-company-legend {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-  font-size: 1.05rem;
-  padding: 0;
-  margin-bottom: 12px;
-}
-.give-company-help {
-  margin: 0 0 14px;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--slate-soft);
-}
-
-/* =================================================================
-   GIFT AID CALLOUT (REQ-023) — donate.html. A holly-tinted opt-in box
-   beneath the tiers in .give-main, mirroring the prototype's treatment.
-   Reuses --radius / --line / surface tokens; the checkbox keeps the
-   global :focus-visible holly ring (REQ-032). Token-only colours — the
-   brand-colours guard forbids holly *text* on light surfaces, so the
-   emphasis is maroon and the tick accent is crimson (not holly).
-   Gated: this whole block is removed with the markup if NBCC is not
-   registered for Gift Aid (see the GIFT AID CALLOUT START/END comments).
-   ================================================================= */
-.giftaid {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-top: clamp(16px, 2.5vw, 24px);
-  padding: clamp(14px, 2vw, 18px);
-  background: var(--holly-soft);
-  border: 1px solid var(--holly);
-  border-radius: var(--radius);
-}
-.giftaid-check {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
-  accent-color: var(--crimson);
-  cursor: pointer;
-}
-.giftaid-label {
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: var(--slate);
-  cursor: pointer;
-}
-.giftaid-label strong {
-  display: block;
-  color: var(--maroon);
-}
-.giftaid-intro {
-  display: block;
-  margin-top: 2px;
-}
-/* The verbatim HMRC declaration (REQ-042): a quieter, hairline-topped legal
-   block below the framing copy. Exactly one shows per give mode; the inactive
-   one carries [hidden]. As with .giftaid above, a display rule beats the bare
-   [hidden] attribute, so collapse the inactive statement explicitly. */
-.giftaid-statement {
-  display: block;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-  font-size: 0.82rem;
-}
-.giftaid-statement[hidden] {
-  display: none;
-}
-
-/* =================================================================
-   MONTHLY DONOR BENEFITS (REQ-025) — donate.html. A tan-soft tinted
-   band beneath the give widget, mirroring the .why/.meet-team pattern
-   (--radius-lg, clamp padding). Two .card groups make the all-donor vs
-   Platinum-only split structurally clear. Reuses .card / .reveal / .rule /
-   .eyebrow and the tokens; token-only colours. On this light surface the
-   brand-colours guard forbids holly/tan body text, so headings are maroon,
-   the eyebrow and check icons crimson, and body copy slate. Check icons are
-   inline SVG via currentColor, no image tags (perf budget).
-   ================================================================= */
-.donor-benefits {
-  background: var(--tan-soft);
-  border-radius: var(--radius-lg);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
-  margin-block: clamp(8px, 3vw, 32px);
-  text-align: center;
-}
-.donor-benefits h2 {
-  font-size: var(--fs-section);
-}
-.donor-benefits-intro {
-  font-size: var(--fs-lede);
-  color: var(--slate);
-  max-width: 58ch;
-  margin: 0.6rem auto 0;
-}
-.benefit-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: clamp(16px, 3vw, 28px);
-  margin-top: clamp(24px, 4vw, 40px);
-  text-align: left;
-}
-.benefit-group {
-  padding: clamp(22px, 3vw, 32px);
-}
-.benefit-title {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-  font-size: 1.3rem;
-  margin: 0 0 16px;
-}
-.benefit-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.benefit-list li {
-  display: flex;
-  gap: 12px;
-  font-size: var(--fs-body);
-  line-height: 1.55;
-  color: var(--slate);
-}
-.benefit-list a {
-  color: var(--crimson);
-}
-.benefit-check {
-  flex: 0 0 auto;
-  margin-top: 3px;
-  color: var(--crimson);
-}
-
-@media (max-width: 680px) {
-  .benefit-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* =================================================================
-   DONATE REASSURANCE (REQ-026) — donate.html. A row of three .card
-   trust items beneath the monthly donor benefits band, before the
-   footer, mirroring the prototype. Reuses .card / .rule / .reveal /
-   .eyebrow and the tokens; token-only colours. On this light surface the
-   brand-colours guard forbids holly/tan body text, so the heading and
-   item titles are maroon, the eyebrow and icons crimson, and body copy
-   slate. Icons are inline SVG via currentColor, aria-hidden, no image
-   tags (perf budget). Links keep the global :focus-visible ring (REQ-032).
-   ================================================================= */
-.reassure {
-  margin-block: clamp(8px, 3vw, 32px);
-  text-align: center;
-}
-.reassure > h2 {
-  font-size: var(--fs-section);
-}
-.reassure-intro {
-  font-size: var(--fs-lede);
-  color: var(--slate);
-  max-width: 58ch;
-  margin: 0.6rem auto 0;
-}
-.reassure-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: clamp(16px, 3vw, 28px);
-  margin-top: clamp(24px, 4vw, 40px);
-  text-align: left;
-}
-.reassure-item {
-  padding: clamp(20px, 3vw, 28px);
-}
-.reassure-icon {
-  color: var(--crimson);
-  margin-bottom: 12px;
-}
-.reassure-item h3 {
-  font-family: var(--font-head);
-  font-weight: 700;
-  color: var(--maroon);
-  font-size: 1.15rem;
-  margin: 0 0 8px;
-}
-.reassure-item p {
-  font-size: var(--fs-body);
-  color: var(--slate);
-  line-height: 1.55;
-  margin: 0;
-}
-.reassure-item a {
-  color: var(--crimson);
-}
-
-@media (max-width: 900px) {
-  .reassure-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* =================================================================
-   CONTACT PAGE (REQ-027) — contact.html. A centred intro (mirroring
-   .about-intro/.donate-intro) above a two-column grid: NBCC's contact
-   points on the shared .card surface beside the enquiry form. Reuses
-   .card / .rule / .eyebrow / .btn and the tokens; token-only colours. On
-   these light surfaces the brand-colours guard forbids holly/tan body
-   text, so headings/labels are maroon, the required asterisk and icons
-   crimson, and body copy slate. Icons are inline SVG via currentColor,
-   aria-hidden, no image tags (perf budget). Inputs keep the global
-   :focus-visible holly ring (REQ-032). The enquiry POST target
-   (/api/contact) is REQ-030, out of scope here.
-   ================================================================= */
-.contact-intro {
-  text-align: center;
-  max-width: 760px;
-  margin-inline: auto;
-  padding-block: clamp(8px, 3vw, 40px);
-}
-.contact-intro .rule,
-.contact-intro .lede {
-  margin-inline: auto;
-}
-.contact-grid {
-  display: grid;
-  grid-template-columns: 0.9fr 1.1fr;
-  gap: clamp(28px, 5vw, 56px);
-  align-items: start;
-  margin-block: clamp(8px, 3vw, 32px);
-}
-.contact-details h2,
-.contact-form-wrap h2 {
-  font-size: var(--fs-section);
-  margin: 0 0 clamp(14px, 2vw, 20px);
-}
-.contact-points {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.contact-point {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: clamp(14px, 2vw, 18px) clamp(16px, 2.5vw, 22px);
-}
-.contact-ic {
-  flex: 0 0 auto;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius);
-  background: var(--tan-soft);
-  color: var(--crimson);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.contact-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.contact-label {
-  font-size: var(--fs-eyebrow);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-weight: 600;
-  color: var(--maroon);
-}
-.contact-value {
-  color: var(--slate);
-  font-weight: 600;
-  text-decoration: none;
-  word-break: break-word;
-}
-a.contact-value:hover {
-  color: var(--crimson);
-}
-.contact-note {
-  font-size: 0.82rem;
-  color: var(--slate-soft);
-}
-
-/* Enquiry form: the form sits on the shared .card surface. */
-.contact-form {
-  padding: clamp(20px, 3vw, 32px);
-  display: flex;
-  flex-direction: column;
-  gap: clamp(14px, 2vw, 18px);
-}
-/* A non-interactive surface card — opt out of the shared .card hover-lift. */
-.contact-form:hover {
-  transform: none;
-}
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: clamp(14px, 2vw, 18px);
-}
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.field label {
-  font-weight: 600;
-  font-size: 0.92rem;
-  color: var(--slate);
-}
-.field .req {
-  color: var(--crimson);
-}
-.field input,
-.field textarea {
-  font: inherit;
-  color: var(--slate);
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 11px 14px;
-}
-.field textarea {
-  resize: vertical;
-  min-height: 120px;
-}
-.field.invalid input,
-.field.invalid textarea {
-  border-color: var(--crimson);
-}
-.field-error {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--crimson);
-}
-.contact-form .btn {
-  align-self: start;
-}
-.form-status {
-  margin: 0;
-  font-weight: 600;
-  color: var(--slate);
-}
-/* Success is an inverted cream-on-holly banner — the brand-colours guard forbids
-   holly *text* on light surfaces, so the holly lives in the background. */
-.form-status.is-success {
-  background: var(--holly);
-  color: var(--cream);
-  padding: 12px 16px;
-  border-radius: var(--radius);
-}
-
-@media (max-width: 860px) {
-  .contact-grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 460px) {
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* =================================================================
-   SUPPORTERS PAGE (REQ-035) — supporters.html. A centred page intro
-   mirroring .about-intro/.donate-intro/.contact-intro; reuses .eyebrow /
-   base h1 / .rule / .lede and the tokens. The tiered supporters list that
-   fills the page-sections slot below is the SUPPORTERS TIERS block (TASK-023).
-   ================================================================= */
-.supporters-intro {
-  text-align: center;
-  max-width: 760px;
-  margin-inline: auto;
-  padding-block: clamp(8px, 3vw, 40px);
-}
-.supporters-intro .rule,
-.supporters-intro .lede {
-  margin-inline: auto;
-}
-
-/* =================================================================
-   SUPPORTERS TIERS (REQ-035) — supporters.html. Three tinted-band tier
-   groups (Bronze, Silver, Gold) in the page-sections slot, each a .card
-   grid of supporter entries. Reuses the home pillars/why tinted-band
-   pattern, .card, .reveal and tokens; token-only colours. Alternating band
-   tints (tan / holly / tan via :nth-child) give the three groups rhythm;
-   person vs organisation icons are crimson (holly text is forbidden on
-   these light bands by the brand-colours guard), like the pillar icons.
-   ================================================================= */
-.supporter-tier {
-  background: var(--tan-soft);
-  border-radius: var(--radius-lg);
-  padding: clamp(28px, 5vw, 56px) clamp(20px, 4vw, 40px);
-  margin-block: clamp(8px, 3vw, 32px);
-}
-.supporter-tiers > .supporter-tier:nth-child(even) {
-  background: var(--holly-soft);
-}
-.supporter-tier-name {
-  font-size: var(--fs-section);
-  text-align: center;
-  margin: 0 0 clamp(18px, 3vw, 30px);
-}
-.supporter-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: clamp(14px, 2vw, 22px);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.supporter {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: clamp(16px, 2vw, 22px);
-}
-.supporter-icon {
-  color: var(--crimson);
-  flex: none;
-}
-.supporter-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.supporter-name {
-  font-weight: 600;
-  color: var(--slate);
-}
-.supporter-kind {
-  font-size: 0.82rem;
-  color: var(--slate-soft);
-}
-
-@media (max-width: 900px) {
-  .supporter-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (max-width: 680px) {
-  .supporter-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* =================================================================
-   CONFIRMATION (REQ-035) — thank-you.html, the post-payment landing page
-   Stripe returns the donor to (STRIPE_SUCCESS_URL). A centred intro
-   mirroring .contact-intro/.supporters-intro, above a single reassurance
-   .card in the page-sections slot. Reuses .eyebrow / base h1 / .rule /
-   .lede / .card / .btn and the tokens; token-only colours, no image tags.
-   ================================================================= */
-.thankyou-intro {
-  text-align: center;
-  max-width: 760px;
-  margin-inline: auto;
-  padding-block: clamp(8px, 3vw, 40px);
-}
-.thankyou-intro .rule,
-.thankyou-intro .lede {
-  margin-inline: auto;
-}
-.thankyou-next {
-  max-width: 680px;
-  margin-inline: auto;
-  text-align: center;
-}
-.thankyou-next h2 {
-  color: var(--maroon);
-}
-.thankyou-next p {
-  margin-top: 12px;
-}
-.thankyou-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: center;
-  margin-top: clamp(20px, 3vw, 28px);
-}
-
-/* =================================================================
-   DONOR PORTAL (REQ-061) — portal.html, the self-serve donor portal
-   reached via a magic-link token. A centred intro mirroring
-   .contact-intro/.thankyou-intro, above a stack of .card sections
-   (details, monthly gift, Gift Aid) that initPortal fills from
-   GET /api/portal/:token. Reuses .eyebrow / base h1 / .rule / .lede /
-   .card / .btn and the tokens; token-only colours, no image tags.
-   ================================================================= */
-.portal-intro {
-  text-align: center;
-  max-width: 760px;
-  margin-inline: auto;
-  padding-block: clamp(8px, 3vw, 40px);
-}
-.portal-intro .rule,
-.portal-intro .lede {
-  margin-inline: auto;
-}
-.portal-status {
-  max-width: 680px;
-  margin-inline: auto;
-  text-align: center;
-  color: var(--ink-soft);
-}
-.portal-content {
-  display: grid;
-  gap: clamp(16px, 3vw, 24px);
-  max-width: 680px;
-  margin-inline: auto;
-}
-.portal-error {
-  max-width: 680px;
-  margin-inline: auto;
-  text-align: center;
-}
-.portal-card h2 {
-  color: var(--maroon);
-}
-.portal-fields {
-  margin-top: 12px;
-  display: grid;
-  gap: 12px;
-}
-.portal-field {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 12px;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--hairline);
-  padding-bottom: 8px;
-}
-.portal-field dt {
-  font-weight: 600;
-  color: var(--ink-soft);
-}
-.portal-field dd {
-  margin: 0;
-}
-.portal-plan {
-  margin-top: 12px;
-}
-.portal-note {
-  margin-top: 8px;
-  color: var(--ink-soft);
-}
-.portal-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: clamp(16px, 3vw, 20px);
-}
-.portal-reduce {
-  margin-top: clamp(16px, 3vw, 20px);
-  padding-top: clamp(16px, 3vw, 20px);
-  border-top: 1px solid var(--hairline);
-}
-
-/* =================================================================
-   PRIVACY NOTICE (REQ-064) — privacy.html, the data-protection notice
-   linked from the footer and the consent controls. A centred intro
-   mirroring .contact-intro/.thankyou-intro above a single readable
-   .card of prose. Reuses .eyebrow / base h1 / .rule / .lede / .card /
-   .btn and the tokens; token-only colours, no image tags.
-   ================================================================= */
-.privacy-intro {
-  text-align: center;
-  max-width: 760px;
-  margin-inline: auto;
-  padding-block: clamp(8px, 3vw, 40px);
-}
-.privacy-intro .rule,
-.privacy-intro .lede {
-  margin-inline: auto;
-}
-.privacy-body {
-  max-width: 760px;
-  margin-inline: auto;
-}
-.privacy-body h2 {
-  color: var(--maroon);
-  margin-top: clamp(20px, 3vw, 28px);
-}
-.privacy-body h2:first-of-type {
-  margin-top: 0;
-}
-.privacy-body p,
-.privacy-body ul {
-  margin-top: 12px;
-}
-.privacy-body ul {
-  padding-left: 1.2em;
-  list-style: disc;
-}
-.privacy-body li {
-  margin-top: 6px;
-}
-.privacy-actions {
-  margin-top: clamp(20px, 3vw, 28px);
+@media (max-width:980px){
+  .hero .wrap,.split,.split.narrow-img,.contact-grid,.give-inner,.duo{grid-template-columns:1fr}
+  .map-duo{grid-template-columns:1fr}
+  .mapfig{max-width:460px;margin:0 auto}
+  .hero-art{order:-1;max-width:320px;margin-inline:auto}
+  .pillars{grid-template-columns:repeat(2,1fr)}
+  .team{grid-template-columns:repeat(3,1fr)}
+  .reassure{grid-template-columns:1fr}
+  .give-side{order:-1}
+  footer .wrap{grid-template-columns:1fr 1fr}
+}
+@media (max-width:680px){
+  .nav-links,.nav-cta{display:none}
+  .nav.open .nav-links{display:flex;flex-direction:column;align-items:stretch;gap:2px;position:absolute;top:var(--nav-h);left:0;right:0;background:var(--cream);border-bottom:1px solid var(--line);padding:14px clamp(20px,5vw,48px) 20px;box-shadow:var(--shadow)}
+  .nav.open .nav-links a{padding:13px 8px;font-size:1.05rem}
+  .nav.open .nav-links a.active::after{display:none}
+  .burger{display:block}
+  .nav.open .burger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+  .nav.open .burger span:nth-child(2){opacity:0}
+  .nav.open .burger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+  .pillars,.tiers,.give-tiers,.row2,.benefits{grid-template-columns:1fr}
+  .team{grid-template-columns:repeat(2,1fr)}
+  .proof{position:static;margin-top:16px}
+  footer .wrap{grid-template-columns:1fr}
+  .crow{grid-template-columns:22px 1fr auto}
+  .crow.no-pos{grid-template-columns:1fr auto}
+  .crow .name{grid-column:2}
+  .crow.no-pos .name{grid-column:1}
+  .crow .bar{grid-column:1 / -1;order:3;height:26px}
+  .hero h1 .allyear{white-space:normal}
+}
+/* reduced-motion off-switch (REQ-032): never animate, never hide content */
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none !important;transition:none !important}
+  .reveal{opacity:1 !important;transform:none !important}
+  .btn:hover,.tier:hover,.give-tier:hover,.nav-cta:hover,.member:hover img{transform:none}
 }

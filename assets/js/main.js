@@ -709,6 +709,10 @@
     var controls = doc.querySelectorAll("[data-amount]");
     if (!controls.length) return;
     Array.prototype.forEach.call(controls, function (btn) {
+      // In the donate step wizard, a tier click SELECTS an amount (give-steps.js)
+      // rather than opening checkout immediately; the wizard calls startCheckout
+      // itself at its final step. Skip auto-wiring those tiers.
+      if (btn.closest && btn.closest("[data-give-steps]")) return;
       btn.addEventListener("click", function () {
         startCheckout(btn, win);
       });
@@ -892,5 +896,10 @@
     initContactForm(document, window);
     initCheckout(document, window);
     initPortal(document, window);
+    // Expose the checkout payload/redirect builder so the donate step wizard
+    // (give-steps.js) can trigger it from its final step with the selected tier.
+    window.startCheckout = function (btn) {
+      return startCheckout(btn, window);
+    };
   }
 })();

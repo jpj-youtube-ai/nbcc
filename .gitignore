@@ -7,6 +7,18 @@ coverage/
 # keep originals (and any unconsented/in-progress photos) out of version control;
 # only the processed assets/img/team-*.jpg outputs are committed.
 assets/img/source/
+# Local design-iteration scratch (redesign screenshots, mockup exports, raw sources) —
+# working artifacts, never part of the shipped site.
+r-*.jpeg
+v[0-9]*.jpeg
+assets-test.png
+.playwright-mcp/
+.redesign-img/
+prototypes/
+assets/source/
+# Git worktrees created under the repo (isolation dirs, not source).
+/.claude/worktrees/
+
 # terraform
 **/.terraform/*
 *.tfstate

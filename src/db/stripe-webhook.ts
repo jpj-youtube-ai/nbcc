@@ -473,11 +473,10 @@ async function handleCheckoutCompleted(
     }
   }
 
-  // Confirm the gift by email only when the donor gave us their email AND consent
-  // (confirmationEmailFor gates this; donationFromCheckoutSession already suppresses
-  // the email otherwise). A company's contact email is not marketing consent, so this is
-  // null for a company — the Corporation Tax receipt above is its email. Sent after COMMIT.
-  return { action: "donation.created", email: confirmationEmailFor(donor, donation), receipt };
+  // A company donation's email is its Corporation Tax receipt (above), NOT the individual donor
+  // confirmation — so suppress the donor thank-you for companies (an individual/partnership donor
+  // gets it whenever we have an email, consent-independent). Sent after COMMIT.
+  return { action: "donation.created", email: companyRow ? null : confirmationEmailFor(donor, donation), receipt };
 }
 
 // charge.succeeded → record an IN-PERSON (Stripe Terminal / card_present) donation

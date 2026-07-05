@@ -109,10 +109,12 @@ describe("confirmationEmailFromCheckoutSession — pure event→payload mapping"
     });
   });
 
-  it("also sends a transactional thank-you for a company donation now the consent gate is gone (REQ-039 revised)", () => {
-    // A company's contact email is an operational billing contact, not marketing consent
-    // (emailConsent stays false); since the send is no longer consent-gated, the same
-    // transactional thank-you goes out here too, alongside the Corporation Tax receipt (TASK-088).
+  it("still maps a payload for a company session (this pure mapper is consent-independent, not company-aware)", () => {
+    // confirmationEmailFor/confirmationEmailFromCheckoutSession stay consent-independent and
+    // company-agnostic — they return a payload whenever an email is present. The actual
+    // suppression for a COMPANY donation (no donor thank-you alongside its Corporation Tax
+    // receipt, TASK-088/REQ-053) is applied at the stripe-webhook.ts call site, which nulls the
+    // email when a companyRow is present — see company-receipt-webhook.test.ts for that assertion.
     expect(
       confirmationEmailFromCheckoutSession(
         session({

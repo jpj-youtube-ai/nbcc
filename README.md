@@ -2027,8 +2027,18 @@ cp .env.example .env
 docker compose up -d db          # Postgres only
 npm ci
 npm run migrate                  # apply migrations
+npm run seed:demo                # optional: mock data across the model's cardinalities
 npm run dev                      # http://localhost:3000/health
 ```
+
+`scripts/seed-demo.mjs` (`npm run seed:demo`, reads `DATABASE_URL`) inserts a re-runnable demo
+dataset covering the donation model's cardinalities — donors (individual/company, all supporter tiers,
+anonymous), declarations (active/revoked/superseded/non-UK, retention expired + expiring), donations
+across every `claim_status`/`mode`/`plan`/channel/`declaration_status`/refund/`payment_status`, claim
+batches (open/submitted/adjustment_due), dunning (active/past_due/lapsed) and audit rows. It populates
+the public supporters wall and every admin dashboard view/queue. Re-runnable: it clears its own
+`@demo.nbcc`/`DEMO`-tagged rows first (the append-only audit rows insert once). Point `DATABASE_URL` at
+staging RDS to seed there. Local-dev / demo only, never production donor data.
 
 Or run the whole thing in containers: `docker compose up` (and
 `docker compose run --rm migrate` once to migrate).

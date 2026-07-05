@@ -211,6 +211,19 @@
           el.disabled = !isCompany;
         });
       }
+      // REQ-039: the individual email is required on the individual/partnership paths, but a
+      // company donates via its own contact email — un-require the individual field there so a
+      // hidden/irrelevant required input never blocks submission (mirrors the company inputs above).
+      var donorEmail = doc.getElementById("donorEmail");
+      if (donorEmail) {
+        if (path === "company") {
+          donorEmail.removeAttribute("required");
+          donorEmail.removeAttribute("aria-required");
+        } else {
+          donorEmail.setAttribute("required", "");
+          donorEmail.setAttribute("aria-required", "true");
+        }
+      }
     }
 
     radios.forEach(function (btn) {

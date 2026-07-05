@@ -227,3 +227,44 @@ export async function findNewestDonorByEmail(
   const row = res.rows[0];
   return row ? { donorId: row.id, fullName: row.full_name } : null;
 }
+
+// A donor's giving history for the portal dashboard (REQ-061 revised). Identity = email: a donor
+// who gave N times is N donor rows sharing an email, so this aggregates every donation joined to a
+// donor row with that email (case-insensitive), newest first, plus the count and gross total. Pure
+// read (pool.query). An email with no donations yields an empty history (count 0, total 0).
+export interface DonorDonationHistory {
+  totalPence: number;
+  count: number;
+  donations: Array<{
+    date: string;
+    amountPence: number;
+    mode: "once" | "monthly";
+    giftAid: boolean;
+    status: string;
+  }>;
+}
+
+export async function getDonorDonationHistory(email: string): Promise<DonorDonationHistory> {
+  const res = await pool.query<{
+    created_at: Date;
+    amount_pence: number;
+    mode: string;
+    gift_aid: boolean;
+    payment_status: string;
+  }>(
+    `SELECT d.created_at, d.amount_pence, d.mode, d.gift_aid, d.payment_status
+       FROM donations d JOIN donors dn ON dn.id = d.donor_id
+      WHERE LOWER(dn.email) = LOWER($1)
+      ORDER BY d.created_at DESC, d.id DESC`,
+    [email],
+  );
+  const donations = res.rows.map((r) => ({
+    date: r.created_at.toISOString(),
+    amountPence: r.amount_pence,
+    mode: r.mode === "monthly" ? ("monthly" as const) : ("once" as const),
+    giftAid: r.gift_aid,
+    status: r.payment_status,
+  }));
+  const totalPence = donations.reduce((sum, d) => sum + d.amountPence, 0);
+  return { totalPence, count: donations.length, donations };
+}

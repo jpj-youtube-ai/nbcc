@@ -5,6 +5,7 @@ import { PortalTokenError, portalMagicLink } from "../portal/tokens";
 import {
   authenticatePortalToken,
   getDonorPortalSnapshot,
+  getDonorDonationHistory,
   updateDonorPortal,
   issuePortalAccessToken,
   findNewestDonorByEmail,
@@ -47,7 +48,11 @@ export async function getPortal(req: Request, res: Response): Promise<Response |
   try {
     const snapshot = await getDonorPortalSnapshot(donorId);
     if (!snapshot) return res.status(404).json({ error: "Donor not found" });
-    return res.status(200).json(snapshot);
+    // Aggregate the donor's giving by email (identity = email); empty history when no email on file.
+    const history = snapshot.email
+      ? await getDonorDonationHistory(snapshot.email)
+      : { totalPence: 0, count: 0, donations: [] };
+    return res.status(200).json({ ...snapshot, history });
   } catch (err) {
     console.error("portal read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Portal is temporarily unavailable" });

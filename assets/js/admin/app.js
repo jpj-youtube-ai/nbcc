@@ -505,6 +505,12 @@
       .then(renderDonor)
       .catch(function () {});
   }
+  // Join the donor's house name/number + address line into one string for display; "None on file"
+  // when neither is set. Postcode is shown as its own row (d.postcode).
+  function donorAddress(d) {
+    var parts = [d.houseNameNumber, d.address].filter(function (p) { return p && String(p).trim(); });
+    return parts.length ? parts.join(", ") : "None on file";
+  }
   function renderDonor(d) {
     var canWrite = H.roleCan(currentRole, "editor");
     var info =
@@ -513,6 +519,8 @@
       dl("Email", d.email || "None on file") +
       dl("Email consent", d.emailConsent ? "Yes" : "No") +
       dl("Anonymous", d.anonymous ? "Yes" : "No") +
+      dl("Address", donorAddress(d)) +
+      dl("Postcode", d.postcode || "None on file") +
       dl("Monthly plan", d.subscriptionPlan ? cap(d.subscriptionPlan) : "None") +
       dl("Gift Aid", d.giftAid ? "Active" : "Not active") +
       "</dl>";

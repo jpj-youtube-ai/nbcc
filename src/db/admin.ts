@@ -190,6 +190,47 @@ export async function listEligibleForClaim(): Promise<EligibleClaimRow[]> {
   return res.rows;
 }
 
+export interface DonorAddress {
+  houseNameNumber: string | null;
+  address: string | null;
+  postcode: string | null;
+}
+
+// The donor's current postal address for the admin donor view. An individual's address lives on
+// their latest NON-REVOKED Gift Aid declaration (REQ-043); a company's on the donor's billing_*
+// columns (REQ-053). Read-only (pool.query, no transaction). Returns nulls when there is no
+// declaration / billing address on file. Kept out of getDonorPortalSnapshot so the donor-facing
+// portal shape is unchanged; getAdminDonor merges this in.
+export async function getDonorAddress(donorId: number): Promise<DonorAddress> {
+  const row = (
+    await pool.query<{
+      donor_type: string;
+      billing_address: string | null;
+      billing_postcode: string | null;
+      house_name_number: string | null;
+      address: string | null;
+      postcode: string | null;
+    }>(
+      `SELECT dn.donor_type, dn.billing_address, dn.billing_postcode,
+              dec.house_name_number, dec.address, dec.postcode
+         FROM donors dn
+         LEFT JOIN LATERAL (
+           SELECT house_name_number, address, postcode
+             FROM declarations d
+            WHERE d.donor_id = dn.id AND d.revoked_at IS NULL
+            ORDER BY d.id DESC LIMIT 1
+         ) dec ON true
+        WHERE dn.id = $1`,
+      [donorId],
+    )
+  ).rows[0];
+  if (!row) return { houseNameNumber: null, address: null, postcode: null };
+  if (row.donor_type === "company") {
+    return { houseNameNumber: null, address: row.billing_address, postcode: row.billing_postcode };
+  }
+  return { houseNameNumber: row.house_name_number, address: row.address, postcode: row.postcode };
+}
+
 export interface AdjustmentDueRow {
   id: number;
   donor_id: number;

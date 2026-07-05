@@ -98,13 +98,27 @@
               </div>
             </section>
 
-            <!-- Claims: the adjustment-due queue + the claim batches (submit / export). -->
+            <!-- Claims: the Gift Aid reclaim workflow — eligible → batch → export → submit. -->
             <section class="admin-view" id="view-claims" aria-labelledby="claims-heading" hidden>
-              <h2 id="claims-heading">Claims</h2>
-              <h3 class="admin-subhead">Adjustment due</h3>
-              <div class="admin-table-wrap" id="adjustmentTable"><p class="admin-loading">Loading…</p></div>
-              <h3 class="admin-subhead">Claim batches</h3>
+              <h2 id="claims-heading">Gift Aid claims</h2>
+              <p class="admin-view-intro">Reclaim 25% Gift Aid tax from HMRC: group eligible gifts into a batch, export the batch as a Charities Online file, upload it to HMRC, then mark the batch submitted.</p>
+
+              <h3 class="admin-subhead">1. Ready to claim</h3>
+              <p class="admin-help">Gift-Aided gifts with a valid declaration that aren’t in a batch yet. Tick the ones to claim and add them to a batch.</p>
+              <div class="admin-claim-actions" id="eligibleActions" hidden>
+                <label for="assignBatchSelect">Add selected to</label>
+                <select id="assignBatchSelect"><option value="new">New batch</option></select>
+                <button class="admin-btn" type="button" id="assignBtn">Add to batch</button>
+              </div>
+              <div class="admin-table-wrap" id="eligibleTable"><p class="admin-loading">Loading…</p></div>
+
+              <h3 class="admin-subhead">2. Claim batches</h3>
+              <p class="admin-help">Each batch is one HMRC submission. Export it as a Charities Online file, upload it to HMRC, then mark it submitted.</p>
               <div class="admin-table-wrap" id="batchesTable"><p class="admin-loading">Loading…</p></div>
+
+              <h3 class="admin-subhead">3. Adjustment due</h3>
+              <p class="admin-help">Already-claimed gifts that were later refunded — declare these as an adjustment on your next HMRC claim.</p>
+              <div class="admin-table-wrap" id="adjustmentTable"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Subscriptions: at-risk / lapsed monthly gifts. -->

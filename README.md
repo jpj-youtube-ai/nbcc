@@ -945,6 +945,9 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/search/donors?q=` | **implemented** | REQ-062 (admin donor search) |
 | `GET /api/admin/search/declarations?q=` | **implemented** | REQ-062 (admin declaration search) |
 | `GET /api/admin/search/donations?q=` | **implemented** | REQ-062 (admin donation search) |
+| `POST /api/admin/claim-batches` | **implemented** | REQ-052/REQ-062 (open a new claim batch) |
+| `POST /api/admin/claim-batches/:id/donations` | **implemented** | REQ-052/REQ-062 (assign eligible donations to a batch) |
+| `GET /api/admin/claims/eligible` | **implemented** | REQ-052 (eligible-unbatched donations, ready to claim) |
 | `POST /api/admin/claim-batches/:id/submit` | **implemented** | REQ-052/REQ-062 (mark claim batch submitted) |
 | `GET /api/admin/claims/adjustment-due` | **implemented** | REQ-063 (adjustment-due queue) |
 | `GET /api/admin/queues/retention-expiry` | **implemented** | REQ-046 (retention-expiry queue) |
@@ -1100,6 +1103,17 @@ reuses `listClaimableDonationsForExport(batchId)` + the pure `toCharitiesOnlineC
 streams the batch's Charities Online CSV as a `text/csv` download. No new config (reuses
 `ADMIN_SESSION_SECRET`). Proven by `test/unit/admin-read.test.ts` (the `clampPage` clamp, 401/403/400
 gating and the viewer-200s DB-free) and the `@db` `features/admin-api.feature`.
+
+**Gift Aid claims pipeline (REQ-052/REQ-062).** The Claims view drives the full HMRC reclaim workflow:
+`eligible → batch → export → submit`. `GET /api/admin/claims/eligible` (Viewer+) lists the Gift-Aided,
+declared, still-unbatched donations; `POST /api/admin/claim-batches` (Editor+) opens a new batch;
+`POST /api/admin/claim-batches/:id/donations` (Editor+) assigns one or many eligible donations to it
+(each via the audited `assignDonationToBatch`, aggregating per-id success/failure so a partial failure is
+reported). **A batch's CSV export selects its donations by `claim_batch_id`** — NOT by
+`claim_status='eligible'`, which is unsatisfiable once a donation is batched (`batched`/`claimed`) and
+made every batch export empty (fixed; regression-guarded in `test/unit/charities-online-query.test.ts`).
+The Claims page presents the three stages (Ready to claim · Claim batches · Adjustment due) with
+plain-English guidance and a checkbox picker to add eligible gifts to a batch.
 
 **Admin dashboard UI (REQ-066 · TASK-115).** `admin.html` is a private, token-authed staff SPA served
 at `/admin` (a clean-URL rewrite in `_redirects`; `noindex`, and outside the marketing nav/footer so it

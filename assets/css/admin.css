@@ -91,3 +91,11 @@
   .admin-nav{position:static;padding:12px}
   .admin-nav ul{flex-direction:row;flex-wrap:wrap}
 }
+
+/* Claims workflow (Gift Aid pipeline): stage intro + help copy + the assign control. */
+.admin-view-intro{color:var(--slate-soft);margin:0 0 18px;max-width:64ch;font-size:.95rem}
+.admin-help{color:var(--slate-soft);font-size:.88rem;margin:2px 0 10px;max-width:64ch}
+.admin-claim-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.admin-claim-actions select{font-family:var(--font-body);font-size:.95rem;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:10px;padding:8px 10px}
+.admin-btn{font-family:var(--font-body);font-weight:600;font-size:.9rem;color:var(--cream);background:var(--holly);border:none;border-radius:10px;padding:9px 16px;cursor:pointer}
+.admin-btn:hover{background:var(--maroon)}

@@ -77,7 +77,7 @@ beforeEach(() => {
 
 describe("POST /api/checkout-session — one-off (REQ-029)", () => {
   it("creates a payment session with inline GBP price_data from the amount (pence)", async () => {
-    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
 
     expect(res.statusCode).toBe(200);
     expect((res.body as { url: string }).url).toBe("https://checkout.stripe.com/c/pay/test_123");
@@ -94,7 +94,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
   });
 
   it("falls back to an inline product when STRIPE_DONATION_PRODUCT is unset", async () => {
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     const p = lastParams();
     expect(p.line_items[0].price_data.product).toBeUndefined();
     expect(p.line_items[0].price_data.product_data.name.length).toBeGreaterThan(0);
@@ -102,7 +102,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
 
   it("attaches the configured donation product to the inline price when set", async () => {
     mockConfig.STRIPE_DONATION_PRODUCT = "prod_donation_123";
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     const p = lastParams();
     expect(p.line_items[0].price_data.product).toBe("prod_donation_123");
     expect(p.line_items[0].price_data.product_data).toBeUndefined();
@@ -113,7 +113,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
 
 describe("POST /api/checkout-session — monthly (REQ-029)", () => {
   it("creates a subscription session using the plan's recurring price id", async () => {
-    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true });
+    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
 
     expect(res.statusCode).toBe(200);
     const p = lastParams();
@@ -130,13 +130,13 @@ describe("POST /api/checkout-session — monthly (REQ-029)", () => {
       ["platinum", "price_platinum_id"],
     ] as const) {
       create.mockClear();
-      await run({ mode: "monthly", plan, amount: 1000, giftAid: false, ageConfirmed: true });
+      await run({ mode: "monthly", plan, amount: 1000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
       expect(lastParams().line_items[0].price).toBe(price);
     }
   });
 
   it("builds an inline monthly recurring price for a custom amount (no plan, REQ-041)", async () => {
-    const res = await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true });
+    const res = await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     expect(res.statusCode).toBe(200);
     const p = lastParams();
     expect(p.mode).toBe("subscription");
@@ -147,10 +147,10 @@ describe("POST /api/checkout-session — monthly (REQ-029)", () => {
   });
 
   it("rolls the custom monthly price under the donation product when set, else an inline product", async () => {
-    await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true });
+    await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     expect(lastParams().line_items[0].price_data.product_data.name.length).toBeGreaterThan(0);
     mockConfig.STRIPE_DONATION_PRODUCT = "prod_donation_123";
-    await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true });
+    await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     const p = lastParams();
     expect(p.line_items[0].price_data.product).toBe("prod_donation_123");
     expect(p.line_items[0].price_data.product_data).toBeUndefined();
@@ -159,14 +159,14 @@ describe("POST /api/checkout-session — monthly (REQ-029)", () => {
 
 describe("POST /api/checkout-session — payment methods (REQ-029 / TASK-089)", () => {
   it("offers both card and BACS Direct Debit on a one-off (payment) session", async () => {
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     const methods = lastParams().payment_method_types;
     expect(methods).toContain("card");
     expect(methods).toContain("bacs_debit");
   });
 
   it("offers both card and BACS Direct Debit on a monthly (subscription) session", async () => {
-    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true });
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     const methods = lastParams().payment_method_types;
     expect(methods).toContain("card");
     expect(methods).toContain("bacs_debit");
@@ -175,12 +175,12 @@ describe("POST /api/checkout-session — payment methods (REQ-029 / TASK-089)", 
 
 describe("POST /api/checkout-session — Gift Aid (REQ-023)", () => {
   it("records the declaration as metadata.giftAid='true' when opted in", async () => {
-    await run({ mode: "once", plan: null, amount: 2500, giftAid: true });
+    await run({ mode: "once", plan: null, amount: 2500, giftAid: true, email: "donor@example.com" });
     expect(lastParams().metadata.giftAid).toBe("true");
   });
 
   it("records metadata.giftAid='false' when not opted in", async () => {
-    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false, ageConfirmed: true });
+    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     expect(lastParams().metadata.giftAid).toBe("false");
   });
 });
@@ -189,7 +189,7 @@ describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", (
   it("stamps the all-donations wording version + snapshot for a gift-aided monthly gift", async () => {
     // A monthly gift is enduring (all_donations scope), so it binds the multiple/all-
     // donations HMRC statement — the exact text selectDeclarationWording returns.
-    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true });
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true, email: "donor@example.com" });
     const md = lastParams().metadata;
     const wording = selectDeclarationWording({ mode: "monthly", scope: "all_donations" });
     expect(md.giftAidWordingVersion).toBe(wording.wording_version);
@@ -197,7 +197,7 @@ describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", (
   });
 
   it("stamps the single-donation wording version + snapshot for a gift-aided one-off gift", async () => {
-    await run({ mode: "once", plan: null, amount: 2500, giftAid: true });
+    await run({ mode: "once", plan: null, amount: 2500, giftAid: true, email: "donor@example.com" });
     const md = lastParams().metadata;
     const wording = selectDeclarationWording({ mode: "once", scope: "this_donation" });
     expect(md.giftAidWordingVersion).toBe(wording.wording_version);
@@ -205,15 +205,15 @@ describe("POST /api/checkout-session — Gift Aid wording binding (TASK-053)", (
   });
 
   it("binds distinct wording versions for monthly (enduring) vs one-off", async () => {
-    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true });
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true, email: "donor@example.com" });
     const monthly = lastParams().metadata.giftAidWordingVersion;
-    await run({ mode: "once", plan: null, amount: 2500, giftAid: true });
+    await run({ mode: "once", plan: null, amount: 2500, giftAid: true, email: "donor@example.com" });
     const oneOff = lastParams().metadata.giftAidWordingVersion;
     expect(monthly).not.toBe(oneOff);
   });
 
   it("stamps NO wording metadata when Gift Aid is not opted in", async () => {
-    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false, ageConfirmed: true });
+    await run({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     const md = lastParams().metadata;
     expect(md.giftAid).toBe("false");
     expect(md.giftAidWordingVersion).toBeUndefined();
@@ -250,12 +250,12 @@ describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
   it("defaults donorType to 'individual' when omitted (the no-JS base contract is unchanged)", async () => {
     // startCheckout only folds donorType in once the REQ-038 enhancement is active;
     // a bare { mode, plan, amount, giftAid } body must still be accepted as an individual.
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: true });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: true, email: "donor@example.com" });
     expect(lastParams().metadata.donorType).toBe("individual");
   });
 
   it("stamps an empty businessName when none is supplied", async () => {
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "individual" });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, donorType: "individual", email: "donor@example.com" });
     expect(lastParams().metadata.businessName).toBe("");
   });
 
@@ -288,7 +288,14 @@ describe("POST /api/checkout-session — donor-type routing (REQ-038)", () => {
 });
 
 describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", () => {
-  const monthly = { mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true };
+  const monthly = {
+    mode: "monthly",
+    plan: "gold",
+    amount: 5000,
+    giftAid: false,
+    ageConfirmed: true,
+    email: "donor@example.com",
+  };
 
   it("rejects a monthly payload that does not confirm 18 or over with 400 and never calls Stripe", async () => {
     // Monthly giving is set up by adults aged 18 or over (REQ-039).
@@ -309,7 +316,7 @@ describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", 
   });
 
   it("does not require the 18+ confirmation for a one-off gift", async () => {
-    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     expect(res.statusCode).toBe(200);
   });
 
@@ -329,11 +336,11 @@ describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", 
     expect(md.ageConfirmed).toBe("true");
   });
 
-  it("stamps empty/false contact metadata when the fields are absent (base contract)", async () => {
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+  it("stamps empty/false contact metadata when the optional fields are absent (base contract; REQ-039 email is still mandatory)", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     const md = lastParams().metadata;
     expect(md.fullName).toBe("");
-    expect(md.email).toBe("");
+    expect(md.email).toBe("donor@example.com");
     expect(md.emailConsent).toBe("false");
     expect(md.anonymous).toBe("false");
   });
@@ -341,17 +348,17 @@ describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", 
 
 describe("POST /api/checkout-session — declaration scope + currency (REQ-041 / TASK-060)", () => {
   it("stamps metadata.declarationScope='enduring' for a monthly gift (pairs with an enduring declaration)", async () => {
-    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true });
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     expect(lastParams().metadata.declarationScope).toBe("enduring");
   });
 
   it("stamps metadata.declarationScope='this_donation' for a one-off gift", async () => {
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     expect(lastParams().metadata.declarationScope).toBe("this_donation");
   });
 
   it("stamps the declaration scope regardless of the Gift Aid opt-in", async () => {
-    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true });
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: true, ageConfirmed: true, email: "donor@example.com" });
     expect(lastParams().metadata.declarationScope).toBe("enduring");
   });
 
@@ -359,7 +366,7 @@ describe("POST /api/checkout-session — declaration scope + currency (REQ-041 /
     // A one-off carries its amount + GBP currency inline on the session price; the
     // frequency rides on metadata.mode. (A monthly gift's currency lives on its Stripe
     // recurring price.)
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     const p = lastParams();
     expect(p.metadata.mode).toBe("once");
     expect(p.line_items[0].price_data.currency).toBe("gbp");
@@ -379,7 +386,7 @@ describe("POST /api/checkout-session — Gift Aid declaration (REQ-043 / TASK-06
   };
 
   it("accepts a gift-aided individual with a valid declaration and stamps the fields onto metadata", async () => {
-    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: true, declaration: decl });
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: true, declaration: decl, email: "donor@example.com" });
     expect(res.statusCode).toBe(200);
     const md = lastParams().metadata;
     expect(md.declFirstName).toBe("Ada");
@@ -417,6 +424,7 @@ describe("POST /api/checkout-session — Gift Aid declaration (REQ-043 / TASK-06
       plan: null,
       amount: 5000,
       giftAid: true,
+      email: "donor@example.com",
       declaration: {
         firstName: "Jean",
         lastName: "Le Maistre",
@@ -438,6 +446,7 @@ describe("POST /api/checkout-session — Gift Aid declaration (REQ-043 / TASK-06
       plan: null,
       amount: 5000,
       giftAid: true,
+      email: "donor@example.com",
       declaration: { ...decl, scope: "this_donation" },
     });
     expect(res.statusCode).toBe(200);
@@ -445,7 +454,7 @@ describe("POST /api/checkout-session — Gift Aid declaration (REQ-043 / TASK-06
   });
 
   it("stamps no declaration metadata when Gift Aid is not opted in", async () => {
-    await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     expect(lastParams().metadata.declFirstName).toBeUndefined();
   });
 });
@@ -466,6 +475,7 @@ describe("POST /api/checkout-session — explicit declaration scope override (RE
       plan: null,
       amount: 5000,
       giftAid: true,
+      email: "donor@example.com",
       declaration: { ...decl, scope: "all_donations" },
     });
     // The donor's explicit choice wins over the mode-derived default (once → this_donation).
@@ -478,6 +488,7 @@ describe("POST /api/checkout-session — explicit declaration scope override (RE
       plan: null,
       amount: 5000,
       giftAid: true,
+      email: "donor@example.com",
       declaration: { ...decl, scope: "all_donations" },
     });
     const md = lastParams().metadata;
@@ -492,6 +503,7 @@ describe("POST /api/checkout-session — explicit declaration scope override (RE
       plan: null,
       amount: 5000,
       giftAid: true,
+      email: "donor@example.com",
       declaration: { ...decl, scope: "this_donation" },
     });
     expect(lastParams().metadata.declarationScope).toBe("this_donation");
@@ -503,6 +515,7 @@ describe("POST /api/checkout-session — explicit declaration scope override (RE
       plan: null,
       amount: 5000,
       giftAid: true,
+      email: "donor@example.com",
       declaration: decl,
     });
     expect(lastParams().metadata.declarationScope).toBe("this_donation");
@@ -526,6 +539,7 @@ describe("POST /api/checkout-session — partnership shares (REQ-051 / TASK-081)
     amount,
     giftAid: true,
     donorType: "partnership" as const,
+    email: "donor@example.com",
     partners,
   });
 
@@ -566,6 +580,7 @@ describe("POST /api/checkout-session — partnership shares (REQ-051 / TASK-081)
       amount: 10000,
       giftAid: false,
       donorType: "partnership",
+      email: "donor@example.com",
     });
     expect(res.statusCode).toBe(200);
     expect(lastParams().metadata.partners).toBeUndefined();
@@ -655,11 +670,42 @@ describe("POST /api/checkout-session — invalid bodies return 400", () => {
   });
 });
 
+describe("POST /api/checkout-session — mandatory email (REQ-039)", () => {
+  it("rejects an individual donation with no email (REQ-039: email is mandatory)", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 2500, giftAid: false, donorType: "individual" });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects an individual donation with a malformed email", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 2500,
+      giftAid: false,
+      donorType: "individual",
+      email: "not-an-email",
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("accepts an individual donation that includes a valid email", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 2500,
+      giftAid: false,
+      donorType: "individual",
+      email: "donor@example.com",
+    });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
 describe("POST /api/checkout-session — upstream failure", () => {
   it("returns 502 when the Stripe call throws", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     create.mockRejectedValueOnce(new Error("stripe unavailable"));
-    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
     expect(res.statusCode).toBe(502);
     expect(errSpy).toHaveBeenCalled(); // the failure is logged for diagnosis
     errSpy.mockRestore();

@@ -125,6 +125,20 @@ const checkoutBodySchema = z
         path: ["company"],
       });
     }
+    // REQ-039 (revised): email is mandatory and always stored, so we can send every
+    // donor a thank-you and a portal link. Required for the individual/partnership paths;
+    // a company carries its own required company.contactEmail instead, so it is exempt here.
+    if (b.donorType !== "company") {
+      const email = (b.email ?? "").trim();
+      const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if (!ok) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "a valid email is required",
+          path: ["email"],
+        });
+      }
+    }
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;

@@ -33,6 +33,7 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
     When I start checkout with JSON:
       """
       { "mode": "once", "plan": null, "amount": 5000, "giftAid": true, "donorType": "individual",
+        "email": "jean.journey@example.com",
         "declaration": { "firstName": "Jean", "lastName": "Journey", "houseNameNumber": "La Rue",
           "address": "St Helier, Jersey", "postcode": "SW1A 1AA", "nonUk": true } }
       """
@@ -50,7 +51,7 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
     When I start checkout with JSON:
       """
       { "mode": "once", "plan": null, "amount": 5000, "giftAid": false, "donorType": "individual",
-        "anonymous": true }
+        "email": "anon.journey@example.com", "anonymous": true }
       """
     Then the response status should be 200
     When Stripe completes the checkout with:
@@ -108,6 +109,7 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
     When I start checkout with JSON:
       """
       { "mode": "once", "plan": null, "amount": 10000, "giftAid": true, "donorType": "partnership",
+        "email": "partnership.journey@example.com",
         "partners": [
           { "firstName": "Ada", "lastName": "Partner", "houseNameNumber": "1",
             "address": "Partnership House, London", "postcode": "SW1A 1AA", "nonUk": false, "sharePence": 6000 },
@@ -163,6 +165,7 @@ Feature: End-to-end donation journey (REQ-028/REQ-029/REQ-036)
     When I start checkout with JSON:
       """
       { "mode": "once", "plan": null, "amount": 5000, "giftAid": true, "donorType": "individual",
+        "email": "ada.bacs.journey@example.com",
         "declaration": { "firstName": "Ada", "lastName": "Bacs", "houseNameNumber": "12",
           "address": "Analytical Avenue, London", "postcode": "KA1 1AA", "nonUk": false } }
       """

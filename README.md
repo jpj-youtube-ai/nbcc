@@ -623,6 +623,15 @@ Token-only colours (slate body, maroon legend, crimson accents; the `brand-colou
 guard forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-contact-capture.test.ts`.
 
+**Server-side (REQ-039, revised):** `POST /api/checkout-session` now requires a
+valid `email` for the individual/partnership donor paths — a missing or
+malformed email is rejected with 400. A company donation is exempt, since it
+already carries its own required `company.contactEmail`. Email is always
+stored (not gated on `emailConsent`, which now governs marketing consent only)
+so every donor can be sent a thank-you and a donor-portal link; see
+`test/unit/checkout-session.test.ts` and the `features/checkout.feature`
+"without an email is rejected" scenario.
+
 ### Gift Aid declaration capture (REQ-043)
 
 Below the Gift Aid callout, a `.give-declaration` `<fieldset>` (`GIFT AID DECLARATION`

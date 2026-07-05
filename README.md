@@ -885,7 +885,12 @@ first; confirming posts to **`POST /api/portal/:token/subscription/cancel`** wit
 posts to **`POST /api/portal/:token/gift-aid/cancel`** (TASK-103). To drive the
 cancel flow, `getDonorPortalSnapshot` (`src/db/portal.ts`) now also returns
 `subscriptionId` (the most-recent monthly-gift donation's Stripe subscription id, or
-null). Being a private landing page, no nav link is marked active. Dash-free copy,
+null). A **donation-history dashboard** (REQ-061 revised, TASK-122) renders the
+snapshot's `history` field (`{ totalPence, count, donations[] }`, aggregated by the
+donor's email): a "Your giving" card shows the running total and donation count, and
+a per-donation table (date, amount, type, Gift Aid, status), with an empty-state note
+when the donor has no recorded donations. Being a private landing page, no nav link is
+marked active. Dash-free copy,
 "NBCC" in full (REQ-031); skip-link + landmarks (REQ-032). Proven by
 `test/unit/donor-portal.test.ts` (static markup + jsdom against the real `initPortal`)
 and the `@db`-free `features/site.feature` clean-URL rows; `seo-metadata` /

@@ -16,7 +16,8 @@
     "test:bdd": "cucumber-js",
     "images": "node scripts/process-images.mjs",
     "export:charities-online": "tsx scripts/export-charities-online.mjs",
-    "anonymize:retention-expired": "tsx scripts/anonymize-retention-expired.mjs"
+    "anonymize:retention-expired": "tsx scripts/anonymize-retention-expired.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs"
   },
   "dependencies": {
     "express": "^4.19.2",

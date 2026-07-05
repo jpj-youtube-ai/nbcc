@@ -14,6 +14,9 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 Before({ tags: "@supporters" }, async function () {
   await pool.query("DELETE FROM donations WHERE stripe_payment_intent_id LIKE 'pi_bdd_sup%'");
   await pool.query("DELETE FROM donors WHERE email LIKE '%sup.bdd@example.com'");
+  // Supporters are seeded via the shared signed-webhook step, which stamps the event-id ledger;
+  // clear those rows so the ledger does not accumulate across local runs (CI is fresh regardless).
+  await pool.query("DELETE FROM stripe_webhook_events WHERE id LIKE 'evt_bdd_%'");
 });
 
 Then("the response body should not contain {string}", function (unexpected) {

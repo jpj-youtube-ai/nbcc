@@ -31,7 +31,15 @@ Feature: Checkout session endpoint (REQ-029)
       """
     Then the response status should be 400
 
-  Scenario: an invalid body is rejected
+  Scenario: a valid monthly custom amount (no preset plan) returns a subscription URL (REQ-041)
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "monthly", "plan": null, "amount": 3000, "giftAid": false, "ageConfirmed": true }
+      """
+    Then the response status should be 200
+    And the response field "url" should start with "https://"
+
+  Scenario: a monthly donation with neither a plan nor an amount is rejected
     When I POST "/api/checkout-session" with JSON:
       """
       { "mode": "monthly", "plan": null, "amount": null, "giftAid": false }

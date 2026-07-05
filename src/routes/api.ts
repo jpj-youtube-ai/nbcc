@@ -75,8 +75,10 @@ const checkoutBodySchema = z
     // partnership and no-JS base contracts are unchanged.
     company: companyFieldsSchema.optional(),
   })
-  .refine((b) => b.mode !== "monthly" || b.plan !== null, {
-    message: "monthly giving requires a plan",
+  // A monthly gift needs EITHER a preset plan (its pre-configured recurring price) OR a custom
+  // amount (an inline monthly recurring price, REQ-041) — but not neither.
+  .refine((b) => b.mode !== "monthly" || b.plan !== null || b.amount !== null, {
+    message: "monthly giving requires a plan or a custom amount",
     path: ["plan"],
   })
   .refine((b) => b.mode !== "once" || b.amount !== null, {
@@ -235,12 +237,26 @@ export function buildSessionParams(
   };
 
   if (body.mode === "monthly") {
-    // plan is guaranteed non-null by the schema refinement above.
-    return {
-      ...base,
-      mode: "subscription",
-      line_items: [{ price: stripePriceByPlan[body.plan as (typeof PLANS)[number]], quantity: 1 }],
-    };
+    // A preset tier uses its pre-configured recurring Price (one Price per plan, REQ-022/REQ-055).
+    // A custom monthly amount (no plan, REQ-041) builds an INLINE monthly recurring price from the
+    // entered amount — Stripe creates the ad-hoc price on the fly, so NO per-amount Product is
+    // needed: it rolls up under the configured donation product, or names an inline one, exactly
+    // like the one-off path below. The schema guarantees a plan OR an amount for a monthly gift.
+    const donationProduct = config.STRIPE_DONATION_PRODUCT;
+    const monthlyItem: StripeNS.Checkout.SessionCreateParams.LineItem = body.plan
+      ? { price: stripePriceByPlan[body.plan], quantity: 1 }
+      : {
+          quantity: 1,
+          price_data: {
+            currency: "gbp",
+            unit_amount: body.amount as number,
+            recurring: { interval: "month" },
+            ...(donationProduct
+              ? { product: donationProduct }
+              : { product_data: { name: "Monthly donation to NBCC" } }),
+          },
+        };
+    return { ...base, mode: "subscription", line_items: [monthlyItem] };
   }
 
   // One-off: an inline GBP price built from the amount in pence (schema-guaranteed

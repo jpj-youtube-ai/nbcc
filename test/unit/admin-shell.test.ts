@@ -59,4 +59,15 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(html).toContain('src="/assets/js/admin/helpers.js"');
     expect(html).toContain('src="/assets/js/admin/app.js"');
   });
+
+  it("has the six nav sections + the donor detail view (TASK-117)", () => {
+    const navViews = [...doc.querySelectorAll(".admin-nav-link")].map((b) => b.getAttribute("data-view"));
+    expect(navViews).toEqual(["overview", "search", "donations", "claims", "subscriptions", "audit"]);
+    for (const v of ["donations", "claims", "subscriptions", "audit", "donor"]) {
+      expect(doc.getElementById("view-" + v), `#view-${v}`).not.toBeNull();
+    }
+    // Donor detail is reached from a row, not the nav, and has a Back control + status region.
+    expect(doc.getElementById("donorBack")).not.toBeNull();
+    expect(doc.getElementById("donorActionStatus")?.getAttribute("role")).toBe("status");
+  });
 });

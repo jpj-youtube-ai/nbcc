@@ -8,6 +8,8 @@ import {
   searchDeclarations,
   searchDonations,
   submitClaimBatch,
+  createClaimBatch,
+  listEligibleForClaim,
   listAdjustmentDueDonations,
   ClaimBatchSubmitError,
   listRetentionExpiryDeclarations,
@@ -17,7 +19,7 @@ import {
   listAuditLog,
   listDunning,
 } from "../db/admin";
-import { listClaimableDonationsForExport } from "../db/donations";
+import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError } from "../db/donations";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
@@ -348,6 +350,71 @@ export async function getAdminAdjustmentDue(req: Request, res: Response): Promis
 
 adminRouter.post("/api/admin/claim-batches/:id/submit", postAdminSubmitClaimBatch);
 adminRouter.get("/api/admin/claims/adjustment-due", getAdminAdjustmentDue);
+
+// POST /api/admin/claim-batches (REQ-052/REQ-062): open a new claim batch. A state change → Editor/
+// Admin, audited (claim_batch.created). Returns the new batch id.
+const createBatchBodySchema = z.object({ hmrcReference: z.string().min(1).optional() });
+
+export async function postAdminCreateClaimBatch(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const parsed = createBatchBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "Invalid claim batch request" });
+  try {
+    const { batchId } = await createClaimBatch(actorOf(claims), parsed.data.hmrcReference);
+    return res.status(201).json({ batchId });
+  } catch (err) {
+    console.error("admin create claim-batch failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Claim batch create is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/claims/eligible (REQ-052): the eligible-unbatched donations ready to be claimed
+// (the "ready to claim" picker). A read → Viewer and up.
+export async function getAdminEligibleForClaim(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listEligibleForClaim() });
+  } catch (err) {
+    console.error("admin eligible-for-claim list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/claim-batches/:id/donations (REQ-052/REQ-062): assign one or many eligible
+// donations to a batch. A state change → Editor/Admin. Each id is applied via the audited
+// assignDonationToBatch (which enforces the claim invariant + one-batch guard); the outcomes are
+// aggregated so a partial failure (already batched / not eligible) is reported, not silently dropped.
+const assignBodySchema = z.object({ donationIds: z.array(z.number().int().positive()).min(1) });
+
+export async function postAdminAssignBatchDonations(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = claimBatchId(req, res);
+  if (id == null) return;
+  const parsed = assignBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: "Invalid assignment request" });
+  const assigned: number[] = [];
+  const failed: { id: number; reason: string }[] = [];
+  for (const donationId of parsed.data.donationIds) {
+    try {
+      await assignDonationToBatch(donationId, id, actorOf(claims));
+      assigned.push(donationId);
+    } catch (err) {
+      if (err instanceof BatchAssignmentError) {
+        failed.push({ id: donationId, reason: err.reason });
+      } else {
+        console.error("admin assign donation to batch failed:", err instanceof Error ? err.message : err);
+        failed.push({ id: donationId, reason: "error" });
+      }
+    }
+  }
+  return res.status(200).json({ assigned, failed });
+}
+
+adminRouter.post("/api/admin/claim-batches", postAdminCreateClaimBatch);
+adminRouter.get("/api/admin/claims/eligible", getAdminEligibleForClaim);
+adminRouter.post("/api/admin/claim-batches/:id/donations", postAdminAssignBatchDonations);
 
 // --- Admin retention + awaiting-declaration queues (REQ-046/REQ-049 · TASK-110) -----------------
 // Two read-only admin queues (Viewer and up): declarations whose HMRC six-year retention window is

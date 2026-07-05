@@ -169,7 +169,11 @@ export async function postRequestAccess(req: Request, res: Response): Promise<Re
   const now = Date.now();
 
   // Over-limit is treated exactly like any other outcome: the generic 200, no work done.
-  if (emailLimiter.allow(email, now) && ipLimiter.allow(req.ip ?? "unknown", now)) {
+  // Evaluate BOTH limiters unconditionally first so an email-limited request still
+  // consumes its IP-window slot (short-circuiting would let it skip the IP check).
+  const emailOk = emailLimiter.allow(email, now);
+  const ipOk = ipLimiter.allow(req.ip ?? "unknown", now);
+  if (emailOk && ipOk) {
     try {
       const subIds = await findSubscriptionIdsByEmail(email);
       const donor = await findDonorBySubscriptionIds(subIds);

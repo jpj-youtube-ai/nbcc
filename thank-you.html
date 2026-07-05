@@ -37,8 +37,8 @@
     />
     <meta name="twitter:image" content="https://www.example.org/assets/img/og-image.png" />
 
-    <link rel="stylesheet" href="assets/css/styles.css" />
-    <script defer src="assets/js/main.js"></script>
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <script defer src="/assets/js/main.js"></script>
   </head>
   <body>
     <!-- Skip link (REQ-032): first focusable element; jumps to <main id="main">. -->
@@ -65,7 +65,7 @@
       </div>
     </header>
 
-    <main class="site-main" id="main" tabindex="-1">
+    <main class="site-main site-main--boxed" id="main" tabindex="-1">
       <!-- Confirmation intro (REQ-035): the post-payment thank you Stripe returns
            the donor to (STRIPE_SUCCESS_URL). Centred page intro mirroring
            .contact-intro / .supporters-intro; reuses .eyebrow / base h1 / .rule /
@@ -74,7 +74,7 @@
       <section class="thankyou-intro" aria-labelledby="thankyou-intro-heading">
         <span class="eyebrow">Thank you</span>
         <h1 id="thankyou-intro-heading">Your gift is on its way to making Christmas brighter</h1>
-        <div class="rule"></div>
+        <div class="rule center"><i></i></div>
         <p class="lede">
           Thank you for supporting the Night Before Christmas Campaign. Your
           generosity helps bring comfort, dignity and joy at Christmas, all year
@@ -91,9 +91,9 @@
         <div class="thankyou-next card reveal">
           <h2 id="thankyou-next-heading">What happens next</h2>
           <p>
-            If you shared an email address, a confirmation email is on its way to
-            your inbox with the details of your gift. If it does not arrive, please
-            check your spam folder or get in touch and the NBCC elves will help.
+            A confirmation email is on its way to your inbox with the details of
+            your gift. If it does not arrive, please check your spam folder or get
+            in touch and the NBCC elves will help.
           </p>
           <p>
             A monthly gift continues each month until you choose to stop it, and

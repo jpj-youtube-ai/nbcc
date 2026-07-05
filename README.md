@@ -1116,6 +1116,16 @@ shared brand tokens in `styles.css`. The shell's own accessibility floor (a skip
 covered by `features/site.feature`. The image bakes `admin.html` in via the Dockerfile COPY (guarded by
 `test/unit/dockerfile-site-assets.test.ts`). No new config.
 
+The dashboard's remaining views + donor detail (REQ-066 · TASK-117) build on that shell over the same
+`/api/admin/*` API with **no new backend**: **Donations** (browse all, paged), **Claims** (the
+adjustment-due queue + the claim batches, with **Submit** and **Export CSV** shown only to Editor+),
+**Subscriptions** (dunning / at-risk gifts) and the **Audit** trail. A **donor detail** view is opened
+from any donor/donation row and shows the snapshot plus role-gated actions — edit fields
+(`PATCH /api/admin/donors/:id`), cancel subscription and cancel Gift Aid — reusing the REQ-062 write
+endpoints (the UI hides write controls below Editor via `roleCan`; the server still enforces). The CSV
+export is fetched with the bearer token and saved via a blob download (a plain link cannot carry the
+`Authorization` header). `admin-shell.test.ts` covers the six nav sections + the donor detail view.
+
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
 six-year window has **closed**, it erases the captured personal data. It reuses the pure

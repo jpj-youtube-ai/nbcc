@@ -51,6 +51,10 @@
             <ul>
               <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
               <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
             </ul>
           </nav>
 
@@ -81,6 +85,46 @@
                 </form>
               </div>
               <div class="admin-table-wrap" id="searchResults" aria-live="polite"></div>
+            </section>
+
+            <!-- Browse all donations (paginated). -->
+            <section class="admin-view" id="view-donations" aria-labelledby="donations-heading" hidden>
+              <h2 id="donations-heading">Donations</h2>
+              <div class="admin-table-wrap" id="donationsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div class="admin-pager" id="donationsPager" hidden>
+                <button class="admin-page-btn" id="donationsPrev" type="button">Previous</button>
+                <span class="admin-page-info" id="donationsInfo"></span>
+                <button class="admin-page-btn" id="donationsNext" type="button">Next</button>
+              </div>
+            </section>
+
+            <!-- Claims: the adjustment-due queue + the claim batches (submit / export). -->
+            <section class="admin-view" id="view-claims" aria-labelledby="claims-heading" hidden>
+              <h2 id="claims-heading">Claims</h2>
+              <h3 class="admin-subhead">Adjustment due</h3>
+              <div class="admin-table-wrap" id="adjustmentTable"><p class="admin-loading">Loading…</p></div>
+              <h3 class="admin-subhead">Claim batches</h3>
+              <div class="admin-table-wrap" id="batchesTable"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Subscriptions: at-risk / lapsed monthly gifts. -->
+            <section class="admin-view" id="view-subscriptions" aria-labelledby="subs-heading" hidden>
+              <h2 id="subs-heading">Subscriptions</h2>
+              <div class="admin-table-wrap" id="subsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Audit trail (append-only governance log). -->
+            <section class="admin-view" id="view-audit" aria-labelledby="audit-heading" hidden>
+              <h2 id="audit-heading">Audit trail</h2>
+              <div class="admin-table-wrap" id="auditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Donor detail (reached from a donor/donation row); role-gated actions. -->
+            <section class="admin-view" id="view-donor" aria-labelledby="donor-heading" hidden>
+              <button class="admin-back" id="donorBack" type="button">&larr; Back</button>
+              <h2 id="donor-heading">Donor</h2>
+              <div id="donorDetail" aria-live="polite"></div>
+              <p class="admin-action-status" id="donorActionStatus" role="status" aria-live="polite"></p>
             </section>
           </div>
         </div>

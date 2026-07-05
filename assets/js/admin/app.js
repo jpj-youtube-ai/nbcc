@@ -9,6 +9,9 @@
   var H = window.AdminHelpers;
   var doc = document;
   var TOKEN_KEY = "nbcc_admin_token";
+  var currentRole = "viewer"; // decoded from the session token; gates the write actions (server still enforces)
+  var donationsOffset = 0; // Donations view paging cursor
+  var currentDonorId = null; // the donor open in the detail view
 
   function token() {
     return sessionStorage.getItem(TOKEN_KEY);
@@ -36,6 +39,7 @@
   function showApp(claims) {
     el("loginView").hidden = true;
     el("appView").hidden = false;
+    currentRole = claims.role || "viewer";
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
     selectView("overview");
@@ -102,17 +106,25 @@
   }
 
   // ---- view switching ----
+  function showOnly(viewId) {
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-view"), function (v) {
+      v.hidden = v.id !== viewId;
+    });
+  }
   function selectView(name) {
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-view") === name);
     });
-    Array.prototype.forEach.call(doc.querySelectorAll(".admin-view"), function (v) {
-      v.hidden = v.id !== "view-" + name;
-    });
+    showOnly("view-" + name);
     if (name === "search") {
       var q = el("searchQuery");
       if (q && q.focus) q.focus();
-    }
+    } else if (name === "donations") {
+      donationsOffset = 0;
+      loadDonations();
+    } else if (name === "claims") loadClaims();
+    else if (name === "subscriptions") loadSubs();
+    else if (name === "audit") loadAudit();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
     b.addEventListener("click", function () {
@@ -136,13 +148,14 @@
           "<tr><td>" + d.id + "</td><td>" + H.escapeHtml(d.donor_name) + "</td><td>" + gift +
           '</td><td class="admin-num">' + H.formatPence(d.amount_pence) + "</td><td>" +
           (d.gift_aid ? '<span class="admin-pill">Gift Aid</span>' : "") + "</td><td>" +
-          H.escapeHtml(d.claim_status) + "</td><td>" + H.fmtDate(d.created_at) + "</td></tr>"
+          H.escapeHtml(d.claim_status) + "</td><td>" + H.fmtDate(d.created_at) +
+          '</td><td><button class="admin-link" type="button" data-donor="' + d.donor_id + '">View</button></td></tr>'
         );
       })
       .join("");
     return (
       '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Gift</th>' +
-      "<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Date</th></tr></thead><tbody>" +
+      "<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Date</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>"
     );
   }
@@ -200,11 +213,336 @@
       authFetch("/api/admin/search/" + searchKind + "?q=" + encodeURIComponent(q))
         .then(j)
         .then(function (data) {
-          out.innerHTML = genericTable(data.results || []);
+          var rows = data.results || [];
+          if (searchKind === "donors") out.innerHTML = donorsSearchTable(rows);
+          else if (searchKind === "donations") out.innerHTML = donationsTable(rows);
+          else out.innerHTML = genericTable(rows);
         })
         .catch(function () {
           out.innerHTML = '<p class="admin-empty">Search is unavailable.</p>';
         });
+    });
+  }
+
+  function bindClick(id, fn) {
+    var e = el(id);
+    if (e) e.addEventListener("click", fn);
+  }
+  function cap(s) {
+    s = String(s || "");
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+  }
+
+  // ---- donations (browse all, paged) ----
+  function loadDonations() {
+    var wrap = el("donationsTable");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/donations?limit=25&offset=" + donationsOffset)
+      .then(j)
+      .then(function (d) {
+        wrap.innerHTML = donationsTable(d.results || []);
+        var total = d.total || 0;
+        el("donationsPager").hidden = total <= 25;
+        el("donationsInfo").textContent = total
+          ? donationsOffset + 1 + "–" + Math.min(donationsOffset + 25, total) + " of " + total
+          : "";
+        el("donationsPrev").disabled = donationsOffset <= 0;
+        el("donationsNext").disabled = donationsOffset + 25 >= total;
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+  bindClick("donationsPrev", function () {
+    donationsOffset = Math.max(0, donationsOffset - 25);
+    loadDonations();
+  });
+  bindClick("donationsNext", function () {
+    donationsOffset += 25;
+    loadDonations();
+  });
+
+  // ---- claims: adjustment-due + batches (submit/export for editor+) ----
+  function loadClaims() {
+    authFetch("/api/admin/claims/adjustment-due")
+      .then(j)
+      .then(function (d) {
+        el("adjustmentTable").innerHTML = adjustmentTable(d.results || []);
+      })
+      .catch(function () {});
+    authFetch("/api/admin/claim-batches")
+      .then(j)
+      .then(function (d) {
+        el("batchesTable").innerHTML = batchesTable(d.results || []);
+      })
+      .catch(function () {});
+  }
+  function adjustmentTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No adjustments due.</p>';
+    var body = rows
+      .map(function (r) {
+        return (
+          "<tr><td>" + r.id + "</td><td>" + H.escapeHtml(r.donor_name) + '</td><td class="admin-num">' +
+          H.formatPence(r.amount_pence) + '</td><td class="admin-num">' + H.formatPence(r.adjustment_pence || 0) +
+          "</td><td>" + H.escapeHtml(r.adjustment_reason || "") + "</td></tr>"
+        );
+      })
+      .join("");
+    return '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Amount</th><th>Adjustment</th><th>Reason</th></tr></thead><tbody>' + body + "</tbody></table>";
+  }
+  function batchesTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No claim batches.</p>';
+    var canWrite = H.roleCan(currentRole, "editor");
+    var body = rows
+      .map(function (b) {
+        var actions = "";
+        if (canWrite) {
+          if (b.status === "open") actions += '<button class="admin-link" type="button" data-submit-batch="' + b.id + '">Submit</button> ';
+          actions += '<button class="admin-link" type="button" data-export-batch="' + b.id + '">Export CSV</button>';
+        }
+        return (
+          "<tr><td>" + b.id + '</td><td><span class="admin-pill">' + H.escapeHtml(b.status) + "</span></td><td>" +
+          b.donation_count + '</td><td class="admin-num">' + H.formatPence(b.total_pence) + "</td><td>" +
+          H.fmtDate(b.submitted_at) + "</td><td>" + actions + "</td></tr>"
+        );
+      })
+      .join("");
+    return '<table class="admin-table"><thead><tr><th>ID</th><th>Status</th><th>Donations</th><th>Total</th><th>Submitted</th><th></th></tr></thead><tbody>' + body + "</tbody></table>";
+  }
+  function submitBatch(id) {
+    if (!window.confirm("Submit claim batch " + id + " to HMRC?")) return;
+    authFetch("/api/admin/claim-batches/" + id + "/submit", { method: "POST" })
+      .then(function (res) {
+        if (res.ok) loadClaims();
+      })
+      .catch(function () {});
+  }
+  function exportBatch(id) {
+    authFetch("/api/admin/claim-batches/" + id + "/export")
+      .then(function (res) {
+        return res.text();
+      })
+      .then(function (csv) {
+        var blob = new Blob([csv], { type: "text/csv" });
+        var url = URL.createObjectURL(blob);
+        var a = doc.createElement("a");
+        a.href = url;
+        a.download = "claim-batch-" + id + ".csv";
+        doc.body.appendChild(a);
+        a.click();
+        doc.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(function () {});
+  }
+
+  // ---- subscriptions (dunning) ----
+  function loadSubs() {
+    var wrap = el("subsTable");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/subscriptions/dunning")
+      .then(j)
+      .then(function (d) {
+        var rows = d.results || [];
+        if (!rows.length) {
+          wrap.innerHTML = '<p class="admin-empty">No at-risk subscriptions.</p>';
+          return;
+        }
+        var body = rows
+          .map(function (s) {
+            return (
+              "<tr><td>" + s.id + "</td><td>" + H.escapeHtml(s.donor_name) + '</td><td><span class="admin-pill">' +
+              H.escapeHtml(s.status) + "</span></td><td>" + s.failed_attempts + "</td><td>" + H.fmtDate(s.lapsed_at) + "</td></tr>"
+            );
+          })
+          .join("");
+        wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Status</th><th>Failed</th><th>Lapsed</th></tr></thead><tbody>' + body + "</tbody></table>";
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+
+  // ---- audit ----
+  function loadAudit() {
+    var wrap = el("auditTable");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/audit?limit=50")
+      .then(j)
+      .then(function (d) {
+        var rows = d.results || [];
+        if (!rows.length) {
+          wrap.innerHTML = '<p class="admin-empty">No audit entries.</p>';
+          return;
+        }
+        var body = rows
+          .map(function (r) {
+            return (
+              "<tr><td>" + r.id + "</td><td>" + H.fmtDate(r.created_at) + "</td><td>" + H.escapeHtml(r.actor) +
+              "</td><td>" + H.escapeHtml(r.action) + "</td><td>" + H.escapeHtml(r.entity) + " " + (r.entity_id || "") + "</td></tr>"
+            );
+          })
+          .join("");
+        wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>When</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>' + body + "</tbody></table>";
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+
+  // ---- donor search results (with a View action) ----
+  function donorsSearchTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No results.</p>';
+    var body = rows
+      .map(function (r) {
+        return (
+          "<tr><td>" + r.id + "</td><td>" + H.escapeHtml(r.full_name) + "</td><td>" + H.escapeHtml(r.email || "") +
+          "</td><td>" + H.escapeHtml(r.donor_type) + "</td><td>" + (r.anonymous ? '<span class="admin-pill">Anon</span>' : "") +
+          '</td><td><button class="admin-link" type="button" data-donor="' + r.id + '">View</button></td></tr>'
+        );
+      })
+      .join("");
+    return '<table class="admin-table"><thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Type</th><th></th><th></th></tr></thead><tbody>' + body + "</tbody></table>";
+  }
+
+  // ---- donor detail + role-gated actions ----
+  function dl(k, v) {
+    return "<dt>" + H.escapeHtml(k) + "</dt><dd>" + H.escapeHtml(v) + "</dd>";
+  }
+  function editField(id, label, type, val) {
+    return (
+      '<div class="admin-field"><label for="edit-' + id + '">' + H.escapeHtml(label) + "</label>" +
+      '<input id="edit-' + id + '" name="' + id + '" type="' + type + '" value="' + H.escapeHtml(val) + '" /></div>'
+    );
+  }
+  function editCheck(id, label, on) {
+    return '<label class="admin-check"><input type="checkbox" id="edit-' + id + '"' + (on ? " checked" : "") + " /> " + H.escapeHtml(label) + "</label>";
+  }
+  function donorStatus(msg) {
+    el("donorActionStatus").textContent = msg || "";
+  }
+  function openDonor(id) {
+    currentDonorId = id;
+    showOnly("view-donor");
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+      b.classList.remove("is-active");
+    });
+    donorStatus("");
+    var wrap = el("donorDetail");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/donors/" + id)
+      .then(function (res) {
+        if (res.status === 404) {
+          wrap.innerHTML = '<p class="admin-empty">Donor not found.</p>';
+          throw new Error("not found");
+        }
+        return res.json();
+      })
+      .then(renderDonor)
+      .catch(function () {});
+  }
+  function renderDonor(d) {
+    var canWrite = H.roleCan(currentRole, "editor");
+    var info =
+      '<dl class="admin-dl">' +
+      dl("Name", d.fullName) +
+      dl("Email", d.email || "None on file") +
+      dl("Email consent", d.emailConsent ? "Yes" : "No") +
+      dl("Anonymous", d.anonymous ? "Yes" : "No") +
+      dl("Monthly plan", d.subscriptionPlan ? cap(d.subscriptionPlan) : "None") +
+      dl("Gift Aid", d.giftAid ? "Active" : "Not active") +
+      "</dl>";
+    var actions = "";
+    if (canWrite) {
+      actions =
+        '<form class="admin-edit" id="donorEditForm"><h3 class="admin-subhead">Edit donor</h3>' +
+        editField("fullName", "Name", "text", d.fullName || "") +
+        editField("email", "Email", "email", d.email || "") +
+        editCheck("emailConsent", "Email consent", d.emailConsent) +
+        editCheck("anonymous", "Anonymous on the public page", d.anonymous) +
+        '<button class="btn btn-primary" type="submit">Save changes</button></form>' +
+        '<div class="admin-donor-actions">';
+      if (d.subscriptionPlan && d.subscriptionId) actions += '<button class="btn btn-ghost" type="button" id="cancelSubBtn">Cancel monthly gift</button>';
+      if (d.giftAid) actions += '<button class="btn btn-ghost" type="button" id="cancelGaBtn">Cancel Gift Aid</button>';
+      actions += "</div>";
+    }
+    el("donorDetail").innerHTML = info + actions;
+    if (canWrite) wireDonorActions(d);
+  }
+  function wireDonorActions(d) {
+    var form = el("donorEditForm");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var body = {
+          fullName: (el("edit-fullName").value || "").trim(),
+          email: (el("edit-email").value || "").trim(),
+          emailConsent: el("edit-emailConsent").checked,
+          anonymous: el("edit-anonymous").checked,
+        };
+        if (!body.email) delete body.email; // email optional; PATCH rejects an empty string
+        authFetch("/api/admin/donors/" + currentDonorId, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+          .then(function (res) {
+            return res.ok ? res.json() : null;
+          })
+          .then(function (snap) {
+            if (snap) {
+              renderDonor(snap);
+              donorStatus("Saved.");
+            } else donorStatus("Could not save the changes.");
+          })
+          .catch(function () {
+            donorStatus("Could not save the changes.");
+          });
+      });
+    }
+    bindClick("cancelSubBtn", function () {
+      if (!window.confirm("Cancel this donor's monthly gift?")) return;
+      authFetch("/api/admin/donors/" + currentDonorId + "/subscription/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscriptionId: d.subscriptionId, accepted: "cancel" }),
+      })
+        .then(function (res) {
+          donorStatus(res.ok ? "Monthly gift cancelled." : "Could not cancel the monthly gift.");
+          if (res.ok) openDonor(currentDonorId);
+        })
+        .catch(function () {
+          donorStatus("Could not cancel the monthly gift.");
+        });
+    });
+    bindClick("cancelGaBtn", function () {
+      if (!window.confirm("Cancel this donor's Gift Aid declaration?")) return;
+      authFetch("/api/admin/donors/" + currentDonorId + "/gift-aid/cancel", { method: "POST" })
+        .then(function (res) {
+          donorStatus(res.ok ? "Gift Aid cancelled." : "Could not cancel Gift Aid.");
+          if (res.ok) openDonor(currentDonorId);
+        })
+        .catch(function () {
+          donorStatus("Could not cancel Gift Aid.");
+        });
+    });
+  }
+
+  // Back from donor detail, and delegated actions on any table (view donor / submit / export).
+  bindClick("donorBack", function () {
+    selectView("donations");
+  });
+  var content = doc.querySelector(".admin-content");
+  if (content) {
+    content.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var donor = t.closest("[data-donor]");
+      if (donor) return openDonor(donor.getAttribute("data-donor"));
+      var sub = t.closest("[data-submit-batch]");
+      if (sub) return submitBatch(sub.getAttribute("data-submit-batch"));
+      var exp = t.closest("[data-export-batch]");
+      if (exp) return exportBatch(exp.getAttribute("data-export-batch"));
     });
   }
 

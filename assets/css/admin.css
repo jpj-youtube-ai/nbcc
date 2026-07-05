@@ -68,6 +68,24 @@
 .admin-search-form input{flex:1;font-family:var(--font-body);font-size:.95rem;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:10px 14px}
 .admin-search-form input:focus{border-color:var(--holly);outline:none}
 
+/* ---- links, pager, donor detail ---- */
+.admin-link{background:none;border:0;color:var(--maroon);font-family:var(--font-body);font-weight:600;font-size:.85rem;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:0}
+.admin-link:hover{color:var(--crimson)}
+.admin-back{background:none;border:0;color:var(--maroon);font-family:var(--font-body);font-weight:600;font-size:.9rem;cursor:pointer;padding:0;margin-bottom:12px}
+.admin-back:hover{color:var(--crimson)}
+.admin-pager{display:flex;align-items:center;gap:14px;margin-top:14px}
+.admin-page-btn{background:var(--card);border:1.6px solid var(--line);border-radius:999px;padding:8px 16px;font-family:var(--font-body);font-weight:600;font-size:.85rem;cursor:pointer}
+.admin-page-btn:disabled{opacity:.5;cursor:default}
+.admin-page-info{font-size:.85rem;color:var(--slate-soft);font-variant-numeric:tabular-nums}
+.admin-dl{display:grid;grid-template-columns:auto 1fr;gap:8px 18px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px;max-width:560px}
+.admin-dl dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-soft);font-weight:600;align-self:center}
+.admin-dl dd{margin:0;font-weight:600;color:var(--slate)}
+.admin-edit{max-width:480px;margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px}
+.admin-check{display:flex;align-items:center;gap:8px;font-size:.9rem;margin:10px 0;cursor:pointer}
+.admin-check input{width:18px;height:18px;accent-color:var(--crimson)}
+.admin-donor-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
+.admin-action-status{margin-top:14px;font-weight:600;color:var(--holly)}
+
 @media (max-width:760px){
   .admin-body-grid{grid-template-columns:1fr}
   .admin-nav{position:static;padding:12px}

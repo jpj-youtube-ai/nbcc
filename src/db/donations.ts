@@ -315,6 +315,15 @@ export async function listClaimableDonationsForExport(
   claimBatchId?: number,
 ): Promise<ClaimableExportRow[]> {
   const filterByBatch = claimBatchId != null;
+  // A batch's export is the donations ASSIGNED to it — whose claim_status is 'batched' (then
+  // 'claimed' after submit), NEVER 'eligible'. Filtering by claim_status='eligible' AND
+  // claim_batch_id=$1 is unsatisfiable, which made every batch CSV export empty. So scope a
+  // batch export by claim_batch_id alone; the INNER JOIN to declarations still guarantees a
+  // declaration is present. With no batch id, list the eligible-unbatched donations (which by
+  // definition have claim_batch_id IS NULL) — the "ready to claim" set.
+  const whereSql = filterByBatch
+    ? "WHERE d.claim_batch_id = $1"
+    : "WHERE d.claim_status = 'eligible'";
   const res = await pool.query<ClaimableExportDbRow>(
     `SELECT d.id, dn.full_name,
             dec.title, dec.first_name, dec.last_name, dec.house_name_number, dec.postcode,
@@ -322,8 +331,7 @@ export async function listClaimableDonationsForExport(
        FROM donations d
        JOIN declarations dec ON dec.id = d.declaration_id
        JOIN donors dn ON dn.id = d.donor_id
-      WHERE d.claim_status = 'eligible'
-        ${filterByBatch ? "AND d.claim_batch_id = $1" : ""}
+      ${whereSql}
       ORDER BY d.id ASC`,
     filterByBatch ? [claimBatchId] : [],
   );

@@ -36,6 +36,9 @@ import {
   getAdminSearchDeclarations,
   getAdminSearchDonations,
   postAdminSubmitClaimBatch,
+  postAdminCreateClaimBatch,
+  getAdminEligibleForClaim,
+  postAdminAssignBatchDonations,
   getAdminAdjustmentDue,
   getAdminRetentionExpiry,
   getAdminAwaitingDeclaration,
@@ -74,6 +77,9 @@ const runSearchDonors = async (o: any) => { const res = mockRes(); await getAdmi
 const runSearchDeclarations = async (o: any) => { const res = mockRes(); await getAdminSearchDeclarations(req(o) as any, res as any); return res; };
 const runSearchDonations = async (o: any) => { const res = mockRes(); await getAdminSearchDonations(req(o) as any, res as any); return res; };
 const runSubmitBatch = async (o: any) => { const res = mockRes(); await postAdminSubmitClaimBatch(req(o) as any, res as any); return res; };
+const runCreateBatch = async (o: any) => { const res = mockRes(); await postAdminCreateClaimBatch(req(o) as any, res as any); return res; };
+const runEligible = async (o: any) => { const res = mockRes(); await getAdminEligibleForClaim(req(o) as any, res as any); return res; };
+const runAssign = async (o: any) => { const res = mockRes(); await postAdminAssignBatchDonations(req(o) as any, res as any); return res; };
 const runAdjustmentDue = async (o: any) => { const res = mockRes(); await getAdminAdjustmentDue(req(o) as any, res as any); return res; };
 const runRetentionExpiry = async (o: any) => { const res = mockRes(); await getAdminRetentionExpiry(req(o) as any, res as any); return res; };
 const runAwaitingDeclaration = async (o: any) => { const res = mockRes(); await getAdminAwaitingDeclaration(req(o) as any, res as any); return res; };
@@ -114,6 +120,8 @@ beforeEach(() => {
     if (/update donors/i.test(sql)) return { rowCount: 1, rows: [] };
     if (/update declarations/i.test(sql)) return { rowCount: 1, rows: [] };
     if (/update claim_batches/i.test(sql)) return { rowCount: 1, rows: [] };
+    // createClaimBatch's INSERT … RETURNING id
+    if (/insert into claim_batches/i.test(sql)) return { rows: [{ id: 77 }], rowCount: 1 };
     if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };
     return { rows: [], rowCount: 0 };
   });
@@ -395,5 +403,68 @@ describe("GET /api/admin/queues/awaiting-declaration", () => {
     // The query filters declaration_status to 'sent'/'undelivered' (bounced emails included).
     const call = queryMock.mock.calls.find((c) => /declaration_status\s+in\s*\(\s*'sent'\s*,\s*'undelivered'\s*\)/i.test(String(c[0])));
     expect(call).toBeTruthy();
+  });
+});
+
+// --- claims pipeline: create batch, eligible list, assign-to-batch (TASK-NNN) -------------------
+describe("POST /api/admin/claim-batches (create)", () => {
+  it("401s with no token", async () => {
+    expect((await runCreateBatch({ token: "" })).statusCode).toBe(401);
+  });
+  it("403s a Viewer (create is a write)", async () => {
+    const res = await runCreateBatch({ role: "viewer" });
+    expect(res.statusCode).toBe(403);
+    // No INSERT into claim_batches attempted.
+    expect(clientQueryMock.mock.calls.some((c) => /insert into claim_batches/i.test(String(c[0])))).toBe(false);
+  });
+  it("creates a batch for an Editor and returns its id (201) with a claim_batch.created audit row", async () => {
+    const res = await runCreateBatch({ role: "editor", body: {} });
+    expect(res.statusCode).toBe(201);
+    expect(res.body).toEqual({ batchId: 77 });
+    expect(auditInserts().length).toBe(1);
+  });
+});
+
+describe("GET /api/admin/claims/eligible", () => {
+  it("401s with no token", async () => {
+    expect((await runEligible({ token: "" })).statusCode).toBe(401);
+  });
+  it("lets a Viewer list the eligible-unbatched donations", async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id: 5, donor_name: "Ada Lovelace", amount_pence: 5000, postcode: "KA1 1AA", created_at: new Date(0) }],
+      rowCount: 1,
+    });
+    const res = await runEligible({ role: "viewer" });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { results: unknown[] }).results).toHaveLength(1);
+  });
+});
+
+describe("POST /api/admin/claim-batches/:id/donations (assign)", () => {
+  it("403s a Viewer (assign is a write)", async () => {
+    const res = await runAssign({ role: "viewer", body: { donationIds: [1] } });
+    expect(res.statusCode).toBe(403);
+  });
+  it("400s an empty donationIds body", async () => {
+    const res = await runAssign({ role: "editor", body: { donationIds: [] } });
+    expect(res.statusCode).toBe(400);
+  });
+  it("assigns each id and reports per-id failures (already batched)", async () => {
+    // Drive batchDonation's FOR UPDATE lock per donation id: id 2 is already batched → blocked.
+    clientQueryMock.mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (/^\s*(begin|commit|rollback)/i.test(sql)) return {};
+      if (/select[\s\S]*from donations[\s\S]*for update/i.test(sql)) {
+        const donationId = Array.isArray(params) ? params[0] : undefined;
+        return donationId === 2
+          ? { rows: [{ claim_status: "batched", claim_batch_id: 5 }], rowCount: 1 }
+          : { rows: [{ claim_status: "eligible", claim_batch_id: null }], rowCount: 1 };
+      }
+      if (/update donations/i.test(sql)) return { rowCount: 1, rows: [] };
+      if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await runAssign({ id: "9", role: "editor", body: { donationIds: [1, 2] } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ assigned: [1], failed: [{ id: 2, reason: "already_batched" }] });
   });
 });

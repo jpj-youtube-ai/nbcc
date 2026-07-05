@@ -98,13 +98,44 @@
               </div>
             </section>
 
-            <!-- Claims: the adjustment-due queue + the claim batches (submit / export). -->
+            <!-- Claims: the Gift Aid reclaim workflow — eligible → batch → export → submit. -->
             <section class="admin-view" id="view-claims" aria-labelledby="claims-heading" hidden>
-              <h2 id="claims-heading">Claims</h2>
-              <h3 class="admin-subhead">Adjustment due</h3>
-              <div class="admin-table-wrap" id="adjustmentTable"><p class="admin-loading">Loading…</p></div>
-              <h3 class="admin-subhead">Claim batches</h3>
+              <h2 id="claims-heading">Gift Aid claims</h2>
+              <p class="admin-view-intro">NBCC reclaims 25p of tax from HMRC for every £1 given by a UK taxpayer who made a Gift Aid declaration. You file the claim through HMRC’s Charities Online service. This page prepares the claim and tracks it; it does not file it for you.</p>
+
+              <details class="admin-guide">
+                <summary>How a Gift Aid claim works, step by step</summary>
+                <div class="admin-guide-body">
+                  <ol>
+                    <li><strong>One-time setup (HMRC).</strong> Enrol for <a href="https://www.gov.uk/claim-gift-aid-online" target="_blank" rel="noopener">Charities Online</a> in NBCC’s HMRC online account (choose “Charities”). HMRC posts an activation code; it arrives in about a week and must be used within 28 days.</li>
+                    <li><strong>Build a batch here.</strong> In <em>1. Ready to claim</em> below, tick the Gift-Aided gifts you want to claim and add them to a batch. <strong>One batch is one HMRC claim</strong> (up to 1,000 donations; above that HMRC needs claiming software).</li>
+                    <li><strong>Export the batch.</strong> Under <em>2. Claim batches</em>, click <em>Export CSV</em>. The file lists each gift with the donor’s name, house name/number, postcode, date and amount: exactly the columns HMRC’s schedule needs.</li>
+                    <li><strong>Fill HMRC’s schedule spreadsheet.</strong> Download HMRC’s official <a href="https://www.gov.uk/guidance/schedule-spreadsheet-to-claim-back-tax-on-gift-aid-donations" target="_blank" rel="noopener">Gift Aid schedule spreadsheet</a> (an <code>.ods</code> file) and copy the exported rows into it. HMRC only accepts <em>their</em> spreadsheet, so don’t rename its worksheet tab or it won’t attach.</li>
+                    <li><strong>Submit on Charities Online.</strong> Log in to HMRC, attach the filled schedule to the online claim form, and send it.</li>
+                    <li><strong>Mark the batch submitted.</strong> Come back here and click <em>Submit</em> on the batch, so NBCC’s records match what you sent HMRC.</li>
+                    <li><strong>HMRC pays.</strong> Repayment arrives by BACS, normally within about 4 weeks (HMRC target: 20 working days).</li>
+                    <li><strong>Keep the records.</strong> Keep each donor’s declaration for 6 years. NBCC stores these automatically so HMRC can audit them.</li>
+                  </ol>
+                  <p class="admin-guide-note">Refunded a gift you had already claimed? See <em>3. Adjustment due</em>. Enter that amount in the <em>adjustment</em> box on your next Charities Online claim, which repays HMRC by reducing the new claim. Deadline: claim within 4 years of the end of the tax year the gift was received. This is a plain-English summary of HMRC guidance, not tax advice.</p>
+                </div>
+              </details>
+
+              <h3 class="admin-subhead">1. Ready to claim</h3>
+              <p class="admin-help">Gift-Aided gifts with a valid declaration that aren’t in a batch yet. Tick the ones to claim and add them to a batch (step 2 above). Each becomes one line of your HMRC claim.</p>
+              <div class="admin-claim-actions" id="eligibleActions" hidden>
+                <label for="assignBatchSelect">Add selected to</label>
+                <select id="assignBatchSelect"><option value="new">New batch</option></select>
+                <button class="admin-btn" type="button" id="assignBtn">Add to batch</button>
+              </div>
+              <div class="admin-table-wrap" id="eligibleTable"><p class="admin-loading">Loading…</p></div>
+
+              <h3 class="admin-subhead">2. Claim batches</h3>
+              <p class="admin-help">Each batch is one HMRC claim. <em>Export CSV</em> to get its donations (step 3), copy them into HMRC’s schedule spreadsheet and submit on Charities Online (steps 4–5), then click <em>Submit</em> here to record that it has gone (step 6).</p>
               <div class="admin-table-wrap" id="batchesTable"><p class="admin-loading">Loading…</p></div>
+
+              <h3 class="admin-subhead">3. Adjustment due</h3>
+              <p class="admin-help">Gifts that were refunded after you had already claimed the Gift Aid on them. Enter each amount in the <em>adjustment</em> box on your next Charities Online claim so HMRC reclaims the overpaid tax; no separate payment is needed.</p>
+              <div class="admin-table-wrap" id="adjustmentTable"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Subscriptions: at-risk / lapsed monthly gifts. -->

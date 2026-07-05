@@ -145,6 +145,51 @@ export async function submitClaimBatch(
   );
 }
 
+// Create a new (open) claim batch (REQ-052/REQ-062). status/regulator/charity_number all default in
+// the schema (open/OSCR/SC047995); hmrc_reference is optional (set later when the claim is prepared).
+// Audited (claim_batch.created) in ONE transaction, mirroring submitClaimBatch.
+export async function createClaimBatch(
+  actor: string,
+  hmrcReference?: string,
+): Promise<{ batchId: number }> {
+  return writeWithAudit(
+    async (client) => {
+      const row = (
+        await client.query<{ id: number }>(
+          `INSERT INTO claim_batches (hmrc_reference) VALUES ($1) RETURNING id`,
+          [hmrcReference ?? null],
+        )
+      ).rows[0];
+      return { batchId: row.id };
+    },
+    (r) => ({ actor, action: "claim_batch.created", entity: "claim_batch", entityId: r.batchId, data: {} }),
+  );
+}
+
+export interface EligibleClaimRow {
+  id: number;
+  donor_name: string;
+  amount_pence: number;
+  postcode: string | null;
+  created_at: Date;
+}
+
+// The eligible-unbatched donations (claim_status='eligible' ⇒ claim_batch_id IS NULL) with a
+// declaration, shaped for the admin "ready to claim" picker. Read-only (pool.query, no transaction —
+// mirrors listAdjustmentDueDonations). The INNER JOIN to declarations excludes any eligible row
+// without one; ordered by id for a stable list.
+export async function listEligibleForClaim(): Promise<EligibleClaimRow[]> {
+  const res = await pool.query<EligibleClaimRow>(
+    `SELECT d.id, dn.full_name AS donor_name, d.amount_pence, dec.postcode, d.created_at
+       FROM donations d
+       JOIN declarations dec ON dec.id = d.declaration_id
+       JOIN donors dn ON dn.id = d.donor_id
+      WHERE d.claim_status = 'eligible'
+      ORDER BY d.id ASC`,
+  );
+  return res.rows;
+}
+
 export interface AdjustmentDueRow {
   id: number;
   donor_id: number;

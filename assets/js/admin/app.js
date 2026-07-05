@@ -261,21 +261,85 @@
     donationsOffset += 25;
     loadDonations();
   });
+  bindClick("assignBtn", assignSelected);
 
-  // ---- claims: adjustment-due + batches (submit/export for editor+) ----
+  // ---- claims: eligible → batch → export → submit (writes are editor+) ----
   function loadClaims() {
+    var canWrite = H.roleCan(currentRole, "editor");
+    var actions = el("eligibleActions");
+    if (actions) actions.hidden = !canWrite;
+    authFetch("/api/admin/claims/eligible")
+      .then(j)
+      .then(function (d) {
+        el("eligibleTable").innerHTML = eligibleTable(d.results || [], canWrite);
+      })
+      .catch(function () {});
+    authFetch("/api/admin/claim-batches")
+      .then(j)
+      .then(function (d) {
+        var rows = d.results || [];
+        el("batchesTable").innerHTML = batchesTable(rows);
+        var sel = el("assignBatchSelect");
+        if (sel) {
+          var opts = '<option value="new">New batch</option>';
+          rows.forEach(function (b) {
+            if (b.status === "open") opts += '<option value="' + b.id + '">Batch ' + b.id + "</option>";
+          });
+          sel.innerHTML = opts;
+        }
+      })
+      .catch(function () {});
     authFetch("/api/admin/claims/adjustment-due")
       .then(j)
       .then(function (d) {
         el("adjustmentTable").innerHTML = adjustmentTable(d.results || []);
       })
       .catch(function () {});
-    authFetch("/api/admin/claim-batches")
-      .then(j)
-      .then(function (d) {
-        el("batchesTable").innerHTML = batchesTable(d.results || []);
+  }
+  function eligibleTable(rows, canWrite) {
+    if (!rows.length) return '<p class="admin-empty">No donations are waiting to be claimed.</p>';
+    var body = rows
+      .map(function (r) {
+        var box = canWrite ? '<td><input type="checkbox" class="elig-check" value="' + r.id + '" aria-label="Select donation ' + r.id + '"></td>' : "";
+        return (
+          "<tr>" + box + "<td>" + r.id + "</td><td>" + H.escapeHtml(r.donor_name) +
+          '</td><td class="admin-num">' + H.formatPence(r.amount_pence) + "</td><td>" +
+          H.escapeHtml(r.postcode || "") + "</td><td>" + H.fmtDate(r.created_at) + "</td></tr>"
+        );
       })
-      .catch(function () {});
+      .join("");
+    var head = (canWrite ? "<th></th>" : "") + "<th>ID</th><th>Donor</th><th>Amount</th><th>Postcode</th><th>Date</th>";
+    return '<table class="admin-table"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table>";
+  }
+  function assignSelected() {
+    var ids = Array.prototype.slice
+      .call(doc.querySelectorAll(".elig-check:checked"))
+      .map(function (c) { return Number(c.value); });
+    if (!ids.length) { window.alert("Tick at least one donation first."); return; }
+    var target = el("assignBatchSelect").value;
+    function post(batchId) {
+      authFetch("/api/admin/claim-batches/" + batchId + "/donations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ donationIds: ids }),
+      })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (out) {
+          if (out && out.failed && out.failed.length) {
+            window.alert("Added " + out.assigned.length + ", " + out.failed.length + " could not be added.");
+          }
+          loadClaims();
+        })
+        .catch(function () {});
+    }
+    if (target === "new") {
+      authFetch("/api/admin/claim-batches", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+        .then(function (res) { return res.json(); })
+        .then(function (d) { post(d.batchId); })
+        .catch(function () {});
+    } else {
+      post(target);
+    }
   }
   function adjustmentTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No adjustments due.</p>';

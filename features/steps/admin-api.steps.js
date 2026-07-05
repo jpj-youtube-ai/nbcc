@@ -199,6 +199,90 @@ Then("the admin response content type should contain {string}", function (expect
   );
 });
 
+// --- Claims pipeline (create batch → assign eligible → export non-empty CSV) ---
+// Clean this scenario's seeded gift in FK order (donations → declarations → donors). The eligible
+// donor uses a distinct '%claims.pipeline@example.test' email so the @admin Before (which deletes donors
+// by '%admin.bdd@example.com' and would hit an FK on a donor that has a donation) never touches it.
+Before({ tags: "@claims-pipeline" }, async function () {
+  await pool.query(
+    "DELETE FROM donations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%claims.pipeline@example.test')",
+  );
+  await pool.query(
+    "DELETE FROM declarations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%claims.pipeline@example.test')",
+  );
+  await pool.query("DELETE FROM donors WHERE email LIKE '%claims.pipeline@example.test'");
+});
+
+Given("an eligible Gift-Aided donation", async function () {
+  const donor = await pool.query(
+    "INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', 'Ada Claims', 'ada.claims.pipeline@example.test', true) RETURNING id",
+  );
+  const donorId = donor.rows[0].id;
+  const decl = await pool.query(
+    `INSERT INTO declarations
+       (donor_id, first_name, last_name, house_name_number, address, postcode, non_uk,
+        scope, wording_version, wording_snapshot, confirmed_taxpayer)
+     VALUES ($1, 'Ada', 'Claims', '12', 'Analytical Avenue, London', 'KA1 1AA', false,
+        'this_donation', 'hmrc-single-2024-01', 'I want to Gift Aid my donation ...', true)
+     RETURNING id`,
+    [donorId],
+  );
+  const donation = await pool.query(
+    `INSERT INTO donations (donor_id, declaration_id, mode, amount_pence, gift_aid, claim_status)
+     VALUES ($1, $2, 'once', 5000, true, 'eligible') RETURNING id`,
+    [donorId, decl.rows[0].id],
+  );
+  this.eligibleDonationId = donation.rows[0].id;
+});
+
+When("I create a claim batch as {string} with password {string}", async function (email, password) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/claim-batches`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: "{}",
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+  if (this.adminBody && this.adminBody.batchId != null) this.claimBatchId = this.adminBody.batchId;
+});
+
+Then("the created claim batch id is returned", function () {
+  assert.ok(Number.isInteger(this.claimBatchId), `expected a numeric batch id, got ${this.claimBatchId}`);
+});
+
+When(
+  "I add the eligible donation to the batch as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/claim-batches/${this.claimBatchId}/donations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ donationIds: [this.eligibleDonationId] }),
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When(
+  "I export the claim batch to CSV as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/claim-batches/${this.claimBatchId}/export`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminCsv = await res.text();
+  },
+);
+
+Then("the exported CSV has at least {int} data row", function (n) {
+  const lines = String(this.adminCsv || "").split("\r\n").filter(function (l) { return l.length > 0; });
+  // First line is the header; the rest are donation rows.
+  assert.ok(lines.length - 1 >= n, `expected >= ${n} data rows, got ${lines.length - 1} (csv: ${JSON.stringify(this.adminCsv)})`);
+});
+
 AfterAll(async function () {
   await pool.end();
 });

@@ -17,6 +17,7 @@ Before({ tags: "@portal" }, async function () {
   await pool.query(`DELETE FROM portal_access_tokens WHERE ${donorFilter}`);
   // declarations FK to donors is ON DELETE RESTRICT, so clear the donor's declarations first (TASK-103).
   await pool.query(`DELETE FROM declarations WHERE ${donorFilter}`);
+  await pool.query(`DELETE FROM donations WHERE ${donorFilter}`);
   await pool.query("DELETE FROM donors WHERE email LIKE '%portal.bdd@example.com'");
 });
 
@@ -116,6 +117,47 @@ Then("the portal response status should be {int}", function (code) {
 
 Then("the portal response field {string} should be {string}", function (field, value) {
   assert.equal(String(this.portalBody[field]), value);
+});
+
+// Seed a subscription donor: a donor row (no stored marketing email needed for the lookup) plus a
+// 'monthly' donation whose stripe_subscription_id equals the deterministic stub id for this email
+// (Task 2: email e -> "sub_stub_" + e), so the route's Stripe->donor mapping resolves offline.
+Given("a subscription donor {string} with email {string}", async function (name, email) {
+  const donor = await pool.query(
+    "INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', $1, $2, true) RETURNING id",
+    [name, email],
+  );
+  await pool.query(
+    `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status, stripe_subscription_id)
+     VALUES ($1, 'monthly', 1000, false, 'not_eligible', $2)`,
+    [donor.rows[0].id, `sub_stub_${email}`],
+  );
+});
+
+When("I POST a portal access request for {string}", async function (email) {
+  const res = await fetch(`${BASE_URL}/api/portal/request`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  this.portalStatus = res.status;
+  this.portalBody = await res.json().catch(() => ({}));
+});
+
+Then("a portal token exists for {string}", async function (email) {
+  const row = await pool.query(
+    `SELECT 1 FROM portal_access_tokens t JOIN donors d ON d.id = t.donor_id WHERE d.email = $1`,
+    [email],
+  );
+  assert.ok(row.rowCount > 0, "expected a portal token for the donor");
+});
+
+Then("no portal token exists for {string}", async function (email) {
+  const row = await pool.query(
+    `SELECT 1 FROM portal_access_tokens t JOIN donors d ON d.id = t.donor_id WHERE d.email = $1`,
+    [email],
+  );
+  assert.equal(row.rowCount, 0, "expected no portal token for an unknown email");
 });
 
 AfterAll(async function () {

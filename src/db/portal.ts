@@ -212,3 +212,23 @@ export async function updateDonorPortal(
     }),
   );
 }
+
+// Resolve a donor from Stripe subscription ids (REQ-061 · TASK-123). Given the subscription ids
+// Stripe returns for a requester's email, find the matching donation row and return its donor —
+// newest donation wins when several match. Returns null when no stored donation references any of
+// the ids (an unknown/one-off email), so the caller can respond generically without enumerating.
+export async function findDonorBySubscriptionIds(
+  subIds: string[],
+): Promise<{ donorId: number; fullName: string } | null> {
+  if (subIds.length === 0) return null;
+  const res = await pool.query<{ donor_id: number; full_name: string }>(
+    `SELECT d.donor_id, dn.full_name
+       FROM donations d JOIN donors dn ON dn.id = d.donor_id
+      WHERE d.stripe_subscription_id = ANY($1)
+      ORDER BY d.id DESC
+      LIMIT 1`,
+    [subIds],
+  );
+  const row = res.rows[0];
+  return row ? { donorId: row.donor_id, fullName: row.full_name } : null;
+}

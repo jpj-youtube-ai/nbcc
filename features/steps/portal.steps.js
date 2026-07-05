@@ -134,6 +134,20 @@ Given("a subscription donor {string} with email {string}", async function (name,
   );
 });
 
+// Seed a one-off donor: a donor row with a stored email and a one-off donation, NO subscription id
+// (REQ-061 revised — reached via the stored donors.email, not Stripe).
+Given("a one-off donor {string} with email {string}", async function (name, email) {
+  const donor = await pool.query(
+    "INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', $1, $2, false) RETURNING id",
+    [name, email],
+  );
+  await pool.query(
+    `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status)
+     VALUES ($1, 'once', 2500, false, 'not_eligible')`,
+    [donor.rows[0].id],
+  );
+});
+
 When("I POST a portal access request for {string}", async function (email) {
   const res = await fetch(`${BASE_URL}/api/portal/request`, {
     method: "POST",

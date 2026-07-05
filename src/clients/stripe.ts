@@ -49,13 +49,6 @@ function stubStripe(): Stripe {
         }),
       },
     },
-    customers: {
-      // Deterministic: any queried email maps to a single stub customer whose id encodes it,
-      // so findSubscriptionIdsByEmail is reproducible offline (BDD seeds against this rule).
-      list: async (params: Stripe.CustomerListParams) => ({
-        data: params.email ? [{ id: `cus_stub_${params.email}`, object: "customer", email: params.email }] : [],
-      }),
-    },
     // Subscription tier changes (REQ-055) exercised end to end without a Stripe
     // account. The retrieved sub carries a single item on an obviously-fake price
     // that never matches a real STRIPE_PRICE_*, so a plan change through the stub
@@ -84,18 +77,6 @@ function stubStripe(): Stripe {
         object: "subscription",
         status: "canceled",
         items: { data: [{ id: "si_preview", price: { id: "price_preview_current" } }] },
-      }),
-      // One active stub subscription per customer; its id echoes the customer's encoded email
-      // so the whole email -> subscription -> donor-row chain is deterministic offline.
-      list: async (params: Stripe.SubscriptionListParams) => ({
-        data: [
-          {
-            id: `sub_stub_${String(params.customer).replace(/^cus_stub_/, "")}`,
-            object: "subscription",
-            status: "active",
-            items: { data: [{ id: "si_preview", price: { id: "price_preview_current" } }] },
-          },
-        ],
       }),
     },
   } as unknown as Stripe;
@@ -166,18 +147,4 @@ export async function changeSubscriptionPlan(
 // subscription (status 'canceled').
 export async function cancelSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
   return stripe.subscriptions.cancel(subscriptionId);
-}
-
-// Find every Stripe subscription id for the customers registered under an email (REQ-061 · TASK-123).
-// The self-request route uses this to reach subscription donors by their Stripe customer email —
-// which Stripe always holds — even when we stored no marketing email for them (REQ-039). Offline the
-// stub above makes this deterministic; with a real key it lists customers then their subscriptions.
-export async function findSubscriptionIdsByEmail(email: string): Promise<string[]> {
-  const customers = await stripe.customers.list({ email, limit: 100 });
-  const ids: string[] = [];
-  for (const customer of customers.data) {
-    const subs = await stripe.subscriptions.list({ customer: customer.id, status: "all", limit: 100 });
-    for (const sub of subs.data) ids.push(sub.id);
-  }
-  return ids;
 }

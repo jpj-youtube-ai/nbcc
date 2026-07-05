@@ -7,9 +7,9 @@ import {
   getDonorPortalSnapshot,
   updateDonorPortal,
   issuePortalAccessToken,
-  findDonorBySubscriptionIds,
+  findNewestDonorByEmail,
 } from "../db/portal";
-import { cancelSubscription, findSubscriptionIdsByEmail } from "../clients/stripe";
+import { cancelSubscription } from "../clients/stripe";
 import { sendPortalMagicLink } from "../clients/email";
 import { createRateLimiter } from "../portal/request-limiter";
 import {
@@ -147,10 +147,10 @@ export async function postCancelGiftAid(req: Request, res: Response): Promise<Re
   }
 }
 
-// The self-serve portal access request (REQ-061 · TASK-123). A donor enters their email; we reach
-// subscription donors via their Stripe customer email (always held by Stripe) and email them a
-// one-time magic link. The response is ALWAYS the same generic 200 — match, no-match, or a failed
-// send — so the endpoint never reveals whether an email belongs to a supporter (no enumeration).
+// The self-serve portal access request (REQ-061 revised). A donor enters their email; we match ANY
+// donor — one-off included — by their stored donors.email and email them a one-time magic link. The
+// response is ALWAYS the same generic 200 — match, no-match, or a failed send — so the endpoint
+// never reveals whether an email belongs to a supporter (no enumeration).
 const requestBodySchema = z.object({ email: z.string().trim().email() });
 
 // Abuse control: cap requests per email and per client IP. In-memory + per-task (documented follow-up
@@ -175,8 +175,9 @@ export async function postRequestAccess(req: Request, res: Response): Promise<Re
   const ipOk = ipLimiter.allow(req.ip ?? "unknown", now);
   if (emailOk && ipOk) {
     try {
-      const subIds = await findSubscriptionIdsByEmail(email);
-      const donor = await findDonorBySubscriptionIds(subIds);
+      // REQ-061 revised: email is mandatory + always stored, so we match ANY donor (one-off
+      // included) by their stored email — no Stripe subscription lookup needed.
+      const donor = await findNewestDonorByEmail(email);
       if (donor) {
         const { token } = await issuePortalAccessToken(donor.donorId, { actor: "donor" });
         const link = portalMagicLink(config.PORTAL_BASE_URL, token);

@@ -1012,9 +1012,10 @@ revoke+audit decision lives in `src/declarations/cancellation.ts` (`buildDeclara
 DB-free, clock injected — like `buildDeclarationRevision`). Proven DB-free by
 `test/unit/gift-aid-cancel.test.ts` (mocked pool) and end to end by the `@db` `features/portal.feature`.
 
-- `POST /api/portal/request` `{ email }` — a subscription donor requests a one-time portal
-  magic link. The donor is matched via their **Stripe customer email** (so subscription donors
-  are reachable even without a stored marketing email) and, on a match, emailed a link
+- `POST /api/portal/request` `{ email }` — a donor requests a one-time portal magic link. The
+  donor is matched by their **stored `donors.email`** (`findNewestDonorByEmail`, case-insensitive,
+  newest row wins) — since email is now mandatory and always stored, this reaches ANY donor,
+  including one-off donors with no Stripe subscription — and, on a match, emailed a link
   (`issuePortalAccessToken` → `portalMagicLink` → `sendPortalMagicLink`). Always returns an
   identical generic `200` — no email enumeration. Rate-limited per email and per IP (in-memory,
   per-task; a distributed limiter is a follow-up).

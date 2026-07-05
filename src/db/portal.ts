@@ -213,22 +213,17 @@ export async function updateDonorPortal(
   );
 }
 
-// Resolve a donor from Stripe subscription ids (REQ-061 · TASK-123). Given the subscription ids
-// Stripe returns for a requester's email, find the matching donation row and return its donor —
-// newest donation wins when several match. Returns null when no stored donation references any of
-// the ids (an unknown/one-off email), so the caller can respond generically without enumerating.
-export async function findDonorBySubscriptionIds(
-  subIds: string[],
+// Resolve the newest donor row for a stored email (REQ-061 revised). With email now mandatory
+// and always stored, the self-request route reaches ANY donor — including one-off donors with no
+// Stripe subscription — by their stored donors.email. Case-insensitive; newest row wins (that is
+// the canonical row the token targets). Returns null when no donor has that email.
+export async function findNewestDonorByEmail(
+  email: string,
 ): Promise<{ donorId: number; fullName: string } | null> {
-  if (subIds.length === 0) return null;
-  const res = await pool.query<{ donor_id: number; full_name: string }>(
-    `SELECT d.donor_id, dn.full_name
-       FROM donations d JOIN donors dn ON dn.id = d.donor_id
-      WHERE d.stripe_subscription_id = ANY($1)
-      ORDER BY d.id DESC
-      LIMIT 1`,
-    [subIds],
+  const res = await pool.query<{ id: number; full_name: string }>(
+    `SELECT id, full_name FROM donors WHERE LOWER(email) = LOWER($1) ORDER BY id DESC LIMIT 1`,
+    [email],
   );
   const row = res.rows[0];
-  return row ? { donorId: row.donor_id, fullName: row.full_name } : null;
+  return row ? { donorId: row.id, fullName: row.full_name } : null;
 }

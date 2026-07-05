@@ -1156,8 +1156,9 @@ contact capture (`fullName`, `email`, `emailConsent`, `anonymous`, `ageConfirmed
 folded in by the give widget — into a Stripe Checkout session and returns its
 `{ url }` (which `startCheckout` redirects to). The body is validated zod-first
 (same style as `src/config/schema.ts`); impossible combinations are rejected with
-**400** (a monthly gift with no plan, a one-off with no amount, a bad mode/plan,
-a non-positive amount, an unknown `donorType`, a `company` payload that also
+**400** (a monthly gift with **neither a plan nor an amount** (REQ-041 — a monthly
+gift takes a preset tier *or* a custom amount), a one-off with no amount, a bad
+mode/plan, a non-positive amount, an unknown `donorType`, a `company` payload that also
 asserts `giftAid=true` — companies take the no-Gift-Aid path — or a **monthly** gift
 that does not confirm 18 or over (`ageConfirmed`, REQ-039)). All captured contact
 fields are stamped onto the session metadata for the webhook.
@@ -1177,8 +1178,12 @@ Aid declaration.
 A one-off is a `mode: payment` session with inline GBP
 `price_data` built from the amount in **pence** — attached to the
 `STRIPE_DONATION_PRODUCT` product when that optional id is set, otherwise an inline
-product is named — and a monthly is a `mode: subscription` session using the
-recurring `STRIPE_PRICE_*` id keyed by plan. `payment_method_types` is
+product is named — and a monthly is a `mode: subscription` session: a preset tier
+uses the recurring `STRIPE_PRICE_*` id keyed by plan, while a **custom monthly
+amount** (`plan: null`, `amount` in pence, REQ-041) builds an **inline recurring
+`price_data`** (`recurring.interval: 'month'`) rolled under `STRIPE_DONATION_PRODUCT`
+when set, else an inline product — so no per-amount Stripe Product is needed.
+`payment_method_types` is
 `['card', 'bacs_debit']` on **both** session shapes (Apple Pay / Google Pay ride on
 the card method; BACS Direct Debit is offered for our GBP-only UK donations, which
 satisfy Stripe's BACS currency/country requirement — REQ-029 · TASK-089).

@@ -134,6 +134,27 @@ describe("POST /api/checkout-session — monthly (REQ-029)", () => {
       expect(lastParams().line_items[0].price).toBe(price);
     }
   });
+
+  it("builds an inline monthly recurring price for a custom amount (no plan, REQ-041)", async () => {
+    const res = await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true });
+    expect(res.statusCode).toBe(200);
+    const p = lastParams();
+    expect(p.mode).toBe("subscription");
+    expect(p.line_items[0].price).toBeUndefined();
+    expect(p.line_items[0].price_data.currency).toBe("gbp");
+    expect(p.line_items[0].price_data.unit_amount).toBe(3000);
+    expect(p.line_items[0].price_data.recurring.interval).toBe("month");
+  });
+
+  it("rolls the custom monthly price under the donation product when set, else an inline product", async () => {
+    await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true });
+    expect(lastParams().line_items[0].price_data.product_data.name.length).toBeGreaterThan(0);
+    mockConfig.STRIPE_DONATION_PRODUCT = "prod_donation_123";
+    await run({ mode: "monthly", plan: null, amount: 3000, giftAid: false, ageConfirmed: true });
+    const p = lastParams();
+    expect(p.line_items[0].price_data.product).toBe("prod_donation_123");
+    expect(p.line_items[0].price_data.product_data).toBeUndefined();
+  });
 });
 
 describe("POST /api/checkout-session — payment methods (REQ-029 / TASK-089)", () => {
@@ -617,7 +638,7 @@ describe("POST /api/checkout-session — company details (REQ-038 / TASK-085)", 
 
 describe("POST /api/checkout-session — invalid bodies return 400", () => {
   it.each([
-    ["monthly without a plan", { mode: "monthly", plan: null, amount: 1000, giftAid: false }],
+    ["monthly with neither a plan nor an amount", { mode: "monthly", plan: null, amount: null, giftAid: false, ageConfirmed: true }],
     ["monthly not confirming 18 or over", { mode: "monthly", plan: "gold", amount: 5000, giftAid: false }],
     ["once without an amount", { mode: "once", plan: null, amount: null, giftAid: false }],
     ["an unknown mode", { mode: "annual", plan: null, amount: 1000, giftAid: false }],

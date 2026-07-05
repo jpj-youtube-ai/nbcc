@@ -65,9 +65,9 @@ describe("donation-confirmation email trigger (TASK-070)", () => {
     );
   });
 
-  it("sends NOTHING when email_consent is false (even though an email is present)", async () => {
+  it("sends the confirmation when an email is present even if consent is false (transactional thank-you)", async () => {
     await trigger({ email: "ada@example.com", emailConsent: "false" });
-    expect(sendDonationConfirmation).not.toHaveBeenCalled();
+    expect(sendDonationConfirmation).toHaveBeenCalledTimes(1);
   });
 
   it("sends NOTHING when no email was captured", async () => {
@@ -83,10 +83,17 @@ describe("donation-confirmation email trigger (TASK-070)", () => {
 });
 
 describe("confirmationEmailFromCheckoutSession — pure event→payload mapping", () => {
-  it("returns null when consent was withheld (platform sends nothing)", () => {
+  it("returns the payload even when consent was withheld (transactional thank-you, REQ-039 revised)", () => {
     expect(
       confirmationEmailFromCheckoutSession(session({ email: "ada@example.com", emailConsent: "false" })),
-    ).toBeNull();
+    ).toEqual({
+      email: "ada@example.com",
+      fullName: "Ada Lovelace",
+      amountPence: 5000,
+      currency: "GBP",
+      giftAid: false,
+      mode: "once",
+    });
   });
 
   it("returns the payload for a consenting donor", () => {
@@ -102,9 +109,10 @@ describe("confirmationEmailFromCheckoutSession — pure event→payload mapping"
     });
   });
 
-  it("returns null for a company donation (untouched — it uses the corporation-tax receipt path)", () => {
-    // A company's contact email is not marketing consent (emailConsent stays false), so no
-    // confirmation email is produced — the Corporation Tax receipt is its email (TASK-088).
+  it("also sends a transactional thank-you for a company donation now the consent gate is gone (REQ-039 revised)", () => {
+    // A company's contact email is an operational billing contact, not marketing consent
+    // (emailConsent stays false); since the send is no longer consent-gated, the same
+    // transactional thank-you goes out here too, alongside the Corporation Tax receipt (TASK-088).
     expect(
       confirmationEmailFromCheckoutSession(
         session({
@@ -117,7 +125,14 @@ describe("confirmationEmailFromCheckoutSession — pure event→payload mapping"
           companyConsiderationGiven: "false",
         }),
       ),
-    ).toBeNull();
+    ).toEqual({
+      email: "finance@acme.test",
+      fullName: "Ada Lovelace",
+      amountPence: 5000,
+      currency: "GBP",
+      giftAid: false,
+      mode: "once",
+    });
   });
 });
 

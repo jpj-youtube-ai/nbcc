@@ -106,3 +106,16 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     And an open claim batch
     When I export the claim batch as "viewer.admin.bdd@example.com" with password "view-pw-123"
     Then the admin response status should be 403
+
+  @claims-pipeline
+  Scenario: an Editor claims eligible donations end to end and exports a non-empty CSV
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And an eligible Gift-Aided donation
+    When I create a claim batch as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 201
+    And the created claim batch id is returned
+    When I add the eligible donation to the batch as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    When I export the claim batch to CSV as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the exported CSV has at least 1 data row

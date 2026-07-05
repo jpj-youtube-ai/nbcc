@@ -35,21 +35,30 @@ async function postWebhook(payload, signature) {
 // Fresh start for the tagged scenarios: remove any test donations/donors from a
 // previous run so the "exactly 1" counts are deterministic.
 Before({ tags: "@stripe-webhook" }, async function () {
-  // Also match by subscription id: the monthly parent donation has a NULL payment
-  // intent, so it must be cleared via its subscription id before the donor delete.
+  // Capture the donor ids from THIS feature's donations FIRST, then delete by id. Many webhook
+  // scenarios create a donor with NO email (no marketing consent — e.g. "Grace Prorate", "Ada BACS",
+  // the anonymous walk-in), so an email-only delete can never reach them and they pile up across
+  // local runs. Match donations by payment-intent OR subscription id (the monthly parent donation
+  // has a NULL payment intent).
+  const { rows } = await pool.query(
+    "SELECT DISTINCT donor_id FROM donations WHERE stripe_payment_intent_id LIKE 'pi_bdd_%' OR stripe_subscription_id LIKE 'sub_bdd_%'",
+  );
+  const donorIds = rows.map((r) => r.donor_id).filter((id) => id != null);
   await pool.query(
     "DELETE FROM donations WHERE stripe_payment_intent_id LIKE 'pi_bdd_%' OR stripe_subscription_id LIKE 'sub_bdd_%'",
   );
-  // Declarations reference donors (RESTRICT), and donations reference declarations
-  // (RESTRICT) — so clear the bdd donors' declarations after their donations, before
-  // the donor delete.
+  // Declarations reference donors (RESTRICT) and donations reference declarations (RESTRICT), so
+  // clear these donors' declarations after their donations, before the donor delete.
+  if (donorIds.length) {
+    await pool.query("DELETE FROM declarations WHERE donor_id = ANY($1)", [donorIds]);
+    await pool.query("DELETE FROM donors WHERE id = ANY($1)", [donorIds]);
+  }
+  // Belt-and-braces: any bdd donor reached by email (some scenarios do set one) that had no
+  // donation this run, plus any now-childless walk-in donor.
   await pool.query(
     "DELETE FROM declarations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%bdd@example.com')",
   );
   await pool.query("DELETE FROM donors WHERE email LIKE '%bdd@example.com'");
-  // Card-present (in-person) donations book an anonymous walk-in donor with NO email
-  // (REQ-054), so the email-based delete above can't reach them. Clear any now-childless
-  // walk-in donors (their pi_bdd_% donation was just deleted) so counts stay deterministic.
   await pool.query(
     "DELETE FROM donors WHERE full_name = 'In-person donor' AND id NOT IN (SELECT donor_id FROM donations WHERE donor_id IS NOT NULL)",
   );

@@ -230,6 +230,11 @@ h2.h-lg{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
 .card-lg{border-radius:var(--radius-lg)}
 
+/* thank-you "what happens next" card: inner padding so content is not flush to the edges */
+.thankyou-next{padding:clamp(24px,4vw,40px)}
+.thankyou-next h2{margin-top:0}
+.thankyou-next .thankyou-actions{margin-top:clamp(20px,3vw,28px)}
+
 /* trust pillars (the four booklet cards) */
 .pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
 .pillar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);padding:32px 26px;text-align:center;box-shadow:var(--shadow-sm)}

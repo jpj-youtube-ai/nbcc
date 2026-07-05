@@ -53,6 +53,11 @@ Before({ tags: "@stripe-webhook" }, async function () {
   await pool.query(
     "DELETE FROM donors WHERE full_name = 'In-person donor' AND id NOT IN (SELECT donor_id FROM donations WHERE donor_id IS NOT NULL)",
   );
+  // Clear the idempotency ledger for this feature's events. Scenarios that reuse a FIXED event id
+  // (e.g. evt_bdd_cp_1) would otherwise be treated as duplicates on a re-run and no-op, so the
+  // donation is never (re)created and the counts fail. CI runs on a fresh DB; this keeps local
+  // re-runs deterministic too.
+  await pool.query("DELETE FROM stripe_webhook_events WHERE id LIKE 'evt_bdd_%'");
 });
 
 AfterAll(async function () {

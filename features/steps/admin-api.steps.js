@@ -1,4 +1,4 @@
-const { Given, When, Then, Before, AfterAll } = require("@cucumber/cucumber");
+const { Given, When, Then, Before, After, AfterAll } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
 const { randomBytes, scryptSync } = require("node:crypto");
@@ -28,6 +28,17 @@ async function login(email, password) {
 Before({ tags: "@admin" }, async function () {
   await pool.query("DELETE FROM users WHERE email LIKE '%admin.bdd@example.com'");
   await pool.query("DELETE FROM donors WHERE email LIKE '%admin.bdd@example.com'");
+});
+
+// Remove the claim batch a scenario created (the "an open claim batch" Given and the create-batch
+// step both stamp this.claimBatchId). Without this, every run left a stray batch behind — empty
+// ones piled up on the admin Claims screen. Delete the batch's donations first (a claims-pipeline
+// scenario assigns a seeded eligible gift to it) so the FK from donations → claim_batches is clear.
+// this.claimBatchId is only ever a batch the test just created, never real/seed data.
+After({ tags: "@admin" }, async function () {
+  if (this.claimBatchId == null) return;
+  await pool.query("DELETE FROM donations WHERE claim_batch_id = $1", [this.claimBatchId]);
+  await pool.query("DELETE FROM claim_batches WHERE id = $1", [this.claimBatchId]);
 });
 
 Given("a donor {string} with email {string}", async function (fullName, email) {

@@ -50,6 +50,8 @@ Before({ tags: "@donation-journey" }, async function () {
     await pool.query("DELETE FROM declarations WHERE donor_id = ANY($1)", [donorIds]);
     await pool.query("DELETE FROM donors WHERE id = ANY($1)", [donorIds]);
   }
+  // Clear this feature's events from the idempotency ledger so it does not accumulate across runs.
+  await pool.query("DELETE FROM stripe_webhook_events WHERE id LIKE 'evt_journey_%'");
 });
 
 AfterAll(async function () {

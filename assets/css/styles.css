@@ -452,8 +452,6 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-box{position:relative;margin-top:14px}
 .give-ribbon{position:absolute;top:0;left:50%;transform:translate(-50%,-44%);z-index:3;pointer-events:none;filter:drop-shadow(0 5px 9px color-mix(in srgb,var(--maroon) 20%,transparent))}
 .give-ribbon svg{display:block}
-/* faint vertical ribbon down the card centre (behind the bow), like wrapping */
-.give-ribbon-band{position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:34px;z-index:2;pointer-events:none;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--crimson) 11%,transparent) 22%,color-mix(in srgb,var(--crimson) 11%,transparent) 78%,transparent);box-shadow:inset 1px 0 0 color-mix(in srgb,var(--maroon) 10%,transparent),inset -1px 0 0 color-mix(in srgb,var(--maroon) 10%,transparent)}
 .give-card .give-inner{display:grid;grid-template-columns:1.4fr .6fr}
 @media(max-width:980px){.give-card .give-inner{grid-template-columns:1fr}}
 .give-card .give-main{padding:clamp(24px,4vw,42px)}

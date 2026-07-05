@@ -9,6 +9,9 @@ import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
   const app = express();
+  // Behind the ALB, trust the proxy so req.ip / rate-limiting see the real client IP
+  // (taken from X-Forwarded-For) rather than the load balancer's address.
+  app.set("trust proxy", true);
   // The Stripe webhook (REQ-036) needs the RAW body for signature verification, so
   // it is mounted BEFORE express.json — its route applies express.raw itself; all
   // other routes still get parsed JSON below.

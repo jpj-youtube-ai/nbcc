@@ -937,6 +937,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
+| `POST /api/portal/request` | **implemented** | REQ-061 (donor self-request portal magic link) |
 | `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login) |
 | `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read) |
 | `PATCH /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor update) |
@@ -1001,6 +1002,13 @@ revoked it → **409** (the `FOR UPDATE` re-check throws `DeclarationCancellatio
 revoke+audit decision lives in `src/declarations/cancellation.ts` (`buildDeclarationCancellation`,
 DB-free, clock injected — like `buildDeclarationRevision`). Proven DB-free by
 `test/unit/gift-aid-cancel.test.ts` (mocked pool) and end to end by the `@db` `features/portal.feature`.
+
+- `POST /api/portal/request` `{ email }` — a subscription donor requests a one-time portal
+  magic link. The donor is matched via their **Stripe customer email** (so subscription donors
+  are reachable even without a stored marketing email) and, on a match, emailed a link
+  (`issuePortalAccessToken` → `portalMagicLink` → `sendPortalMagicLink`). Always returns an
+  identical generic `200` — no email enumeration. Rate-limited per email and per IP (in-memory,
+  per-task; a distributed limiter is a follow-up).
 
 **`POST /api/admin/login` (REQ-062 · TASK-105).** The role-based admin login. The `users` table
 (TASK-056) already carries the `role` enum (`viewer`/`editor`/`admin`, NOT NULL default `viewer`); an

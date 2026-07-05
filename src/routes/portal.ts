@@ -1,12 +1,17 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { PortalTokenError } from "../portal/tokens";
+import { config } from "../config";
+import { PortalTokenError, portalMagicLink } from "../portal/tokens";
 import {
   authenticatePortalToken,
   getDonorPortalSnapshot,
   updateDonorPortal,
+  issuePortalAccessToken,
+  findDonorBySubscriptionIds,
 } from "../db/portal";
-import { cancelSubscription } from "../clients/stripe";
+import { cancelSubscription, findSubscriptionIdsByEmail } from "../clients/stripe";
+import { sendPortalMagicLink } from "../clients/email";
+import { createRateLimiter } from "../portal/request-limiter";
 import {
   cancelDeclaration,
   findActiveDeclarationIdForDonor,
@@ -142,7 +147,52 @@ export async function postCancelGiftAid(req: Request, res: Response): Promise<Re
   }
 }
 
+// The self-serve portal access request (REQ-061 · TASK-123). A donor enters their email; we reach
+// subscription donors via their Stripe customer email (always held by Stripe) and email them a
+// one-time magic link. The response is ALWAYS the same generic 200 — match, no-match, or a failed
+// send — so the endpoint never reveals whether an email belongs to a supporter (no enumeration).
+const requestBodySchema = z.object({ email: z.string().trim().email() });
+
+// Abuse control: cap requests per email and per client IP. In-memory + per-task (documented follow-up
+// for a distributed limiter). Module-scoped so the window persists across requests.
+const emailLimiter = createRateLimiter({ max: 3, windowMs: 15 * 60 * 1000 });
+const ipLimiter = createRateLimiter({ max: 20, windowMs: 15 * 60 * 1000 });
+
+const GENERIC_REQUEST_MESSAGE = "If that email matches a supporter, we've sent a portal link.";
+
+export async function postRequestAccess(req: Request, res: Response): Promise<Response | void> {
+  const parsed = requestBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "A valid email is required" });
+  }
+  const email = parsed.data.email;
+  const now = Date.now();
+
+  // Over-limit is treated exactly like any other outcome: the generic 200, no work done.
+  // Evaluate BOTH limiters unconditionally first so an email-limited request still
+  // consumes its IP-window slot (short-circuiting would let it skip the IP check).
+  const emailOk = emailLimiter.allow(email, now);
+  const ipOk = ipLimiter.allow(req.ip ?? "unknown", now);
+  if (emailOk && ipOk) {
+    try {
+      const subIds = await findSubscriptionIdsByEmail(email);
+      const donor = await findDonorBySubscriptionIds(subIds);
+      if (donor) {
+        const { token } = await issuePortalAccessToken(donor.donorId, { actor: "donor" });
+        const link = portalMagicLink(config.PORTAL_BASE_URL, token);
+        // Best-effort, mirroring the other sends: a provider failure is logged, never surfaced.
+        await sendPortalMagicLink({ email, fullName: donor.fullName, link });
+      }
+    } catch (err) {
+      console.error("portal access request failed:", err instanceof Error ? err.message : err);
+    }
+  }
+
+  return res.status(200).json({ message: GENERIC_REQUEST_MESSAGE });
+}
+
 portalRouter.get("/api/portal/:token", getPortal);
 portalRouter.patch("/api/portal/:token", patchPortal);
 portalRouter.post("/api/portal/:token/subscription/cancel", postCancelSubscription);
 portalRouter.post("/api/portal/:token/gift-aid/cancel", postCancelGiftAid);
+portalRouter.post("/api/portal/request", postRequestAccess);

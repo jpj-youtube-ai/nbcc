@@ -34,3 +34,20 @@ Feature: Self-serve donor portal (REQ-061)
 
     When I POST to cancel the donor's Gift Aid
     Then the portal response status should be 404
+
+  Scenario: a subscription donor self-requests a portal link
+    Given a subscription donor "Deb Portal" with email "deb.selfreq.portal.bdd@example.com"
+    When I POST a portal access request for "deb.selfreq.portal.bdd@example.com"
+    Then the portal response status should be 200
+    And the portal response field "message" should be "If that email matches a supporter, we've sent a portal link."
+    And a portal token exists for "deb.selfreq.portal.bdd@example.com"
+
+  Scenario: an unknown email gets the same generic response and no link
+    When I POST a portal access request for "nobody.selfreq.portal.bdd@example.com"
+    Then the portal response status should be 200
+    And the portal response field "message" should be "If that email matches a supporter, we've sent a portal link."
+    And no portal token exists for "nobody.selfreq.portal.bdd@example.com"
+
+  Scenario: a malformed email is rejected
+    When I POST a portal access request for "not-an-email"
+    Then the portal response status should be 400

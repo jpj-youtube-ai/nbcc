@@ -75,10 +75,15 @@ describe("give monthly tiers (REQ-022)", () => {
     }
   });
 
-  it("offers an other-monthly-amount line linking to the giving mailbox", () => {
-    const link = monthly?.querySelector('a[href^="mailto:giving@nightbeforechristmas.co.uk"]');
-    expect(link).not.toBeNull();
-    expect(norm(link?.textContent).length).toBeGreaterThan(0);
+  it("offers a choose-your-own monthly amount control (REQ-022/REQ-041)", () => {
+    const custom = monthly?.querySelector(".give-tier-custom");
+    expect(custom).not.toBeNull();
+    expect(norm(custom?.querySelector(".give-custom-label")?.textContent)).toContain("Choose your own amount");
+    expect(custom?.querySelector("input#customAmountMonthly")).not.toBeNull();
+    const go = custom?.querySelector(".give-custom-go");
+    expect(go?.getAttribute("data-mode")).toBe("monthly");
+    expect(go?.getAttribute("data-plan")).toBe("");
+    expect(go?.getAttribute("data-amount")).toBe("");
   });
 
   it("wires the checkout contract: data-mode=monthly, data-plan and data-amount in pence (REQ-028)", () => {

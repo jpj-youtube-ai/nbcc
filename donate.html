@@ -76,7 +76,7 @@
 <section class="page-sections" data-region="sections">
 <div class="section flush-top"><div class="wrap"><section aria-labelledby="give-widget-heading" class="give-widget">
 <h2 id="give-widget-heading">Make your gift</h2>
-<div class="give-box"><div aria-hidden="true" class="give-ribbon"><svg fill="none" height="84" viewbox="0 0 100 56" width="150"><path d="M50 28 L40 54 L50 47 L60 54 Z" fill="var(--maroon)"></path><path d="M50 28 C 32 6, 6 12, 14 27 C 19 36, 40 36, 50 28 Z" fill="var(--crimson)"></path><path d="M50 28 C 68 6, 94 12, 86 27 C 81 36, 60 36, 50 28 Z" fill="var(--crimson)"></path><path d="M50 28 C 42 21, 27 23, 19 27" opacity=".26" stroke="var(--maroon)" stroke-linecap="round" stroke-width="1.4"></path><path d="M50 28 C 58 21, 73 23, 81 27" opacity=".26" stroke="var(--maroon)" stroke-linecap="round" stroke-width="1.4"></path><rect fill="var(--maroon)" height="16" rx="5" width="14" x="43" y="21"></rect></svg></div><div aria-hidden="true" class="give-ribbon-band"></div><div class="card card-lg give-card"><div class="give-inner">
+<div class="give-box"><div aria-hidden="true" class="give-ribbon"><svg fill="none" height="84" viewbox="0 0 100 56" width="150"><path d="M50 28 L40 54 L50 47 L60 54 Z" fill="var(--maroon)"></path><path d="M50 28 C 32 6, 6 12, 14 27 C 19 36, 40 36, 50 28 Z" fill="var(--crimson)"></path><path d="M50 28 C 68 6, 94 12, 86 27 C 81 36, 60 36, 50 28 Z" fill="var(--crimson)"></path><path d="M50 28 C 42 21, 27 23, 19 27" opacity=".26" stroke="var(--maroon)" stroke-linecap="round" stroke-width="1.4"></path><path d="M50 28 C 58 21, 73 23, 81 27" opacity=".26" stroke="var(--maroon)" stroke-linecap="round" stroke-width="1.4"></path><rect fill="var(--maroon)" height="16" rx="5" width="14" x="43" y="21"></rect></svg></div><div class="card card-lg give-card"><div class="give-inner">
 <div class="give-main" data-give-steps="">
 <ol aria-hidden="true" class="give-progress">
 <li class="is-active" data-pstep="1"><span class="p-n">Step 1</span> Your gift</li>
@@ -154,10 +154,16 @@
 <span class="give-tier-head">More joy, every month</span>
 <span class="give-tier-desc">Each month gives support around the value of two Red Bags Full of Joy, helping NBCC reach more people across South West Scotland.</span>
 </button>
-<p class="give-other">
-                  Want a different monthly amount?
-                  <a href="mailto:giving@nightbeforechristmas.co.uk?subject=Monthly%20giving%20enquiry">Email us about monthly giving</a>
-</p>
+<div class="card give-tier-custom">
+<label class="give-custom-label" for="customAmountMonthly">Choose your own amount</label>
+<div class="give-custom-field">
+<span aria-hidden="true" class="give-custom-currency">£</span>
+<input class="give-custom-input" id="customAmountMonthly" inputmode="numeric" min="1" name="customAmountMonthly" placeholder="Other amount" step="1" type="number"/>
+<span class="give-cadence">per month</span>
+</div>
+<!-- Empty data-amount: startCheckout builds the pence from the custom input (REQ-028). -->
+<button class="btn btn-primary give-custom-go" data-amount="" data-mode="monthly" data-plan="" type="button">Give monthly</button>
+</div>
 </div>
 <p class="give-step-err" data-err="1">Please choose an amount to continue.</p>
 </section>

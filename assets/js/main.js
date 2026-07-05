@@ -899,7 +899,9 @@
     var choosers = Array.prototype.slice.call(root.querySelectorAll(".give-tier, .give-custom-go"));
     function clearSelection() { choosers.forEach(function (b) { b.classList.remove("is-selected"); }); }
     function customPence() {
-      var el = doc.getElementById("customAmount");
+      // Read the custom-amount input in the currently visible tier set (once XOR monthly),
+      // falling back to the once input by id for older markup.
+      var el = root.querySelector(".give-tiers:not([hidden]) .give-custom-input") || doc.getElementById("customAmount");
       var v = el ? parseFloat(el.value) : NaN;
       return isFinite(v) && v > 0 ? Math.round(v * 100) : 0;
     }
@@ -908,7 +910,13 @@
     choosers.forEach(function (btn) {
       btn.addEventListener("click", function () {
         if (btn.classList.contains("give-custom-go")) {
-          if (!customPence()) { showErr(1); var ci = doc.getElementById("customAmount"); if (ci) ci.focus(); return; }
+          if (!customPence()) {
+            showErr(1);
+            var cb = btn.closest ? btn.closest(".give-tier-custom") : null;
+            var ci = cb ? cb.querySelector(".give-custom-input") : null;
+            if (ci && ci.focus) ci.focus();
+            return;
+          }
         }
         select(btn);
         go(2, 1); // one tap picks the amount and moves on

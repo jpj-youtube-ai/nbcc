@@ -77,6 +77,13 @@ describe("listClaimableDonationsForExport (REQ-052)", () => {
     expect(lastParams()).toEqual([7]);
   });
 
+  it("does NOT constrain claim_status='eligible' for a batch export (the empty-CSV regression)", async () => {
+    // A donation in a batch is 'batched' (then 'claimed'), never 'eligible', so an
+    // AND claim_status='eligible' predicate made every batch export return zero rows.
+    await listClaimableDonationsForExport(7);
+    expect(lastSql()).not.toMatch(/claim_status\s*=\s*'eligible'/i);
+  });
+
   it("maps each DB row into the { donation, declaration } shape the CSV builder consumes", async () => {
     const rows = await listClaimableDonationsForExport();
     expect(rows).toHaveLength(2);

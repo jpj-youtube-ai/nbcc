@@ -93,6 +93,15 @@ const donorRow = {
   subscription_plan: "gold",
   subscription_id: "sub_123",
   gift_aid: true,
+  // Address fields read by getDonorAddress (getAdminDonor merges them into the response). An
+  // individual's postal address lives on their latest non-revoked declaration; a company's on the
+  // donor's billing_* columns. Present here so the shared `from donors` mock feeds both queries.
+  donor_type: "individual",
+  house_name_number: "12",
+  address: "Analytical Avenue, London",
+  postcode: "KA1 1AA",
+  billing_address: null,
+  billing_postcode: null,
 };
 
 beforeEach(() => {
@@ -466,5 +475,34 @@ describe("POST /api/admin/claim-batches/:id/donations (assign)", () => {
     const res = await runAssign({ id: "9", role: "editor", body: { donationIds: [1, 2] } });
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ assigned: [1], failed: [{ id: 2, reason: "already_batched" }] });
+  });
+});
+
+// --- donor detail now includes the postal address (declaration for individuals, billing for companies) ---
+describe("GET /api/admin/donors/:id — postal address", () => {
+  it("returns the individual's declaration address + postcode merged onto the snapshot", async () => {
+    const res = await runGet({ role: "viewer" });
+    expect(res.statusCode).toBe(200);
+    const b = res.body as { postcode?: string; address?: string; houseNameNumber?: string };
+    expect(b.postcode).toBe("KA1 1AA");
+    expect(b.address).toBe("Analytical Avenue, London");
+    expect(b.houseNameNumber).toBe("12");
+  });
+
+  it("returns the company's billing address + postcode for a company donor", async () => {
+    queryMock.mockImplementation(async (sql: string) => {
+      if (/from donors/i.test(sql)) {
+        return {
+          rows: [{ ...donorRow, donor_type: "company", house_name_number: null, address: null, postcode: null, billing_address: "1 Office Park, London", billing_postcode: "SW1A 1AA" }],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    const res = await runGet({ role: "viewer" });
+    expect(res.statusCode).toBe(200);
+    const b = res.body as { postcode?: string; address?: string };
+    expect(b.postcode).toBe("SW1A 1AA");
+    expect(b.address).toBe("1 Office Park, London");
   });
 });

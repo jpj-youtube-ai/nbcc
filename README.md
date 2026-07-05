@@ -938,7 +938,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
 | `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login) |
-| `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read) |
+| `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read; incl. postal address — declaration for an individual, billing for a company) |
 | `PATCH /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor update) |
 | `POST /api/admin/donors/:id/subscription/cancel` | **implemented** | REQ-062 (admin cancel subscription) |
 | `POST /api/admin/donors/:id/gift-aid/cancel` | **implemented** | REQ-062 (admin cancel Gift Aid) |

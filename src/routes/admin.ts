@@ -10,6 +10,7 @@ import {
   submitClaimBatch,
   createClaimBatch,
   listEligibleForClaim,
+  getDonorAddress,
   listAdjustmentDueDonations,
   ClaimBatchSubmitError,
   listRetentionExpiryDeclarations,
@@ -145,7 +146,10 @@ export async function getAdminDonor(req: Request, res: Response): Promise<Respon
   try {
     const snapshot = await getDonorPortalSnapshot(id);
     if (!snapshot) return res.status(404).json({ error: "Donor not found" });
-    return res.status(200).json(snapshot);
+    // Enrich the admin view with the donor's postal address (declaration for an individual, billing
+    // for a company) — kept off the donor-facing portal snapshot, so it is merged in here.
+    const address = await getDonorAddress(id);
+    return res.status(200).json({ ...snapshot, ...address });
   } catch (err) {
     console.error("admin donor read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

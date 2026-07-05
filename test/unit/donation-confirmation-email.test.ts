@@ -65,9 +65,9 @@ describe("donation-confirmation email trigger (TASK-070)", () => {
     );
   });
 
-  it("sends NOTHING when email_consent is false (even though an email is present)", async () => {
+  it("sends the confirmation when an email is present even if consent is false (transactional thank-you)", async () => {
     await trigger({ email: "ada@example.com", emailConsent: "false" });
-    expect(sendDonationConfirmation).not.toHaveBeenCalled();
+    expect(sendDonationConfirmation).toHaveBeenCalledTimes(1);
   });
 
   it("sends NOTHING when no email was captured", async () => {
@@ -83,10 +83,17 @@ describe("donation-confirmation email trigger (TASK-070)", () => {
 });
 
 describe("confirmationEmailFromCheckoutSession — pure event→payload mapping", () => {
-  it("returns null when consent was withheld (platform sends nothing)", () => {
+  it("returns the payload even when consent was withheld (transactional thank-you, REQ-039 revised)", () => {
     expect(
       confirmationEmailFromCheckoutSession(session({ email: "ada@example.com", emailConsent: "false" })),
-    ).toBeNull();
+    ).toEqual({
+      email: "ada@example.com",
+      fullName: "Ada Lovelace",
+      amountPence: 5000,
+      currency: "GBP",
+      giftAid: false,
+      mode: "once",
+    });
   });
 
   it("returns the payload for a consenting donor", () => {
@@ -102,9 +109,12 @@ describe("confirmationEmailFromCheckoutSession — pure event→payload mapping"
     });
   });
 
-  it("returns null for a company donation (untouched — it uses the corporation-tax receipt path)", () => {
-    // A company's contact email is not marketing consent (emailConsent stays false), so no
-    // confirmation email is produced — the Corporation Tax receipt is its email (TASK-088).
+  it("still maps a payload for a company session (this pure mapper is consent-independent, not company-aware)", () => {
+    // confirmationEmailFor/confirmationEmailFromCheckoutSession stay consent-independent and
+    // company-agnostic — they return a payload whenever an email is present. The actual
+    // suppression for a COMPANY donation (no donor thank-you alongside its Corporation Tax
+    // receipt, TASK-088/REQ-053) is applied at the stripe-webhook.ts call site, which nulls the
+    // email when a companyRow is present — see company-receipt-webhook.test.ts for that assertion.
     expect(
       confirmationEmailFromCheckoutSession(
         session({
@@ -117,7 +127,14 @@ describe("confirmationEmailFromCheckoutSession — pure event→payload mapping"
           companyConsiderationGiven: "false",
         }),
       ),
-    ).toBeNull();
+    ).toEqual({
+      email: "finance@acme.test",
+      fullName: "Ada Lovelace",
+      amountPence: 5000,
+      currency: "GBP",
+      giftAid: false,
+      mode: "once",
+    });
   });
 });
 

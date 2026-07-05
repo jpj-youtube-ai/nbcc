@@ -113,7 +113,7 @@ describe("donationFromCheckoutSession — contact capture (REQ-039)", () => {
     expect(donor.fullName).toBe("Stripe Name");
   });
 
-  it("stores the email and marks consent ONLY when the donor opted in", () => {
+  it("stores the email and marks consent when the donor opted in", () => {
     const { donor } = donationFromCheckoutSession(
       session({
         metadata: {
@@ -131,7 +131,7 @@ describe("donationFromCheckoutSession — contact capture (REQ-039)", () => {
     expect(donor.emailConsent).toBe(true);
   });
 
-  it("suppresses the email and consent when consent was NOT given (platform sends nothing)", () => {
+  it("stores the donor email even when marketing consent was not given (REQ-039 revised)", () => {
     const { donor } = donationFromCheckoutSession(
       session({
         metadata: {
@@ -144,7 +144,9 @@ describe("donationFromCheckoutSession — contact capture (REQ-039)", () => {
         customer_details: { name: "Ada", email: "stripe@example.com" },
       }),
     );
-    expect(donor.email).toBeNull();
+    // Email is mandatory + always stored so every donor gets a thank-you and can reach
+    // the portal; emailConsent stays a separate marketing-consent flag.
+    expect(donor.email).toBe("captured@example.com");
     expect(donor.emailConsent).toBe(false);
   });
 

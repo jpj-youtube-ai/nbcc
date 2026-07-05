@@ -54,7 +54,13 @@ Before({ tags: "@stripe-webhook" }, async function () {
     await pool.query("DELETE FROM donors WHERE id = ANY($1)", [donorIds]);
   }
   // Belt-and-braces: any bdd donor reached by email (some scenarios do set one) that had no
-  // donation this run, plus any now-childless walk-in donor.
+  // donation this run, plus any now-childless walk-in donor. Clear their donations FIRST — other
+  // features (e.g. @portal) seed bdd-email donors with donations that carry NO pi_bdd_/sub_bdd_
+  // marker, so the marker-based delete above misses them and the donor delete would hit the
+  // donations FK. Donations reference declarations (RESTRICT), so donations go before declarations.
+  await pool.query(
+    "DELETE FROM donations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%bdd@example.com')",
+  );
   await pool.query(
     "DELETE FROM declarations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%bdd@example.com')",
   );

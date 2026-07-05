@@ -220,8 +220,8 @@
 <input aria-required="true" autocomplete="name" class="give-field-input" id="donorName" name="fullName" placeholder="Your full name" required="" type="text"/>
 </div>
 <div class="give-field">
-<label for="donorEmail">Email <span class="give-optional">(optional)</span></label>
-<input autocomplete="email" class="give-field-input" id="donorEmail" name="email" placeholder="you@example.com" type="email"/>
+<label for="donorEmail">Email <span aria-hidden="true" class="give-req">*</span></label>
+<input aria-required="true" autocomplete="email" class="give-field-input" id="donorEmail" name="email" placeholder="you@example.com" required="" type="email"/>
 <p class="give-field-help">We only use this to send your receipt and a thank you. We never share it.</p>
 </div>
 <label class="give-check" for="emailConsent">

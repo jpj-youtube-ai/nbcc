@@ -211,6 +211,19 @@
           el.disabled = !isCompany;
         });
       }
+      // REQ-039: the individual email is required on the individual/partnership paths, but a
+      // company donates via its own contact email — un-require the individual field there so a
+      // hidden/irrelevant required input never blocks submission (mirrors the company inputs above).
+      var donorEmail = doc.getElementById("donorEmail");
+      if (donorEmail) {
+        if (path === "company") {
+          donorEmail.removeAttribute("required");
+          donorEmail.removeAttribute("aria-required");
+        } else {
+          donorEmail.setAttribute("required", "");
+          donorEmail.setAttribute("aria-required", "true");
+        }
+      }
     }
 
     radios.forEach(function (btn) {
@@ -847,6 +860,38 @@
       var giftAidEl = doc.getElementById("portalGiftAid");
       if (giftAidEl) giftAidEl.textContent = data.giftAid ? "Active" : "Not active";
       if (cancelGiftAid) cancelGiftAid.hidden = !data.giftAid;
+
+      // Donation history (REQ-061 revised): total, count, and a row per donation.
+      var history = data.history || { totalPence: 0, count: 0, donations: [] };
+      var totalEl = doc.getElementById("portalTotal");
+      if (totalEl) totalEl.textContent = "£" + (history.totalPence / 100).toFixed(2);
+      var countEl = doc.getElementById("portalCount");
+      if (countEl) countEl.textContent = String(history.count);
+      var noHistory = doc.getElementById("portalNoHistory");
+      var historyTable = doc.getElementById("portalHistoryTable");
+      var body = doc.getElementById("portalHistoryBody");
+      if (body) {
+        body.textContent = "";
+        (history.donations || []).forEach(function (d) {
+          var tr = doc.createElement("tr");
+          var cells = [
+            new Date(d.date).toLocaleDateString(),
+            "£" + (d.amountPence / 100).toFixed(2),
+            d.mode === "monthly" ? "Monthly" : "One-off",
+            d.giftAid ? "Yes" : "No",
+            d.status,
+          ];
+          cells.forEach(function (text) {
+            var td = doc.createElement("td");
+            td.textContent = text;
+            tr.appendChild(td);
+          });
+          body.appendChild(tr);
+        });
+      }
+      var hasHistory = (history.count || 0) > 0;
+      if (noHistory) noHistory.hidden = hasHistory;
+      if (historyTable) historyTable.hidden = !hasHistory;
 
       if (statusEl) statusEl.hidden = true;
       if (errorEl) errorEl.hidden = true;

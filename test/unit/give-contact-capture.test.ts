@@ -60,12 +60,13 @@ describe("contact capture markup (REQ-039)", () => {
     expect(norm(label?.textContent).length).toBeGreaterThan(0);
   });
 
-  it("has an OPTIONAL email input with a real <label for>, not required", () => {
+  it("has a REQUIRED email input with a real <label for> and aria-required (REQ-039)", () => {
     const input = contact?.querySelector("#donorEmail") as HTMLInputElement | null;
     expect(input).not.toBeNull();
     expect(input?.getAttribute("type")).toBe("email");
     expect(input?.getAttribute("name")).toBe("email");
-    expect(input?.hasAttribute("required")).toBe(false);
+    expect(input?.hasAttribute("required")).toBe(true);
+    expect(input?.getAttribute("aria-required")).toBe("true");
     expect(contact?.querySelector('label[for="donorEmail"]')).not.toBeNull();
   });
 

@@ -6,7 +6,7 @@ Feature: Checkout session endpoint (REQ-029)
   Scenario: a valid one-off donation returns a Stripe checkout URL
     When I POST "/api/checkout-session" with JSON:
       """
-      { "mode": "once", "plan": null, "amount": 5000, "giftAid": false }
+      { "mode": "once", "plan": null, "amount": 5000, "giftAid": false, "email": "donor@example.com" }
       """
     Then the response status should be 200
     And the response field "url" should start with "https://"
@@ -18,7 +18,7 @@ Feature: Checkout session endpoint (REQ-029)
     # (ageConfirmed, REQ-039/TASK-059).
     When I POST "/api/checkout-session" with JSON:
       """
-      { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true, "ageConfirmed": true }
+      { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true, "ageConfirmed": true, "email": "donor@example.com" }
       """
     Then the response status should be 200
     And the response field "url" should start with "https://"
@@ -27,14 +27,21 @@ Feature: Checkout session endpoint (REQ-029)
   Scenario: a monthly donation that does not confirm 18 or over is rejected (REQ-039)
     When I POST "/api/checkout-session" with JSON:
       """
-      { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true }
+      { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true, "email": "donor@example.com" }
+      """
+    Then the response status should be 400
+
+  Scenario: an individual donation without an email is rejected (REQ-039: email mandatory)
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "once", "amount": 2500, "giftAid": false, "donorType": "individual" }
       """
     Then the response status should be 400
 
   Scenario: a valid monthly custom amount (no preset plan) returns a subscription URL (REQ-041)
     When I POST "/api/checkout-session" with JSON:
       """
-      { "mode": "monthly", "plan": null, "amount": 3000, "giftAid": false, "ageConfirmed": true }
+      { "mode": "monthly", "plan": null, "amount": 3000, "giftAid": false, "ageConfirmed": true, "email": "donor@example.com" }
       """
     Then the response status should be 200
     And the response field "url" should start with "https://"

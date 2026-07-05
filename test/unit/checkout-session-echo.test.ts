@@ -57,7 +57,7 @@ beforeEach(() => {
 
 describe("POST /api/checkout-session — stub-mode session echo (TASK-116)", () => {
   it("echoes the built session id + metadata + mode on the 200 body when stubbed and not in production", async () => {
-    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: true });
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: true, email: "donor@example.com" });
     expect(res.statusCode).toBe(200);
     const body = res.body as { url: string; session?: { id: string; mode: string; metadata: Record<string, string> } };
     expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_1");
@@ -70,7 +70,7 @@ describe("POST /api/checkout-session — stub-mode session echo (TASK-116)", () 
   });
 
   it("echoes mode='subscription' for a monthly gift", async () => {
-    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true });
+    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     const body = res.body as { session?: { mode: string } };
     expect(body.session!.mode).toBe("subscription");
   });

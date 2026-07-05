@@ -213,22 +213,58 @@ export async function updateDonorPortal(
   );
 }
 
-// Resolve a donor from Stripe subscription ids (REQ-061 · TASK-123). Given the subscription ids
-// Stripe returns for a requester's email, find the matching donation row and return its donor —
-// newest donation wins when several match. Returns null when no stored donation references any of
-// the ids (an unknown/one-off email), so the caller can respond generically without enumerating.
-export async function findDonorBySubscriptionIds(
-  subIds: string[],
+// Resolve the newest donor row for a stored email (REQ-061 revised). With email now mandatory
+// and always stored, the self-request route reaches ANY donor — including one-off donors with no
+// Stripe subscription — by their stored donors.email. Case-insensitive; newest row wins (that is
+// the canonical row the token targets). Returns null when no donor has that email.
+export async function findNewestDonorByEmail(
+  email: string,
 ): Promise<{ donorId: number; fullName: string } | null> {
-  if (subIds.length === 0) return null;
-  const res = await pool.query<{ donor_id: number; full_name: string }>(
-    `SELECT d.donor_id, dn.full_name
-       FROM donations d JOIN donors dn ON dn.id = d.donor_id
-      WHERE d.stripe_subscription_id = ANY($1)
-      ORDER BY d.id DESC
-      LIMIT 1`,
-    [subIds],
+  const res = await pool.query<{ id: number; full_name: string }>(
+    `SELECT id, full_name FROM donors WHERE LOWER(email) = LOWER($1) ORDER BY id DESC LIMIT 1`,
+    [email],
   );
   const row = res.rows[0];
-  return row ? { donorId: row.donor_id, fullName: row.full_name } : null;
+  return row ? { donorId: row.id, fullName: row.full_name } : null;
+}
+
+// A donor's giving history for the portal dashboard (REQ-061 revised). Identity = email: a donor
+// who gave N times is N donor rows sharing an email, so this aggregates every donation joined to a
+// donor row with that email (case-insensitive), newest first, plus the count and gross total. Pure
+// read (pool.query). An email with no donations yields an empty history (count 0, total 0).
+export interface DonorDonationHistory {
+  totalPence: number;
+  count: number;
+  donations: Array<{
+    date: string;
+    amountPence: number;
+    mode: "once" | "monthly";
+    giftAid: boolean;
+    status: string;
+  }>;
+}
+
+export async function getDonorDonationHistory(email: string): Promise<DonorDonationHistory> {
+  const res = await pool.query<{
+    created_at: Date;
+    amount_pence: number;
+    mode: string;
+    gift_aid: boolean;
+    payment_status: string;
+  }>(
+    `SELECT d.created_at, d.amount_pence, d.mode, d.gift_aid, d.payment_status
+       FROM donations d JOIN donors dn ON dn.id = d.donor_id
+      WHERE LOWER(dn.email) = LOWER($1)
+      ORDER BY d.created_at DESC, d.id DESC`,
+    [email],
+  );
+  const donations = res.rows.map((r) => ({
+    date: r.created_at.toISOString(),
+    amountPence: r.amount_pence,
+    mode: r.mode === "monthly" ? ("monthly" as const) : ("once" as const),
+    giftAid: r.gift_aid,
+    status: r.payment_status,
+  }));
+  const totalPence = donations.reduce((sum, d) => sum + d.amountPence, 0);
+  return { totalPence, count: donations.length, donations };
 }

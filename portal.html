@@ -171,6 +171,24 @@
             </div>
           </div>
 
+          <!-- Your donation history (REQ-061 revised): aggregated by email. -->
+          <div class="portal-card card reveal" aria-labelledby="portal-history-heading">
+            <h2 id="portal-history-heading">Your giving</h2>
+            <p class="portal-plan">
+              Total given: <strong id="portalTotal">£0.00</strong>
+              (<span id="portalCount">0</span> donations)
+            </p>
+            <p class="portal-note" id="portalNoHistory" hidden>
+              We have no recorded donations for your email yet.
+            </p>
+            <table class="portal-history" id="portalHistoryTable">
+              <thead>
+                <tr><th scope="col">Date</th><th scope="col">Amount</th><th scope="col">Type</th><th scope="col">Gift Aid</th><th scope="col">Status</th></tr>
+              </thead>
+              <tbody id="portalHistoryBody"></tbody>
+            </table>
+          </div>
+
           <!-- Action outcome region: initPortal writes the result of a cancel here. -->
           <p class="portal-status" id="portalActionStatus" role="status" aria-live="polite"></p>
         </div>

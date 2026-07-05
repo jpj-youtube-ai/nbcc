@@ -95,6 +95,8 @@ beforeEach(() => {
   connect.mockClear();
   sendCompanyReceipt.mockReset();
   sendCompanyReceipt.mockResolvedValue(undefined);
+  sendDonationConfirmation.mockReset();
+  sendDonationConfirmation.mockResolvedValue(undefined);
   installQuery();
 });
 
@@ -121,6 +123,11 @@ describe("company webhook — no consideration given → Corporation Tax receipt
     // No trustee flag for a clean gift.
     const audits = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0])));
     expect(audits.some((c) => c[1][1] === "donation.flagged_for_trustees")).toBe(false);
+
+    // A company gets ONLY the Corporation Tax receipt — no individual donor thank-you
+    // (REQ-039 revised did not remove this suppression; it moved from confirmationEmailFor
+    // to the stripe-webhook.ts call site, gated on companyRow).
+    expect(sendDonationConfirmation).not.toHaveBeenCalled();
   });
 });
 
@@ -152,5 +159,8 @@ describe("company webhook — consideration given → flagged for trustees, no r
     expect(donationCall?.[1][9]).toBe("not_eligible"); // claim_status
     expect(seq.some((s) => /insert into declarations/i.test(s))).toBe(false);
     expect(seq[seq.length - 1]).toMatch(/^commit/i);
+
+    // Flagged-for-trustees or not, a company never gets the individual donor thank-you.
+    expect(sendDonationConfirmation).not.toHaveBeenCalled();
   });
 });

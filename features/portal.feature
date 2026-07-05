@@ -51,3 +51,18 @@ Feature: Self-serve donor portal (REQ-061)
   Scenario: a malformed email is rejected
     When I POST a portal access request for "not-an-email"
     Then the portal response status should be 400
+
+  Scenario: a one-off donor (no subscription) self-requests a portal link
+    Given a one-off donor "Fay Portal" with email "fay.oneoff.portal.bdd@example.com"
+    When I POST a portal access request for "fay.oneoff.portal.bdd@example.com"
+    Then the portal response status should be 200
+    And the portal response field "message" should be "If that email matches a supporter, we've sent a portal link."
+    And a portal token exists for "fay.oneoff.portal.bdd@example.com"
+
+  Scenario: the portal shows a donor's donation history and total
+    Given a donor "Gil Portal" with email "gil.portal.bdd@example.com" and a valid portal token
+    And the donor has 3 recorded donations totalling 6000 pence
+    When I GET the donor portal
+    Then the portal response status should be 200
+    And the portal history count should be 3
+    And the portal history total pence should be 6000

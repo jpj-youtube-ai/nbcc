@@ -623,6 +623,15 @@ Token-only colours (slate body, maroon legend, crimson accents; the `brand-colou
 guard forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-contact-capture.test.ts`.
 
+**Server-side (REQ-039, revised):** `POST /api/checkout-session` now requires a
+valid `email` for the individual/partnership donor paths — a missing or
+malformed email is rejected with 400. A company donation is exempt, since it
+already carries its own required `company.contactEmail`. Email is always
+stored (not gated on `emailConsent`, which now governs marketing consent only)
+so every donor can be sent a thank-you and a donor-portal link; see
+`test/unit/checkout-session.test.ts` and the `features/checkout.feature`
+"without an email is rejected" scenario.
+
 ### Gift Aid declaration capture (REQ-043)
 
 Below the Gift Aid callout, a `.give-declaration` `<fieldset>` (`GIFT AID DECLARATION`
@@ -876,7 +885,12 @@ first; confirming posts to **`POST /api/portal/:token/subscription/cancel`** wit
 posts to **`POST /api/portal/:token/gift-aid/cancel`** (TASK-103). To drive the
 cancel flow, `getDonorPortalSnapshot` (`src/db/portal.ts`) now also returns
 `subscriptionId` (the most-recent monthly-gift donation's Stripe subscription id, or
-null). Being a private landing page, no nav link is marked active. Dash-free copy,
+null). A **donation-history dashboard** (REQ-061 revised, TASK-122) renders the
+snapshot's `history` field (`{ totalPence, count, donations[] }`, aggregated by the
+donor's email): a "Your giving" card shows the running total and donation count, and
+a per-donation table (date, amount, type, Gift Aid, status), with an empty-state note
+when the donor has no recorded donations. Being a private landing page, no nav link is
+marked active. Dash-free copy,
 "NBCC" in full (REQ-031); skip-link + landmarks (REQ-032). Proven by
 `test/unit/donor-portal.test.ts` (static markup + jsdom against the real `initPortal`)
 and the `@db`-free `features/site.feature` clean-URL rows; `seo-metadata` /
@@ -1003,9 +1017,10 @@ revoke+audit decision lives in `src/declarations/cancellation.ts` (`buildDeclara
 DB-free, clock injected — like `buildDeclarationRevision`). Proven DB-free by
 `test/unit/gift-aid-cancel.test.ts` (mocked pool) and end to end by the `@db` `features/portal.feature`.
 
-- `POST /api/portal/request` `{ email }` — a subscription donor requests a one-time portal
-  magic link. The donor is matched via their **Stripe customer email** (so subscription donors
-  are reachable even without a stored marketing email) and, on a match, emailed a link
+- `POST /api/portal/request` `{ email }` — a donor requests a one-time portal magic link. The
+  donor is matched by their **stored `donors.email`** (`findNewestDonorByEmail`, case-insensitive,
+  newest row wins) — since email is now mandatory and always stored, this reaches ANY donor,
+  including one-off donors with no Stripe subscription — and, on a match, emailed a link
   (`issuePortalAccessToken` → `portalMagicLink` → `sendPortalMagicLink`). Always returns an
   identical generic `200` — no email enumeration. Rate-limited per email and per IP (in-memory,
   per-task; a distributed limiter is a follow-up).

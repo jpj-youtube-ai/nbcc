@@ -103,6 +103,7 @@ describe("GET /api/portal/:token (REQ-061)", () => {
       subscriptionPlan: "gold",
       subscriptionId: "sub_123",
       giftAid: true,
+      history: { totalPence: 0, count: 0, donations: [] },
     });
   });
 

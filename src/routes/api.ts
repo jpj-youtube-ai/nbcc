@@ -48,9 +48,11 @@ const checkoutBodySchema = z
     donorType: z.enum(DONOR_TYPES).default("individual"),
     businessName: z.string().optional(),
     // REQ-039: consent-based contact capture folded in by the give widget (TASK-058).
-    // All optional so the no-JS base contract ({ mode, plan, amount, giftAid }) is
-    // unchanged. email is optional and its persistence is gated on emailConsent by the
-    // webhook; ageConfirmed is the 18+ attestation required for monthly giving below.
+    // These fields are optional at the type level (the no-JS base contract is still
+    // { mode, plan, amount, giftAid }), but email is REQUIRED for the individual/partnership
+    // paths by the superRefine below and is ALWAYS stored by the webhook (REQ-039 revised);
+    // emailConsent now governs MARKETING only, not storage. ageConfirmed is the 18+
+    // attestation required for monthly giving below.
     fullName: z.string().optional(),
     email: z.string().optional(),
     emailConsent: z.boolean().optional(),
@@ -124,6 +126,20 @@ const checkoutBodySchema = z
         message: "a company donation requires company details",
         path: ["company"],
       });
+    }
+    // REQ-039 (revised): email is mandatory and always stored, so we can send every
+    // donor a thank-you and a portal link. Required for the individual/partnership paths;
+    // a company carries its own required company.contactEmail instead, so it is exempt here.
+    if (b.donorType !== "company") {
+      const email = (b.email ?? "").trim();
+      const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+      if (!ok) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "a valid email is required",
+          path: ["email"],
+        });
+      }
     }
   });
 

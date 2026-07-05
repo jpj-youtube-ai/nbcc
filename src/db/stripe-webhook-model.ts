@@ -65,11 +65,11 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
     stripeSubscriptionId: asString(session.subscription),
     stripeChargeId: null,
   });
-  // REQ-039: the donor's contact details come from OUR consent-based capture, stamped
-  // on metadata by the checkout endpoint. Full name falls back to the Stripe cardholder
-  // name (then a placeholder) when the capture form was bypassed. Email is consent-based:
-  // store the captured email + mark consent ONLY when the donor opted in, otherwise
-  // persist no email so the platform sends nothing (Stripe's receipt email is separate).
+  // REQ-039 (revised): the donor's contact details come from OUR capture, stamped on
+  // metadata by the checkout endpoint. Full name falls back to the Stripe cardholder
+  // name (then a placeholder) when the capture form was bypassed. Email is now mandatory
+  // and always stored (so every donor gets a thank-you + can reach the portal);
+  // emailConsent is a separate marketing-consent flag, no longer gating storage.
   const cardholderName = session.customer_details?.name ?? null;
   const consented = md.emailConsent === "true";
 
@@ -99,7 +99,9 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
     donor: {
       fullName: md.fullName ? md.fullName : (cardholderName ?? "Anonymous donor"),
       businessName,
-      email: consented && md.email ? md.email : null,
+      // REQ-039 (revised): email is mandatory + always stored so every donor gets a
+      // thank-you and can reach the portal. Marketing consent (emailConsent) is separate.
+      email: md.email ? md.email : null,
       emailConsent: consented,
       anonymous: md.anonymous === "true",
     },
@@ -245,15 +247,15 @@ export interface DonationConfirmationEmail {
 }
 
 // Decide whether — and with what payload — to send a donation-confirmation email.
-// Returns null (send nothing) unless the donor gave us an email AND opted into
-// contact (email_consent). This is the consent gate: donationFromCheckoutSession
-// already suppresses the email when consent was withheld, and this predicate is the
-// belt-and-braces the send path checks. Pure: no pool/config/network/clock.
+// Returns null (send nothing) only when the donor has no email on file. A donation
+// confirmation/thank-you is transactional, so it sends whenever we have an email — no
+// marketing-consent gate (REQ-039 revised). Marketing sends stay gated elsewhere.
+// Pure: no pool/config/network/clock.
 export function confirmationEmailFor(
   donor: { email?: string | null; emailConsent?: boolean; fullName: string },
   gift: { amountPence: number; currency: string; giftAid: boolean; mode: "once" | "monthly" },
 ): DonationConfirmationEmail | null {
-  if (!donor.email || donor.emailConsent !== true) return null;
+  if (!donor.email) return null;
   return {
     email: donor.email,
     fullName: donor.fullName,
@@ -265,9 +267,9 @@ export function confirmationEmailFor(
 }
 
 // checkout.session.completed → the confirmation-email payload, or null when the
-// donor withheld their email / did not consent. The event→payload mapping the
-// webhook processor triggers a send from, kept pure so the trigger is unit-tested
-// DB-free (the send itself is a mocked client).
+// donor gave no email. The event→payload mapping the webhook processor triggers a
+// send from, kept pure so the trigger is unit-tested DB-free (the send itself is a
+// mocked client).
 export function confirmationEmailFromCheckoutSession(
   session: Stripe.Checkout.Session,
 ): DonationConfirmationEmail | null {

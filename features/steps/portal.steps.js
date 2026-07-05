@@ -134,6 +134,20 @@ Given("a subscription donor {string} with email {string}", async function (name,
   );
 });
 
+// Seed a one-off donor: a donor row with a stored email and a one-off donation, NO subscription id
+// (REQ-061 revised — reached via the stored donors.email, not Stripe).
+Given("a one-off donor {string} with email {string}", async function (name, email) {
+  const donor = await pool.query(
+    "INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', $1, $2, false) RETURNING id",
+    [name, email],
+  );
+  await pool.query(
+    `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status)
+     VALUES ($1, 'once', 2500, false, 'not_eligible')`,
+    [donor.rows[0].id],
+  );
+});
+
 When("I POST a portal access request for {string}", async function (email) {
   const res = await fetch(`${BASE_URL}/api/portal/request`, {
     method: "POST",
@@ -158,6 +172,30 @@ Then("no portal token exists for {string}", async function (email) {
     [email],
   );
   assert.equal(row.rowCount, 0, "expected no portal token for an unknown email");
+});
+
+Given("the donor has {int} recorded donations totalling {int} pence", async function (count, totalPence) {
+  const donor = await pool.query("SELECT donor_id FROM portal_access_tokens WHERE token = $1", [this.portalToken]);
+  const donorId = donor.rows[0].donor_id;
+  const each = Math.floor(totalPence / count);
+  let remaining = totalPence;
+  for (let i = 0; i < count; i++) {
+    const amount = i === count - 1 ? remaining : each;
+    remaining -= amount;
+    await pool.query(
+      `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status)
+       VALUES ($1, 'once', $2, false, 'not_eligible')`,
+      [donorId, amount],
+    );
+  }
+});
+
+Then("the portal history count should be {int}", function (n) {
+  assert.equal(this.portalBody.history && this.portalBody.history.count, n);
+});
+
+Then("the portal history total pence should be {int}", function (n) {
+  assert.equal(this.portalBody.history && this.portalBody.history.totalPence, n);
 });
 
 AfterAll(async function () {

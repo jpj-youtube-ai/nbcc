@@ -1027,6 +1027,22 @@ revoke+audit decision lives in `src/declarations/cancellation.ts` (`buildDeclara
 DB-free, clock injected — like `buildDeclarationRevision`). Proven DB-free by
 `test/unit/gift-aid-cancel.test.ts` (mocked pool) and end to end by the `@db` `features/portal.feature`.
 
+**`PATCH /api/portal/:token/declaration` (REQ-059 · TASK-129).** Edit the **identity / address** on the
+donor's active Gift Aid declaration — the donor-facing surface for TASK-128's **amend** path. The body
+is validated by `declarationFieldsSchema` (`title?`, first/last name, house name/number, address,
+`postcode?`, `nonUk`); the route holds `scope` + `confirmed_taxpayer` at the active declaration's
+**current** values (read via `getActiveDeclarationForDonor`), so `reviseDeclaration` always **amends in
+place** (a `declaration.amended` audit note, no new row) rather than revoking-and-superseding — a
+scope/consent change is deliberately out of scope here. It also syncs `donors.full_name` to
+`"First Last"` so the account name and the declaration name **cannot diverge** (`updateDonorPortal`);
+the two writes are separate audited transactions (declaration first — a name-sync failure leaves the
+declaration correct and only the display name stale, a documented single-transaction follow-up). No
+active declaration → **404**; invalid body → **400**; invalid token → **401**. The portal page shows a
+prefilled **"Your Gift Aid declaration details"** form (`#portalDeclaration`, shown only when a
+declaration is present; `GET /api/portal/:token` now carries `declaration`). Proven by
+`test/unit/portal-declaration-edit.test.ts` + `test/unit/portal-active-declaration.test.ts` and end to
+end by the `@db` `features/portal.feature`.
+
 - `POST /api/portal/request` `{ email }` — a donor requests a one-time portal magic link. The
   donor is matched by their **stored `donors.email`** (`findNewestDonorByEmail`, case-insensitive,
   newest row wins) — since email is now mandatory and always stored, this reaches ANY donor,
@@ -1498,6 +1514,8 @@ pool/config and no ambient clock — the timestamp is injected) builds the candi
 `declaration.created` audit row — any throw rolls back **all** of it, returning
 `{ outcome: "unchanged" | "amended" | "revised", … }`. It **never** touches `donations` (an existing
 `donation.declaration_id` is left as is). Proven DB-free (`test/unit/declaration-revision.test.ts`).
+The **amend** path is donor-reachable via `PATCH /api/portal/:token/declaration` (TASK-129) — see the
+portal API above.
 
 **Declaration confirmation lifecycle (REQ-057 · TASK-074).** A Gift Aid declaration
 captured without a wet/online signature (in-person, telephone) must be confirmed by the

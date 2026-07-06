@@ -35,6 +35,17 @@ Feature: Self-serve donor portal (REQ-061)
     When I POST to cancel the donor's Gift Aid
     Then the portal response status should be 404
 
+  Scenario: a donor edits the address on their active declaration (amend, not revise)
+    Given a donor "Gus Portal" with email "gus.portal.bdd@example.com" and a valid portal token
+    And the donor has an active Gift Aid declaration
+    When I PATCH the donor's Gift Aid declaration:
+      """
+      { "firstName": "Gus", "lastName": "Portal", "houseNameNumber": "9", "address": "New Road, Ayr", "postcode": "KA7 1AA", "nonUk": false }
+      """
+    Then the portal response status should be 200
+    And the donor's active declaration address should be "New Road, Ayr"
+    And the donor's declaration is not revoked
+
   Scenario: a subscription donor self-requests a portal link
     Given a subscription donor "Deb Portal" with email "deb.selfreq.portal.bdd@example.com"
     When I POST a portal access request for "deb.selfreq.portal.bdd@example.com"

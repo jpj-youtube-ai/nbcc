@@ -104,6 +104,7 @@ describe("GET /api/portal/:token (REQ-061)", () => {
       subscriptionId: "sub_123",
       giftAid: true,
       history: { totalPence: 0, count: 0, donations: [] },
+      declaration: null, // TASK-129: GET now carries the active declaration (none in this fixture)
     });
   });
 

@@ -36,6 +36,12 @@ const PAGES = [
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];
 const FULL_PHRASE = "children, young people and vulnerable adults";
 
+// Hyphenated PROPER NAMES are legitimate and exempt from the no-hyphen house
+// style (the rule targets phrases like "one-off" / "volunteer-run", not names).
+// Stripped from the copy before the hyphen scan so the guard still catches the
+// style violations it is meant to.
+const ALLOWED_HYPHENATED = ["Lisa-Marie"];
+
 // The rendered, human-visible copy of a page: <body> text (with script / style /
 // svg stripped, so code and path data never count) plus the four human-facing
 // attributes. URLs, mailto:/tel: hrefs and data-* attributes are excluded by
@@ -67,7 +73,10 @@ describe.each(PAGES)("copy rules (REQ-031): %s", (page) => {
   });
 
   it("has no hyphen between word characters (e.g. one-off, year-round, volunteer-run)", () => {
-    const matches = copy.match(/\w-\w/g) ?? [];
+    // Allow hyphenated proper names (e.g. "Lisa-Marie") but keep guarding phrases.
+    let scan = copy;
+    for (const name of ALLOWED_HYPHENATED) scan = scan.split(name).join(" ");
+    const matches = scan.match(/\w-\w/g) ?? [];
     expect(matches, `hyphenated word(s) in visible copy: ${[...new Set(matches)].join(", ")}`).toEqual(
       [],
     );

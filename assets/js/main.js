@@ -743,6 +743,50 @@
   // to cancel, so reducing is always offered first. Cancelling Gift Aid posts to
   // /api/portal/:token/gift-aid/cancel (TASK-103). Best-effort, mirroring initContactForm /
   // startCheckout: it only runs where fetch exists, and no-ops on any page without #portalContent.
+  // Self-serve magic-link request (REQ-061): the portal error card carries a small form
+  // (#portalRequestForm) where a donor whose link is missing or expired enters their email to
+  // get a fresh one. Wired independently of initPortal because it must work on the no-token /
+  // failed-load path, where initPortal early-returns. Posts { email } to /api/portal/request,
+  // which always returns the same generic 200 (no enumeration); we surface that reply verbatim
+  // and never claim success or failure of the match. Best-effort, mirroring initContactForm.
+  function initPortalRequest(doc, win) {
+    var form = doc.getElementById("portalRequestForm");
+    if (!form) return; // not the portal page
+    win = win || (doc && doc.defaultView) || window;
+
+    var input = doc.getElementById("portalRequestEmail");
+    var statusEl = doc.getElementById("portalRequestStatus");
+    var GENERIC = "If that email matches a supporter, we've sent a portal link.";
+
+    form.addEventListener("submit", function (ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      var email = input && input.value ? input.value.trim() : "";
+      // Let the native required/type=email validation surface an empty/invalid address rather
+      // than posting it; the endpoint would 400 anyway.
+      if (form.checkValidity && !form.checkValidity()) {
+        if (form.reportValidity) form.reportValidity();
+        return;
+      }
+      if (typeof win.fetch !== "function") return;
+      return win
+        .fetch("/api/portal/request", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email }),
+        })
+        .then(function () {
+          // The endpoint returns the same generic reply for match / no-match / send failure, so
+          // we always show the same reassuring line. A network error falls through to the catch.
+          if (statusEl) statusEl.textContent = GENERIC;
+        })
+        .catch(function () {
+          if (statusEl)
+            statusEl.textContent =
+              "We could not send a link just now. Please try again later, or get in touch.";
+        });
+    });
+  }
+
   function initPortal(doc, win) {
     var content = doc.getElementById("portalContent");
     if (!content) return; // not the portal page
@@ -1174,6 +1218,7 @@
       initCheckout,
       initGiveSteps,
       initPortal,
+      initPortalRequest,
     };
   } else {
     initNav(document, window);
@@ -1187,6 +1232,7 @@
     initCheckout(document, window);
     initGiveSteps(document, window);
     initPortal(document, window);
+    initPortalRequest(document, window);
     // Also expose the checkout payload/redirect builder on window so any inline
     // handler (or the donate wizard) can trigger it with the selected tier.
     window.startCheckout = function (btn) {

@@ -96,9 +96,22 @@
             This link is missing or is no longer valid. Please use the most recent link
             from your NBCC email, or ask us to send you a new one.
           </p>
-          <div class="portal-actions">
-            <a class="btn btn-primary" href="/contact">Get in touch</a>
-          </div>
+          <!-- Self-serve magic-link request (REQ-061): a donor whose link is missing or
+               expired enters their email and we send a fresh one. Posts to
+               /api/portal/request, which always returns the same generic reply (no
+               enumeration), so the status line below never reveals whether the email
+               matched a supporter. Works without JS falling through to "Get in touch". -->
+          <form class="portal-request" id="portalRequestForm" novalidate>
+            <div class="give-field">
+              <label for="portalRequestEmail">Your email <span class="give-req" aria-hidden="true">*</span></label>
+              <input type="email" id="portalRequestEmail" name="email" class="give-field-input" autocomplete="email" required aria-required="true" placeholder="you@example.com" />
+            </div>
+            <div class="portal-actions">
+              <button class="btn btn-primary" type="submit">Email me a new link</button>
+              <a class="btn btn-ghost" href="/contact">Get in touch</a>
+            </div>
+            <p class="portal-status" id="portalRequestStatus" role="status" aria-live="polite"></p>
+          </form>
         </div>
 
         <!-- The portal proper. Shipped hidden and revealed by initPortal once the GET

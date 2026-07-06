@@ -892,8 +892,14 @@ reduce-instead choice** (REQ-055): the cancel action lives inside `#reduceChoice
 which stays hidden until the donor asks to cancel, so reducing is always offered
 first; confirming posts to **`POST /api/portal/:token/subscription/cancel`** with
 `accepted: 'cancel'` and the snapshot's `subscriptionId`. A Gift Aid cancel control
-posts to **`POST /api/portal/:token/gift-aid/cancel`** (TASK-103). To drive the
-cancel flow, `getDonorPortalSnapshot` (`src/db/portal.ts`) now also returns
+posts to **`POST /api/portal/:token/gift-aid/cancel`** (TASK-103). When the link is
+**missing or expired**, `initPortal` reveals the `#portalError` card, which now carries
+a **self-serve magic-link request form** (`#portalRequestForm`): the donor enters their
+email and `initPortalRequest` (exported + unit-tested alongside `initPortal`, wired
+independently so it runs on the no-token path) posts `{ email }` to **`POST
+/api/portal/request`**. That endpoint always returns the same generic reply (no
+enumeration), so the status line never reveals whether the email matched a supporter. To
+drive the cancel flow, `getDonorPortalSnapshot` (`src/db/portal.ts`) now also returns
 `subscriptionId` (the most-recent monthly-gift donation's Stripe subscription id, or
 null). A **donation-history dashboard** (REQ-061 revised, TASK-122) renders the
 snapshot's `history` field (`{ totalPence, count, donations[] }`, aggregated by the

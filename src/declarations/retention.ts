@@ -38,7 +38,9 @@ export interface RetentionInput {
 }
 
 // The 5 April (UTC) that ends the UK tax year containing `at` — the accounting-period-end proxy.
-function endOfUkTaxYear(at: Date): Date {
+// Exported so other tax-year-anchored deadlines (e.g. the GASDS 2-year claim cliff) reuse one
+// definition of the UK tax-year boundary.
+export function endOfUkTaxYear(at: Date): Date {
   const y = at.getUTCFullYear();
   const m = at.getUTCMonth();
   const d = at.getUTCDate();

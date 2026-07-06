@@ -3,6 +3,7 @@ import { writeWithAudit } from "./donations";
 import { findActiveDeclarationIdForDonor, DeclarationCancellationError } from "./declarations";
 import { buildDeclarationCancellation } from "../declarations/cancellation";
 import { computeRetentionExpiry } from "../declarations/retention";
+import { gasdsClaimDeadline } from "../gasds/deadline";
 import type { Scope } from "../declarations/wording";
 
 // Read access to admin/staff `users` (TASK-105/REQ-062). Read-only (pool.query, no transaction —
@@ -331,6 +332,63 @@ export async function listRetentionExpiryDeclarations(
       last_name: r.last_name,
       scope: r.scope,
       retentionExpiry: expiry.toISOString(),
+      flag,
+    });
+  }
+  return rows;
+}
+
+// How far ahead of `now` a GASDS gift counts as "expiring" (versus already "expired"). A six-month
+// horizon gives staff notice before the GASDS 2-year claim cliff closes.
+const GASDS_DEADLINE_WINDOW_MS = 180 * 24 * 60 * 60 * 1000;
+
+export interface GasdsDeadlineRow {
+  id: number; // donation id
+  donor_id: number;
+  full_name: string;
+  amountPence: number;
+  collectedAt: string; // ISO date the small donation was collected
+  gasdsDeadline: string; // ISO date the GASDS 2-year claim window closes
+  flag: "expired" | "expiring";
+}
+
+// List GASDS-eligible small donations whose 2-year claim window has closed ("expired") or closes
+// within the horizon ("expiring"), per the pure gasdsClaimDeadline calculator (TASK-135 — two years
+// after the tax-year-end of collection). Read-only (pool.query). `now` is injectable so the
+// classification is deterministic under test. NOTE: NBCC does not yet track whether a GASDS top-up
+// has been claimed per donation (top-ups are pooled per tax year), so this lists ALL eligible small
+// gifts by deadline; suppressing already-claimed ones is a follow-up once GASDS claims are tracked.
+export async function listGasdsDeadlineDonations(now: Date = new Date()): Promise<GasdsDeadlineRow[]> {
+  const res = await pool.query<{
+    id: number;
+    donor_id: number;
+    full_name: string;
+    amount_pence: number;
+    created_at: Date;
+  }>(
+    `SELECT dn.id, dn.donor_id, d.full_name, dn.amount_pence, dn.created_at
+       FROM donations dn JOIN donors d ON d.id = dn.donor_id
+      WHERE dn.gasds_eligible = true AND dn.payment_status = 'paid'
+      ORDER BY dn.created_at ASC`,
+  );
+
+  const rows: GasdsDeadlineRow[] = [];
+  for (const r of res.rows) {
+    const deadline = gasdsClaimDeadline(r.created_at);
+    const flag =
+      deadline.getTime() <= now.getTime()
+        ? "expired"
+        : deadline.getTime() <= now.getTime() + GASDS_DEADLINE_WINDOW_MS
+          ? "expiring"
+          : null;
+    if (!flag) continue; // deadline beyond the horizon — not yet a queue item
+    rows.push({
+      id: r.id,
+      donor_id: r.donor_id,
+      full_name: r.full_name,
+      amountPence: r.amount_pence,
+      collectedAt: r.created_at.toISOString(),
+      gasdsDeadline: deadline.toISOString(),
       flag,
     });
   }

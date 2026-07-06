@@ -1154,6 +1154,19 @@ Proven by the queues block in `test/unit/admin-api.test.ts` (401, the viewer/edi
 expired-flag computation, that a live enduring declaration is omitted, and the sent/undelivered filter)
 and the `@db` `features/admin-api.feature`.
 
+**GASDS 2-year claim-deadline queue (TASK-135).** GASDS (the small-donations top-up) has a **shorter**
+claim deadline than Gift Aid — **2 years** after the end of the tax year of collection, versus Gift
+Aid's 4 — so small gifts can silently pass the cliff and lose their top-up. `gasdsClaimDeadline`
+(`src/gasds/deadline.ts`, pure — 2 years after the collection tax-year-end, reusing
+`endOfUkTaxYear`) feeds `listGasdsDeadlineDonations` (`src/db/admin.ts`), a read-only Viewer+ queue at
+`GET /api/admin/queues/gasds-deadline` that flags `gasds_eligible`, paid donations whose deadline has
+closed (**`expired`**) or closes within a six-month horizon (**`expiring`**), with the computed
+`gasdsDeadline`. It surfaces as a **"GASDS deadline near"** overview stat. NBCC does not yet track
+whether a GASDS top-up was claimed per donation (top-ups are pooled per tax year), so the queue lists
+all eligible small gifts by deadline; suppressing already-claimed ones is a noted follow-up. Proven by
+`test/unit/gasds-deadline.test.ts` + `test/unit/gasds-deadline-queue.test.ts` and the `@db`
+`features/admin-api.feature`.
+
 **Dashboard read lists (REQ-066 · TASK-114).** The reads that back the admin cockpit UI, all `viewer`
 and up (missing/invalid token → **401**) except the CSV export. `GET /api/admin/donations` browses
 every donation newest-first with optional `?status`/`?channel` filters and a bounded `?limit`/`?offset`

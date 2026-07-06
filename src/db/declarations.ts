@@ -53,7 +53,16 @@ export type ReviseDeclarationResult =
 export async function reviseDeclaration(
   declarationId: number,
   updated: DeclarationFields,
-  context: { scope: Scope; confirmedTaxpayer: boolean; mode: Mode; actor?: string },
+  context: {
+    scope: Scope;
+    confirmedTaxpayer: boolean;
+    mode: Mode;
+    actor?: string;
+    // When set, the SAME transaction also syncs the donor's account name (donors.full_name) to this
+    // value + a `donor.updated` audit row (TASK-131), so a declaration edit and its name sync commit
+    // or roll back together. The donor is the declaration's own donor_id — no extra id is threaded.
+    syncDonorFullName?: string;
+  },
 ): Promise<ReviseDeclarationResult> {
   const actor = context.actor ?? "system";
   const client = await pool.connect();
@@ -92,11 +101,29 @@ export async function reviseDeclaration(
       now: new Date(),
     });
 
-    // Nothing meaningful changed → commit the (read-only) transaction and return.
+    // Nothing meaningful changed → commit the (read-only) transaction and return. The donor name is
+    // derived from the (unchanged) declaration name fields, so no sync is needed here.
     if (!revision) {
       await client.query("COMMIT");
       return { outcome: "unchanged", declarationId };
     }
+
+    // Sync the donor's account name in the SAME transaction when asked (TASK-131), so a declaration
+    // edit and its name sync are atomic. The donor is the declaration's own donor_id.
+    const syncDonorName = async () => {
+      if (context.syncDonorFullName == null) return;
+      await client.query(`UPDATE donors SET full_name = $1 WHERE id = $2`, [
+        context.syncDonorFullName,
+        row.donor_id,
+      ]);
+      await insertAudit(client, {
+        actor,
+        action: "donor.updated",
+        entity: "donor",
+        entityId: row.donor_id,
+        data: { fields: ["fullName"] },
+      });
+    };
 
     // An identity / address change AMENDS the enduring declaration in place: update the matching
     // columns and note it in the audit log — no revoke, no new row (the consent snapshot stays put).
@@ -124,6 +151,7 @@ export async function reviseDeclaration(
         entityId: declarationId,
         data: { changedFields: revision.changedFields, donorId: row.donor_id },
       });
+      await syncDonorName();
       await client.query("COMMIT");
       return { outcome: "amended", declarationId, changedFields: revision.changedFields };
     }
@@ -149,6 +177,7 @@ export async function reviseDeclaration(
       entityId: newDeclarationId,
       data: { supersedes: declarationId, donorId: row.donor_id },
     });
+    await syncDonorName();
 
     await client.query("COMMIT");
     return { outcome: "revised", revokedDeclarationId: declarationId, newDeclarationId };

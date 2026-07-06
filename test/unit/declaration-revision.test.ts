@@ -181,6 +181,47 @@ describe("reviseDeclaration (audited write) — REQ-059", () => {
     expect(has(/update donations/i)).toBe(false);
   });
 
+  it("AMENDS and syncs the donor name in ONE transaction when syncDonorFullName is given", async () => {
+    const result = await reviseDeclaration(
+      10,
+      { ...currentFields, address: "New Address, Kilmarnock" },
+      { ...ctx, syncDonorFullName: "Ada Lovelace" },
+    );
+    expect(result).toEqual({ outcome: "amended", declarationId: 10, changedFields: ["address"] });
+
+    const seq = sqls();
+    // Exactly one COMMIT, no intermediate commit between the declaration update and the donor sync.
+    expect(seq.filter((s) => /^commit/i.test(s)).length).toBe(1);
+    expect(seq[seq.length - 1]).toMatch(/^commit/i);
+    // The donor name is updated inside the same transaction, keyed to the row's donor_id (42).
+    const donorUpdate = call(/update donors/i);
+    expect(donorUpdate).toBeDefined();
+    expect(donorUpdate?.[1]).toEqual(["Ada Lovelace", 42]);
+    // A donor.updated audit row accompanies it.
+    const actions = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0]))).map((c) => c[1][1]);
+    expect(actions).toContain("declaration.amended");
+    expect(actions).toContain("donor.updated");
+  });
+
+  it("REVISES and syncs the donor name in ONE transaction when syncDonorFullName is given", async () => {
+    const result = await reviseDeclaration(10, currentFields, {
+      ...ctx,
+      scope: "all_donations",
+      syncDonorFullName: "Ada Lovelace",
+    });
+    expect(result).toEqual({ outcome: "revised", revokedDeclarationId: 10, newDeclarationId: NEW_DECL_ID });
+    const seq = sqls();
+    expect(seq.filter((s) => /^commit/i.test(s)).length).toBe(1);
+    expect(has(/update donors/i)).toBe(true);
+    const actions = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0]))).map((c) => c[1][1]);
+    expect(actions).toContain("donor.updated");
+  });
+
+  it("does NOT touch donors on an amend when syncDonorFullName is omitted", async () => {
+    await reviseDeclaration(10, { ...currentFields, address: "New Address, Kilmarnock" }, ctx);
+    expect(has(/update donors/i)).toBe(false);
+  });
+
   it("is a no-op (commit, no writes) when nothing meaningful changed", async () => {
     const result = await reviseDeclaration(10, currentFields, ctx);
     expect(result).toEqual({ outcome: "unchanged", declarationId: 10 });

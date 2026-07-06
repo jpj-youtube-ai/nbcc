@@ -197,8 +197,8 @@ export async function patchAdminDonor(req: Request, res: Response): Promise<Resp
 // patchDeclaration: Editor/Admin only. scope + taxpayer are held at the current values, so
 // reviseDeclaration always AMENDS in place (a `declaration.amended` audit note, no new row); the
 // account name is synced so donors.full_name never diverges from the declaration. Both audit rows
-// record admin:<email>. No active declaration → 404. Two audited transactions (declaration first) —
-// same documented single-transaction follow-up as the portal route.
+// record admin:<email>. No active declaration → 404. The amend and the name sync run in ONE
+// transaction (reviseDeclaration's syncDonorFullName, TASK-131) — atomic.
 export async function patchAdminDeclaration(req: Request, res: Response): Promise<Response | void> {
   const claims = authorizeAdmin(req, res, "editor");
   if (!claims) return;
@@ -221,8 +221,8 @@ export async function patchAdminDeclaration(req: Request, res: Response): Promis
       confirmedTaxpayer: active.confirmedTaxpayer,
       mode: "once",
       actor: actorOf(claims),
+      syncDonorFullName: `${fields.firstName} ${fields.lastName}`,
     });
-    await updateDonorPortal(id, { fullName: `${fields.firstName} ${fields.lastName}` }, actorOf(claims));
 
     const snapshot = await getDonorPortalSnapshot(id);
     const address = await getDonorAddress(id);

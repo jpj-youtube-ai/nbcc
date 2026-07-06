@@ -96,9 +96,15 @@ describe("PATCH /api/portal/:token/declaration (TASK-129)", () => {
     expect(reviseMock).toHaveBeenCalledWith(
       7,
       expect.objectContaining({ address: "New Address, Kilmarnock" }),
-      expect.objectContaining({ scope: "all_donations", confirmedTaxpayer: true, actor: "donor" }),
+      expect.objectContaining({
+        scope: "all_donations",
+        confirmedTaxpayer: true,
+        actor: "donor",
+        syncDonorFullName: "Ada Lovelace",
+      }),
     );
-    expect(updateMock).toHaveBeenCalledWith(42, { fullName: "Ada Lovelace" }, "donor");
+    // TASK-131: the name sync is now inside reviseDeclaration's transaction, not a separate call.
+    expect(updateMock).not.toHaveBeenCalled();
   });
 
   it("404s when the donor has no active declaration", async () => {

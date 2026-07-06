@@ -43,20 +43,14 @@ const currentFields = {
 const NOW = new Date("2026-07-03T00:00:00.000Z");
 const ctx = { scope: "this_donation" as const, confirmedTaxpayer: true, mode: "once" as const };
 
-describe("buildDeclarationRevision (pure) — REQ-059", () => {
-  it("returns null (no-op) when the meaningful fields are identical to the current declaration", () => {
-    const result = buildDeclarationRevision({
-      current: currentRow,
-      updated: currentFields,
-      scope: "this_donation",
-      confirmedTaxpayer: true,
-      mode: "once",
-      now: NOW,
-    });
-    expect(result).toBeNull();
+describe("buildDeclarationRevision (pure) — REQ-059 / TASK-128", () => {
+  it("returns null (no-op) when the meaningful fields are identical", () => {
+    expect(
+      buildDeclarationRevision({ current: currentRow, updated: currentFields, scope: "this_donation", confirmedTaxpayer: true, mode: "once", now: NOW }),
+    ).toBeNull();
   });
 
-  it("returns a revoke+new pair on ANY changed field, the new row carrying the current wording", () => {
+  it("AMENDS in place when only identity/address fields change (name/address/postcode/non-UK)", () => {
     const result = buildDeclarationRevision({
       current: currentRow,
       updated: { ...currentFields, address: "New Address, Kilmarnock" },
@@ -66,27 +60,47 @@ describe("buildDeclarationRevision (pure) — REQ-059", () => {
       now: NOW,
     });
     expect(result).not.toBeNull();
-    expect(result!.revokedDeclaration).toEqual({ id: 10, revoked_at: NOW });
-    expect(result!.newDeclaration.address).toBe("New Address, Kilmarnock");
-    expect(result!.newDeclaration.donor_id).toBe(42);
-    // The new declaration carries the CURRENT verbatim wording (selectDeclarationWording).
-    const wording = selectDeclarationWording({ mode: "once", scope: "this_donation" });
-    expect(result!.newDeclaration.wording_version).toBe(wording.wording_version);
-    expect(result!.newDeclaration.wording_snapshot).toBe(wording.wording_snapshot);
+    expect(result!.kind).toBe("amend");
+    if (result!.kind !== "amend") throw new Error("expected amend");
+    expect(result!.declarationId).toBe(10);
+    expect(result!.changes.address).toBe("New Address, Kilmarnock");
+    expect(result!.changedFields).toContain("address");
   });
 
-  it("treats a scope, postcode, non-UK or taxpayer-confirmation change as a revision too", () => {
-    const changes = [
-      { updated: currentFields, scope: "all_donations" as const, confirmedTaxpayer: true },
-      { updated: { ...currentFields, postcode: "M1 1AE" }, scope: "this_donation" as const, confirmedTaxpayer: true },
-      { updated: { firstName: "Ada", lastName: "Lovelace", houseNameNumber: "12", address: "Analytical Avenue, London", nonUk: true }, scope: "this_donation" as const, confirmedTaxpayer: true },
-      { updated: currentFields, scope: "this_donation" as const, confirmedTaxpayer: false },
-    ];
-    for (const c of changes) {
-      expect(
-        buildDeclarationRevision({ current: currentRow, updated: c.updated, scope: c.scope, confirmedTaxpayer: c.confirmedTaxpayer, mode: "once", now: NOW }),
-      ).not.toBeNull();
+  it("AMENDS for a postcode-only or non-UK-only change", () => {
+    for (const updated of [
+      { ...currentFields, postcode: "M1 1AE" },
+      { firstName: "Ada", lastName: "Lovelace", houseNameNumber: "12", address: "Analytical Avenue, London", nonUk: true },
+    ]) {
+      const r = buildDeclarationRevision({ current: currentRow, updated, scope: "this_donation", confirmedTaxpayer: true, mode: "once", now: NOW });
+      expect(r?.kind).toBe("amend");
     }
+  });
+
+  it("REVISES (revoke+new) when the scope changes, the new row carrying the current wording", () => {
+    const result = buildDeclarationRevision({
+      current: currentRow, updated: currentFields, scope: "all_donations", confirmedTaxpayer: true, mode: "once", now: NOW,
+    });
+    expect(result!.kind).toBe("revise");
+    if (result!.kind !== "revise") throw new Error("expected revise");
+    expect(result!.revokedDeclaration).toEqual({ id: 10, revoked_at: NOW });
+    const wording = selectDeclarationWording({ mode: "once", scope: "all_donations" });
+    expect(result!.newDeclaration.wording_version).toBe(wording.wording_version);
+    expect(result!.newDeclaration.scope).toBe("all_donations");
+  });
+
+  it("REVISES when the taxpayer confirmation changes", () => {
+    const r = buildDeclarationRevision({ current: currentRow, updated: currentFields, scope: "this_donation", confirmedTaxpayer: false, mode: "once", now: NOW });
+    expect(r?.kind).toBe("revise");
+  });
+
+  it("REVISES when consent AND identity both change, the new row carrying the new address", () => {
+    const r = buildDeclarationRevision({
+      current: currentRow, updated: { ...currentFields, address: "New Address, Kilmarnock" }, scope: "all_donations", confirmedTaxpayer: true, mode: "once", now: NOW,
+    });
+    expect(r!.kind).toBe("revise");
+    if (r!.kind !== "revise") throw new Error("expected revise");
+    expect(r!.newDeclaration.address).toBe("New Address, Kilmarnock");
   });
 });
 
@@ -120,9 +134,9 @@ beforeEach(() => {
 });
 
 describe("reviseDeclaration (audited write) — REQ-059", () => {
-  it("revokes the old row + inserts the new + two audit rows, in one transaction, never touching donations", async () => {
-    const result = await reviseDeclaration(10, { ...currentFields, address: "New Address, Kilmarnock" }, ctx);
-    expect(result).toEqual({ revised: true, revokedDeclarationId: 10, newDeclarationId: NEW_DECL_ID });
+  it("REVISES (revoke old + insert new + two audits) when the scope changes", async () => {
+    const result = await reviseDeclaration(10, currentFields, { ...ctx, scope: "all_donations" });
+    expect(result).toEqual({ outcome: "revised", revokedDeclarationId: 10, newDeclarationId: NEW_DECL_ID });
 
     const seq = sqls();
     expect(seq[0]).toMatch(/^begin/i);
@@ -138,12 +152,11 @@ describe("reviseDeclaration (audited write) — REQ-059", () => {
     expect(update?.[1][2]).toBe(10); // old id
 
     // Two audit rows: declaration.revoked (old) + declaration.created (new).
-    const audits = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0])));
-    const actions = audits.map((c) => c[1][1]);
+    const actions = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0]))).map((c) => c[1][1]);
     expect(actions).toContain("declaration.revoked");
     expect(actions).toContain("declaration.created");
 
-    // Ordering: insert new → update old → audits, all before COMMIT.
+    // Ordering: insert new → update old, all before COMMIT.
     const insIdx = seq.findIndex((s) => /insert into declarations/i.test(s));
     const updIdx = seq.findIndex((s) => /update declarations/i.test(s));
     expect(insIdx).toBeLessThan(updIdx);
@@ -153,9 +166,24 @@ describe("reviseDeclaration (audited write) — REQ-059", () => {
     expect(has(/insert into donations/i)).toBe(false);
   });
 
+  it("AMENDS in place (one update, one declaration.amended audit, no new row) on an address change", async () => {
+    const result = await reviseDeclaration(10, { ...currentFields, address: "New Address, Kilmarnock" }, ctx);
+    expect(result).toEqual({ outcome: "amended", declarationId: 10, changedFields: ["address"] });
+
+    const seq = sqls();
+    expect(seq[0]).toMatch(/^begin/i);
+    expect(seq[seq.length - 1]).toMatch(/^commit/i);
+    expect(has(/insert into declarations/i)).toBe(false); // no new row
+    const update = call(/update declarations/i);
+    expect(update?.[0]).not.toMatch(/revoked_at/i); // an amend, not a revoke
+    const actions = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0]))).map((c) => c[1][1]);
+    expect(actions).toEqual(["declaration.amended"]);
+    expect(has(/update donations/i)).toBe(false);
+  });
+
   it("is a no-op (commit, no writes) when nothing meaningful changed", async () => {
     const result = await reviseDeclaration(10, currentFields, ctx);
-    expect(result).toEqual({ revised: false, revokedDeclarationId: 10 });
+    expect(result).toEqual({ outcome: "unchanged", declarationId: 10 });
     expect(has(/insert into declarations/i)).toBe(false);
     expect(has(/update declarations/i)).toBe(false);
     expect(has(/insert into audit_log/i)).toBe(false);

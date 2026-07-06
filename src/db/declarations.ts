@@ -8,12 +8,17 @@ import {
 } from "../declarations/revision";
 import { buildDeclarationCancellation } from "../declarations/cancellation";
 
-// The transactional, audited declaration-revision write (REQ-059). A donor editing their Gift Aid
-// declaration never mutates the immutable saved row (REQ-046): this REVOKES the old row and inserts
-// a new one that SUPERSEDES it, in ONE transaction with its two audit_log rows — mirroring the
+// The transactional, audited declaration-edit write (REQ-059 / TASK-128). A donor editing their Gift
+// Aid declaration is handled by WHAT changed: a CONSENT change (scope / taxpayer confirmation) is
+// immutable (REQ-046) — REVOKE the old row and insert a SUPERSEDING one, with two audit_log rows; an
+// IDENTITY / address change AMENDS the enduring declaration in place (update the matching columns +
+// one declaration.amended audit note, no new row). Both run in ONE transaction — mirroring the
 // writeWithAudit / assignDonationToBatch shape in src/db/donations.ts (a manual BEGIN…COMMIT here
-// because two audit rows are appended, which writeWithAudit's single-audit shape does not cover).
-// The pure revision decision lives in src/declarations/revision.ts; this owns only the transaction.
+// because multiple audit rows can be appended, which writeWithAudit's single-audit shape does not
+// cover). Revoke-and-supersede on a consent change is NBCC's design choice for a clean audit trail;
+// HMRC does not require a new declaration for an address change — it permits noting the change on the
+// enduring declaration. The pure decision lives in src/declarations/revision.ts; this owns only the
+// transaction.
 
 // A revision that cannot proceed: the declaration id is unknown, or it is already revoked (a row is
 // revoked exactly once). A typed error like BatchAssignmentError so a caller/route can branch on it.
@@ -31,20 +36,20 @@ interface DeclarationRow extends CurrentDeclaration {
   revoked_at: Date | null;
 }
 
-export interface ReviseDeclarationResult {
-  revised: boolean; // false when nothing meaningful changed (a no-op — no writes)
-  revokedDeclarationId: number;
-  newDeclarationId?: number; // present only when revised
-}
+export type ReviseDeclarationResult =
+  | { outcome: "unchanged"; declarationId: number }
+  | { outcome: "amended"; declarationId: number; changedFields: string[] }
+  | { outcome: "revised"; revokedDeclarationId: number; newDeclarationId: number };
 
-// Revise the declaration `declarationId` with the newly captured fields. In ONE transaction it:
-// locks the row (FOR UPDATE, so a concurrent revise races safely), rejects an unknown id
-// (not_found) or an already-revoked row (already_revoked) with DeclarationRevisionError, computes
-// the revision (buildDeclarationRevision) and — when something changed — inserts the new immutable
-// declarations row, sets the old row's revoked_at + superseded_by_declaration_id, and appends a
-// `declaration.revoked` + a `declaration.created` audit row. Any throw rolls back ALL of it. It
-// NEVER touches donations — an existing donation.declaration_id still points at the (now revoked)
-// old row; re-linking is a separate concern. A no-op (no field change) commits without writing.
+// Edit the declaration `declarationId` with the newly captured fields. In ONE transaction it: locks
+// the row (FOR UPDATE, so a concurrent edit races safely), rejects an unknown id (not_found) or an
+// already-revoked row (already_revoked) with DeclarationRevisionError, computes the decision
+// (buildDeclarationRevision) and then, per its kind: an "amend" (identity/address only) updates the
+// matching columns in place + appends one `declaration.amended` audit row; a "revise" (consent
+// change) inserts the new immutable row, sets the old row's revoked_at + superseded_by_declaration_id
+// and appends `declaration.revoked` + `declaration.created`. Any throw rolls back ALL of it. It NEVER
+// touches donations — an existing donation.declaration_id is left as is. A no-op (no field change)
+// commits without writing.
 export async function reviseDeclaration(
   declarationId: number,
   updated: DeclarationFields,
@@ -87,13 +92,44 @@ export async function reviseDeclaration(
       now: new Date(),
     });
 
-    // No meaningful change → nothing to revise; commit the (read-only) transaction and return.
+    // Nothing meaningful changed → commit the (read-only) transaction and return.
     if (!revision) {
       await client.query("COMMIT");
-      return { revised: false, revokedDeclarationId: declarationId };
+      return { outcome: "unchanged", declarationId };
     }
 
-    // Insert the new immutable row FIRST so its id can be wired onto the old row's superseded_by.
+    // An identity / address change AMENDS the enduring declaration in place: update the matching
+    // columns and note it in the audit log — no revoke, no new row (the consent snapshot stays put).
+    if (revision.kind === "amend") {
+      await client.query(
+        `UPDATE declarations
+            SET title = $1, first_name = $2, last_name = $3, house_name_number = $4,
+                address = $5, postcode = $6, non_uk = $7
+          WHERE id = $8`,
+        [
+          revision.changes.title,
+          revision.changes.first_name,
+          revision.changes.last_name,
+          revision.changes.house_name_number,
+          revision.changes.address,
+          revision.changes.postcode,
+          revision.changes.non_uk,
+          declarationId,
+        ],
+      );
+      await insertAudit(client, {
+        actor,
+        action: "declaration.amended",
+        entity: "declaration",
+        entityId: declarationId,
+        data: { changedFields: revision.changedFields, donorId: row.donor_id },
+      });
+      await client.query("COMMIT");
+      return { outcome: "amended", declarationId, changedFields: revision.changedFields };
+    }
+
+    // A CONSENT change (scope / taxpayer confirmation) revokes the old row and inserts a superseding
+    // immutable one. Insert the new row FIRST so its id can be wired onto the old row's superseded_by.
     const newDeclarationId = await insertDeclaration(client, revision.newDeclaration);
     await client.query(
       `UPDATE declarations SET revoked_at = $1, superseded_by_declaration_id = $2 WHERE id = $3`,
@@ -115,7 +151,7 @@ export async function reviseDeclaration(
     });
 
     await client.query("COMMIT");
-    return { revised: true, revokedDeclarationId: declarationId, newDeclarationId };
+    return { outcome: "revised", revokedDeclarationId: declarationId, newDeclarationId };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

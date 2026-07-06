@@ -1291,6 +1291,23 @@ npm run anonymize:retention-expired            # anonymise every expired declara
 npm run anonymize:retention-expired -- --dry   # list what WOULD be anonymised, write nothing
 ```
 
+**Setting an admin password.** `POST /api/admin/login` (REQ-062) verifies email + scrypt password. A
+user row can exist with `role='admin'` but `password_hash=NULL` (e.g. seeded by a migration), which
+always 401s until a credential is set. `scripts/set-admin-password.mjs`
+(`npm run admin:set-password`, run via `tsx` through `src/db/pool.ts`) sets the hash for an **existing**
+user (it does not create users or grant roles — that stays in migrations). The plaintext is read from
+`ADMIN_PASSWORD` (never argv, never logged; golden rule 4) and hashed with the same scheme
+`src/admin/password.ts` verifies. Pure input handling is covered by
+`test/unit/set-admin-password.test.ts`.
+
+```
+ADMIN_PASSWORD='…' npm run admin:set-password -- --email you@example.com
+```
+
+In production the DB is only reachable from inside the VPC, so run it as a one-off ECS task (the same
+`ecs run-task` pattern as `npm run migrate`), sourcing `ADMIN_PASSWORD` from an SSM SecureString and
+deleting that parameter afterwards.
+
 **`POST /api/checkout-session` (REQ-029).** Turns the REQ-028 front-end payload
 `{ mode, plan, amount, giftAid }` — plus optional `donorType`
 (`individual`|`company`, defaulting to `individual`), `businessName`, and the REQ-039

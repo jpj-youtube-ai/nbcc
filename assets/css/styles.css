@@ -106,23 +106,6 @@ p{margin:0 0 1rem}
 
 .lede{font-size:clamp(1.05rem,1rem + .35vw,1.28rem);color:var(--slate);max-width:54ch}
 
-/* the "twelve months" strip — eleven holly dots, one crimson diamond on December */
-.months{display:flex;gap:clamp(8px,1.6vw,16px);margin-top:26px}
-.months span{
-  position:relative;font-weight:600;font-size:.62rem;letter-spacing:.06em;
-  color:var(--slate-soft);padding-top:13px;line-height:1;
-}
-.months span::before{
-  content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
-  width:5px;height:5px;border-radius:50%;background:var(--holly);opacity:.55;
-}
-.months .dec{color:var(--crimson);font-weight:700}
-.months .dec::before{
-  width:8px;height:8px;border-radius:0;background:var(--crimson);opacity:1;
-  transform:translateX(-50%) rotate(45deg);top:-1px;
-}
-.months-cap{font-family:var(--font-head);font-style:italic;font-size:.98rem;color:var(--slate-soft);margin:10px 0 0}
-
 /* ---- buttons (REQ-009): three pill variants + an animated arrow ---- */
 .btn{
   --bg:var(--crimson);--fg:var(--cream);display:inline-flex;align-items:center;gap:.55em;cursor:pointer;
@@ -184,7 +167,9 @@ p{margin:0 0 1rem}
 .site-main--boxed .donate-intro .lede,.site-main--boxed .supporters-intro .lede,.site-main--boxed .thankyou-intro .lede{margin-inline:auto}
 .site-main--boxed .donor-benefits,.site-main--boxed .reassure{background:none;padding-block:0}
 .page-top{padding:calc(var(--nav-h) + clamp(36px,6vw,76px)) 0 clamp(36px,5vw,64px)}
-.hero{position:relative;overflow:hidden;padding:calc(var(--nav-h) + clamp(44px,6vw,88px)) 0 clamp(56px,7vw,100px)}
+.hero{position:relative;overflow:hidden;padding:calc(var(--nav-h) + clamp(44px,6vw,88px)) 0 clamp(24px,3vw,44px)}
+/* pull the first section up tight under the hero (no cavernous gap) */
+.hero + .section{padding-top:clamp(24px,3vw,44px)}
 .hero::before{content:"";position:absolute;z-index:0;width:min(820px,115vw);height:min(820px,115vw);
   right:-16%;top:-30%;border-radius:50%;
   background:radial-gradient(circle, color-mix(in srgb,var(--tan) 28%,transparent), transparent 62%);pointer-events:none}
@@ -196,10 +181,7 @@ p{margin:0 0 1rem}
 .hero .lede{margin-top:1.3rem}
 .hero-cta{display:flex;flex-wrap:wrap;gap:14px;margin-top:2rem}
 .hero-art{display:flex;justify-content:center;position:relative}
-.hero-art .logo-big{width:min(78%,330px);filter:drop-shadow(0 24px 40px color-mix(in srgb,var(--maroon) 18%,transparent))}
-.proof{position:absolute;right:2%;bottom:2%;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px 20px;box-shadow:var(--shadow-lg);text-align:center}
-.proof .n{font-family:var(--font-head);font-size:2.3rem;font-weight:800;color:var(--crimson);line-height:1}
-.proof .lbl{font-size:.82rem;color:var(--slate-soft);margin-top:2px;font-weight:500;max-width:14ch}
+.hero-art .logo-big{width:min(100%,560px);filter:drop-shadow(0 24px 40px color-mix(in srgb,var(--maroon) 18%,transparent))}
 
 /* generic page intro (about/donate/contact) */
 .intro-hero{text-align:center;max-width:780px;margin-inline:auto}
@@ -586,7 +568,6 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
   .nav.open .burger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
   .pillars,.tiers,.give-tiers,.row2,.benefits{grid-template-columns:1fr}
   .team{grid-template-columns:repeat(2,1fr)}
-  .proof{position:static;margin-top:16px}
   footer .wrap{grid-template-columns:1fr}
   .crow{grid-template-columns:22px 1fr auto}
   .crow.no-pos{grid-template-columns:1fr auto}

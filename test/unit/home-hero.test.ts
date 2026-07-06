@@ -4,9 +4,13 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// TASK-016 (REQ-010): index.html's Home hero — eyebrow, emphasised H1, two CTAs,
-// the logo illustration and the floating proof card. Parsed with jsdom; mirrors
-// footer.test.ts / seo-metadata.test.ts. DB-free.
+// TASK-016 (REQ-010): index.html's Home hero — eyebrow, emphasised H1, two CTAs
+// and the large logo illustration. Parsed with jsdom; mirrors footer.test.ts /
+// seo-metadata.test.ts. DB-free.
+//
+// TASK-149: the hero was decluttered — the floating "7,657" proof card and the
+// twelve-months strip/caption were removed (the 2025 figure still appears in the
+// pillars and year-round sections below), so this file no longer asserts them.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const html = readFileSync(resolve(ROOT, "index.html"), "utf8");
@@ -49,10 +53,10 @@ describe("home hero (REQ-010)", () => {
     expect(img?.getAttribute("loading")).toBe("lazy");
   });
 
-  it("has the floating proof card on the shared .card surface with the 2025 figure", () => {
-    const proof = doc.querySelector(".proof");
-    expect(proof?.classList.contains("card")).toBe(true);
-    expect(norm(proof?.textContent)).toBe("7,657 Red Bags Full of Joy delivered in 2025");
+  it("no longer renders the floating proof card or twelve-months strip (TASK-149)", () => {
+    expect(doc.querySelector(".proof")).toBeNull();
+    expect(doc.querySelector(".months")).toBeNull();
+    expect(doc.querySelector(".months-cap")).toBeNull();
   });
 
   it("keeps the page-sections region for later content", () => {

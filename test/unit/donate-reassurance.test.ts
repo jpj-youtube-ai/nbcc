@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 // three trust items on the shared .card surface: cancel any time under the
 // Direct Debit Guarantee; secure via Stripe with monthly giving set up by adults
 // 18 or over; and a help line to Jaimie Wakefield at
-// giving@nightbeforechristmas.co.uk (mailto) and 01292 811 015 (tel). Token-only
+// giving@nbcc.scot (mailto) and 01292 811 015 (tel). Token-only
 // colours, inline aria-hidden SVGs, no <img> (perf budget), dash-free copy with
 // "NBCC" not "NB4CC" (REQ-031). Parsed with jsdom; mirrors donate-side-panel and
 // monthly-donor-benefits tests.
@@ -69,9 +69,9 @@ describe("donate reassurance (REQ-026)", () => {
   it("item 3: a help line to Jaimie Wakefield by email and phone", () => {
     expect(text).toContain("jaimie wakefield");
 
-    const mail = section?.querySelector('a[href^="mailto:giving@nightbeforechristmas.co.uk"]');
+    const mail = section?.querySelector('a[href^="mailto:giving@nbcc.scot"]');
     expect(mail).not.toBeNull();
-    expect(norm(mail?.textContent)).toContain("giving@nightbeforechristmas.co.uk");
+    expect(norm(mail?.textContent)).toContain("giving@nbcc.scot");
 
     const tel = section?.querySelector('a[href^="tel:"]');
     expect(tel).not.toBeNull();

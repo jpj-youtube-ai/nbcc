@@ -462,7 +462,7 @@
             "Name: " + payload.firstName + " " + payload.lastName + "\n" +
             "Email: " + payload.email + "\n\n" + payload.message;
           win.location.href =
-            "mailto:info@nightbeforechristmas.co.uk?subject=" +
+            "mailto:info@nbcc.scot?subject=" +
             encodeURIComponent(subject) +
             "&body=" +
             encodeURIComponent(body);

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 // #tiersMonthly container (built empty by TASK-028). Bronze/Silver/Gold/Platinum
 // at £10/£25/£50/£100 per month, each with its exact leaflet headline and
 // description, on the shared .card/.tier surface, plus an other-monthly-amount
-// line linking to giving@nightbeforechristmas.co.uk. The checkout contract
+// line linking to giving@nbcc.scot. The checkout contract
 // (data-amount/startCheckout) is REQ-028 and the side-panel content REQ-024,
 // both out of scope here. Parsed with jsdom; mirrors give-once-tiers.test.ts.
 

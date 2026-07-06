@@ -28,7 +28,7 @@ export const GIFT_AID_MONTHLY_CLAUSE =
 export const MANAGE_CANCEL_LINE =
   "Managing your monthly gift: monthly donations can be changed or cancelled whenever you like, and " +
   "Direct Debits are protected by the Direct Debit Guarantee. Any problems, contact Jaimie Wakefield " +
-  "at giving@nightbeforechristmas.co.uk or call 01292 811 015.";
+  "at giving@nbcc.scot or call 01292 811 015.";
 
 export const confirmationInputSchema = z.object({
   fullName: z.string().trim().min(1),

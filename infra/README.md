@@ -149,6 +149,46 @@ unhealthy until the first real deploy.
 
 CLI fallback: `cd infra/envs/staging && terraform init && terraform apply`.
 
+## HTTPS & DNS (production: nbcc.scot)
+
+HTTPS is provisioned in `infra/modules/app/dns.tf` and gated on the `domain_name`
+module input. Staging leaves it empty → **HTTP-only** (port-80 listener, no zone/cert,
+no change). Production sets `domain_name = "nbcc.scot"` (`infra/envs/production/main.tf`),
+which provisions: a Route 53 hosted zone, a DNS-validated ACM cert (`nbcc.scot` +
+`www.nbcc.scot`, auto-renewing), a 443 listener, an 80→443 redirect, and apex/www
+`A`-alias records to the ALB (an alias, not a CNAME — the apex can't be a CNAME).
+
+The zone also carries the **ported Google Workspace email records** so mail keeps
+working after delegation: MX `1 smtp.google.com`, the apex `google-site-verification`
+TXT, and the `google._domainkey` DKIM TXT (from `var.google_dkim_txt`).
+
+**Cutover — delegation ordering matters (chicken-and-egg):** the ACM cert is DNS-
+validated in the new Route 53 zone, but the domain still points at Freeola until you
+delegate, so on the **first apply** `aws_acm_certificate_validation` *waits*.
+
+1. Trigger the **Infra** `apply` for production (approve the prod gate). It creates the
+   zone and starts waiting on cert validation.
+2. Read the nameservers: `cd infra/envs/production && terraform output route53_nameservers`.
+3. In Freeola, set nbcc.scot's nameservers to those **4** (replace `ns3/ns4.freeola.net`).
+   Do **not** do this before step 1 — the zone must exist first or the domain goes dark.
+4. Once delegation propagates (usually minutes), ACM validates and the apply completes.
+   If it timed out, just re-run the `apply`.
+5. **Verify** after propagation:
+   ```bash
+   dig +short nbcc.scot                       # → ALB (alias) addresses
+   dig +short TXT google._domainkey.nbcc.scot # → must match Google Admin DKIM exactly
+   dig +short MX nbcc.scot                     # → 1 smtp.google.com
+   curl -I https://nbcc.scot/health            # → 200 over TLS; http:// 301s to https
+   ```
+   ⚠️ DKIM: confirm the `google_dkim_txt` value matches Google Admin (Gmail → Authenticate
+   email) exactly — one wrong char breaks signing. There is currently **no SPF/DMARC**
+   record on the domain (none existed at Freeola); add `v=spf1 include:_spf.google.com ~all`
+   if you want stricter deliverability.
+
+Follow-up (separate change): once live, point the app's public URLs at the real domain
+— `stripe_success_url` / `stripe_cancel_url` module inputs and the `PORTAL_BASE_URL` /
+`DECLARATION_FORM_BASE_URL` config (still the `example.org` placeholder).
+
 ## Deploy & promote (the app, not infra)
 
 Build-once, promote-the-same-artifact:

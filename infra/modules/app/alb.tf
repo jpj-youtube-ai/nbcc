@@ -10,6 +10,17 @@ resource "aws_security_group" "alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+  # HTTPS from internet — only when a domain/cert is configured (see dns.tf).
+  dynamic "ingress" {
+    for_each = local.https_enabled ? [1] : []
+    content {
+      description = "HTTPS from internet"
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
   egress {
     from_port   = 0
     to_port     = 0
@@ -80,10 +91,40 @@ resource "aws_lb_listener" "http" {
   port              = 80
   protocol          = "HTTP"
 
+  # HTTP-only (no domain): forward :80 to the app. Staging stays on this branch.
+  dynamic "default_action" {
+    for_each = local.https_enabled ? [] : [1]
+    content {
+      type             = "forward"
+      target_group_arn = aws_lb_target_group.app.arn
+    }
+  }
+  # HTTPS enabled: redirect :80 -> :443 so all traffic is TLS.
+  dynamic "default_action" {
+    for_each = local.https_enabled ? [1] : []
+    content {
+      type = "redirect"
+      redirect {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+  }
+}
+
+# TLS listener — only when a domain/cert is configured (see dns.tf). Uses the
+# validated cert so it is attached only after ACM issues.
+resource "aws_lb_listener" "https" {
+  count             = local.https_enabled ? 1 : 0
+  load_balancer_arn = aws_lb.app.arn
+  port              = 443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
+  certificate_arn   = aws_acm_certificate_validation.app[0].certificate_arn
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
-  # For HTTPS: add a 443 listener with an ACM certificate_arn, then redirect
-  # 80 -> 443. Requires a validated domain.
 }

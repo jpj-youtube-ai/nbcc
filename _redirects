@@ -15,6 +15,7 @@
 /supporters    /supporters.html  200
 /donate/thank-you  /thank-you.html   200
 /donor-portal  /portal.html      200
+/portal/access /portal.html      200
 /privacy       /privacy.html     200
 /admin         /admin.html       200
 

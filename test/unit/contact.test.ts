@@ -53,10 +53,10 @@ describe("contact points (REQ-027)", () => {
     }
   });
 
-  it("shows general enquiries email info@nightbeforechristmas.co.uk", () => {
-    const mail = region?.querySelector('a[href^="mailto:info@nightbeforechristmas.co.uk"]');
+  it("shows general enquiries email info@nbcc.scot", () => {
+    const mail = region?.querySelector('a[href^="mailto:info@nbcc.scot"]');
     expect(mail).not.toBeNull();
-    expect(norm(mail?.textContent)).toContain("info@nightbeforechristmas.co.uk");
+    expect(norm(mail?.textContent)).toContain("info@nbcc.scot");
   });
 
   it("shows the phone as a tel link displayed as 01292 811 015", () => {
@@ -66,8 +66,8 @@ describe("contact points (REQ-027)", () => {
     expect(norm(tel?.textContent)).toContain("01292 811 015");
   });
 
-  it("routes donations to Jaimie Wakefield at giving@nightbeforechristmas.co.uk", () => {
-    const mail = region?.querySelector('a[href^="mailto:giving@nightbeforechristmas.co.uk"]');
+  it("routes donations to Jaimie Wakefield at giving@nbcc.scot", () => {
+    const mail = region?.querySelector('a[href^="mailto:giving@nbcc.scot"]');
     expect(mail).not.toBeNull();
     expect(text).toContain("Jaimie Wakefield");
   });

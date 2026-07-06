@@ -538,7 +538,7 @@ towards Christmas joy"), **Silver £25 per month** ("Halfway to a Red Bag Full o
 Joy"), **Gold £50 per month** ("One Christmas made brighter", marked **"Around
 one Red Bag"** on the featured tile), and **Platinum £100 per month** ("More joy,
 every month"), each with its leaflet description. A `.give-other` line links to
-`mailto:giving@nightbeforechristmas.co.uk` for other monthly amounts. Token-only
+`mailto:giving@nbcc.scot` for other monthly amounts. Token-only
 colours, no hex/rgb outside `:root`; copy is dash-free and uses "NBCC" / "per
 month" (REQ-031). Each tile now carries the `data-mode`/`data-plan`/`data-amount`
 + `startCheckout` checkout contract (REQ-028, see **Checkout contract** below).
@@ -776,7 +776,7 @@ carries an inline-SVG icon and a heading + line:
 - **Secure and simple** — donations are handled securely by **Stripe**; monthly
   giving should be set up by adults aged **18 or over**.
 - **Need a hand?** — contact **Jaimie Wakefield** by email
-  (`mailto:giving@nightbeforechristmas.co.uk`) or phone (`tel:+441292811015`,
+  (`mailto:giving@nbcc.scot`) or phone (`tel:+441292811015`,
   shown as **01292 811 015**).
 
 On this light surface body text stays `--slate` with maroon titles and crimson
@@ -794,9 +794,9 @@ centred `.rule`, and a `.lede`. Below it a two-column `.contact-grid` pairs NBCC
 contact points with the enquiry form:
 
 - **Contact points** — four `.card` tiles, each with an inline `aria-hidden` SVG
-  icon: general enquiries (`info@nightbeforechristmas.co.uk`), the phone
+  icon: general enquiries (`info@nbcc.scot`), the phone
   (`tel:+441292811015`, shown as **01292 811 015**), donations via **Jaimie
-  Wakefield** (`giving@nightbeforechristmas.co.uk`), and **Annbank Village Hall**
+  Wakefield** (`giving@nbcc.scot`), and **Annbank Village Hall**
   as the base.
 - **Enquiry form** — a `.card` form with a real `<label for=…>` on every field
   (REQ-032): required **First name**, optional **Last name**, required **Email**,

@@ -275,6 +275,10 @@ h2.h-lg{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
 .figure{background:linear-gradient(135deg,color-mix(in srgb,var(--crimson) 8%,transparent),color-mix(in srgb,var(--holly) 10%,transparent)),var(--card);border:1px dashed var(--tan);border-radius:var(--radius-lg);aspect-ratio:4/5;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--slate-soft);padding:26px;box-shadow:var(--shadow-sm)}
 .figure small{display:block;margin-top:10px;font-size:.78rem;line-height:1.5;opacity:.85}
 .figure strong{color:var(--crimson)}
+/* A real photo fills the figure box: drop the dashed placeholder chrome and cover-fit the image
+   (the 4:5 slot crops a landscape photo to the frame). Margin stays via .figure's aspect-ratio. */
+.photo-slot{padding:0;border:none;background:var(--card);overflow:hidden;margin:0}
+.photo-slot img{width:100%;height:100%;object-fit:cover;display:block}
 .prose p{color:var(--slate);margin-bottom:1rem}
 .prose .strongline{font-weight:600;color:var(--maroon)}
 .prose .quote{font-family:var(--font-head);font-style:italic;font-weight:500;font-size:clamp(1.4rem,1.1rem + 1.4vw,2.1rem);color:var(--crimson);line-height:1.25;margin:6px 0 6px}

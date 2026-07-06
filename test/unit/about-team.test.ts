@@ -21,7 +21,7 @@ const doc = new DOMParser().parseFromString(html, "text/html");
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
 const LEADS = [
-  { nm: "Jodie", rl: "Head Elf (Trustee) and Director", em: "jodie@nbcc.scot" },
+  { nm: "Jodie", rl: "Head Elf (Trustee)", em: "jodie@nbcc.scot" },
   { nm: "Isabel", rl: "Procurement (Trustee)", em: "isabel@nbcc.scot" },
   { nm: "Kenny", rl: "Finance (Trustee)", em: "kenny@nbcc.scot" },
   { nm: "Jaimie", rl: "Project Manager", em: "jaimie@nbcc.scot" },
@@ -33,7 +33,7 @@ const ELVES = [
   "Morag", "Paul", "Scott", "Sue", "Tygan", "Vicky",
 ];
 // Elves whose headshot is already in assets/img (the rest are .is-pending).
-const ELVES_WITH_PHOTO = ["Dawn", "Jill", "Liz", "Tygan", "Vicky"];
+const ELVES_WITH_PHOTO = ["Dawn", "Jill", "Liz", "Sue", "Tygan", "Vicky"];
 
 describe("about meet the volunteers (REQ-016)", () => {
   const section = doc.querySelector("section.meet-team");
@@ -98,7 +98,7 @@ describe("about meet the volunteers (REQ-016)", () => {
       }
     });
 
-    it("has exactly eight placeholder tiles awaiting a headshot", () => {
+    it("has exactly seven placeholder tiles awaiting a headshot", () => {
       expect(section?.querySelectorAll(".team-elves .member-photo.is-pending")).toHaveLength(
         ELVES.length - ELVES_WITH_PHOTO.length,
       );

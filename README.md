@@ -1814,7 +1814,11 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   `sendRefundConfirmation`) stating the refunded amount + date (full vs partial), **post-commit,
   best-effort**, and **only** when a consented donor email is on file (the same
   `email` + `email_consent` gate as the donation-confirmation send); a company never gets this email.
-  Idempotent by event id. Covered DB-free in `test/unit/stripe-webhook-refund.test.ts`.
+  Idempotent by event id. Covered DB-free in `test/unit/stripe-webhook-refund.test.ts`, which drives
+  both event shapes end-to-end: a `charge.refunded` (charge id on the object) and a `charge.dispute.*`
+  (charge id read from `dispute.charge`, or the dispute's `payment_intent` when Stripe expands
+  `charge` to an object), across not-yet-claimed, already-batched, no-matching-donation, and resent
+  (idempotent) cases.
 - **`checkout.session.async_payment_succeeded` / `checkout.session.async_payment_failed`**
   (REQ-065 · TASK-090) → settle a pending **BACS** gift. Found by its **session id** (never a new
   row), the SAME donation's `payment_status` flips to `paid`/`failed` and `claim_status` is

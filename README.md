@@ -1345,8 +1345,9 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   columns record revocation/supersession (REQ-059 · TASK-096, added by migration
   `1783068943728_declaration-revocation.js`): `revoked_at` (set when the declaration is
   revoked) and `superseded_by_declaration_id` (a self-FK `onDelete RESTRICT` to the corrected
-  declaration that replaces it — editing never mutates the immutable row, it supersedes it). The
-  pure revision builder + audited write are wired in TASK-097 (see **Declaration revision** below).
+  declaration that replaces it — a **consent** edit revokes-and-supersedes; an identity/address edit
+  amends the row's matching columns in place, TASK-128). The pure revision builder + audited write
+  are wired in TASK-097 (see **Declaration revision** below).
 - **`donations`** — **THE** one donation record: FK `donor_id`, `mode`
   (once/monthly), `plan`, `amount_pence`, `currency`, the Stripe ids,
   `refunded_amount_pence`, `claim_status`, `payment_channel`, and Gift Aid as a
@@ -1477,20 +1478,26 @@ config env the service boots with, since the query goes through `pool.ts`); the 
 trigger surface is REQ-062/REQ-063. The DB-free query shape is proven by
 `test/unit/charities-online-query.test.ts` (mocked pool).
 
-**Declaration revision (REQ-059 · TASK-097).** A Gift Aid declaration is immutable (REQ-046), so
-editing it never mutates the saved row: the old row is **revoked** and a new, corrected row
-**supersedes** it. The **pure** `src/declarations/revision.ts` (`buildDeclarationRevision`, no
-pool/config and no ambient clock — the timestamp is injected) diffs the newly captured fields
-against the current declaration on the donor-meaningful columns (name, address, postcode, scope,
-non-UK flag, taxpayer confirmation) and returns either **null** (a no-op — nothing changed) or a
-`{ revokedDeclaration, newDeclaration }` pair whose new row carries the **current** verbatim wording
-(`selectDeclarationWording`). The transactional `reviseDeclaration` (`src/db/declarations.ts`,
-mirroring `assignDonationToBatch`) does it in **one** `BEGIN…COMMIT`: locks the row (`FOR UPDATE`),
-rejects an unknown id / already-revoked row with a typed `DeclarationRevisionError`, inserts the new
-immutable row, sets the old row's `revoked_at` + `superseded_by_declaration_id`, and appends a
-`declaration.revoked` + a `declaration.created` audit row — any throw rolls back **all** of it. It
-**never** touches `donations` (an existing `donation.declaration_id` still points at the revoked
-row; re-linking is a separate concern). Proven DB-free (`test/unit/declaration-revision.test.ts`).
+**Declaration revision (REQ-059 · TASK-097 / TASK-128).** A Gift Aid declaration's **consent** is
+immutable (REQ-046): changing the **scope** or **taxpayer confirmation** revokes the old row and
+inserts a superseding one. An **identity / address** change (name, house name/number, address,
+postcode, overseas-address flag) is only an HMRC matching detail, so it **amends the enduring
+declaration in place** with a **`declaration.amended`** audit note — no revoke, no new row.
+Revoke-and-supersede on a consent change is NBCC's design choice for a clean audit trail; HMRC does
+**not** require a new declaration for an address change — it permits noting the change on the
+enduring declaration. The **pure** `src/declarations/revision.ts` (`buildDeclarationRevision`, no
+pool/config and no ambient clock — the timestamp is injected) builds the candidate row (carrying the
+**current** verbatim wording, `selectDeclarationWording`) and classifies the diff, returning **null**
+(no-op), `{ kind: "amend", declarationId, changes, changedFields }` (identity change), or
+`{ kind: "revise", revokedDeclaration, newDeclaration }` (consent change). The transactional
+`reviseDeclaration` (`src/db/declarations.ts`, mirroring `assignDonationToBatch`) does it in **one**
+`BEGIN…COMMIT`: locks the row (`FOR UPDATE`), rejects an unknown id / already-revoked row with a typed
+`DeclarationRevisionError`, then for an **amend** updates the matching columns + one
+`declaration.amended` audit row, or for a **revise** inserts the new immutable row, sets the old row's
+`revoked_at` + `superseded_by_declaration_id`, and appends a `declaration.revoked` + a
+`declaration.created` audit row — any throw rolls back **all** of it, returning
+`{ outcome: "unchanged" | "amended" | "revised", … }`. It **never** touches `donations` (an existing
+`donation.declaration_id` is left as is). Proven DB-free (`test/unit/declaration-revision.test.ts`).
 
 **Declaration confirmation lifecycle (REQ-057 · TASK-074).** A Gift Aid declaration
 captured without a wet/online signature (in-person, telephone) must be confirmed by the

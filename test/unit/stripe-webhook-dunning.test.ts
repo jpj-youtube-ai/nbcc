@@ -42,6 +42,7 @@ vi.mock("../../src/config", () => ({
 }));
 
 import { processWebhookEvent } from "../../src/db/stripe-webhook";
+import { dunningFromStripeEvent } from "../../src/db/stripe-webhook-model";
 
 const SUB_ID = "sub_bdd_dunning";
 const DUNNING_ID = 5;
@@ -146,6 +147,165 @@ describe("dunning lapse — subscription_dunning + audit + notifications (REQ-06
     await processWebhookEvent(lapseEvent());
     expect(sendSubscriptionLapsedAdmin).toHaveBeenCalledOnce();
     expect(sendSubscriptionLapsedDonor).not.toHaveBeenCalled();
+  });
+});
+
+// An invoice.payment_failed event carrying the subscription (flat field) and Stripe's
+// next_payment_attempt: a number while a retry is still scheduled, null once retries are exhausted.
+const invoiceFailedEvent = (nextAttempt: number | null, id = "evt_inv_fail") =>
+  ({
+    id,
+    type: "invoice.payment_failed",
+    data: { object: { object: "invoice", subscription: SUB_ID, next_payment_attempt: nextAttempt } },
+  }) as unknown as import("stripe").Event;
+
+// A customer.subscription.updated event whose status decides whether the sub has lapsed.
+const subUpdatedEvent = (status: string, id = "evt_sub_upd") =>
+  ({
+    id,
+    type: "customer.subscription.updated",
+    data: { object: { id: SUB_ID, object: "subscription", status } },
+  }) as unknown as import("stripe").Event;
+
+describe("dunning renewal-failure lifecycle end-to-end (REQ-057/REQ-065)", () => {
+  it("invoice.payment_failed with a retry still due moves active → past_due (no lapse, no email)", async () => {
+    // A first failure on a healthy subscription: no dunning row yet, so it is INSERTed as past_due.
+    target = {
+      dunning_id: null, status: null, failed_attempts: null,
+      donor_id: DONOR_ID, full_name: "Ada Lovelace", email: "ada@example.com", email_consent: true,
+    };
+    const result = await processWebhookEvent(invoiceFailedEvent(1893456000));
+    expect(result).toEqual({ processed: true, action: "subscription.payment_failed" });
+
+    const insert = call(/insert into subscription_dunning/i);
+    expect(insert?.[1][2]).toBe("past_due"); // status
+    expect(insert?.[1][3]).toBe(1); // failed_attempts incremented from 0
+    expect(insert?.[0]).toMatch(/lapsed_at[\s\S]*NULL/i); // not lapsed
+    // No lapse ⇒ no notifications.
+    expect(sendSubscriptionLapsedAdmin).not.toHaveBeenCalled();
+    expect(sendSubscriptionLapsedDonor).not.toHaveBeenCalled();
+    expect(sqls().some((s) => /rollback/i.test(s))).toBe(false);
+  });
+
+  it("a further invoice.payment_failed (retry due) stays past_due and bumps the attempt count", async () => {
+    // Existing past_due row (failed_attempts 3) → another failure with a retry still due stays past_due.
+    const result = await processWebhookEvent(invoiceFailedEvent(1893456000));
+    expect(result).toEqual({ processed: true, action: "subscription.payment_failed" });
+    const update = call(/update subscription_dunning/i);
+    expect(update?.[1][0]).toBe("past_due");
+    expect(update?.[1][1]).toBe(4); // 3 → 4
+    expect(update?.[0]).not.toMatch(/lapsed_at = now\(\)/i);
+    expect(sendSubscriptionLapsedAdmin).not.toHaveBeenCalled();
+  });
+
+  it("invoice.payment_failed with retries EXHAUSTED (next_payment_attempt null) lapses past_due → lapsed + notifies", async () => {
+    const result = await processWebhookEvent(invoiceFailedEvent(null));
+    expect(result).toEqual({ processed: true, action: "subscription.lapsed" });
+    const update = call(/update subscription_dunning/i);
+    expect(update?.[1][0]).toBe("lapsed");
+    expect(update?.[0]).toMatch(/lapsed_at = now\(\)/i);
+    // Retries exhausted preserves the final attempt count (not incremented).
+    expect(update?.[1][1]).toBe(3);
+    expect(sendSubscriptionLapsedAdmin).toHaveBeenCalledOnce();
+    expect(sendSubscriptionLapsedDonor).toHaveBeenCalledOnce();
+  });
+
+  it("customer.subscription.updated to unpaid lapses a past_due subscription", async () => {
+    const result = await processWebhookEvent(subUpdatedEvent("unpaid"));
+    expect(result).toEqual({ processed: true, action: "subscription.lapsed" });
+    expect(call(/update subscription_dunning/i)?.[1][0]).toBe("lapsed");
+    expect(sendSubscriptionLapsedAdmin).toHaveBeenCalledOnce();
+  });
+
+  it("customer.subscription.updated to a healthy active status is ignored (not a dunning event)", async () => {
+    const result = await processWebhookEvent(subUpdatedEvent("active"));
+    expect(result).toEqual({ processed: true, action: "ignored.not_dunning" });
+    expect(call(/update subscription_dunning/i)).toBeUndefined();
+  });
+
+  it("an event type the handler does not subscribe to is ignored (default branch)", async () => {
+    // payment_intent.succeeded is not in the dispatch switch → the default `ignored` no-op, never
+    // reaching handleDunning. Confirms unhandled Stripe events cannot mutate donation state.
+    const evt = { id: "evt_pi", type: "payment_intent.succeeded", data: { object: { object: "payment_intent" } } } as unknown as import("stripe").Event;
+    const result = await processWebhookEvent(evt);
+    expect(result).toEqual({ processed: true, action: "ignored" });
+  });
+
+  it("a dunning failure for a subscription with no donation on file is ignored", async () => {
+    target = undefined; // the JOIN returns no row
+    const result = await processWebhookEvent(invoiceFailedEvent(null));
+    expect(result).toEqual({ processed: true, action: "ignored.no_subscription" });
+  });
+
+  it("a successful invoice recovers an open past_due dunning row to active (in the same transaction)", async () => {
+    // invoice.paid routes to handleRecurring (records the renewal) AND handleDunning (recovery); the
+    // returned action is the recurring one, so we assert the dunning row was reset to active directly.
+    const result = await processWebhookEvent(
+      { id: "evt_paid", type: "invoice.paid", data: { object: { object: "invoice", subscription: SUB_ID } } } as unknown as import("stripe").Event,
+    );
+    expect(result.processed).toBe(true);
+    const update = call(/update subscription_dunning/i);
+    expect(update?.[1][0]).toBe("active"); // past_due → active
+    expect(update?.[1][1]).toBe(0); // failed_attempts reset
+    expect(update?.[0]).not.toMatch(/lapsed_at = now\(\)/i);
+    expect(sqls().some((s) => /rollback/i.test(s))).toBe(false);
+  });
+});
+
+describe("dunningFromStripeEvent mapper — Stripe event → dunning event (REQ-057/REQ-065)", () => {
+  const ev = (type: string, object: Record<string, unknown>) =>
+    ({ id: "e", type, data: { object } }) as unknown as import("stripe").Event;
+
+  it("invoice.payment_failed with a retry still due → payment_failed", () => {
+    expect(dunningFromStripeEvent(ev("invoice.payment_failed", { subscription: SUB_ID, next_payment_attempt: 123 })))
+      .toEqual({ subscriptionId: SUB_ID, dunningEvent: "payment_failed" });
+  });
+
+  it("invoice.payment_failed with next_payment_attempt null → retries_exhausted", () => {
+    expect(dunningFromStripeEvent(ev("invoice.payment_failed", { subscription: SUB_ID, next_payment_attempt: null })))
+      .toEqual({ subscriptionId: SUB_ID, dunningEvent: "retries_exhausted" });
+  });
+
+  it("invoice.payment_failed with next_payment_attempt ABSENT is treated as exhausted", () => {
+    // A payload that omits the field entirely (== null) must not be read as a live retry.
+    expect(dunningFromStripeEvent(ev("invoice.payment_failed", { subscription: SUB_ID })))
+      .toEqual({ subscriptionId: SUB_ID, dunningEvent: "retries_exhausted" });
+  });
+
+  it("invoice.paid / invoice.payment_succeeded → payment_succeeded", () => {
+    for (const t of ["invoice.paid", "invoice.payment_succeeded"]) {
+      expect(dunningFromStripeEvent(ev(t, { subscription: SUB_ID })))
+        .toEqual({ subscriptionId: SUB_ID, dunningEvent: "payment_succeeded" });
+    }
+  });
+
+  it("customer.subscription.deleted → retries_exhausted", () => {
+    expect(dunningFromStripeEvent(ev("customer.subscription.deleted", { id: SUB_ID })))
+      .toEqual({ subscriptionId: SUB_ID, dunningEvent: "retries_exhausted" });
+  });
+
+  it.each(["unpaid", "canceled", "incomplete_expired"])(
+    "customer.subscription.updated to %s → retries_exhausted",
+    (status) => {
+      expect(dunningFromStripeEvent(ev("customer.subscription.updated", { id: SUB_ID, status })))
+        .toEqual({ subscriptionId: SUB_ID, dunningEvent: "retries_exhausted" });
+    },
+  );
+
+  it("customer.subscription.updated to a non-terminal status → null", () => {
+    expect(dunningFromStripeEvent(ev("customer.subscription.updated", { id: SUB_ID, status: "active" }))).toBeNull();
+    expect(dunningFromStripeEvent(ev("customer.subscription.updated", { id: SUB_ID, status: "past_due" }))).toBeNull();
+  });
+
+  it("resolves the subscription id from the newer nested parent.subscription_details shape", () => {
+    const nested = { parent: { subscription_details: { subscription: SUB_ID } }, next_payment_attempt: null };
+    expect(dunningFromStripeEvent(ev("invoice.payment_failed", nested)))
+      .toEqual({ subscriptionId: SUB_ID, dunningEvent: "retries_exhausted" });
+  });
+
+  it("an invoice with no subscription, and an unrelated event type, map to null", () => {
+    expect(dunningFromStripeEvent(ev("invoice.payment_failed", { next_payment_attempt: 1 }))).toBeNull();
+    expect(dunningFromStripeEvent(ev("payment_intent.succeeded", {}))).toBeNull();
   });
 });
 

@@ -1002,6 +1002,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/claims/adjustment-due` | **implemented** | REQ-063 (adjustment-due queue) |
 | `GET /api/admin/queues/retention-expiry` | **implemented** | REQ-046 (retention-expiry queue) |
 | `GET /api/admin/queues/awaiting-declaration` | **implemented** | REQ-049 (awaiting-declaration queue) |
+| `GET /api/admin/queues/gasds-pool` | **implemented** | REQ-050 (annual GASDS pool report) |
 | `GET /api/admin/donations` | **implemented** | REQ-066 (browse all donations, paginated) |
 | `GET /api/admin/claim-batches` | **implemented** | REQ-066 (list claim batches) |
 | `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
@@ -1194,6 +1195,13 @@ excludes already-claimed gifts (`gasds_claimed_at IS NULL`), and an Editor+ **"M
 (top-ups are pooled per tax year, so this is NBCC's bookkeeping of which small gifts it has claimed on).
 Proven by `test/unit/gasds-deadline.test.ts` + `test/unit/gasds-deadline-queue.test.ts` +
 `test/unit/gasds-mark-claimed.test.ts` and the `@db` `features/admin-api.feature`.
+
+The same GASDS admin view also shows this year's **pool report** (REQ-050): `getGasdsPoolReport`
+(`src/gasds/pool.ts`) reads two independent sums — the `gasds_eligible` small-donations pool and,
+**separately**, the claimed Gift Aid total (never conflated) — and reports the remaining headroom
+against the caps (`gasdsPoolLimitPence`). It is exposed at read-only Viewer+ `GET
+/api/admin/queues/gasds-pool?year=` (defaulting to the current calendar year) and rendered as three
+stat cards above the deadline table. Proven by `test/unit/admin-api.test.ts`.
 
 **Declaration-review-due queue (TASK-136).** HMRC recommends re-confirming **active donors roughly
 every two years** (still paying enough tax, details current) — exactly the enduring/monthly declaration

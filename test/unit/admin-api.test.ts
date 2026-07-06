@@ -42,6 +42,7 @@ import {
   getAdminAdjustmentDue,
   getAdminRetentionExpiry,
   getAdminAwaitingDeclaration,
+  getAdminGasdsPool,
 } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
@@ -412,6 +413,47 @@ describe("GET /api/admin/queues/awaiting-declaration", () => {
     // The query filters declaration_status to 'sent'/'undelivered' (bounced emails included).
     const call = queryMock.mock.calls.find((c) => /declaration_status\s+in\s*\(\s*'sent'\s*,\s*'undelivered'\s*\)/i.test(String(c[0])));
     expect(call).toBeTruthy();
+  });
+});
+
+// --- GASDS pool report (REQ-050) ----------------------------------------------------------------
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const runGasdsPool = async (o: any) => { const res = mockRes(); await getAdminGasdsPool(req(o) as any, res as any); return res; };
+
+describe("GET /api/admin/queues/gasds-pool", () => {
+  it("401s with no token", async () => {
+    expect((await runGasdsPool({ token: "" })).statusCode).toBe(401);
+  });
+
+  it.each(["viewer", "editor", "admin"])("lets %s read the annual pool report", async (role) => {
+    // getGasdsPoolReport reads two independent sums via pool.query: (a) gasds_eligible pool, then
+    // (b) claimed Gift Aid total. Return them in order.
+    queryMock.mockReset();
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ total: 120000 }], rowCount: 1 }) // (a) pool total £1,200
+      .mockResolvedValueOnce({ rows: [{ total: 500000 }], rowCount: 1 }); // (b) claimed Gift Aid £5,000
+    const res = await runGasdsPool({ role, query: { year: "2026" } });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as {
+      year: number; gasdsPoolTotalPence: number; giftAidClaimedPence: number; remainingHeadroomPence: number;
+    };
+    expect(body.year).toBe(2026);
+    expect(body.gasdsPoolTotalPence).toBe(120000);
+    // The two totals are read separately, never conflated (REQ-050).
+    expect(body.giftAidClaimedPence).toBe(500000);
+    expect(typeof body.remainingHeadroomPence).toBe("number");
+    // Both sums were parameterised on the requested year.
+    expect(queryMock.mock.calls.every((c) => c[1]?.[0] === 2026)).toBe(true);
+  });
+
+  it("defaults to the current calendar year when ?year is absent", async () => {
+    queryMock.mockReset();
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ total: 0 }], rowCount: 1 });
+    const res = await runGasdsPool({ role: "viewer" });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { year: number }).year).toBe(new Date().getFullYear());
   });
 });
 

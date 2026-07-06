@@ -427,10 +427,10 @@ Below the story, the `section.meet-team` ("Meet the Volunteers", named by its
   `.member .em` `mailto:` link (`name@nbcc.scot`). Isabel reuses the existing
   `team-isabella.jpg` headshot.
 - **`.team-elves`** — the thirteen **Volunteer Elves** (under a `.team-subhead`
-  subheading) in **alphabetical order**: Dawn, Jill, Lisa Marie, Liz, Lucy,
+  subheading) in **alphabetical order**: Dawn, Jill, Lisa-Marie, Liz, Lucy,
   Margaret, Matt, Morag, Paul, Scott, Sue, Tygan, Vicky. Elves with a supplied
-  headshot use a lazy 640×800 `team-<name>.jpg` `<img>` (Dawn, Jill, Liz, Sue,
-  Tygan, Vicky); those still awaiting one
+  headshot use a lazy 640×800 `team-<name>.jpg` `<img>` (Dawn, Jill, Lisa-Marie,
+  Liz, Sue, Tygan, Vicky); those still awaiting one
   use a `.member-photo.is-pending` placeholder tile (dashed 4:5 box + muted
   `aria-label`ed person icon). Drop `/assets/img/team-<name>.jpg` in to fill a
   placeholder. A `CONTENT VERIFICATION` HTML comment flags the pending headshots.

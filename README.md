@@ -1646,7 +1646,12 @@ itself (~3 attempts / ~2 weeks) is a Stripe Dashboard "Smart Retries" setting, n
 value this service sets** — the table only records the outcome Stripe reports. Unit-tested DB-free
 (`test/unit/subscription-dunning.test.ts`). The webhook that reads Stripe's invoice/subscription
 events and persists the status (plus the lapsed-subscription notifications) is wired in TASK-092 —
-see **Lapsed-subscription notifications** under the webhook section below.
+see **Lapsed-subscription notifications** under the webhook section below. The full renewal-failure
+lifecycle is exercised end-to-end through `processWebhookEvent` in `test/unit/stripe-webhook-dunning.test.ts`:
+`invoice.payment_failed` with a retry still due (`active → past_due`), with retries exhausted
+(`next_payment_attempt: null → lapsed`), `customer.subscription.updated` to `unpaid`/`canceled`, the
+recovery of a `past_due` row on `invoice.paid`, and the `dunningFromStripeEvent` mapper across both the
+flat and nested (`parent.subscription_details`) invoice shapes.
 
 **Declaration wording (REQ-040).** `src/declarations/wording.ts` is the versioned,
 verbatim source of truth for HMRC's Gift Aid liability statements — a

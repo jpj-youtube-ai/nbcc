@@ -16,6 +16,7 @@ Feature: Marketing site served by the app
       | /supporters | Supporters           |
       | /donate/thank-you | Thank you |
       | /donor-portal | Manage your support |
+      | /portal/access | Manage your support |
       | /privacy    | Privacy notice |
       | /admin      | Staff sign in |
 

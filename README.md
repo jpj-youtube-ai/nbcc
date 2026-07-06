@@ -1361,7 +1361,12 @@ front-end degrades to its preview.
 > opt-in — so the full request → `{ url }` flow (including the gift-aided path) is
 > exercised end to end (see `features/checkout.feature`) without a Stripe account.
 > Production **never** stubs, so a missing real key surfaces loudly. Verified by
-> `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios.
+> `test/unit/checkout-session.test.ts` (mocked client) + the BDD scenarios, and the
+> stub-vs-live switch itself is locked by `test/unit/stripe-config.test.ts`: the
+> `(sk|rk)_(test|live)_` + 20-char-token regex across every key shape (incl. the
+> 20-vs-19-char boundary and a rejected `pk_`/placeholder), plus the go-live
+> invariant that **production selects the real SDK even with a placeholder key**
+> (loud failure, not a silent fake checkout).
 >
 > **Pinned API version.** Both real SDK clients (the checkout/subscription client
 > and the webhook verifier) are constructed with an explicit `apiVersion`

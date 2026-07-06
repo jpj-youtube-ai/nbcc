@@ -13,6 +13,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# git-bash/MSYS rewrites a leading "/charity-site/..." arg into a Windows path, which
+# makes `aws ssm put-parameter --name /charity-site/...` fail ("must be fully
+# qualified name"). Disable that path conversion for this script.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL='*'
+
 REGION="eu-west-2"
 CLUSTER="charity-site-production"
 SERVICE="charity-site-production"

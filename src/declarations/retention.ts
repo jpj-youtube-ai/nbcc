@@ -1,19 +1,26 @@
 import { type Scope } from "./wording";
 
-// The pure, DB-free declaration retention-expiry calculator (REQ-046). An immutable Gift
-// Aid declaration must be retained SIX YEARS after the most recent claimed donation, and
-// permanently while an enduring / monthly declaration's subscription is still active. On
-// cancellation the six-year clock is anchored to the FINAL claimed charge, never to the
-// cancellation timestamp itself. No pool/config/clock — like src/declarations/wording.ts
-// and src/db/donations-model.ts it is unit-tested DB-free. This module only computes the
-// expiry date; the REQ-063 admin retention-expiry queue that will call it is out of scope.
+// The pure, DB-free declaration retention-expiry calculator (REQ-046). HMRC's basis is to keep
+// Gift Aid records SIX YEARS after the END OF THE ACCOUNTING PERIOD the donation relates to — not
+// six years after the charge date itself (TASK-134). NBCC has no stored financial year-end, so the
+// accounting period is proxied by the UK TAX YEAR (6 April–5 April): the clock is anchored to the
+// 5 April that ends the tax year of the final claimed charge, then six years are added. This is
+// slightly conservative (records are kept a little longer, never binned early). An enduring /
+// monthly declaration is retained permanently while its subscription is live; on cancellation the
+// clock still anchors to the FINAL claimed charge's tax-year-end, never to the cancellation
+// timestamp. No pool/config/clock — unit-tested DB-free. This module only computes the expiry date;
+// the admin retention-expiry queue (src/db/admin.ts) calls it.
 //
-// Online declarations require NO 30-day confirmation letter (REQ-046 accept clause), so
-// there is no confirmation-window offset to model here — only the six-year-after-last-claim
-// rule below.
+// Online declarations require NO 30-day confirmation letter (REQ-046 accept clause), so there is no
+// confirmation-window offset to model here.
 
 // HMRC's six-year Gift Aid record-retention window.
 export const RETENTION_YEARS = 6;
+
+// The UK tax year ends on 5 April (month index 3). A donation on/before 5 April falls in the tax
+// year ending that 5 April; on/after 6 April it falls in the next one.
+export const TAX_YEAR_END_MONTH = 3; // April, 0-indexed
+export const TAX_YEAR_END_DAY = 5;
 
 export interface RetentionInput {
   // The persisted declarations.scope (REQ-044). An enduring declaration is `all_donations`
@@ -30,13 +37,23 @@ export interface RetentionInput {
   cancelledAt: Date | string | null;
 }
 
-// Six years after a given instant, computed in UTC so the result is independent of the
-// server's timezone. Does not mutate the input. Leap-day anchors (29 Feb) roll to 1 Mar,
-// which JS Date handles natively.
-function addRetentionYears(at: Date): Date {
-  const expiry = new Date(at.getTime());
-  expiry.setUTCFullYear(expiry.getUTCFullYear() + RETENTION_YEARS);
-  return expiry;
+// The 5 April (UTC) that ends the UK tax year containing `at` — the accounting-period-end proxy.
+function endOfUkTaxYear(at: Date): Date {
+  const y = at.getUTCFullYear();
+  const m = at.getUTCMonth();
+  const d = at.getUTCDate();
+  const onOrBeforeApr5 =
+    m < TAX_YEAR_END_MONTH || (m === TAX_YEAR_END_MONTH && d <= TAX_YEAR_END_DAY);
+  const endYear = onOrBeforeApr5 ? y : y + 1;
+  return new Date(Date.UTC(endYear, TAX_YEAR_END_MONTH, TAX_YEAR_END_DAY));
+}
+
+// Six years after the end of the accounting period (tax-year-end) of the given instant, in UTC so
+// the result is timezone-independent.
+function retentionExpiryFrom(at: Date): Date {
+  const periodEnd = endOfUkTaxYear(at);
+  periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + RETENTION_YEARS);
+  return periodEnd;
 }
 
 // Compute a declaration's retention-expiry date, or null to retain it indefinitely.
@@ -62,5 +79,5 @@ export function computeRetentionExpiry(input: RetentionInput): Date | null {
       ? input.lastClaimedDonationAt
       : new Date(input.lastClaimedDonationAt);
 
-  return addRetentionYears(finalCharge);
+  return retentionExpiryFrom(finalCharge);
 }

@@ -1656,13 +1656,15 @@ partner declarations rather than a single `declaration_id`) is a REQ-051 follow-
 **Declaration retention (REQ-046 · TASK-068).** `src/declarations/retention.ts` is the
 pure, DB-free calculator for how long an immutable declaration must be kept.
 `computeRetentionExpiry({ scope, subscriptionActive, lastClaimedDonationAt, cancelledAt })`
-returns the retention-expiry `Date`, or `null` to retain indefinitely. HMRC's six-year
-window (`RETENTION_YEARS`) runs from the **most recent claimed donation**: while an enduring
-/ monthly declaration's subscription is active it is retained indefinitely (`null`); once
-inactive or cancelled the six-year clock is anchored to the **final claimed charge**
-(`lastClaimedDonationAt` as of cancellation), **not** the cancellation timestamp — a
-cancellation long after the last charge cannot extend retention. A `this_donation`
-declaration with a single claimed donation expires six years after that donation. **Edge
+returns the retention-expiry `Date`, or `null` to retain indefinitely. HMRC's basis is six
+years after the **end of the accounting period** the donation relates to (TASK-134); NBCC has
+no stored financial year-end, so the accounting period is proxied by the **UK tax year** (ends
+5 April) — the six-year window (`RETENTION_YEARS`) runs from the 5 April that ends the tax year
+of the most recent claimed donation (slightly conservative, so records are never binned early).
+While an enduring / monthly declaration's subscription is active it is retained indefinitely
+(`null`); once inactive or cancelled the clock is anchored to the **final claimed charge's
+tax-year-end** (`lastClaimedDonationAt` as of cancellation), **not** the cancellation timestamp
+— a cancellation long after the last charge cannot extend retention. **Edge
 case:** a declaration with **no claimed donation at all** has no anchor for the clock —
 nothing to retain against — so the calculator returns `null` deterministically (no throw),
 which the caller reads as "no computable expiry", not "retain forever". Online declarations

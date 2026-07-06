@@ -6,6 +6,7 @@ import {
   authenticatePortalToken,
   getDonorPortalSnapshot,
   getDonorDonationHistory,
+  getActiveDeclarationForDonor,
   updateDonorPortal,
   issuePortalAccessToken,
   findNewestDonorByEmail,
@@ -15,9 +16,11 @@ import { sendPortalMagicLink } from "../clients/email";
 import { createRateLimiter } from "../portal/request-limiter";
 import {
   cancelDeclaration,
+  reviseDeclaration,
   findActiveDeclarationIdForDonor,
   DeclarationCancellationError,
 } from "../db/declarations";
+import { declarationFieldsSchema } from "../declarations/fields";
 
 // The self-serve donor portal API (REQ-061 · TASK-101). A donor reaches it via a one-time, expiring
 // magic-link token (TASK-100); EVERY route authenticates that token with verifyPortalToken and
@@ -52,7 +55,8 @@ export async function getPortal(req: Request, res: Response): Promise<Response |
     const history = snapshot.email
       ? await getDonorDonationHistory(snapshot.email)
       : { totalPence: 0, count: 0, donations: [] };
-    return res.status(200).json({ ...snapshot, history });
+    const declaration = await getActiveDeclarationForDonor(donorId);
+    return res.status(200).json({ ...snapshot, history, declaration });
   } catch (err) {
     console.error("portal read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Portal is temporarily unavailable" });
@@ -88,6 +92,50 @@ export async function patchPortal(req: Request, res: Response): Promise<Response
   } catch (err) {
     console.error("portal update failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Portal update is temporarily unavailable" });
+  }
+}
+
+// Edit the identity / address on the donor's ACTIVE Gift Aid declaration (REQ-059 · TASK-129). The
+// token authenticates the donor; the body is the declaration's matching fields (declarationFieldsSchema).
+// We hold scope + taxpayer confirmation at the declaration's CURRENT values, so reviseDeclaration always
+// takes the AMEND path (update the matching columns in place, a `declaration.amended` audit note — no new
+// row); a scope/consent change is out of scope here. The account name is synced to first+last so
+// donors.full_name never diverges from the declaration. No active declaration → 404. NOTE: reviseDeclaration
+// and updateDonorPortal are two audited transactions — the declaration (the HMRC-matching record) commits
+// first; a name-sync failure afterwards is a logged 500 leaving only the account display name stale (a
+// cosmetic drift a retry fixes). Folding both into one transaction is a documented follow-up.
+export async function patchDeclaration(req: Request, res: Response): Promise<Response | void> {
+  const donorId = await authOrReject(req, res);
+  if (donorId == null) return;
+
+  const parsed = declarationFieldsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid declaration update", details: parsed.error.flatten() });
+  }
+  const fields = parsed.data;
+
+  try {
+    const active = await getActiveDeclarationForDonor(donorId);
+    if (!active) {
+      return res.status(404).json({ error: "No active Gift Aid declaration to edit" });
+    }
+    // scope + taxpayer held at the current values → always the amend path. mode only feeds wording
+    // selection, which the amend path never emits, so a fixed "once" is safe here.
+    const result = await reviseDeclaration(active.id, fields, {
+      scope: active.scope,
+      confirmedTaxpayer: active.confirmedTaxpayer,
+      mode: "once",
+      actor: "donor",
+    });
+    // Keep the account name in sync with the declaration name (option b).
+    await updateDonorPortal(donorId, { fullName: `${fields.firstName} ${fields.lastName}` }, "donor");
+
+    const declaration = await getActiveDeclarationForDonor(donorId);
+    const snapshot = await getDonorPortalSnapshot(donorId);
+    return res.status(200).json({ ...snapshot, declaration, outcome: result.outcome });
+  } catch (err) {
+    console.error("portal declaration update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Declaration update is temporarily unavailable" });
   }
 }
 
@@ -199,6 +247,7 @@ export async function postRequestAccess(req: Request, res: Response): Promise<Re
 
 portalRouter.get("/api/portal/:token", getPortal);
 portalRouter.patch("/api/portal/:token", patchPortal);
+portalRouter.patch("/api/portal/:token/declaration", patchDeclaration);
 portalRouter.post("/api/portal/:token/subscription/cancel", postCancelSubscription);
 portalRouter.post("/api/portal/:token/gift-aid/cancel", postCancelGiftAid);
 portalRouter.post("/api/portal/request", postRequestAccess);

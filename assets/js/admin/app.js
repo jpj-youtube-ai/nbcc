@@ -165,12 +165,14 @@
       authFetch("/api/admin/claims/adjustment-due").then(j),
       authFetch("/api/admin/queues/retention-expiry").then(j),
       authFetch("/api/admin/queues/awaiting-declaration").then(j),
+      authFetch("/api/admin/queues/gasds-deadline").then(j),
     ])
       .then(function (r) {
         stats.innerHTML =
           statCard((r[0].results || []).length, "Adjustments due", true) +
           statCard((r[1].results || []).length, "Retention expiring", true) +
-          statCard((r[2].results || []).length, "Awaiting declaration", false);
+          statCard((r[2].results || []).length, "Awaiting declaration", false) +
+          statCard((r[3].results || []).length, "GASDS deadline near", true);
       })
       .catch(function () {});
     authFetch("/api/admin/donations?limit=10")

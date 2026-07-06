@@ -15,6 +15,7 @@ import {
   ClaimBatchSubmitError,
   listRetentionExpiryDeclarations,
   listAwaitingDeclarationDonations,
+  listGasdsDeadlineDonations,
   listDonations,
   listClaimBatches,
   listAuditLog,
@@ -489,8 +490,21 @@ export async function getAdminAwaitingDeclaration(req: Request, res: Response): 
   }
 }
 
+// GASDS 2-year claim-deadline queue (TASK-135): small donations approaching or past the GASDS
+// claim cliff (2 years after the tax-year-end of collection — shorter than Gift Aid's 4 years).
+export async function getAdminGasdsDeadline(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listGasdsDeadlineDonations() });
+  } catch (err) {
+    console.error("admin gasds-deadline queue failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/queues/retention-expiry", getAdminRetentionExpiry);
 adminRouter.get("/api/admin/queues/awaiting-declaration", getAdminAwaitingDeclaration);
+adminRouter.get("/api/admin/queues/gasds-deadline", getAdminGasdsDeadline);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
 // Read-only lists that back the admin cockpit UI. Browsing/reads are Viewer and up; the Charities

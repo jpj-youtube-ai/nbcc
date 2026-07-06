@@ -1167,6 +1167,16 @@ all eligible small gifts by deadline; suppressing already-claimed ones is a note
 `test/unit/gasds-deadline.test.ts` + `test/unit/gasds-deadline-queue.test.ts` and the `@db`
 `features/admin-api.feature`.
 
+**Declaration-review-due queue (TASK-136).** HMRC recommends re-confirming **active donors roughly
+every two years** (still paying enough tax, details current) — exactly the enduring/monthly declaration
+population. `listDeclarationsDueReview` (`src/db/admin.ts`, `DECLARATION_REVIEW_YEARS = 2`) is a
+read-only Viewer+ queue at `GET /api/admin/queues/declaration-review` listing **active** (`revoked_at
+IS NULL`) enduring (`all_donations`) declarations made more than two years ago, with `reviewDueSince`
+(`created_at + 2y`). There is no separate `reviewed_at` column yet, so the declaration's own
+`created_at` is the anchor — re-confirming a donor issues a fresh declaration via `reviseDeclaration`,
+resetting the clock. It surfaces as a **"Declaration review due"** overview stat. Proven by
+`test/unit/declaration-review-queue.test.ts` and the `@db` `features/admin-api.feature`.
+
 **Dashboard read lists (REQ-066 · TASK-114).** The reads that back the admin cockpit UI, all `viewer`
 and up (missing/invalid token → **401**) except the CSV export. `GET /api/admin/donations` browses
 every donation newest-first with optional `?status`/`?channel` filters and a bounded `?limit`/`?offset`

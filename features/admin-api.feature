@@ -73,6 +73,7 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
       | retention-expiry     |
       | awaiting-declaration |
       | gasds-deadline       |
+      | declaration-review   |
 
   Scenario Outline: the admin queues reject a missing token with 401
     When I GET the admin queue "<queue>" without a token
@@ -83,6 +84,7 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
       | retention-expiry     |
       | awaiting-declaration |
       | gasds-deadline       |
+      | declaration-review   |
 
   Scenario Outline: a Viewer can read the dashboard lists (REQ-066)
     Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"

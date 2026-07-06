@@ -83,7 +83,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("appView").hidden).toBe(false);
     expect(el("userEmail").textContent).toBe("editor@nbcc");
     expect(el("userRole").textContent).toBe("editor");
-    expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(4);
+    expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(5);
     await flush();
     expect(document.querySelector("#overviewRecent table")).not.toBeNull();
 

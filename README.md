@@ -1102,7 +1102,11 @@ their `users` rows (`kenny@`/`isabella@nightbeforechristmas.co.uk`) with `role='
 via `ON CONFLICT (email) DO UPDATE SET role='admin'` (so a re-run, or a pre-existing row, is upgraded
 rather than duplicated). No `password_hash` is set — the accounts cannot log in until a password is set
 out of band (golden rule 4), the safe default. Additive/expand-contract (a data INSERT, no schema
-change); guarded by `test/unit/admin-seed-migration.test.ts` and applied by CI's migrations job.
+change); guarded by `test/unit/admin-seed-migration.test.ts` and applied by CI's migrations job. A
+later data-only migration `1783345566569_update-admin-emails-nbcc-scot.js` (TASK-147) repoints those
+two identities onto the **nbcc.scot** domain (`kenny@`/`isabella@nbcc.scot`, matching the public
+contact addresses) and adds a third admin, `paul.popa1995@yahoo.ro`; same idempotent
+`ON CONFLICT (email) DO UPDATE`, guarded by `test/unit/admin-email-migration.test.ts`.
 
 **`GET`/`PATCH /api/admin/donors/:id`, `POST …/subscription/cancel`, `POST …/gift-aid/cancel`
 (REQ-062 · TASK-106).** The role-gated admin actions that let an Editor/Admin act on a donor's

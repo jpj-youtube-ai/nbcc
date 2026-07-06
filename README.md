@@ -368,9 +368,11 @@ slot, stacking ≤680px). The copy column has an eyebrow ("Why your donation
 matters"), an emotive `<h2>` ("Every pound reminds someone they have not been
 forgotten."), the `.rule` divider under it, two leaflet paragraphs, and a
 **Support NBCC** `.btn-primary` linking to `/donate`. The photo column is a
-`.photo-slot` placeholder (a `<figure>` with a decorative camera icon + caption,
-**no `<img>` yet** — the real packing/delivery photo is REQ-034). Token-only
-colours, reusing `.btn`/`.rule`/`.reveal`/`.card` tokens. Verified by
+`.photo-slot` `<figure>` holding the real consented photo
+(`assets/img/home-red-bags-handover.jpg`, NBCC volunteers at the Elves Workshop,
+`loading="lazy"` with descriptive alt text; provenance in `assets/img/CREDITS.md`).
+`.photo-slot` drops the placeholder chrome and cover-fits the image to the 4:5 slot.
+Token-only colours, reusing `.btn`/`.rule`/`.reveal`/`.card` tokens. Verified by
 `test/unit/home-why.test.ts`.
 
 ### Closing CTA strip (REQ-013)

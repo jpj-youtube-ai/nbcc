@@ -88,7 +88,19 @@ jobs:
         run: |
           aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \
             --task-definition "$TASK_ARN" >/dev/null
-          aws ecs wait services-stable --cluster "$CLUSTER" --service "$SERVICE"
+          # `wait services-stable` caps at ~10 min (40 x 15s). A slow-draining
+          # deploy can converge just after that, so the waiter errors while the
+          # rollout is actually fine. Retry up to 3 waits (~30 min total) before
+          # failing; the ECS circuit breaker still owns real rollback.
+          for attempt in 1 2 3; do
+            if aws ecs wait services-stable --cluster "$CLUSTER" --service "$SERVICE"; then
+              echo "service stable (attempt $attempt)"
+              exit 0
+            fi
+            echo "services-stable wait attempt $attempt timed out; retrying"
+          done
+          echo "service did not stabilize after 3 waits" >&2
+          exit 1
 
       - name: Smoke test production
         run: bash scripts/smoke.sh "$ALB_URL"

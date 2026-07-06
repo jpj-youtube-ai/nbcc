@@ -100,10 +100,9 @@ export async function patchPortal(req: Request, res: Response): Promise<Response
 // We hold scope + taxpayer confirmation at the declaration's CURRENT values, so reviseDeclaration always
 // takes the AMEND path (update the matching columns in place, a `declaration.amended` audit note — no new
 // row); a scope/consent change is out of scope here. The account name is synced to first+last so
-// donors.full_name never diverges from the declaration. No active declaration → 404. NOTE: reviseDeclaration
-// and updateDonorPortal are two audited transactions — the declaration (the HMRC-matching record) commits
-// first; a name-sync failure afterwards is a logged 500 leaving only the account display name stale (a
-// cosmetic drift a retry fixes). Folding both into one transaction is a documented follow-up.
+// donors.full_name never diverges from the declaration. No active declaration → 404. The declaration
+// amend and the name sync run in ONE transaction (reviseDeclaration's syncDonorFullName, TASK-131), so
+// they commit or roll back together.
 export async function patchDeclaration(req: Request, res: Response): Promise<Response | void> {
   const donorId = await authOrReject(req, res);
   if (donorId == null) return;
@@ -120,15 +119,15 @@ export async function patchDeclaration(req: Request, res: Response): Promise<Res
       return res.status(404).json({ error: "No active Gift Aid declaration to edit" });
     }
     // scope + taxpayer held at the current values → always the amend path. mode only feeds wording
-    // selection, which the amend path never emits, so a fixed "once" is safe here.
+    // selection, which the amend path never emits, so a fixed "once" is safe here. The account name is
+    // kept in sync (option b) in the SAME transaction (syncDonorFullName, TASK-131) — atomic.
     const result = await reviseDeclaration(active.id, fields, {
       scope: active.scope,
       confirmedTaxpayer: active.confirmedTaxpayer,
       mode: "once",
       actor: "donor",
+      syncDonorFullName: `${fields.firstName} ${fields.lastName}`,
     });
-    // Keep the account name in sync with the declaration name (option b).
-    await updateDonorPortal(donorId, { fullName: `${fields.firstName} ${fields.lastName}` }, "donor");
 
     const declaration = await getActiveDeclarationForDonor(donorId);
     const snapshot = await getDonorPortalSnapshot(donorId);

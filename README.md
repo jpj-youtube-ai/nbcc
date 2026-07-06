@@ -1933,8 +1933,9 @@ touched), so a code-level rollback stays safe (golden rule 2).
 **Benefit-cap calculation + write (REQ-045 · TASK-067).** The pure HMRC cap logic lives in
 `src/benefits/caps.ts` — no pool/config/clock, so it is unit-tested DB-free
 (`test/unit/benefit-caps.test.ts`), mirroring `src/db/donations-model.ts`. `benefitCapPence`
-implements the three tiers on the **annualised donation**: ≤£100 → 25% of the donation,
-£100–£1,000 → a flat £25, >£1,000 → 5% up to a £2,500 max. `deriveBenefitCapBreach({
+implements HMRC's post-2019 **relevant value test** on the **annualised donation**: **25% of the
+first £100 + 5% of everything above £100, capped at £2,500** (so £120/yr → £26, £1,200/yr → £80).
+`deriveBenefitCapBreach({
 annualisedDonationPence, benefitValuePence })` returns whether the (annualised) benefit
 total exceeds that cap; `annualisePence` scales a monthly gift ×12 so the donation and the
 benefit total are banded on the same yearly basis. The five seeded **recognition perks**

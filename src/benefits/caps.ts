@@ -7,30 +7,29 @@ import { MODES } from "../db/donations-model";
 // persists donation_benefits rows and flips donations.benefit_cap_breached lives in
 // src/db/donations.ts (recordDonationBenefits); this module only decides values + breach.
 
-// HMRC's donor-benefit limits are tiered by the ANNUALISED donation amount (a regular
-// monthly gift is annualised ×12 before the bands apply — see annualisePence):
-//   • donation ≤ £100        → benefit cap = 25% of the donation
-//   • £100 < donation ≤ £1,000 → benefit cap = a flat £25
-//   • donation > £1,000       → benefit cap = 5% of the donation, up to a max of £2,500
-// A gift breaches the cap when the (annualised) total benefit value exceeds that cap.
-// All money is in integer pence, matching the DB columns.
-export const TIER1_DONATION_MAX_PENCE = 10_000; // £100
-export const TIER2_DONATION_MAX_PENCE = 100_000; // £1,000
-export const TIER1_RATE = 0.25; // 25% of the donation
-export const TIER2_FLAT_CAP_PENCE = 2_500; // flat £25
-export const TIER3_RATE = 0.05; // 5% of the donation
-export const TIER3_MAX_CAP_PENCE = 250_000; // £2,500 aggregate max
+// HMRC's donor-benefit limit on the ANNUALISED donation amount (a regular monthly gift is
+// annualised ×12 before the test applies — see annualisePence). Since 6 April 2019 this is the
+// single "relevant value test": there is no longer a three-tier / flat-£25 band. The cap is
+//   25% of the first £100  +  5% of everything above £100,  capped at £2,500 in total.
+// So a £100 gift caps at £25; a £1,200/yr (Platinum) gift caps at £25 + 5% of £1,100 = £80.
+// A gift breaches the cap when the (annualised) total benefit value exceeds that cap. All money is
+// in integer pence, matching the DB columns.
+export const FIRST_BAND_MAX_PENCE = 10_000; // £100 — the 25% band ceiling
+export const FIRST_BAND_RATE = 0.25; // 25% of the first £100
+export const ABOVE_BAND_RATE = 0.05; // 5% of everything above £100
+export const AGGREGATE_MAX_CAP_PENCE = 250_000; // £2,500 total cap
 
 const donationPenceSchema = z.number().int().nonnegative();
 
-// The maximum benefit value (pence) a donation of the given ANNUALISED size may carry
-// before Gift Aid is lost. Percentage tiers floor to whole pence, keeping the cap
-// conservative (a fractional penny never widens what is allowed).
+// The maximum benefit value (pence) a donation of the given ANNUALISED size may carry before Gift
+// Aid is lost, per the relevant value test. The two-band sum floors to whole pence (a fractional
+// penny never widens what is allowed), then the £2,500 aggregate cap applies.
 export function benefitCapPence(annualisedDonationPence: number): number {
   const donation = donationPenceSchema.parse(annualisedDonationPence);
-  if (donation <= TIER1_DONATION_MAX_PENCE) return Math.floor(donation * TIER1_RATE);
-  if (donation <= TIER2_DONATION_MAX_PENCE) return TIER2_FLAT_CAP_PENCE;
-  return Math.min(Math.floor(donation * TIER3_RATE), TIER3_MAX_CAP_PENCE);
+  const firstBand = Math.min(donation, FIRST_BAND_MAX_PENCE);
+  const aboveBand = Math.max(0, donation - FIRST_BAND_MAX_PENCE);
+  const raw = Math.floor(firstBand * FIRST_BAND_RATE + aboveBand * ABOVE_BAND_RATE);
+  return Math.min(raw, AGGREGATE_MAX_CAP_PENCE);
 }
 
 // The breach decision, mirroring deriveClaimStatus in donations-model.ts: a validated

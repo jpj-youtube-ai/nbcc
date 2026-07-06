@@ -127,25 +127,25 @@ describe("recordDonationBenefits — named recognition perks are recorded at £0
 
 describe("recordDonationBenefits — sets benefit_cap_breached from the annualised totals (REQ-045)", () => {
   it("flags a breach (true) when the benefit total exceeds the cap", async () => {
-    donationRow = { amount_pence: pounds(2_000), mode: "once" }; // cap = 5% = £100
+    donationRow = { amount_pence: pounds(2_000), mode: "once" }; // cap = £25 + 5% of £1,900 = £120
     const result = await recordDonationBenefits(42, 10, [
-      { benefitTypeId: 1, name: "gala dinner", valuePence: pounds(101) },
+      { benefitTypeId: 1, name: "gala dinner", valuePence: pounds(121) },
     ]);
     expect(result.capBreached).toBe(true);
     expect(call(/update donations/i)?.[1]).toEqual([true, 42]);
   });
 
   it("does not flag a breach (false) when the benefit total is within the cap", async () => {
-    donationRow = { amount_pence: pounds(2_000), mode: "once" }; // cap = £100
+    donationRow = { amount_pence: pounds(2_000), mode: "once" }; // cap = £120 (relevant value test)
     const result = await recordDonationBenefits(42, 10, [
-      { benefitTypeId: 1, name: "gala dinner", valuePence: pounds(100) },
+      { benefitTypeId: 1, name: "gala dinner", valuePence: pounds(120) },
     ]);
     expect(result.capBreached).toBe(false);
     expect(call(/update donations/i)?.[1]).toEqual([false, 42]);
   });
 
   it("annualises a monthly gift ×12 for BOTH the donation and the benefit total", async () => {
-    // £10/mo → £120/yr donation → tier 2 flat £25 cap. A £3/mo benefit → £36/yr > £25 ⇒ breach.
+    // £10/mo → £120/yr donation → £26 cap (relevant value test). A £3/mo benefit → £36/yr > £26 ⇒ breach.
     donationRow = { amount_pence: pounds(10), mode: "monthly" };
     const result = await recordDonationBenefits(42, 10, [
       { benefitTypeId: 1, name: "monthly newsletter perk", valuePence: pounds(3) },

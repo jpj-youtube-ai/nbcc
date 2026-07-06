@@ -922,6 +922,19 @@ landmarks (REQ-032). Registered in the sitewide `seo-metadata` / `accessibility`
 links and the clean-URL wiring are proven by `test/unit/privacy-links.test.ts`, and `/privacy` serving
 end to end by the `features/site.feature` clean-URL rows.
 
+**Fundraising governance (TASK-137).** Two governance references, so recurring-giving comms and any
+future marketing sit inside the regulatory framework:
+- **Fundraising self-regulation** — `/privacy` carries a **Fundraising standards** section: NBCC
+  follows the **Code of Fundraising Practice**, overseen in Scotland by the **Scottish Fundraising
+  Adjudication Panel**, and points donors at the **Fundraising Preference Service** to manage/stop
+  fundraising contact.
+- **BACS advance-notice duty** — NBCC is the Direct Debit scheme user, so it carries the duty to give
+  **advance notice of the amount and date before the first collection and before any change** (e.g. a
+  tier up/down). Stripe surfaces some of this, but the duty is NBCC's; the `/donate` "Cancel any time"
+  reassurance states it to the donor. This is a standing **requirement**, not an assumption, for any
+  monthly-gift or plan-change comms.
+Both lines are guarded by `test/unit/fundraising-governance.test.ts`.
+
 ### Checkout contract (REQ-028)
 
 Every amount control wires the one front-end → backend integration point. Each

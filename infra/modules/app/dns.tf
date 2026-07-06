@@ -56,6 +56,46 @@ resource "aws_route53_record" "dkim" {
   records = [join("\"\"", local.dkim_chunks)]
 }
 
+# ---- Resend (transactional email relay) domain verification --------------------
+# Verifies nbcc.scot as a Resend sending domain for the email-relay Worker
+# (services/email-relay). All on distinct names, so no clash with the Google
+# Workspace apex MX/TXT above. DMARC is set to p=none (monitor-only) as a baseline.
+resource "aws_route53_record" "resend_dkim" {
+  count   = local.https_enabled ? 1 : 0
+  zone_id = aws_route53_zone.primary[0].zone_id
+  name    = "resend._domainkey.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 3600
+  records = ["p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDObmTJ0OFRvcEFtdxNNptkaGrbU6xnXoHkZj3CoB7cfSLywko1WOUYsinRa3DjQ67QAyLcfQeZKP+jyxcb/Hj+WCSOtNWQ5H4h7CzizVjiQ/JeRwSJNiYG6cl2RiL7avUsGgni2ri+y30XRUbzeQCGMAt68+Wd7YjRw8uteMaLtwIDAQAB"]
+}
+
+resource "aws_route53_record" "resend_mx" {
+  count   = local.https_enabled ? 1 : 0
+  zone_id = aws_route53_zone.primary[0].zone_id
+  name    = "send.${var.domain_name}"
+  type    = "MX"
+  ttl     = 3600
+  records = ["10 feedback-smtp.eu-west-1.amazonses.com"]
+}
+
+resource "aws_route53_record" "resend_spf" {
+  count   = local.https_enabled ? 1 : 0
+  zone_id = aws_route53_zone.primary[0].zone_id
+  name    = "send.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 3600
+  records = ["v=spf1 include:amazonses.com ~all"]
+}
+
+resource "aws_route53_record" "dmarc" {
+  count   = local.https_enabled ? 1 : 0
+  zone_id = aws_route53_zone.primary[0].zone_id
+  name    = "_dmarc.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 3600
+  records = ["v=DMARC1; p=none;"]
+}
+
 # ---- ACM certificate (apex + www), DNS-validated, auto-renewing ----------------
 resource "aws_acm_certificate" "app" {
   count                     = local.https_enabled ? 1 : 0

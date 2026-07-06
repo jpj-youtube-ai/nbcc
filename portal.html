@@ -130,6 +130,33 @@
                 <dd id="portalEmail"></dd>
               </div>
             </dl>
+
+            <!-- Self-edit the account details (REQ-061): name, email, marketing consent and the
+                 public-anonymity flag. initPortal prefills this from the snapshot and PATCHes the
+                 changed fields to /api/portal/:token; anonymity is a public-display setting only,
+                 the HMRC claim still uses the real name (REQ-064). -->
+            <form class="give-declaration" id="portalDetailsForm" novalidate>
+              <div class="give-field">
+                <label for="pdName">Name <span class="give-req" aria-hidden="true">*</span></label>
+                <input type="text" id="pdName" name="fullName" class="give-field-input" autocomplete="name" required aria-required="true" />
+              </div>
+              <div class="give-field">
+                <label for="pdEmail">Email</label>
+                <input type="email" id="pdEmail" name="email" class="give-field-input" autocomplete="email" placeholder="you@example.com" />
+              </div>
+              <label class="give-check" for="pdEmailConsent">
+                <input type="checkbox" id="pdEmailConsent" name="emailConsent" class="give-check-box" value="true" />
+                <span class="give-check-text">Keep me updated by email about the impact of my support.</span>
+              </label>
+              <label class="give-check" for="pdAnonymous">
+                <input type="checkbox" id="pdAnonymous" name="anonymous" class="give-check-box" value="true" />
+                <span class="give-check-text">Hide my name from the public supporters page. NBCC still records it for the Gift Aid claim.</span>
+              </label>
+              <div class="portal-actions">
+                <button class="btn btn-primary" type="submit">Save my details</button>
+              </div>
+              <p class="portal-status" id="portalDetailsStatus" role="status" aria-live="polite"></p>
+            </form>
           </div>
 
           <!-- Your monthly gift + reduce-instead-then-cancel (REQ-055). -->

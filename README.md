@@ -887,7 +887,12 @@ page). A centred intro (the `DONOR PORTAL` CSS block) sits above a stack of `.ca
 sections. `initPortal` (`assets/js/main.js`, exported + unit-tested like
 `initContactForm`) reads the token from the query string and, on load, calls **`GET
 /api/portal/:token`**, rendering the donor's name/email, monthly-gift plan and Gift
-Aid status from the snapshot. Cancelling the monthly gift is **gated behind a
+Aid status from the snapshot. The **"Your details" card** also carries a self-edit
+form (`#portalDetailsForm`): `initPortal` prefills name, email, marketing consent and
+the public-anonymity flag from the snapshot, and submitting **`PATCH /api/portal/:token`**
+(the bare route) with the changed fields, reflecting the returned snapshot back into the
+read-only display. Anonymity is a public-display setting only —
+the HMRC claim still uses the donor's real name (REQ-064). Cancelling the monthly gift is **gated behind a
 reduce-instead choice** (REQ-055): the cancel action lives inside `#reduceChoice`,
 which stays hidden until the donor asks to cancel, so reducing is always offered
 first; confirming posts to **`POST /api/portal/:token/subscription/cancel`** with

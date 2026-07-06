@@ -31,6 +31,7 @@ import { getDonorPortalSnapshot, updateDonorPortal, getActiveDeclarationForDonor
 import { cancelSubscription } from "../clients/stripe";
 import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
 import { declarationFieldsSchema } from "../declarations/fields";
+import { getGasdsPoolReport } from "../gasds/pool";
 import { config } from "../config";
 
 // The role-based admin login endpoint (REQ-062 · TASK-105). POST /api/admin/login verifies a staff
@@ -540,8 +541,25 @@ export async function postAdminMarkGasdsClaimed(req: Request, res: Response): Pr
   }
 }
 
+// GET /api/admin/queues/gasds-pool?year= — the annual GASDS small-donations pool report (REQ-050):
+// the pool total, the SEPARATELY-read claimed Gift Aid total, and the remaining headroom (the binding
+// of the three GASDS caps). Read-only, Viewer+. Defaults to the current calendar year when ?year is
+// absent or not a positive integer. Surfaces the getGasdsPoolReport logic that had no route until now.
+export async function getAdminGasdsPool(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const yearNum = Number(req.query.year);
+    const year = Number.isInteger(yearNum) && yearNum > 0 ? yearNum : new Date().getFullYear();
+    return res.status(200).json(await getGasdsPoolReport(year));
+  } catch (err) {
+    console.error("admin gasds-pool report failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/queues/gasds-deadline", getAdminGasdsDeadline);
 adminRouter.post("/api/admin/queues/gasds-deadline/mark-claimed", postAdminMarkGasdsClaimed);
+adminRouter.get("/api/admin/queues/gasds-pool", getAdminGasdsPool);
 adminRouter.get("/api/admin/queues/declaration-review", getAdminDeclarationReview);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------

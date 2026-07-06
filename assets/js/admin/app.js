@@ -280,6 +280,19 @@
         if (actions) actions.hidden = !(canWrite && (d.results || []).length);
       })
       .catch(function () {});
+    // This year's pool report (REQ-050): three separately-read figures, never conflated.
+    var poolEl = el("gasdsPool");
+    if (poolEl) {
+      authFetch("/api/admin/queues/gasds-pool")
+        .then(j)
+        .then(function (p) {
+          poolEl.innerHTML =
+            statCard(H.formatPence(p.gasdsPoolTotalPence), "Small donations pool (" + p.year + ")", false) +
+            statCard(H.formatPence(p.giftAidClaimedPence), "Gift Aid claimed this year", false) +
+            statCard(H.formatPence(p.remainingHeadroomPence), "Remaining GASDS headroom", false);
+        })
+        .catch(function () {});
+    }
   }
   function gasdsTable(rows, canWrite) {
     if (!rows.length) return '<p class="admin-empty">No GASDS gifts are approaching the claim deadline.</p>';

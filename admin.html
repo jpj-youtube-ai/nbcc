@@ -143,6 +143,9 @@
             <section class="admin-view" id="view-gasds" aria-labelledby="gasds-heading" hidden>
               <h2 id="gasds-heading">GASDS deadline</h2>
               <p class="admin-view-intro">GASDS (the Gift Aid Small Donations Scheme) tops up small cash and contactless gifts, but the claim window is only two years from the end of the tax year of collection. These small gifts are approaching or past that cliff and are not yet marked as claimed. Tick the ones you have claimed under GASDS to clear them.</p>
+              <!-- This year's GASDS pool report (REQ-050): the small-donations pool, the separately
+                   read claimed Gift Aid total, and remaining headroom against the caps. -->
+              <div class="admin-stats" id="gasdsPool" aria-live="polite"></div>
               <div class="admin-claim-actions" id="gasdsActions" hidden>
                 <button class="admin-btn" type="button" id="markGasdsBtn">Mark claimed</button>
               </div>

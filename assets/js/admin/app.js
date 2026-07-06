@@ -123,6 +123,7 @@
       donationsOffset = 0;
       loadDonations();
     } else if (name === "claims") loadClaims();
+    else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
     else if (name === "audit") loadAudit();
   }
@@ -266,6 +267,53 @@
     loadDonations();
   });
   bindClick("assignBtn", assignSelected);
+  bindClick("markGasdsBtn", markGasdsSelected);
+
+  // ---- GASDS deadline: small gifts near the 2-year cliff → mark claimed (editor+) ----
+  function loadGasds() {
+    var canWrite = H.roleCan(currentRole, "editor");
+    var actions = el("gasdsActions");
+    authFetch("/api/admin/queues/gasds-deadline")
+      .then(j)
+      .then(function (d) {
+        el("gasdsTable").innerHTML = gasdsTable(d.results || [], canWrite);
+        if (actions) actions.hidden = !(canWrite && (d.results || []).length);
+      })
+      .catch(function () {});
+  }
+  function gasdsTable(rows, canWrite) {
+    if (!rows.length) return '<p class="admin-empty">No GASDS gifts are approaching the claim deadline.</p>';
+    var body = rows
+      .map(function (r) {
+        var box = canWrite ? '<td><input type="checkbox" class="gasds-check" value="' + r.id + '" aria-label="Select donation ' + r.id + '"></td>' : "";
+        return (
+          "<tr>" + box + "<td>" + r.id + "</td><td>" + H.escapeHtml(r.full_name) +
+          '</td><td class="admin-num">' + H.formatPence(r.amountPence) + "</td><td>" +
+          H.fmtDate(r.collectedAt) + "</td><td>" + H.fmtDate(r.gasdsDeadline) +
+          '</td><td>' + H.escapeHtml(r.flag) + "</td></tr>"
+        );
+      })
+      .join("");
+    var head = (canWrite ? "<th></th>" : "") + "<th>ID</th><th>Donor</th><th>Amount</th><th>Collected</th><th>Deadline</th><th>Status</th>";
+    return '<table class="admin-table"><thead><tr>' + head + "</tr></thead><tbody>" + body + "</tbody></table>";
+  }
+  function markGasdsSelected() {
+    var ids = Array.prototype.slice
+      .call(doc.querySelectorAll(".gasds-check:checked"))
+      .map(function (c) { return Number(c.value); });
+    if (!ids.length) { window.alert("Tick at least one gift first."); return; }
+    authFetch("/api/admin/queues/gasds-deadline/mark-claimed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ donationIds: ids }),
+    })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (out) {
+        if (out) loadGasds();
+        else window.alert("Could not mark those gifts as claimed.");
+      })
+      .catch(function () { window.alert("Could not mark those gifts as claimed."); });
+  }
 
   // ---- claims: eligible → batch → export → submit (writes are editor+) ----
   function loadClaims() {

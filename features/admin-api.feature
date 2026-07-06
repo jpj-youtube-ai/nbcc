@@ -24,6 +24,14 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     Then the admin response status should be 200
     And the admin response field "fullName" should be "Ada Edited"
 
+  Scenario: an Editor marks a GASDS gift claimed, clearing it from the deadline queue
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the admin donor has a GASDS-eligible small gift collected "2019-05-01"
+    When the admin marks the GASDS gift claimed as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the admin response field "claimed" should be "1"
+    And the GASDS gift is marked claimed
+
   Scenario: an Editor corrects a donor's declaration address (amend, not revise)
     Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
     And the admin donor has an active Gift Aid declaration

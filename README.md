@@ -1174,11 +1174,15 @@ Aid's 4 — so small gifts can silently pass the cliff and lose their top-up. `g
 `endOfUkTaxYear`) feeds `listGasdsDeadlineDonations` (`src/db/admin.ts`), a read-only Viewer+ queue at
 `GET /api/admin/queues/gasds-deadline` that flags `gasds_eligible`, paid donations whose deadline has
 closed (**`expired`**) or closes within a six-month horizon (**`expiring`**), with the computed
-`gasdsDeadline`. It surfaces as a **"GASDS deadline near"** overview stat. NBCC does not yet track
-whether a GASDS top-up was claimed per donation (top-ups are pooled per tax year), so the queue lists
-all eligible small gifts by deadline; suppressing already-claimed ones is a noted follow-up. Proven by
-`test/unit/gasds-deadline.test.ts` + `test/unit/gasds-deadline-queue.test.ts` and the `@db`
-`features/admin-api.feature`.
+`gasdsDeadline`. It surfaces as a **"GASDS deadline near"** overview stat and a dedicated **GASDS**
+admin view (a table of unclaimed small gifts near the cliff). Per-donation GASDS-claim status is
+tracked by the nullable `donations.gasds_claimed_at` column (TASK-138, additive migration): the queue
+excludes already-claimed gifts (`gasds_claimed_at IS NULL`), and an Editor+ **"Mark claimed"** action
+(`POST /api/admin/queues/gasds-deadline/mark-claimed` → `markGasdsClaimed`, stamping `gasds_claimed_at`
++ a `gasds.claimed` audit row in one transaction) clears them once counted toward a GASDS top-up
+(top-ups are pooled per tax year, so this is NBCC's bookkeeping of which small gifts it has claimed on).
+Proven by `test/unit/gasds-deadline.test.ts` + `test/unit/gasds-deadline-queue.test.ts` +
+`test/unit/gasds-mark-claimed.test.ts` and the `@db` `features/admin-api.feature`.
 
 **Declaration-review-due queue (TASK-136).** HMRC recommends re-confirming **active donors roughly
 every two years** (still paying enough tax, details current) — exactly the enduring/monthly declaration

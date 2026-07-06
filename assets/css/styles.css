@@ -457,10 +457,7 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-widget h2{font-size:clamp(1.8rem,1.4rem + 1.4vw,2.4rem);margin-bottom:6px}
 .give-widget > h2{text-align:center;margin-bottom:clamp(20px,3vw,32px)}
 .give-card{padding:0;overflow:hidden}
-/* the give card is a gift box: a small bow peeks over its top edge (decorative) */
 .give-box{position:relative;margin-top:14px}
-.give-ribbon{position:absolute;top:0;left:50%;transform:translate(-50%,-44%);z-index:3;pointer-events:none;filter:drop-shadow(0 5px 9px color-mix(in srgb,var(--maroon) 20%,transparent))}
-.give-ribbon svg{display:block}
 .give-card .give-inner{display:grid;grid-template-columns:1.4fr .6fr}
 @media(max-width:980px){.give-card .give-inner{grid-template-columns:1fr}}
 .give-card .give-main{padding:clamp(24px,4vw,42px)}

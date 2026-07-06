@@ -81,6 +81,13 @@ describe("give widget shell (REQ-020)", () => {
   it("writes the widget copy without dashes (REQ-031)", () => {
     expect(norm(widget?.textContent)).not.toMatch(/[–—-]/);
   });
+
+  // TASK-148 (REQ-020): the give-card carries no decorative bow/ribbon flourish;
+  // the shell stands on its own. Guards against the ribbon SVG being reintroduced.
+  it("ships no decorative bow/ribbon on the give-card", () => {
+    expect(widget?.querySelector(".give-ribbon")).toBeNull();
+    expect(css).not.toMatch(/\.give-ribbon\b/);
+  });
 });
 
 describe("give widget toggle behaviour (jsdom)", () => {

@@ -4,18 +4,18 @@ import {
   RETENTION_YEARS,
 } from "../../src/declarations/retention";
 
-// TASK-068 (REQ-046): the pure, DB-free declaration retention-expiry calculator. Mirrors
-// test/unit/declaration-wording.test.ts — no pool, config or clock, unit-tested here in
-// isolation. An immutable declaration is retained six years after the MOST RECENT claimed
-// donation, and permanently while an enduring / monthly declaration's subscription is
-// active; on cancellation the six-year clock is anchored to the FINAL charge, not the
-// cancellation timestamp (REQ-046).
+// TASK-068 (REQ-046) · TASK-134: the pure, DB-free declaration retention-expiry calculator. An
+// immutable declaration is retained six years after the END OF THE ACCOUNTING PERIOD (proxied by
+// the UK tax year, ending 5 April) of the MOST RECENT claimed donation, and permanently while an
+// enduring / monthly declaration's subscription is active; on cancellation the clock is anchored to
+// the FINAL charge's tax-year-end, not the cancellation timestamp (REQ-046).
 
-// Six years after a given instant, computed in UTC so the result is timezone-deterministic.
-function sixYearsAfter(iso: string): number {
+// Six years after the 5 April that ends the UK tax year of the given instant (UTC, deterministic).
+function expectedExpiry(iso: string): number {
   const d = new Date(iso);
-  d.setUTCFullYear(d.getUTCFullYear() + RETENTION_YEARS);
-  return d.getTime();
+  const onOrBeforeApr5 = d.getUTCMonth() < 3 || (d.getUTCMonth() === 3 && d.getUTCDate() <= 5);
+  const endYear = (onOrBeforeApr5 ? d.getUTCFullYear() : d.getUTCFullYear() + 1) + RETENTION_YEARS;
+  return Date.UTC(endYear, 3, 5);
 }
 
 describe("computeRetentionExpiry (REQ-046)", () => {
@@ -51,9 +51,9 @@ describe("computeRetentionExpiry (REQ-046)", () => {
       cancelledAt,
     });
     expect(expiry).not.toBeNull();
-    expect(expiry!.getTime()).toBe(sixYearsAfter("2023-11-05T12:30:00Z"));
+    expect(expiry!.getTime()).toBe(expectedExpiry("2023-11-05T12:30:00Z"));
     // Explicitly NOT six years after the cancellation timestamp.
-    expect(expiry!.getTime()).not.toBe(sixYearsAfter("2024-12-01T08:00:00Z"));
+    expect(expiry!.getTime()).not.toBe(expectedExpiry("2024-12-01T08:00:00Z"));
   });
 
   it("treats a cancelledAt as inactive even if subscriptionActive is still true", () => {
@@ -64,10 +64,10 @@ describe("computeRetentionExpiry (REQ-046)", () => {
       lastClaimedDonationAt: finalCharge,
       cancelledAt: new Date("2022-07-01T00:00:00Z"),
     });
-    expect(expiry!.getTime()).toBe(sixYearsAfter("2022-06-15T00:00:00Z"));
+    expect(expiry!.getTime()).toBe(expectedExpiry("2022-06-15T00:00:00Z"));
   });
 
-  it("expires a this_donation declaration six years after its single claimed donation", () => {
+  it("expires a this_donation declaration six years after its single donation's tax-year-end", () => {
     const donation = new Date("2021-04-20T15:45:00Z");
     const expiry = computeRetentionExpiry({
       scope: "this_donation",
@@ -75,17 +75,17 @@ describe("computeRetentionExpiry (REQ-046)", () => {
       lastClaimedDonationAt: donation,
       cancelledAt: null,
     });
-    expect(expiry!.getTime()).toBe(sixYearsAfter("2021-04-20T15:45:00Z"));
+    expect(expiry!.getTime()).toBe(expectedExpiry("2021-04-20T15:45:00Z"));
   });
 
   it("accepts an ISO string for the last-claimed date, not just a Date", () => {
     const expiry = computeRetentionExpiry({
       scope: "this_donation",
       subscriptionActive: false,
-      lastClaimedDonationAt: "2020-02-29T00:00:00Z", // leap day rolls to 2026-03-01
+      lastClaimedDonationAt: "2020-02-29T00:00:00Z", // tax year ends 2020-04-05 → +6 = 2026-04-05
       cancelledAt: null,
     });
-    expect(expiry!.getTime()).toBe(sixYearsAfter("2020-02-29T00:00:00Z"));
+    expect(expiry!.getTime()).toBe(expectedExpiry("2020-02-29T00:00:00Z"));
   });
 
   // Documented edge case: an inactive/one-off declaration with NO claimed donation has no

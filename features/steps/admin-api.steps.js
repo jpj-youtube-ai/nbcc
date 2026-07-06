@@ -106,6 +106,35 @@ When(
   },
 );
 
+// Seed an active (revoked_at NULL) declaration for the admin's donor (TASK-130). Keyed to
+// this.adminDonorId; stores this.declarationId so the shared portal Then steps can assert on it.
+Given("the admin donor has an active Gift Aid declaration", async function () {
+  const decl = await pool.query(
+    `INSERT INTO declarations
+       (donor_id, first_name, last_name, house_name_number, address, non_uk, scope,
+        wording_version, wording_snapshot, confirmed_taxpayer)
+     VALUES ($1, 'Ada', 'Behalf', '12', 'Old Ave, London', false, 'all_donations',
+             'v1', 'I want to Gift Aid my donations.', true)
+     RETURNING id`,
+    [this.adminDonorId],
+  );
+  this.declarationId = decl.rows[0].id;
+});
+
+When(
+  "I PATCH the admin donor declaration as {string} with password {string}:",
+  async function (email, password, docString) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/donors/${this.adminDonorId}/declaration`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: docString,
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
 Given("an open claim batch", async function () {
   const batch = await pool.query(
     "INSERT INTO claim_batches (status) VALUES ('open') RETURNING id",

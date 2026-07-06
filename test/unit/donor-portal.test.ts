@@ -44,10 +44,22 @@ describe("donor portal page markup (REQ-061)", () => {
     expect(doc0.getElementById("reduceInstead"), "#reduceInstead missing").not.toBeNull();
     expect(doc0.getElementById("cancelGiftAid"), "#cancelGiftAid missing").not.toBeNull();
   });
+
+  it("offers a self-serve magic-link request form inside the error card (REQ-061)", () => {
+    const err = doc0.getElementById("portalError");
+    const form = doc0.getElementById("portalRequestForm");
+    const email = doc0.getElementById("portalRequestEmail");
+    expect(form, "#portalRequestForm missing").not.toBeNull();
+    // The request form must live inside the error card so it is shown exactly when the donor has
+    // no usable link (initPortal reveals #portalError on the no-token / failed-load path).
+    expect(err?.contains(form), "request form must live inside #portalError").toBe(true);
+    expect(email?.getAttribute("type")).toBe("email");
+    expect(email?.hasAttribute("required")).toBe(true);
+  });
 });
 
 // --- Behaviour (jsdom), against the real initPortal --------------------------------------------
-const { initPortal } = require(resolve(ROOT, "assets/js/main.js"));
+const { initPortal, initPortalRequest } = require(resolve(ROOT, "assets/js/main.js"));
 
 const SNAPSHOT = {
   donorId: 42,
@@ -166,5 +178,53 @@ describe("initPortal behaviour (jsdom)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     const err = document.getElementById("portalError");
     expect(err?.hidden).toBe(false);
+  });
+});
+
+describe("initPortalRequest behaviour (jsdom)", () => {
+  it("exports initPortalRequest from the shared script", () => {
+    expect(typeof initPortalRequest).toBe("function");
+  });
+
+  it("posts the email to /api/portal/request and shows the generic reply", async () => {
+    const fetchMock = vi.fn(
+      async () => ({ ok: true, json: async () => ({ message: "ok" }) }) as unknown as Response,
+    );
+    const win = makeWin(fetchMock);
+    initPortalRequest(document, win);
+
+    const input = document.getElementById("portalRequestEmail") as HTMLInputElement;
+    input.value = "lost.link@example.com";
+    document
+      .getElementById("portalRequestForm")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalled();
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("/api/portal/request");
+    expect((opts as RequestInit)?.method).toBe("POST");
+    expect(JSON.parse(String((opts as RequestInit)?.body)).email).toBe("lost.link@example.com");
+    // The reply is the same generic line regardless of match, so no enumeration leaks.
+    expect(norm(document.getElementById("portalRequestStatus")?.textContent).length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it("does not post an empty/invalid email (native validation blocks it)", async () => {
+    const fetchMock = vi.fn(
+      async () => ({ ok: true, json: async () => ({}) }) as unknown as Response,
+    );
+    const win = makeWin(fetchMock);
+    initPortalRequest(document, win);
+
+    const input = document.getElementById("portalRequestEmail") as HTMLInputElement;
+    input.value = "not-an-email";
+    document
+      .getElementById("portalRequestForm")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

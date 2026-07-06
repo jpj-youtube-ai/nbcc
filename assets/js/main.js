@@ -835,6 +835,99 @@
       });
     }
 
+    // Gift Aid declaration edit (TASK-129): identity/address only. The card is shown + prefilled
+    // only when the donor has an active declaration; the overseas checkbox hides/un-requires the
+    // postcode (mirroring initDeclarationCapture); submit PATCHes the matching fields and reflects
+    // the synced name back into "Your details".
+    var declCard = doc.getElementById("portalDeclaration");
+    var declForm = doc.getElementById("portalDeclForm");
+    var pdPostcodeField = doc.getElementById("pdPostcodeField");
+    var pdPostcode = doc.getElementById("pdPostcode");
+    var pdNonUk = doc.getElementById("pdNonUk");
+
+    function applyPdNonUk() {
+      var off = !!(pdNonUk && pdNonUk.checked);
+      if (pdPostcodeField) pdPostcodeField.hidden = off;
+      if (pdPostcode) {
+        pdPostcode.disabled = off;
+        if (off) {
+          pdPostcode.removeAttribute("required");
+          pdPostcode.removeAttribute("aria-required");
+        } else {
+          pdPostcode.setAttribute("required", "");
+          pdPostcode.setAttribute("aria-required", "true");
+        }
+      }
+    }
+    if (pdNonUk) pdNonUk.addEventListener("change", applyPdNonUk);
+
+    function prefillDeclaration(decl) {
+      if (!declCard || !decl) return;
+      var set = function (id, v) {
+        var el = doc.getElementById(id);
+        if (el) el.value = v == null ? "" : v;
+      };
+      set("pdTitle", decl.title);
+      set("pdFirstName", decl.firstName);
+      set("pdLastName", decl.lastName);
+      set("pdHouse", decl.houseNameNumber);
+      set("pdAddress", decl.address);
+      set("pdPostcode", decl.postcode);
+      if (pdNonUk) pdNonUk.checked = !!decl.nonUk;
+      applyPdNonUk();
+      declCard.hidden = false;
+    }
+
+    if (declForm) {
+      declForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        if (typeof win.fetch !== "function") return;
+        var nonUk = !!(pdNonUk && pdNonUk.checked);
+        var val = function (id) {
+          var el = doc.getElementById(id);
+          return el ? el.value.trim() : "";
+        };
+        var payload = {
+          title: val("pdTitle") || undefined,
+          firstName: val("pdFirstName"),
+          lastName: val("pdLastName"),
+          houseNameNumber: val("pdHouse") || undefined,
+          address: val("pdAddress"),
+          nonUk: nonUk,
+        };
+        if (!nonUk) payload.postcode = val("pdPostcode");
+        win
+          .fetch(base + "/declaration", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+          .then(function (r) {
+            return r.json().then(function (b) {
+              return { ok: r.ok, body: b };
+            });
+          })
+          .then(function (res) {
+            setStatus(
+              actionStatus,
+              res.ok
+                ? "Your declaration details are updated."
+                : (res.body && res.body.error) || "We could not update your declaration just now.",
+            );
+            if (res.ok && res.body && res.body.declaration) {
+              prefillDeclaration(res.body.declaration);
+              var nameEl = doc.getElementById("portalName");
+              if (nameEl) {
+                nameEl.textContent = res.body.declaration.firstName + " " + res.body.declaration.lastName;
+              }
+            }
+          })
+          .catch(function () {
+            setStatus(actionStatus, "We could not update your declaration just now.");
+          });
+      });
+    }
+
     // Render the donor snapshot returned by GET /api/portal/:token.
     function render(data) {
       subscriptionId = data.subscriptionId || null;
@@ -863,6 +956,9 @@
       var giftAidEl = doc.getElementById("portalGiftAid");
       if (giftAidEl) giftAidEl.textContent = data.giftAid ? "Active" : "Not active";
       if (cancelGiftAid) cancelGiftAid.hidden = !data.giftAid;
+
+      // Gift Aid declaration edit (TASK-129): prefill + show the form only with an active declaration.
+      prefillDeclaration(data.declaration);
 
       // Donation history (REQ-061 revised): total, count, and a row per donation.
       var history = data.history || { totalPence: 0, count: 0, donations: [] };

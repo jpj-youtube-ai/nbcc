@@ -171,6 +171,45 @@
             </div>
           </div>
 
+          <!-- Edit Gift Aid declaration details (REQ-059 · TASK-129): identity/address only. -->
+          <div class="portal-card card reveal" id="portalDeclaration" aria-labelledby="portal-decl-heading" hidden>
+            <h2 id="portal-decl-heading">Your Gift Aid declaration details</h2>
+            <p class="portal-note">Keep the name and address on your declaration up to date so HMRC can match your donations. Changing these does not affect your Gift Aid, it stays in place.</p>
+            <form class="give-declaration" id="portalDeclForm" novalidate>
+              <div class="give-field">
+                <label for="pdTitle">Title <span class="give-optional">(optional)</span></label>
+                <input type="text" id="pdTitle" name="title" class="give-field-input" autocomplete="honorific-prefix" placeholder="Mr, Ms, Dr" />
+              </div>
+              <div class="give-field">
+                <label for="pdFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                <input type="text" id="pdFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+              </div>
+              <div class="give-field">
+                <label for="pdLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
+                <input type="text" id="pdLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+              </div>
+              <div class="give-field">
+                <label for="pdHouse">House name or number <span class="give-req" aria-hidden="true">*</span></label>
+                <input type="text" id="pdHouse" name="houseNameNumber" class="give-field-input" required aria-required="true" placeholder="e.g. 12 or Rose Cottage" />
+              </div>
+              <div class="give-field">
+                <label for="pdAddress">Home address <span class="give-req" aria-hidden="true">*</span></label>
+                <input type="text" id="pdAddress" name="address" class="give-field-input" autocomplete="street-address" required aria-required="true" placeholder="Street and town" />
+              </div>
+              <div class="give-field" id="pdPostcodeField">
+                <label for="pdPostcode">Postcode <span class="give-req" aria-hidden="true">*</span></label>
+                <input type="text" id="pdPostcode" name="postcode" class="give-field-input" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" />
+              </div>
+              <label class="give-check" for="pdNonUk">
+                <input type="checkbox" id="pdNonUk" name="nonUk" class="give-check-box" value="true" />
+                <span class="give-check-text">I have no UK postcode, for example my home address is in the Channel Islands or Isle of Man.</span>
+              </label>
+              <div class="portal-actions">
+                <button class="btn btn-primary" type="submit">Save my declaration details</button>
+              </div>
+            </form>
+          </div>
+
           <!-- Your donation history (REQ-061 revised): aggregated by email. -->
           <div class="portal-card card reveal" aria-labelledby="portal-history-heading">
             <h2 id="portal-history-heading">Your giving</h2>

@@ -415,19 +415,26 @@ NBCC site rather than the 2025 leaflet, so its copy is flagged with a
 token-only colours. Stacks ≤680px. Verified by
 `test/unit/about-our-story.test.ts`.
 
-### About meet-the-team grid (REQ-016)
+### About "Meet the Volunteers" grid (REQ-016)
 
-Below the story, a tinted band (`ABOUT MEET THE TEAM` CSS block,
-`var(--holly-soft)`, `--radius-lg`) holds a responsive grid of ten member cards
-(`.team-grid`: 5-across desktop → 3 ≤900px → 2 ≤680px, mirroring `.pillar-grid`).
-Each `.member` is a 4:5 `.photo-slot` portrait placeholder (decorative
-`aria-hidden` person icon, **no `<img>`** — real headshots are REQ-034) with a
-Playfair crimson `.member-name` and a `.member-role`: Tygan/Founder,
-Jodie/Head Elf and Founder, Isabella/Co founder, Jaimie/Donations, then six
-**Volunteer Elf** placeholders (Dawn, Jill, Jon, Kenny, Liz, Vicky) flagged with a
-`CONTENT VERIFICATION` HTML comment for NBCC to confirm. Semantic `<section>` named
-by its `<h2>` (REQ-032); token-only colours; `.reveal` reused. Verified by
-`test/unit/about-team.test.ts`.
+Below the story, the `section.meet-team` ("Meet the Volunteers", named by its
+`<h2>`, REQ-032) holds **two** `.team` grids on the shared `.member` card surface
+(`.team`: 5-across desktop → 3 ≤980px → 2 ≤680px):
+
+- **`.team-leads`** — five leads/trustees in **role order** (not alphabetical):
+  Jodie/Head Elf (Trustee) and Director, Isabel/Procurement (Trustee),
+  Kenny/Finance (Trustee), Jaimie/Project Manager, Jon/Marketing. Each card adds a
+  `.member .em` `mailto:` link (`name@nbcc.scot`). Isabel reuses the existing
+  `team-isabella.jpg` headshot.
+- **`.team-elves`** — the thirteen **Volunteer Elves** (under a `.team-subhead`
+  subheading) in **alphabetical order**: Dawn, Jill, Lisa Marie, Liz, Lucy,
+  Margaret, Matt, Morag, Paul, Scott, Sue, Tygan, Vicky. Elves with a supplied
+  headshot use a lazy 640×800 `team-<name>.jpg` `<img>`; those still awaiting one
+  use a `.member-photo.is-pending` placeholder tile (dashed 4:5 box + muted
+  `aria-label`ed person icon). Drop `/assets/img/team-<name>.jpg` in to fill a
+  placeholder. A `CONTENT VERIFICATION` HTML comment flags the pending headshots.
+
+Token-only colours; `.reveal` reused. Verified by `test/unit/about-team.test.ts`.
 
 ### About age-reach figures (REQ-017)
 

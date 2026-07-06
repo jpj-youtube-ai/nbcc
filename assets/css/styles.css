@@ -415,6 +415,13 @@ footer ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;
 .member:hover img{transform:translateY(-4px);box-shadow:var(--shadow)}
 .member .nm{font-family:var(--font-head);font-weight:700;color:var(--crimson);font-size:1.15rem;margin-top:14px;line-height:1.1}
 .member .rl{font-size:.84rem;color:var(--slate-soft);margin-top:3px}
+.member .em{display:inline-block;margin-top:6px;font-size:.82rem;color:var(--maroon);text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--maroon) 30%,transparent);transition:color .16s,border-color .16s}
+.member .em:hover{color:var(--crimson);border-color:var(--crimson)}
+/* placeholder tile for volunteers whose headshot is not in yet (same 4:5 box as .member img) */
+.member-photo.is-pending{width:100%;aspect-ratio:4/5;border-radius:var(--radius-lg);border:1px dashed color-mix(in srgb,var(--maroon) 22%,transparent);background:linear-gradient(160deg,var(--cream),var(--tint));display:grid;place-items:center;color:color-mix(in srgb,var(--slate-soft) 65%,transparent)}
+.member-photo.is-pending svg{width:38%;height:auto}
+/* "Volunteer Elves" subheading between the leads grid and the elves grid */
+.team-subhead{font-family:var(--font-head);font-weight:700;color:var(--maroon);text-align:center;font-size:clamp(1.4rem,1.1rem + 1vw,1.9rem);margin:clamp(36px,5vw,56px) 0 clamp(22px,3vw,30px)}
 figure.story-photo{margin:0}
 figure.story-photo img{width:100%;border-radius:var(--radius-lg);border:1px solid var(--line);box-shadow:var(--shadow);aspect-ratio:4/5;object-fit:cover}
 figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate-soft);font-style:italic}

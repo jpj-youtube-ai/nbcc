@@ -254,8 +254,11 @@
 
   // Gift Aid declaration capture (REQ-043): the HMRC declaration fieldset below the Gift
   // Aid callout. Progressive enhancement — the fields are plain inputs that work without
-  // JS. This wires the non-UK checkbox (a donor outside the UK has no UK postcode, so it
-  // hides, disables and un-requires the postcode) and marks the fieldset data-ready, so
+  // JS. This wires the overseas-address checkbox (a donor whose home address has no UK
+  // postcode, e.g. Channel Islands / Isle of Man, so it hides, disables and un-requires the
+  // postcode). That is only a matching detail — it does NOT affect Gift Aid eligibility,
+  // which is the UK-taxpayer declaration the donor agrees to on submit. It marks the
+  // fieldset data-ready, so
   // startCheckout folds a `declaration` object into the payload — but ONLY when Gift Aid
   // is opted in, since that is the only time a declaration is made. Without JS the base
   // { mode, plan, amount, giftAid } contract is unchanged.

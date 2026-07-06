@@ -645,9 +645,12 @@ Below the Gift Aid callout, a `.give-declaration` `<fieldset>` (`GIFT AID DECLAR
 markup) captures the HMRC declaration: an optional `title` and a **required** first name
 (`#declFirstName`), last name (`#declLastName`) and house name/number (`#declHouse`) — the
 HMRC matching keys, all `required` + `aria-required` — plus the **one** home address
-(`#declAddress`, no work / c-o address) and a `postcode` (`#declPostcode`). A non-UK donor
-checkbox (`#declNonUk`, Channel Islands / Isle of Man) drives `initDeclarationCapture`,
-which **hides, disables and un-requires** the postcode (a non-UK declaration omits it). Every
+(`#declAddress`, no work / c-o address) and a `postcode` (`#declPostcode`). An overseas-address
+checkbox (`#declNonUk`, no UK postcode — e.g. Channel Islands / Isle of Man) drives
+`initDeclarationCapture`, which **hides, disables and un-requires** the postcode. That flag is
+only an HMRC matching detail; Gift Aid **eligibility** is paying UK Income Tax / CGT (the
+verbatim taxpayer declaration the donor agrees to on submit), never a postcode. A short note by
+the declaration says so, so an overseas UK taxpayer knows they can still Gift Aid. Every
 field has a real `<label for>` (REQ-032). `initDeclarationCapture` marks the fieldset
 `data-ready`, so `startCheckout` folds a **`declaration`** object (`{ title?, firstName,
 lastName, houseNameNumber, address, postcode?, nonUk, scope }`) into the REQ-028 payload
@@ -679,7 +682,7 @@ the **partnership** path keeps it and swaps the single `.give-declaration` for t
 `.give-partners` `<fieldset>` (one Gift Aid declaration per partner). `initPartnershipCapture`
 clones `#partnerRowTemplate` into one partner row on load and wires **add** (`#addPartner`) /
 **remove** (`[data-remove-partner]`, hidden while one partner remains); each row captures the
-same declaration fields as `.give-declaration` (with its own non-UK postcode toggle) **plus a
+same declaration fields as `.give-declaration` (with its own overseas-address postcode toggle) **plus a
 required share** of the gift, and gets a per-row unique id base (`partner-N-*`) so every
 `<label for>`/input id stays matched and unique (REQ-032). `startCheckout` folds a **`partners`**
 array (`[{ title?, firstName, lastName, houseNameNumber, address, postcode?, nonUk, sharePence }]`,

@@ -8,9 +8,10 @@ import { createRequire } from "node:module";
 // TASK-062 (REQ-043): the Gift Aid declaration capture fields in the give widget.
 // Below the Gift Aid callout, a .give-declaration fieldset captures the HMRC
 // declaration (title optional; first name, last name, house name/number, home address
-// and postcode) with a non-UK donor checkbox (Channel Islands / Isle of Man) that
-// hides, disables and un-requires the postcode. Behaviour (initDeclarationCapture in
-// main.js): marks the fieldset data-ready, toggles the postcode on the non-UK box, and
+// and postcode) with an overseas-address checkbox (no UK postcode, e.g. Channel Islands /
+// Isle of Man) that hides, disables and un-requires the postcode — a matching detail, not
+// the eligibility gate (that is the UK-taxpayer declaration). Behaviour (initDeclarationCapture
+// in main.js): marks the fieldset data-ready, toggles the postcode on the overseas-address box, and
 // startCheckout folds a `declaration` object into the REQ-028 payload ONLY when #giftAid
 // is checked (mirroring how initDonorType folds donorType). Static markup is parsed with
 // jsdom; behaviour runs against the real main.js, mirroring give-contact-capture /

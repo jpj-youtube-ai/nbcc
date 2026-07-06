@@ -7,6 +7,7 @@ import {
   PortalTokenError,
   type PortalTokenRecord,
 } from "../portal/tokens";
+import type { Scope } from "../declarations/wording";
 
 // The transactional, audited donor-portal magic-link writes (REQ-061). Issuing a token persists a
 // one-time, expiring grant; consuming it verifies + marks it used. Mirrors the audited BEGIN…COMMIT /
@@ -267,4 +268,57 @@ export async function getDonorDonationHistory(email: string): Promise<DonorDonat
   }));
   const totalPence = donations.reduce((sum, d) => sum + d.amountPence, 0);
   return { totalPence, count: donations.length, donations };
+}
+
+// The donor's ACTIVE Gift Aid declaration (REQ-059 · TASK-129) — the newest non-revoked row — with
+// its editable identity/address fields plus the frozen consent (scope + taxpayer confirmation) the
+// portal edit round-trips unchanged so reviseDeclaration takes the amend path. Read-only (pool.query).
+export interface ActiveDeclaration {
+  id: number;
+  title: string | null;
+  firstName: string;
+  lastName: string;
+  houseNameNumber: string;
+  address: string;
+  postcode: string | null;
+  nonUk: boolean;
+  scope: Scope;
+  confirmedTaxpayer: boolean;
+}
+
+export async function getActiveDeclarationForDonor(donorId: number): Promise<ActiveDeclaration | null> {
+  const row = (
+    await pool.query<{
+      id: number;
+      title: string | null;
+      first_name: string;
+      last_name: string;
+      house_name_number: string;
+      address: string;
+      postcode: string | null;
+      non_uk: boolean;
+      scope: Scope;
+      confirmed_taxpayer: boolean;
+    }>(
+      `SELECT id, title, first_name, last_name, house_name_number, address, postcode, non_uk,
+              scope, confirmed_taxpayer
+         FROM declarations
+        WHERE donor_id = $1 AND revoked_at IS NULL
+        ORDER BY id DESC LIMIT 1`,
+      [donorId],
+    )
+  ).rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    houseNameNumber: row.house_name_number,
+    address: row.address,
+    postcode: row.postcode,
+    nonUk: row.non_uk,
+    scope: row.scope,
+    confirmedTaxpayer: row.confirmed_taxpayer,
+  };
 }

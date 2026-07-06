@@ -4,8 +4,10 @@ Bridges the app's custom email payloads (`src/clients/email.ts`) to Resend. The 
 POSTs its own JSON shape (no subject/from/type; auth in the URL) to `EMAIL_SEND_URL`;
 this Worker discriminates the payload, renders/wraps it, and sends via Resend.
 
-The app's `EMAIL_SEND_URL` = this Worker's URL **with the shared secret in the query**:
-`https://nbcc-email-relay.<subdomain>.workers.dev/send?key=<RELAY_SECRET>`.
+Two routes, both authed by the same `?key=<RELAY_SECRET>`:
+- `EMAIL_SEND_URL`     = `…workers.dev/send?key=<RELAY_SECRET>`    — transactional emails
+- `CONTACT_FORWARD_URL` = `…workers.dev/contact?key=<RELAY_SECRET>` — contact-form enquiries
+  (emailed to `CONTACT_TO`, reply-to the enquirer)
 
 ## One-time setup
 
@@ -33,6 +35,10 @@ wrangler secret put RELAY_SECRET     # a long random token (e.g. openssl rand -h
 aws ssm put-parameter --region eu-west-2 --overwrite --type SecureString \
   --name /charity-site/production/EMAIL_SEND_URL \
   --value "https://nbcc-email-relay.<subdomain>.workers.dev/send?key=<RELAY_SECRET>"
+
+aws ssm put-parameter --region eu-west-2 --overwrite --type SecureString \
+  --name /charity-site/production/CONTACT_FORWARD_URL \
+  --value "https://nbcc-email-relay.<subdomain>.workers.dev/contact?key=<RELAY_SECRET>"
 ```
 
 Then force a prod task refresh so it picks up the new value:

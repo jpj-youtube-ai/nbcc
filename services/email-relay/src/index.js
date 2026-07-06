@@ -102,13 +102,51 @@ function buildEmail(p) {
   return null; // unrecognised
 }
 
+// Contact enquiry (src/clients/contact.ts) → an email to the NBCC inbox (CONTACT_TO),
+// reply-to the enquirer. Distinct payload {firstName,lastName,email,message}, so it has
+// its own route (/contact) rather than sharing the transactional discriminator.
+function buildContact(p, env) {
+  const name = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim() || "Website visitor";
+  return {
+    to: env.CONTACT_TO,
+    replyTo: p.email,
+    ...page(
+      `Website enquiry from ${name}`,
+      `<p><strong>${esc(name)}</strong> &lt;${esc(p.email)}&gt; wrote:</p>
+       <blockquote style="border-left:3px solid #ddd;padding-left:12px;color:#333;white-space:pre-wrap">${esc(p.message)}</blockquote>`,
+      `${name} <${p.email}> wrote:\n\n${p.message}`,
+    ),
+  };
+}
+
+async function sendViaResend(env, msg) {
+  const body = {
+    from: env.MAIL_FROM,
+    to: msg.to,
+    subject: msg.subject,
+    html: msg.html,
+    text: msg.text,
+  };
+  if (msg.replyTo) body.reply_to = msg.replyTo;
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    return new Response(`Resend error ${res.status}: ${detail}`, { status: 502 });
+  }
+  return new Response("sent", { status: 200 });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-    // Auth: shared secret in the URL query (?key=…), matching EMAIL_SEND_URL.
-    const key = new URL(request.url).searchParams.get("key") || "";
-    if (!env.RELAY_SECRET || key !== env.RELAY_SECRET) {
+    const url = new URL(request.url);
+    // Auth: shared secret in the URL query (?key=…), matching EMAIL_SEND_URL / CONTACT_FORWARD_URL.
+    if (!env.RELAY_SECRET || (url.searchParams.get("key") || "") !== env.RELAY_SECRET) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -118,30 +156,19 @@ export default {
     } catch {
       return new Response("Bad JSON", { status: 400 });
     }
-    if (!payload || !payload.email) return new Response("Missing recipient", { status: 422 });
 
+    // /contact → contact-form enquiry; anything else (/send) → transactional email.
+    if (url.pathname.endsWith("/contact")) {
+      if (!payload || !payload.email || !payload.message) {
+        return new Response("Missing enquiry fields", { status: 422 });
+      }
+      if (!env.CONTACT_TO) return new Response("CONTACT_TO not configured", { status: 500 });
+      return sendViaResend(env, buildContact(payload, env));
+    }
+
+    if (!payload || !payload.email) return new Response("Missing recipient", { status: 422 });
     const built = buildEmail(payload);
     if (!built) return new Response("Unrecognised payload", { status: 422 });
-
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: env.MAIL_FROM,
-        to: built.to,
-        subject: built.subject,
-        html: built.html,
-        text: built.text,
-      }),
-    });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      return new Response(`Resend error ${res.status}: ${detail}`, { status: 502 });
-    }
-    return new Response("sent", { status: 200 });
+    return sendViaResend(env, built);
   },
 };

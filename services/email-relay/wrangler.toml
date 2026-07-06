@@ -2,9 +2,11 @@ name = "nbcc-email-relay"
 main = "src/index.js"
 compatibility_date = "2026-06-01"
 
-# Non-secret var: the verified Resend sender. Override with a real verified address.
+# Non-secret vars. MAIL_FROM = verified Resend sender; CONTACT_TO = inbox that
+# receives website contact-form enquiries (reply-to is set to the enquirer).
 [vars]
 MAIL_FROM = "NBCC <noreply@nbcc.scot>"
+CONTACT_TO = "hello@nbcc.scot"
 
 # Secrets (do NOT put here — set with `wrangler secret put`):
 #   RESEND_API_KEY   re_…   Resend API key

@@ -965,6 +965,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login) |
 | `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read; incl. postal address — declaration for an individual, billing for a company) |
 | `PATCH /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor update) |
+| `PATCH /api/admin/donors/:id/declaration` | **implemented** | REQ-059 (admin correct declaration address — amend; TASK-130) |
 | `POST /api/admin/donors/:id/subscription/cancel` | **implemented** | REQ-062 (admin cancel subscription) |
 | `POST /api/admin/donors/:id/gift-aid/cancel` | **implemented** | REQ-062 (admin cancel Gift Aid) |
 | `GET /api/admin/search/donors?q=` | **implemented** | REQ-062 (admin donor search) |
@@ -1095,6 +1096,19 @@ appends its audit_log row in the same transaction as the state change** (the tru
 which admin acted. No active declaration → 404; a concurrent revoke → 409; a non-numeric id → 400.
 Proven by `test/unit/admin-api.test.ts` (mocked pool — the full 401/403/200 role matrix and that each
 successful write is audited) and end to end by the `@db` `features/admin-api.feature`.
+
+**`PATCH /api/admin/donors/:id/declaration` (REQ-059 · TASK-130).** Correct the **identity / address**
+on a donor's active Gift Aid declaration on their behalf — the admin-authorised twin of the portal's
+`PATCH /api/portal/:token/declaration` (TASK-129) and the staff surface for TASK-128's **amend** path.
+Editor+ (Viewer → 403); body validated by `declarationFieldsSchema`; `scope` + `confirmed_taxpayer`
+held at the declaration's current values so `reviseDeclaration` always **amends in place**
+(`declaration.amended`, no new row), never revises. It syncs `donors.full_name` to `"First Last"` so
+the account and declaration names cannot diverge, and both audit rows record `admin:<email>`. No active
+declaration → 404; invalid body → 400; invalid token → 401. `GET /api/admin/donors/:id` now also carries
+the active `declaration`, so the admin donor view renders a prefilled **"Gift Aid declaration details"**
+edit form (`assets/js/admin/app.js`). Like the portal route, the declaration amend and the name sync are
+two audited transactions (declaration first) — a documented single-transaction follow-up. Proven by
+`test/unit/admin-declaration-edit.test.ts` and end to end by the `@db` `features/admin-api.feature`.
 
 **`GET /api/admin/search/{donors,declarations,donations}?q=` (REQ-062 · TASK-108).** Read-only admin
 search over the three core tables by a free `?q=` query — a name, email, id or postcode. Each is

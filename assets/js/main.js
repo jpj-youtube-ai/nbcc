@@ -972,6 +972,74 @@
       });
     }
 
+    // Self-edit the account details (REQ-061): name, email, marketing consent and the public
+    // anonymity flag. Prefilled by render() from the snapshot; submit PATCHes the fields to the
+    // bare /api/portal/:token and reflects the returned snapshot back into "Your details".
+    var detailsForm = doc.getElementById("portalDetailsForm");
+    var pdName = doc.getElementById("pdName");
+    var pdEmail = doc.getElementById("pdEmail");
+    var pdEmailConsent = doc.getElementById("pdEmailConsent");
+    var pdAnonymous = doc.getElementById("pdAnonymous");
+    var detailsStatus = doc.getElementById("portalDetailsStatus");
+
+    function prefillDetails(data) {
+      if (pdName) pdName.value = data.fullName || "";
+      if (pdEmail) pdEmail.value = data.email || "";
+      if (pdEmailConsent) pdEmailConsent.checked = !!data.emailConsent;
+      if (pdAnonymous) pdAnonymous.checked = !!data.anonymous;
+    }
+
+    if (detailsForm) {
+      detailsForm.addEventListener("submit", function (ev) {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        if (detailsForm.checkValidity && !detailsForm.checkValidity()) {
+          if (detailsForm.reportValidity) detailsForm.reportValidity();
+          return;
+        }
+        if (typeof win.fetch !== "function") return;
+        // Send name + the two flags always; email only when non-empty (the schema rejects an
+        // empty string, and clearing an email is not an edit we expose here).
+        var payload = {
+          fullName: pdName ? pdName.value.trim() : "",
+          emailConsent: !!(pdEmailConsent && pdEmailConsent.checked),
+          anonymous: !!(pdAnonymous && pdAnonymous.checked),
+        };
+        var email = pdEmail ? pdEmail.value.trim() : "";
+        if (email) payload.email = email;
+        return win
+          .fetch(base, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+          .then(function (r) {
+            return r.json().then(function (b) {
+              return { ok: r.ok, body: b };
+            });
+          })
+          .then(function (res) {
+            setStatus(
+              detailsStatus,
+              res.ok
+                ? "Your details are updated."
+                : (res.body && res.body.error) || "We could not update your details just now.",
+            );
+            // The bare PATCH returns the fresh snapshot; reflect it into the read-only display and
+            // re-prefill the form so the shown values match what was saved.
+            if (res.ok && res.body) {
+              var nm = doc.getElementById("portalName");
+              if (nm) nm.textContent = res.body.fullName || "Not on file";
+              var em = doc.getElementById("portalEmail");
+              if (em) em.textContent = res.body.email || "No email on file";
+              prefillDetails(res.body);
+            }
+          })
+          .catch(function () {
+            setStatus(detailsStatus, "We could not update your details just now.");
+          });
+      });
+    }
+
     // Render the donor snapshot returned by GET /api/portal/:token.
     function render(data) {
       subscriptionId = data.subscriptionId || null;
@@ -980,6 +1048,7 @@
       if (nameEl) nameEl.textContent = data.fullName || "Not on file";
       var emailEl = doc.getElementById("portalEmail");
       if (emailEl) emailEl.textContent = data.email || "No email on file";
+      prefillDetails(data);
 
       // Monthly gift: show the plan, or the no-subscription note (and hide the manage actions).
       var planEl = doc.getElementById("portalPlan");

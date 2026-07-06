@@ -45,6 +45,15 @@ describe("donor portal page markup (REQ-061)", () => {
     expect(doc0.getElementById("cancelGiftAid"), "#cancelGiftAid missing").not.toBeNull();
   });
 
+  it("offers a self-edit details form (name, email, consent, anonymity) (REQ-061)", () => {
+    const form = doc0.getElementById("portalDetailsForm");
+    expect(form, "#portalDetailsForm missing").not.toBeNull();
+    for (const id of ["pdName", "pdEmail", "pdEmailConsent", "pdAnonymous"]) {
+      expect(doc0.getElementById(id), `#${id} missing`).not.toBeNull();
+    }
+    expect(doc0.getElementById("pdName")?.hasAttribute("required")).toBe(true);
+  });
+
   it("offers a self-serve magic-link request form inside the error card (REQ-061)", () => {
     const err = doc0.getElementById("portalError");
     const form = doc0.getElementById("portalRequestForm");
@@ -132,6 +141,45 @@ describe("initPortal behaviour (jsdom)", () => {
     expect(choice.hidden).toBe(false);
     expect(choice.contains(confirm)).toBe(true);
     expect(document.getElementById("reduceInstead")).not.toBeNull();
+  });
+
+  it("prefills the self-edit details form from the GET snapshot", async () => {
+    const win = makeWin(getFetch());
+    initPortal(document, win);
+    await flush();
+
+    expect((document.getElementById("pdName") as HTMLInputElement).value).toBe("Ada Portal");
+    expect((document.getElementById("pdEmail") as HTMLInputElement).value).toBe(
+      "ada.portal@example.com",
+    );
+    expect((document.getElementById("pdEmailConsent") as HTMLInputElement).checked).toBe(true);
+    expect((document.getElementById("pdAnonymous") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("PATCHes the bare /api/portal/:token with the edited details on submit", async () => {
+    const fetchMock = getFetch();
+    const win = makeWin(fetchMock);
+    initPortal(document, win);
+    await flush();
+    fetchMock.mockClear();
+
+    (document.getElementById("pdName") as HTMLInputElement).value = "Ada Renamed";
+    (document.getElementById("pdEmailConsent") as HTMLInputElement).checked = false;
+    (document.getElementById("pdAnonymous") as HTMLInputElement).checked = true;
+    document
+      .getElementById("portalDetailsForm")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalled();
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe(`/api/portal/${TOKEN}`);
+    expect((opts as RequestInit)?.method).toBe("PATCH");
+    const body = JSON.parse(String((opts as RequestInit)?.body));
+    expect(body.fullName).toBe("Ada Renamed");
+    expect(body.emailConsent).toBe(false);
+    expect(body.anonymous).toBe(true);
+    expect(body.email).toBe("ada.portal@example.com");
   });
 
   it("posts to /api/portal/:token/gift-aid/cancel when the Gift Aid cancel control is used", async () => {

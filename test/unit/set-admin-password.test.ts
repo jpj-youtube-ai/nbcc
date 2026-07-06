@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveInputs } from "../../scripts/lib/admin-password-input.mjs";
+import { resolveInputs } from "../../src/ops/admin-password-input";
 import { hashPassword, verifyPassword } from "../../src/admin/password";
 
 // The script's DB write is integration-only (needs a live pool), but its input resolution is pure and
@@ -30,6 +30,13 @@ describe("set-admin-password resolveInputs", () => {
 
   it("rejects a too-short password", () => {
     expect(() => resolveInputs(argv("a@b.com"), { ADMIN_PASSWORD: "short" })).toThrow(/12 characters/);
+  });
+
+  it("does not read the password from argv", () => {
+    // Passing it on the command line must NOT be honoured — only the env var counts.
+    expect(() => resolveInputs([...argv("a@b.com"), "--password", "on the cli here"], {})).toThrow(
+      /ADMIN_PASSWORD/,
+    );
   });
 });
 

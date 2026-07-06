@@ -16,6 +16,7 @@ import {
   listRetentionExpiryDeclarations,
   listAwaitingDeclarationDonations,
   listGasdsDeadlineDonations,
+  listDeclarationsDueReview,
   listDonations,
   listClaimBatches,
   listAuditLog,
@@ -504,7 +505,20 @@ export async function getAdminGasdsDeadline(req: Request, res: Response): Promis
 
 adminRouter.get("/api/admin/queues/retention-expiry", getAdminRetentionExpiry);
 adminRouter.get("/api/admin/queues/awaiting-declaration", getAdminAwaitingDeclaration);
+// Declaration-review-due queue (TASK-136): active enduring/monthly declarations HMRC recommends
+// re-confirming (made over ~2 years ago). Read-only, Viewer+.
+export async function getAdminDeclarationReview(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listDeclarationsDueReview() });
+  } catch (err) {
+    console.error("admin declaration-review queue failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/queues/gasds-deadline", getAdminGasdsDeadline);
+adminRouter.get("/api/admin/queues/declaration-review", getAdminDeclarationReview);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
 // Read-only lists that back the admin cockpit UI. Browsing/reads are Viewer and up; the Charities

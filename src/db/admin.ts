@@ -395,6 +395,54 @@ export async function listGasdsDeadlineDonations(now: Date = new Date()): Promis
   return rows;
 }
 
+// HMRC recommends re-confirming ACTIVE donors roughly every two years — still paying enough tax,
+// details current. This applies to the enduring/monthly declaration population (TASK-136).
+export const DECLARATION_REVIEW_YEARS = 2;
+
+export interface DeclarationReviewRow {
+  id: number;
+  donor_id: number;
+  first_name: string;
+  last_name: string;
+  createdAt: string; // ISO date the declaration was made (the review anchor)
+  reviewDueSince: string; // ISO date it became due for review (created_at + 2 years)
+}
+
+// List ACTIVE enduring (all_donations) declarations that are due a periodic review — made more than
+// two years ago and not revoked. Read-only (pool.query). `now` is injectable so the cutoff is
+// deterministic under test. A light reminder so staff re-confirm long-running monthly donors; there
+// is no separate "reviewed_at" column yet, so the declaration's own created_at is the anchor
+// (re-confirming today issues a fresh declaration via reviseDeclaration, resetting the clock).
+export async function listDeclarationsDueReview(now: Date = new Date()): Promise<DeclarationReviewRow[]> {
+  const cutoff = new Date(now.getTime());
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - DECLARATION_REVIEW_YEARS);
+  const res = await pool.query<{
+    id: number;
+    donor_id: number;
+    first_name: string;
+    last_name: string;
+    created_at: Date;
+  }>(
+    `SELECT dec.id, dec.donor_id, dec.first_name, dec.last_name, dec.created_at
+       FROM declarations dec
+      WHERE dec.revoked_at IS NULL AND dec.scope = 'all_donations' AND dec.created_at <= $1
+      ORDER BY dec.created_at ASC`,
+    [cutoff],
+  );
+  return res.rows.map((r) => {
+    const due = new Date(r.created_at.getTime());
+    due.setUTCFullYear(due.getUTCFullYear() + DECLARATION_REVIEW_YEARS);
+    return {
+      id: r.id,
+      donor_id: r.donor_id,
+      first_name: r.first_name,
+      last_name: r.last_name,
+      createdAt: r.created_at.toISOString(),
+      reviewDueSince: due.toISOString(),
+    };
+  });
+}
+
 export interface AwaitingDeclarationRow {
   id: number;
   donor_id: number;

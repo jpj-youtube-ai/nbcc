@@ -1,4 +1,11 @@
 import { z } from "zod";
+import {
+  CHARITY_NAME,
+  CHARITY_SHORT_NAME,
+  OSCR_NUMBER,
+  REGISTRATION_TEXT,
+  REGISTRATION_HTML,
+} from "../legal/registration";
 
 // Pure, DB-free Corporation Tax receipt content builder for a COMPANY donation (REQ-038 /
 // REQ-053). An incorporated company's gift is never Gift Aided; instead the company deducts it
@@ -11,10 +18,9 @@ import { z } from "zod";
 // builders in src/db/stripe-webhook-model.ts.
 
 // NBCC's identity — the verbatim charity name + the OSCR (Scottish charity regulator)
-// registration number, an immutable source of truth (as with the HMRC wording).
-export const CHARITY_NAME = "Night Before Christmas Campaign";
-export const CHARITY_SHORT_NAME = "NBCC";
-export const OSCR_NUMBER = "SC047995";
+// registration number now live in the single source of truth src/legal/registration.ts.
+// Re-exported here so existing importers (tests, callers) keep resolving them from receipt.ts.
+export { CHARITY_NAME, CHARITY_SHORT_NAME, OSCR_NUMBER };
 
 // The two fixed statements a Corporation Tax receipt must carry, verbatim (immutable):
 //  1. it is a GENUINE donation with nothing of value given in return (a qualifying charitable
@@ -83,24 +89,24 @@ export function buildCorporationTaxReceipt(input: ReceiptInput): CorporationTaxR
 
   const text =
     `${title}\n\n` +
-    `${CHARITY_NAME} (${CHARITY_SHORT_NAME})\n` +
-    `Registered Scottish charity, OSCR number ${OSCR_NUMBER}\n\n` +
+    `${CHARITY_NAME} (${CHARITY_SHORT_NAME})\n\n` +
     `Received with thanks from ${legalName}: a donation of ${amount} on ${date}.\n\n` +
     `${GENUINE_DONATION_STATEMENT}\n` +
     `${NO_GIFT_AID_STATEMENT}\n\n` +
     `Please keep this receipt to support your company's claim for Corporation Tax relief on ` +
-    `qualifying charitable donations.`;
+    `qualifying charitable donations.\n\n` +
+    `${REGISTRATION_TEXT}`;
 
   const html =
     `<section class="ct-receipt">` +
     `<h1>${escapeHtml(title)}</h1>` +
-    `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong><br />` +
-    `Registered Scottish charity, OSCR number ${OSCR_NUMBER}</p>` +
+    `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong></p>` +
     `<p>Received with thanks from ${escapeHtml(legalName)}: a donation of ${escapeHtml(amount)} on ${date}.</p>` +
     `<p>${escapeHtml(GENUINE_DONATION_STATEMENT)}</p>` +
     `<p>${escapeHtml(NO_GIFT_AID_STATEMENT)}</p>` +
     `<p>Please keep this receipt to support your company's claim for Corporation Tax relief on ` +
     `qualifying charitable donations.</p>` +
+    REGISTRATION_HTML +
     `</section>`;
 
   return { text, html };
@@ -139,15 +145,15 @@ export function buildCompanyRefundNotice(input: {
 
   const text =
     `${title}\n\n` +
-    `${CHARITY_NAME} (${CHARITY_SHORT_NAME})\n` +
-    `Registered Scottish charity, OSCR number ${OSCR_NUMBER}\n\n` +
-    `${body}\n`;
+    `${CHARITY_NAME} (${CHARITY_SHORT_NAME})\n\n` +
+    `${body}\n\n` +
+    `${REGISTRATION_TEXT}`;
   const html =
     `<section class="ct-receipt ct-receipt-refund">` +
     `<h1>${escapeHtml(title)}</h1>` +
-    `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong><br />` +
-    `Registered Scottish charity, OSCR number ${OSCR_NUMBER}</p>` +
+    `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong></p>` +
     `<p>${escapeHtml(body)}</p>` +
+    REGISTRATION_HTML +
     `</section>`;
   return { text, html };
 }

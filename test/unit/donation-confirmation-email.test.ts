@@ -21,6 +21,7 @@ import { sendConfirmation } from "../../src/db/stripe-webhook";
 import { confirmationEmailFromCheckoutSession } from "../../src/db/stripe-webhook-model";
 import {
   buildDonationConfirmation,
+  buildRefundConfirmation,
   GIFT_AID_CONFIRMATION_LINE,
   MANAGE_CANCEL_LINE,
 } from "../../src/donors/confirmation";
@@ -164,5 +165,29 @@ describe("buildDonationConfirmation (pure content) — REQ-060 · TASK-098", () 
     const monthly = buildDonationConfirmation({ ...base, giftAid: false, mode: "monthly" });
     expect(monthly.text).not.toContain("Gift Aid");
     expect(monthly.text).toContain(MANAGE_CANCEL_LINE);
+  });
+
+  it("carries the canonical charity-registration line (text + html)", () => {
+    const content = buildDonationConfirmation({ ...base, giftAid: false, mode: "once" });
+    expect(content.text).toContain(
+      "known as NBCC, is a Scottish Charitable Incorporated Organisation.",
+    );
+    expect(content.text).toContain("Regulated by the Scottish Charity Regulator, OSCR.");
+    expect(content.html).toContain('class="charity-registration"');
+  });
+});
+
+describe("buildRefundConfirmation (pure content) — REQ-063 · TASK-099", () => {
+  const base = {
+    fullName: "Ada Lovelace",
+    refundedPence: 5000,
+    currency: "GBP",
+    refundDate: "2026-01-05T00:00:00Z",
+  } as const;
+
+  it("carries the canonical charity-registration line (text + html)", () => {
+    const content = buildRefundConfirmation({ ...base, full: true });
+    expect(content.text).toContain("Regulated by the Scottish Charity Regulator, OSCR.");
+    expect(content.html).toContain('class="charity-registration"');
   });
 });

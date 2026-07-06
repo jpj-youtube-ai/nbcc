@@ -16,6 +16,7 @@ import {
   listRetentionExpiryDeclarations,
   listAwaitingDeclarationDonations,
   listGasdsDeadlineDonations,
+  markGasdsClaimed,
   listDeclarationsDueReview,
   listDonations,
   listClaimBatches,
@@ -517,7 +518,30 @@ export async function getAdminDeclarationReview(req: Request, res: Response): Pr
   }
 }
 
+// Mark GASDS small gifts as claimed (TASK-138) — Editor+. Stamps gasds_claimed_at so the deadline
+// queue stops surfacing them. Body: { donationIds: number[] }.
+const gasdsMarkSchema = z.object({
+  donationIds: z.array(z.number().int().positive()).min(1),
+});
+
+export async function postAdminMarkGasdsClaimed(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const parsed = gasdsMarkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid GASDS mark request", details: parsed.error.flatten() });
+  }
+  try {
+    const result = await markGasdsClaimed(parsed.data.donationIds, actorOf(claims));
+    return res.status(200).json({ claimed: result.claimedIds.length, claimedIds: result.claimedIds });
+  } catch (err) {
+    console.error("admin gasds mark-claimed failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/queues/gasds-deadline", getAdminGasdsDeadline);
+adminRouter.post("/api/admin/queues/gasds-deadline/mark-claimed", postAdminMarkGasdsClaimed);
 adminRouter.get("/api/admin/queues/declaration-review", getAdminDeclarationReview);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------

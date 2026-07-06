@@ -27,11 +27,11 @@ async function login(email, password) {
 
 Before({ tags: "@admin" }, async function () {
   await pool.query("DELETE FROM users WHERE email LIKE '%admin.bdd@example.com'");
-  // declarations FK to donors is ON DELETE RESTRICT (TASK-130 seeds one for the donor), so clear the
-  // test donors' declarations before the donors themselves.
-  await pool.query(
-    "DELETE FROM declarations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%admin.bdd@example.com')",
-  );
+  // donations + declarations FK to donors (ON DELETE RESTRICT); TASK-130/138 seed them for the test
+  // donor, so clear children before the donors themselves (donations first — they may FK a declaration).
+  const donorFilter = "donor_id IN (SELECT id FROM donors WHERE email LIKE '%admin.bdd@example.com')";
+  await pool.query(`DELETE FROM donations WHERE ${donorFilter}`);
+  await pool.query(`DELETE FROM declarations WHERE ${donorFilter}`);
   await pool.query("DELETE FROM donors WHERE email LIKE '%admin.bdd@example.com'");
 });
 
@@ -139,6 +139,32 @@ When(
     this.adminBody = await res.json().catch(() => ({}));
   },
 );
+
+Given("the admin donor has a GASDS-eligible small gift collected {string}", async function (isoDate) {
+  const donation = await pool.query(
+    `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status, payment_status,
+                            gasds_eligible, created_at)
+     VALUES ($1, 'once', 2000, false, 'not_eligible', 'paid', true, $2) RETURNING id`,
+    [this.adminDonorId, isoDate],
+  );
+  this.gasdsDonationId = donation.rows[0].id;
+});
+
+When("the admin marks the GASDS gift claimed as {string} with password {string}", async function (email, password) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/queues/gasds-deadline/mark-claimed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ donationIds: [this.gasdsDonationId] }),
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+Then("the GASDS gift is marked claimed", async function () {
+  const row = await pool.query("SELECT gasds_claimed_at FROM donations WHERE id = $1", [this.gasdsDonationId]);
+  assert.ok(row.rows[0].gasds_claimed_at != null, "expected gasds_claimed_at to be set");
+});
 
 Given("an open claim batch", async function () {
   const batch = await pool.query(

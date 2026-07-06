@@ -355,9 +355,9 @@ export interface GasdsDeadlineRow {
 // List GASDS-eligible small donations whose 2-year claim window has closed ("expired") or closes
 // within the horizon ("expiring"), per the pure gasdsClaimDeadline calculator (TASK-135 — two years
 // after the tax-year-end of collection). Read-only (pool.query). `now` is injectable so the
-// classification is deterministic under test. NOTE: NBCC does not yet track whether a GASDS top-up
-// has been claimed per donation (top-ups are pooled per tax year), so this lists ALL eligible small
-// gifts by deadline; suppressing already-claimed ones is a follow-up once GASDS claims are tracked.
+// classification is deterministic under test. Already-claimed gifts are excluded
+// (gasds_claimed_at IS NULL), so the queue only surfaces small gifts still needing a GASDS claim
+// before the cliff (TASK-138 — mark-claimed via markGasdsClaimed).
 export async function listGasdsDeadlineDonations(now: Date = new Date()): Promise<GasdsDeadlineRow[]> {
   const res = await pool.query<{
     id: number;
@@ -368,7 +368,7 @@ export async function listGasdsDeadlineDonations(now: Date = new Date()): Promis
   }>(
     `SELECT dn.id, dn.donor_id, d.full_name, dn.amount_pence, dn.created_at
        FROM donations dn JOIN donors d ON d.id = dn.donor_id
-      WHERE dn.gasds_eligible = true AND dn.payment_status = 'paid'
+      WHERE dn.gasds_eligible = true AND dn.payment_status = 'paid' AND dn.gasds_claimed_at IS NULL
       ORDER BY dn.created_at ASC`,
   );
 
@@ -441,6 +441,36 @@ export async function listDeclarationsDueReview(now: Date = new Date()): Promise
       reviewDueSince: due.toISOString(),
     };
   });
+}
+
+// Mark GASDS-eligible small donations as claimed (TASK-138) — bookkeeping that they have been counted
+// toward a GASDS top-up claim, so the deadline queue stops surfacing them. Stamps gasds_claimed_at on
+// each still-unclaimed, GASDS-eligible id and appends ONE `gasds.claimed` audit row, in one
+// transaction (writeWithAudit). Ids that are not GASDS-eligible or already claimed are silently
+// skipped (the WHERE guards them), so a stale/duplicate request is a safe no-op. Returns the ids
+// actually stamped.
+export async function markGasdsClaimed(
+  donationIds: number[],
+  actor: string,
+): Promise<{ claimedIds: number[] }> {
+  return writeWithAudit(
+    async (client) => {
+      const res = await client.query<{ id: number }>(
+        `UPDATE donations SET gasds_claimed_at = now()
+          WHERE id = ANY($1::int[]) AND gasds_eligible = true AND gasds_claimed_at IS NULL
+        RETURNING id`,
+        [donationIds],
+      );
+      return { claimedIds: res.rows.map((r) => r.id) };
+    },
+    (r) => ({
+      actor,
+      action: "gasds.claimed",
+      entity: "donation",
+      entityId: r.claimedIds[0] ?? 0,
+      data: { donationIds: r.claimedIds },
+    }),
+  );
 }
 
 export interface AwaitingDeclarationRow {

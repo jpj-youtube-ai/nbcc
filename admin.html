@@ -53,6 +53,7 @@
               <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>
               <li><button class="admin-nav-link" type="button" data-view="donations">Donations</button></li>
               <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
             </ul>
@@ -136,6 +137,16 @@
               <h3 class="admin-subhead">3. Adjustment due</h3>
               <p class="admin-help">Gifts that were refunded after you had already claimed the Gift Aid on them. Enter each amount in the <em>adjustment</em> box on your next Charities Online claim so HMRC reclaims the overpaid tax; no separate payment is needed.</p>
               <div class="admin-table-wrap" id="adjustmentTable"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- GASDS deadline: small gifts approaching the 2-year claim cliff. -->
+            <section class="admin-view" id="view-gasds" aria-labelledby="gasds-heading" hidden>
+              <h2 id="gasds-heading">GASDS deadline</h2>
+              <p class="admin-view-intro">GASDS (the Gift Aid Small Donations Scheme) tops up small cash and contactless gifts, but the claim window is only two years from the end of the tax year of collection. These small gifts are approaching or past that cliff and are not yet marked as claimed. Tick the ones you have claimed under GASDS to clear them.</p>
+              <div class="admin-claim-actions" id="gasdsActions" hidden>
+                <button class="admin-btn" type="button" id="markGasdsBtn">Mark claimed</button>
+              </div>
+              <div class="admin-table-wrap" id="gasdsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Subscriptions: at-risk / lapsed monthly gifts. -->

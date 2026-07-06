@@ -91,3 +91,24 @@ variable "skip_final_snapshot" {
   type    = bool
   default = true
 }
+
+# Public HTTPS domain (REQ-034). Empty => HTTP-only: staging keeps the port-80
+# listener and provisions no Route53 zone / ACM cert (zero change). Set to the real
+# apex domain in the env root (e.g. "nbcc.scot") to provision a Route53 hosted zone,
+# a DNS-validated ACM cert (apex + www), a 443 listener, an 80->443 redirect and
+# apex/www alias records to the ALB. See dns.tf.
+variable "domain_name" {
+  type    = string
+  default = ""
+}
+
+# DKIM public-key TXT value for Google Workspace mail on `domain_name`
+# (google._domainkey). Ported from the existing DNS so email keeps signing after the
+# zone is delegated to Route53. Non-secret (it is a PUBLIC key). VERIFY this exact
+# string against Google Admin -> Apps -> Google Workspace -> Gmail -> Authenticate
+# email before relying on it — one wrong char breaks DKIM. Only used when
+# domain_name is set. Empty => the DKIM record is skipped.
+variable "google_dkim_txt" {
+  type    = string
+  default = ""
+}

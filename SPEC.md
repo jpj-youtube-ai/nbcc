@@ -511,7 +511,7 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (2)
+## Planned (3)
 
 ### REQ-066 — Admin dashboard
 
@@ -531,3 +531,10 @@ Governance copy meeting fundraising self-regulation expectations, including BACS
 
 Tasks:
 - TASK-137 — Governance: fundraising self-regulation + BACS advance-notice lines
+
+### REQ-068 — Production domain DNS cutover from WIX
+
+Document the domain's current WIX DNS configuration and produce a migration runbook that maps every existing record (A/ALIAS, CNAME, MX, TXT/SPF/DKIM/DMARC, verification records, nameservers) to its target value so the domain can be safely repointed at the new backend (ALB) without breaking mail or other services.
+
+Tasks:
+- TASK-139 — Produce a WIX DNS inventory and domain-cutover runbook

@@ -260,3 +260,82 @@ function refundEventOfAmount(amount: number, amountRefunded: number, id = "evt_r
     },
   } as unknown as import("stripe").Event;
 }
+
+// A charge.dispute.* event. Unlike a charge.refunded, the object is a `dispute`: its charge id lives
+// in `dispute.charge` (a string by default, or an expanded object when Stripe expands it), and the
+// refunded value is `dispute.amount`. `charge` defaults to a string so the handler's dispute
+// charge-id extraction branch is exercised; pass `chargeExpanded` to model the expanded-object shape.
+function disputeEvent(
+  type: string,
+  amount: number,
+  opts: { id?: string; chargeExpanded?: boolean; paymentIntent?: string | null } = {},
+) {
+  const charge = opts.chargeExpanded ? { id: "ch_x", object: "charge" } : "ch_x";
+  return {
+    id: opts.id ?? "evt_dispute",
+    type,
+    created: 1_767_312_000,
+    data: {
+      object: {
+        id: "dp_x",
+        object: "dispute",
+        charge,
+        payment_intent: opts.paymentIntent === undefined ? null : opts.paymentIntent,
+        amount,
+      },
+    },
+  } as unknown as import("stripe").Event;
+}
+
+describe("charge.dispute.* — routed through handleRefund (REQ-058/REQ-063)", () => {
+  it("created dispute for the full amount on a not-yet-claimed individual → not_eligible, matched by dispute.charge", async () => {
+    target = individual({ claim_status: "eligible", claim_batch_id: null });
+    const result = await processWebhookEvent(disputeEvent("charge.dispute.created", 5000));
+    expect(result.processed).toBe(true);
+    // The donation SELECT was given the charge id extracted from dispute.charge (param 2), with no
+    // payment_intent (param 1 null) — the branch charge.refunded never exercises.
+    const select = call(/from donations[\s\S]*join\s+donors/i);
+    expect(select?.[1][0]).toBeNull(); // payment_intent
+    expect(select?.[1][1]).toBe("ch_x"); // chargeId from dispute.charge
+    const update = call(/update donations/i);
+    expect(String(update?.[0])).toMatch(/claim_status/i);
+    expect(update?.[1]).toContain("not_eligible");
+    expect(has(/rollback/i)).toBe(false);
+  });
+
+  it("funds_withdrawn dispute on an already-batched donation → adjustment_due + a claim_adjustments row", async () => {
+    target = individual({ claim_status: "batched", claim_batch_id: 12 });
+    const result = await processWebhookEvent(disputeEvent("charge.dispute.funds_withdrawn", 5000, { id: "evt_dp_fw" }));
+    expect(result.processed).toBe(true);
+    expect(call(/update donations/i)?.[1]).toContain("adjustment_due");
+    expect(has(/insert into claim_adjustments/i)).toBe(true);
+  });
+
+  it("resolves the donation via payment_intent when dispute.charge is an expanded object", async () => {
+    // Stripe may expand `charge` to an object; the handler treats a non-string charge as no id and
+    // must still find the donation via the dispute's payment_intent.
+    target = individual();
+    const result = await processWebhookEvent(
+      disputeEvent("charge.dispute.created", 5000, { id: "evt_dp_exp", chargeExpanded: true, paymentIntent: "pi_x" }),
+    );
+    expect(result.processed).toBe(true);
+    const select = call(/from donations[\s\S]*join\s+donors/i);
+    expect(select?.[1][0]).toBe("pi_x"); // payment_intent used
+    expect(select?.[1][1]).toBeNull(); // no charge id (expanded object, not a string)
+  });
+
+  it("a dispute for a charge with no matching donation is ignored", async () => {
+    target = undefined;
+    const result = await processWebhookEvent(disputeEvent("charge.dispute.created", 5000, { id: "evt_dp_none" }));
+    expect(result).toEqual({ processed: true, action: "ignored.no_donation" });
+  });
+
+  it("is idempotent across a resent dispute event id", async () => {
+    const first = await processWebhookEvent(disputeEvent("charge.dispute.created", 5000, { id: "evt_dp_dup" }));
+    expect(first.processed).toBe(true);
+    queryMock.mockClear();
+    const second = await processWebhookEvent(disputeEvent("charge.dispute.created", 5000, { id: "evt_dp_dup" }));
+    expect(second).toEqual({ processed: false, action: "duplicate" });
+    expect(has(/update donations/i)).toBe(false);
+  });
+});

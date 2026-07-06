@@ -45,11 +45,16 @@ describe.each(PAGES)("%s footer", (file) => {
     }
   });
 
-  it("has a legal strip with the SCIO line and an OSCR link for SC047995", () => {
+  it("has a legal strip with the exact charity-registration wording and OSCR link", () => {
     expect(footer).toMatch(/class="legal"/);
-    expect(footer).toMatch(/Scottish Charitable Incorporated Organisation/i);
+    expect(footer).toContain(
+      "Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.",
+    );
+    expect(footer).toMatch(
+      /Scottish Charity Number\s*<a[^>]*>SC047995<\/a>\.\s*Regulated by the Scottish Charity Regulator, OSCR\./,
+    );
     expect(footer).toMatch(/href="[^"]*oscr\.org\.uk[^"]*SC047995[^"]*"/i);
-    expect(footer).toContain("SC047995");
+    expect(footer).not.toContain("&copy; 2026");
   });
 
   it("uses no raw .html inter-page hrefs", () => {

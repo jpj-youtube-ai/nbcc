@@ -29,11 +29,11 @@ const LEADS = [
 ];
 
 const ELVES = [
-  "Dawn", "Jill", "Lisa Marie", "Liz", "Lucy", "Margaret", "Matt",
+  "Dawn", "Jill", "Lisa-Marie", "Liz", "Lucy", "Margaret", "Matt",
   "Morag", "Paul", "Scott", "Sue", "Tygan", "Vicky",
 ];
 // Elves whose headshot is already in assets/img (the rest are .is-pending).
-const ELVES_WITH_PHOTO = ["Dawn", "Jill", "Liz", "Sue", "Tygan", "Vicky"];
+const ELVES_WITH_PHOTO = ["Dawn", "Jill", "Lisa-Marie", "Liz", "Sue", "Tygan", "Vicky"];
 
 describe("about meet the volunteers (REQ-016)", () => {
   const section = doc.querySelector("section.meet-team");
@@ -98,7 +98,7 @@ describe("about meet the volunteers (REQ-016)", () => {
       }
     });
 
-    it("has exactly seven placeholder tiles awaiting a headshot", () => {
+    it("has exactly six placeholder tiles awaiting a headshot", () => {
       expect(section?.querySelectorAll(".team-elves .member-photo.is-pending")).toHaveLength(
         ELVES.length - ELVES_WITH_PHOTO.length,
       );

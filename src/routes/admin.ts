@@ -24,9 +24,10 @@ import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignment
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
-import { getDonorPortalSnapshot, updateDonorPortal } from "../db/portal";
+import { getDonorPortalSnapshot, updateDonorPortal, getActiveDeclarationForDonor } from "../db/portal";
 import { cancelSubscription } from "../clients/stripe";
-import { DeclarationCancellationError } from "../db/declarations";
+import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
+import { declarationFieldsSchema } from "../declarations/fields";
 import { config } from "../config";
 
 // The role-based admin login endpoint (REQ-062 · TASK-105). POST /api/admin/login verifies a staff
@@ -149,7 +150,8 @@ export async function getAdminDonor(req: Request, res: Response): Promise<Respon
     // Enrich the admin view with the donor's postal address (declaration for an individual, billing
     // for a company) — kept off the donor-facing portal snapshot, so it is merged in here.
     const address = await getDonorAddress(id);
-    return res.status(200).json({ ...snapshot, ...address });
+    const declaration = await getActiveDeclarationForDonor(id);
+    return res.status(200).json({ ...snapshot, ...address, declaration });
   } catch (err) {
     console.error("admin donor read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
@@ -186,6 +188,48 @@ export async function patchAdminDonor(req: Request, res: Response): Promise<Resp
     return res.status(200).json(snapshot);
   } catch (err) {
     console.error("admin donor update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+// PATCH /api/admin/donors/:id/declaration — correct the identity/address on the donor's active Gift
+// Aid declaration on their behalf (REQ-059 · TASK-130). The admin-authorised twin of the portal's
+// patchDeclaration: Editor/Admin only. scope + taxpayer are held at the current values, so
+// reviseDeclaration always AMENDS in place (a `declaration.amended` audit note, no new row); the
+// account name is synced so donors.full_name never diverges from the declaration. Both audit rows
+// record admin:<email>. No active declaration → 404. Two audited transactions (declaration first) —
+// same documented single-transaction follow-up as the portal route.
+export async function patchAdminDeclaration(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = donorId(req, res);
+  if (id == null) return;
+
+  const parsed = declarationFieldsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid declaration update", details: parsed.error.flatten() });
+  }
+  const fields = parsed.data;
+
+  try {
+    const active = await getActiveDeclarationForDonor(id);
+    if (!active) {
+      return res.status(404).json({ error: "No active Gift Aid declaration to edit" });
+    }
+    const result = await reviseDeclaration(active.id, fields, {
+      scope: active.scope,
+      confirmedTaxpayer: active.confirmedTaxpayer,
+      mode: "once",
+      actor: actorOf(claims),
+    });
+    await updateDonorPortal(id, { fullName: `${fields.firstName} ${fields.lastName}` }, actorOf(claims));
+
+    const snapshot = await getDonorPortalSnapshot(id);
+    const address = await getDonorAddress(id);
+    const declaration = await getActiveDeclarationForDonor(id);
+    return res.status(200).json({ ...snapshot, ...address, declaration, outcome: result.outcome });
+  } catch (err) {
+    console.error("admin declaration update failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin update is temporarily unavailable" });
   }
 }
@@ -247,6 +291,7 @@ export async function postAdminCancelGiftAid(req: Request, res: Response): Promi
 }
 
 adminRouter.get("/api/admin/donors/:id", getAdminDonor);
+adminRouter.patch("/api/admin/donors/:id/declaration", patchAdminDeclaration);
 adminRouter.patch("/api/admin/donors/:id", patchAdminDonor);
 adminRouter.post("/api/admin/donors/:id/subscription/cancel", postAdminCancelSubscription);
 adminRouter.post("/api/admin/donors/:id/gift-aid/cancel", postAdminCancelGiftAid);

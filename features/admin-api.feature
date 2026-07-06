@@ -24,6 +24,17 @@ Feature: Role-gated admin actions on a donor's behalf (REQ-062)
     Then the admin response status should be 200
     And the admin response field "fullName" should be "Ada Edited"
 
+  Scenario: an Editor corrects a donor's declaration address (amend, not revise)
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the admin donor has an active Gift Aid declaration
+    When I PATCH the admin donor declaration as "editor.admin.bdd@example.com" with password "edit-pw-123":
+      """
+      { "firstName": "Ada", "lastName": "Behalf", "houseNameNumber": "12", "address": "New Road, Ayr", "postcode": "KA7 1AA", "nonUk": false }
+      """
+    Then the admin response status should be 200
+    And the donor's active declaration address should be "New Road, Ayr"
+    And the donor's declaration is not revoked
+
   Scenario: a Viewer can search donors and finds the seeded donor
     Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
     When I search admin "donors" for "Ada Behalf" as "viewer.admin.bdd@example.com" with password "view-pw-123"

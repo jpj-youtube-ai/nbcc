@@ -532,8 +532,22 @@
         editField("email", "Email", "email", d.email || "") +
         editCheck("emailConsent", "Email consent", d.emailConsent) +
         editCheck("anonymous", "Anonymous on the public page", d.anonymous) +
-        '<button class="btn btn-primary" type="submit">Save changes</button></form>' +
-        '<div class="admin-donor-actions">';
+        '<button class="btn btn-primary" type="submit">Save changes</button></form>';
+      // Gift Aid declaration details (TASK-130): correct identity/address on the active declaration.
+      if (d.declaration) {
+        var dec = d.declaration;
+        actions +=
+          '<form class="admin-edit" id="donorDeclForm"><h3 class="admin-subhead">Gift Aid declaration details</h3>' +
+          editField("declTitle", "Title", "text", dec.title || "") +
+          editField("declFirstName", "First name", "text", dec.firstName || "") +
+          editField("declLastName", "Last name", "text", dec.lastName || "") +
+          editField("declHouse", "House name or number", "text", dec.houseNameNumber || "") +
+          editField("declAddress", "Home address", "text", dec.address || "") +
+          editField("declPostcode", "Postcode", "text", dec.postcode || "") +
+          editCheck("declNonUk", "No UK postcode (overseas address)", dec.nonUk) +
+          '<button class="btn btn-primary" type="submit">Save declaration details</button></form>';
+      }
+      actions += '<div class="admin-donor-actions">';
       if (d.subscriptionPlan && d.subscriptionId) actions += '<button class="btn btn-ghost" type="button" id="cancelSubBtn">Cancel monthly gift</button>';
       if (d.giftAid) actions += '<button class="btn btn-ghost" type="button" id="cancelGaBtn">Cancel Gift Aid</button>';
       actions += "</div>";
@@ -569,6 +583,39 @@
           })
           .catch(function () {
             donorStatus("Could not save the changes.");
+          });
+      });
+    }
+    var declForm = el("donorDeclForm");
+    if (declForm) {
+      declForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var nonUk = el("edit-declNonUk").checked;
+        var declBody = {
+          title: (el("edit-declTitle").value || "").trim() || undefined,
+          firstName: (el("edit-declFirstName").value || "").trim(),
+          lastName: (el("edit-declLastName").value || "").trim(),
+          houseNameNumber: (el("edit-declHouse").value || "").trim() || undefined,
+          address: (el("edit-declAddress").value || "").trim(),
+          nonUk: nonUk,
+        };
+        if (!nonUk) declBody.postcode = (el("edit-declPostcode").value || "").trim();
+        authFetch("/api/admin/donors/" + currentDonorId + "/declaration", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(declBody),
+        })
+          .then(function (res) {
+            return res.ok ? res.json() : null;
+          })
+          .then(function (snap) {
+            if (snap) {
+              renderDonor(snap);
+              donorStatus("Declaration details saved.");
+            } else donorStatus("Could not save the declaration details.");
+          })
+          .catch(function () {
+            donorStatus("Could not save the declaration details.");
           });
       });
     }

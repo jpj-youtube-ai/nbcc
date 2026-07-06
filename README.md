@@ -1036,8 +1036,8 @@ is validated by `declarationFieldsSchema` (`title?`, first/last name, house name
 place** (a `declaration.amended` audit note, no new row) rather than revoking-and-superseding — a
 scope/consent change is deliberately out of scope here. It also syncs `donors.full_name` to
 `"First Last"` so the account name and the declaration name **cannot diverge** (`updateDonorPortal`);
-the two writes are separate audited transactions (declaration first — a name-sync failure leaves the
-declaration correct and only the display name stale, a documented single-transaction follow-up). No
+the declaration amend and the name sync run in **one** transaction
+(`reviseDeclaration`'s `syncDonorFullName`, TASK-131), so they commit or roll back together. No
 active declaration → **404**; invalid body → **400**; invalid token → **401**. The portal page shows a
 prefilled **"Your Gift Aid declaration details"** form (`#portalDeclaration`, shown only when a
 declaration is present; `GET /api/portal/:token` now carries `declaration`). Proven by
@@ -1106,8 +1106,8 @@ held at the declaration's current values so `reviseDeclaration` always **amends 
 the account and declaration names cannot diverge, and both audit rows record `admin:<email>`. No active
 declaration → 404; invalid body → 400; invalid token → 401. `GET /api/admin/donors/:id` now also carries
 the active `declaration`, so the admin donor view renders a prefilled **"Gift Aid declaration details"**
-edit form (`assets/js/admin/app.js`). Like the portal route, the declaration amend and the name sync are
-two audited transactions (declaration first) — a documented single-transaction follow-up. Proven by
+edit form (`assets/js/admin/app.js`). Like the portal route, the amend and the name sync run in **one**
+transaction (`reviseDeclaration`'s `syncDonorFullName`, TASK-131). Proven by
 `test/unit/admin-declaration-edit.test.ts` and end to end by the `@db` `features/admin-api.feature`.
 
 **`GET /api/admin/search/{donors,declarations,donations}?q=` (REQ-062 · TASK-108).** Read-only admin

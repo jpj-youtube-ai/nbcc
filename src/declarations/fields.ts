@@ -4,8 +4,10 @@ import { SCOPES, type Scope, type DeclarationWording } from "./wording";
 // The pure, DB-free declaration field-capture validation + row builder (REQ-043). A
 // Gift Aid declaration captures the donor's title (optional), first and last name, the
 // house name/number as a SEPARATE HMRC matching key, the rest of the ONE home address,
-// and a UK postcode — with a non-UK flag (Channel Islands / Isle of Man) that omits the
-// postcode. No pool/config/clock, so it is unit-tested DB-free like
+// and a UK postcode — with an overseas-ADDRESS flag (no UK postcode, e.g. Channel Islands /
+// Isle of Man) that omits the postcode. That flag is only an HMRC matching detail; Gift Aid
+// ELIGIBILITY is the UK-taxpayer liability declaration (src/declarations/wording.ts), never
+// this flag. No pool/config/clock, so it is unit-tested DB-free like
 // src/db/donations-model.ts and src/declarations/wording.ts. The scope (REQ-044) and the
 // verbatim wording (REQ-040) come from their own modules; this validates only the
 // captured fields and maps them onto a declarations row (columns per migration
@@ -24,7 +26,8 @@ export function isValidUkPostcode(value: string): boolean {
 
 // The captured declaration fields (camelCase input). `.strict()` rejects any unknown
 // key, so a stray work/c-o address field cannot slip in — there is one home address
-// only. houseNameNumber and postcode are validated conditionally on nonUk below. This is
+// only. houseNameNumber and postcode are validated conditionally on nonUk (the
+// overseas-address flag) below. This is
 // the strict OBJECT before the cross-field refinements; partnership.ts (REQ-051) extends
 // it with a per-partner share, so it is exported for reuse.
 export const declarationFieldsBase = z
@@ -44,18 +47,20 @@ export const declarationFieldsBase = z
   })
   .strict();
 
-// The nonUk-conditional home-address rules (house name/number + UK postcode). Applied to
+// The overseas-address-conditional home-address rules (house name/number + UK postcode).
+// nonUk marks an overseas address (no UK postcode) — a matching detail, not the eligibility
+// test (that is the UK-taxpayer liability declaration). Applied to
 // the base object here, and reused by partnership.ts on its base+share object so the
 // per-partner declaration obeys the same rules — single source of truth.
 export function refineDeclarationFields<T extends z.ZodTypeAny>(schema: T) {
   return schema
-    // A UK declaration needs the house name/number (the HMRC matching key); a non-UK
-    // declaration may omit it.
+    // A UK-postcode declaration needs the house name/number (the HMRC matching key); an
+    // overseas-address declaration may omit it.
     .refine((d) => d.nonUk || (d.houseNameNumber != null && d.houseNameNumber.length > 0), {
       message: "a house name or number is required for a UK declaration",
       path: ["houseNameNumber"],
     })
-    // A UK declaration needs a valid UK postcode; a non-UK declaration omits it.
+    // A UK-postcode declaration needs a valid UK postcode; an overseas-address declaration omits it.
     .refine((d) => d.nonUk || (d.postcode != null && isValidUkPostcode(d.postcode)), {
       message: "a valid UK postcode is required for a UK declaration",
       path: ["postcode"],
@@ -86,9 +91,9 @@ export interface DeclarationRow {
 }
 
 // Build the declarations row from validated fields + the donor FK, scope and wording.
-// Pure: a non-UK declaration stores no postcode (REQ-043); confirmed_taxpayer defaults
-// to false. house_name_number falls back to an empty string for a non-UK declaration
-// that omitted it (the column is NOT NULL).
+// Pure: an overseas-address declaration stores no postcode (REQ-043); confirmed_taxpayer
+// defaults to false. house_name_number falls back to an empty string for an overseas-address
+// declaration that omitted it (the column is NOT NULL).
 export function buildDeclarationRow(
   fields: DeclarationFields,
   context: {

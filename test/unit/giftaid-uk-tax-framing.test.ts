@@ -13,9 +13,9 @@ const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
 const OLD_FRAMING =
   "I live outside the UK (Channel Islands or Isle of Man), so I have no UK postcode.";
 const DONOR_CHECKBOX =
-  "I have no UK postcode — for example, my home address is in the Channel Islands or Isle of Man.";
+  "I have no UK postcode, for example my home address is in the Channel Islands or Isle of Man.";
 const PARTNER_CHECKBOX =
-  "This partner has no UK postcode — for example, a home address in the Channel Islands or Isle of Man.";
+  "This partner has no UK postcode, for example a home address in the Channel Islands or Isle of Man.";
 const TAX_NOTE =
   "Gift Aid depends on paying UK Income Tax or Capital Gains Tax, not on where you live";
 

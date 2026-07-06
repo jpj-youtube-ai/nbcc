@@ -314,7 +314,7 @@ Tasks:
 
 ### REQ-043 — Declaration field capture
 
-Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode, with a non-UK donor flag (Channel Islands / Isle of Man) that omits the postcode. *Accept:* field-level validation enforces postcode format and a required house number; only a home address is accepted (no work or c/o addresses).
+Capture first name, last name, optional title, house name/number as a separate HMRC matching key, the rest of the home address, and a UK postcode. Gift Aid eligibility rests on the donor's UK-taxpayer declaration (they pay enough UK Income Tax / Capital Gains Tax to cover the claim), not on holding a UK postcode. Provide an overseas-address flag purely as an HMRC address-matching detail: an overseas address (e.g. Channel Islands or Isle of Man) has no UK postcode, so the postcode is omitted. This flag does not by itself make a Channel Islands or Isle of Man resident eligible, and a UK taxpayer living abroad can still Gift Aid. *Accept:* field-level validation enforces postcode format for UK addresses and a required house number; only a home address is accepted (no work or c/o addresses).
 
 Tasks:
 - TASK-061 — Add declaration field capture validation and row-builder module
@@ -331,7 +331,7 @@ Tasks:
 
 ### REQ-045 — Benefit tracking and caps
 
-Record the benefits accepted per donation with an admin-set value per perk and an automatic check against HMRC's annualised benefit caps (≤£100 → 25%; £101–£1,000 → £25; £1,001+ → 5% capped at £2,500). *Accept:* recognition perks such as name-on-page, impact updates, social thank-yous, digital badges and certificates are recorded at zero monetary value; any cap breach is flagged.
+Record the benefits accepted per donation with an admin-set value per perk and an automatic check against HMRC's annualised benefit cap: 25% of the first £100 of the (annualised) donation, plus 5% of anything above £100, capped at £2,500 in total (the rule in force since 6 April 2019, which replaced the earlier three-tier cap). *Accept:* recognition perks such as name-on-page, impact updates, social thank-yous, digital badges and certificates are recorded at zero monetary value; any cap breach is flagged.
 
 Tasks:
 - TASK-066 — Add benefit_types and donation_benefits tables plus a donation cap-breach flag (additive migration)
@@ -447,7 +447,7 @@ Tasks:
 
 ### REQ-059 — Editing a declaration creates a new one
 
-Treat declarations as immutable so that any change to name, address, scope or taxpayer confirmation deactivates the old declaration with a revoked timestamp and creates a new one with the current wording, linking future charges to the new declaration while past claimed donations keep their original. *Accept:* each donation's claim references the declaration that was valid at the time of that donation.
+A change to consent — the declaration's scope or the UK-taxpayer confirmation — revokes the old declaration with a revoked timestamp and creates a superseding one with the current wording, linking future charges to the new declaration while past claimed donations keep their original. A change to identity or address — name, house name/number, address, postcode, or the overseas flag — amends the enduring declaration in place with an audit note, leaving it active (no revoke, no new declaration). The revoke-and-supersede-on-consent-change behaviour is a deliberate design choice for a clean audit trail, not an HMRC requirement — HMRC permits noting an address change on the enduring declaration. *Accept:* each donation's claim references the declaration wording that was valid at the time of that donation.
 
 Tasks:
 - TASK-096 — Add additive migration for declaration revocation and lineage columns

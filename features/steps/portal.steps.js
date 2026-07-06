@@ -104,6 +104,26 @@ When("I POST to cancel the donor's Gift Aid", async function () {
   this.portalBody = await res.json().catch(() => ({}));
 });
 
+When("I PATCH the donor's Gift Aid declaration:", async function (docString) {
+  const res = await fetch(`${BASE_URL}/api/portal/${this.portalToken}/declaration`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: docString,
+  });
+  this.portalStatus = res.status;
+  this.portalBody = await res.json().catch(() => ({}));
+});
+
+Then("the donor's active declaration address should be {string}", async function (addr) {
+  const row = await pool.query("SELECT address FROM declarations WHERE id = $1", [this.declarationId]);
+  assert.equal(row.rows[0].address, addr);
+});
+
+Then("the donor's declaration is not revoked", async function () {
+  const row = await pool.query("SELECT revoked_at FROM declarations WHERE id = $1", [this.declarationId]);
+  assert.ok(row.rows[0].revoked_at == null, "expected the same declaration row, not revoked");
+});
+
 Then("the donor's active declaration is revoked", async function () {
   const row = await pool.query("SELECT revoked_at FROM declarations WHERE id = $1", [
     this.declarationId,

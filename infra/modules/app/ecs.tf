@@ -1,4 +1,9 @@
 # --- IAM ----------------------------------------------------------------------
+# Account id + region for constructing ARNs of parameters not managed as Terraform
+# resources (e.g. the transient ADMIN_BOOTSTRAP_PASSWORD used by the admin-password ops task).
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
 data "aws_iam_policy_document" "ecs_assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -54,6 +59,12 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
       # role must be able to read it.
       aws_ssm_parameter.admin_session_secret.arn,
+      # Admin password bootstrap: a TRANSIENT, operator-managed SecureString (not a Terraform
+      # resource and not read by the running service) that the one-off `node dist/ops/set-admin-
+      # password.js` ECS task injects as the ADMIN_PASSWORD secret. Granting read here lets that
+      # one-off task-def pull it; the operator sets the value with put-parameter before a run and
+      # deletes it after, so the parameter usually does not exist (the grant is then harmless).
+      "arn:aws:ssm:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:parameter/${var.project}/${var.environment}/ADMIN_BOOTSTRAP_PASSWORD",
     ]
   }
   statement {

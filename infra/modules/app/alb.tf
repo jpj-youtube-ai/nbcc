@@ -111,6 +111,13 @@ resource "aws_lb_listener" "http" {
       }
     }
   }
+
+  # Only flip :80 to the 443-redirect AFTER the HTTPS listener exists. On a first
+  # HTTPS bring-up the cert can sit in PENDING_VALIDATION for a while (ACM re-check
+  # latency after delegation); without this ordering, :80 would redirect to a 443
+  # port that has no listener yet — a real outage window. depends_on holds the
+  # redirect until 443 is live, so :80 keeps forwarding (serving HTTP) until then.
+  depends_on = [aws_lb_listener.https]
 }
 
 # TLS listener — only when a domain/cert is configured (see dns.tf). Uses the

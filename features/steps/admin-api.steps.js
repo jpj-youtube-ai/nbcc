@@ -27,6 +27,11 @@ async function login(email, password) {
 
 Before({ tags: "@admin" }, async function () {
   await pool.query("DELETE FROM users WHERE email LIKE '%admin.bdd@example.com'");
+  // declarations FK to donors is ON DELETE RESTRICT (TASK-130 seeds one for the donor), so clear the
+  // test donors' declarations before the donors themselves.
+  await pool.query(
+    "DELETE FROM declarations WHERE donor_id IN (SELECT id FROM donors WHERE email LIKE '%admin.bdd@example.com')",
+  );
   await pool.query("DELETE FROM donors WHERE email LIKE '%admin.bdd@example.com'");
 });
 

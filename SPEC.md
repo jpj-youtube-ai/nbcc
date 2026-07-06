@@ -343,6 +343,7 @@ Persist each declaration immutably with all captured fields, the declaration tim
 
 Tasks:
 - TASK-068 — Add a pure declaration retention-expiry calculator implementing the six-year-after-last-claim rule
+- TASK-134 — Retention: anchor the 6-year window to the donation's tax-year-end
 
 ### REQ-047 — Post-payment confirmation and donors page
 
@@ -377,6 +378,7 @@ Claim small in-person gifts of £30 or less that carry no declaration via GAsepa
 Tasks:
 - TASK-077 — Add gasds_eligible column and a pure GASDS eligibility/cap calculator
 - TASK-078 — Flag gasds_eligible on card-present ingestion and add an annual GASDS pool read
+- TASK-138 — GASDS claim tracking: suppress already-claimed gifts from the deadline queue
 
 ### REQ-051 — Partnership donations
 
@@ -489,6 +491,8 @@ Tasks:
 - TASK-108 — Add admin donor, declaration and donation search endpoints
 - TASK-109 — Add admin claim-batch submission marking and adjustment-due queue endpoints
 - TASK-110 — Add admin retention-expiry flags and awaiting-declaration queue endpoints
+- TASK-135 — Admin: GASDS 2-year claim-deadline queue
+- TASK-136 — Admin: declaration-review-due queue (~2-year re-confirm)
 
 ### REQ-064 — Data protection and anonymity
 
@@ -507,6 +511,23 @@ Tasks:
 - TASK-047 — Wire the Stripe webhook signing secret through config, SSM, task-def and IAM
 - TASK-048 — Add an idempotent Stripe webhook event ledger (additive migration + de-dup helper)
 
-## Planned (0)
+## Planned (2)
 
-_None yet._
+### REQ-066 — Admin dashboard
+
+A role-based admin dashboard: read endpoints (donations, claim batches, audit), an authenticated shell with overview and search, donor-detail and browse views, and the Gift Aid claims pipeline (batch create/assign, Charities Online CSV export).
+
+Tasks:
+- TASK-114 — Add admin dashboard read endpoints
+- TASK-115 — Admin dashboard shell: auth, overview + search
+- TASK-117 — Admin dashboard donor detail + browse views
+- TASK-118 — Admin dashboard app integration test
+- TASK-122 — Claims Gift Aid pipeline: create/assign batches, fix empty CSV export, HMRC tutorial
+- TASK-124 — Admin donor view: show postal address + postcode
+
+### REQ-067 — Fundraising governance and self-regulation
+
+Governance copy meeting fundraising self-regulation expectations, including BACS advance-notice wording on the giving flow.
+
+Tasks:
+- TASK-137 — Governance: fundraising self-regulation + BACS advance-notice lines

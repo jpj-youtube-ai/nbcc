@@ -149,8 +149,15 @@ Every page mounts the same maroon footer in its `<footer class="site-footer">`
 slot (REQ-003, ported from the NBCC design), **identical across all five pages**:
 three columns — the logo lockup (74px) + social links (Instagram/Facebook/X),
 **Explore** (the clean URLs `/`, `/about-us`, `/donate`, `/contact`, `/supporters`), and
-**Ways to give** (`/donate`, `/contact`) — plus a legal strip with the SCIO line
-and the OSCR registration link for charity **SC047995**. Styling lives in the
+**Ways to give** (`/donate`, `/contact`) — plus a legal strip carrying the exact,
+mandated charity-registration statement (TASK-126): *"Night Before Christmas
+Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.
+Scottish Charity Number SC047995. Regulated by the Scottish Charity Regulator,
+OSCR."* — the `SC047995` wrapping the OSCR register link. This exact wording is
+the single source of truth in `src/legal/registration.ts` and also appears in
+every donor-facing receipt and thank-you letter (the Corporation Tax receipt +
+refund notice in `src/donors/receipt.ts`, and the donation- and refund-
+confirmation letters in `src/donors/confirmation.ts`). Styling lives in the
 shared `assets/css/styles.css` under a commented `FOOTER (REQ-003)` block (maroon
 background, cream text, reuses `--maroon`/`--cream`/`--line`/`--maxw`; columns
 stack at ≤680px). The logo is the only `<img>` (social icons are inline SVG) and

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHARITY_SHORT_NAME, REGISTRATION_TEXT, REGISTRATION_HTML } from "../legal/registration";
 
 // Pure, DB-free content builder for the post-payment donation-confirmation email (REQ-060 · TASK-098,
 // extending TASK-070). Mirrors src/donors/receipt.ts (buildCorporationTaxReceipt): no
@@ -8,7 +9,9 @@ import { z } from "zod";
 // instructions only for a monthly (recurring) gift — and invents NO new legal wording (the verbatim
 // HMRC statement lives in src/declarations/wording.ts and is bound at declaration time, not here).
 
-export const CHARITY_SHORT_NAME = "NBCC";
+// The charity short name now lives in the single source of truth src/legal/registration.ts;
+// re-exported so existing importers keep resolving it from here.
+export { CHARITY_SHORT_NAME };
 
 // The Gift Aid confirmation line — a plain acknowledgement that Gift Aid was added, NOT the HMRC
 // declaration statement. Only included when the donation actually opted into Gift Aid.
@@ -75,10 +78,11 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
     paragraphs.push(MANAGE_CANCEL_LINE);
   }
 
-  const text = paragraphs.join("\n\n") + "\n";
+  const text = paragraphs.join("\n\n") + "\n\n" + REGISTRATION_TEXT + "\n";
   const html =
     `<section class="donation-confirmation">` +
     paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("") +
+    REGISTRATION_HTML +
     `</section>`;
   return { text, html };
 }
@@ -114,7 +118,7 @@ export function buildRefundConfirmation(input: RefundConfirmationInput): Donatio
     ? `Thank you ${fullName}. Your donation to ${CHARITY_SHORT_NAME} has been refunded in full: ${amount} on ${date}.`
     : `Thank you ${fullName}. A refund of ${amount} was made to your donation to ${CHARITY_SHORT_NAME} on ${date}; ` +
       `the rest of your gift still stands.`;
-  const text = line + "\n";
-  const html = `<section class="refund-confirmation"><p>${escapeHtml(line)}</p></section>`;
+  const text = line + "\n\n" + REGISTRATION_TEXT + "\n";
+  const html = `<section class="refund-confirmation"><p>${escapeHtml(line)}</p>${REGISTRATION_HTML}</section>`;
   return { text, html };
 }

@@ -54,6 +54,15 @@ describe("buildCorporationTaxReceipt (REQ-053)", () => {
     expect(receipt.text.toLowerCase()).toContain("not claimed and will not claim gift aid");
   });
 
+  it("carries the canonical charity-registration line (text + html)", () => {
+    const receipt = buildCorporationTaxReceipt(input);
+    expect(receipt.text).toContain(
+      "known as NBCC, is a Scottish Charitable Incorporated Organisation.",
+    );
+    expect(receipt.text).toContain("Regulated by the Scottish Charity Regulator, OSCR.");
+    expect(receipt.html).toContain('class="charity-registration"');
+  });
+
   it("includes the donor legal name, the amount and the donation date (DD/MM/YYYY)", () => {
     const receipt = buildCorporationTaxReceipt(input);
     expect(receipt.text).toContain("Acme Ltd");
@@ -98,6 +107,12 @@ describe("buildCompanyRefundNotice (REQ-063 · TASK-095)", () => {
     }
     expect(notice.text.toUpperCase()).toContain("VOID");
     expect(notice.text).toContain("£1000.00");
+  });
+
+  it("carries the canonical charity-registration line", () => {
+    const notice = buildCompanyRefundNotice({ ...base, action: "void", refundedPence: 100000 });
+    expect(notice.text).toContain("Regulated by the Scottish Charity Regulator, OSCR.");
+    expect(notice.html).toContain('class="charity-registration"');
   });
 
   it("builds a CORRECT notice for a partial refund, stating the retained amount", () => {

@@ -6,7 +6,7 @@ compatibility_date = "2026-06-01"
 # receives website contact-form enquiries (reply-to is set to the enquirer).
 [vars]
 MAIL_FROM = "NBCC <noreply@nbcc.scot>"
-CONTACT_TO = "hello@nbcc.scot"
+CONTACT_TO = "info@nbcc.scot"
 
 # Secrets (do NOT put here — set with `wrangler secret put`):
 #   RESEND_API_KEY   re_…   Resend API key

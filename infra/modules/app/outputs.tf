@@ -10,3 +10,10 @@ output "task_subnet_ids_csv" { value = join(",", module.vpc.public_subnets) }
 output "route53_nameservers" {
   value = local.create_zone ? aws_route53_zone.primary[0].name_servers : []
 }
+
+# The public base URL of the environment: the HTTPS domain when configured, else the
+# plain-HTTP ALB. Deploy workflows smoke/BDD against this (an HTTPS env now redirects
+# 80->443, so testing http://<alb> would just 301).
+output "public_url" {
+  value = local.https_enabled ? "https://${var.domain_name}" : "http://${aws_lb.app.dns_name}"
+}

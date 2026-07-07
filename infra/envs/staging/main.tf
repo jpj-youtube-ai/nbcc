@@ -16,4 +16,8 @@ module "app" {
   # staging has a real trusted HTTPS URL (e.g. for Stripe test webhooks).
   domain_name    = "staging.nbcc.scot"
   parent_zone_id = "Z09647452ZFTMDWPFTGZN" # the nbcc.scot hosted zone (owned by prod state)
+
+  # Stripe post-checkout redirects on the staging domain (were the example.org default).
+  stripe_success_url = "https://staging.nbcc.scot/donate/thank-you"
+  stripe_cancel_url  = "https://staging.nbcc.scot/donate"
 }

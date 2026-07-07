@@ -5,6 +5,13 @@ Feature: Subscription plan change endpoint (REQ-055)
   subscription. Unknown or missing fields are rejected with 400. (The offline stub
   in src/clients/stripe drives this end to end without a live Stripe account.)
 
+  @stub-only
+  # @stub-only: this happy path reaches Stripe with a fixture subscription id
+  # (sub_demo_123) that exists only in the offline stub — a live Stripe test account
+  # has no such subscription, so the real SDK 502s. It cannot run against a live
+  # deployment; excluded from the staging BDD like @db and covered in pr.yml via the
+  # offline stub. The two 400 validation scenarios below reject before touching Stripe,
+  # so they stay live-safe and keep running against staging.
   Scenario: a valid plan change returns the updated subscription
     When I POST "/api/subscription/change-plan" with JSON:
       """

@@ -11,11 +11,16 @@ Feature: Checkout session endpoint (REQ-029)
     Then the response status should be 200
     And the response field "url" should start with "https://"
 
+  @stub-only
   Scenario: a valid monthly Gift Aid donation returns a session reflecting the opt-in
     # giftAid=true binds the verbatim HMRC wording onto the session metadata (TASK-053);
     # the offline stub reflects the opt-in in its preview URL, so this is asserted
     # without a live Stripe account. Monthly giving requires confirming 18 or over
-    # (ageConfirmed, REQ-039/TASK-059).
+    # (ageConfirmed, REQ-039/TASK-059). @stub-only: a preset plan maps to a
+    # STRIPE_PRICE_* id, which on a live deployment is a real Stripe price the test
+    # account need not have (staging's is a REPLACE_ME placeholder) — real Stripe then
+    # rejects it (502). Excluded from the live-staging BDD like @db; covered in pr.yml
+    # against the offline stub.
     When I POST "/api/checkout-session" with JSON:
       """
       { "mode": "monthly", "plan": "gold", "amount": 5000, "giftAid": true, "ageConfirmed": true, "email": "donor@example.com" }

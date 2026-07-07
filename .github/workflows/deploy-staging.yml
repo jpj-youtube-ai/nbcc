@@ -104,9 +104,17 @@ jobs:
         # deployment: staging's RDS is in a private subnet unreachable from the runner (they
         # fail with ECONNREFUSED). Every DB-touching feature (@stripe-webhook, @gift-aid,
         # @supporters, …) carries the @db tag, so `not @db` excludes them all and cannot drift
-        # as new ones are added. They are already covered by the full BDD in pr.yml (local app
-        # + DB + secret). Here we only smoke the live public HTTP behaviour against the ALB.
-        run: npm run test:bdd -- --tags "not @db"
+        # as new ones are added.
+        #
+        # Also exclude @stub-only: happy-path Stripe scenarios that only pass against the
+        # offline stub in src/clients/stripe — they use fixture data (a preset plan's
+        # STRIPE_PRICE_* placeholder, or the fake subscription sub_demo_123) that a live
+        # Stripe test account has no real counterpart for, so the real SDK 502s. Their
+        # validation (400) siblings reach no Stripe call and stay as live smoke coverage.
+        #
+        # Both sets are already covered by the full BDD in pr.yml (local app + DB + secret +
+        # stub). Here we only smoke the live public HTTP behaviour against the ALB.
+        run: npm run test:bdd -- --tags "not @db and not @stub-only"
 
       - name: Tag release (known-good staging build)
         run: |

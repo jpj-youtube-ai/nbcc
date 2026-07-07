@@ -8,5 +8,5 @@ output "task_subnet_ids_csv" { value = join(",", module.vpc.public_subnets) }
 # The 4 Route53 nameservers to paste at the registrar (Freeola) to delegate the zone.
 # Empty when HTTPS is not enabled (no domain set).
 output "route53_nameservers" {
-  value = local.https_enabled ? aws_route53_zone.primary[0].name_servers : []
+  value = local.create_zone ? aws_route53_zone.primary[0].name_servers : []
 }

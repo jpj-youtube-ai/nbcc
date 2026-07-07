@@ -183,6 +183,23 @@ p{margin:0 0 1rem}
 .hero-art{display:flex;justify-content:center;position:relative}
 .hero-art .logo-big{width:min(100%,560px);filter:drop-shadow(0 24px 40px color-mix(in srgb,var(--maroon) 18%,transparent))}
 
+/* =================================================================
+   HOME PAGE (.home) — scoped overrides so the shared stylesheet's
+   other pages (about/donate/contact/supporters) are untouched.
+   1) Hero elf logo ~25% larger: give its column more room AND raise
+      the cap (the old 560px cap was never reached — the .92fr column
+      constrained it to ~515px, so both must change). Desktop only, so
+      the <=980px single-column collapse still wins.
+   2) One consistent vertical rhythm between every section, equal to
+      the tight hero -> pillars gap the brief liked
+      (was clamp(58px,8.5vw,112px), ~2.5x larger and inconsistent).
+   ================================================================= */
+@media (min-width:981px){
+  .home .hero .wrap{grid-template-columns:.85fr 1.15fr}
+}
+.home .hero-art .logo-big{width:min(100%,700px)}
+.home .section{padding-block:clamp(24px,3vw,44px)}
+
 /* generic page intro (about/donate/contact) */
 .intro-hero{text-align:center;max-width:780px;margin-inline:auto}
 .intro-hero h1{font-size:clamp(2.3rem,1.8rem + 3.4vw,3.8rem)}

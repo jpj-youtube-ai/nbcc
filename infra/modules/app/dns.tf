@@ -1,15 +1,24 @@
-# --- HTTPS: Route53 zone + ACM cert + email records ---------------------------
-# All gated on `domain_name` being set, so staging (empty) provisions nothing here
-# and stays HTTP-only. Production sets domain_name = "nbcc.scot" (infra/envs/production).
+# --- HTTPS: ACM cert + DNS records --------------------------------------------
+# Gated on `domain_name`. Empty => HTTP-only (staging default before this: no cert).
+# Two modes:
+#   • Apex mode (parent_zone_id == ""): CREATE a Route53 hosted zone for domain_name
+#     and put every record + the ported Google/Resend email records in it. Production
+#     (nbcc.scot) uses this — the zone's nameservers are delegated at the registrar.
+#   • Subdomain mode (parent_zone_id set): do NOT create a zone; add the cert-validation
+#     + A-alias records into the EXISTING parent zone (already delegated). Staging
+#     (staging.nbcc.scot, parent = the nbcc.scot zone) uses this — no new delegation,
+#     no email records, cert validates fast because the parent zone is already public.
 #
-# Operational note (delegation ordering): the FIRST apply creates the hosted zone but
-# the domain's nameservers still point at Freeola, so the ACM DNS validation record is
-# not yet publicly resolvable. `aws_acm_certificate_validation` will WAIT. Read the
-# `route53_nameservers` output, set those 4 NS at Freeola, and once delegation
-# propagates the cert validates and the apply completes (re-run apply if it times out).
+# Apex-mode operational note: on the FIRST apply the zone exists but the registrar still
+# points elsewhere, so `aws_acm_certificate_validation` waits until the NS delegation
+# (from the `route53_nameservers` output) propagates. Subdomain mode has no such wait.
 
 locals {
   https_enabled = var.domain_name != ""
+  # Apex mode creates + owns the zone; subdomain mode reuses a parent zone by id.
+  create_zone = local.https_enabled && var.parent_zone_id == ""
+  # The zone every record targets: the created one (apex) or the given parent (subdomain).
+  zone_id = local.create_zone ? aws_route53_zone.primary[0].zone_id : var.parent_zone_id
 
   # DKIM value can exceed a single 255-char DNS character-string; Route53/Terraform
   # need it split into <=255-char quoted chunks concatenated within one TXT record.
@@ -18,51 +27,45 @@ locals {
   ] : []
 }
 
-# ---- Hosted zone (authoritative once Freeola delegates to these nameservers) ----
+# ---- Hosted zone (apex mode only; authoritative once delegated at the registrar) ----
 resource "aws_route53_zone" "primary" {
-  count = local.https_enabled ? 1 : 0
+  count = local.create_zone ? 1 : 0
   name  = var.domain_name
 }
 
-# ---- Ported Google Workspace email records (so mail survives delegation) --------
-# MX: Google Workspace simplified single record.
+# ---- Ported email records (apex mode only — these belong to the root domain) --------
+# Google Workspace: MX + apex site-verification TXT + google._domainkey DKIM.
 resource "aws_route53_record" "mx" {
-  count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
   name    = var.domain_name
   type    = "MX"
   ttl     = 3600
   records = ["1 smtp.google.com"]
 }
 
-# TXT at the apex: Google site-verification token.
 resource "aws_route53_record" "txt_apex" {
-  count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
   name    = var.domain_name
   type    = "TXT"
   ttl     = 3600
   records = ["google-site-verification=jUKUlpbnahczgBEa-dhCEnKbRtt45dkWnnXgUdEpr-8"]
 }
 
-# TXT google._domainkey: DKIM public key (chunked; VERIFY against Google Admin — see
-# var.google_dkim_txt). Skipped if the value is empty.
 resource "aws_route53_record" "dkim" {
-  count   = local.https_enabled && var.google_dkim_txt != "" ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone && var.google_dkim_txt != "" ? 1 : 0
+  zone_id = local.zone_id
   name    = "google._domainkey.${var.domain_name}"
   type    = "TXT"
   ttl     = 3600
   records = [join("\"\"", local.dkim_chunks)]
 }
 
-# ---- Resend (transactional email relay) domain verification --------------------
-# Verifies nbcc.scot as a Resend sending domain for the email-relay Worker
-# (services/email-relay). All on distinct names, so no clash with the Google
-# Workspace apex MX/TXT above. DMARC is set to p=none (monitor-only) as a baseline.
+# Resend (transactional email relay) sender verification — apex mode only.
 resource "aws_route53_record" "resend_dkim" {
-  count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
   name    = "resend._domainkey.${var.domain_name}"
   type    = "TXT"
   ttl     = 3600
@@ -70,8 +73,8 @@ resource "aws_route53_record" "resend_dkim" {
 }
 
 resource "aws_route53_record" "resend_mx" {
-  count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
   name    = "send.${var.domain_name}"
   type    = "MX"
   ttl     = 3600
@@ -79,8 +82,8 @@ resource "aws_route53_record" "resend_mx" {
 }
 
 resource "aws_route53_record" "resend_spf" {
-  count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
   name    = "send.${var.domain_name}"
   type    = "TXT"
   ttl     = 3600
@@ -88,19 +91,20 @@ resource "aws_route53_record" "resend_spf" {
 }
 
 resource "aws_route53_record" "dmarc" {
-  count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
   name    = "_dmarc.${var.domain_name}"
   type    = "TXT"
   ttl     = 3600
   records = ["v=DMARC1; p=none;"]
 }
 
-# ---- ACM certificate (apex + www), DNS-validated, auto-renewing ----------------
+# ---- ACM certificate, DNS-validated, auto-renewing -----------------------------
+# Apex mode covers domain + www; subdomain mode covers just the subdomain.
 resource "aws_acm_certificate" "app" {
   count                     = local.https_enabled ? 1 : 0
   domain_name               = var.domain_name
-  subject_alternative_names = ["www.${var.domain_name}"]
+  subject_alternative_names = local.create_zone ? ["www.${var.domain_name}"] : []
   validation_method         = "DNS"
 
   lifecycle {
@@ -117,7 +121,7 @@ resource "aws_route53_record" "cert_validation" {
     }
   } : {}
 
-  zone_id         = aws_route53_zone.primary[0].zone_id
+  zone_id         = local.zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -131,10 +135,11 @@ resource "aws_acm_certificate_validation" "app" {
   validation_record_fqdns = [for r in aws_route53_record.cert_validation : r.fqdn]
 }
 
-# ---- Alias records: apex + www -> the ALB (A-alias handles the apex CNAME limit) --
+# ---- Alias records -> the ALB (A-alias handles the apex CNAME limit) ------------
+# The primary name (domain_name) always; www only in apex mode.
 resource "aws_route53_record" "apex" {
   count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  zone_id = local.zone_id
   name    = var.domain_name
   type    = "A"
 
@@ -146,8 +151,8 @@ resource "aws_route53_record" "apex" {
 }
 
 resource "aws_route53_record" "www" {
-  count   = local.https_enabled ? 1 : 0
-  zone_id = aws_route53_zone.primary[0].zone_id
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
   name    = "www.${var.domain_name}"
   type    = "A"
 

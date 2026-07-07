@@ -102,6 +102,15 @@ variable "domain_name" {
   default = ""
 }
 
+# Subdomain mode (see dns.tf): when set, the module does NOT create a Route53 zone — it
+# adds the cert-validation + A-alias records into this EXISTING parent zone (already
+# delegated). Used by staging (domain_name = "staging.nbcc.scot", parent_zone_id = the
+# nbcc.scot zone id). Empty => apex mode: the module creates + owns the zone (production).
+variable "parent_zone_id" {
+  type    = string
+  default = ""
+}
+
 # DKIM public-key TXT value for Google Workspace mail on `domain_name`
 # (google._domainkey). Ported from the existing DNS so email keeps signing after the
 # zone is delegated to Route53. Non-secret (it is a PUBLIC key). VERIFY this exact

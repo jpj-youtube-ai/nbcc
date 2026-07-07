@@ -41,6 +41,14 @@ function audit(actor, action, entity, entityId, data = {}) {
 }
 
 async function main() {
+  // Safety: refuse to seed a production database. This script ships in the image so it can
+  // run as a one-off ECS task on staging; NODE_ENV is the env name (staging/production), so a
+  // prod task-def is blocked here. Set SEED_FORCE=1 to override (local/dev only).
+  if (process.env.NODE_ENV === "production" && process.env.SEED_FORCE !== "1") {
+    console.error("Refusing to seed: NODE_ENV=production (set SEED_FORCE=1 to override).");
+    process.exit(1);
+  }
+
   // ---- clean prior demo rows (FK-safe order; audit_log handled separately) ----
   const demoDonors = `SELECT id FROM donors WHERE email LIKE '%@demo.nbcc'`;
   await run(`DELETE FROM claim_adjustments WHERE donation_id IN (SELECT id FROM donations WHERE donor_id IN (${demoDonors}))`);

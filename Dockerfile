@@ -15,6 +15,10 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+# Demo-data seed (scripts/seed-demo.mjs), run as a one-off ECS task against a
+# non-prod DB to populate the admin dashboard. Never invoked by CMD; it self-guards
+# against NODE_ENV=production. Uses `pg` (a runtime dependency).
+COPY scripts/seed-demo.mjs ./scripts/seed-demo.mjs
 # Static marketing site served by the app (TASK-005 / REQ-033): every served page,
 # their shared assets, and the clean-URL rules. The site router resolves its root
 # to /app (this WORKDIR) at runtime. Every .html the app serves must be here — the

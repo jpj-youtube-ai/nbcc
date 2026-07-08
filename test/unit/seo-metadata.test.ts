@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url";
 // TASK-004: each static page carries unique SEO + social-share metadata. These
 // tests encode the issue's acceptance check (distinct title/description/canonical/
 // og:url across pages, absolute canonical == og:url) so it can't silently drift
-// (golden rules 1 & 5). Placeholder canonical domain — finalised at REQ-033.
+// (golden rules 1 & 5). Canonical domain is the production host (nbcc.scot).
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const BASE = "https://www.example.org";
+const BASE = "https://nbcc.scot";
 
 // clean URL path per page (from TASK-002), used for canonical + og:url.
 const PAGES = [

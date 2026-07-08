@@ -216,12 +216,11 @@ Twitter card tags. `canonical` and `og:url` are absolute and match the clean URL
 above; no title/description/canonical is duplicated across pages. Verified by
 `test/unit/seo-metadata.test.ts`.
 
-> **Placeholder domain:** canonical/`og:url`/`og:image` use
-> `https://www.example.org` because there's no production domain / custom
-> hostname yet. Replace it across the five pages + `test/unit/seo-metadata.test.ts`
-> in one find/replace when the real domain lands. The share image
-> (`/assets/img/og-image.png`) is **referenced only** — the asset/pipeline is
-> REQ-034.
+> **Canonical domain:** canonical/`og:url`/`og:image` use the production host
+> `https://nbcc.scot` (apex, no `www` — matching the Stripe success/cancel URLs
+> and the `/health` smoke check). Set across the static pages +
+> `test/unit/seo-metadata.test.ts`. The share image (`/assets/img/og-image.png`)
+> ships in `assets/img/` (REQ-034).
 
 ### Brand colour system (REQ-004)
 

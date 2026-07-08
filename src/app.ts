@@ -5,6 +5,7 @@ import { apiRouter } from "./routes/api";
 import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
+import { unsubscribeRouter } from "./routes/unsubscribe";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -21,6 +22,9 @@ export function createApp() {
   app.use(portalRouter);
   app.use(adminRouter);
   app.use(healthRouter);
+  // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
+  // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.
+  app.use(unsubscribeRouter);
   // Static marketing site: the four pages, their clean URLs, and /assets.
   // siteRoot resolves relative to this module — the repo root locally and under
   // tsx, /app in the container (where the Dockerfile copies the site files).

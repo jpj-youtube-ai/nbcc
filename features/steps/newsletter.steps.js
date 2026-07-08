@@ -1,7 +1,7 @@
 const { Given, When, Then, Before, After } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
-const { randomBytes, scryptSync } = require("node:crypto");
+const { randomBytes, scryptSync, createHmac } = require("node:crypto");
 
 // Steps for newsletter.feature (REQ-069 · TASK-161). Seeds a staff user + logs in through
 // POST /api/admin/login to get a real session token, seeds consenting/non-consenting donors, then
@@ -123,3 +123,34 @@ Then("the newsletter response field {string} should be {string}", function (fiel
 Then("the newsletter recipient count should be at least {int}", function (min) {
   assert.ok(this.nlBody.recipientCount >= min, `recipientCount ${this.nlBody.recipientCount} < ${min}`);
 });
+
+function signUnsubscribeToken(donorId, secret) {
+  const body = String(donorId);
+  const sig = createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
+When("I visit the unsubscribe link for {string}", async function (email) {
+  const row = await pool.query("SELECT id FROM donors WHERE email = $1", [email]);
+  const donorId = row.rows[0].id;
+  const token = signUnsubscribeToken(donorId, process.env.ADMIN_SESSION_SECRET);
+  const res = await fetch(`${BASE_URL}/unsubscribe/${token}`);
+  this.unsubStatus = res.status;
+});
+
+When("I visit the unsubscribe link with token {string}", async function (token) {
+  const res = await fetch(`${BASE_URL}/unsubscribe/${token}`);
+  this.unsubStatus = res.status;
+});
+
+Then("the unsubscribe response status should be {int}", function (expected) {
+  assert.equal(this.unsubStatus, expected);
+});
+
+Then(
+  "the donor {string} should have email consent {string}",
+  async function (email, expected) {
+    const row = await pool.query("SELECT email_consent FROM donors WHERE email = $1", [email]);
+    assert.equal(String(row.rows[0].email_consent), expected);
+  },
+);

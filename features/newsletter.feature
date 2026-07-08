@@ -30,3 +30,13 @@ Feature: Admin newsletter (REQ-069)
     When I create a newsletter with subject "Nope" and body "<p>x</p>"
     And I send that newsletter
     Then the newsletter response status should be 403
+
+  Scenario: a donor unsubscribes via their token link, and is then excluded
+    Given a consenting donor with email "leaver.newsletter.bdd@example.com"
+    When I visit the unsubscribe link for "leaver.newsletter.bdd@example.com"
+    Then the unsubscribe response status should be 200
+    And the donor "leaver.newsletter.bdd@example.com" should have email consent "false"
+
+  Scenario: an invalid unsubscribe token is rejected
+    When I visit the unsubscribe link with token "garbage.token"
+    Then the unsubscribe response status should be 400

@@ -69,7 +69,219 @@
       <section class="section flush-top" aria-label="Share your story">
         <div class="wrap">
           <div class="page-sections" data-region="sections">
-            <!-- form added in Task A2 -->
+            <section class="give-widget" aria-labelledby="story-form-heading">
+              <h2 id="story-form-heading">Tell us your story</h2>
+              <div class="give-box">
+                <div class="card card-lg give-card">
+                  <div class="give-inner">
+                    <div class="give-main" data-story-steps>
+                      <ol class="give-progress" aria-hidden="true">
+                        <li class="is-active" data-pstep="1"><span class="p-n">Step 1</span> Your story</li>
+                        <li data-pstep="2"><span class="p-n">Step 2</span> How we can use it</li>
+                        <li data-pstep="3"><span class="p-n">Step 3</span> About you</li>
+                      </ol>
+                      <form id="storyForm" class="give-steps" novalidate>
+                        <section class="give-step" data-step="1" aria-labelledby="storyStep1Title" tabindex="-1">
+                          <h3 class="give-step-title" id="storyStep1Title">You and your story</h3>
+                          <p class="give-step-sub">Share whatever feels right for you, a few lines or a longer reflection.</p>
+
+                          <fieldset class="give-field">
+                            <legend>Which best describes you? <span class="give-req" aria-hidden="true">*</span></legend>
+                            <label class="give-check" for="roleSupported">
+                              <input class="give-check-box" type="radio" id="roleSupported" name="submitterRole" value="supported" required aria-required="true" />
+                              <span class="give-check-text">Someone NBCC has supported</span>
+                            </label>
+                            <label class="give-check" for="roleFamily">
+                              <input class="give-check-box" type="radio" id="roleFamily" name="submitterRole" value="family_carer" />
+                              <span class="give-check-text">A parent, family member or carer</span>
+                            </label>
+                            <label class="give-check" for="roleVolunteer">
+                              <input class="give-check-box" type="radio" id="roleVolunteer" name="submitterRole" value="volunteer" />
+                              <span class="give-check-text">A volunteer, an Elf</span>
+                            </label>
+                            <label class="give-check" for="roleProfessional">
+                              <input class="give-check-box" type="radio" id="roleProfessional" name="submitterRole" value="professional_partner" />
+                              <span class="give-check-text">A professional partner (social work, school, support service)</span>
+                            </label>
+                            <label class="give-check" for="roleSupporter">
+                              <input class="give-check-box" type="radio" id="roleSupporter" name="submitterRole" value="supporter_donor" />
+                              <span class="give-check-text">A supporter or donor</span>
+                            </label>
+                            <label class="give-check" for="roleOther">
+                              <input class="give-check-box" type="radio" id="roleOther" name="submitterRole" value="other" />
+                              <span class="give-check-text">Someone else</span>
+                            </label>
+                          </fieldset>
+
+                          <div class="give-field">
+                            <label for="storyText">Your story <span class="give-req" aria-hidden="true">*</span></label>
+                            <textarea class="give-field-input" id="storyText" name="storyText" rows="6" required aria-required="true" placeholder="Tell us how it felt, the difference it made, what stood out, or how you heard about NBCC."></textarea>
+                            <p class="give-field-help">Write as much or as little as you feel comfortable sharing.</p>
+                          </div>
+
+                          <div class="give-field">
+                            <label for="shortQuote">A short quote we could share <span class="give-optional">(optional)</span></label>
+                            <input class="give-field-input" type="text" id="shortQuote" name="shortQuote" placeholder="One or two sentences" />
+                          </div>
+
+                          <p class="give-field-help">Please do not share details that identify someone else, especially a child, without their permission.</p>
+
+                          <p class="give-step-err" data-err="1">Please tell us who you are and share a little of your story to continue.</p>
+                          <div class="give-nav">
+                            <button class="btn primary" type="button" data-story-next>Continue <span aria-hidden="true" class="arrow">→</span></button>
+                          </div>
+                        </section>
+
+                        <section class="give-step" data-step="2" hidden aria-labelledby="storyStep2Title" tabindex="-1">
+                          <h3 class="give-step-title" id="storyStep2Title">How we can use it</h3>
+                          <p class="give-step-sub">You are always in control of how your story is used.</p>
+
+                          <fieldset class="give-field">
+                            <legend>How can we use your story? <span class="give-req" aria-hidden="true">*</span></legend>
+                            <label class="give-check" for="scopePublic">
+                              <input class="give-check-box" type="radio" id="scopePublic" name="useScope" value="public" required aria-required="true" />
+                              <span class="give-check-text">Publicly. You are happy for us to share it on our website, social media, newsletters, press or funding reports. We may share it in full or in part and edit lightly for length or clarity while keeping your meaning.</span>
+                            </label>
+                            <label class="give-check" for="scopeInternal">
+                              <input class="give-check-box" type="radio" id="scopeInternal" name="useScope" value="internal_only" />
+                              <span class="give-check-text">Internally only, for volunteer training, funding bids and service improvement. Never published.</span>
+                            </label>
+                          </fieldset>
+
+                          <div class="give-field story-reveal" data-reveal="public" hidden>
+                            <p class="give-field-help">Since you are happy for us to share your story publicly, would you also let us include either of these details.</p>
+                            <label class="give-check" for="shareFirstName">
+                              <input class="give-check-box" type="checkbox" id="shareFirstName" name="shareFirstName" />
+                              <span class="give-check-text">You can share my first name</span>
+                            </label>
+                            <label class="give-check" for="shareTown">
+                              <input class="give-check-box" type="checkbox" id="shareTown" name="shareTown" />
+                              <span class="give-check-text">You can share my town or area</span>
+                            </label>
+                          </div>
+
+                          <div class="give-field story-reveal" data-reveal="professional" hidden>
+                            <label class="give-check" for="thirdPartyConsent">
+                              <input class="give-check-box" type="checkbox" id="thirdPartyConsent" name="thirdPartyConsent" />
+                              <span class="give-check-text">I have the permission of the person this story is about, or their parent or guardian, to share it.</span>
+                            </label>
+                          </div>
+
+                          <label class="give-check" for="contactForMore">
+                            <input class="give-check-box" type="checkbox" id="contactForMore" name="contactForMore" />
+                            <span class="give-check-text">Would you be happy for us to contact you to hear more? This can help build a fuller case study for funding bids.</span>
+                          </label>
+
+                          <label class="give-check" for="photoInterest">
+                            <input class="give-check-box" type="checkbox" id="photoInterest" name="photoInterest" />
+                            <span class="give-check-text">We would love to share a photo too one day. I would be happy to share a photo, please contact me about this.</span>
+                          </label>
+
+                          <p class="give-field-help">We will keep your story as part of our archive unless you ask us to remove it. You can ask us to stop using it or remove it at any time, just email us.</p>
+
+                          <p class="give-step-err" data-err="2">Please tell us how we can use your story to continue.</p>
+                          <div class="give-nav">
+                            <button class="give-back" type="button" data-story-prev><span aria-hidden="true">←</span> Back</button>
+                            <button class="btn primary" type="button" data-story-next>Continue <span aria-hidden="true" class="arrow">→</span></button>
+                          </div>
+                        </section>
+
+                        <section class="give-step" data-step="3" hidden aria-labelledby="storyStep3Title" tabindex="-1">
+                          <h3 class="give-step-title" id="storyStep3Title">A little about you</h3>
+                          <p class="give-step-sub">All optional, except the final confirmation below.</p>
+
+                          <div class="give-field">
+                            <label for="firstName">First name <span class="give-optional">(optional)</span></label>
+                            <input class="give-field-input" type="text" id="firstName" name="firstName" autocomplete="given-name" placeholder="Leave blank to stay anonymous" />
+                          </div>
+
+                          <div class="give-field">
+                            <label for="email">Email <span class="give-optional">(optional)</span></label>
+                            <input class="give-field-input" type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" />
+                            <p class="give-field-help">So we can say thank you or check a detail. Never published.</p>
+                          </div>
+
+                          <div class="give-field">
+                            <label for="phone">Phone <span class="give-optional">(optional)</span></label>
+                            <input class="give-field-input" type="tel" id="phone" name="phone" autocomplete="tel" />
+                            <p class="give-field-help">Never published.</p>
+                          </div>
+
+                          <fieldset class="give-field">
+                            <legend>Your age <span class="give-optional">(optional)</span></legend>
+                            <label class="give-check" for="age1624">
+                              <input class="give-check-box" type="radio" id="age1624" name="ageBand" value="16_24" />
+                              <span class="give-check-text">16 to 24</span>
+                            </label>
+                            <label class="give-check" for="age2544">
+                              <input class="give-check-box" type="radio" id="age2544" name="ageBand" value="25_44" />
+                              <span class="give-check-text">25 to 44</span>
+                            </label>
+                            <label class="give-check" for="age4564">
+                              <input class="give-check-box" type="radio" id="age4564" name="ageBand" value="45_64" />
+                              <span class="give-check-text">45 to 64</span>
+                            </label>
+                            <label class="give-check" for="age65plus">
+                              <input class="give-check-box" type="radio" id="age65plus" name="ageBand" value="65_plus" />
+                              <span class="give-check-text">65 plus</span>
+                            </label>
+                          </fieldset>
+
+                          <div class="give-field">
+                            <label for="gender">How do you describe your gender? <span class="give-optional">(optional)</span></label>
+                            <input class="give-field-input" type="text" id="gender" name="gender" />
+                          </div>
+
+                          <div class="give-field">
+                            <label for="town">Your town or area <span class="give-optional">(optional)</span></label>
+                            <input class="give-field-input" type="text" id="town" name="town" autocomplete="address-level2" />
+                          </div>
+
+                          <fieldset class="give-field">
+                            <legend>The Red Bag went to a <span class="give-optional">(optional)</span></legend>
+                            <label class="give-check" for="recipientChild">
+                              <input class="give-check-box" type="radio" id="recipientChild" name="recipientType" value="child" />
+                              <span class="give-check-text">Child</span>
+                            </label>
+                            <label class="give-check" for="recipientYoungPerson">
+                              <input class="give-check-box" type="radio" id="recipientYoungPerson" name="recipientType" value="young_person" />
+                              <span class="give-check-text">Young person</span>
+                            </label>
+                            <label class="give-check" for="recipientVulnerableAdult">
+                              <input class="give-check-box" type="radio" id="recipientVulnerableAdult" name="recipientType" value="vulnerable_adult" />
+                              <span class="give-check-text">Vulnerable adult</span>
+                            </label>
+                          </fieldset>
+
+                          <div class="give-field">
+                            <label for="heardAbout">How did you hear about us? <span class="give-optional">(optional)</span></label>
+                            <input class="give-field-input" type="text" id="heardAbout" name="heardAbout" />
+                          </div>
+
+                          <label class="give-check" for="confirmOver16">
+                            <input class="give-check-box" type="checkbox" id="confirmOver16" name="confirmOver16" required aria-required="true" />
+                            <span class="give-check-text">I am 16 or over, the information I have given is accurate, and where my story involves someone else I have their permission to share it. <span class="give-req" aria-hidden="true">*</span></span>
+                          </label>
+
+                          <div hidden aria-hidden="true">
+                            <label for="website">Leave blank
+                              <input type="text" id="website" name="website" tabindex="-1" autocomplete="off" />
+                            </label>
+                          </div>
+
+                          <p class="give-step-err" data-err="3">Please complete the confirmation above to share your story.</p>
+                          <p class="form-status" id="storyStatus" role="status" aria-live="polite"></p>
+                          <div class="give-nav">
+                            <button class="give-back" type="button" data-story-prev><span aria-hidden="true">←</span> Back</button>
+                            <button class="btn primary" type="submit" data-story-submit>Share your story</button>
+                          </div>
+                        </section>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </section>

@@ -15,7 +15,25 @@ const footerOf = (html: string) =>
 const exploreList = (footer: string) =>
   footer.match(/Explore<\/h4>[\s\S]*?<ul>([\s\S]*?)<\/ul>/i)?.[1] ?? "";
 
-const PAGES = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html"];
+const PAGES = [
+  "index.html",
+  "about.html",
+  "donate.html",
+  "contact.html",
+  "supporters.html",
+  "my-story.html",
+  "portal.html",
+  "privacy.html",
+  "gift-aid.html",
+  "thank-you.html",
+];
+
+// Pages whose footer is byte-identical to index.html's (full brand paragraph,
+// "Find us at nbcc.scot" handle line, four-item "Ways to give" with the
+// Amazon Wishlist link). Some pages (portal/privacy/gift-aid/thank-you) ship
+// a legitimately shorter footer (no handle line, only two "Ways to give"
+// items) and are intentionally excluded from the byte-identity group below.
+const IDENTICAL_FOOTER_GROUP = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html", "my-story.html"];
 
 describe.each(PAGES)("%s footer", (file) => {
   const footer = footerOf(read(file));
@@ -63,10 +81,27 @@ describe.each(PAGES)("%s footer", (file) => {
   });
 });
 
-describe("the footer is identical across all five pages", () => {
+describe("the footer is identical across pages that share the full footer", () => {
   it("is byte-identical", () => {
-    const footers = PAGES.map((f) => footerOf(read(f)));
+    const footers = IDENTICAL_FOOTER_GROUP.map((f) => footerOf(read(f)));
     expect(footers.every((f) => f.length > 0)).toBe(true);
     expect(new Set(footers).size).toBe(1);
+  });
+});
+
+describe("the shorter-footer pages are identical to each other", () => {
+  const SHORT_FOOTER_GROUP = PAGES.filter((f) => !IDENTICAL_FOOTER_GROUP.includes(f));
+
+  it("is byte-identical", () => {
+    const footers = SHORT_FOOTER_GROUP.map((f) => footerOf(read(f)));
+    expect(footers.every((f) => f.length > 0)).toBe(true);
+    expect(new Set(footers).size).toBe(1);
+  });
+
+  it("still carries the /my-story Explore link", () => {
+    for (const file of SHORT_FOOTER_GROUP) {
+      const list = exploreList(footerOf(read(file)));
+      expect(list, `${file} Explore list`).toContain('href="/my-story"');
+    }
   });
 });

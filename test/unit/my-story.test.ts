@@ -69,3 +69,16 @@ describe("my story form structure (REQ-NNN)", () => {
     expect(norm(form?.textContent)).not.toMatch(/[–—-]/);
   });
 });
+
+import { readFileSync as read2 } from "node:fs";
+describe("my story CSS is token-only (REQ-NNN)", () => {
+  const css = read2(resolve(ROOT, "assets/css/styles.css"), "utf8");
+  it("declares a MY STORY PAGE block", () => {
+    expect(css).toMatch(/MY STORY PAGE/);
+  });
+  it("uses no raw hex or rgb in the story block", () => {
+    const block = (css.split("MY STORY PAGE")[1] || "").split("/*")[0];
+    expect(block.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);
+    expect(block.match(/\brgba?\(/gi) ?? []).toEqual([]);
+  });
+});

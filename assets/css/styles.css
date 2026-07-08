@@ -612,3 +612,13 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
   .reveal{opacity:1 !important;transform:none !important}
   .btn:hover,.tier:hover,.give-tier:hover,.nav-cta:hover,.member:hover img{transform:none}
 }
+/* ===== MY STORY PAGE (REQ-NNN) =====
+   The 3-step form reuses the donate wizard's .give-* chrome (progress list,
+   steps, field/check styles) almost as-is. This block only resets a bare
+   <fieldset class="give-field"> (used for the radio groups in this form,
+   where donate.html always paired .give-field with a single label) and
+   styles the conditional-reveal groups toggled by initStorySteps. */
+fieldset.give-field{border:0;margin:0 0 16px;padding:0;min-width:0}
+fieldset.give-field legend{display:block;font-family:var(--font-head);font-weight:700;font-size:1rem;color:var(--maroon);margin:0 0 10px;padding:0;line-height:1.3}
+.story-reveal{border-top:1px solid var(--line);padding-top:14px;margin-top:2px}
+[data-reveal][hidden]{display:none}

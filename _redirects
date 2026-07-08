@@ -18,6 +18,7 @@
 /portal/access /portal.html      200
 /privacy       /privacy.html     200
 /admin         /admin.html       200
+/my-story      /my-story.html    200
 
 # Canonicalise the raw .html paths onto the clean URL so each page has exactly
 # one address. The `!` force flag is required because the .html files physically
@@ -31,3 +32,4 @@
 /portal.html      /donor-portal      301!
 /privacy.html     /privacy           301!
 /admin.html       /admin             301!
+/my-story.html    /my-story          301!

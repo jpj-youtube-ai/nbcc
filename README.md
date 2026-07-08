@@ -65,9 +65,10 @@ string (`?token=…`); it is a private landing page (`noindex`), not a nav
 destination. `/privacy` is the data-protection privacy notice (REQ-064), linked
 from the footer and from the consent controls on the contact and donate pages,
 not a primary nav destination. `/my-story` is the public story submission page:
-a guided 3 step form (frontend only for now) linked from the footer Explore
-list on every page, not a primary nav destination; the form posts to
-`POST /api/my-story`, wired up in a follow on storage task.
+a guided 3 step form linked from the footer Explore list on every page, not a
+primary nav destination; the form posts to `POST /api/my-story` (Task B1),
+which persists submissions to a SEPARATE `stories` database (own name +
+credentials, same server as the main app DB — never the main `charity` DB).
 
 The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
 Netlify-style format. The Express site router (`src/routes/site.ts`) parses it
@@ -997,6 +998,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/subscription/change-plan` | **implemented** | REQ-055 (tier up/down) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form) |
+| `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
@@ -2251,6 +2253,20 @@ staging RDS to seed there. Local-dev / demo only, never production donor data.
 
 Or run the whole thing in containers: `docker compose up` (and
 `docker compose run --rm migrate` once to migrate).
+
+My Story submissions (Task B1) persist to a SEPARATE `stories` database (own name +
+credentials, same Postgres server as `charity`, never the main DB — see
+`src/db/stories-pool.ts`). Its migration lives in its own `migrations-stories/`
+directory, with its own `pgmigrations` tracking table, applied via:
+
+```bash
+npm run migrate:stories          # node-pg-migrate -m migrations-stories -d STORIES_DATABASE_URL up
+```
+
+Locally this requires a `stories` database to exist alongside `charity` on the same
+Postgres instance (e.g. `createdb stories` / `psql -c 'CREATE DATABASE stories'`) —
+CI creates it explicitly in `pr.yml`. Provisioning it in staging/production (the RDS
+role + SSM parameter + task-def wiring) is Task B2, not this slice.
 
 Tests:
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,5 +80,53 @@ describe("my story CSS is token-only (REQ-NNN)", () => {
     const block = (css.split("MY STORY PAGE")[1] || "").split("/*")[0];
     expect(block.match(/#[0-9a-f]{3,8}\b/gi) ?? []).toEqual([]);
     expect(block.match(/\brgba?\(/gi) ?? []).toEqual([]);
+  });
+});
+
+import { createRequire } from "node:module";
+const require2 = createRequire(import.meta.url);
+
+describe("my story stepping + validation (jsdom)", () => {
+  const { initStorySteps } = require2(resolve(ROOT, "assets/js/main.js"));
+  const formHtml = doc.querySelector("[data-story-steps]")?.outerHTML ?? "";
+  const setVal = (n: string, v: string) => {
+    (document.querySelector(`[name="${n}"]`) as HTMLInputElement | HTMLTextAreaElement).value = v;
+  };
+  const check = (n: string) => { (document.querySelector(`[name="${n}"]`) as HTMLInputElement).checked = true; };
+  const clickNext = () => (document.querySelector("[data-story-next]") as HTMLButtonElement)?.click();
+  const visibleStep = () =>
+    [...document.querySelectorAll(".give-step")].find((s) => !(s as HTMLElement).hidden)?.getAttribute("data-step");
+
+  beforeEach(() => {
+    document.body.innerHTML = `<main>${formHtml}</main>`;
+    (window as unknown as { fetch?: unknown }).fetch = undefined;
+    initStorySteps(document, window);
+  });
+
+  it("exports initStorySteps", () => {
+    expect(typeof initStorySteps).toBe("function");
+  });
+  it("starts on step 1 and blocks advancing until required fields are filled", () => {
+    expect(visibleStep()).toBe("1");
+    clickNext();
+    expect(visibleStep()).toBe("1"); // still, story + role missing
+    const err = document.querySelector('[data-err="1"]');
+    expect(err?.classList.contains("show")).toBe(true);
+  });
+  it("advances to step 2 once role and story are provided", () => {
+    check("submitterRole"); // first radio
+    setVal("storyText", "The Red Bag brought my daughter such comfort.");
+    clickNext();
+    expect(visibleStep()).toBe("2");
+  });
+  it("reveals the public identifier opt-ins only when 'public' is chosen", () => {
+    check("submitterRole");
+    setVal("storyText", "A lovely moment.");
+    clickNext();
+    const publicRadio = document.querySelector('[name="useScope"][value="public"]') as HTMLInputElement;
+    publicRadio.checked = true;
+    publicRadio.dispatchEvent(new Event("change", { bubbles: true }));
+    const reveal = document.querySelector('[data-reveal="public"]') as HTMLElement;
+    expect(reveal.hidden).toBe(false);
   });
 });

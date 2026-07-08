@@ -1273,6 +1273,189 @@
     go(1, 0, true); // initial state, no scroll/focus
   }
 
+  // My Story step wizard (my-story.html only): progressive disclosure that splits the
+  // 3-step story submission form (1 your story, 2 how we can use it, 3 about you) so a
+  // submitter is never faced with the whole form at once. Mirrors initGiveSteps's
+  // go()/validate()/next()/prev()/slide-in chrome, but generalised (no tier selection).
+  // Adds conditional reveals (public identifier opt-ins, the professional-partner
+  // confirm), a honeypot spam guard, and a preview-only final submit (the real
+  // POST /api/my-story endpoint arrives in Task B; this best-effort delivers to it when
+  // fetch is available, mirroring initContactForm's deliver()). No-ops on any page
+  // without [data-story-steps]; progressive enhancement means the fields all ship
+  // present and usable without JS.
+  function initStorySteps(doc, win) {
+    var root = doc.querySelector("[data-story-steps]");
+    if (!root) return;
+    var form = doc.getElementById("storyForm");
+    if (!form) return;
+    var status = doc.getElementById("storyStatus");
+
+    var reduce =
+      typeof win.matchMedia === "function" &&
+      win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var steps = Array.prototype.slice.call(root.querySelectorAll(".give-step"));
+    var current = 1;
+
+    function stepEl(n) { return root.querySelector('.give-step[data-step="' + n + '"]'); }
+    function showErr(n) { var e = root.querySelector('[data-err="' + n + '"]'); if (e) e.classList.add("show"); }
+    function hideErr(n) { var e = root.querySelector('[data-err="' + n + '"]'); if (e) e.classList.remove("show"); }
+
+    // ---- validation: required, visible, enabled controls in a step. Walks
+    // ancestors for a `hidden` attribute rather than measuring layout (offsetParent/
+    // getClientRects), which jsdom cannot compute, so this validates the same way in
+    // a real browser and under test. ----
+    function visible(el) {
+      var node = el;
+      while (node && node.nodeType === 1) {
+        if (node.hidden) return false;
+        node = node.parentElement;
+      }
+      return true;
+    }
+    function validate(el) {
+      var ctrls = Array.prototype.slice.call(el.querySelectorAll("input, select, textarea"));
+      var ok = true, firstBad = null;
+      ctrls.forEach(function (c) {
+        if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
+        var bad;
+        if (c.type === "checkbox" || c.type === "radio") {
+          var group = form.querySelectorAll('[name="' + c.name + '"]');
+          bad = !Array.prototype.some.call(group, function (g) { return g.checked; });
+        } else {
+          var val = (c.value || "").trim();
+          bad = !val;
+          if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
+        }
+        var field = (c.closest && (c.closest(".give-field") || c.closest("fieldset"))) || null;
+        if (field) field.classList.toggle("invalid", bad);
+        c.setAttribute("aria-invalid", String(bad));
+        if (bad) { ok = false; if (!firstBad) firstBad = c; }
+      });
+      if (firstBad && firstBad.focus) firstBad.focus();
+      return ok;
+    }
+
+    // ---- navigation ----
+    function go(n, dir, silent) {
+      if (n < 1 || n > steps.length) return;
+      steps.forEach(function (s) { s.hidden = parseInt(s.getAttribute("data-step"), 10) !== n; });
+      Array.prototype.forEach.call(root.querySelectorAll(".give-progress li"), function (li) {
+        var p = parseInt(li.getAttribute("data-pstep"), 10);
+        li.classList.toggle("is-active", p === n);
+        li.classList.toggle("is-done", p < n);
+      });
+      current = n;
+      var el = stepEl(n);
+      if (!silent && !reduce && el) {
+        el.classList.remove("slide-in", "slide-back");
+        void el.offsetWidth;
+        el.classList.add(dir < 0 ? "slide-back" : "slide-in");
+      }
+      if (!silent) {
+        if (el && el.focus) el.focus();
+        var top = root.getBoundingClientRect().top + win.scrollY - 90;
+        win.scrollTo({ top: top, behavior: reduce ? "auto" : "smooth" });
+      }
+    }
+
+    function next() {
+      if (!validate(stepEl(current))) { showErr(current); return; }
+      hideErr(current);
+      go(current + 1, 1);
+    }
+    function prev() { if (current > 1) go(current - 1, -1); }
+
+    Array.prototype.forEach.call(root.querySelectorAll("[data-story-next]"), function (b) { b.addEventListener("click", next); });
+    Array.prototype.forEach.call(root.querySelectorAll("[data-story-prev]"), function (b) { b.addEventListener("click", prev); });
+
+    // ---- conditional reveals ----
+    var useScopeRadios = Array.prototype.slice.call(form.querySelectorAll('[name="useScope"]'));
+    var revealPublic = form.querySelector('[data-reveal="public"]');
+    useScopeRadios.forEach(function (r) {
+      r.addEventListener("change", function () {
+        if (revealPublic) revealPublic.hidden = r.value !== "public" || !r.checked;
+      });
+    });
+
+    var roleRadios = Array.prototype.slice.call(form.querySelectorAll('[name="submitterRole"]'));
+    var revealProfessional = form.querySelector('[data-reveal="professional"]');
+    roleRadios.forEach(function (r) {
+      r.addEventListener("change", function () {
+        if (revealProfessional) revealProfessional.hidden = r.value !== "professional_partner" || !r.checked;
+      });
+    });
+
+    // ---- best-effort delivery (production). Preview/local has no working backend, so
+    // this only runs in a real browser with fetch; mirrors initContactForm's deliver(). ----
+    function deliver(payload) {
+      if (typeof win.fetch !== "function") return;
+      win
+        .fetch("/api/my-story", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        .catch(function () {
+          /* best effort only; the success message already shows */
+        });
+    }
+
+    function fieldValue(name) {
+      var el = form.querySelector('[name="' + name + '"]');
+      return el ? (el.value || "").trim() : "";
+    }
+    function fieldChecked(name) {
+      var el = form.querySelector('[name="' + name + '"]');
+      return !!(el && el.checked);
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      // Honeypot: a filled hidden field means a bot filled every input. Silently
+      // drop, no error, no submit, and no tell to the bot that anything happened.
+      if (fieldValue("website")) return;
+
+      if (!validate(stepEl(3))) { showErr(3); return; }
+      hideErr(3);
+
+      var payload = {
+        submitterRole: fieldValue("submitterRole"),
+        storyText: fieldValue("storyText"),
+        shortQuote: fieldValue("shortQuote"),
+        useScope: fieldValue("useScope"),
+        shareFirstName: fieldChecked("shareFirstName"),
+        shareTown: fieldChecked("shareTown"),
+        thirdPartyConsent: fieldChecked("thirdPartyConsent"),
+        contactForMore: fieldChecked("contactForMore"),
+        photoInterest: fieldChecked("photoInterest"),
+        firstName: fieldValue("firstName"),
+        email: fieldValue("email"),
+        phone: fieldValue("phone"),
+        ageBand: fieldValue("ageBand"),
+        gender: fieldValue("gender"),
+        town: fieldValue("town"),
+        recipientType: fieldValue("recipientType"),
+        heardAbout: fieldValue("heardAbout"),
+        confirmOver16: fieldChecked("confirmOver16"),
+      };
+
+      // Preview behaviour: show the success message (the real endpoint is Task B).
+      if (status) {
+        status.textContent = "Thank you, your story becomes part of ours.";
+        status.className = "form-status is-success";
+      }
+
+      deliver(payload);
+      form.reset();
+      if (revealPublic) revealPublic.hidden = true;
+      if (revealProfessional) revealProfessional.hidden = true;
+      go(1, -1, true);
+    });
+
+    go(1, 0, true); // initial state, no scroll/focus
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       initNav,
@@ -1286,6 +1469,7 @@
       startCheckout,
       initCheckout,
       initGiveSteps,
+      initStorySteps,
       initPortal,
       initPortalRequest,
     };
@@ -1300,6 +1484,7 @@
     initContactForm(document, window);
     initCheckout(document, window);
     initGiveSteps(document, window);
+    initStorySteps(document, window);
     initPortal(document, window);
     initPortalRequest(document, window);
     // Also expose the checkout payload/redirect builder on window so any inline

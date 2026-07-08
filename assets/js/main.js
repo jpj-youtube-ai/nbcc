@@ -1288,6 +1288,11 @@
     if (!root) return;
     var form = doc.getElementById("storyForm");
     if (!form) return;
+    // No-JS: the form has no novalidate, so native `required` validation and a
+    // real POST to /api/my-story work with JS off. Once JS runs it fully owns
+    // validation instead, so native popups do not fire on required fields
+    // inside JS-hidden steps.
+    form.noValidate = true;
     var status = doc.getElementById("storyStatus");
 
     var reduce =

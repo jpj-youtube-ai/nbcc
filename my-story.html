@@ -80,7 +80,7 @@
                         <li data-pstep="2"><span class="p-n">Step 2</span> How we can use it</li>
                         <li data-pstep="3"><span class="p-n">Step 3</span> About you</li>
                       </ol>
-                      <form id="storyForm" class="give-steps" novalidate>
+                      <form id="storyForm" class="give-steps" action="/api/my-story" method="post">
                         <section class="give-step" data-step="1" aria-labelledby="storyStep1Title" tabindex="-1">
                           <h3 class="give-step-title" id="storyStep1Title">You and your story</h3>
                           <p class="give-step-sub">Share whatever feels right for you, a few lines or a longer reflection.</p>
@@ -132,7 +132,7 @@
                           </div>
                         </section>
 
-                        <section class="give-step" data-step="2" hidden aria-labelledby="storyStep2Title" tabindex="-1">
+                        <section class="give-step" data-step="2" aria-labelledby="storyStep2Title" tabindex="-1">
                           <h3 class="give-step-title" id="storyStep2Title">How we can use it</h3>
                           <p class="give-step-sub">You are always in control of how your story is used.</p>
 
@@ -186,7 +186,7 @@
                           </div>
                         </section>
 
-                        <section class="give-step" data-step="3" hidden aria-labelledby="storyStep3Title" tabindex="-1">
+                        <section class="give-step" data-step="3" aria-labelledby="storyStep3Title" tabindex="-1">
                           <h3 class="give-step-title" id="storyStep3Title">A little about you</h3>
                           <p class="give-step-sub">All optional, except the final confirmation below.</p>
 

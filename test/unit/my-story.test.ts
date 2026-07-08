@@ -23,6 +23,24 @@ describe("my story page shell (REQ-NNN)", () => {
   });
 });
 
+describe("my story form progressively enhances (REQ-NNN)", () => {
+  it("has no novalidate and posts to the my-story API without JS", () => {
+    const form = doc.querySelector("#storyForm");
+    expect(form).not.toBeNull();
+    expect(form?.hasAttribute("novalidate")).toBe(false);
+    expect(form?.getAttribute("action")).toBe("/api/my-story");
+    expect(form?.getAttribute("method")?.toLowerCase()).toBe("post");
+  });
+  it("renders steps 2 and 3 visible (no static hidden) so no-JS is one scrollable form", () => {
+    const step2 = doc.querySelector('.give-step[data-step="2"]');
+    const step3 = doc.querySelector('.give-step[data-step="3"]');
+    expect(step2).not.toBeNull();
+    expect(step3).not.toBeNull();
+    expect(step2?.hasAttribute("hidden")).toBe(false);
+    expect(step3?.hasAttribute("hidden")).toBe(false);
+  });
+});
+
 describe("my story form structure (REQ-NNN)", () => {
   const form = doc.querySelector("#storyForm");
   const steps = [...(doc.querySelectorAll("[data-story-steps] .give-step") ?? [])];
@@ -105,6 +123,14 @@ describe("my story stepping + validation (jsdom)", () => {
 
   it("exports initStorySteps", () => {
     expect(typeof initStorySteps).toBe("function");
+  });
+  it("takes over validation and JS-hides steps 2 and 3 on init", () => {
+    const form = document.getElementById("storyForm") as HTMLFormElement;
+    expect(form.noValidate).toBe(true);
+    const step2 = document.querySelector('.give-step[data-step="2"]') as HTMLElement;
+    const step3 = document.querySelector('.give-step[data-step="3"]') as HTMLElement;
+    expect(step2.hidden).toBe(true);
+    expect(step3.hidden).toBe(true);
   });
   it("starts on step 1 and blocks advancing until required fields are filled", () => {
     expect(visibleStep()).toBe("1");

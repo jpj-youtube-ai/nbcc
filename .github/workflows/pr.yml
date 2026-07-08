@@ -52,6 +52,8 @@ jobs:
       # Admin session signing key (TASK-105): required by the schema so the app boots; a
       # placeholder is fine for CI (the admin-auth unit test signs/verifies with its own key).
       ADMIN_SESSION_SECRET: ci-admin-session-secret
+      # Newsletter From/Reply-To address (TASK-161): required by the schema so the app boots.
+      NEWSLETTER_FROM_EMAIL: newsletter@nbcc.scot
       BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4

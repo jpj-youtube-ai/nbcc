@@ -59,6 +59,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
       # role must be able to read it.
       aws_ssm_parameter.admin_session_secret.arn,
+      # Newsletter From/Reply-To address (TASK-161): non-secret String injected via valueFrom, so
+      # the exec role must be able to read it.
+      aws_ssm_parameter.newsletter_from_email.arn,
       # Admin password bootstrap: a TRANSIENT, operator-managed SecureString (not a Terraform
       # resource and not read by the running service) that the one-off `node dist/ops/set-admin-
       # password.js` ECS task injects as the ADMIN_PASSWORD secret. Granting read here lets that
@@ -148,6 +151,9 @@ resource "aws_ecs_task_definition" "app" {
       # Admin session signing key (TASK-105): a SecureString, injected like a secret — so its ARN
       # must also appear in exec_secrets above.
       { name = "ADMIN_SESSION_SECRET", valueFrom = aws_ssm_parameter.admin_session_secret.arn },
+      # Newsletter From/Reply-To address (TASK-161/REQ-069): non-secret SSM String, injected via
+      # valueFrom like PORTAL_BASE_URL — so its ARN must also appear in exec_secrets below.
+      { name = "NEWSLETTER_FROM_EMAIL", valueFrom = aws_ssm_parameter.newsletter_from_email.arn },
     ]
 
     logConfiguration = {

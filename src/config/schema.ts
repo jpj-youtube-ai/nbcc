@@ -74,6 +74,13 @@ export const configSchema = z.object({
   // defaulted (a default would mask a missing key and let anyone forge a session); a placeholder
   // locally/CI, a SecureString in SSM in staging/prod. Kept long/random in real environments.
   ADMIN_SESSION_SECRET: z.string().min(1),
+
+  // The From/Reply-To address for the admin newsletter (TASK-161/REQ-069). Every newsletter
+  // email is sent From and Reply-To this address so donors can reply to a real inbox (not a
+  // noreply). NOT a secret (it ships in the email headers), but AWS-injected like
+  // ADMIN_NOTIFICATION_EMAIL (SSM String → task-def). Validated as an email address. Defaulted
+  // to the production address so local dev / CI boot without extra setup.
+  NEWSLETTER_FROM_EMAIL: z.string().email().default("newsletter@nbcc.scot"),
 });
 
 export type Config = z.infer<typeof configSchema>;

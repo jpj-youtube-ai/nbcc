@@ -38,7 +38,8 @@ import {
   createNewsletter,
   updateNewsletterDraft,
   listNewsletterRecipients,
-  markNewsletterSent,
+  claimNewsletterForSend,
+  setNewsletterRecipientCount,
 } from "../db/newsletters";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
@@ -222,9 +223,13 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   if (!claims) return;
   const id = newsletterId(req, res);
   if (id === null) return;
-  const row = await getNewsletter(id);
-  if (!row) return res.status(404).json({ error: "Newsletter not found" });
-  if (row.status === "sent") {
+
+  // Atomically claim the draft BEFORE sending. If another request already sent it (or it never
+  // existed as a draft), we 409 without emailing anyone — a double-click cannot re-blast.
+  const newsletter = await claimNewsletterForSend(id, claims.sub);
+  if (!newsletter) {
+    const existing = await getNewsletter(id);
+    if (!existing) return res.status(404).json({ error: "Newsletter not found" });
     return res.status(409).json({ error: "This newsletter has already been sent" });
   }
 
@@ -232,13 +237,13 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   for (const r of recipients) {
     const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
-    const html = buildNewsletterHtml(row.bodyHtml, unsubscribeUrl);
+    const html = buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
     try {
       await sendNewsletter({
         to: r.email,
         from: config.NEWSLETTER_FROM_EMAIL,
         replyTo: config.NEWSLETTER_FROM_EMAIL,
-        subject: row.subject,
+        subject: newsletter.subject,
         html,
       });
     } catch (err) {
@@ -247,8 +252,7 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     }
   }
 
-  const marked = await markNewsletterSent(id, claims.sub, recipients.length);
-  if (!marked) return res.status(409).json({ error: "This newsletter has already been sent" });
+  await setNewsletterRecipientCount(id, recipients.length);
   return res.json({ status: "sent", recipientCount: recipients.length });
 }
 

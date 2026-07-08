@@ -104,20 +104,26 @@ export async function listNewsletterRecipients(): Promise<NewsletterRecipient[]>
   return rows.map((r) => ({ email: r.email, donorId: r.donor_id }));
 }
 
-// Mark a draft sent. Returns false when the row is not a draft (already sent / missing) so the route
-// can treat a re-send as a no-op 409 — a double-click cannot re-blast.
-export async function markNewsletterSent(
-  id: number,
-  sentBy: number,
-  recipientCount: number,
-): Promise<boolean> {
-  const result = await pool.query(
-    `UPDATE newsletters
-        SET status = 'sent', sent_at = now(), sent_by = $2, recipient_count = $3
-      WHERE id = $1 AND status = 'draft'`,
-    [id, sentBy, recipientCount],
-  );
-  return (result.rowCount ?? 0) > 0;
+// Atomically claim a draft for sending: flip it to 'sent' ONLY if it is still a draft, in a single
+// UPDATE, and return the claimed row. Returns null if the row is missing or already sent — so the
+// caller can 409 and, crucially, NEVER runs the send loop for a newsletter another request already
+// claimed. This is what makes a double-click / two concurrent admins unable to double-send: the row
+// is marked sent BEFORE any email goes out. recipient_count is filled in afterwards by
+// setNewsletterRecipientCount once the recipient list is known.
+export async function claimNewsletterForSend(id: number, sentBy: number): Promise<Newsletter | null> {
+  const row = (
+    await pool.query<Row>(
+      `UPDATE newsletters SET status = 'sent', sent_at = now(), sent_by = $2
+        WHERE id = $1 AND status = 'draft'
+       RETURNING id, subject, body_html, status, sent_at, recipient_count`,
+      [id, sentBy],
+    )
+  ).rows[0];
+  return row ? toNewsletter(row) : null;
+}
+
+export async function setNewsletterRecipientCount(id: number, recipientCount: number): Promise<void> {
+  await pool.query(`UPDATE newsletters SET recipient_count = $2 WHERE id = $1`, [id, recipientCount]);
 }
 
 export async function unsubscribeDonor(donorId: number): Promise<void> {

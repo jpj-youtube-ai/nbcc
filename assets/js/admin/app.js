@@ -593,7 +593,10 @@
             body: JSON.stringify(payload),
           });
       req
-        .then(j)
+        .then(function (res) {
+          if (!res.ok) throw new Error("save failed: " + res.status);
+          return res.json();
+        })
         .then(function (n) {
           el("newsletterMsg").textContent = "Saved.";
           loadNewsletters();
@@ -607,15 +610,21 @@
     el("newsletterSend").addEventListener("click", function () {
       var id = el("newsletterId").value;
       if (!id) return;
+      var sendBtn = el("newsletterSend");
+      sendBtn.disabled = true;
       el("newsletterMsg").textContent = "Sending…";
       authFetch("/api/admin/newsletters/" + id + "/send", { method: "POST" })
-        .then(j)
+        .then(function (res) {
+          if (!res.ok) throw new Error("send failed: " + res.status);
+          return res.json();
+        })
         .then(function (r) {
           el("newsletterMsg").textContent = "Sent to " + r.recipientCount + " subscriber(s).";
           loadNewsletters();
           loadNewsletterInto(id);
         })
         .catch(function () {
+          sendBtn.disabled = false;
           el("newsletterMsg").textContent = "Send failed (already sent, or not permitted).";
         });
     });

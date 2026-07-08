@@ -38,9 +38,9 @@ describe.each(PAGES)("%s footer", (file) => {
     expect(brand).toMatch(/alt="[^"]+"/);
   });
 
-  it("lists the five Explore links by clean URL", () => {
+  it("lists the six Explore links by clean URL", () => {
     const list = exploreList(footer);
-    for (const href of ["/", "/about-us", "/donate", "/contact", "/supporters"]) {
+    for (const href of ["/", "/about-us", "/donate", "/contact", "/supporters", "/my-story"]) {
       expect(list).toContain(`href="${href}"`);
     }
   });

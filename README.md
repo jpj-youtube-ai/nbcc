@@ -1288,9 +1288,10 @@ recipient** via `sendNewsletter` (`src/clients/email.ts`), each wrapped by the p
 `buildNewsletterHtml` with a **per-recipient unsubscribe link**
 (`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC token signed with `ADMIN_SESSION_SECRET` —
 reused, not a new secret), From and Reply-To `NEWSLETTER_FROM_EMAIL` (see **Configuration**). A
-single failed send is logged and does not abort the batch. The send is **idempotent**: once
-marked `sent` (`markNewsletterSent`, stamping the sender + recipient count), re-sending the same
-newsletter is rejected with **409** rather than double-blasting donors. The admin UI (`admin.html`
+single failed send is logged and does not abort the batch. The send is **idempotent**: the draft is
+claimed atomically (`claimNewsletterForSend`, stamping the sender) **before** any email goes out, so
+a double-click or two concurrent admins cannot both send — the second claim finds no draft and is
+rejected with **409** rather than double-blasting donors (the recipient count is stamped afterwards). The admin UI (`admin.html`
 + `assets/js/admin/app.js`) lists newsletters, edits the subject/body for any draft (Editor+), and
 shows **Send** only to `role === "admin"` on an unsent newsletter (the server enforces regardless
 of what the UI hides). Proven by `test/unit/newsletter-html.test.ts`,

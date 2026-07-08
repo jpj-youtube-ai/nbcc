@@ -55,6 +55,7 @@
               <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
               <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
             </ul>
           </nav>
@@ -156,6 +157,23 @@
             <section class="admin-view" id="view-subscriptions" aria-labelledby="subs-heading" hidden>
               <h2 id="subs-heading">Subscriptions</h2>
               <div class="admin-table-wrap" id="subsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Newsletter: author, save (Editor+) and send (Admin only) to consenting donors. -->
+            <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
+              <h2 id="newsletter-heading">Newsletter</h2>
+              <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <form id="newsletterForm">
+                <input type="hidden" id="newsletterId" />
+                <p><label>Subject<br /><input type="text" id="newsletterSubject" required style="width:100%" /></label></p>
+                <p><label>Body (HTML)<br /><textarea id="newsletterBody" rows="14" required style="width:100%"></textarea></label></p>
+                <p>
+                  <button type="button" id="newsletterNew">New newsletter</button>
+                  <button type="submit" id="newsletterSave">Save</button>
+                  <button type="button" id="newsletterSend" hidden>Send to subscribers</button>
+                </p>
+                <p id="newsletterMsg" aria-live="polite"></p>
+              </form>
             </section>
 
             <!-- Audit trail (append-only governance log). -->

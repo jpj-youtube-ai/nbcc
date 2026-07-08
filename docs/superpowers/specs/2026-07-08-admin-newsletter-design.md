@@ -1,6 +1,11 @@
 # TASK-161 — Admin newsletter: edit, save, send to subscribers
 
-**Requirement:** REQ-066 (new) — Admin-authored newsletter, sent by email to consenting donors.
+**Requirement:** REQ-069 (new) — Admin-authored newsletter, sent by email to consenting donors.
+
+> Note: `SPEC.md` is a machine-generated projection of the upstream requirement
+> log and is never hand-edited (a guard blocks it). REQ-069 is claimed here for
+> this ad-hoc task; the canonical SPEC entry lands when the requirement log is
+> regenerated upstream. REQ-066 is the existing Admin dashboard — not this.
 
 ## Summary
 

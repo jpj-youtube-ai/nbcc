@@ -240,7 +240,7 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     const html = buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
     try {
       await sendNewsletter({
-        to: r.email,
+        email: r.email,
         from: config.NEWSLETTER_FROM_EMAIL,
         replyTo: config.NEWSLETTER_FROM_EMAIL,
         subject: newsletter.subject,

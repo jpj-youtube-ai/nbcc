@@ -2450,11 +2450,15 @@ admin-newsletter email, so a donor can reply to a real inbox rather than a norep
 secret (it ships in the email headers) — a plain SSM `String` injected via `valueFrom` like
 `DECLARATION_FORM_BASE_URL`/`PORTAL_BASE_URL` (its ARN still lives in the `exec_secrets` policy,
 matching that pattern), validated as an email address and **defaulted** to
-`newsletter@nbcc.scot`, so local dev / CI boot without extra setup. **Ops prerequisite:**
-`newsletter@nbcc.scot` must be a **verified sender** on the email provider behind
-`EMAIL_SEND_URL` before production sends, and that provider must honour a **per-message**
-`from`/`replyTo` (not just an account-level default) — `sendNewsletter` (`src/clients/email.ts`)
-sets both on every call.
+`newsletter@nbcc.scot`, so local dev / CI boot without extra setup. `sendNewsletter`
+(`src/clients/email.ts`) POSTs the recipient in `email`, its own `subject`/`from`/`replyTo`, and a
+`newsletter: true` discriminator; the relay Worker (`services/email-relay/src/index.js`) has a
+dedicated newsletter branch that maps those to a Resend send honouring the per-message `from`/`reply_to`
+(other payloads fall through to the fixed `MAIL_FROM`). **Ops prerequisites:** (1) the relay Worker
+must be redeployed (`cd services/email-relay && wrangler deploy`) for the newsletter branch to take
+effect — one Worker serves both staging and production; (2) `newsletter@nbcc.scot` must be a real
+**receiving mailbox** (Resend is send-only) for replies to land, and its domain `nbcc.scot` must stay
+verified in Resend.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

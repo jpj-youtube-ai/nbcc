@@ -200,3 +200,30 @@ export async function sendSubscriptionLapsedAdmin(message: SubscriptionLapsedAdm
     throw new Error(`Subscription lapsed (admin) email send responded ${res.status}`);
   }
 }
+
+// The admin newsletter send (TASK-161/REQ-069). Sends ONE individual message per consenting donor,
+// with From + Reply-To set to config.NEWSLETTER_FROM_EMAIL so replies reach a real inbox (not
+// noreply). Each message's html already carries the recipient's unsubscribe link (built by the route
+// from buildNewsletterHtml). Same stub-seam + best-effort contract as the other sends: a placeholder
+// EMAIL_SEND_URL means no network outside production.
+export interface NewsletterEmail {
+  to: string;
+  from: string; // config.NEWSLETTER_FROM_EMAIL
+  replyTo: string; // same as from
+  subject: string;
+  html: string;
+}
+
+export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Newsletter email send responded ${res.status}`);
+  }
+}

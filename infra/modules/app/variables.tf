@@ -121,3 +121,12 @@ variable "google_dkim_txt" {
   type    = string
   default = ""
 }
+
+# From/Reply-To address for the admin newsletter (TASK-161/REQ-069). Non-secret; injected via
+# the task-def secrets list like ADMIN_NOTIFICATION_EMAIL. Override per env in
+# infra/envs/*/main.tf if needed.
+variable "newsletter_from_email" {
+  description = "From/Reply-To address for the admin newsletter"
+  type        = string
+  default     = "newsletter@nbcc.scot"
+}

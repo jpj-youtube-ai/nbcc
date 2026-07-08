@@ -32,6 +32,18 @@ import { cancelSubscription } from "../clients/stripe";
 import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
 import { declarationFieldsSchema } from "../declarations/fields";
 import { getGasdsPoolReport } from "../gasds/pool";
+import {
+  listNewsletters,
+  getNewsletter,
+  createNewsletter,
+  updateNewsletterDraft,
+  listNewsletterRecipients,
+  claimNewsletterForSend,
+  setNewsletterRecipientCount,
+} from "../db/newsletters";
+import { signUnsubscribeToken } from "../donors/unsubscribe-token";
+import { buildNewsletterHtml } from "../donors/newsletter";
+import { sendNewsletter } from "../clients/email";
 import { config } from "../config";
 
 // The role-based admin login endpoint (REQ-062 · TASK-105). POST /api/admin/login verifies a staff
@@ -141,6 +153,108 @@ function donorId(req: Request, res: Response): number | null {
 
 // The admin's audit actor label, so a donor-record change records WHICH admin acted on their behalf.
 const actorOf = (claims: AdminSessionClaims): string => `admin:${claims.email}`;
+
+// Parse and validate the newsletter id in the path; sends a 400 and returns null when it is not a
+// positive integer (mirrors donorId above).
+function newsletterId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid newsletter id" });
+    return null;
+  }
+  return id;
+}
+
+const newsletterBodySchema = z.object({
+  subject: z.string().min(1),
+  bodyHtml: z.string().min(1),
+});
+
+// GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
+export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  return res.json(await listNewsletters());
+}
+
+// GET /api/admin/newsletters/:id — one newsletter incl. body_html (Editor+).
+export async function getAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const row = await getNewsletter(id);
+  if (!row) return res.status(404).json({ error: "Newsletter not found" });
+  return res.json(row);
+}
+
+// POST /api/admin/newsletters — create a new draft (Editor+).
+export async function postAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const parsed = newsletterBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
+  }
+  const created = await createNewsletter(parsed.data.subject, parsed.data.bodyHtml);
+  return res.status(201).json(created);
+}
+
+// PUT /api/admin/newsletters/:id — edit a draft (Editor+). A sent newsletter is immutable → 409.
+export async function putAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const parsed = newsletterBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
+  }
+  const existing = await getNewsletter(id);
+  if (!existing) return res.status(404).json({ error: "Newsletter not found" });
+  if (existing.status === "sent") {
+    return res.status(409).json({ error: "A sent newsletter cannot be edited" });
+  }
+  const updated = await updateNewsletterDraft(id, parsed.data.subject, parsed.data.bodyHtml);
+  if (!updated) return res.status(409).json({ error: "A sent newsletter cannot be edited" });
+  return res.json(updated);
+}
+
+// POST /api/admin/newsletters/:id/send — Admin only. Sends one email per consenting donor, each with
+// an unsubscribe link, then marks the newsletter sent. Idempotent: an already-sent newsletter → 409.
+export async function postAdminSendNewsletter(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "admin");
+  if (!claims) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+
+  // Atomically claim the draft BEFORE sending. If another request already sent it (or it never
+  // existed as a draft), we 409 without emailing anyone — a double-click cannot re-blast.
+  const newsletter = await claimNewsletterForSend(id, claims.sub);
+  if (!newsletter) {
+    const existing = await getNewsletter(id);
+    if (!existing) return res.status(404).json({ error: "Newsletter not found" });
+    return res.status(409).json({ error: "This newsletter has already been sent" });
+  }
+
+  const recipients = await listNewsletterRecipients();
+  for (const r of recipients) {
+    const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
+    const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
+    const html = buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
+    try {
+      await sendNewsletter({
+        to: r.email,
+        from: config.NEWSLETTER_FROM_EMAIL,
+        replyTo: config.NEWSLETTER_FROM_EMAIL,
+        subject: newsletter.subject,
+        html,
+      });
+    } catch (err) {
+      // Best-effort: a single failed send is logged, not fatal to the batch.
+      console.error(`newsletter send to ${r.email} failed`, err);
+    }
+  }
+
+  await setNewsletterRecipientCount(id, recipients.length);
+  return res.json({ status: "sent", recipientCount: recipients.length });
+}
 
 // GET /api/admin/donors/:id — the donor snapshot (reuses getDonorPortalSnapshot). Read-only, so any
 // authenticated role (Viewer and up) may call it.
@@ -658,3 +772,10 @@ adminRouter.get("/api/admin/claim-batches", getAdminClaimBatches);
 adminRouter.get("/api/admin/claim-batches/:id/export", getAdminClaimBatchExport);
 adminRouter.get("/api/admin/audit", getAdminAuditLog);
 adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);
+
+// --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
+adminRouter.get("/api/admin/newsletters", getAdminNewsletters);
+adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
+adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
+adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);
+adminRouter.post("/api/admin/newsletters/:id/send", postAdminSendNewsletter);

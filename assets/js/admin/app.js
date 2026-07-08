@@ -125,6 +125,7 @@
     } else if (name === "claims") loadClaims();
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
+    else if (name === "newsletter") loadNewsletters();
     else if (name === "audit") loadAudit();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
@@ -517,6 +518,116 @@
       .catch(function () {
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
       });
+  }
+
+  // ---- newsletter ----
+  function renderNewsletterList(rows) {
+    if (!rows.length) return '<p class="admin-loading">No newsletters yet.</p>';
+    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Recipients</th><th></th></tr></thead><tbody>';
+    rows.forEach(function (n) {
+      html +=
+        "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" + n.status + "</td><td>" +
+        (n.sentAt ? new Date(n.sentAt).toLocaleString() : "—") + "</td><td>" +
+        (n.recipientCount == null ? "—" : n.recipientCount) +
+        '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button></td></tr>';
+    });
+    return html + "</tbody></table>";
+  }
+
+  function loadNewsletterInto(id) {
+    authFetch("/api/admin/newsletters/" + id)
+      .then(j)
+      .then(function (n) {
+        el("newsletterId").value = n.id;
+        el("newsletterSubject").value = n.subject;
+        el("newsletterBody").value = n.bodyHtml;
+        var sent = n.status === "sent";
+        // Send is Admin-only and only for an unsent newsletter.
+        el("newsletterSend").hidden = !(currentRole === "admin" && !sent);
+        el("newsletterSave").disabled = sent;
+        el("newsletterMsg").textContent = sent ? "This newsletter has been sent and is read-only." : "";
+      })
+      .catch(function () {});
+  }
+
+  function loadNewsletters() {
+    authFetch("/api/admin/newsletters")
+      .then(j)
+      .then(function (rows) {
+        el("newsletterList").innerHTML = renderNewsletterList(rows);
+        Array.prototype.forEach.call(doc.querySelectorAll("[data-edit-newsletter]"), function (b) {
+          b.addEventListener("click", function () {
+            loadNewsletterInto(b.getAttribute("data-edit-newsletter"));
+          });
+        });
+        // Open the first newsletter by default so the editor is never empty.
+        if (rows.length) loadNewsletterInto(rows[0].id);
+      })
+      .catch(function () {});
+  }
+
+  var nlForm = el("newsletterForm");
+  if (nlForm) {
+    el("newsletterNew").addEventListener("click", function () {
+      el("newsletterId").value = "";
+      el("newsletterSubject").value = "";
+      el("newsletterBody").value = "";
+      el("newsletterSend").hidden = true; // save first to get an id
+      el("newsletterSave").disabled = false;
+      el("newsletterMsg").textContent = "";
+    });
+
+    nlForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var id = el("newsletterId").value;
+      var payload = { subject: el("newsletterSubject").value, bodyHtml: el("newsletterBody").value };
+      var req = id
+        ? authFetch("/api/admin/newsletters/" + id, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : authFetch("/api/admin/newsletters", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+      req
+        .then(function (res) {
+          if (!res.ok) throw new Error("save failed: " + res.status);
+          return res.json();
+        })
+        .then(function (n) {
+          el("newsletterMsg").textContent = "Saved.";
+          loadNewsletters();
+          loadNewsletterInto(n.id);
+        })
+        .catch(function () {
+          el("newsletterMsg").textContent = "Save failed.";
+        });
+    });
+
+    el("newsletterSend").addEventListener("click", function () {
+      var id = el("newsletterId").value;
+      if (!id) return;
+      var sendBtn = el("newsletterSend");
+      sendBtn.disabled = true;
+      el("newsletterMsg").textContent = "Sending…";
+      authFetch("/api/admin/newsletters/" + id + "/send", { method: "POST" })
+        .then(function (res) {
+          if (!res.ok) throw new Error("send failed: " + res.status);
+          return res.json();
+        })
+        .then(function (r) {
+          el("newsletterMsg").textContent = "Sent to " + r.recipientCount + " subscriber(s).";
+          loadNewsletters();
+          loadNewsletterInto(id);
+        })
+        .catch(function () {
+          sendBtn.disabled = false;
+          el("newsletterMsg").textContent = "Send failed (already sent, or not permitted).";
+        });
+    });
   }
 
   // ---- donor search results (with a View action) ----

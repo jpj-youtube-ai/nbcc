@@ -1276,6 +1276,36 @@ endpoints (the UI hides write controls below Editor via `roleCan`; the server st
 export is fetched with the bearer token and saved via a blob download (a plain link cannot carry the
 `Authorization` header). `admin-shell.test.ts` covers the six nav sections + the donor detail view.
 
+**Newsletter tab (REQ-069 · TASK-161).** A seventh admin nav section for authoring and sending an
+HTML newsletter to consenting donors, over a new `newsletters` table (one row per newsletter,
+`status` `draft`|`sent`). Reads and drafting are **Editor+**: `GET /api/admin/newsletters` lists
+summaries, `GET /api/admin/newsletters/:id` returns one newsletter's full `body_html`,
+`POST /api/admin/newsletters` creates a draft (`{ subject, bodyHtml }`), `PUT
+/api/admin/newsletters/:id` edits a draft — a `sent` newsletter is immutable (**409**). Sending is
+**Admin only**: `POST /api/admin/newsletters/:id/send` reads every consenting donor
+(`listNewsletterRecipients`, deduped on `email_consent=true`) and sends **one individual email per
+recipient** via `sendNewsletter` (`src/clients/email.ts`), each wrapped by the pure
+`buildNewsletterHtml` with a **per-recipient unsubscribe link**
+(`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC token signed with `ADMIN_SESSION_SECRET` —
+reused, not a new secret), From and Reply-To `NEWSLETTER_FROM_EMAIL` (see **Configuration**). A
+single failed send is logged and does not abort the batch. The send is **idempotent**: the draft is
+claimed atomically (`claimNewsletterForSend`, stamping the sender) **before** any email goes out, so
+a double-click or two concurrent admins cannot both send — the second claim finds no draft and is
+rejected with **409** rather than double-blasting donors (the recipient count is stamped afterwards). The admin UI (`admin.html`
++ `assets/js/admin/app.js`) lists newsletters, edits the subject/body for any draft (Editor+), and
+shows **Send** only to `role === "admin"` on an unsent newsletter (the server enforces regardless
+of what the UI hides). Proven by `test/unit/newsletter-html.test.ts`,
+`test/unit/unsubscribe-token.test.ts` and the `@newsletter @db` `features/newsletter.feature`.
+
+**Public unsubscribe route (REQ-069 · TASK-161).** `GET /unsubscribe/:token`
+(`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
+The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with
+`ADMIN_SESSION_SECRET`); a valid token flips that donor's `email_consent` to `false`
+(`unsubscribeDonor`, idempotent — unsubscribing twice is a no-op) and renders a small inline
+confirmation page (no new static `.html` file, so there's no Dockerfile-COPY / page-list guard to
+update). An invalid or tampered token renders the same page shape with **400** instead of writing
+anything. Covered by the `@newsletter @db` `features/newsletter.feature` unsubscribe scenarios.
+
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
 six-year window has **closed**, it erases the captured personal data. It reuses the pure
@@ -2414,6 +2444,17 @@ injected via `valueFrom` with its ARN in `exec_secrets`, required and **never de
 schema (`z.string().min(1)`) so a missing key fails boot rather than letting anyone forge a session,
 with a placeholder in `.env.example` and the CI env. Wired through all six touch-points (schema,
 `.env.example`, `pr.yml` env, SSM param, task-def `secrets`, `exec_secrets` IAM).
+
+`NEWSLETTER_FROM_EMAIL` (TASK-161 · REQ-069) is the From **and** Reply-To address stamped on every
+admin-newsletter email, so a donor can reply to a real inbox rather than a noreply. **Not** a
+secret (it ships in the email headers) — a plain SSM `String` injected via `valueFrom` like
+`DECLARATION_FORM_BASE_URL`/`PORTAL_BASE_URL` (its ARN still lives in the `exec_secrets` policy,
+matching that pattern), validated as an email address and **defaulted** to
+`newsletter@nbcc.scot`, so local dev / CI boot without extra setup. **Ops prerequisite:**
+`newsletter@nbcc.scot` must be a **verified sender** on the email provider behind
+`EMAIL_SEND_URL` before production sends, and that provider must honour a **per-message**
+`from`/`replyTo` (not just an account-level default) — `sendNewsletter` (`src/clients/email.ts`)
+sets both on every call.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

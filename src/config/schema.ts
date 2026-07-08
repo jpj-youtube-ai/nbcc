@@ -8,6 +8,14 @@ export const configSchema = z.object({
 
   DATABASE_URL: z.string().url(),
 
+  // My Story submissions (TASK-B1/REQ intent: "Persist My Story submissions to a
+  // dedicated stories database..."). Lives in a SEPARATE Postgres database (own
+  // name + credentials, same RDS server) so this feature can never read/write the
+  // main `charity` DB — accessed only via src/db/stories-pool.ts. Required, never
+  // defaulted (mirrors DATABASE_URL): a missing value must fail boot, not silently
+  // fall back to the main database.
+  STORIES_DATABASE_URL: z.string().url(),
+
   EXTERNAL_API_ONE_BASE_URL: z.string().url(),
   EXTERNAL_API_ONE_KEY: z.string().min(1),
   EXTERNAL_API_TWO_KEY: z.string().min(1),

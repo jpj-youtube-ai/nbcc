@@ -27,17 +27,23 @@ async function login(email, password) {
 }
 
 Before({ tags: "@newsletter" }, async function () {
+  await pool.query(
+    "DELETE FROM newsletter_images WHERE uploaded_by IN (SELECT id FROM users WHERE email LIKE '%newsletter.bdd@example.com')",
+  );
   await pool.query("DELETE FROM users WHERE email LIKE '%newsletter.bdd@example.com'");
   await pool.query("DELETE FROM donors WHERE email LIKE '%newsletter.bdd@example.com'");
   // Remove any newsletters a prior run created (subjects are test-specific).
   await pool.query(
-    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope')",
+    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update')",
   );
 });
 
 After({ tags: "@newsletter" }, async function () {
   await pool.query(
-    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope')",
+    "DELETE FROM newsletter_images WHERE uploaded_by IN (SELECT id FROM users WHERE email LIKE '%newsletter.bdd@example.com')",
+  );
+  await pool.query(
+    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update')",
   );
 });
 
@@ -154,3 +160,78 @@ Then(
     assert.equal(String(row.rows[0].email_consent), expected);
   },
 );
+
+// TASK-168 (REQ-069): block-document builder — create/preview a block doc, upload/serve an image.
+
+// A minimal valid block document (greeting merges the recipient first name).
+const SAMPLE_DOC = {
+  blocks: [
+    { type: "masthead", variant: 0, data: { issueTitle: "Blocks update" } },
+    { type: "greeting", variant: 0, data: {} },
+    { type: "text", variant: 0, data: { text: "Hello from the committee." } },
+  ],
+};
+// 1x1 transparent PNG.
+const PNG_1PX_B64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+When("I create a block newsletter with subject {string}", async function (subject) {
+  const r = await authFetch("/api/admin/newsletters", "POST", { subject, bodyJson: SAMPLE_DOC }, this.token);
+  this.nlStatus = r.status;
+  this.nlBody = r.json;
+  if (r.json && r.json.id) this.newsletterId = r.json.id;
+});
+
+When("I preview the current block document", async function () {
+  const r = await authFetch("/api/admin/newsletters/preview", "POST", { bodyJson: SAMPLE_DOC }, this.token);
+  this.previewStatus = r.status;
+  this.previewHtml = r.json.html || "";
+});
+
+Then("the preview response status should be {int}", function (expected) {
+  assert.equal(this.previewStatus, expected);
+});
+
+Then("the preview HTML should contain {string}", function (needle) {
+  assert.ok(this.previewHtml.includes(needle), `preview missing ${needle}`);
+});
+
+When("I upload a newsletter image", async function () {
+  const r = await authFetch(
+    "/api/admin/newsletter-images",
+    "POST",
+    { mime: "image/png", dataBase64: PNG_1PX_B64 },
+    this.token,
+  );
+  this.imgUploadStatus = r.status;
+  this.imgId = r.json.id;
+});
+
+When("I upload an oversize newsletter image", async function () {
+  const big = Buffer.alloc(2 * 1024 * 1024 + 10, 0x41).toString("base64"); // > 2 MB decoded
+  const r = await authFetch(
+    "/api/admin/newsletter-images",
+    "POST",
+    { mime: "image/png", dataBase64: big },
+    this.token,
+  );
+  this.imgUploadStatus = r.status;
+});
+
+Then("the image upload status should be {int}", function (expected) {
+  assert.equal(this.imgUploadStatus, expected);
+});
+
+When("I fetch the uploaded image", async function () {
+  const res = await fetch(`${BASE_URL}/media/newsletter/${this.imgId}`);
+  this.imgFetchStatus = res.status;
+  this.imgContentType = res.headers.get("content-type");
+});
+
+Then("the image fetch status should be {int}", function (expected) {
+  assert.equal(this.imgFetchStatus, expected);
+});
+
+Then("the image content type should be {string}", function (expected) {
+  assert.equal(this.imgContentType, expected);
+});

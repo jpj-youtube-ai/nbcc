@@ -40,3 +40,25 @@ Feature: Admin newsletter (REQ-069)
   Scenario: an invalid unsubscribe token is rejected
     When I visit the unsubscribe link with token "garbage.token"
     Then the unsubscribe response status should be 400
+
+  Scenario: an Editor creates a block-document draft and previews it
+    Given a newsletter admin "editor3.newsletter.bdd@example.com" with role "editor" and password "pw-e3"
+    When I create a block newsletter with subject "Blocks update"
+    Then the newsletter response status should be 201
+    When I preview the current block document
+    Then the preview response status should be 200
+    And the preview HTML should contain "Dear Jane,"
+    And the preview HTML should contain "SC047995"
+
+  Scenario: an Editor uploads an image and it serves back
+    Given a newsletter admin "editor4.newsletter.bdd@example.com" with role "editor" and password "pw-e4"
+    When I upload a newsletter image
+    Then the image upload status should be 201
+    When I fetch the uploaded image
+    Then the image fetch status should be 200
+    And the image content type should be "image/png"
+
+  Scenario: an over-size image upload is rejected
+    Given a newsletter admin "editor5.newsletter.bdd@example.com" with role "editor" and password "pw-e5"
+    When I upload an oversize newsletter image
+    Then the image upload status should be 413

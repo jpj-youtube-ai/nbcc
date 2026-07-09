@@ -62,12 +62,25 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
 
   it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds)", () => {
     const navViews = [...doc.querySelectorAll(".admin-nav-link")].map((b) => b.getAttribute("data-view"));
-    expect(navViews).toEqual(["overview", "search", "donations", "claims", "gasds", "subscriptions", "audit"]);
-    for (const v of ["donations", "claims", "gasds", "subscriptions", "audit", "donor"]) {
+    expect(navViews).toEqual(["overview", "search", "donations", "claims", "gasds", "subscriptions", "stories", "audit"]);
+    for (const v of ["donations", "claims", "gasds", "subscriptions", "stories", "audit", "donor", "story"]) {
       expect(doc.getElementById("view-" + v), `#view-${v}`).not.toBeNull();
     }
     // Donor detail is reached from a row, not the nav, and has a Back control + status region.
     expect(doc.getElementById("donorBack")).not.toBeNull();
     expect(doc.getElementById("donorActionStatus")?.getAttribute("role")).toBe("status");
+  });
+
+  // Task C: the Stories tab (list + status filter) and its detail sub-view (reached from a row).
+  it("has the Stories view with a status filter, and the story detail view", () => {
+    expect(doc.getElementById("view-stories")).not.toBeNull();
+    expect(doc.getElementById("storiesTable")).not.toBeNull();
+    const filterButtons = [...doc.querySelectorAll("#storiesStatusFilter .admin-seg")].map((b) =>
+      b.getAttribute("data-status"),
+    );
+    expect(filterButtons).toEqual(["", "new", "reviewed", "used", "withdrawn"]);
+    expect(doc.getElementById("storyBack")).not.toBeNull();
+    expect(doc.getElementById("storyDetail")).not.toBeNull();
+    expect(doc.getElementById("storyActionStatus")?.getAttribute("role")).toBe("status");
   });
 });

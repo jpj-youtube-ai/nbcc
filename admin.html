@@ -55,6 +55,7 @@
               <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
               <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
             </ul>
           </nav>
@@ -156,6 +157,30 @@
             <section class="admin-view" id="view-subscriptions" aria-labelledby="subs-heading" hidden>
               <h2 id="subs-heading">Subscriptions</h2>
               <div class="admin-table-wrap" id="subsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Stories: My Story submissions from the separate stories database (Task C). -->
+            <section class="admin-view" id="view-stories" aria-labelledby="stories-heading" hidden>
+              <h2 id="stories-heading">Stories</h2>
+              <p class="admin-view-intro">Submissions from the public "My Story" form. Each carries its own consent — whether it may be used publicly or kept internal only, and whether the submitter's first name / town may be shared. Review a story, tag and note it, and withdraw it if consent is ever revoked.</p>
+              <div class="admin-search-bar">
+                <div class="admin-segmented" role="group" aria-label="Filter by status" id="storiesStatusFilter">
+                  <button class="admin-seg is-active" type="button" data-status="">All</button>
+                  <button class="admin-seg" type="button" data-status="new">New</button>
+                  <button class="admin-seg" type="button" data-status="reviewed">Reviewed</button>
+                  <button class="admin-seg" type="button" data-status="used">Used</button>
+                  <button class="admin-seg" type="button" data-status="withdrawn">Withdrawn</button>
+                </div>
+              </div>
+              <div class="admin-table-wrap" id="storiesTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Story detail (reached from a stories row); Editor+ status/tags/notes actions. -->
+            <section class="admin-view" id="view-story" aria-labelledby="story-heading" hidden>
+              <button class="admin-back" id="storyBack" type="button">&larr; Back</button>
+              <h2 id="story-heading">Story</h2>
+              <div id="storyDetail" aria-live="polite"></div>
+              <p class="admin-action-status" id="storyActionStatus" role="status" aria-live="polite"></p>
             </section>
 
             <!-- Audit trail (append-only governance log). -->

@@ -86,6 +86,12 @@
 .admin-donor-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
 .admin-action-status{margin-top:14px;font-weight:600;color:var(--holly)}
 
+/* Stories tab (Task C): the field select/textarea share .admin-field input's look; the story text
+   block preserves line breaks and wraps (story_text can be up to 5000 chars, see src/stories/schema.ts). */
+.admin-field select,.admin-field textarea{width:100%;font-family:var(--font-body);font-size:1rem;color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:12px 14px;resize:vertical}
+.admin-field select:focus,.admin-field textarea:focus{border:1.6px solid var(--holly);outline:none}
+.admin-story-text{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 20px;max-width:64ch;line-height:1.6}
+
 @media (max-width:760px){
   .admin-body-grid{grid-template-columns:1fr}
   .admin-nav{position:static;padding:12px}

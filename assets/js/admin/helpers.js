@@ -60,12 +60,52 @@
     return dd + "/" + mm + "/" + d.getUTCFullYear();
   }
 
+  // Task C (Stories tab): a plain-English "how old is this consent" label, e.g. "today",
+  // "1 day ago", "5 days ago", "6 months ago" — so admin can judge whether an old consent should
+  // still be relied on before reusing a story publicly (spec's Retention guardrail 3). `now`
+  // defaults to the current time; a Date/ISO string may be passed for deterministic tests.
+  function consentAge(value, now) {
+    if (!value) return "";
+    var then = new Date(value);
+    if (isNaN(then.getTime())) return "";
+    var ref = now instanceof Date ? now : now ? new Date(now) : new Date();
+    var days = Math.floor((ref.getTime() - then.getTime()) / 86400000);
+    if (days <= 0) return "today";
+    if (days === 1) return "1 day ago";
+    if (days < 60) return days + " days ago";
+    var months = Math.floor(days / 30);
+    return months + " month" + (months === 1 ? "" : "s") + " ago";
+  }
+
+  // Task C: human labels for the story enum fields, used by the Stories list/detail badges.
+  var STORY_LABELS = {
+    useScope: { public: "Public", internal_only: "Internal only" },
+    status: { new: "New", reviewed: "Reviewed", used: "Used", withdrawn: "Withdrawn" },
+    submitterRole: {
+      supported: "Supported",
+      family_carer: "Family / carer",
+      volunteer: "Volunteer",
+      professional_partner: "Professional partner",
+      supporter_donor: "Supporter / donor",
+      other: "Other",
+    },
+    ageBand: { "16_24": "16-24", "25_44": "25-44", "45_64": "45-64", "65_plus": "65+" },
+    recipientType: { child: "Child", young_person: "Young person", vulnerable_adult: "Vulnerable adult" },
+  };
+  function storyLabel(key, value) {
+    if (value == null || value === "") return "Not given";
+    var map = STORY_LABELS[key];
+    return (map && map[value]) || String(value);
+  }
+
   var api = {
     formatPence: formatPence,
     escapeHtml: escapeHtml,
     parseClaims: parseClaims,
     roleCan: roleCan,
     fmtDate: fmtDate,
+    consentAge: consentAge,
+    storyLabel: storyLabel,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

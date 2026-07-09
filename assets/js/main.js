@@ -1336,6 +1336,25 @@
         c.setAttribute("aria-invalid", String(bad));
         if (bad) { ok = false; if (!firstBad) firstBad = c; }
       });
+
+      // G2 item 10: a professional partner must confirm third party permission before
+      // this step can pass, mirroring the schema's authoritative refine
+      // (src/stories/schema.ts). thirdPartyConsent has NO native `required` — it sits in a
+      // conditionally hidden reveal ([data-reveal="professional"]), and a required field
+      // inside a hidden ancestor blocks native form submission even off-step, which would
+      // break the no-JS path — so this business rule is checked explicitly here instead.
+      // Reads the CHECKED submitterRole radio directly (fieldValue() would only ever
+      // return the first radio in the group, checked or not).
+      var checkedRole = form.querySelector('[name="submitterRole"]:checked');
+      var professionalConsent = form.querySelector('[name="thirdPartyConsent"]');
+      if (el.contains(professionalConsent) && visible(professionalConsent) && checkedRole && checkedRole.value === "professional_partner" && !professionalConsent.checked) {
+        var consentField = professionalConsent.closest(".give-field");
+        if (consentField) consentField.classList.add("invalid");
+        professionalConsent.setAttribute("aria-invalid", "true");
+        ok = false;
+        if (!firstBad) firstBad = professionalConsent;
+      }
+
       if (firstBad && firstBad.focus) firstBad.focus();
       return ok;
     }

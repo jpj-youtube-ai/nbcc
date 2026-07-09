@@ -176,6 +176,61 @@ describe("storySubmissionSchema", () => {
   });
 });
 
+// G2 item 10: a professional partner (social work, school, support service) is very
+// often telling someone else's story (a child or vulnerable adult they support), so their
+// submission must affirmatively confirm third-party permission — the schema is the
+// authoritative backstop (also covers the no-JS path, where a native `required` cannot be
+// put on the conditionally-hidden checkbox, see my-story.html's data-reveal="professional").
+describe("storySubmissionSchema — professional partner third party consent (G2 item 10)", () => {
+  it("rejects a professional_partner submission without thirdPartyConsent", () => {
+    const result = storySubmissionSchema.safeParse({
+      ...validJsonPayload(),
+      submitterRole: "professional_partner",
+      thirdPartyConsent: false,
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path.join(".") === "thirdPartyConsent")).toBe(true);
+    }
+  });
+
+  it("accepts a professional_partner submission WITH thirdPartyConsent", () => {
+    const result = storySubmissionSchema.safeParse({
+      ...validJsonPayload(),
+      submitterRole: "professional_partner",
+      thirdPartyConsent: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("does not require thirdPartyConsent for a non professional submitter role", () => {
+    const result = storySubmissionSchema.safeParse({
+      ...validJsonPayload(),
+      submitterRole: "supported",
+      thirdPartyConsent: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a professional_partner submission even when thirdPartyConsent is simply absent", () => {
+    const { thirdPartyConsent, ...rest } = validJsonPayload();
+    void thirdPartyConsent;
+    const result = storySubmissionSchema.safeParse({ ...rest, submitterRole: "professional_partner" });
+    expect(result.success).toBe(false);
+  });
+
+  it("coerces the form-encoded 'on' string for thirdPartyConsent on the professional path", () => {
+    const result = storySubmissionSchema.safeParse({
+      storyText: "A story about someone I support.",
+      useScope: "internal_only",
+      confirmOver16: "on",
+      submitterRole: "professional_partner",
+      thirdPartyConsent: "on",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
 describe("buildStoryRecord", () => {
   it("maps validated input onto snake_case StoryRecord columns", () => {
     const parsed = storySubmissionSchema.parse(validJsonPayload());

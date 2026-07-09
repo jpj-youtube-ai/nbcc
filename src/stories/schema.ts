@@ -43,7 +43,7 @@ function optionalText(max: number) {
   }, z.string().max(max).optional());
 }
 
-export const storySubmissionSchema = z.object({
+const baseStorySubmissionSchema = z.object({
   submitterRole: z.enum(SUBMITTER_ROLES).optional(),
   storyText: z
     .string()
@@ -81,7 +81,24 @@ export const storySubmissionSchema = z.object({
   website: optionalText(500),
 });
 
-export type StorySubmission = z.infer<typeof storySubmissionSchema>;
+// G2 item 10: a professional partner (social work, school, support service) is very often
+// telling someone else's story — a child or vulnerable adult they support — so their
+// submission must affirmatively confirm third-party permission before it is accepted. This
+// refine is the AUTHORITATIVE backstop: my-story.html cannot put a native `required` on the
+// thirdPartyConsent checkbox because it sits in a conditionally-hidden reveal
+// ([data-reveal="professional"]), which would break the no-JS submission path (a hidden
+// required field blocks native form submission even when its section is not relevant). The
+// client-side check in initStorySteps (assets/js/main.js) mirrors this for the JS-enhanced
+// path, but this refine is what actually enforces it, including when JS is off.
+export const storySubmissionSchema = baseStorySubmissionSchema.refine(
+  (d) => d.submitterRole !== "professional_partner" || d.thirdPartyConsent === true,
+  {
+    message: "please confirm you have permission to share this story about someone else",
+    path: ["thirdPartyConsent"],
+  },
+);
+
+export type StorySubmission = z.infer<typeof baseStorySubmissionSchema>;
 
 // The stories table row shape (snake_case columns; mirrors migrations-stories/*_stories.js).
 // created_at / consent_captured_at / id are DB-assigned defaults, not supplied here.

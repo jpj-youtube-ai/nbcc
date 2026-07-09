@@ -78,13 +78,45 @@ describe("my story form structure (REQ-NNN)", () => {
     expect(hp).not.toBeNull();
     expect(hp?.closest("[hidden], [aria-hidden='true']") || hp?.hasAttribute("hidden")).toBeTruthy();
   });
-  it("writes the retention and withdrawal notice", () => {
-    const text = norm(form?.textContent);
-    expect(text.toLowerCase()).toContain("archive");
-    expect(text.toLowerCase()).toContain("remove");
+  it("writes the retention notice as a permanent archive with a real withdraw/delete route (G2 item 7)", () => {
+    const text = norm(form?.textContent).toLowerCase();
+    expect(text).toContain("archive");
+    expect(text).toContain("withdraw");
+    expect(text).toContain("delete");
+    // A real route to act on it: a mailto link and a link to the contact form, not
+    // just prose asking the submitter to "email us" with no actual link.
+    expect(form?.querySelector('a[href^="mailto:"]')).not.toBeNull();
+    expect(form?.querySelector('a[href="/contact"]')).not.toBeNull();
   });
   it("keeps the form copy dash-free (REQ-031)", () => {
     expect(norm(form?.textContent)).not.toMatch(/[–—-]/);
+  });
+  it("links to the privacy notice near the final confirm, step 3 (G2 item 8)", () => {
+    const step3 = doc.querySelector('.give-step[data-step="3"]');
+    const link = step3?.querySelector('a[href="/privacy"]');
+    expect(link, "no visible /privacy link inside step 3").not.toBeNull();
+    expect((link?.textContent ?? "").toLowerCase()).toContain("privacy");
+  });
+  it("gives purpose microcopy for gender and recipientType, never published (G2 item 11)", () => {
+    const genderHelp = field("gender")?.closest(".give-field")?.querySelector(".give-field-help");
+    expect(genderHelp, "no give-field-help near gender").not.toBeNull();
+    expect(norm(genderHelp?.textContent).toLowerCase()).toContain("never published");
+
+    const recipientFieldset = field("recipientType")?.closest("fieldset");
+    const recipientHelp = recipientFieldset?.querySelector(".give-field-help");
+    expect(recipientHelp, "no give-field-help near recipientType").not.toBeNull();
+    expect(norm(recipientHelp?.textContent).toLowerCase()).toContain("never published");
+  });
+  it("separates the public-use edit clause from the end of the radio label (G2 item 12)", () => {
+    const scopePublicLabel = doc.querySelector('label[for="scopePublic"]');
+    expect(scopePublicLabel).not.toBeNull();
+    // The "we may edit lightly..." clause is its own sentence/help line, not buried as the
+    // final clause inside the radio's single .give-check-text span.
+    const checkText = norm(scopePublicLabel?.querySelector(".give-check-text")?.textContent);
+    expect(checkText.toLowerCase()).not.toContain("edit lightly");
+    const editClause = doc.querySelector(".give-field-help.public-edit-note");
+    expect(editClause, "no separated edit-lightly clause").not.toBeNull();
+    expect(norm(editClause?.textContent).toLowerCase()).toContain("edit");
   });
 });
 
@@ -154,5 +186,67 @@ describe("my story stepping + validation (jsdom)", () => {
     publicRadio.dispatchEvent(new Event("change", { bubbles: true }));
     const reveal = document.querySelector('[data-reveal="public"]') as HTMLElement;
     expect(reveal.hidden).toBe(false);
+  });
+
+  // G2 item 10: a professional partner must confirm third party permission before
+  // advancing past step 2 (client side mirror of the schema's authoritative refine —
+  // src/stories/schema.ts). thirdPartyConsent has no native `required` (it sits in a
+  // conditionally hidden reveal, which would break the no-JS path), so this check is
+  // explicit business logic in initStorySteps, not the generic required-field validate().
+  describe("professional partner third party consent gate", () => {
+    function chooseProfessionalRoleAndAdvanceToStep2() {
+      const professionalRadio = document.querySelector(
+        '[name="submitterRole"][value="professional_partner"]',
+      ) as HTMLInputElement;
+      professionalRadio.checked = true;
+      professionalRadio.dispatchEvent(new Event("change", { bubbles: true }));
+      setVal("storyText", "A story about a family I support.");
+      clickNext();
+    }
+
+    it("reveals the third party consent checkbox when professional_partner is chosen", () => {
+      chooseProfessionalRoleAndAdvanceToStep2();
+      const reveal = document.querySelector('[data-reveal="professional"]') as HTMLElement;
+      expect(reveal.hidden).toBe(false);
+    });
+
+    it("blocks advancing from step 2 when thirdPartyConsent is not checked", () => {
+      chooseProfessionalRoleAndAdvanceToStep2();
+      expect(visibleStep()).toBe("2");
+      const internalRadio = document.querySelector(
+        '[name="useScope"][value="internal_only"]',
+      ) as HTMLInputElement;
+      internalRadio.checked = true;
+      internalRadio.dispatchEvent(new Event("change", { bubbles: true }));
+      clickNext();
+      expect(visibleStep()).toBe("2"); // still — thirdPartyConsent unchecked
+      const err = document.querySelector('[data-err="2"]');
+      expect(err?.classList.contains("show")).toBe(true);
+    });
+
+    it("advances from step 2 once thirdPartyConsent is checked", () => {
+      chooseProfessionalRoleAndAdvanceToStep2();
+      const internalRadio = document.querySelector(
+        '[name="useScope"][value="internal_only"]',
+      ) as HTMLInputElement;
+      internalRadio.checked = true;
+      internalRadio.dispatchEvent(new Event("change", { bubbles: true }));
+      check("thirdPartyConsent");
+      clickNext();
+      expect(visibleStep()).toBe("3");
+    });
+
+    it("does not require thirdPartyConsent for a non professional submitter role", () => {
+      check("submitterRole"); // first radio: "supported"
+      setVal("storyText", "A lovely moment.");
+      clickNext();
+      const internalRadio = document.querySelector(
+        '[name="useScope"][value="internal_only"]',
+      ) as HTMLInputElement;
+      internalRadio.checked = true;
+      internalRadio.dispatchEvent(new Event("change", { bubbles: true }));
+      clickNext();
+      expect(visibleStep()).toBe("3");
+    });
   });
 });

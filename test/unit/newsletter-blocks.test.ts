@@ -101,3 +101,56 @@ describe("newsletter blocks — masthead variants", () => {
     expect(html).toMatch(/<span[^>]*>July Newsletter<\/span>/);
   });
 });
+
+describe("newsletter blocks — greeting variants", () => {
+  it("variant 0: plain 'Dear {{firstName}},' merges the donor's first name", () => {
+    const html = renderNewsletter(
+      { blocks: [{ type: "greeting", variant: 0, data: {} }] },
+      { firstName: "Jane" },
+    );
+    expect(html).toContain("Dear Jane,");
+  });
+
+  it("variant 0: merges a fallback 'friend' name the same way", () => {
+    const html = renderNewsletter(
+      { blocks: [{ type: "greeting", variant: 0, data: {} }] },
+      { firstName: "friend" },
+    );
+    expect(html).toContain("Dear friend,");
+  });
+
+  it("variant 1: greeting line plus a lead intro paragraph below it", () => {
+    const html = renderNewsletter(
+      {
+        blocks: [
+          { type: "greeting", variant: 1, data: { lead: "What a year it has been." } },
+        ],
+      },
+      { firstName: "Jane" },
+    );
+    expect(html).toContain("Dear Jane,");
+    expect(html).toContain("What a year it has been.");
+  });
+
+  it("variant 2: heading appears above the greeting line", () => {
+    const html = renderNewsletter(
+      {
+        blocks: [
+          { type: "greeting", variant: 2, data: { heading: "A Year of Giving" } },
+        ],
+      },
+      { firstName: "Jane" },
+    );
+    expect(html).toContain("A Year of Giving");
+    expect(html).toContain("Dear Jane,");
+    expect(html.indexOf("A Year of Giving")).toBeLessThan(html.indexOf("Dear Jane,"));
+  });
+
+  it("variant 3: warm/casual 'Hi {{firstName}} 👋'", () => {
+    const html = renderNewsletter(
+      { blocks: [{ type: "greeting", variant: 3, data: {} }] },
+      { firstName: "Jane" },
+    );
+    expect(html).toContain("Hi Jane 👋");
+  });
+});

@@ -3,7 +3,19 @@
 // in ./theme. The same function backs the live preview, the saved body_html, and the per-recipient
 // merge send — one source of truth, no drift. DB-free + config-free → unit-tested directly.
 import { z } from "zod";
-import { type RenderCtx, renderFrame, escapeHtml, CRIMSON, HEAD, LOGO_URL } from "./theme";
+import {
+  type RenderCtx,
+  renderFrame,
+  escapeHtml,
+  applyMerge,
+  CRIMSON,
+  MAROON,
+  SLATE,
+  SLATE_SOFT,
+  HEAD,
+  BODY,
+  LOGO_URL,
+} from "./theme";
 
 export const BLOCK_TYPES = [
   "masthead",
@@ -117,6 +129,42 @@ function masthead(b: Block): string {
   return `<div style="padding:28px 40px 8px;text-align:center">${logo(150)}<h1 style="font-family:${HEAD};color:${CRIMSON};font-size:26px;font-weight:800;margin:8px 0 0">${title}</h1>${heroImg}</div>`;
 }
 
+// greeting — the salutation line, merging ctx.firstName via applyMerge.
+//   0: plain "Dear {{firstName}},"
+//   1: greeting line + a lead intro paragraph below it
+//   2: a heading (Playfair/HEAD font) ABOVE the greeting line
+//   3: warm/casual "Hi {{firstName}} 👋"
+//
+// data contract: heading (string, optional — read only by variant 2), lead (string, optional —
+// read only by variant 1). Neither field is present in the "Dear {{firstName}}," line itself,
+// which always comes from ctx via applyMerge rather than from data.
+function greeting(b: Block, ctx: RenderCtx): string {
+  const heading = str(b.data, "heading");
+  const lead = str(b.data, "lead");
+  const dearLine = `<p style="font-family:${BODY};color:${SLATE};font-size:16px;margin:0">${applyMerge("Dear {{firstName}},", ctx)}</p>`;
+
+  if (b.variant === 1) {
+    const leadEl = lead
+      ? `<p style="font-family:${BODY};color:${SLATE_SOFT};font-size:15px;margin:8px 0 0">${escapeHtml(lead)}</p>`
+      : "";
+    return `<div style="padding:12px 40px">${dearLine}${leadEl}</div>`;
+  }
+
+  if (b.variant === 2) {
+    const headingEl = heading
+      ? `<h2 style="font-family:${HEAD};color:${MAROON};font-size:20px;font-weight:800;margin:0 0 8px">${escapeHtml(heading)}</h2>`
+      : "";
+    return `<div style="padding:12px 40px">${headingEl}${dearLine}</div>`;
+  }
+
+  if (b.variant === 3) {
+    return `<div style="padding:12px 40px"><p style="font-family:${BODY};color:${SLATE};font-size:16px;margin:0">${applyMerge("Hi {{firstName}} 👋", ctx)}</p></div>`;
+  }
+
+  // variant 0 (default): plain "Dear {{firstName}},"
+  return `<div style="padding:12px 40px">${dearLine}</div>`;
+}
+
 // rawHtml — legacy passthrough (a draft saved before the block builder). Not in the palette. The
 // stored HTML is authored by staff (trusted), so it is emitted verbatim inside the frame.
 function rawHtml(b: Block): string {
@@ -128,7 +176,7 @@ const stub = (): string => "";
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
   masthead,
   rawHtml,
-  greeting: stub,
+  greeting,
   text: stub,
   heading: stub,
   image: stub,

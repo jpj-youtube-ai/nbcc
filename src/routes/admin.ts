@@ -25,6 +25,7 @@ import {
 } from "../db/admin";
 import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError } from "../db/donations";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
+import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
@@ -1069,6 +1070,89 @@ adminRouter.get("/api/admin/stories", getAdminStories);
 adminRouter.get("/api/admin/stories/:id", getAdminStory);
 adminRouter.patch("/api/admin/stories/:id", patchAdminStory);
 adminRouter.delete("/api/admin/stories/:id", deleteAdminStory);
+
+// --- Admin Contact inbox (2026-07-10 spec): list/view/reply-status/delete contact enquiries -------
+// Reads/writes go to the SEPARATE contact DB only (src/db/contact, contactPool) — never
+// src/db/pool.ts / the charity DB, never the stories DB, never audit_log. Browsing is Viewer+;
+// marking replied / deleting is an Editor+ write (mirrors the stories routes).
+
+function contactId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid enquiry id" });
+    return null;
+  }
+  return id;
+}
+
+export async function getAdminContact(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    return res.status(200).json({ results: await listEnquiries(status) });
+  } catch (err) {
+    console.error("admin contact list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+export async function getAdminContactItem(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  const id = contactId(req, res);
+  if (id == null) return;
+  try {
+    const row = await getEnquiry(id);
+    if (!row) return res.status(404).json({ error: "Enquiry not found" });
+    return res.status(200).json(row);
+  } catch (err) {
+    console.error("admin contact read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+const contactPatchSchema = z.object({ status: z.enum(["new", "replied"]) }).strict();
+
+export async function patchAdminContact(req: Request, res: Response): Promise<Response | void> {
+  // Capture the claims (not just the boolean gate) so we can record WHO marked it replied —
+  // mirrors how patchAdminDonor uses claims for the audit actor. authorizeAdmin returns the
+  // claims (with .email) on success, or null after sending the 401/403.
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = contactId(req, res);
+  if (id == null) return;
+  const parsed = contactPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid enquiry update", details: parsed.error.flatten() });
+  }
+  const replied = parsed.data.status === "replied";
+  try {
+    const row = await markReplied(id, replied, replied ? claims.email : null);
+    if (!row) return res.status(404).json({ error: "Enquiry not found" });
+    return res.status(200).json(row);
+  } catch (err) {
+    console.error("admin contact update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+export async function deleteAdminContact(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const id = contactId(req, res);
+  if (id == null) return;
+  try {
+    const deleted = await deleteEnquiry(id);
+    if (!deleted) return res.status(404).json({ error: "Enquiry not found" });
+    return res.status(200).json({ deleted: true, id });
+  } catch (err) {
+    console.error("admin contact delete failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin delete is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/contact", getAdminContact);
+adminRouter.get("/api/admin/contact/:id", getAdminContactItem);
+adminRouter.patch("/api/admin/contact/:id", patchAdminContact);
+adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
 
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);

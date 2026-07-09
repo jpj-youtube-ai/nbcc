@@ -35,3 +35,63 @@ describe("newsletter blocks — core", () => {
     expect(r.success).toBe(false);
   });
 });
+
+describe("newsletter blocks — masthead variants", () => {
+  it("variant 1: logo-left / title(+date)-right two-cell table, date rendered", () => {
+    const html = renderNewsletter(
+      {
+        blocks: [
+          {
+            type: "masthead",
+            variant: 1,
+            data: { issueTitle: "July Newsletter", date: "9 July 2026" },
+          },
+        ],
+      },
+      ctx,
+    );
+    // marker unique to variant 1: the two-cell <table> row layout (logo cell + title cell)
+    expect(html).toContain('<td style="vertical-align:middle">');
+    expect(html).toContain('<td style="vertical-align:middle;text-align:right">');
+    expect(html).toContain("July Newsletter");
+    expect(html).toContain("9 July 2026"); // date value present
+  });
+
+  it("variant 2 with heroUrl: hero <img> src present, title accompanies it", () => {
+    const html = renderNewsletter(
+      {
+        blocks: [
+          {
+            type: "masthead",
+            variant: 2,
+            data: { issueTitle: "July Newsletter", heroUrl: "https://example.org/hero.jpg" },
+          },
+        ],
+      },
+      ctx,
+    );
+    expect(html).toContain('<img src="https://example.org/hero.jpg"');
+    expect(html).toContain("July Newsletter");
+  });
+
+  it("variant 2 without heroUrl: degrades to logo+title fallback, no broken <img>", () => {
+    const html = renderNewsletter(
+      { blocks: [{ type: "masthead", variant: 2, data: { issueTitle: "July Newsletter" } }] },
+      ctx,
+    );
+    expect(html).toContain("July Newsletter");
+    expect(html).toContain("nbcc-logo.png"); // logo still present
+    expect(html).not.toContain('src=""'); // no broken empty-src <img>
+  });
+
+  it("variant 3: slim/compact wordmark strip, title as inline <span>", () => {
+    const html = renderNewsletter(
+      { blocks: [{ type: "masthead", variant: 3, data: { issueTitle: "July Newsletter" } }] },
+      ctx,
+    );
+    // marker unique to variant 3: compact single-row table (14px vertical padding vs 28px
+    // elsewhere) with the title as an inline <span> rather than an <h1>
+    expect(html).toContain('style="padding:14px 40px"');
+    expect(html).toMatch(/<span[^>]*>July Newsletter<\/span>/);
+  });
+});

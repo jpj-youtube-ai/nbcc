@@ -55,6 +55,10 @@ const list = (d: Record<string, unknown>, k: string): Record<string, unknown>[] 
 //   1: logo left, issue title (+ optional date) right
 //   2: issue title over the hero image (hero as banner, title on/under it)
 //   3: slim wordmark strip — small logo + title inline
+//
+// data contract: issueTitle (string, optional — falls back to "Newsletter"), heroUrl (string,
+// optional — read by variant 0 as an accent and variant 2 as the banner), date (string,
+// optional — read only by variant 1, rendered as a small line under the title when present).
 function masthead(b: Block): string {
   const title = escapeHtml(str(b.data, "issueTitle", "Newsletter"));
   const hero = str(b.data, "heroUrl");
@@ -89,7 +93,10 @@ function masthead(b: Block): string {
   </div>
 </div>`;
     }
-    // no hero to sit the title on — degrade to a centered header
+    // no hero to sit the title on — degrade to the same centered header as variant 0's
+    // hero-less form (byte-identical to the no-hero branch below). Intentional convergence:
+    // both are the "just logo + title" baseline once there is no hero to compose against, so
+    // there is no separate markup to invent here. Pinned by the variant-2-without-heroUrl test.
     return `<div style="padding:28px 40px 8px;text-align:center">${logo(150)}<h1 style="font-family:${HEAD};color:${CRIMSON};font-size:26px;font-weight:800;margin:8px 0 0">${title}</h1></div>`;
   }
 

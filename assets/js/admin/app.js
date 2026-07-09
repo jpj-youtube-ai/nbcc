@@ -14,6 +14,8 @@
   var currentDonorId = null; // the donor open in the detail view
   var currentStoryId = null; // the story open in the detail view
   var storiesStatusFilter = ""; // Stories view status filter ("" = all)
+  var currentContactId = null; // the contact enquiry open in the detail view
+  var contactStatusFilter = ""; // Contact form view status filter ("" = all)
 
   function token() {
     return sessionStorage.getItem(TOKEN_KEY);
@@ -128,6 +130,7 @@
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
     else if (name === "stories") loadStories();
+    else if (name === "contact") loadContact();
     else if (name === "newsletter") loadNewsletters();
     else if (name === "thank-you") loadThankYou();
     else if (name === "audit") loadAudit();
@@ -689,6 +692,152 @@
   }
   bindClick("storyBack", function () {
     selectView("stories");
+  });
+
+  // ---- contact form (2026-07-10 spec): list + filter, detail, reply-in-Gmail/mark-new/delete
+  // (editor+). Reads/writes go to the isolated contact DB via /api/admin/contact*. Mirrors the
+  // Stories view controller above (loadStories/storiesTable/openStory/renderStory).
+  Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (b) {
+    b.addEventListener("click", function () {
+      contactStatusFilter = b.getAttribute("data-status") || "";
+      Array.prototype.forEach.call(doc.querySelectorAll("#contactStatusFilter .admin-seg"), function (x) {
+        x.classList.toggle("is-active", x === b);
+      });
+      loadContact();
+    });
+  });
+  function contactSnippet(message) {
+    var s = String(message || "");
+    return s.length > 80 ? s.slice(0, 80) + "…" : s;
+  }
+  function contactStatusBadge(status) {
+    return '<span class="admin-pill">' + (status === "replied" ? "Replied" : "New") + "</span>";
+  }
+  function contactTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No enquiries yet.</p>';
+    var body = rows
+      .map(function (r) {
+        return (
+          "<tr><td>" + window.formatReceived(r.created_at) + "</td><td>" +
+          H.escapeHtml(((r.first_name || "") + " " + (r.last_name || "")).trim()) + "</td><td>" +
+          H.escapeHtml(r.email) + "</td><td>" + contactStatusBadge(r.status) + "</td><td>" +
+          H.escapeHtml(contactSnippet(r.message)) +
+          '</td><td><button class="admin-link" type="button" data-contact="' + r.id + '">View</button></td></tr>'
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>Received</th><th>Name</th><th>Email</th>' +
+      "<th>Status</th><th>Message</th><th></th></tr></thead><tbody>" +
+      body + "</tbody></table>"
+    );
+  }
+  function loadContact() {
+    var wrap = el("contactTable");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    var path = "/api/admin/contact" + (contactStatusFilter ? "?status=" + encodeURIComponent(contactStatusFilter) : "");
+    authFetch(path)
+      .then(j)
+      .then(function (d) {
+        wrap.innerHTML = contactTable(d.results || []);
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+  function contactStatus(msg) {
+    el("contactActionStatus").textContent = msg || "";
+  }
+  function openContact(id) {
+    currentContactId = id;
+    showOnly("view-contact-detail");
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+      b.classList.remove("is-active");
+    });
+    contactStatus("");
+    var wrap = el("contactDetail");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/contact/" + id)
+      .then(function (res) {
+        if (res.status === 404) {
+          wrap.innerHTML = '<p class="admin-empty">Enquiry not found.</p>';
+          throw new Error("not found");
+        }
+        return res.json();
+      })
+      .then(renderContact)
+      .catch(function () {});
+  }
+  function renderContact(c) {
+    var canWrite = H.roleCan(currentRole, "editor");
+    var info =
+      '<dl class="admin-dl">' +
+      dl("Name", ((c.first_name || "") + " " + (c.last_name || "")).trim()) +
+      dl("Email", c.email) +
+      dl("Received", window.formatReceived(c.created_at)) +
+      dl("Status", c.status === "replied" ? "Replied" : "New") +
+      (c.status === "replied"
+        ? dl("Replied by", (c.replied_by || "") + " · " + window.formatReceived(c.replied_at))
+        : "") +
+      "</dl>" +
+      '<h3 class="admin-subhead">Message</h3><p class="admin-story-text">' + H.escapeHtml(c.message || "") + "</p>";
+    var actions = "";
+    if (canWrite) {
+      actions =
+        '<div class="admin-donor-actions">' +
+        '<button class="btn btn-primary" type="button" id="contactReplyBtn">Reply in Gmail</button> ' +
+        (c.status === "replied" ? '<button class="btn btn-ghost" type="button" id="contactMarkNewBtn">Mark as new</button> ' : "") +
+        '<button class="btn btn-danger" type="button" id="contactDeleteBtn">Delete</button>' +
+        "</div>";
+    }
+    el("contactDetail").innerHTML = info + actions;
+    if (canWrite) wireContactActions(c);
+  }
+  function patchContact(body, okMsg, errMsg) {
+    return authFetch("/api/admin/contact/" + currentContactId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (updated) {
+        if (updated) {
+          renderContact(updated);
+          contactStatus(okMsg);
+        } else contactStatus(errMsg);
+      })
+      .catch(function () {
+        contactStatus(errMsg);
+      });
+  }
+  function wireContactActions(c) {
+    bindClick("contactReplyBtn", function () {
+      window.open(window.buildGmailReplyUrl(c), "_blank", "noopener");
+      patchContact({ status: "replied" }, "Marked as replied", "Could not mark the enquiry as replied.");
+    });
+    bindClick("contactMarkNewBtn", function () {
+      patchContact({ status: "new" }, "Marked as new", "Could not mark the enquiry as new.");
+    });
+    bindClick("contactDeleteBtn", deleteContact);
+  }
+  function deleteContact() {
+    if (!window.confirm("Delete this enquiry? This cannot be undone.")) return;
+    authFetch("/api/admin/contact/" + currentContactId, { method: "DELETE" })
+      .then(function (res) {
+        if (res.ok) {
+          selectView("contact");
+        } else {
+          contactStatus("Could not delete the enquiry.");
+        }
+      })
+      .catch(function () {
+        contactStatus("Could not delete the enquiry.");
+      });
+  }
+  bindClick("contactBack", function () {
+    selectView("contact");
   });
 
   // ---- audit ----
@@ -1327,6 +1476,8 @@
       if (donor) return openDonor(donor.getAttribute("data-donor"));
       var story = t.closest("[data-story]");
       if (story) return openStory(story.getAttribute("data-story"));
+      var contact = t.closest("[data-contact]");
+      if (contact) return openContact(contact.getAttribute("data-contact"));
       var sub = t.closest("[data-submit-batch]");
       if (sub) return submitBatch(sub.getAttribute("data-submit-batch"));
       var exp = t.closest("[data-export-batch]");

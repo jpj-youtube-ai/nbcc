@@ -394,14 +394,14 @@
     control.dataset.ready = "true";
   }
 
-  // Contact form (REQ-027): client-side validation + submit handling for the
-  // enquiry form. Progressive enhancement — without JS the form posts to
-  // /api/contact (REQ-030). With JS this validates the required fields and the
-  // email format, surfaces inline errors (aria-invalid + aria-describedby), and
-  // on a valid submit shows the success message (the preview behaviour). It then
-  // best-effort POSTs {firstName,lastName,email,message} to /api/contact and, if
-  // that endpoint is absent or unavailable, falls back to the visitor's mail
-  // client (mailto). The endpoint itself is REQ-030 and out of scope here.
+  // Contact form (REQ-027, honest-save 2026-07-10 contact-inbox spec): client-side
+  // validation + submit handling for the enquiry form. Progressive enhancement —
+  // without JS the form posts to /api/contact (REQ-030). With JS this validates the
+  // required fields and the email format, surfaces inline errors (aria-invalid +
+  // aria-describedby), and only on a genuine 200 from POST /api/contact shows the
+  // success message and resets the form. A non-2xx response or a network failure
+  // shows an error message and leaves the typed message in place (nothing is
+  // discarded); the submit button is disabled only while the request is in flight.
   function initContactForm(doc, win) {
     var form = doc.getElementById("contactForm");
     if (!form) return;
@@ -450,38 +450,6 @@
       return el ? (el.value || "").trim() : "";
     }
 
-    // Best-effort delivery (production). Preview/local has no working backend, so
-    // this only runs in a real browser with fetch; a 501/error/absent endpoint
-    // falls back to opening the visitor's mail client.
-    function deliver(payload) {
-      if (typeof win.fetch !== "function") return;
-      function mailFallback() {
-        try {
-          var subject = "Website enquiry from " + payload.firstName;
-          var body =
-            "Name: " + payload.firstName + " " + payload.lastName + "\n" +
-            "Email: " + payload.email + "\n\n" + payload.message;
-          win.location.href =
-            "mailto:info@nbcc.scot?subject=" +
-            encodeURIComponent(subject) +
-            "&body=" +
-            encodeURIComponent(body);
-        } catch (e) {
-          /* navigation unavailable (e.g. tests); the success message already shows */
-        }
-      }
-      win
-        .fetch("/api/contact", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        .then(function (res) {
-          if (!res || !res.ok) mailFallback();
-        })
-        .catch(mailFallback);
-    }
-
     form.addEventListener("submit", function (e) {
       e.preventDefault();
 
@@ -511,18 +479,50 @@
         message: value("message"),
       };
 
-      // Preview behaviour: show the success message.
+      if (typeof win.fetch !== "function") return; // no-JS/preview: native POST handles it
+
+      var submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
       if (status) {
-        status.textContent =
-          "Thank you " +
-          payload.firstName +
-          ", your message is on its way to the NBCC inbox. We will be in touch soon.";
-        status.className = "form-status is-success";
+        status.textContent = "Sending…";
+        status.className = "form-status";
       }
 
-      form.reset();
-      clearErrors();
-      deliver(payload);
+      win
+        .fetch("/api/contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        .then(function (res) {
+          if (res && res.ok) {
+            if (status) {
+              status.textContent =
+                "Thank you " +
+                payload.firstName +
+                ", your message has reached the NBCC inbox. We will be in touch soon.";
+              status.className = "form-status is-success";
+            }
+            form.reset();
+            clearErrors();
+          } else {
+            if (status) {
+              status.textContent =
+                "Sorry, we could not send your message just now. Please try again, or email info@nbcc.scot.";
+              status.className = "form-status is-error";
+            }
+          }
+        })
+        .catch(function () {
+          if (status) {
+            status.textContent =
+              "Sorry, we could not send your message just now. Please try again, or email info@nbcc.scot.";
+            status.className = "form-status is-error";
+          }
+        })
+        .then(function () {
+          if (submitBtn) submitBtn.disabled = false;
+        });
     });
   }
 

@@ -10,6 +10,13 @@
     <link rel="stylesheet" href="/assets/css/admin.css" />
     <script defer src="/assets/js/admin/helpers.js"></script>
     <script defer src="/assets/js/admin/app.js"></script>
+    <!-- app.js is a classic script; bridge the ES-module gmail-reply.js helpers onto window
+         so app.js (Contact form tab) can call them (2026-07-10 contact-inbox spec, Task 8). -->
+    <script type="module">
+      import { buildGmailReplyUrl, formatReceived } from "/assets/js/gmail-reply.js";
+      window.buildGmailReplyUrl = buildGmailReplyUrl;
+      window.formatReceived = formatReceived;
+    </script>
   </head>
   <body class="admin-body">
     <a class="skip-link" href="#admin-main">Skip to content</a>
@@ -59,6 +66,7 @@
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
               <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
               <li class="admin-nav-group" aria-hidden="true">Governance</li>
@@ -187,6 +195,28 @@
               <h2 id="story-heading">Story</h2>
               <div id="storyDetail" aria-live="polite"></div>
               <p class="admin-action-status" id="storyActionStatus" role="status" aria-live="polite"></p>
+            </section>
+
+            <!-- Contact form: public enquiries from the isolated contact database (2026-07-10 spec). -->
+            <section class="admin-view" id="view-contact" aria-labelledby="contact-heading" hidden>
+              <h2 id="contact-heading">Contact form</h2>
+              <p class="admin-view-intro">Messages sent through the public contact form. Open one to read it, reply in Gmail (which marks it Replied), or delete it. These live in their own database, separate from donor and story data.</p>
+              <div class="admin-search-bar">
+                <div class="admin-segmented" role="group" aria-label="Filter by status" id="contactStatusFilter">
+                  <button class="admin-seg is-active" type="button" data-status="">All</button>
+                  <button class="admin-seg" type="button" data-status="new">New</button>
+                  <button class="admin-seg" type="button" data-status="replied">Replied</button>
+                </div>
+              </div>
+              <div class="admin-table-wrap" id="contactTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Contact enquiry detail (reached from a contact row); Editor+ reply/delete actions. -->
+            <section class="admin-view" id="view-contact-detail" aria-labelledby="contact-detail-heading" hidden>
+              <button class="admin-back" id="contactBack" type="button">&larr; Back</button>
+              <h2 id="contact-detail-heading">Enquiry</h2>
+              <div id="contactDetail" aria-live="polite"></div>
+              <p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p>
             </section>
 
             <!-- Newsletter: author, save (Editor+) and send (Admin only) to consenting donors. -->

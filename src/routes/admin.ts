@@ -33,7 +33,7 @@ import { cancelSubscription } from "../clients/stripe";
 import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
 import { declarationFieldsSchema } from "../declarations/fields";
 import { getGasdsPoolReport } from "../gasds/pool";
-import { listThankYouEligible, recordThankYouSent, listThankYouSent } from "../db/thank-you";
+import { listThankYouEligible, recordThankYouSent, listThankYouSent, deleteThankYouSent } from "../db/thank-you";
 import { DEFAULT_THANK_YOU_THRESHOLD_PENCE, thankYouInputSchema, giftSummary } from "../thank-you/model";
 import { buildThankYouEmailHtml, thankYouSubject } from "../thank-you/letter";
 import {
@@ -722,6 +722,12 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
     typeof body.letterDate === "string" && body.letterDate.trim()
       ? body.letterDate.trim()
       : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  // Optional CC on the email (TASK-168), send-time only (not stored). Validated as an email when set.
+  const ccRaw = typeof body.ccEmail === "string" ? body.ccEmail.trim() : "";
+  if (ccRaw && !z.string().email().safeParse(ccRaw).success) {
+    return res.status(400).json({ error: "Invalid CC email address" });
+  }
+  const cc = ccRaw || undefined;
   try {
     const id = await recordThankYouSent(input);
     try {
@@ -739,6 +745,7 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
       });
       await sendThankYou({
         email: input.recipientEmail,
+        cc,
         from: config.GIVING_FROM_EMAIL,
         replyTo: config.GIVING_FROM_EMAIL,
         subject: thankYouSubject(input),
@@ -773,6 +780,28 @@ export async function getAdminThankYouSent(req: Request, res: Response): Promise
 }
 
 adminRouter.get("/api/admin/thank-you/sent", getAdminThankYouSent);
+
+// DELETE /api/admin/thank-you/sent/:id (REQ-069 · TASK-168). Remove a sent-letter history row (e.g. a
+// mistaken send) and audit the deletion. Editor+ (a write); the append-only audit_log keeps both the
+// original `thank_you.sent` and the new `thank_you.deleted` entry, so the governance trail is intact.
+export async function deleteAdminThankYouSent(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ error: "Invalid id" });
+  }
+  try {
+    const deleted = await deleteThankYouSent(id, actorOf(claims));
+    if (!deleted) return res.status(404).json({ error: "Thank-you letter not found" });
+    return res.status(200).json({ deleted: true });
+  } catch (err) {
+    console.error("admin thank-you delete failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.delete("/api/admin/thank-you/sent/:id", deleteAdminThankYouSent);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
 // Read-only lists that back the admin cockpit UI. Browsing/reads are Viewer and up; the Charities

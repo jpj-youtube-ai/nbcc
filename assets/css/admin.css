@@ -141,6 +141,9 @@
 .ty-count{color:var(--slate-soft);font-size:.85rem}
 .ty-spacer{margin-left:auto}
 .ty-muted{color:var(--slate-soft);font-weight:400}
+/* destructive action in the sent-history table (TASK-168) */
+.ty-del{color:var(--crimson)}
+.ty-del:hover{color:var(--maroon)}
 
 /* status pills reused by the eligible + sent tables */
 .ty-pill{display:inline-flex;align-items:center;gap:6px;border-radius:var(--radius-pill);padding:3px 10px;font-size:.75rem;font-weight:600}

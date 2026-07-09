@@ -241,6 +241,7 @@ export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
 // contract as the other sends: a placeholder EMAIL_SEND_URL means no network outside production.
 export interface ThankYouLetterEmail {
   email: string; // recipient — the relay's recipient field
+  cc?: string; // optional CC recipient (TASK-168); omitted from the payload when unset
   from: string; // config.GIVING_FROM_EMAIL
   replyTo: string; // same as from
   subject: string;

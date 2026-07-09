@@ -1027,8 +1027,9 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
 | `GET /api/admin/subscriptions/dunning` | **implemented** | REQ-066 (at-risk / lapsed monthly gifts) |
 | `GET /api/admin/thank-you/eligible?threshold=` | **implemented** | REQ-069 · TASK-162 (donors whose largest single paid gift ≥ threshold pence, default £1,000, tagged with send-state + already-thanked) |
-| `POST /api/admin/thank-you/send` | **implemented** | REQ-069 · TASK-163 (Editor+; record + audit a thank-you letter and email the donor the branded letter) |
+| `POST /api/admin/thank-you/send` | **implemented** | REQ-069 · TASK-163 (Editor+; record + audit a thank-you letter and email the donor the branded letter; optional `ccEmail` copies someone, TASK-168) |
 | `GET /api/admin/thank-you/sent?limit&offset` | **implemented** | REQ-069 · TASK-163 (sent-letter history, most recent first) |
+| `DELETE /api/admin/thank-you/sent/:id` | **implemented** | REQ-069 · TASK-168 (Editor+; remove a sent-letter row, audited as `thank_you.deleted`) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1349,6 +1350,18 @@ Editor/Admin (the server enforces regardless). Proven by `test/unit/thank-you-le
 send/history/role scenarios. A **PDF attachment** (the mockup's aspiration) is a deliberate
 follow-up: the repo has no PDF/headless-browser subsystem, so this slice emails the branded HTML
 letter.
+
+**Thank-you CC + delete (REQ-069 · TASK-168).** Two additions to the tab above. **(a)** The compose
+form has an optional **CC** field (`ccEmail`) so an admin can copy a colleague on the donor's email;
+it is validated as an email when set, sent-time only (not stored), threaded through
+`sendThankYou` → the relay's `thankYou` branch → the Resend `cc`. **(b)** Each **Sent history** row
+(Editor+) has a **Delete** button: `DELETE /api/admin/thank-you/sent/:id` (`deleteThankYouSent`)
+removes the row and appends a `thank_you.deleted` audit entry in the same transaction — written
+**only** when a row is actually deleted (a missing id → 404, no audit). The append-only `audit_log`
+keeps the original `thank_you.sent` entry, so the governance trail records both the send and the
+deletion. Covered by the extended `email-relay-build` CC test and `@thankyou @db` delete/CC scenarios.
+**Ops:** the relay Worker must be redeployed for the CC pass-through to take effect (delete works
+without it — it's an app endpoint).
 
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC

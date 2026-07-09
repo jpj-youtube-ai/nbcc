@@ -124,36 +124,89 @@ Then("the thank-you eligible donor {string} should be marked already thanked", f
 
 // ---- TASK-163: compose + send, and the sent-letter history ----
 
+async function sendLetter(world, email, password, recipient, name, cc) {
+  const token = await login(email, password);
+  const payload = {
+    donorId: null,
+    thankYouName: name,
+    addressedTo: name,
+    recipientEmail: recipient,
+    giftType: "money",
+    giftAmountPence: 150000,
+    giftInKind: null,
+    giftAided: true,
+    personalMessage: null,
+    signedByName: "Jodie McFarlane",
+    signedByRole: "Head Elf (Trustee), Night Before Christmas Campaign",
+  };
+  if (cc !== undefined) payload.ccEmail = cc;
+  const res = await fetch(`${BASE_URL}/api/admin/thank-you/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  world.adminStatus = res.status;
+  world.adminBody = await res.json().catch(() => ({}));
+  if (world.adminBody && world.adminBody.id) world.tySentId = world.adminBody.id;
+}
+
 When(
   "I send a thank-you letter as {string} with password {string} to {string} for {string}",
   async function (email, password, recipient, name) {
-    const token = await login(email, password);
-    const res = await fetch(`${BASE_URL}/api/admin/thank-you/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        donorId: null,
-        thankYouName: name,
-        addressedTo: name,
-        recipientEmail: recipient,
-        giftType: "money",
-        giftAmountPence: 150000,
-        giftInKind: null,
-        giftAided: true,
-        personalMessage: null,
-        signedByName: "Jodie McFarlane",
-        signedByRole: "Head Elf (Trustee), Night Before Christmas Campaign",
-      }),
-    });
-    this.adminStatus = res.status;
-    this.adminBody = await res.json().catch(() => ({}));
-    if (this.adminBody && this.adminBody.id) this.tySentId = this.adminBody.id;
+    await sendLetter(this, email, password, recipient, name);
+  },
+);
+
+// TASK-168: an optional CC on the thank-you email.
+When(
+  "I send a thank-you letter as {string} with password {string} to {string} for {string} cc {string}",
+  async function (email, password, recipient, name, cc) {
+    await sendLetter(this, email, password, recipient, name, cc);
   },
 );
 
 Then("a thank-you letter to {string} should be recorded", async function (recipient) {
   const r = await pool.query("SELECT COUNT(*)::int AS n FROM thank_you_sent WHERE recipient_email = $1", [recipient]);
   assert.ok(r.rows[0].n >= 1, `expected a recorded thank_you_sent to ${recipient}`);
+});
+
+Then("a thank-you letter to {string} should not be recorded", async function (recipient) {
+  const r = await pool.query("SELECT COUNT(*)::int AS n FROM thank_you_sent WHERE recipient_email = $1", [recipient]);
+  assert.equal(r.rows[0].n, 0, `expected no thank_you_sent to ${recipient}`);
+});
+
+// TASK-168: deleting a sent thank-you from the history.
+When("I delete that sent thank-you as {string} with password {string}", async function (email, password) {
+  assert.ok(this.tySentId, "expected a sent-letter id from a prior send");
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/thank-you/sent/${this.tySentId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+When(
+  "I delete thank-you letter id {int} as {string} with password {string}",
+  async function (id, email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/thank-you/sent/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("there should be a {string} audit row for the deleted thank-you", async function (action) {
+  assert.ok(this.tySentId, "expected a sent-letter id");
+  const r = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM audit_log WHERE action = $1 AND (data->>'thankYouSentId')::int = $2",
+    [action, this.tySentId],
+  );
+  assert.ok(r.rows[0].n >= 1, `no ${action} audit row for id ${this.tySentId}`);
 });
 
 Then("the sent thank-you should have an audit row", async function () {

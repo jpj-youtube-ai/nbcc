@@ -766,10 +766,11 @@
     nlDoc.blocks.forEach(function (block, i) {
       var li = doc.createElement("li");
       li.className = "nl-block";
+      var def = nlBlockDefs[block.type] || { label: "Raw HTML" };
       var head = doc.createElement("div");
       head.className = "nl-block-head";
       head.innerHTML =
-        '<span class="nl-block-title">' + nlBlockDefs[block.type].label + "</span>" +
+        '<span class="nl-block-title">' + def.label + "</span>" +
         '<span class="nl-block-ctrls">' +
         '<button type="button" data-nl="up">↑</button>' +
         '<button type="button" data-nl="down">↓</button>' +
@@ -981,8 +982,22 @@
     }
   }
 
-  // Filled in Task 25:
-  function nlSchedulePreview() {}
+  // Debounced live preview: renders the current nlDoc server-side and streams it into the iframe.
+  var nlPreviewTimer = null;
+  function nlSchedulePreview() {
+    if (nlPreviewTimer) clearTimeout(nlPreviewTimer);
+    nlPreviewTimer = setTimeout(nlRefreshPreview, 300);
+  }
+  function nlRefreshPreview() {
+    authFetch("/api/admin/newsletters/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyJson: nlDoc }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j2) { if (j2.html != null) el("nlPreview").srcdoc = j2.html; })
+      .catch(function () {});
+  }
 
   if (el("nlPalette")) nlRenderPalette();
 
@@ -1005,12 +1020,19 @@
       .then(function (n) {
         el("newsletterId").value = n.id;
         el("newsletterSubject").value = n.subject;
-        el("newsletterBody").value = n.bodyHtml;
+        // A block-doc newsletter hydrates its blocks; a legacy raw-HTML draft becomes one rawHtml block.
+        if (n.bodyJson && Array.isArray(n.bodyJson.blocks)) {
+          nlDoc = n.bodyJson;
+        } else {
+          nlDoc = { blocks: [{ type: "rawHtml", variant: 0, data: { html: n.bodyHtml || "" } }] };
+        }
         var sent = n.status === "sent";
         // Send is Admin-only and only for an unsent newsletter.
         el("newsletterSend").hidden = !(currentRole === "admin" && !sent);
         el("newsletterSave").disabled = sent;
         el("newsletterMsg").textContent = sent ? "This newsletter has been sent and is read-only." : "";
+        nlRenderCanvas();
+        nlRefreshPreview();
       })
       .catch(function () {});
   }
@@ -1036,16 +1058,18 @@
     el("newsletterNew").addEventListener("click", function () {
       el("newsletterId").value = "";
       el("newsletterSubject").value = "";
-      el("newsletterBody").value = "";
+      nlDoc = { blocks: [] };
       el("newsletterSend").hidden = true; // save first to get an id
       el("newsletterSave").disabled = false;
       el("newsletterMsg").textContent = "";
+      nlRenderCanvas();
+      nlRefreshPreview();
     });
 
     nlForm.addEventListener("submit", function (e) {
       e.preventDefault();
       var id = el("newsletterId").value;
-      var payload = { subject: el("newsletterSubject").value, bodyHtml: el("newsletterBody").value };
+      var payload = { subject: el("newsletterSubject").value, bodyJson: nlDoc };
       var req = id
         ? authFetch("/api/admin/newsletters/" + id, {
             method: "PUT",
@@ -1058,14 +1082,12 @@
             body: JSON.stringify(payload),
           });
       req
+        .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
         .then(function (res) {
-          if (!res.ok) throw new Error("save failed: " + res.status);
-          return res.json();
-        })
-        .then(function (n) {
+          if (!res.ok) { el("newsletterMsg").textContent = res.body.error || "Save failed."; return; }
           el("newsletterMsg").textContent = "Saved.";
           loadNewsletters();
-          loadNewsletterInto(n.id);
+          loadNewsletterInto(res.body.id);
         })
         .catch(function () {
           el("newsletterMsg").textContent = "Save failed.";

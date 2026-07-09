@@ -115,9 +115,12 @@ Inline success state (aria-live) or `/my-story` thank-you view with a warm close
 
 ## Data model — `stories` table (Task B)
 
-Migration `migrations/<ts>_stories.js` (node-pg-migrate, CommonJS). **Additive-only /
-expand-contract safe** (golden rule 2): every column is nullable or defaulted; no
-change to existing tables.
+**Lives in a SEPARATE database** (`stories`) on the same RDS server, never in the
+main `charity` DB (owner decision — see [[my-story-separate-db]]). The table is the
+sole object in that database, created by a migration in its **own** directory
+`migrations-stories/<ts>_stories.js` (node-pg-migrate, CommonJS), tracked by that
+database's own `pgmigrations` table. Additive-only by construction (a fresh DB), and
+it never touches the `charity` DB.
 
 | Column | Type | Notes |
 |---|---|---|
@@ -168,27 +171,59 @@ Text lengths capped in the Zod schema (not the DB) to keep the migration additiv
   `test/unit/contact*`/`nav.test.ts` patterns); BDD `features/my-story.feature` — page
   renders at `/my-story` with the three step regions and required-field markers.
 
-### Task B — Storage: persist submissions
-*REQ intent: "Persist My Story submissions with consent & retention metadata."*
+### Task B — Storage: persist submissions to a SEPARATE database
+*REQ intent: "Persist My Story submissions to a dedicated stories database with consent & retention metadata."*
 
-- Migration for the `stories` table above.
-- `src/db/stories.ts` — model + `insertStory()` and the row/record types.
-- `POST /api/my-story` in `src/routes/api.ts`:
-  - Validate body with a **Zod schema** (`src/stories/schema.ts`): `story_text`
-    required + length-capped; `use_scope` enum; identifier opt-ins boolean; role enum;
-    `confirmed_over_16` must be true; email format if present; everything else
-    optional. Invalid → 400.
-  - **Spam/abuse guard** for a public unauthenticated endpoint: a honeypot field +
-    lightweight rate limit (reuse the `src/portal/request-limiter.ts` pattern). Cap
-    field sizes server-side.
-  - Insert; return success (JSON for the JS flow) → drives the thank-you state.
-- **Config:** none expected (DB only). If a notify-email-on-submission is wanted it
-  goes through `src/config/schema.ts` + `.env.example` + SSM + task def (golden rule
-  3) — flagged as optional, likely its own follow-up.
-- **Tests:** Vitest for the Zod schema (valid/invalid payloads, `confirmed_over_16`
-  gate, scope→identifier rules) and the form→record mapping (DB-free); BDD — submitting
-  a valid story returns success and persists; a story missing consent/confirm is
-  rejected.
+The separate-DB decision (own name + credentials, same RDS server) makes this span
+app code, migrations tooling, CI, and infra. Split into two shippable slices:
+
+**B1 — App + migrations + CI (one PR, testable in CI):**
+- **Config:** add `STORIES_DATABASE_URL: z.string().url()` to `src/config/schema.ts`
+  (mirrors `DATABASE_URL`, never defaulted) and a line to `.env.example`
+  (`postgres://stories_app:stories@localhost:5432/stories` locally). Golden rule 3.
+- **Pool:** `src/db/stories-pool.ts` — a second `Pool` reading `config.STORIES_DATABASE_URL`
+  (mirror `src/db/pool.ts`; `max: 5`). This is the ONLY pool the stories feature uses;
+  it can never reach the `charity` DB.
+- **Migrations:** a new `migrations-stories/` dir + the `stories` table migration; a
+  `migrate:stories` npm script pointing node-pg-migrate at `STORIES_DATABASE_URL` and
+  `-m migrations-stories` (`DATABASE_URL=$STORIES_DATABASE_URL node-pg-migrate -m migrations-stories up`).
+- **Model:** `src/db/stories.ts` — `insertStory(record)` using the stories pool + the
+  audit-less single INSERT pattern (no cross-DB audit table; keep it self-contained).
+- **Endpoint** `POST /api/my-story` in `src/routes/api.ts`:
+  - Accept BOTH `application/json` (JS path) AND `application/x-www-form-urlencoded`
+    (no-JS native form POST) — the form's `action`/`method` mean a no-JS submit hits
+    this too. On success: JSON → 200 `{ ok: true }`; form POST → 200 self-contained
+    `text/html` thank-you response (warm message + link home; links the site
+    stylesheet). Chosen over a 303 to a new static thank-you page to avoid adding a
+    page/route. (Implemented this way in B1, `src/routes/api.ts`.)
+  - Validate with a **Zod schema** (`src/stories/schema.ts`): `storyText` required +
+    length-capped; `useScope` enum; role enum; identifier opt-ins boolean/coerced;
+    `confirmOver16` must be truthy; email format if present; everything else optional.
+    Invalid → 400 (JSON) / re-render with errors (form). Enum values EXACTLY match
+    Task A's field values.
+  - **Spam/abuse guard:** honeypot `website` must be empty (silently 200, no insert);
+    per-IP rate limit via `createRateLimiter` (mirror `portal.ts`). Cap field sizes.
+- **CI (`pr.yml`):** create the `stories` database in the Postgres service + set
+  `STORIES_DATABASE_URL` + run `npm run migrate:stories`, so BDD can exercise the real
+  insert.
+- **Tests:** Vitest for the Zod schema (valid/invalid, `confirmOver16` gate,
+  scope→identifier rules, honeypot) and the form→record mapping (DB-free); BDD —
+  a valid JSON submit and a valid form-encoded submit both persist; missing
+  consent/confirm → rejected; honeypot-filled → silently accepted, nothing stored.
+
+**B2 — Infra (Terraform PR via `infra.yml`; MANUAL apply, owner-gated):**
+- `random_password.stories` + SSM `STORIES_DATABASE_URL` in `infra/modules/app/main.tf`
+  (value `postgres://stories_app:${…}@${rds.address}:5432/stories?sslmode=no-verify`).
+- Task-def `secrets` entry + `exec_secrets` IAM ARN in `ecs.tf` (the three-place rule).
+- **DB + role creation has no Terraform precedent** (fixed `db_name`, no `postgresql`
+  provider, private RDS). Provision imperatively via a one-off **`ecs run-task`** (which
+  can reach RDS from the task SG) running a bootstrap: `scripts/bootstrap-stories-db.mjs`
+  connects with the MASTER `DATABASE_URL` and idempotently `CREATE DATABASE stories`,
+  `CREATE ROLE stories_app LOGIN PASSWORD …` (from the stories secret), `GRANT`s. Wire a
+  `bootstrap:stories` npm script + a one-off step in the deploy workflows BEFORE the
+  `migrate:stories` step. Bootstrap runs once per environment (idempotent so re-runs are safe).
+- **Owner action:** trigger the Infra `apply` (staging), then the deploy runs bootstrap
+  + stories migration. I never run `terraform apply`.
 
 ### Task C — Admin: view, tag & manage stories (inside `/admin`)
 *REQ intent: "Admin panel can view, tag and manage submitted stories, incl. withdrawal."*
@@ -204,11 +239,19 @@ Text lengths capped in the Zod schema (not the DB) to keep the migration additiv
   - `PATCH /api/admin/stories/:id` — update `status` (incl. `withdrawn` = honour
     erasure/withdrawal), `admin_tags`, `admin_notes`. Editor+ role for mutations,
     mirroring existing admin PATCH gating.
-- `src/db/stories.ts` gains the admin reads/updates. HTML-escape story text on render
-  (reuse `escapeHtml` pattern in `site.ts`).
-- **Tests:** Vitest for pure list/badge/render helpers; BDD `features/admin-stories.feature`
-  — an authed admin lists stories, opens one, and withdraws it (then it reads as
-  withdrawn / excluded from use).
+- `src/db/stories.ts` gains the admin reads/updates — **all via `storiesPool`** (the
+  separate DB; admin code must not reach the `charity` DB for story data). HTML-escape
+  story text on render (reuse `escapeHtml` pattern in `site.ts`).
+- **Server-side validate the PATCH body** (`status`/`admin_tags`) against the allowed
+  enums with Zod before writing — the admin is now a write path into the stories DB.
+- **Defense-in-depth (from B1 review):** since Task C adds writes, add DB-level `CHECK`
+  constraints for the enum columns (`use_scope`, `submitter_role`, `age_band`,
+  `recipient_type`, `status`) via a new additive migration in `migrations-stories/`, so
+  invalid values can't be written even by direct DB access. (Deferred from B1 where
+  there were no writes yet.)
+- **Tests:** Vitest for pure list/badge/render helpers + the PATCH validation; BDD
+  `features/admin-stories.feature` — an authed admin lists stories, opens one, and
+  withdraws it (then it reads as withdrawn / excluded from use).
 
 ### Task D — Optional photo upload (DEFERRED, own task)
 *REQ intent: "Optional photo upload for stories with image consent & moderation."*

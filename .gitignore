@@ -25,3 +25,6 @@ assets/source/
 *.tfstate.*
 crash.log
 *.tfvars.local
+
+# Local Claude Code preview launcher (machine-specific paths)
+.claude/launch.json

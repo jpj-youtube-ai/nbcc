@@ -1555,6 +1555,57 @@
     go(1, 0, true); // initial state, no scroll/focus
   }
 
+  // Supporter ticker (REQ-003 · TASK-178): fetch the admin-curated active supporters and, if any,
+  // render a scrolling marquee fixed just under the nav on every marketing page. Progressive
+  // enhancement — no supporters or no JS means no ticker, and nothing else on the page shifts.
+  function tickerEscape(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function initSupporterTicker(doc, win) {
+    var nav = doc.getElementById("nav");
+    if (!nav || !win.fetch) return;
+    win
+      .fetch("/api/supporters/ticker")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var names = data && data.supporters ? data.supporters : [];
+        if (!names.length) return;
+        buildSupporterTicker(doc, win, nav, names);
+      })
+      .catch(function () {});
+  }
+  function buildSupporterTicker(doc, win, nav, names) {
+    var sep = ' <span class="supporter-ticker__sep" aria-hidden="true">&#9670;</span> ';
+    var items = names
+      .map(function (n) { return '<span class="supporter-ticker__item">' + tickerEscape(n) + "</span>"; })
+      .join(sep);
+    var reduced = win.matchMedia && win.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    var bar = doc.createElement("div");
+    bar.className = "supporter-ticker";
+    bar.setAttribute("role", "complementary");
+    bar.setAttribute("aria-label", "Our supporters");
+    // Duplicate the run for a seamless loop (the animation shifts by one run's width).
+    var trackHtml = reduced ? items : items + sep + items;
+    bar.innerHTML =
+      '<span class="supporter-ticker__label">Our supporters</span>' +
+      '<div class="supporter-ticker__viewport"><div class="supporter-ticker__track' +
+      (reduced ? " is-static" : "") +
+      '">' + trackHtml + "</div></div>";
+
+    nav.parentNode.insertBefore(bar, nav.nextSibling);
+    doc.body.classList.add("has-ticker");
+
+    // Constant speed regardless of list length: duration = one-run width / ~60px per second.
+    if (!reduced) {
+      var track = bar.querySelector(".supporter-ticker__track");
+      var oneRun = track.scrollWidth / 2;
+      var seconds = Math.max(16, Math.round(oneRun / 60));
+      track.style.animationDuration = seconds + "s";
+    }
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       initNav,
@@ -1574,6 +1625,7 @@
     };
   } else {
     initNav(document, window);
+    initSupporterTicker(document, window);
     initReveal(document, window);
     initGiveToggle(document);
     initDeclarationCapture(document);

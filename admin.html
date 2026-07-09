@@ -59,6 +59,7 @@
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="ticker">Supporters ticker</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
               <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
               <li class="admin-nav-group" aria-hidden="true">Governance</li>
@@ -358,6 +359,21 @@
               <h3 class="admin-subhead">3. Sent history</h3>
               <p class="admin-help">Every thank-you letter sent, most recent first.</p>
               <div class="admin-table-wrap" id="tySentTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Supporters ticker: the admin-curated list shown scrolling under the site nav. -->
+            <section class="admin-view" id="view-ticker" aria-labelledby="ticker-heading" hidden>
+              <h2 id="ticker-heading">Supporters ticker</h2>
+              <p class="admin-view-intro">Add the businesses and people who are ongoing supporters. Active ones scroll across the top of every page, just under the navigation. Changes appear on the site immediately.</p>
+              <form id="tickerForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Supporter name
+                  <input id="tickerName" type="text" maxlength="120" placeholder="e.g. Ayrshire Bakery" style="width:220px" />
+                </label>
+                <button class="btn btn-primary" type="submit" id="tickerAdd">Add supporter</button>
+                <span class="ty-count" id="tickerCount" aria-live="polite"></span>
+              </form>
+              <p class="ty-status" id="tickerStatus" role="status" aria-live="polite"></p>
+              <div class="admin-table-wrap" id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Audit trail (append-only governance log). -->

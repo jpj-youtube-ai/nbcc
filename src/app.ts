@@ -8,6 +8,7 @@ import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { newsletterImagesRouter } from "./routes/newsletter-images";
+import { tickerRouter } from "./routes/ticker";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -34,6 +35,8 @@ export function createApp() {
   app.use("/api/admin/newsletter-images", express.json({ limit: "3mb" }));
   app.use(express.json());
   app.use(apiRouter);
+  // Public supporter-ticker feed (TASK-178/REQ-003): GET /api/supporters/ticker.
+  app.use(tickerRouter);
   app.use(portalRouter);
   app.use(adminRouter);
   app.use(healthRouter);

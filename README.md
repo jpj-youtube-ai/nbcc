@@ -1030,6 +1030,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/admin/thank-you/send` | **implemented** | REQ-069 · TASK-163 (Editor+; record + audit a thank-you letter and email the donor the branded letter; optional `ccEmail` copies someone, TASK-168) |
 | `GET /api/admin/thank-you/sent?limit&offset` | **implemented** | REQ-069 · TASK-163 (sent-letter history, most recent first) |
 | `DELETE /api/admin/thank-you/sent/:id` | **implemented** | REQ-069 · TASK-168 (Editor+; remove a sent-letter row, audited as `thank_you.deleted`) |
+| `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
+| `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1417,6 +1419,20 @@ keeps the original `thank_you.sent` entry, so the governance trail records both 
 deletion. Covered by the extended `email-relay-build` CC test and `@thankyou @db` delete/CC scenarios.
 **Ops:** the relay Worker must be redeployed for the CC pass-through to take effect (delete works
 without it — it's an app endpoint).
+
+**Supporter ticker (REQ-003 · TASK-178).** An admin-curated list of ongoing supporters (businesses or
+people) shown scrolling under the site nav — distinct from the donor-derived Supporters page. The
+`supporter_ticker` table (additive migration; `name`, `active`, `sort_order`) is served two ways: the
+public `GET /api/supporters/ticker` returns the **active** names in order, and the admin
+**Supporters ticker** tab (`view-ticker` + `loadTicker` in `assets/js/admin/app.js`) does full CRUD
+over `/api/admin/ticker` — reads are Viewer+, add/edit/hide/delete are **Editor+** and each write
+appends a `supporter.*` audit row (`src/db/ticker.ts`). The public marquee is injected by
+`assets/js/main.js` (`initSupporterTicker`) on every marketing page: it fetches the feed and, only if
+there are supporters, renders a seamless CSS marquee fixed at `top:var(--nav-h)` and adds
+`body.has-ticker` (which reserves `--ticker-h` so nothing else shifts otherwise). It pauses on hover
+and respects `prefers-reduced-motion` (no animation, a scrollable strip instead). Proven by
+`test/unit/ticker-model.test.ts` and the `@ticker @db` `features/ticker.feature` (add → public feed;
+hide/delete → removed; Viewer → 403).
 
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC

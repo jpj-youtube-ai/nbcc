@@ -1292,26 +1292,62 @@ endpoints (the UI hides write controls below Editor via `roleCan`; the server st
 export is fetched with the bearer token and saved via a blob download (a plain link cannot carry the
 `Authorization` header). `admin-shell.test.ts` covers the six nav sections + the donor detail view.
 
-**Newsletter tab (REQ-069 · TASK-161).** A seventh admin nav section for authoring and sending an
-HTML newsletter to consenting donors, over a new `newsletters` table (one row per newsletter,
-`status` `draft`|`sent`). Reads and drafting are **Editor+**: `GET /api/admin/newsletters` lists
-summaries, `GET /api/admin/newsletters/:id` returns one newsletter's full `body_html`,
-`POST /api/admin/newsletters` creates a draft (`{ subject, bodyHtml }`), `PUT
-/api/admin/newsletters/:id` edits a draft — a `sent` newsletter is immutable (**409**). Sending is
-**Admin only**: `POST /api/admin/newsletters/:id/send` reads every consenting donor
-(`listNewsletterRecipients`, deduped on `email_consent=true`) and sends **one individual email per
-recipient** via `sendNewsletter` (`src/clients/email.ts`), each wrapped by the pure
-`buildNewsletterHtml` with a **per-recipient unsubscribe link**
-(`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC token signed with `ADMIN_SESSION_SECRET` —
-reused, not a new secret), From and Reply-To `NEWSLETTER_FROM_EMAIL` (see **Configuration**). A
-single failed send is logged and does not abort the batch. The send is **idempotent**: the draft is
-claimed atomically (`claimNewsletterForSend`, stamping the sender) **before** any email goes out, so
-a double-click or two concurrent admins cannot both send — the second claim finds no draft and is
-rejected with **409** rather than double-blasting donors (the recipient count is stamped afterwards). The admin UI (`admin.html`
-+ `assets/js/admin/app.js`) lists newsletters, edits the subject/body for any draft (Editor+), and
-shows **Send** only to `role === "admin"` on an unsent newsletter (the server enforces regardless
-of what the UI hides). Proven by `test/unit/newsletter-html.test.ts`,
-`test/unit/unsubscribe-token.test.ts` and the `@newsletter @db` `features/newsletter.feature`.
+**Newsletter tab (REQ-069 · TASK-161, block builder TASK-168).** A seventh admin nav section for
+authoring and sending an HTML newsletter to consenting donors, over the `newsletters` table (one
+row per newsletter, `status` `draft`|`sent`). The tab is a two-pane **block builder**: a left rail
+palette to add typed content blocks — masthead, greeting, text, heading, image, story, spotlight,
+impact stats, ways to help, events, donation CTA, button and divider — each block offering **4
+style variants**, plus per-block fields, reordering, duplication and deletion; the right rail shows
+a **live preview** that is the exact HTML the email will render, recomputed on every edit
+(debounced) via `POST /api/admin/newsletters/preview`. A newsletter is stored as a JSON **block
+document** (`{ blocks: [{ type, variant, data }, …] }`) in the `newsletters.body_json` column
+(nullable — legacy raw-HTML drafts from before TASK-168 keep `body_json` `NULL` and hydrate into a
+single `rawHtml` block in the builder). One pure renderer, `renderNewsletter` in
+`src/newsletter/blocks.ts` (brand tokens/frame in `src/newsletter/theme.ts`), compiles a block
+document to a brand-inlined HTML email — the **single source of truth** behind the live preview,
+the `body_html` saved alongside every draft, and the send. Reads and drafting are **Editor+**:
+`GET /api/admin/newsletters` lists summaries, `GET /api/admin/newsletters/:id` returns one
+newsletter's full `body_html` (+ `body_json` for the builder to hydrate), `POST
+/api/admin/newsletters` creates a draft (`{ subject, bodyJson }`, or legacy `{ subject, bodyHtml }`),
+`PUT /api/admin/newsletters/:id` edits a draft — a `sent` newsletter is immutable (**409**), and
+`POST /api/admin/newsletters/preview` (Editor+, stateless, no DB) renders a posted `bodyJson`
+document to HTML for the live preview. Sending is **Admin only**: `POST
+/api/admin/newsletters/:id/send` reads every consenting donor (`listNewsletterRecipients`, deduped
+on `email_consent=true`) and sends **one individual email per recipient** via `sendNewsletter`
+(`src/clients/email.ts`). For a block-doc newsletter, each recipient's email is **re-rendered**
+per-recipient so the greeting block can carry a **`{{firstName}}` merge** — the first
+whitespace-delimited token of the donor's name, falling back to **"friend"** when there is no
+usable name; a legacy raw-HTML row (no valid `body_json`) falls back to the one stored, already-
+compiled `body_html`. Each send is then wrapped by the pure `buildNewsletterHtml` with a
+**per-recipient unsubscribe link** (`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC token signed
+with `ADMIN_SESSION_SECRET` — reused, not a new secret), From and Reply-To `NEWSLETTER_FROM_EMAIL`
+(see **Configuration**). A single failed send is logged and does not abort the batch. The send is
+**idempotent**: the draft is claimed atomically (`claimNewsletterForSend`, stamping the sender)
+**before** any email goes out, so a double-click or two concurrent admins cannot both send — the
+second claim finds no draft and is rejected with **409** rather than double-blasting donors (the
+recipient count is stamped afterwards).
+
+**Newsletter images (REQ-069 · TASK-168).** Image blocks (masthead hero, image, story, spotlight,
+donation CTA) fill their picture from any of three sources in the same field: a manual URL, an
+**"NBCC library"** quick-pick of existing nbcc.scot assets (logo, elf, red-bags handover, and
+others — a fixed list in `assets/js/admin/app.js`), or a direct **upload**. `POST
+/api/admin/newsletter-images` (Editor+, `{ mime, dataBase64 }` JSON — the client base64-encodes the
+file) accepts `image/png`, `image/jpeg`, `image/webp` or `image/gif` up to **2 MB**, rejecting an
+unsupported type with **400** and an oversized file with **413** (`validateUpload`,
+`src/newsletter/image-validation.ts`); the bytes are stored in the new `newsletter_images` table
+(`src/db/newsletter-images.ts`) and the response is the public serve URL. `GET
+/media/newsletter/:id` (`src/routes/newsletter-images.ts`, mounted in `src/app.ts`) serves an
+uploaded image **unauthenticated** (email clients fetch images with no session) by uuid lookup only
+— no path input, so no traversal — with `X-Content-Type-Options: nosniff` and a long-lived
+immutable `Cache-Control`, so a served upload can't be sniffed as script. No new config.
+
+The admin UI (`admin.html` + `assets/js/admin/app.js`) drives all of the above and shows **Send**
+only to `role === "admin"` on an unsent newsletter (the server enforces regardless of what the UI
+hides). Proven by `test/unit/newsletter-blocks.test.ts` (block renderer, all block types/variants),
+`test/unit/newsletter-theme.test.ts` (shared brand frame), `test/unit/newsletter-html.test.ts`,
+`test/unit/newsletter-image-store.test.ts` (upload validation), `test/unit/newsletter-builder-ui.test.ts`
+(admin UI), `test/unit/unsubscribe-token.test.ts` and the `@newsletter @db` `features/newsletter.feature`
+(including block create/preview/upload/serve scenarios).
 
 **Public unsubscribe route (REQ-069 · TASK-161).** `GET /unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.

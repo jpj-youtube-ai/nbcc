@@ -198,7 +198,7 @@ export async function postAdminNewsletter(req: Request, res: Response): Promise<
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
   }
-  const created = await createNewsletter(parsed.data.subject, parsed.data.bodyHtml);
+  const created = await createNewsletter(parsed.data.subject, parsed.data.bodyHtml, null);
   return res.status(201).json(created);
 }
 
@@ -216,7 +216,7 @@ export async function putAdminNewsletter(req: Request, res: Response): Promise<R
   if (existing.status === "sent") {
     return res.status(409).json({ error: "A sent newsletter cannot be edited" });
   }
-  const updated = await updateNewsletterDraft(id, parsed.data.subject, parsed.data.bodyHtml);
+  const updated = await updateNewsletterDraft(id, parsed.data.subject, parsed.data.bodyHtml, null);
   if (!updated) return res.status(409).json({ error: "A sent newsletter cannot be edited" });
   return res.json(updated);
 }

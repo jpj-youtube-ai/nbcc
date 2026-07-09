@@ -293,3 +293,47 @@ describe("newsletter blocks — button variants", () => {
     expect(result).toBe("");
   });
 });
+
+describe("newsletter blocks — image variants", () => {
+  const mk = (variant: number, data: Record<string, unknown>) =>
+    renderNewsletter({ blocks: [{ type: "image", variant, data }] }, ctx);
+
+  it("variant 0: full-width image, url in src, alt escaped", () => {
+    const html = mk(0, {
+      url: "https://example.org/tree.jpg",
+      alt: "Tree & lights",
+    });
+    expect(html).toContain('src="https://example.org/tree.jpg"');
+    expect(html).toContain('alt="Tree &amp; lights"');
+  });
+
+  it("variant 1: rounded corners", () => {
+    const html = mk(1, { url: "https://example.org/tree.jpg" });
+    expect(html).toContain('src="https://example.org/tree.jpg"');
+    expect(html).toContain("border-radius");
+  });
+
+  it("variant 2: caption rendered under the image", () => {
+    const html = mk(2, {
+      url: "https://example.org/tree.jpg",
+      caption: "Lighting the tree, December 2025",
+    });
+    expect(html).toContain('src="https://example.org/tree.jpg"');
+    expect(html).toContain("Lighting the tree, December 2025");
+  });
+
+  it("variant 3: framed with a border", () => {
+    const html = mk(3, { url: "https://example.org/tree.jpg" });
+    expect(html).toContain('src="https://example.org/tree.jpg"');
+    expect(html).toContain("border:1px solid");
+  });
+
+  it("degrades to nothing when url is empty", () => {
+    const result = renderBlock(
+      { type: "image", variant: 0, data: { url: "", alt: "Tree" } },
+      ctx,
+    );
+    expect(result).toBe("");
+    expect(result).not.toContain("<img");
+  });
+});

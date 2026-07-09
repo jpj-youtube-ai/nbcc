@@ -269,6 +269,42 @@ function button(b: Block): string {
   return `<div style="padding:12px 40px;text-align:center">${brandButton(label, href, style)}</div>`;
 }
 
+// image — a standalone photo.
+//   0: full-width
+//   1: rounded corners
+//   2: with a small SLATE caption underneath
+//   3: framed with a thin border
+//
+// data contract: url (string, optional — falls back to ""), alt (string, optional — falls back
+// to "", escaped either way), caption (string, optional — read only by variant 2). Degrades to
+// nothing when url is empty, rather than emitting a broken <img src="">.
+function image(b: Block): string {
+  const url = str(b.data, "url");
+  if (!url) return "";
+
+  const alt = escapeHtml(str(b.data, "alt"));
+  const caption = str(b.data, "caption");
+  const safeUrl = escapeHtml(url);
+
+  if (b.variant === 1) {
+    return `<div style="padding:12px 40px"><img src="${safeUrl}" alt="${alt}" width="580" style="display:block;width:100%;max-width:580px;height:auto;border-radius:12px" /></div>`;
+  }
+
+  if (b.variant === 2) {
+    const captionEl = caption
+      ? `<p style="font-family:${BODY};color:${SLATE};font-size:13px;margin:8px 0 0">${escapeHtml(caption)}</p>`
+      : "";
+    return `<div style="padding:12px 40px"><img src="${safeUrl}" alt="${alt}" width="580" style="display:block;width:100%;max-width:580px;height:auto" />${captionEl}</div>`;
+  }
+
+  if (b.variant === 3) {
+    return `<div style="padding:12px 40px"><div style="border:1px solid #e5ded3;padding:6px"><img src="${safeUrl}" alt="${alt}" width="580" style="display:block;width:100%;max-width:568px;height:auto" /></div></div>`;
+  }
+
+  // variant 0 (default): full-width
+  return `<div style="padding:12px 40px"><img src="${safeUrl}" alt="${alt}" width="580" style="display:block;width:100%;max-width:580px;height:auto" /></div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
@@ -277,7 +313,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   greeting,
   text,
   heading,
-  image: stub,
+  image,
   story: stub,
   spotlight: stub,
   stats: stub,

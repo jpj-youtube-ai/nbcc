@@ -9,7 +9,7 @@ import {
   supporterDisplayName,
   type SupporterSourceRow,
 } from "../../src/db/donations-model";
-import { renderSupportersPage } from "../../src/routes/site";
+import { renderSupportersPage, renderSupporterTiers } from "../../src/routes/site";
 
 // TASK-071 (REQ-035): the /supporters page now renders the real, donation-sourced donor
 // list. The tiering / name / anonymous-exclusion logic is pure (donations-model) and the
@@ -116,5 +116,17 @@ describe("renderSupportersPage — injects real donors into the supporters.html 
 
   it("keeps the intro above the tiers", () => {
     expect(norm(doc.querySelector("main .supporters-intro .eyebrow")?.textContent)).toBe("Supporters");
+  });
+});
+
+describe("renderSupporterTiers — escapes a single quote in a donor name (G1 item 4)", () => {
+  it("never leaves a raw ' in the rendered HTML attribute/text context", () => {
+    const html = renderSupporterTiers({
+      bronze: [{ name: "Sam's Bakes", kind: "organisation" }],
+      silver: [],
+      gold: [],
+    });
+    expect(html).toContain("Sam&#39;s Bakes");
+    expect(html).not.toContain("Sam's Bakes");
   });
 });

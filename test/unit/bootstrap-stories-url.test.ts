@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseStoriesUrl } from "../../scripts/bootstrap-stories-db.mjs";
+import { parseStoriesUrl, quoteLiteral, quoteIdent } from "../../scripts/bootstrap-stories-db.mjs";
 
 // TASK-B2 (REQ intent: "Persist My Story submissions to a dedicated stories
 // database..."): scripts/bootstrap-stories-db.mjs provisions the `stories`
@@ -56,5 +56,29 @@ describe("parseStoriesUrl", () => {
 
   it("throws a clear error when the URL has no credentials", () => {
     expect(() => parseStoriesUrl("postgres://localhost:5432/stories")).toThrow(/user|password/i);
+  });
+});
+
+// G1 item 5: quoteLiteral/quoteIdent build raw SQL for CREATE/ALTER ROLE and CREATE DATABASE
+// (positions that cannot take a bound parameter). These assert their escaping doubles an
+// embedded quote correctly, so a password or role name containing one can never break out of
+// the literal/identifier and inject SQL.
+describe("quoteLiteral", () => {
+  it("doubles an embedded single quote and wraps in single quotes", () => {
+    expect(quoteLiteral("a'b")).toBe("'a''b'");
+  });
+
+  it("wraps a value with no special characters unchanged", () => {
+    expect(quoteLiteral("s3cret")).toBe("'s3cret'");
+  });
+});
+
+describe("quoteIdent", () => {
+  it("doubles an embedded double quote and wraps in double quotes", () => {
+    expect(quoteIdent('a"b')).toBe('"a""b"');
+  });
+
+  it("wraps an identifier with no special characters unchanged", () => {
+    expect(quoteIdent("stories_app")).toBe('"stories_app"');
   });
 });

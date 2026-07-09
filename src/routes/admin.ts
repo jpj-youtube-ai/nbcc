@@ -712,11 +712,14 @@ const STORY_STATUSES = ["new", "reviewed", "used", "withdrawn"] as const;
 
 // PATCH body: status / admin_tags / admin_notes, all optional but at least one required (mirrors
 // adminPatchSchema's "no fields to update" refine).
+// adminNotes/adminTags are capped (2000 chars / 50 tags of up to 100 chars each) so a
+// staff PATCH can never smuggle an unbounded payload into the stories DB — mirrors the
+// story submission schema's own length caps (src/stories/schema.ts).
 const storyPatchSchema = z
   .object({
     status: z.enum(STORY_STATUSES).optional(),
-    adminTags: z.array(z.string()).optional(),
-    adminNotes: z.string().optional(),
+    adminTags: z.array(z.string().max(100)).max(50).optional(),
+    adminNotes: z.string().max(2000).optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });

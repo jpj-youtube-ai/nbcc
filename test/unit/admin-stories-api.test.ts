@@ -176,6 +176,33 @@ describe("PATCH /api/admin/stories/:id (editor+ gate)", () => {
     expect(updateStoryMock).not.toHaveBeenCalled();
   });
 
+  it("rejects adminNotes over the 2000 char cap (400)", async () => {
+    const res = await runPatch({ role: "editor", body: { adminNotes: "x".repeat(2001) } });
+    expect(res.statusCode).toBe(400);
+    expect(updateStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts adminNotes at exactly the 2000 char cap", async () => {
+    updateStoryMock.mockResolvedValueOnce({ id: 7, admin_notes: "x".repeat(2000) });
+    const res = await runPatch({ role: "editor", body: { adminNotes: "x".repeat(2000) } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("rejects more than 50 adminTags (400)", async () => {
+    const res = await runPatch({
+      role: "editor",
+      body: { adminTags: Array.from({ length: 51 }, (_, i) => `tag${i}`) },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(updateStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a single adminTag over the 100 char cap (400)", async () => {
+    const res = await runPatch({ role: "editor", body: { adminTags: ["x".repeat(101)] } });
+    expect(res.statusCode).toBe(400);
+    expect(updateStoryMock).not.toHaveBeenCalled();
+  });
+
   it("404s when the story does not exist", async () => {
     updateStoryMock.mockResolvedValueOnce(null);
     const res = await runPatch({ role: "editor", body: { status: "reviewed" } });

@@ -54,13 +54,16 @@ export function parseStoriesUrl(rawUrl) {
 // Quote a Postgres identifier (role/database name) safely — doubles embedded quotes.
 // Used instead of a bound parameter because CREATE ROLE/DATABASE don't accept them for
 // identifiers; the identifier here is always our own STORIES_DATABASE_URL, not user input.
-function quoteIdent(identifier) {
+// Exported (not just used internally) so its escaping is unit-tested directly
+// (test/unit/bootstrap-stories-url.test.ts) without needing a live DB connection.
+export function quoteIdent(identifier) {
   return `"${identifier.replace(/"/g, '""')}"`;
 }
 
 // Quote a Postgres string literal (e.g. a password in ALTER/CREATE ROLE ... PASSWORD '...'),
-// which also can't be a bound parameter in that DDL position.
-function quoteLiteral(value) {
+// which also can't be a bound parameter in that DDL position. Exported for the same
+// direct-unit-test reason as quoteIdent above.
+export function quoteLiteral(value) {
   return `'${value.replace(/'/g, "''")}'`;
 }
 

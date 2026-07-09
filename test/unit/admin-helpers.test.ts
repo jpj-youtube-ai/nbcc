@@ -23,6 +23,11 @@ describe("admin helpers (TASK-115)", () => {
     expect(H.escapeHtml(null)).toBe("");
   });
 
+  it("escapeHtml neutralises a single quote (G1 item 4)", () => {
+    expect(H.escapeHtml("O'Brien")).toBe("O&#39;Brien");
+    expect(H.escapeHtml("'; DROP TABLE stories; --")).not.toContain("'");
+  });
+
   it("roleCan ranks viewer < editor < admin", () => {
     expect(H.roleCan("admin", "editor")).toBe(true);
     expect(H.roleCan("editor", "editor")).toBe(true);

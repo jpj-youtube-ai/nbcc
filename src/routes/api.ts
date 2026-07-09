@@ -605,7 +605,35 @@ export async function postMyStory(req: Request, res: Response): Promise<Response
   return res.status(200).type("html").send(myStoryThankYouHtml());
 }
 
-// The global express.json() (src/app.ts) already parses application/json for every
-// route; only application/x-www-form-urlencoded needs adding here, mirroring the
-// gift-aid route above.
-apiRouter.post("/api/my-story", express.urlencoded({ extended: false }), postMyStory);
+// Body-size guard for this route only. The global express.json() (src/app.ts,
+// mounted BEFORE apiRouter) already parses application/json for every route at ITS
+// default 100kb limit, and body-parser skips re-parsing a body it already parsed
+// (req._body) — so a per-route express.json({ limit }) mounted here would never
+// actually run for the JSON path and its limit would be a no-op. To give this public,
+// unauthenticated endpoint a REAL tighter cap without touching the global parser (and
+// so without affecting any other route), reject an oversized JSON request by its
+// Content-Length header before it reaches the handler. 32kb is comfortably above the
+// largest legitimate JSON payload (storyText caps at 5000 chars, see
+// src/stories/schema.ts) while shutting a deliberately oversized POST down early.
+const MY_STORY_JSON_LIMIT_BYTES = 32 * 1024;
+
+export function rejectOversizedMyStoryJson(req: Request, res: Response, next: () => void): void {
+  if (req.is("application/json")) {
+    const len = Number(req.headers["content-length"]);
+    if (Number.isFinite(len) && len > MY_STORY_JSON_LIMIT_BYTES) {
+      res.status(413).json({ error: "Your story submission is too large" });
+      return;
+    }
+  }
+  next();
+}
+
+// The form-encoded path (no-JS fallback) has NO global parser (only the global
+// express.json() exists in src/app.ts), so a real, enforced per-route limit of 16kb
+// is added here — comfortably above the largest legitimate form payload.
+apiRouter.post(
+  "/api/my-story",
+  rejectOversizedMyStoryJson,
+  express.urlencoded({ extended: false, limit: "16kb" }),
+  postMyStory,
+);

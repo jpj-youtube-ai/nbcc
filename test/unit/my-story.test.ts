@@ -172,6 +172,53 @@ describe("my story form structure (REQ-NNN)", () => {
     expect(norm(recipientHelp?.textContent).toLowerCase()).toContain("never published");
   });
 
+  it("has a visually hidden, polite live region for step announcements (accessibility)", () => {
+    const announce = doc.getElementById("storyStepAnnounce");
+    expect(announce).not.toBeNull();
+    expect(announce?.getAttribute("aria-live")).toBe("polite");
+    expect(announce?.classList.contains("sr-only")).toBe(true);
+  });
+
+  it("links every field or radio group with real helper text via aria-describedby (accessibility)", () => {
+    const pairs: Array<[string, string]> = [
+      ["storyText", "storyTextHelp"],
+      ["email", "emailHelp"],
+      ["phone", "phoneHelp"],
+      ["gender", "genderHelp"],
+      ["confirmOver16", "confirmOver16Help"],
+    ];
+    for (const [name, helpId] of pairs) {
+      const control = form?.querySelector(`[name="${name}"]`);
+      expect(control?.getAttribute("aria-describedby"), `${name} aria-describedby`).toBe(helpId);
+      const help = doc.getElementById(helpId);
+      expect(help, `#${helpId} exists`).not.toBeNull();
+      expect(norm(help?.textContent).length).toBeGreaterThan(0);
+    }
+
+    // recipientType is a radio group: every radio in the group points at the same help id.
+    const recipientRadios = [...(form?.querySelectorAll('[name="recipientType"]') ?? [])];
+    expect(recipientRadios.length).toBeGreaterThan(0);
+    recipientRadios.forEach((r) => expect(r.getAttribute("aria-describedby")).toBe("recipientTypeHelp"));
+    expect(doc.getElementById("recipientTypeHelp")).not.toBeNull();
+
+    // the two consent cards each describe their own radio.
+    const scopePublic = doc.getElementById("scopePublic");
+    const scopeInternal = doc.getElementById("scopeInternal");
+    expect(scopePublic?.getAttribute("aria-describedby")).toBe("scopePublicHelp");
+    expect(scopeInternal?.getAttribute("aria-describedby")).toBe("scopeInternalHelp");
+    expect(doc.getElementById("scopePublicHelp")).not.toBeNull();
+    expect(doc.getElementById("scopeInternalHelp")).not.toBeNull();
+  });
+
+  it("resolves every aria-describedby id in the form to a real element in the document (accessibility)", () => {
+    const described = [...(form?.querySelectorAll("[aria-describedby]") ?? [])] as HTMLElement[];
+    expect(described.length).toBeGreaterThan(0);
+    described.forEach((el) => {
+      const ids = (el.getAttribute("aria-describedby") ?? "").split(/\s+/).filter(Boolean);
+      ids.forEach((id) => expect(doc.getElementById(id), `#${id} referenced by aria-describedby`).not.toBeNull());
+    });
+  });
+
   it("separates the public-use edit clause from the end of the card copy (G2 item 12)", () => {
     const scopePublicLabel = doc.querySelector('label[for="scopePublic"]');
     expect(scopePublicLabel).not.toBeNull();
@@ -265,6 +312,19 @@ describe("my story stepping + validation (jsdom)", () => {
     clickNextOnStep("2");
     expect(visibleStep()).toBe("3");
   });
+  it("announces the current step and its title in the sr-only live region as steps change (accessibility)", () => {
+    const announce = document.getElementById("storyStepAnnounce");
+    // The silent initial load does NOT announce (the live region fires only on real,
+    // user-triggered step changes, so a screen reader is not talked over on page load).
+    expect(announce?.textContent).toBe("");
+    check("submitterRole");
+    setVal("storyText", "A lovely moment.");
+    clickNext();
+    expect(announce?.textContent).toBe("Step 2 of 3, A little about you");
+    clickNextOnStep("2");
+    expect(announce?.textContent).toBe("Step 3 of 3, How we can use it");
+  });
+
   it("reveals the public identifier opt-ins only when 'public' is chosen, in step 3", () => {
     check("submitterRole");
     setVal("storyText", "A lovely moment.");

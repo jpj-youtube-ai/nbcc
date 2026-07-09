@@ -836,3 +836,171 @@ describe("newsletter blocks — events variants", () => {
     expect(result).toBe("");
   });
 });
+
+describe("newsletter blocks — donationCta variants", () => {
+  const mk = (variant: number, data: Record<string, unknown>) =>
+    renderNewsletter({ blocks: [{ type: "donationCta", variant, data }] }, ctx);
+
+  it("variant 0: image row + heading + button, image src present when imageUrl given", () => {
+    const html = mk(0, {
+      imageUrl: "https://example.org/donate.jpg",
+      heading: "Make a donation today",
+      label: "Donate now",
+      href: "https://nbcc.scot/donate",
+    });
+    expect(html).toContain("Make a donation today");
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).toContain('src="https://example.org/donate.jpg"');
+  });
+
+  it("variant 0: degrades to no image markup when imageUrl is absent, heading/button still render", () => {
+    const html = mk(0, {
+      heading: "Make a donation today",
+      label: "Donate now",
+      href: "https://nbcc.scot/donate",
+    });
+    expect(html).toContain("Make a donation today");
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).not.toContain("<img");
+  });
+
+  it("variant 1: tinted TAN_SOFT band + heading + button", () => {
+    const html = mk(1, {
+      heading: "Make a donation today",
+      label: "Donate now",
+      href: "https://nbcc.scot/donate",
+    });
+    expect(html).toContain("Make a donation today");
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).toContain("#F3E4DD"); // TAN_SOFT
+  });
+
+  it("variant 2: split layout — heading and button in a two-cell table", () => {
+    const html = mk(2, {
+      heading: "Make a donation today",
+      label: "Donate now",
+      href: "https://nbcc.scot/donate",
+    });
+    expect(html).toContain("Make a donation today");
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).toContain("<table");
+  });
+
+  it("variant 3: centered heading + button", () => {
+    const html = mk(3, {
+      heading: "Make a donation today",
+      label: "Donate now",
+      href: "https://nbcc.scot/donate",
+    });
+    expect(html).toContain("Make a donation today");
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).toContain("text-align:center");
+  });
+
+  it("escapes the heading string", () => {
+    const html = mk(0, {
+      heading: "<script>evil()</script>",
+      label: "Donate now",
+      href: "https://nbcc.scot/donate",
+    });
+    expect(html).toContain("&lt;script&gt;evil()&lt;/script&gt;");
+    expect(html).not.toContain("<script>evil()</script>");
+  });
+});
+
+describe("newsletter blocks — all block types integration", () => {
+  it("renders one block of every palette type + rawHtml with clean output (no leaked 'undefined' or '[object Object]')", () => {
+    const html = renderNewsletter(
+      {
+        blocks: [
+          { type: "masthead", variant: 0, data: { issueTitle: "July Newsletter" } },
+          { type: "greeting", variant: 0, data: {} },
+          { type: "text", variant: 0, data: { text: "Some body copy." } },
+          { type: "heading", variant: 0, data: { title: "Section Heading" } },
+          {
+            type: "image",
+            variant: 0,
+            data: { url: "https://example.org/img.jpg", alt: "Alt text" },
+          },
+          {
+            type: "story",
+            variant: 0,
+            data: {
+              imageUrl: "https://example.org/story.jpg",
+              title: "A Story",
+              body: "Story body.",
+            },
+          },
+          {
+            type: "spotlight",
+            variant: 0,
+            data: {
+              photoUrl: "https://example.org/person.jpg",
+              name: "Jane Doe",
+              quote: "Great quote.",
+              role: "Volunteer",
+            },
+          },
+          {
+            type: "stats",
+            variant: 0,
+            data: { items: [{ number: "500+", label: "Meals served" }] },
+          },
+          {
+            type: "waysToHelp",
+            variant: 0,
+            data: {
+              items: [
+                {
+                  icon: "🎁",
+                  title: "Donate",
+                  body: "Help out.",
+                  label: "Give now",
+                  href: "https://nbcc.scot/donate",
+                },
+              ],
+            },
+          },
+          {
+            type: "events",
+            variant: 0,
+            data: {
+              items: [
+                {
+                  day: "12",
+                  month: "Dec",
+                  name: "Carols",
+                  location: "Church Street",
+                  label: "Register",
+                  href: "https://nbcc.scot/events",
+                },
+              ],
+            },
+          },
+          {
+            type: "donationCta",
+            variant: 0,
+            data: {
+              imageUrl: "https://example.org/donate.jpg",
+              heading: "Make a donation today",
+              label: "Donate now",
+              href: "https://nbcc.scot/donate",
+            },
+          },
+          {
+            type: "button",
+            variant: 0,
+            data: { label: "Learn more", href: "https://nbcc.scot/about" },
+          },
+          { type: "divider", variant: 0, data: {} },
+          { type: "rawHtml", variant: 0, data: { html: "<p>Legacy content</p>" } },
+        ],
+      },
+      ctx,
+    );
+    expect(html).toContain("<!doctype html>");
+    expect(html).toContain("SC047995");
+    expect(html).not.toContain("undefined");
+    expect(html).not.toContain("[object Object]");
+  });
+});

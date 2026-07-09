@@ -706,6 +706,62 @@ function events(b: Block): string {
   return `<div style="padding:12px 40px">${items.map(eventRow).join("")}</div>`;
 }
 
+// donationCta — the closing "Make a donation today" banner. Always renders the button via
+// brandButton(label, href, "primary") since href is expected present (no href degradation, per
+// the task brief — unlike button/story/waysToHelp/events, this block's whole purpose is the ask).
+//   0: image row (imageUrl) + heading + button
+//   1: tinted band (background:${TAN_SOFT}) + heading + button
+//   2: split — heading left, button right (two-cell table)
+//   3: centered — heading + button, both centered
+//
+// data contract: imageUrl (string, optional — read only by variant 0), heading (string, optional
+// — falls back to ""), label (string, optional — falls back to ""), href (string, optional —
+// falls back to ""). Degrades to no image markup when imageUrl is absent (variant 0 only; the
+// other variants never show one).
+function donationCtaImage(imageUrl: string): string {
+  if (!imageUrl) return "";
+  return `<img src="${escapeHtml(imageUrl)}" alt="" width="580" style="display:block;width:100%;max-width:580px;height:auto;margin:0 0 12px" />`;
+}
+
+function donationCta(b: Block): string {
+  const imageUrl = str(b.data, "imageUrl");
+  const heading = escapeHtml(str(b.data, "heading"));
+  const label = str(b.data, "label");
+  const href = str(b.data, "href");
+
+  if (b.variant === 1) {
+    // tinted band
+    return `<div style="padding:12px 40px"><div style="background:${TAN_SOFT};padding:24px;text-align:center">
+  <h2 style="font-family:${HEAD};color:${MAROON};font-size:22px;font-weight:800;margin:0 0 12px">${heading}</h2>
+  ${brandButton(label, href, "primary")}
+</div></div>`;
+  }
+
+  if (b.variant === 2) {
+    // split — heading left, button right
+    return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+  <td style="vertical-align:middle">
+    <h2 style="font-family:${HEAD};color:${MAROON};font-size:20px;font-weight:800;margin:0">${heading}</h2>
+  </td>
+  <td style="vertical-align:middle;text-align:right">${brandButton(label, href, "primary")}</td>
+</tr></table></div>`;
+  }
+
+  if (b.variant === 3) {
+    // centered
+    return `<div style="padding:12px 40px;text-align:center">
+  <h2 style="font-family:${HEAD};color:${MAROON};font-size:22px;font-weight:800;margin:0 0 12px">${heading}</h2>
+  ${brandButton(label, href, "primary")}
+</div>`;
+  }
+
+  // variant 0 (default): image row + heading + button
+  return `<div style="padding:12px 40px;text-align:center">${donationCtaImage(imageUrl)}
+  <h2 style="font-family:${HEAD};color:${MAROON};font-size:22px;font-weight:800;margin:0 0 12px">${heading}</h2>
+  ${brandButton(label, href, "primary")}
+</div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
@@ -720,7 +776,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   stats,
   waysToHelp,
   events,
-  donationCta: stub,
+  donationCta,
   button,
   divider,
 };

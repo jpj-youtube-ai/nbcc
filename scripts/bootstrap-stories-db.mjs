@@ -101,6 +101,12 @@ export async function bootstrapStoriesDb({ masterUrl, storiesUrl, log = console.
       );
     }
 
+    // Make the connecting (master) role a member of stories_app. On RDS the master user is
+    // `rds_superuser`, NOT a true superuser, so it may only CREATE DATABASE ... OWNER <role>
+    // when it is a member of that role — otherwise Postgres raises "must be member of role
+    // stories_app". Idempotent: granting an already-held membership is a harmless no-op.
+    await client.query(`GRANT ${quoteIdent(user)} TO CURRENT_USER`);
+
     // --- Database: idempotent create ---
     const { rowCount: dbExists } = await client.query(
       "SELECT 1 FROM pg_database WHERE datname = $1",

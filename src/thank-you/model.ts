@@ -18,6 +18,9 @@ export const thankYouInputSchema = z
     giftAided: z.boolean(),
     personalMessage: z.string().trim().min(1).nullable(),
     signedByName: z.string().trim().min(1),
+    // The signatory's title shown on the letter (e.g. "Head Elf (Trustee), …"). Optional/nullable:
+    // a presentation detail stored (TASK-165) so a re-opened letter keeps its role.
+    signedByRole: z.string().trim().min(1).nullable().optional(),
     sentBy: z.string().trim().min(1), // the logged-in admin (audit)
   })
   .refine((v) => (v.giftType === "money" ? v.giftAmountPence != null : v.giftInKind != null), {

@@ -35,7 +35,8 @@ import { declarationFieldsSchema } from "../declarations/fields";
 import { getGasdsPoolReport } from "../gasds/pool";
 import { listThankYouEligible, recordThankYouSent, listThankYouSent, deleteThankYouSent } from "../db/thank-you";
 import { DEFAULT_THANK_YOU_THRESHOLD_PENCE, thankYouInputSchema, giftSummary } from "../thank-you/model";
-import { buildThankYouEmailHtml, thankYouSubject } from "../thank-you/letter";
+import { buildThankYouEmailHtml, buildThankYouEmailText, thankYouSubject } from "../thank-you/letter";
+import { signThankYouLetterToken } from "../thank-you/letter-token";
 import {
   listNewsletters,
   getNewsletter,
@@ -764,8 +765,8 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
     return res.status(400).json({ error: "Invalid thank-you", details: parsed.error.flatten() });
   }
   const input = parsed.data;
-  const signedByRole =
-    typeof body.signedByRole === "string" && body.signedByRole.trim() ? body.signedByRole.trim() : null;
+  // signedByRole is stored via the schema (input.signedByRole); letterDate is presentation-only
+  // (defaults to today) and not stored — the print page uses the row's sent_at instead.
   const letterDate =
     typeof body.letterDate === "string" && body.letterDate.trim()
       ? body.letterDate.trim()
@@ -779,7 +780,10 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
   try {
     const id = await recordThankYouSent(input);
     try {
-      const html = buildThankYouEmailHtml({
+      // A tokenised link to the public print-your-letter page (the donor prints/saves a PDF there —
+      // a link, not an attachment, so deliverability stays clean).
+      const printUrl = `${config.PORTAL_BASE_URL}/thank-you/letter/${signThankYouLetterToken(id, config.ADMIN_SESSION_SECRET)}`;
+      const view = {
         thankYouName: input.thankYouName,
         addressedTo: input.addressedTo,
         giftType: input.giftType,
@@ -788,16 +792,18 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
         giftAided: input.giftAided,
         personalMessage: input.personalMessage,
         signedByName: input.signedByName,
-        signedByRole,
+        signedByRole: input.signedByRole ?? null,
         letterDate,
-      });
+        printUrl,
+      };
       await sendThankYou({
         email: input.recipientEmail,
         cc,
         from: config.GIVING_FROM_EMAIL,
         replyTo: config.GIVING_FROM_EMAIL,
         subject: thankYouSubject(input),
-        html,
+        html: buildThankYouEmailHtml(view),
+        text: buildThankYouEmailText(view),
       });
     } catch (err) {
       // Best-effort: the row is recorded and the donor is marked thanked regardless of the send.
@@ -820,7 +826,13 @@ export async function getAdminThankYouSent(req: Request, res: Response): Promise
   try {
     const raw = pageArgs(req);
     const { limit, offset } = clampPage(raw.limit, raw.offset);
-    return res.status(200).json(await listThankYouSent(limit, offset));
+    const { results, total } = await listThankYouSent(limit, offset);
+    // Attach each letter's public print URL (TASK-165) so staff can re-open/print any sent letter.
+    const withPrint = results.map((r) => ({
+      ...r,
+      printUrl: `${config.PORTAL_BASE_URL}/thank-you/letter/${signThankYouLetterToken(r.id, config.ADMIN_SESSION_SECRET)}`,
+    }));
+    return res.status(200).json({ results: withPrint, total });
   } catch (err) {
     console.error("admin thank-you sent list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

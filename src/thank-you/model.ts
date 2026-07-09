@@ -48,3 +48,27 @@ export function giftSummary(
   }
   return `Gift in kind: ${input.giftInKind ?? ""}`.trim();
 }
+
+// Default eligibility threshold: a single gift of £1,000 (pence). Configurable in TASK-168.
+export const DEFAULT_THANK_YOU_THRESHOLD_PENCE = 100_000;
+
+// Whether a donor can be emailed a thank-you right now (respecting consent).
+export type SendState = "ready" | "no_email" | "opted_out";
+
+export function deriveSendState(donor: { email: string | null; emailConsent: boolean }): SendState {
+  if (!donor.email) return "no_email";
+  if (!donor.emailConsent) return "opted_out";
+  return "ready";
+}
+
+// The name to greet: a company's business name if it has one, otherwise the full name.
+export function recipientName(donor: {
+  donorType: string;
+  fullName: string;
+  businessName: string | null;
+}): string {
+  if (donor.donorType === "company" && donor.businessName && donor.businessName.trim()) {
+    return donor.businessName;
+  }
+  return donor.fullName;
+}

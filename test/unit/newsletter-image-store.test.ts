@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateUpload, MAX_IMAGE_BYTES } from "../../src/db/newsletter-images";
+import { validateUpload, MAX_IMAGE_BYTES } from "../../src/newsletter/image-validation";
 
 describe("validateUpload", () => {
   it("accepts an allowed mime within the size cap", () => {

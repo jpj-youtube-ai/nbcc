@@ -11,10 +11,10 @@ export async function insertStory(record: StoryRecord): Promise<{ id: number }> 
     `INSERT INTO stories (
        submitter_role, story_text, short_quote, use_scope,
        consent_share_first_name, consent_share_town, third_party_consent,
-       contact_for_more, photo_interest,
+       contact_for_more,
        submitter_first_name, submitter_email, submitter_phone, submitter_town,
        age_band, gender, recipient_type, heard_about, confirmed_over_16
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
      RETURNING id`,
     [
       record.submitter_role,
@@ -25,7 +25,6 @@ export async function insertStory(record: StoryRecord): Promise<{ id: number }> 
       record.consent_share_town,
       record.third_party_consent,
       record.contact_for_more,
-      record.photo_interest,
       record.submitter_first_name,
       record.submitter_email,
       record.submitter_phone,
@@ -63,7 +62,6 @@ export interface StoryListRow {
 export interface StoryRow extends StoryListRow {
   story_text: string;
   contact_for_more: boolean;
-  photo_interest: boolean;
   submitter_first_name: string | null;
   submitter_email: string | null;
   submitter_phone: string | null;

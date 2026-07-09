@@ -1409,21 +1409,6 @@
       });
     });
 
-    // ---- best-effort delivery (production). Preview/local has no working backend, so
-    // this only runs in a real browser with fetch; mirrors initContactForm's deliver(). ----
-    function deliver(payload) {
-      if (typeof win.fetch !== "function") return;
-      win
-        .fetch("/api/my-story", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        .catch(function () {
-          /* best effort only; the success message already shows */
-        });
-    }
-
     function fieldValue(name) {
       var el = form.querySelector('[name="' + name + '"]');
       return el ? (el.value || "").trim() : "";
@@ -1433,15 +1418,70 @@
       return !!(el && el.checked);
     }
 
+    // ---- FIX 5: contactForMore nudge — a gentle, non blocking note when the visitor
+    // asks to be contacted but left both email and phone (step 2) blank, so the
+    // request cannot actually be actioned. Client side only; never blocks submit. ----
+    var contactForMoreBox = form.querySelector('[name="contactForMore"]');
+    var contactNudge = doc.getElementById("contactForMoreNudge");
+    function updateContactNudge() {
+      if (!contactNudge) return;
+      var wantsContact = fieldChecked("contactForMore");
+      var hasWay = !!(fieldValue("email") || fieldValue("phone"));
+      contactNudge.hidden = !(wantsContact && !hasWay);
+    }
+    if (contactForMoreBox) contactForMoreBox.addEventListener("change", updateContactNudge);
+    ["email", "phone"].forEach(function (n) {
+      var el = form.querySelector('[name="' + n + '"]');
+      if (el) el.addEventListener("input", updateContactNudge);
+    });
+
+    var thirdPartyConsentErr = doc.getElementById("thirdPartyConsentErr");
+    var submitBtn = form.querySelector("[data-story-submit]");
+
+    function setStatus(text, kind) {
+      if (!status) return;
+      status.textContent = text;
+      status.className = kind ? "form-status " + kind : "form-status";
+    }
+
+    // ---- FIX 1 (CRITICAL): the success message must reflect a REAL save. The old
+    // deliver() was fire and forget — it showed success and reset the form BEFORE the
+    // POST resolved, so a server side rejection (e.g. the 5000 char cap, or any other
+    // Zod failure) still told the visitor their story had saved. This awaits the real
+    // response and only then shows success/resets, or shows a kind error and leaves the
+    // form untouched so nothing already typed is lost. ----
     form.addEventListener("submit", function (e) {
-      e.preventDefault();
-
       // Honeypot: a filled hidden field means a bot filled every input. Silently
-      // drop, no error, no submit, and no tell to the bot that anything happened.
-      if (fieldValue("website")) return;
+      // drop, no error, no submit, and no tell to the bot that anything happened. This
+      // still prevents the native/no-JS submission, matching prior behaviour.
+      if (fieldValue("website")) { e.preventDefault(); return; }
 
-      if (!validate(stepEl(3))) { showErr(3); return; }
+      // FIX 4: a professional partner who has not ticked third party permission gets a
+      // specific, dedicated message next to the checkbox, not just the generic step
+      // error — the server side Zod refine (src/stories/schema.ts) remains the backstop.
+      // Computed up front (validate() already blocks on this same condition as part of
+      // its generic required-field pass) so the specific message shows regardless of
+      // which check is what stops the submit.
+      var checkedRole = form.querySelector('[name="submitterRole"]:checked');
+      var professionalConsent = form.querySelector('[name="thirdPartyConsent"]');
+      var professionalGateFailed = !!(
+        checkedRole && checkedRole.value === "professional_partner" && professionalConsent && !professionalConsent.checked
+      );
+      if (thirdPartyConsentErr) thirdPartyConsentErr.classList.toggle("show", professionalGateFailed);
+
+      if (!validate(stepEl(3))) {
+        e.preventDefault();
+        showErr(3);
+        return;
+      }
       hideErr(3);
+
+      // No fetch available (very old browser, or fetch stripped in a test environment):
+      // let the native form submission proceed to the real /api/my-story POST + HTML
+      // response instead of faking a success message.
+      if (typeof win.fetch !== "function") return;
+
+      e.preventDefault();
 
       var payload = {
         submitterRole: fieldValue("submitterRole"),
@@ -1452,7 +1492,6 @@
         shareTown: fieldChecked("shareTown"),
         thirdPartyConsent: fieldChecked("thirdPartyConsent"),
         contactForMore: fieldChecked("contactForMore"),
-        photoInterest: fieldChecked("photoInterest"),
         firstName: fieldValue("firstName"),
         email: fieldValue("email"),
         phone: fieldValue("phone"),
@@ -1464,17 +1503,43 @@
         confirmOver16: fieldChecked("confirmOver16"),
       };
 
-      // Preview behaviour: show the success message (the real endpoint is Task B).
-      if (status) {
-        status.textContent = "Thank you, your story becomes part of ours.";
-        status.className = "form-status is-success";
-      }
+      if (submitBtn) submitBtn.disabled = true;
+      setStatus("Sharing your story...", "is-pending");
 
-      deliver(payload);
-      form.reset();
-      if (revealPublic) revealPublic.hidden = true;
-      if (revealProfessional) revealProfessional.hidden = true;
-      go(1, -1, true);
+      win
+        .fetch("/api/my-story", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        .then(function (res) {
+          if (res.ok) {
+            setStatus("Thank you, your story becomes part of ours.", "is-success");
+            form.reset();
+            if (revealPublic) revealPublic.hidden = true;
+            if (revealProfessional) revealProfessional.hidden = true;
+            if (submitBtn) submitBtn.disabled = false;
+            go(1, -1, true);
+            return;
+          }
+          if (submitBtn) submitBtn.disabled = false;
+          if (res.status >= 400 && res.status < 500) {
+            return res
+              .json()
+              .catch(function () { return {}; })
+              .then(function (body) {
+                setStatus(
+                  (body && body.error) || "Please check your story and try again.",
+                  "is-error",
+                );
+              });
+          }
+          setStatus("Sorry, we could not save your story just now. Please try again.", "is-error");
+        })
+        .catch(function () {
+          if (submitBtn) submitBtn.disabled = false;
+          setStatus("Sorry, we could not save your story just now. Please try again.", "is-error");
+        });
     });
 
     go(1, 0, true); // initial state, no scroll/focus

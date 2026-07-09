@@ -38,7 +38,7 @@ const storyRow = {
   consent_share_town: false, third_party_consent: true, status: "new", short_quote: "It helped us.",
 };
 const storyDetail = {
-  ...storyRow, story_text: "The full story text.", contact_for_more: false, photo_interest: false,
+  ...storyRow, story_text: "The full story text.", contact_for_more: false,
   submitter_first_name: "Ada", submitter_email: "ada@x.co", submitter_phone: null,
   submitter_town: "Ayr", age_band: "25_44", gender: "female", recipient_type: "child",
   heard_about: "Facebook", confirmed_over_16: true, admin_tags: ["funding"], admin_notes: "note",

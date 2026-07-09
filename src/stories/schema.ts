@@ -56,7 +56,6 @@ const baseStorySubmissionSchema = z.object({
   shareTown: checkboxField.default(false),
   thirdPartyConsent: checkboxField.default(false),
   contactForMore: checkboxField.default(false),
-  photoInterest: checkboxField.default(false),
   firstName: optionalText(200),
   // An absent email is fine (optional); a PRESENT one must be well-formed.
   email: z.preprocess((v) => {
@@ -111,7 +110,6 @@ export interface StoryRecord {
   consent_share_town: boolean;
   third_party_consent: boolean;
   contact_for_more: boolean;
-  photo_interest: boolean;
   submitter_first_name: string | null;
   submitter_email: string | null;
   submitter_phone: string | null;
@@ -135,7 +133,6 @@ export function buildStoryRecord(input: StorySubmission): StoryRecord {
     consent_share_town: input.shareTown,
     third_party_consent: input.thirdPartyConsent,
     contact_for_more: input.contactForMore,
-    photo_interest: input.photoInterest,
     submitter_first_name: input.firstName ?? null,
     submitter_email: input.email ?? null,
     submitter_phone: input.phone ?? null,

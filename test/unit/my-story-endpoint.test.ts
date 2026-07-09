@@ -89,6 +89,7 @@ describe("POST /api/my-story — valid JSON submission", () => {
 describe("POST /api/my-story — invalid bodies", () => {
   it.each([
     ["missing storyText", { ...VALID, storyText: "" }],
+    ["whitespace only storyText", { ...VALID, storyText: "   \n\t  " }],
     ["confirmOver16 false", { ...VALID, confirmOver16: false }],
     ["missing confirmOver16", { submitterRole: "supported", storyText: "hi", useScope: "public" }],
     ["bad useScope enum", { ...VALID, useScope: "everywhere" }],

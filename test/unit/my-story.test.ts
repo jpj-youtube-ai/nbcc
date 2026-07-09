@@ -52,32 +52,93 @@ describe("my story form structure (REQ-NNN)", () => {
     expect(doc.querySelector("[data-story-steps] .give-progress")).not.toBeNull();
     expect(doc.querySelector("#storyStatus")?.getAttribute("aria-live")).toBe("polite");
   });
+
+  it("orders the progress labels as Your story, A little about you, How we can use it", () => {
+    const items = [...doc.querySelectorAll("[data-story-steps] .give-progress li")];
+    expect(items).toHaveLength(3);
+    expect(norm(items[0]?.textContent)).toContain("Your story");
+    expect(norm(items[1]?.textContent)).toContain("A little about you");
+    expect(norm(items[2]?.textContent)).toContain("How we can use it");
+  });
+
   it("step 1 has the required role choice and required story textarea", () => {
-    expect(field("submitterRole")).not.toBeNull();
-    const story = field("storyText");
+    const step1 = doc.querySelector('.give-step[data-step="1"]');
+    expect(step1?.querySelector('[name="submitterRole"]')).not.toBeNull();
+    const story = step1?.querySelector('[name="storyText"]');
     expect(story?.tagName).toBe("TEXTAREA");
     expect(story?.hasAttribute("required")).toBe(true);
+    expect(step1?.querySelector('[name="shortQuote"]')).not.toBeNull();
   });
-  it("step 2 has the required use-scope choice and default-OFF identifier opt-ins", () => {
-    expect(form?.querySelector('[name="useScope"][required]')).not.toBeNull();
-    const first = field("shareFirstName") as HTMLInputElement | null;
-    const town = field("shareTown") as HTMLInputElement | null;
-    expect(first?.getAttribute("type")).toBe("checkbox");
-    expect(first?.hasAttribute("checked")).toBe(false);
-    expect(town?.hasAttribute("checked")).toBe(false);
-  });
-  it("step 3 fields are optional except the final confirm; 'how did you hear' is optional", () => {
+
+  it("step 2 is 'A little about you' and holds only the optional detail fields, none required", () => {
+    const step2 = doc.querySelector('.give-step[data-step="2"]');
+    expect(norm(step2?.querySelector(".give-step-title")?.textContent)).toBe("A little about you");
     for (const n of ["firstName", "email", "phone", "ageBand", "gender", "town", "recipientType", "heardAbout"]) {
-      expect(field(n), `#${n} present`).not.toBeNull();
-      expect(field(n)?.hasAttribute("required"), `${n} optional`).toBe(false);
+      const el = step2?.querySelector(`[name="${n}"]`);
+      expect(el, `#${n} present in step 2`).not.toBeNull();
+      expect(el?.hasAttribute("required"), `${n} optional`).toBe(false);
     }
-    expect((field("confirmOver16") as HTMLInputElement)?.hasAttribute("required")).toBe(true);
+    // No final confirm and no submit button on step 2.
+    expect(step2?.querySelector('[name="confirmOver16"]')).toBeNull();
+    expect(step2?.querySelector('button[type="submit"]')).toBeNull();
   });
+
+  it("step 3 is 'How we can use it' and holds the consent choice, reveals, contact opt in, retention notice, final confirm and submit", () => {
+    const step3 = doc.querySelector('.give-step[data-step="3"]');
+    expect(norm(step3?.querySelector(".give-step-title")?.textContent)).toBe("How we can use it");
+    expect(step3?.querySelector('[name="useScope"][required]')).not.toBeNull();
+    expect(step3?.querySelector('[name="shareFirstName"]')).not.toBeNull();
+    expect(step3?.querySelector('[name="shareTown"]')).not.toBeNull();
+    expect(step3?.querySelector('[name="thirdPartyConsent"]')).not.toBeNull();
+    expect(step3?.querySelector('[name="contactForMore"]')).not.toBeNull();
+    const confirm = step3?.querySelector('[name="confirmOver16"]') as HTMLInputElement | null;
+    expect(confirm).not.toBeNull();
+    expect(confirm?.hasAttribute("required")).toBe(true);
+    const submit = step3?.querySelector('button[type="submit"]');
+    expect(submit).not.toBeNull();
+  });
+
+  it("keeps useScope values as public and internal_only even though labels changed", () => {
+    const radios = [...(form?.querySelectorAll('[name="useScope"]') ?? [])] as HTMLInputElement[];
+    const values = radios.map((r) => r.value).sort();
+    expect(values).toEqual(["internal_only", "public"]);
+  });
+
+  it("presents useScope as two selectable consent cards with the specified copy", () => {
+    const publicCard = doc.querySelector('label[for="scopePublic"]');
+    const internalCard = doc.querySelector('label[for="scopeInternal"]');
+    expect(publicCard, "public consent card present").not.toBeNull();
+    expect(internalCard, "internal consent card present").not.toBeNull();
+    expect(publicCard?.classList.contains("consent-card")).toBe(true);
+    expect(internalCard?.classList.contains("consent-card")).toBe(true);
+
+    expect(norm(publicCard?.querySelector(".consent-card-title")?.textContent)).toBe(
+      "Yes, you can share my story publicly",
+    );
+    expect(norm(publicCard?.querySelector(".consent-card-help")?.textContent)).toBe(
+      "We may use it on our website, social media, newsletters, press and funding reports. We may share it in full or in part, and edit lightly for length or clarity while keeping your meaning.",
+    );
+
+    expect(norm(internalCard?.querySelector(".consent-card-title")?.textContent)).toBe(
+      "Please keep it private to NBCC",
+    );
+    expect(norm(internalCard?.querySelector(".consent-card-help")?.textContent)).toBe(
+      "Only the NBCC team will see it, to learn from and to support our funding bids. We will never publish it.",
+    );
+  });
+
+  it("never shows the word 'internal' in the visible consent card copy", () => {
+    const step3 = doc.querySelector('.give-step[data-step="3"]');
+    const consentFieldset = step3?.querySelector('fieldset:has([name="useScope"])') ?? step3;
+    expect(norm(consentFieldset?.textContent).toLowerCase()).not.toContain("internal");
+  });
+
   it("has a hidden honeypot field named website", () => {
     const hp = field("website") as HTMLInputElement | null;
     expect(hp).not.toBeNull();
     expect(hp?.closest("[hidden], [aria-hidden='true']") || hp?.hasAttribute("hidden")).toBeTruthy();
   });
+
   it("writes the retention notice as a permanent archive with a real withdraw/delete route (G2 item 7)", () => {
     const text = norm(form?.textContent).toLowerCase();
     expect(text).toContain("archive");
@@ -88,15 +149,18 @@ describe("my story form structure (REQ-NNN)", () => {
     expect(form?.querySelector('a[href^="mailto:"]')).not.toBeNull();
     expect(form?.querySelector('a[href="/contact"]')).not.toBeNull();
   });
+
   it("keeps the form copy dash-free (REQ-031)", () => {
     expect(norm(form?.textContent)).not.toMatch(/[–—-]/);
   });
+
   it("links to the privacy notice near the final confirm, step 3 (G2 item 8)", () => {
     const step3 = doc.querySelector('.give-step[data-step="3"]');
     const link = step3?.querySelector('a[href="/privacy"]');
     expect(link, "no visible /privacy link inside step 3").not.toBeNull();
     expect((link?.textContent ?? "").toLowerCase()).toContain("privacy");
   });
+
   it("gives purpose microcopy for gender and recipientType, never published (G2 item 11)", () => {
     const genderHelp = field("gender")?.closest(".give-field")?.querySelector(".give-field-help");
     expect(genderHelp, "no give-field-help near gender").not.toBeNull();
@@ -107,16 +171,17 @@ describe("my story form structure (REQ-NNN)", () => {
     expect(recipientHelp, "no give-field-help near recipientType").not.toBeNull();
     expect(norm(recipientHelp?.textContent).toLowerCase()).toContain("never published");
   });
-  it("separates the public-use edit clause from the end of the radio label (G2 item 12)", () => {
+
+  it("separates the public-use edit clause from the end of the card copy (G2 item 12)", () => {
     const scopePublicLabel = doc.querySelector('label[for="scopePublic"]');
     expect(scopePublicLabel).not.toBeNull();
-    // The "we may edit lightly..." clause is its own sentence/help line, not buried as the
-    // final clause inside the radio's single .give-check-text span.
-    const checkText = norm(scopePublicLabel?.querySelector(".give-check-text")?.textContent);
-    expect(checkText.toLowerCase()).not.toContain("edit lightly");
-    const editClause = doc.querySelector(".give-field-help.public-edit-note");
-    expect(editClause, "no separated edit-lightly clause").not.toBeNull();
-    expect(norm(editClause?.textContent).toLowerCase()).toContain("edit");
+    // The "we may edit lightly..." clause lives in its own helper paragraph inside the
+    // card, not buried as the final clause of the heading.
+    const title = norm(scopePublicLabel?.querySelector(".consent-card-title")?.textContent);
+    expect(title.toLowerCase()).not.toContain("edit lightly");
+    const helper = scopePublicLabel?.querySelector(".consent-card-help");
+    expect(helper, "no consent-card-help with the edit clause").not.toBeNull();
+    expect(norm(helper?.textContent).toLowerCase()).toContain("edit");
   });
 });
 
@@ -144,14 +209,29 @@ describe("my story stepping + validation (jsdom)", () => {
   };
   const check = (n: string) => { (document.querySelector(`[name="${n}"]`) as HTMLInputElement).checked = true; };
   const clickNext = () => (document.querySelector("[data-story-next]") as HTMLButtonElement)?.click();
+  const clickNextOnStep = (step: string) => {
+    const stepEl = document.querySelector(`.give-step[data-step="${step}"]`);
+    (stepEl?.querySelector("[data-story-next]") as HTMLButtonElement)?.click();
+  };
   const visibleStep = () =>
     [...document.querySelectorAll(".give-step")].find((s) => !(s as HTMLElement).hidden)?.getAttribute("data-step");
 
+  function mockFetchOnce(response: { ok: boolean; status: number; json: () => Promise<unknown> }) {
+    const fn = () => Promise.resolve(response as Response);
+    (window as unknown as { fetch: unknown }).fetch = fn;
+    return fn;
+  }
+
   beforeEach(() => {
     document.body.innerHTML = `<main>${formHtml}</main>`;
-    (window as unknown as { fetch?: unknown }).fetch = undefined;
+    // Default: a mocked successful save, so tests that submit the form (but are not
+    // themselves testing network behaviour) still observe the real post-fetch success
+    // path introduced by Fix 1, rather than the pre existing fire and forget one.
+    mockFetchOnce({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) });
     initStorySteps(document, window);
   });
+
+  const flush = () => new Promise((r) => setTimeout(r, 0));
 
   it("exports initStorySteps", () => {
     expect(typeof initStorySteps).toBe("function");
@@ -171,16 +251,25 @@ describe("my story stepping + validation (jsdom)", () => {
     const err = document.querySelector('[data-err="1"]');
     expect(err?.classList.contains("show")).toBe(true);
   });
-  it("advances to step 2 once role and story are provided", () => {
+  it("advances to step 2 (about you) once role and story are provided", () => {
     check("submitterRole"); // first radio
     setVal("storyText", "The Red Bag brought my daughter such comfort.");
     clickNext();
     expect(visibleStep()).toBe("2");
   });
-  it("reveals the public identifier opt-ins only when 'public' is chosen", () => {
+  it("step 2 (about you) has no required fields, so continuing needs no input", () => {
     check("submitterRole");
     setVal("storyText", "A lovely moment.");
     clickNext();
+    expect(visibleStep()).toBe("2");
+    clickNextOnStep("2");
+    expect(visibleStep()).toBe("3");
+  });
+  it("reveals the public identifier opt-ins only when 'public' is chosen, in step 3", () => {
+    check("submitterRole");
+    setVal("storyText", "A lovely moment.");
+    clickNext(); // -> step 2
+    clickNextOnStep("2"); // -> step 3
     const publicRadio = document.querySelector('[name="useScope"][value="public"]') as HTMLInputElement;
     publicRadio.checked = true;
     publicRadio.dispatchEvent(new Event("change", { bubbles: true }));
@@ -189,64 +278,293 @@ describe("my story stepping + validation (jsdom)", () => {
   });
 
   // G2 item 10: a professional partner must confirm third party permission before
-  // advancing past step 2 (client side mirror of the schema's authoritative refine —
-  // src/stories/schema.ts). thirdPartyConsent has no native `required` (it sits in a
-  // conditionally hidden reveal, which would break the no-JS path), so this check is
-  // explicit business logic in initStorySteps, not the generic required-field validate().
+  // the form can submit, mirroring the schema's authoritative refine (src/stories/schema.ts).
+  // thirdPartyConsent has no native `required` (it sits in a conditionally hidden reveal,
+  // which would break the no-JS path), so this check is explicit business logic in
+  // initStorySteps, not the generic required-field validate(). With the step swap, the
+  // reveal and the gate both now live in step 3 (final step), not step 2.
   describe("professional partner third party consent gate", () => {
-    function chooseProfessionalRoleAndAdvanceToStep2() {
+    function chooseProfessionalRoleAndAdvanceToStep3() {
       const professionalRadio = document.querySelector(
         '[name="submitterRole"][value="professional_partner"]',
       ) as HTMLInputElement;
       professionalRadio.checked = true;
       professionalRadio.dispatchEvent(new Event("change", { bubbles: true }));
       setVal("storyText", "A story about a family I support.");
-      clickNext();
+      clickNext(); // -> step 2
+      clickNextOnStep("2"); // -> step 3
     }
 
-    it("reveals the third party consent checkbox when professional_partner is chosen", () => {
-      chooseProfessionalRoleAndAdvanceToStep2();
+    it("reveals the third party consent checkbox in step 3 when professional_partner is chosen", () => {
+      chooseProfessionalRoleAndAdvanceToStep3();
+      expect(visibleStep()).toBe("3");
       const reveal = document.querySelector('[data-reveal="professional"]') as HTMLElement;
       expect(reveal.hidden).toBe(false);
     });
 
-    it("blocks advancing from step 2 when thirdPartyConsent is not checked", () => {
-      chooseProfessionalRoleAndAdvanceToStep2();
-      expect(visibleStep()).toBe("2");
+    it("blocks final submit when thirdPartyConsent is not checked, with a specific permission message", () => {
+      chooseProfessionalRoleAndAdvanceToStep3();
       const internalRadio = document.querySelector(
         '[name="useScope"][value="internal_only"]',
       ) as HTMLInputElement;
       internalRadio.checked = true;
       internalRadio.dispatchEvent(new Event("change", { bubbles: true }));
-      clickNext();
-      expect(visibleStep()).toBe("2"); // still — thirdPartyConsent unchecked
-      const err = document.querySelector('[data-err="2"]');
+      check("confirmOver16");
+      const form = document.getElementById("storyForm") as HTMLFormElement;
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      expect(visibleStep()).toBe("3"); // still — thirdPartyConsent unchecked
+      const err = document.querySelector('[data-err="3"]');
       expect(err?.classList.contains("show")).toBe(true);
+      // FIX 4: the block names the permission tick specifically, not just a generic
+      // "check the confirmation" message, via a dedicated error next to the checkbox.
+      const specific = document.getElementById("thirdPartyConsentErr");
+      expect(specific?.classList.contains("show")).toBe(true);
+      expect((specific?.textContent ?? "").toLowerCase()).toContain("permission");
     });
 
-    it("advances from step 2 once thirdPartyConsent is checked", () => {
-      chooseProfessionalRoleAndAdvanceToStep2();
+    it("submits once thirdPartyConsent and the final confirm are both checked", async () => {
+      chooseProfessionalRoleAndAdvanceToStep3();
       const internalRadio = document.querySelector(
         '[name="useScope"][value="internal_only"]',
       ) as HTMLInputElement;
       internalRadio.checked = true;
       internalRadio.dispatchEvent(new Event("change", { bubbles: true }));
       check("thirdPartyConsent");
-      clickNext();
-      expect(visibleStep()).toBe("3");
+      check("confirmOver16");
+      const status = document.getElementById("storyStatus");
+      const form = document.getElementById("storyForm") as HTMLFormElement;
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await flush();
+      expect(status?.className).toContain("is-success");
     });
 
-    it("does not require thirdPartyConsent for a non professional submitter role", () => {
+    it("does not require thirdPartyConsent for a non professional submitter role", async () => {
       check("submitterRole"); // first radio: "supported"
       setVal("storyText", "A lovely moment.");
-      clickNext();
+      clickNext(); // -> step 2
+      clickNextOnStep("2"); // -> step 3
       const internalRadio = document.querySelector(
         '[name="useScope"][value="internal_only"]',
       ) as HTMLInputElement;
       internalRadio.checked = true;
       internalRadio.dispatchEvent(new Event("change", { bubbles: true }));
-      clickNext();
-      expect(visibleStep()).toBe("3");
+      check("confirmOver16");
+      const status = document.getElementById("storyStatus");
+      const form = document.getElementById("storyForm") as HTMLFormElement;
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await flush();
+      expect(status?.className).toContain("is-success");
     });
+  });
+
+  it("blocks the final submit until confirmOver16 is checked, even with valid useScope", () => {
+    check("submitterRole");
+    setVal("storyText", "A lovely moment.");
+    clickNext(); // -> step 2
+    clickNextOnStep("2"); // -> step 3
+    const publicRadio = document.querySelector('[name="useScope"][value="public"]') as HTMLInputElement;
+    publicRadio.checked = true;
+    publicRadio.dispatchEvent(new Event("change", { bubbles: true }));
+    const form = document.getElementById("storyForm") as HTMLFormElement;
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    expect(visibleStep()).toBe("3");
+    const err = document.querySelector('[data-err="3"]');
+    expect(err?.classList.contains("show")).toBe(true);
+  });
+});
+
+// FIX 1 (CRITICAL): the success message must reflect a REAL save, not a fire and forget
+// POST. Covers the awaited fetch path: 200 -> success + reset, 400 -> kind error + form
+// kept + button re-enabled, 500/network error -> apologetic error + form kept.
+describe("my story submit reflects the real server response (FIX 1)", () => {
+  const { initStorySteps } = require2(resolve(ROOT, "assets/js/main.js"));
+  const formHtml = doc.querySelector("[data-story-steps]")?.outerHTML ?? "";
+  const setVal = (n: string, v: string) => {
+    (document.querySelector(`[name="${n}"]`) as HTMLInputElement | HTMLTextAreaElement).value = v;
+  };
+  const check = (n: string) => { (document.querySelector(`[name="${n}"]`) as HTMLInputElement).checked = true; };
+  const clickNext = () => (document.querySelector("[data-story-next]") as HTMLButtonElement)?.click();
+  const clickNextOnStep = (step: string) => {
+    const stepEl = document.querySelector(`.give-step[data-step="${step}"]`);
+    (stepEl?.querySelector("[data-story-next]") as HTMLButtonElement)?.click();
+  };
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  function fillValidStoryAndAdvanceToStep3() {
+    document.body.innerHTML = `<main>${formHtml}</main>`;
+    check("submitterRole");
+    setVal("storyText", "A lovely moment that made a real difference.");
+    clickNext(); // -> step 2
+    clickNextOnStep("2"); // -> step 3
+    const internalRadio = document.querySelector(
+      '[name="useScope"][value="internal_only"]',
+    ) as HTMLInputElement;
+    internalRadio.checked = true;
+    internalRadio.dispatchEvent(new Event("change", { bubbles: true }));
+    check("confirmOver16");
+  }
+
+  function submitForm() {
+    const form = document.getElementById("storyForm") as HTMLFormElement;
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    return form;
+  }
+
+  it("disables the submit button and shows an in-flight status the instant a valid submit fires", () => {
+    fillValidStoryAndAdvanceToStep3();
+    (window as unknown as { fetch: unknown }).fetch = () => new Promise(() => {}); // never resolves
+    initStorySteps(document, window);
+    submitForm();
+    const submitBtn = document.querySelector("[data-story-submit]") as HTMLButtonElement;
+    const status = document.getElementById("storyStatus");
+    expect(submitBtn.disabled).toBe(true);
+    expect(status?.textContent).toMatch(/sharing your story/i);
+  });
+
+  it("on a mocked 200 response: shows the success message and resets the form", async () => {
+    fillValidStoryAndAdvanceToStep3();
+    (window as unknown as { fetch: unknown }).fetch = () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) } as Response);
+    initStorySteps(document, window);
+    const storyTextBefore = (document.getElementById("storyText") as HTMLTextAreaElement);
+    submitForm();
+    await flush();
+    const status = document.getElementById("storyStatus");
+    expect(status?.className).toContain("is-success");
+    expect(status?.textContent).toMatch(/thank you/i);
+    expect(storyTextBefore.value).toBe("");
+    const submitBtn = document.querySelector("[data-story-submit]") as HTMLButtonElement;
+    expect(submitBtn.disabled).toBe(false);
+  });
+
+  it("on a mocked 400 response: shows the server's error message, keeps the form filled, and re-enables the button", async () => {
+    fillValidStoryAndAdvanceToStep3();
+    (window as unknown as { fetch: unknown }).fetch = () =>
+      Promise.resolve({
+        ok: false,
+        status: 400,
+        json: () => Promise.resolve({ error: "Please check your story details and try again" }),
+      } as Response);
+    initStorySteps(document, window);
+    const storyText = document.getElementById("storyText") as HTMLTextAreaElement;
+    const valueBeforeSubmit = storyText.value;
+    submitForm();
+    await flush();
+    const status = document.getElementById("storyStatus");
+    expect(status?.className).not.toContain("is-success");
+    expect(status?.className).toContain("is-error");
+    expect(status?.textContent).toContain("Please check your story details and try again");
+    expect(storyText.value).toBe(valueBeforeSubmit); // form NOT reset
+    const submitBtn = document.querySelector("[data-story-submit]") as HTMLButtonElement;
+    expect(submitBtn.disabled).toBe(false); // re-enabled
+  });
+
+  it("on a mocked 400 with no JSON error body: falls back to a kind generic message", async () => {
+    fillValidStoryAndAdvanceToStep3();
+    (window as unknown as { fetch: unknown }).fetch = () =>
+      Promise.resolve({ ok: false, status: 400, json: () => Promise.reject(new Error("no body")) } as Response);
+    initStorySteps(document, window);
+    submitForm();
+    await flush();
+    const status = document.getElementById("storyStatus");
+    expect(status?.className).toContain("is-error");
+    expect(status?.textContent).toMatch(/check your story/i);
+  });
+
+  it("on a mocked 500 response: shows the apologetic retry message and does not reset the form", async () => {
+    fillValidStoryAndAdvanceToStep3();
+    (window as unknown as { fetch: unknown }).fetch = () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ error: "boom" }) } as Response);
+    initStorySteps(document, window);
+    const storyText = document.getElementById("storyText") as HTMLTextAreaElement;
+    const valueBeforeSubmit = storyText.value;
+    submitForm();
+    await flush();
+    const status = document.getElementById("storyStatus");
+    expect(status?.className).toContain("is-error");
+    expect(status?.textContent).toMatch(/could not save your story/i);
+    expect(storyText.value).toBe(valueBeforeSubmit);
+  });
+
+  it("on a network error (rejected fetch): shows the apologetic retry message and does not reset the form", async () => {
+    fillValidStoryAndAdvanceToStep3();
+    (window as unknown as { fetch: unknown }).fetch = () => Promise.reject(new Error("network down"));
+    initStorySteps(document, window);
+    const storyText = document.getElementById("storyText") as HTMLTextAreaElement;
+    const valueBeforeSubmit = storyText.value;
+    submitForm();
+    await flush();
+    const status = document.getElementById("storyStatus");
+    expect(status?.className).toContain("is-error");
+    expect(status?.textContent).toMatch(/could not save your story/i);
+    expect(storyText.value).toBe(valueBeforeSubmit);
+  });
+
+  it("rejects a whitespace only story (client side, before any fetch happens)", () => {
+    document.body.innerHTML = `<main>${formHtml}</main>`;
+    let fetchCalled = false;
+    (window as unknown as { fetch: unknown }).fetch = () => {
+      fetchCalled = true;
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true }) } as Response);
+    };
+    initStorySteps(document, window);
+    check("submitterRole");
+    setVal("storyText", "   \n\t  "); // whitespace only
+    clickNext();
+    // still on step 1: whitespace-only trims to empty, so required validation blocks it.
+    const step1 = document.querySelector('.give-step[data-step="1"]') as HTMLElement;
+    expect(step1.hidden).toBe(false);
+    expect(fetchCalled).toBe(false);
+  });
+
+  it("when win.fetch is unavailable, does not preventDefault and shows no fake success", () => {
+    fillValidStoryAndAdvanceToStep3();
+    (window as unknown as { fetch?: unknown }).fetch = undefined;
+    initStorySteps(document, window);
+    const form = submitForm();
+    const status = document.getElementById("storyStatus");
+    expect(form.defaultPrevented ?? false).toBe(false);
+    expect(status?.className ?? "").not.toContain("is-success");
+  });
+});
+
+// FIX 5: contactForMore nudge — ticked with both email and phone blank on step 2.
+describe("my story contactForMore nudge (FIX 5)", () => {
+  const { initStorySteps } = require2(resolve(ROOT, "assets/js/main.js"));
+  const formHtml = doc.querySelector("[data-story-steps]")?.outerHTML ?? "";
+  const setVal = (n: string, v: string) => {
+    (document.querySelector(`[name="${n}"]`) as HTMLInputElement | HTMLTextAreaElement).value = v;
+  };
+  const check = (n: string) => { (document.querySelector(`[name="${n}"]`) as HTMLInputElement).checked = true; };
+
+  beforeEach(() => {
+    document.body.innerHTML = `<main>${formHtml}</main>`;
+    (window as unknown as { fetch?: unknown }).fetch = undefined;
+    initStorySteps(document, window);
+  });
+
+  it("shows a gentle note when contactForMore is ticked but email and phone are both blank", () => {
+    const contactForMore = document.getElementById("contactForMore") as HTMLInputElement;
+    check("contactForMore");
+    contactForMore.dispatchEvent(new Event("change", { bubbles: true }));
+    const nudge = document.getElementById("contactForMoreNudge");
+    expect(nudge?.hidden).toBe(false);
+  });
+
+  it("does not show the note when an email is present", () => {
+    setVal("email", "person@example.com");
+    const contactForMore = document.getElementById("contactForMore") as HTMLInputElement;
+    check("contactForMore");
+    contactForMore.dispatchEvent(new Event("change", { bubbles: true }));
+    const nudge = document.getElementById("contactForMoreNudge");
+    expect(nudge?.hidden).toBe(true);
+  });
+
+  it("does not block submit; it is a non blocking client side note only", () => {
+    const contactForMore = document.getElementById("contactForMore") as HTMLInputElement;
+    check("contactForMore");
+    contactForMore.dispatchEvent(new Event("change", { bubbles: true }));
+    const nudge = document.getElementById("contactForMoreNudge");
+    expect(nudge?.getAttribute("role")).not.toBe("alert");
   });
 });

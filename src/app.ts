@@ -7,6 +7,7 @@ import { adminRouter } from "./routes/admin";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
+import { newsletterImagesRouter } from "./routes/newsletter-images";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -27,6 +28,10 @@ export function createApp() {
   // skips a body already parsed at the 100kb default). Scoped to the one path; it only
   // reads a header, never the body, so it is safe ahead of the parser.
   app.use("/api/my-story", rejectOversizedMyStoryJson);
+  // The newsletter image upload carries a base64 payload up to ~2 MB (×1.37 encoded), which exceeds
+  // the global express.json 100kb cap. Give just this path a larger parser BEFORE the global one;
+  // body-parser then sees the body already parsed and skips it. Mirrors the /api/my-story guard.
+  app.use("/api/admin/newsletter-images", express.json({ limit: "3mb" }));
   app.use(express.json());
   app.use(apiRouter);
   app.use(portalRouter);
@@ -38,6 +43,8 @@ export function createApp() {
   // Public printable thank-you letter page (TASK-165/REQ-069). Also before the site catch-all so its
   // wildcard doesn't shadow /thank-you/letter/:token.
   app.use(thankYouLetterRouter);
+  // Public newsletter image serve — before the site catch-all so /media/* isn't shadowed.
+  app.use(newsletterImagesRouter);
   // Static marketing site: the four pages, their clean URLs, and /assets.
   // siteRoot resolves relative to this module — the repo root locally and under
   // tsx, /app in the container (where the Dockerfile copies the site files).

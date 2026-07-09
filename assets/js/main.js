@@ -1300,6 +1300,7 @@
       win.matchMedia("(prefers-reduced-motion: reduce)").matches;
     var steps = Array.prototype.slice.call(root.querySelectorAll(".give-step"));
     var current = 1;
+    var stepAnnounce = doc.getElementById("storyStepAnnounce");
 
     function stepEl(n) { return root.querySelector('.give-step[data-step="' + n + '"]'); }
     function showErr(n) { var e = root.querySelector('[data-err="' + n + '"]'); if (e) e.classList.add("show"); }
@@ -1370,6 +1371,15 @@
       });
       current = n;
       var el = stepEl(n);
+      // Screen-reader step cue: the progress rail is aria-hidden (it is purely visual),
+      // so this live region is the only announcement a screen reader user gets that the
+      // step actually changed. Label is read straight off the step's own title so it
+      // never drifts out of sync with what sighted users see.
+      if (!silent && stepAnnounce && el) {
+        var titleEl = el.querySelector(".give-step-title");
+        var title = titleEl ? titleEl.textContent.trim() : "";
+        stepAnnounce.textContent = "Step " + n + " of " + steps.length + (title ? ", " + title : "");
+      }
       if (!silent && !reduce && el) {
         el.classList.remove("slide-in", "slide-back");
         void el.offsetWidth;

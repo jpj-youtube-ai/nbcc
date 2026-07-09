@@ -81,6 +81,7 @@
                         <li data-pstep="2"><span class="p-n">Step 2</span> A little about you</li>
                         <li data-pstep="3"><span class="p-n">Step 3</span> How we can use it</li>
                       </ol>
+                      <p class="sr-only" aria-live="polite" id="storyStepAnnounce"></p>
                       <form id="storyForm" class="give-steps" action="/api/my-story" method="post">
                         <section class="give-step" data-step="1" aria-labelledby="storyStep1Title" tabindex="-1">
                           <h3 class="give-step-title" id="storyStep1Title">You and your story</h3>
@@ -144,14 +145,14 @@
 
                           <div class="give-field">
                             <label for="email">Email <span class="give-optional">(optional)</span></label>
-                            <input class="give-field-input" type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" />
-                            <p class="give-field-help">So we can say thank you or check a detail. Never published.</p>
+                            <input class="give-field-input" type="email" id="email" name="email" autocomplete="email" placeholder="you@example.com" aria-describedby="emailHelp" />
+                            <p class="give-field-help" id="emailHelp">So we can say thank you or check a detail. Never published.</p>
                           </div>
 
                           <div class="give-field">
                             <label for="phone">Phone <span class="give-optional">(optional)</span></label>
-                            <input class="give-field-input" type="tel" id="phone" name="phone" autocomplete="tel" />
-                            <p class="give-field-help">Never published.</p>
+                            <input class="give-field-input" type="tel" id="phone" name="phone" autocomplete="tel" aria-describedby="phoneHelp" />
+                            <p class="give-field-help" id="phoneHelp">Never published.</p>
                           </div>
 
                           <fieldset class="give-field">
@@ -176,8 +177,8 @@
 
                           <div class="give-field">
                             <label for="gender">How do you describe your gender? <span class="give-optional">(optional)</span></label>
-                            <input class="give-field-input" type="text" id="gender" name="gender" dir="auto" />
-                            <p class="give-field-help">Helps us report on who we reach, for funders. Never published.</p>
+                            <input class="give-field-input" type="text" id="gender" name="gender" dir="auto" aria-describedby="genderHelp" />
+                            <p class="give-field-help" id="genderHelp">Helps us report on who we reach, for funders. Never published.</p>
                           </div>
 
                           <div class="give-field">
@@ -188,18 +189,18 @@
                           <fieldset class="give-field">
                             <legend>If this story is about someone we supported, they are a <span class="give-optional">(optional)</span></legend>
                             <label class="give-check" for="recipientChild">
-                              <input class="give-check-box" type="radio" id="recipientChild" name="recipientType" value="child" />
+                              <input class="give-check-box" type="radio" id="recipientChild" name="recipientType" value="child" aria-describedby="recipientTypeHelp" />
                               <span class="give-check-text">Child</span>
                             </label>
                             <label class="give-check" for="recipientYoungPerson">
-                              <input class="give-check-box" type="radio" id="recipientYoungPerson" name="recipientType" value="young_person" />
+                              <input class="give-check-box" type="radio" id="recipientYoungPerson" name="recipientType" value="young_person" aria-describedby="recipientTypeHelp" />
                               <span class="give-check-text">Young person</span>
                             </label>
                             <label class="give-check" for="recipientVulnerableAdult">
-                              <input class="give-check-box" type="radio" id="recipientVulnerableAdult" name="recipientType" value="vulnerable_adult" />
+                              <input class="give-check-box" type="radio" id="recipientVulnerableAdult" name="recipientType" value="vulnerable_adult" aria-describedby="recipientTypeHelp" />
                               <span class="give-check-text">Vulnerable adult</span>
                             </label>
-                            <p class="give-field-help">Helps us report on who we reach, for funders. Never published.</p>
+                            <p class="give-field-help" id="recipientTypeHelp">Helps us report on who we reach, for funders. Never published.</p>
                           </fieldset>
 
                           <div class="give-field">
@@ -222,17 +223,17 @@
                             <legend>How can we use your story? <span class="give-req" aria-hidden="true">*</span></legend>
                             <div class="consent-cards">
                               <label class="give-check consent-card" for="scopePublic">
-                                <input class="give-check-box" type="radio" id="scopePublic" name="useScope" value="public" required aria-required="true" />
+                                <input class="give-check-box" type="radio" id="scopePublic" name="useScope" value="public" required aria-required="true" aria-describedby="scopePublicHelp" />
                                 <span class="consent-card-body">
                                   <span class="consent-card-title">Yes, you can share my story publicly</span>
-                                  <span class="consent-card-help">We may use it on our website, social media, newsletters, press and funding reports. We may share it in full or in part, and edit lightly for length or clarity while keeping your meaning.</span>
+                                  <span class="consent-card-help" id="scopePublicHelp">We may use it on our website, social media, newsletters, press and funding reports. We may share it in full or in part, and edit lightly for length or clarity while keeping your meaning.</span>
                                 </span>
                               </label>
                               <label class="give-check consent-card" for="scopeInternal">
-                                <input class="give-check-box" type="radio" id="scopeInternal" name="useScope" value="internal_only" />
+                                <input class="give-check-box" type="radio" id="scopeInternal" name="useScope" value="internal_only" aria-describedby="scopeInternalHelp" />
                                 <span class="consent-card-body">
                                   <span class="consent-card-title">Please keep it private to NBCC</span>
-                                  <span class="consent-card-help">Only the NBCC team will see it, to learn from and to support our funding bids. We will never publish it.</span>
+                                  <span class="consent-card-help" id="scopeInternalHelp">Only the NBCC team will see it, to learn from and to support our funding bids. We will never publish it.</span>
                                 </span>
                               </label>
                             </div>
@@ -272,10 +273,10 @@
 
                           <div class="give-field story-final">
                             <label class="give-check" for="confirmOver16">
-                              <input class="give-check-box" type="checkbox" id="confirmOver16" name="confirmOver16" required aria-required="true" />
+                              <input class="give-check-box" type="checkbox" id="confirmOver16" name="confirmOver16" required aria-required="true" aria-describedby="confirmOver16Help" />
                               <span class="give-check-text">I am 16 or over, the information I have given is accurate, and where my story involves someone else I have their permission to share it. <span class="give-req" aria-hidden="true">*</span></span>
                             </label>
-                            <p class="give-field-help">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
+                            <p class="give-field-help" id="confirmOver16Help">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
                           </div>
 
                           <div hidden aria-hidden="true">

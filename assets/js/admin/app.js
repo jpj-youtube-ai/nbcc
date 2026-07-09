@@ -719,6 +719,292 @@
   }
 
   // ---- newsletter ----
+
+  // Block builder model (TASK-168). Each def: label, default data, and how many of the 4 variants
+  // are meaningful (all 4 unless noted). The renderer server-side owns the visual variants; the UI
+  // just carries type/variant/data.
+  var nlBlockDefs = {
+    masthead: { label: "Masthead", data: { issueTitle: "July Newsletter" } },
+    greeting: { label: "Greeting", data: { heading: "", lead: "" } },
+    text: { label: "Text", data: { text: "Your text here." } },
+    heading: { label: "Heading", data: { kicker: "", title: "Section title" } },
+    image: { label: "Image", data: { url: "", alt: "", caption: "" } },
+    story: { label: "Story", data: { imageUrl: "", title: "Story title", body: "Story text.", label: "Read more", href: "" } },
+    spotlight: { label: "Spotlight", data: { photoUrl: "", name: "Name", quote: "Quote", role: "" } },
+    stats: { label: "Impact stats", data: { items: [{ number: "7,657", label: "Red Bags delivered" }] } },
+    waysToHelp: { label: "Ways to help", data: { items: [{ icon: "🎁", title: "Donate", body: "", label: "Donate", href: "https://nbcc.scot/donate" }] } },
+    events: { label: "Events", data: { items: [{ day: "15", month: "JUL", name: "Event name", location: "", label: "Register", href: "" }] } },
+    donationCta: { label: "Donation CTA", data: { imageUrl: "", heading: "Support our work", label: "Make a donation today", href: "https://nbcc.scot/donate" } },
+    button: { label: "Button", data: { label: "Learn more", href: "" } },
+    divider: { label: "Divider", data: {} },
+  };
+
+  var nlDoc = { blocks: [] };
+
+  function nlRenderPalette() {
+    var host = el("nlPalette");
+    host.innerHTML = "";
+    Object.keys(nlBlockDefs).forEach(function (type) {
+      var b = doc.createElement("button");
+      b.type = "button";
+      b.textContent = "+ " + nlBlockDefs[type].label;
+      b.addEventListener("click", function () { nlAddBlock(type); });
+      host.appendChild(b);
+    });
+  }
+
+  function nlAddBlock(type) {
+    nlDoc.blocks.push({ type: type, variant: 0, data: JSON.parse(JSON.stringify(nlBlockDefs[type].data)) });
+    nlRenderCanvas();
+    nlSchedulePreview();
+  }
+
+  function nlRenderCanvas() {
+    var host = el("nlCanvas");
+    host.innerHTML = "";
+    nlDoc.blocks.forEach(function (block, i) {
+      var li = doc.createElement("li");
+      li.className = "nl-block";
+      var def = nlBlockDefs[block.type] || { label: "Raw HTML" };
+      var head = doc.createElement("div");
+      head.className = "nl-block-head";
+      head.innerHTML =
+        '<span class="nl-block-title">' + def.label + "</span>" +
+        '<span class="nl-block-ctrls">' +
+        '<button type="button" data-nl="up">↑</button>' +
+        '<button type="button" data-nl="down">↓</button>' +
+        '<button type="button" data-nl="dup">⧉</button>' +
+        '<button type="button" data-nl="del">✕</button>' +
+        "</span>";
+      li.appendChild(head);
+
+      var variants = doc.createElement("div");
+      variants.className = "nl-variants";
+      for (var v = 0; v < 4; v++) {
+        var vb = doc.createElement("button");
+        vb.type = "button";
+        vb.textContent = "Style " + (v + 1);
+        vb.setAttribute("aria-pressed", String(block.variant === v));
+        (function (vi) { vb.addEventListener("click", function () { block.variant = vi; nlRenderCanvas(); nlSchedulePreview(); }); })(v);
+        variants.appendChild(vb);
+      }
+      li.appendChild(variants);
+
+      var fields = doc.createElement("div");
+      fields.className = "nl-fields";
+      nlRenderFields(fields, block); // Task 24
+      li.appendChild(fields);
+
+      head.querySelector('[data-nl="up"]').addEventListener("click", function () { nlMove(i, -1); });
+      head.querySelector('[data-nl="down"]').addEventListener("click", function () { nlMove(i, 1); });
+      head.querySelector('[data-nl="dup"]').addEventListener("click", function () { nlDup(i); });
+      head.querySelector('[data-nl="del"]').addEventListener("click", function () { nlDoc.blocks.splice(i, 1); nlRenderCanvas(); nlSchedulePreview(); });
+
+      host.appendChild(li);
+    });
+  }
+
+  function nlMove(i, delta) {
+    var j = i + delta;
+    if (j < 0 || j >= nlDoc.blocks.length) return;
+    var tmp = nlDoc.blocks[i];
+    nlDoc.blocks[i] = nlDoc.blocks[j];
+    nlDoc.blocks[j] = tmp;
+    nlRenderCanvas();
+    nlSchedulePreview();
+  }
+
+  function nlDup(i) {
+    nlDoc.blocks.splice(i + 1, 0, JSON.parse(JSON.stringify(nlDoc.blocks[i])));
+    nlRenderCanvas();
+    nlSchedulePreview();
+  }
+
+  // Quick-pick library of real nbcc.scot assets, offered alongside the URL field and upload button
+  // (TASK-168 / Task 24).
+  var NBCC_IMAGE_LIBRARY = [
+    { label: "Logo", url: "https://nbcc.scot/assets/img/nbcc-logo.png" },
+    { label: "Elf", url: "https://nbcc.scot/assets/img/nbcc-elf.png" },
+    { label: "Red bags handover", url: "https://nbcc.scot/assets/img/home-red-bags-handover.jpg" },
+    { label: "Why packing", url: "https://nbcc.scot/assets/img/why-packing.jpg" },
+    { label: "Story — Tygan", url: "https://nbcc.scot/assets/img/story-tygan.jpg" },
+  ];
+
+  // A labelled text input (or textarea) bound to block.data[key].
+  function nlText(host, block, key, label, multiline) {
+    var wrap = doc.createElement("label");
+    wrap.textContent = label;
+    var input = doc.createElement(multiline ? "textarea" : "input");
+    if (multiline) input.rows = 3;
+    input.value = block.data[key] != null ? block.data[key] : "";
+    input.addEventListener("input", function () { block.data[key] = input.value; nlSchedulePreview(); });
+    wrap.appendChild(input);
+    host.appendChild(wrap);
+  }
+
+  // An image field: URL input + "NBCC library" quick-pick + Upload (POSTs base64 to the endpoint).
+  function nlImageField(host, block, key, label) {
+    nlText(host, block, key, label + " URL", false);
+    var row = doc.createElement("div");
+    row.className = "nl-img-tools";
+
+    var lib = doc.createElement("select");
+    lib.innerHTML = '<option value="">NBCC library…</option>' +
+      NBCC_IMAGE_LIBRARY.map(function (i) { return '<option value="' + i.url + '">' + i.label + "</option>"; }).join("");
+    lib.addEventListener("change", function () {
+      if (lib.value) { block.data[key] = lib.value; nlRenderCanvas(); nlSchedulePreview(); }
+    });
+    row.appendChild(lib);
+
+    var file = doc.createElement("input");
+    file.type = "file";
+    file.accept = "image/png,image/jpeg,image/webp,image/gif";
+    file.addEventListener("change", function () {
+      var f = file.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var base64 = String(reader.result).split(",")[1];
+        authFetch("/api/admin/newsletter-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mime: f.type, dataBase64: base64, filename: f.name }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (j2) {
+            if (j2.url) { block.data[key] = j2.url; nlRenderCanvas(); nlSchedulePreview(); }
+            else el("newsletterMsg").textContent = j2.error || "Upload failed.";
+          });
+      };
+      reader.readAsDataURL(f);
+    });
+    row.appendChild(file);
+    host.appendChild(row);
+  }
+
+  // Repeater for the list-shaped blocks (stats/waysToHelp/events). Renders each item's fields + an
+  // add/remove control. Item shape depends on block.type (see nlBlockDefs defaults).
+  function nlRenderItems(host, block) {
+    var keysByType = {
+      stats: ["number", "label", "caption"],
+      waysToHelp: ["icon", "title", "body", "label", "href"],
+      events: ["day", "month", "name", "location", "label", "href"],
+      story: ["imageUrl", "title", "body", "label", "href"],
+    };
+    var keys = keysByType[block.type];
+    (block.data.items || []).forEach(function (item, idx) {
+      var fs = doc.createElement("fieldset");
+      fs.innerHTML = "<legend>Item " + (idx + 1) + "</legend>";
+      keys.forEach(function (k) {
+        var wrap = doc.createElement("label");
+        wrap.textContent = k;
+        var input = doc.createElement("input");
+        input.value = item[k] != null ? item[k] : "";
+        input.addEventListener("input", function () { item[k] = input.value; nlSchedulePreview(); });
+        wrap.appendChild(input);
+        fs.appendChild(wrap);
+      });
+      var rm = doc.createElement("button");
+      rm.type = "button";
+      rm.textContent = "Remove item";
+      rm.addEventListener("click", function () { block.data.items.splice(idx, 1); nlRenderCanvas(); nlSchedulePreview(); });
+      fs.appendChild(rm);
+      host.appendChild(fs);
+    });
+    var add = doc.createElement("button");
+    add.type = "button";
+    add.textContent = "+ Add item";
+    add.addEventListener("click", function () {
+      var blank = {};
+      keys.forEach(function (k) { blank[k] = ""; });
+      block.data.items = (block.data.items || []).concat([blank]);
+      nlRenderCanvas();
+      nlSchedulePreview();
+    });
+    host.appendChild(add);
+  }
+
+  // Task 24: editable fields per block type, bound to block.data.
+  function nlRenderFields(host, block) {
+    host.innerHTML = "";
+    switch (block.type) {
+      case "masthead":
+        nlText(host, block, "issueTitle", "Issue title", false);
+        nlImageField(host, block, "heroUrl", "Hero image");
+        break;
+      case "greeting":
+        nlText(host, block, "heading", "Heading (optional)", false);
+        nlText(host, block, "lead", "Intro paragraph (optional)", true);
+        break;
+      case "text":
+        nlText(host, block, "text", "Text (use {{firstName}} to merge)", true);
+        break;
+      case "heading":
+        nlText(host, block, "kicker", "Kicker (optional)", false);
+        nlText(host, block, "title", "Title", false);
+        break;
+      case "image":
+        nlImageField(host, block, "url", "Image");
+        nlText(host, block, "alt", "Alt text", false);
+        nlText(host, block, "caption", "Caption (optional)", false);
+        break;
+      case "story":
+        nlImageField(host, block, "imageUrl", "Image");
+        nlText(host, block, "title", "Title", false);
+        nlText(host, block, "body", "Body", true);
+        nlText(host, block, "label", "Button label", false);
+        nlText(host, block, "href", "Button link", false);
+        // Variant 2 (two-up) reads data.items[] instead of the top-level fields above (which it
+        // falls back to only when items is empty) — also render the repeater so an editor can
+        // author multiple story cards. nlRenderFields re-runs on variant change, so this is safe.
+        if (block.variant === 2) nlRenderItems(host, block);
+        break;
+      case "spotlight":
+        nlImageField(host, block, "photoUrl", "Photo");
+        nlText(host, block, "name", "Name", false);
+        nlText(host, block, "quote", "Quote", true);
+        nlText(host, block, "role", "Role (optional)", false);
+        break;
+      case "donationCta":
+        nlImageField(host, block, "imageUrl", "Image");
+        nlText(host, block, "heading", "Heading", false);
+        nlText(host, block, "label", "Button label", false);
+        nlText(host, block, "href", "Button link", false);
+        break;
+      case "button":
+        nlText(host, block, "label", "Label", false);
+        nlText(host, block, "href", "Link", false);
+        break;
+      case "stats":
+      case "waysToHelp":
+      case "events":
+        nlRenderItems(host, block); // repeaters
+        break;
+      case "divider":
+      default:
+        break;
+    }
+  }
+
+  // Debounced live preview: renders the current nlDoc server-side and streams it into the iframe.
+  var nlPreviewTimer = null;
+  function nlSchedulePreview() {
+    if (nlPreviewTimer) clearTimeout(nlPreviewTimer);
+    nlPreviewTimer = setTimeout(nlRefreshPreview, 300);
+  }
+  function nlRefreshPreview() {
+    authFetch("/api/admin/newsletters/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bodyJson: nlDoc }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (j2) { if (j2.html != null) el("nlPreview").srcdoc = j2.html; })
+      .catch(function () {});
+  }
+
+  if (el("nlPalette")) nlRenderPalette();
+
   function renderNewsletterList(rows) {
     if (!rows.length) return '<p class="admin-loading">No newsletters yet.</p>';
     var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Recipients</th><th></th></tr></thead><tbody>';
@@ -738,12 +1024,19 @@
       .then(function (n) {
         el("newsletterId").value = n.id;
         el("newsletterSubject").value = n.subject;
-        el("newsletterBody").value = n.bodyHtml;
+        // A block-doc newsletter hydrates its blocks; a legacy raw-HTML draft becomes one rawHtml block.
+        if (n.bodyJson && Array.isArray(n.bodyJson.blocks)) {
+          nlDoc = n.bodyJson;
+        } else {
+          nlDoc = { blocks: [{ type: "rawHtml", variant: 0, data: { html: n.bodyHtml || "" } }] };
+        }
         var sent = n.status === "sent";
         // Send is Admin-only and only for an unsent newsletter.
         el("newsletterSend").hidden = !(currentRole === "admin" && !sent);
         el("newsletterSave").disabled = sent;
         el("newsletterMsg").textContent = sent ? "This newsletter has been sent and is read-only." : "";
+        nlRenderCanvas();
+        nlRefreshPreview();
       })
       .catch(function () {});
   }
@@ -769,16 +1062,18 @@
     el("newsletterNew").addEventListener("click", function () {
       el("newsletterId").value = "";
       el("newsletterSubject").value = "";
-      el("newsletterBody").value = "";
+      nlDoc = { blocks: [] };
       el("newsletterSend").hidden = true; // save first to get an id
       el("newsletterSave").disabled = false;
       el("newsletterMsg").textContent = "";
+      nlRenderCanvas();
+      nlRefreshPreview();
     });
 
     nlForm.addEventListener("submit", function (e) {
       e.preventDefault();
       var id = el("newsletterId").value;
-      var payload = { subject: el("newsletterSubject").value, bodyHtml: el("newsletterBody").value };
+      var payload = { subject: el("newsletterSubject").value, bodyJson: nlDoc };
       var req = id
         ? authFetch("/api/admin/newsletters/" + id, {
             method: "PUT",
@@ -791,14 +1086,12 @@
             body: JSON.stringify(payload),
           });
       req
+        .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
         .then(function (res) {
-          if (!res.ok) throw new Error("save failed: " + res.status);
-          return res.json();
-        })
-        .then(function (n) {
+          if (!res.ok) { el("newsletterMsg").textContent = res.body.error || "Save failed."; return; }
           el("newsletterMsg").textContent = "Saved.";
           loadNewsletters();
-          loadNewsletterInto(n.id);
+          loadNewsletterInto(res.body.id);
         })
         .catch(function () {
           el("newsletterMsg").textContent = "Save failed.";

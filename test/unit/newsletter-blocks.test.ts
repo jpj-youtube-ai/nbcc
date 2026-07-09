@@ -50,7 +50,7 @@ describe("newsletter blocks — masthead variants", () => {
       },
       ctx,
     );
-    // marker unique to variant 1: the two-cell <table> row layout (logo cell + title cell)
+    // marker unique to variant 1: the right-aligned title cell in the two-cell <table> layout
     expect(html).toContain('<td style="vertical-align:middle">');
     expect(html).toContain('<td style="vertical-align:middle;text-align:right">');
     expect(html).toContain("July Newsletter");
@@ -82,6 +82,12 @@ describe("newsletter blocks — masthead variants", () => {
     expect(html).toContain("July Newsletter");
     expect(html).toContain("nbcc-logo.png"); // logo still present
     expect(html).not.toContain('src=""'); // no broken empty-src <img>
+    // Without hero, variant 2 converges with variant 0 (both fallback to centered logo+title)
+    const v0 = renderNewsletter(
+      { blocks: [{ type: "masthead", variant: 0, data: { issueTitle: "July Newsletter" } }] },
+      ctx,
+    );
+    expect(html).toBe(v0);
   });
 
   it("variant 3: slim/compact wordmark strip, title as inline <span>", () => {

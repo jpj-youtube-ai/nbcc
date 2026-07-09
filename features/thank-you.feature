@@ -83,7 +83,6 @@ Feature: Admin thank-you eligible-donors list (REQ-069 · TASK-162)
     Then the admin response status should be 201
     When I send a thank-you letter as "ty.editor.cc@example.com" with password "cc-pw-123" to "cc.recip2@example.com" for "Cc Recip2" cc "not-an-email"
     Then the admin response status should be 400
-=======
   # TASK-165: the sent letter has a public, tokenised print-your-letter page.
 
   Scenario: the sent letter is reachable at its signed print link

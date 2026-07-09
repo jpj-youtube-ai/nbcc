@@ -4,6 +4,10 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://app:app@db:5432/charity
+      # My Story (TASK-B2): .env's STORIES_DATABASE_URL points at localhost (for running
+      # the app directly on the host); inside the compose network the DB is reachable as
+      # `db`, so override it here the same way DATABASE_URL is overridden above.
+      STORIES_DATABASE_URL: postgres://stories_app:stories@db:5432/stories
     ports:
       - "3000:3000"
     depends_on:
@@ -20,6 +24,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # My Story (TASK-B2): creates the SEPARATE `stories` database + `stories_app` role
+      # on first init, mirroring scripts/bootstrap-stories-db.mjs in staging/production.
+      # Postgres only runs docker-entrypoint-initdb.d on a FRESH data volume — see the
+      # SQL file's header if you already have an existing local pgdata volume.
+      - ./docker/initdb:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app -d charity"]
       interval: 5s
@@ -39,6 +48,19 @@ services:
       db:
         condition: service_healthy
     command: npm run migrate
+
+  # My Story (TASK-B2): the stories-DB counterpart of `migrate`, same pattern.
+  # Run explicitly:  docker compose run --rm migrate-stories
+  migrate-stories:
+    build: .
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      STORIES_DATABASE_URL: postgres://stories_app:stories@db:5432/stories
+    depends_on:
+      db:
+        condition: service_healthy
+    command: npm run migrate:stories
 
 volumes:
   pgdata:

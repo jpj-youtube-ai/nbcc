@@ -2254,7 +2254,7 @@ staging RDS to seed there. Local-dev / demo only, never production donor data.
 Or run the whole thing in containers: `docker compose up` (and
 `docker compose run --rm migrate` once to migrate).
 
-My Story submissions (Task B1) persist to a SEPARATE `stories` database (own name +
+My Story submissions persist to a SEPARATE `stories` database (own name +
 credentials, same Postgres server as `charity`, never the main DB — see
 `src/db/stories-pool.ts`). Its migration lives in its own `migrations-stories/`
 directory, with its own `pgmigrations` tracking table, applied via:
@@ -2263,10 +2263,30 @@ directory, with its own `pgmigrations` tracking table, applied via:
 npm run migrate:stories          # node-pg-migrate -m migrations-stories -d STORIES_DATABASE_URL up
 ```
 
-Locally this requires a `stories` database to exist alongside `charity` on the same
-Postgres instance (e.g. `createdb stories` / `psql -c 'CREATE DATABASE stories'`) —
-CI creates it explicitly in `pr.yml`. Provisioning it in staging/production (the RDS
-role + SSM parameter + task-def wiring) is Task B2, not this slice.
+Locally this requires a `stories` database + `stories_app` role to exist alongside
+`charity` on the same Postgres instance. `docker compose up` gets this for free — a
+`docker-entrypoint-initdb.d` script (`docker/initdb/10-stories-db.sql`) creates both
+on first container init (only on a **fresh** `pgdata` volume; if you already have one
+from before this existed, either run the two statements in that file manually or
+`docker compose down -v` to pick it up). Running Postgres another way, create them
+by hand: `createdb stories && psql -c "CREATE ROLE stories_app LOGIN PASSWORD
+'stories'" -c 'ALTER DATABASE stories OWNER TO stories_app'`. CI creates the database
+explicitly in `pr.yml` (reusing the `app` role there — credential isolation is a
+staging/production concern, not CI's).
+
+**Staging/production provisioning** (Task B2): Terraform generates the
+`stories_app` credential and publishes it as the `STORIES_DATABASE_URL` SSM
+parameter (`infra/modules/app/main.tf`), wired through the task definition like
+any other secret (`infra/modules/app/ecs.tf`). It can't create the database or
+role itself (no `postgresql` Terraform provider, private RDS), so
+`scripts/bootstrap-stories-db.mjs` does that imperatively — idempotent
+`CREATE ROLE`/`ALTER ROLE`, `CREATE DATABASE`, `GRANT` statements run outside a
+transaction (Postgres can't `CREATE DATABASE` inside one), connecting with the
+**master** `DATABASE_URL`. Both deploy workflows run it as a one-off
+`ecs run-task` (`npm run bootstrap:stories`) right after the `charity` migration
+step and before `migrate:stories`, every deploy — safe because it's idempotent.
+See `infra/README.md` → "My Story: the separate `stories` database" for the full
+walkthrough.
 
 Tests:
 

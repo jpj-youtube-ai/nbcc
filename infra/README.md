@@ -89,8 +89,9 @@ the task definition:
   `EXTERNAL_API_ONE_BASE_URL`). `NODE_ENV` is set to the env name, which is what
   makes the home page show `staging` vs `production`.
 - **Secrets** → `secrets` block in `ecs.tf`, each pointing at an **SSM parameter**
-  (`DATABASE_URL`, `EXTERNAL_API_ONE_KEY`, `EXTERNAL_API_TWO_KEY`). ECS resolves
-  them at task start and injects them as env vars — no AWS SDK in the app.
+  (`DATABASE_URL`, `EXTERNAL_API_ONE_KEY`, `EXTERNAL_API_TWO_KEY`,
+  `STORIES_DATABASE_URL`, …). ECS resolves them at task start and injects them
+  as env vars — no AWS SDK in the app.
 
 Adding a secret takes **three** edits or the task fails to start:
 1. the SSM parameter in `main.tf`,
@@ -107,6 +108,45 @@ The API-key SSM params ship as `REPLACE_ME` placeholders with
 aws ssm put-parameter --name /charity-site/staging/EXTERNAL_API_ONE_KEY \
   --type SecureString --value 'real-key' --overwrite
 ```
+
+### My Story: the separate `stories` database (TASK-B2)
+
+`STORIES_DATABASE_URL` (SSM SecureString, `main.tf`) is assembled the same way as
+`DATABASE_URL` — generated password (`random_password.stories`) + RDS address +
+`sslmode=no-verify` — but points at a **different database name** (`stories`)
+and a **different role** (`stories_app`), never the `charity` DB's master `app`
+user. It's wired through the same three places as any other secret (SSM param,
+`secrets` entry, `exec_secrets` ARN in `ecs.tf`).
+
+Terraform can generate and publish that credential, but it **cannot create the
+database or role**: there's no `postgresql` provider in this stack, `db_name` on
+`aws_db_instance.app` is hardcoded to `charity` (`rds.tf`), and RDS is private
+(only the ECS task security group can reach it). So provisioning is imperative —
+`scripts/bootstrap-stories-db.mjs`, run as a one-off `ecs run-task` (same shape
+as the migration step below, connecting with the **master** `DATABASE_URL`,
+which has `CREATEDB`/`CREATEROLE` on RDS). It idempotently:
+
+1. `CREATE ROLE stories_app LOGIN PASSWORD …` (or `ALTER ROLE …` to re-sync the
+   password if the role already exists — covers secret rotation),
+2. `CREATE DATABASE stories OWNER stories_app` (skipped if it already exists),
+3. `GRANT ALL PRIVILEGES ON DATABASE stories TO stories_app`.
+
+Every statement runs outside a transaction (`CREATE DATABASE` can't run inside
+one). Safe to re-run — the deploy workflows run it on **every** deploy, not just
+the first, via `npm run bootstrap:stories`.
+
+Both deploy workflows (`deploy-staging.yml`, `deploy-prod.yml`) run, in order,
+right after the `charity` migration step and before "Deploy service":
+1. **Bootstrap stories database (idempotent)** — `npm run bootstrap:stories`.
+2. **Run stories DB migrations** — `npm run migrate:stories` (against
+   `migrations-stories/`, its own `pgmigrations` table, never touching the
+   `charity` DB).
+
+Local dev gets the same `stories` database + `stories_app` role via a
+`docker-entrypoint-initdb.d` script (`docker/initdb/10-stories-db.sql`), mounted
+into the `db` service in `docker-compose.yml` — it only runs on a **fresh**
+Postgres data volume, so an existing local `pgdata` volume needs either the two
+statements run manually or a `docker compose down -v` to pick it up.
 
 ## One-time bootstrap
 
@@ -196,9 +236,11 @@ Build-once, promote-the-same-artifact:
 1. **Merge to `main`** → `deploy-staging.yml`: builds the image tagged by commit
    SHA, pushes to the shared ECR, reads infra wiring via `terraform output`,
    registers a new task-def revision (image swap only), runs DB migrations as a
-   one-off Fargate task **before** the service update, rolls the ECS service
-   (`wait services-stable`), smoke-tests `/health`, runs unit + BDD against the
-   live staging ALB, then tags a release.
+   one-off Fargate task, then bootstraps the `stories` database and runs its own
+   migrations the same way (`bootstrap:stories` then `migrate:stories` — see
+   **My Story: the separate `stories` database** above) — all **before** the
+   service update — rolls the ECS service (`wait services-stable`), smoke-tests
+   `/health`, runs unit + BDD against the live staging ALB, then tags a release.
 2. **Staging success** triggers `deploy-prod.yml` (via `workflow_run`), which
    **pauses on the production approval gate**, then deploys the *same image by
    SHA* to prod and smoke-tests it. No rebuild.

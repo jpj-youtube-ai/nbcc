@@ -8,10 +8,13 @@ import {
   renderFrame,
   escapeHtml,
   applyMerge,
+  brandButton,
   CRIMSON,
   MAROON,
+  CREAM,
   SLATE,
   SLATE_SOFT,
+  TAN_SOFT,
   HEAD,
   BODY,
   LOGO_URL,
@@ -171,14 +174,109 @@ function rawHtml(b: Block): string {
   return `<div style="padding:24px 40px">${str(b.data, "html")}</div>`;
 }
 
+// text — a block of copy, merged via applyMerge so {{firstName}} personalises the body.
+//   0: body paragraph
+//   1: lead paragraph (larger, ~18px)
+//   2: pull-quote (HEAD serif, italic, CRIMSON, centered)
+//   3: highlighted callout (TAN_SOFT background, CRIMSON left border)
+//
+// data contract: text (string, optional — falls back to "").
+function text(b: Block, ctx: RenderCtx): string {
+  const body = applyMerge(str(b.data, "text"), ctx);
+
+  if (b.variant === 1) {
+    return `<div style="padding:12px 40px"><p style="font-family:${BODY};color:${SLATE};font-size:18px;line-height:1.6;margin:0">${body}</p></div>`;
+  }
+
+  if (b.variant === 2) {
+    return `<div style="padding:12px 40px;text-align:center"><p style="font-family:${HEAD};color:${CRIMSON};font-style:italic;font-size:20px;line-height:1.5;margin:0">${body}</p></div>`;
+  }
+
+  if (b.variant === 3) {
+    return `<div style="padding:12px 40px"><div style="background:${TAN_SOFT};border-left:4px solid ${CRIMSON};padding:16px 20px"><p style="font-family:${BODY};color:${SLATE};font-size:15px;line-height:1.6;margin:0">${body}</p></div></div>`;
+  }
+
+  // variant 0 (default): plain body paragraph
+  return `<div style="padding:12px 40px"><p style="font-family:${BODY};color:${SLATE};font-size:15px;line-height:1.6;margin:0">${body}</p></div>`;
+}
+
+// heading — a section title.
+//   0: CRIMSON serif (HEAD), centered
+//   1: uppercase eyebrow kicker above the title
+//   2: maroon band behind the title
+//   3: uppercase letter-spaced eyebrow only (title styled as the eyebrow itself)
+//
+// data contract: title (string, optional — falls back to ""), kicker (string, optional — read
+// only by variant 1).
+function heading(b: Block): string {
+  const title = escapeHtml(str(b.data, "title"));
+  const kicker = str(b.data, "kicker");
+
+  if (b.variant === 1) {
+    const kickerEl = kicker
+      ? `<div style="font-family:${BODY};color:${SLATE_SOFT};font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin:0 0 4px">${escapeHtml(kicker)}</div>`
+      : "";
+    return `<div style="padding:12px 40px">${kickerEl}<h2 style="font-family:${HEAD};color:${MAROON};font-size:22px;font-weight:800;margin:0">${title}</h2></div>`;
+  }
+
+  if (b.variant === 2) {
+    return `<div style="padding:12px 40px"><div style="background:${MAROON};color:${CREAM};padding:16px 24px;text-align:center"><h2 style="font-family:${HEAD};font-size:22px;font-weight:800;margin:0">${title}</h2></div></div>`;
+  }
+
+  if (b.variant === 3) {
+    return `<div style="padding:12px 40px;text-align:center"><div style="font-family:${BODY};color:${SLATE_SOFT};font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase">${title}</div></div>`;
+  }
+
+  // variant 0 (default): CRIMSON serif, centered
+  return `<div style="padding:12px 40px;text-align:center"><h2 style="font-family:${HEAD};color:${CRIMSON};font-size:24px;font-weight:800;margin:0">${title}</h2></div>`;
+}
+
+// divider — a visual break between blocks. No data fields.
+//   0: hairline rule
+//   1: short CRIMSON rule
+//   2: blank spacer
+//   3: small centered mark
+function divider(b: Block): string {
+  if (b.variant === 1) {
+    return `<div style="padding:12px 40px;text-align:center"><hr style="border:none;border-top:3px solid ${CRIMSON};width:48px;margin:0 auto" /></div>`;
+  }
+
+  if (b.variant === 2) {
+    return `<div style="padding:24px 40px 0"></div>`;
+  }
+
+  if (b.variant === 3) {
+    return `<div style="padding:12px 40px;text-align:center;font-family:${HEAD};color:${SLATE_SOFT};font-size:18px">&middot;</div>`;
+  }
+
+  // variant 0 (default): hairline rule
+  return `<div style="padding:12px 40px"><hr style="border:none;border-top:1px solid #e5ded3" /></div>`;
+}
+
+// button — a call-to-action link, delegating to the shared brandButton styles.
+//   0: primary, 1: outline, 2: full, 3: link
+//
+// data contract: label (string, optional — falls back to ""), href (string, optional — falls
+// back to ""). Degrades to nothing when href is empty, rather than emitting a dead link.
+const BUTTON_STYLES = ["primary", "outline", "full", "link"] as const;
+
+function button(b: Block): string {
+  const label = str(b.data, "label");
+  const href = str(b.data, "href");
+  if (!href) return "";
+
+  const style = BUTTON_STYLES[b.variant] ?? "primary";
+  return `<div style="padding:12px 40px;text-align:center">${brandButton(label, href, style)}</div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
   masthead,
   rawHtml,
   greeting,
-  text: stub,
-  heading: stub,
+  text,
+  heading,
   image: stub,
   story: stub,
   spotlight: stub,
@@ -186,8 +284,8 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   waysToHelp: stub,
   events: stub,
   donationCta: stub,
-  button: stub,
-  divider: stub,
+  button,
+  divider,
 };
 
 export function renderBlock(block: Block, ctx: RenderCtx): string {

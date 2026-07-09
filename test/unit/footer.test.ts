@@ -52,7 +52,8 @@ describe.each(PAGES)("%s footer", (file) => {
 
   it("shows the brand logo lockup in the foot-brand column", () => {
     const brand = footer.match(/<div class="foot-brand">[\s\S]*?<div class="socials">/i)?.[0] ?? "";
-    expect(brand).toMatch(/<img[^>]+src="[^"]*nbcc-logo(-footer)?\.png"[^>]*>/i);
+    // TASK-177: the footer brand logo is the white-lettered SVG (on the maroon footer).
+    expect(brand).toMatch(/<img[^>]+src="[^"]*nbcc-logo(-footer\.png|-white\.svg)"[^>]*>/i);
     expect(brand).toMatch(/alt="[^"]+"/);
   });
 

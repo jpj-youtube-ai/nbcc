@@ -171,12 +171,12 @@ export function buildThankYouEmailHtml(v: ThankYouLetterView): string {
       <p style="font-family:${HEAD};font-style:italic;color:${CRIMSON};text-align:center;font-size:17px;line-height:1.3;margin:22px auto 14px">&ldquo;How do we change the world?<br>One random act of kindness at a time.&rdquo;</p>
       <div style="text-align:center;margin-bottom:6px">
         <span style="font-family:${BODY};text-transform:uppercase;letter-spacing:.18em;font-size:11px;font-weight:600;color:${CRIMSON};display:block;margin-bottom:4px">How you can donate</span>
-        <span style="font-family:${BODY};font-weight:700;color:${MAROON};font-size:17px">Go to <b style="color:${CRIMSON}">nbcc.scot/donate</b></span>
+        <a href="https://nbcc.scot/donate" style="font-family:${BODY};font-weight:700;color:${MAROON};font-size:17px;text-decoration:none">Go to <b style="color:${CRIMSON};text-decoration:underline">nbcc.scot/donate</b></a>
       </div>
       ${printButton(v.printUrl)}
     </td></tr>
     <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY};font-size:14px;text-align:center">
-      <div style="font-weight:700">01292 811 015 &nbsp;·&nbsp; giving@nbcc.scot &nbsp;·&nbsp; nbcc.scot</div>
+      <div style="font-weight:700"><a href="tel:+441292811015" style="color:${CREAM};text-decoration:none">01292 811 015</a> &nbsp;·&nbsp; <a href="mailto:giving@nbcc.scot" style="color:${CREAM};text-decoration:underline">giving@nbcc.scot</a> &nbsp;·&nbsp; <a href="https://nbcc.scot" style="color:${CREAM};text-decoration:underline">nbcc.scot</a></div>
       <div style="color:${CREAM_82};font-size:11px;margin-top:8px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
     </td></tr>
   </table>

@@ -162,14 +162,14 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
         <p class="pullquote">&ldquo;How do we change the world?<br />One random act of kindness at a time.&rdquo;</p>
         <div class="donate">
           <span class="eyebrow">How you can donate</span>
-          <span class="go">Go to <b>nbcc.scot/donate</b></span>
+          <span class="go">Go to <a href="https://nbcc.scot/donate" style="color:var(--crimson);text-decoration:underline"><b>nbcc.scot/donate</b></a></span>
         </div>
       </div>
       <div class="letter-foot">
         <div class="frow">
-          <span class="cell"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><path d="M4 4h4l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z"/></svg></span>01292 811 015</span>
-          <span class="cell"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></svg></span>giving@nbcc.scot</span>
-          <span class="cell"><span class="ic pair"><span><svg width="11" height="11" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></span><span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></span></span>nbcc.scot</span>
+          <span class="cell"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><path d="M4 4h4l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z"/></svg></span><a href="tel:+441292811015" style="color:var(--cream);text-decoration:none">01292 811 015</a></span>
+          <span class="cell"><span class="ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></svg></span><a href="mailto:giving@nbcc.scot" style="color:var(--cream);text-decoration:underline">giving@nbcc.scot</a></span>
+          <span class="cell"><span class="ic pair"><span><svg width="11" height="11" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></span><span><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></span></span><a href="https://nbcc.scot" style="color:var(--cream);text-decoration:underline">nbcc.scot</a></span>
         </div>
         <div class="legal">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
       </div>

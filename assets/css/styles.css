@@ -96,6 +96,9 @@ p{margin:0 0 1rem}
   font-weight:600;color:var(--crimson);display:inline-block;margin-bottom:14px;
 }
 .eyebrow.on-dark{color:var(--cream-82)}
+/* Hero eyebrow stays on ONE line (TASK-177): tighten the tracking and let the size ease down on
+   narrow screens so "Volunteer run Scottish charity · Annbank, Ayrshire" never wraps. */
+.hero .eyebrow{white-space:nowrap;letter-spacing:.12em;font-size:clamp(.55rem,2.4vw,.78rem)}
 
 /* signature divider (REQ-007): holly line with a crimson diamond, from the print brand */
 .rule{display:flex;align-items:center;gap:14px;margin:18px 0 0;max-width:340px}

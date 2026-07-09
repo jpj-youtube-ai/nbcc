@@ -38,7 +38,7 @@
       <!-- The authenticated dashboard (revealed by app.js once a session token is held). -->
       <div class="admin-app" id="appView" hidden>
         <header class="admin-topbar" data-region="admin-topbar">
-          <a class="admin-brand" href="/admin"><img src="/assets/img/nbcc-elf.png" alt="" width="34" height="34" /><span>NBCC Admin</span></a>
+          <a class="admin-brand" href="/admin"><img src="/assets/img/nbcc-logo-white.svg" alt="" width="34" height="34" /><span>NBCC Admin</span></a>
           <div class="admin-user">
             <span class="admin-user-email" id="userEmail"></span>
             <span class="admin-role-badge" id="userRole"></span>
@@ -288,8 +288,14 @@
                   </div>
                   <div class="ty-field">
                     <label for="tyCc">CC <span class="ty-muted">(optional)</span></label>
-                    <input id="tyCc" type="email" placeholder="e.g. a colleague to copy in" />
-                    <span class="ty-hint">Copied on the email the donor receives. Leave blank for none.</span>
+                    <select id="tyCc">
+                      <option value="">No CC</option>
+                      <option value="jodie@nbcc.scot">jodie@nbcc.scot</option>
+                      <option value="isabel@nbcc.scot">isabel@nbcc.scot</option>
+                      <option value="jaimie@nbcc.scot">jaimie@nbcc.scot</option>
+                      <option value="jon@nbcc.scot">jon@nbcc.scot</option>
+                    </select>
+                    <span class="ty-hint">Copies this person on the email the donor receives.</span>
                   </div>
                   <input type="hidden" id="tyDonorId" />
                   <div class="ty-actions">

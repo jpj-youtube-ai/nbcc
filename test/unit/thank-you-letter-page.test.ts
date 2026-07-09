@@ -60,6 +60,14 @@ describe("thank-you letter page (REQ-069 · TASK-165)", () => {
     expect(html).toContain("SC047995");
   });
 
+  it("makes the donate, email, phone and site references clickable links (TASK-177)", () => {
+    const html = buildThankYouLetterPage(base);
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).toContain('href="mailto:giving@nbcc.scot"');
+    expect(html).toContain('href="tel:+441292811015"');
+    expect(html).toContain('href="https://nbcc.scot"');
+  });
+
   it("omits the role line when the signatory role is unknown (older rows)", () => {
     const html = buildThankYouLetterPage({ ...base, signedByRole: null });
     // the .sig-role class still appears in the <style> block; assert the rendered element is absent

@@ -85,6 +85,14 @@ describe("thank-you letter (REQ-069 · TASK-163)", () => {
       expect(html).toContain("giving@nbcc.scot");
     });
 
+    it("makes the donate, email, phone and site references clickable links (TASK-177)", () => {
+      const html = buildThankYouEmailHtml(base);
+      expect(html).toContain('href="https://nbcc.scot/donate"');
+      expect(html).toContain('href="mailto:giving@nbcc.scot"');
+      expect(html).toContain('href="tel:+441292811015"');
+      expect(html).toContain('href="https://nbcc.scot"');
+    });
+
     it("includes the branded lockup: the real logo (absolute URL) and the tagline", () => {
       const html = buildThankYouEmailHtml(base);
       expect(html).toContain("https://nbcc.scot/assets/img/nbcc-logo.png");

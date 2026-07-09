@@ -232,6 +232,7 @@
 .nl-block-ctrls button { margin-left: .25rem; }
 .nl-block label { display: block; font-size: .8rem; margin-top: .4rem; }
 .nl-block input, .nl-block textarea { width: 100%; }
+.nl-img-tools { display: flex; gap: .4rem; margin-top: .3rem; }
 .nl-preview { width: 100%; height: 720px; border: 1px solid #e0dccf; border-radius: 8px; background: #fff; }
 .nl-preview-label, .nl-actions { margin: .5rem 0; }
 .ty-foot-legal{text-align:center;font-family:var(--font-body);font-weight:400;font-size:7.5pt;color:var(--cream-82);margin-top:3mm}

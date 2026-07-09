@@ -820,8 +820,168 @@
     nlSchedulePreview();
   }
 
-  // Filled in Task 24/25:
-  function nlRenderFields() {}
+  // Quick-pick library of real nbcc.scot assets, offered alongside the URL field and upload button
+  // (TASK-168 / Task 24).
+  var NBCC_IMAGE_LIBRARY = [
+    { label: "Logo", url: "https://nbcc.scot/assets/img/nbcc-logo.png" },
+    { label: "Elf", url: "https://nbcc.scot/assets/img/nbcc-elf.png" },
+    { label: "Red bags handover", url: "https://nbcc.scot/assets/img/home-red-bags-handover.jpg" },
+    { label: "Why packing", url: "https://nbcc.scot/assets/img/why-packing.jpg" },
+    { label: "Story — Tygan", url: "https://nbcc.scot/assets/img/story-tygan.jpg" },
+  ];
+
+  // A labelled text input (or textarea) bound to block.data[key].
+  function nlText(host, block, key, label, multiline) {
+    var wrap = doc.createElement("label");
+    wrap.textContent = label;
+    var input = doc.createElement(multiline ? "textarea" : "input");
+    if (multiline) input.rows = 3;
+    input.value = block.data[key] != null ? block.data[key] : "";
+    input.addEventListener("input", function () { block.data[key] = input.value; nlSchedulePreview(); });
+    wrap.appendChild(input);
+    host.appendChild(wrap);
+  }
+
+  // An image field: URL input + "NBCC library" quick-pick + Upload (POSTs base64 to the endpoint).
+  function nlImageField(host, block, key, label) {
+    nlText(host, block, key, label + " URL", false);
+    var row = doc.createElement("div");
+    row.className = "nl-img-tools";
+
+    var lib = doc.createElement("select");
+    lib.innerHTML = '<option value="">NBCC library…</option>' +
+      NBCC_IMAGE_LIBRARY.map(function (i) { return '<option value="' + i.url + '">' + i.label + "</option>"; }).join("");
+    lib.addEventListener("change", function () {
+      if (lib.value) { block.data[key] = lib.value; nlRenderCanvas(); nlSchedulePreview(); }
+    });
+    row.appendChild(lib);
+
+    var file = doc.createElement("input");
+    file.type = "file";
+    file.accept = "image/png,image/jpeg,image/webp,image/gif";
+    file.addEventListener("change", function () {
+      var f = file.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        var base64 = String(reader.result).split(",")[1];
+        authFetch("/api/admin/newsletter-images", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mime: f.type, dataBase64: base64, filename: f.name }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (j2) {
+            if (j2.url) { block.data[key] = j2.url; nlRenderCanvas(); nlSchedulePreview(); }
+            else el("newsletterMsg").textContent = j2.error || "Upload failed.";
+          });
+      };
+      reader.readAsDataURL(f);
+    });
+    row.appendChild(file);
+    host.appendChild(row);
+  }
+
+  // Repeater for the list-shaped blocks (stats/waysToHelp/events). Renders each item's fields + an
+  // add/remove control. Item shape depends on block.type (see nlBlockDefs defaults).
+  function nlRenderItems(host, block) {
+    var keysByType = {
+      stats: ["number", "label", "caption"],
+      waysToHelp: ["icon", "title", "body", "label", "href"],
+      events: ["day", "month", "name", "location", "label", "href"],
+    };
+    var keys = keysByType[block.type];
+    (block.data.items || []).forEach(function (item, idx) {
+      var fs = doc.createElement("fieldset");
+      fs.innerHTML = "<legend>Item " + (idx + 1) + "</legend>";
+      keys.forEach(function (k) {
+        var wrap = doc.createElement("label");
+        wrap.textContent = k;
+        var input = doc.createElement("input");
+        input.value = item[k] != null ? item[k] : "";
+        input.addEventListener("input", function () { item[k] = input.value; nlSchedulePreview(); });
+        wrap.appendChild(input);
+        fs.appendChild(wrap);
+      });
+      var rm = doc.createElement("button");
+      rm.type = "button";
+      rm.textContent = "Remove item";
+      rm.addEventListener("click", function () { block.data.items.splice(idx, 1); nlRenderCanvas(); nlSchedulePreview(); });
+      fs.appendChild(rm);
+      host.appendChild(fs);
+    });
+    var add = doc.createElement("button");
+    add.type = "button";
+    add.textContent = "+ Add item";
+    add.addEventListener("click", function () {
+      var blank = {};
+      keys.forEach(function (k) { blank[k] = ""; });
+      block.data.items = (block.data.items || []).concat([blank]);
+      nlRenderCanvas();
+      nlSchedulePreview();
+    });
+    host.appendChild(add);
+  }
+
+  // Task 24: editable fields per block type, bound to block.data.
+  function nlRenderFields(host, block) {
+    host.innerHTML = "";
+    switch (block.type) {
+      case "masthead":
+        nlText(host, block, "issueTitle", "Issue title", false);
+        nlImageField(host, block, "heroUrl", "Hero image");
+        break;
+      case "greeting":
+        nlText(host, block, "heading", "Heading (optional)", false);
+        nlText(host, block, "lead", "Intro paragraph (optional)", true);
+        break;
+      case "text":
+        nlText(host, block, "text", "Text (use {{firstName}} to merge)", true);
+        break;
+      case "heading":
+        nlText(host, block, "kicker", "Kicker (optional)", false);
+        nlText(host, block, "title", "Title", false);
+        break;
+      case "image":
+        nlImageField(host, block, "url", "Image");
+        nlText(host, block, "alt", "Alt text", false);
+        nlText(host, block, "caption", "Caption (optional)", false);
+        break;
+      case "story":
+        nlImageField(host, block, "imageUrl", "Image");
+        nlText(host, block, "title", "Title", false);
+        nlText(host, block, "body", "Body", true);
+        nlText(host, block, "label", "Button label", false);
+        nlText(host, block, "href", "Button link", false);
+        break;
+      case "spotlight":
+        nlImageField(host, block, "photoUrl", "Photo");
+        nlText(host, block, "name", "Name", false);
+        nlText(host, block, "quote", "Quote", true);
+        nlText(host, block, "role", "Role (optional)", false);
+        break;
+      case "donationCta":
+        nlImageField(host, block, "imageUrl", "Image");
+        nlText(host, block, "heading", "Heading", false);
+        nlText(host, block, "label", "Button label", false);
+        nlText(host, block, "href", "Button link", false);
+        break;
+      case "button":
+        nlText(host, block, "label", "Label", false);
+        nlText(host, block, "href", "Link", false);
+        break;
+      case "stats":
+      case "waysToHelp":
+      case "events":
+        nlRenderItems(host, block); // repeaters
+        break;
+      case "divider":
+      default:
+        break;
+    }
+  }
+
+  // Filled in Task 25:
   function nlSchedulePreview() {}
 
   if (el("nlPalette")) nlRenderPalette();

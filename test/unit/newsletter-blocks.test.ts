@@ -614,3 +614,112 @@ describe("newsletter blocks — stats variants", () => {
     expect(result).toBe("");
   });
 });
+
+describe("newsletter blocks — waysToHelp variants", () => {
+  const mk = (variant: number, data: Record<string, unknown>) =>
+    renderNewsletter({ blocks: [{ type: "waysToHelp", variant, data }] }, ctx);
+
+  const threeItems = [
+    {
+      icon: "🎁",
+      title: "Donate",
+      body: "Help fund a Christmas parcel.",
+      label: "Give now",
+      href: "https://nbcc.scot/donate",
+    },
+    {
+      icon: "🙋",
+      title: "Volunteer",
+      body: "Join the pack-and-deliver team.",
+      label: "Sign up",
+      href: "https://nbcc.scot/volunteer",
+    },
+    {
+      icon: "📣",
+      title: "Spread the word",
+      body: "Tell a friend or share on social.",
+    },
+  ];
+
+  it("variant 0: three icon columns — a table with all item titles, an icon, and a button when label+href present", () => {
+    const html = mk(0, { items: threeItems });
+    expect(html).toContain("<table");
+    expect(html).toContain("Donate");
+    expect(html).toContain("Volunteer");
+    expect(html).toContain("Spread the word");
+    expect(html).toContain("🎁");
+    expect(html).toContain("Help fund a Christmas parcel.");
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).toContain('href="https://nbcc.scot/volunteer"');
+  });
+
+  it("variant 1: stacked list — all item titles present, no table markup", () => {
+    const html = renderBlock({ type: "waysToHelp", variant: 1, data: { items: threeItems } }, ctx);
+    expect(html).toContain("Donate");
+    expect(html).toContain("Volunteer");
+    expect(html).toContain("Spread the word");
+    expect(html).not.toContain("<table");
+  });
+
+  it("variant 2: two-up columns — all item titles present in a table", () => {
+    const html = mk(2, { items: threeItems });
+    expect(html).toContain("<table");
+    expect(html).toContain("Donate");
+    expect(html).toContain("Volunteer");
+    expect(html).toContain("Spread the word");
+  });
+
+  it("variant 3: single primary CTA — first item only, exactly one button, crimson primary", () => {
+    const html = mk(3, { items: threeItems });
+    expect(html).toContain("Give now");
+    expect(html).toContain('href="https://nbcc.scot/donate"');
+    expect(html).not.toContain("https://nbcc.scot/volunteer");
+    expect(html).not.toContain("Sign up");
+    expect((html.match(/<a /g) ?? []).length).toBe(1);
+    expect(html).toContain(CRIMSON);
+  });
+
+  it("variant 3: degrades to '' when the first item has no href", () => {
+    const result = renderBlock(
+      { type: "waysToHelp", variant: 3, data: { items: [{ title: "Donate", label: "Give now" }] } },
+      ctx,
+    );
+    expect(result).toBe("");
+  });
+
+  it("degrades to no button markup when an item has no href (variants 0-2)", () => {
+    const html = mk(0, { items: [{ title: "Spread the word", body: "Tell a friend." }] });
+    expect(html).toContain("Spread the word");
+    expect(html).not.toContain("<a ");
+  });
+
+  it("escapes icon/title/body/label strings", () => {
+    const html = mk(0, {
+      items: [
+        {
+          icon: "<b>*</b>",
+          title: "<script>evil()</script>",
+          body: "Tea & biscuits",
+          label: "Go <now>",
+          href: "https://nbcc.scot/donate",
+        },
+      ],
+    });
+    expect(html).toContain("&lt;script&gt;evil()&lt;/script&gt;");
+    expect(html).toContain("Tea &amp; biscuits");
+    expect(html).toContain("&lt;b&gt;*&lt;/b&gt;");
+    expect(html).not.toContain("<script>evil()</script>");
+  });
+
+  it("degrades to exactly '' when items is empty", () => {
+    const result0 = renderBlock({ type: "waysToHelp", variant: 0, data: { items: [] } }, ctx);
+    const result1 = renderBlock({ type: "waysToHelp", variant: 1, data: { items: [] } }, ctx);
+    expect(result0).toBe("");
+    expect(result1).toBe("");
+  });
+
+  it("degrades to exactly '' when items is absent entirely", () => {
+    const result = renderBlock({ type: "waysToHelp", variant: 0, data: {} }, ctx);
+    expect(result).toBe("");
+  });
+});

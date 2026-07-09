@@ -505,6 +505,82 @@ function stats(b: Block): string {
   return `<div style="padding:12px 40px;text-align:center">${statFigure(items[0], "40px")}</div>`;
 }
 
+// waysToHelp — Donate / Volunteer / Spread-the-word calls to action.
+//   0: three icon columns (table; each item: icon emoji + title + body + optional button)
+//   1: stacked list (each item stacked vertically)
+//   2: two-up (two columns)
+//   3: single primary CTA — the FIRST item only, rendered as brandButton(label, href, "primary")
+//
+// data contract: items (array of {icon?, title, body?, label?, href?}, optional — read via the
+// `list` helper). Variants 0-2 render EVERY item; variant 3 reads only items[0] and renders
+// nothing but its button. An item's button (label+href) is rendered via brandButton only when
+// href is present — a label with no href degrades to no button rather than a dead link. Degrades
+// to "" when items is empty/absent (0-2), or when the first item has no href (3, since a CTA
+// block with nothing to link to has nothing to show).
+function wayToHelpItem(item: Record<string, unknown>, titleSize: string, bodySize: string): string {
+  const icon = str(item, "icon");
+  const title = escapeHtml(str(item, "title"));
+  const body = str(item, "body");
+  const label = str(item, "label");
+  const href = str(item, "href");
+
+  const iconEl = icon
+    ? `<div style="font-size:28px;line-height:1;margin:0 0 8px">${escapeHtml(icon)}</div>`
+    : "";
+  const bodyEl = body
+    ? `<p style="font-family:${BODY};color:${SLATE};font-size:${bodySize};line-height:1.6;margin:6px 0 0">${escapeHtml(body)}</p>`
+    : "";
+  const buttonEl = href
+    ? `<div style="margin-top:10px">${brandButton(label, href, "outline")}</div>`
+    : "";
+  return `${iconEl}<h3 style="font-family:${HEAD};color:${MAROON};font-size:${titleSize};font-weight:800;margin:0">${title}</h3>${bodyEl}${buttonEl}`;
+}
+
+function wayToHelpTable(items: Record<string, unknown>[], columnWidth: string): string {
+  const cells = items
+    .map(
+      (item) =>
+        `<td style="vertical-align:top;width:${columnWidth};padding:0 8px;text-align:center">${wayToHelpItem(item, "16px", "13px")}</td>`,
+    )
+    .join("");
+  return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></div>`;
+}
+
+function waysToHelp(b: Block): string {
+  const items = list(b.data, "items");
+
+  if (b.variant === 3) {
+    // single primary CTA — first item only
+    if (items.length === 0) return "";
+    const first = items[0];
+    const label = str(first, "label");
+    const href = str(first, "href");
+    if (!href) return "";
+    return `<div style="padding:12px 40px;text-align:center">${brandButton(label, href, "primary")}</div>`;
+  }
+
+  if (items.length === 0) return "";
+
+  if (b.variant === 1) {
+    // stacked list — each item stacked vertically
+    const rows = items
+      .map(
+        (item) =>
+          `<div style="padding:12px 0;border-bottom:1px solid #e5ded3">${wayToHelpItem(item, "16px", "13px")}</div>`,
+      )
+      .join("");
+    return `<div style="padding:12px 40px">${rows}</div>`;
+  }
+
+  if (b.variant === 2) {
+    // two-up — two columns
+    return wayToHelpTable(items, "50%");
+  }
+
+  // variant 0 (default): three icon columns
+  return wayToHelpTable(items, `${Math.floor(100 / items.length)}%`);
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
@@ -517,7 +593,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   story,
   spotlight,
   stats,
-  waysToHelp: stub,
+  waysToHelp,
   events: stub,
   donationCta: stub,
   button,

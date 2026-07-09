@@ -605,16 +605,13 @@ export async function postMyStory(req: Request, res: Response): Promise<Response
   return res.status(200).type("html").send(myStoryThankYouHtml());
 }
 
-// Body-size guard for this route only. The global express.json() (src/app.ts,
-// mounted BEFORE apiRouter) already parses application/json for every route at ITS
-// default 100kb limit, and body-parser skips re-parsing a body it already parsed
-// (req._body) — so a per-route express.json({ limit }) mounted here would never
-// actually run for the JSON path and its limit would be a no-op. To give this public,
-// unauthenticated endpoint a REAL tighter cap without touching the global parser (and
-// so without affecting any other route), reject an oversized JSON request by its
-// Content-Length header before it reaches the handler. 32kb is comfortably above the
-// largest legitimate JSON payload (storyText caps at 5000 chars, see
-// src/stories/schema.ts) while shutting a deliberately oversized POST down early.
+// Body-size guard for the public, unauthenticated JSON path of this route. It reads
+// only the Content-Length header (never the body), so it is mounted in src/app.ts
+// scoped to "/api/my-story" BEFORE the global express.json() — giving a REAL 32kb cap
+// (mounted after the parser it would be a no-op, since body-parser skips a body already
+// parsed at its 100kb default). 32kb is comfortably above the largest legitimate JSON
+// payload (storyText caps at 5000 chars, see src/stories/schema.ts) while shutting a
+// deliberately oversized POST down early. Exported for that mount and for unit tests.
 const MY_STORY_JSON_LIMIT_BYTES = 32 * 1024;
 
 export function rejectOversizedMyStoryJson(req: Request, res: Response, next: () => void): void {
@@ -630,10 +627,10 @@ export function rejectOversizedMyStoryJson(req: Request, res: Response, next: ()
 
 // The form-encoded path (no-JS fallback) has NO global parser (only the global
 // express.json() exists in src/app.ts), so a real, enforced per-route limit of 16kb
-// is added here — comfortably above the largest legitimate form payload.
+// is added here — comfortably above the largest legitimate form payload. The JSON-path
+// size cap (rejectOversizedMyStoryJson) is mounted pre-parse in src/app.ts.
 apiRouter.post(
   "/api/my-story",
-  rejectOversizedMyStoryJson,
   express.urlencoded({ extended: false, limit: "16kb" }),
   postMyStory,
 );

@@ -1,7 +1,7 @@
 import express from "express";
 import { resolve } from "node:path";
 import { healthRouter } from "./routes/health";
-import { apiRouter } from "./routes/api";
+import { apiRouter, rejectOversizedMyStoryJson } from "./routes/api";
 import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
@@ -19,6 +19,12 @@ export function createApp() {
   // it is mounted BEFORE express.json — its route applies express.raw itself; all
   // other routes still get parsed JSON below.
   app.use(stripeWebhookRouter);
+  // Reject an oversized JSON submission to the public, unauthenticated /api/my-story
+  // endpoint by its Content-Length BEFORE the global express.json() parses it, so the
+  // 32kb cap is real (mounted after the parser it would be a no-op, since body-parser
+  // skips a body already parsed at the 100kb default). Scoped to the one path; it only
+  // reads a header, never the body, so it is safe ahead of the parser.
+  app.use("/api/my-story", rejectOversizedMyStoryJson);
   app.use(express.json());
   app.use(apiRouter);
   app.use(portalRouter);

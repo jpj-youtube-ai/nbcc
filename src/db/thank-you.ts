@@ -26,6 +26,7 @@ interface ThankYouSentDbRow {
   gift_aided: boolean;
   personal_message: string | null;
   signed_by_name: string;
+  signed_by_role: string | null;
   sent_by: string;
   sent_at: string;
 }
@@ -42,6 +43,7 @@ export interface ThankYouSent {
   giftAided: boolean;
   personalMessage: string | null;
   signedByName: string;
+  signedByRole: string | null;
   sentBy: string;
   sentAt: string;
 }
@@ -59,6 +61,7 @@ function mapRow(r: ThankYouSentDbRow): ThankYouSent {
     giftAided: r.gift_aided,
     personalMessage: r.personal_message,
     signedByName: r.signed_by_name,
+    signedByRole: r.signed_by_role,
     sentBy: r.sent_by,
     sentAt: r.sent_at,
   };
@@ -69,8 +72,8 @@ export async function insertThankYouSent(client: PoolClient, input: ThankYouInpu
   const res = await client.query<{ id: number }>(
     `INSERT INTO thank_you_sent
        (donor_id, thank_you_name, addressed_to, recipient_email, gift_type,
-        gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name, sent_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name, signed_by_role, sent_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id`,
     [
       input.donorId,
@@ -83,6 +86,7 @@ export async function insertThankYouSent(client: PoolClient, input: ThankYouInpu
       input.giftAided,
       input.personalMessage,
       input.signedByName,
+      input.signedByRole ?? null,
       input.sentBy,
     ],
   );
@@ -119,7 +123,8 @@ export async function listThankYouSent(
 ): Promise<{ results: ThankYouSent[]; total: number }> {
   const res = await pool.query<ThankYouSentDbRow>(
     `SELECT id, donor_id, thank_you_name, addressed_to, recipient_email, gift_type,
-            gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name, sent_by, sent_at
+            gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name,
+            signed_by_role, sent_by, sent_at
        FROM thank_you_sent
       ORDER BY id DESC
       LIMIT $1 OFFSET $2`,
@@ -127,6 +132,20 @@ export async function listThankYouSent(
   );
   const totalRes = await pool.query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM thank_you_sent`);
   return { results: res.rows.map(mapRow), total: Number(totalRes.rows[0].count) };
+}
+
+// One sent letter by id, for re-rendering the public printable-letter page (TASK-165). Returns null
+// when there is no such row.
+export async function getThankYouSentById(id: number): Promise<ThankYouSent | null> {
+  const res = await pool.query<ThankYouSentDbRow>(
+    `SELECT id, donor_id, thank_you_name, addressed_to, recipient_email, gift_type,
+            gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name,
+            signed_by_role, sent_by, sent_at
+       FROM thank_you_sent
+      WHERE id = $1`,
+    [id],
+  );
+  return res.rows.length ? mapRow(res.rows[0]) : null;
 }
 
 // ---- TASK-162: eligible-donors list for the "Donors to thank" view ----

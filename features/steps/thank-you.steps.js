@@ -1,6 +1,7 @@
 const { Given, When, Then, Before, AfterAll } = require("@cucumber/cucumber");
 const assert = require("node:assert");
 const { Pool } = require("pg");
+const { createHmac } = require("node:crypto");
 
 // TASK-162 (REQ-069): BDD for GET /api/admin/thank-you/eligible. Seeds donors +
 // paid donations directly, logs in for a real admin session token, and asserts
@@ -230,6 +231,37 @@ When("I list sent thank-you letters as {string} with password {string}", async f
 Then("the sent thank-you history should include a letter to {string}", function (recipient) {
   const found = (this.adminBody.results || []).some((r) => r.recipientEmail === recipient);
   assert.ok(found, `expected sent history to include a letter to ${recipient}`);
+});
+
+// ---- TASK-165: the public printable-letter page (tokenised) ----
+
+// Mirrors src/thank-you/letter-token.ts: token = `<id>.<hmacSha256(id)>` signed with ADMIN_SESSION_SECRET.
+function signLetterToken(sentId, secret) {
+  const body = String(sentId);
+  const sig = createHmac("sha256", secret).update(body).digest("base64url");
+  return `${body}.${sig}`;
+}
+
+When("I open the print page for that sent letter", async function () {
+  assert.ok(this.tySentId, "expected a sent-letter id from a prior send");
+  const token = signLetterToken(this.tySentId, process.env.ADMIN_SESSION_SECRET);
+  const res = await fetch(`${BASE_URL}/thank-you/letter/${token}`);
+  this.printStatus = res.status;
+  this.printBody = await res.text();
+});
+
+When("I open the print page with an invalid token", async function () {
+  const res = await fetch(`${BASE_URL}/thank-you/letter/garbage.token`);
+  this.printStatus = res.status;
+  this.printBody = await res.text();
+});
+
+Then("the print page status should be {int}", function (expected) {
+  assert.equal(this.printStatus, expected);
+});
+
+Then("the print page should show {string}", function (text) {
+  assert.ok(this.printBody.includes(text), `expected print page to contain "${text}"`);
 });
 
 AfterAll(async function () {

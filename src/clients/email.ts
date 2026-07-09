@@ -232,13 +232,15 @@ export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
   }
 }
 
-// The admin thank-you letter send (TASK-163/REQ-069). After an admin composes a thank-you in the
-// "Thank you" view, the platform emails the donor the fully rendered, branded letter (built by the
-// pure src/thank-you/letter.ts). Like sendNewsletter, From + Reply-To are set to
-// config.GIVING_FROM_EMAIL (the giving inbox) so a reply reaches a real NBCC inbox, and the body carries
-// `thankYou: true` so the relay maps it via its dedicated thank-you branch (honouring this message's
-// subject + from + replyTo) instead of the donation-confirmation default. Same stub-seam + best-effort
-// contract as the other sends: a placeholder EMAIL_SEND_URL means no network outside production.
+// The admin thank-you letter send (TASK-163/REQ-069; from-address + text part TASK-165; CC TASK-168).
+// After an admin composes a thank-you in the "Thank you" view, the platform emails the donor the fully
+// rendered, branded letter (built by the pure src/thank-you/letter.ts) with a plain-text alternative,
+// optionally copying a CC. From + Reply-To are set to config.GIVING_FROM_EMAIL (giving@nbcc.scot) so a
+// reply reaches a real NBCC inbox and the send authenticates on the verified domain, and the body
+// carries `thankYou: true` so the relay maps it via its dedicated thank-you branch (honouring this
+// message's subject + from + replyTo + text + cc) instead of the donation-confirmation default. Same
+// stub-seam + best-effort contract as the other sends: a placeholder EMAIL_SEND_URL means no network
+// outside production.
 export interface ThankYouLetterEmail {
   email: string; // recipient — the relay's recipient field
   cc?: string; // optional CC recipient (TASK-168); omitted from the payload when unset
@@ -246,6 +248,7 @@ export interface ThankYouLetterEmail {
   replyTo: string; // same as from
   subject: string;
   html: string;
+  text?: string; // plain-text alternative (improves deliverability; the relay forwards it)
 }
 
 export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> {

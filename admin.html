@@ -192,12 +192,21 @@
               <form id="newsletterForm">
                 <input type="hidden" id="newsletterId" />
                 <p><label>Subject<br /><input type="text" id="newsletterSubject" required style="width:100%" /></label></p>
-                <p><label>Body (HTML)<br /><textarea id="newsletterBody" rows="14" required style="width:100%"></textarea></label></p>
-                <p>
+                <div class="nl-builder">
+                  <div class="nl-left">
+                    <div class="nl-palette" id="nlPalette" aria-label="Add a block"></div>
+                    <ol class="nl-canvas" id="nlCanvas" aria-label="Newsletter blocks"></ol>
+                  </div>
+                  <div class="nl-right">
+                    <div class="nl-preview-label">Preview</div>
+                    <iframe id="nlPreview" title="Newsletter preview" class="nl-preview"></iframe>
+                  </div>
+                </div>
+                <div class="nl-actions">
                   <button type="button" id="newsletterNew">New newsletter</button>
                   <button type="submit" id="newsletterSave">Save</button>
                   <button type="button" id="newsletterSend" hidden>Send to subscribers</button>
-                </p>
+                </div>
                 <p id="newsletterMsg" aria-live="polite"></p>
               </form>
             </section>

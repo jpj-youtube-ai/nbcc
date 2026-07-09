@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderNewsletter, newsletterDocSchema } from "../../src/newsletter/blocks";
+import { renderNewsletter, newsletterDocSchema, renderBlock } from "../../src/newsletter/blocks";
 import { HEAD, CRIMSON, MAROON } from "../../src/newsletter/theme";
 
 const ctx = { firstName: "Jane" };
@@ -248,6 +248,7 @@ describe("newsletter blocks — divider variants", () => {
     const html = mk(2);
     expect(html).not.toContain("<hr");
     expect(html).not.toContain("&middot;");
+    expect(html).toContain("padding:24px 40px 0");
   });
 
   it("variant 3: small centered mark", () => {
@@ -285,11 +286,10 @@ describe("newsletter blocks — button variants", () => {
   });
 
   it("degrades to nothing when href is empty", () => {
-    const html = renderNewsletter(
-      { blocks: [{ type: "button", variant: 0, data: { label: "Donate now", href: "" } }] },
+    const result = renderBlock(
+      { type: "button", variant: 0, data: { label: "Donate now", href: "" } },
       ctx,
     );
-    expect(html).not.toContain("Donate now");
-    expect(html).not.toContain("<a ");
+    expect(result).toBe("");
   });
 });

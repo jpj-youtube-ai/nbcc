@@ -1543,6 +1543,19 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   the single `donations.declaration_id` FK, a partnership records **one declaration per
   partner** here, each with that partner's share — and the shares must sum exactly to the
   donation total (see **Partnership shares** below, REQ-051).
+- **`thank_you_sent`** — one row per admin thank-you letter sent (additive migration
+  `1783544630090_thank-you-sent.js`, REQ-069 · TASK-161). A **nullable** `donor_id` FK
+  (`onDelete SET NULL`, so an in-kind giver that isn't a donor row — a company or church — is
+  allowed and the history row survives a donor removal), the recipient names
+  (`thank_you_name`/`addressed_to`/`recipient_email`), a gift snapshot (`gift_type` `money`|`in_kind`
+  with `gift_amount_pence` **or** `gift_in_kind`, enforced by a table CHECK, plus a `gift_aided`
+  flag), the optional `personal_message`, the `signed_by_name`, and `sent_by` (the logged-in admin,
+  which may differ from the signatory). It powers the "already thanked" dedupe, an `audit_log` entry
+  per send, and the **Sent history** — storing enough to re-render the PDF. Pure model
+  `src/thank-you/model.ts` (`thankYouInputSchema`, `giftAidUpliftPence`, `formatGiftAmount`,
+  `giftSummary`; unit-tested DB-free in `test/unit/thank-you-model.test.ts`); write/read layer
+  `src/db/thank-you.ts` (`recordThankYouSent` via `writeWithAudit`, `hasBeenThanked`,
+  `listThankYouSent`).
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,

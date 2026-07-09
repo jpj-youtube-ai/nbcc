@@ -669,6 +669,17 @@ describe("newsletter blocks — waysToHelp variants", () => {
     expect(html).toContain("Spread the word");
   });
 
+  it("variant 2: true two-up grid — 3 items wrap into TWO <tr> rows, not one 150%-wide row", () => {
+    const html = renderBlock({ type: "waysToHelp", variant: 2, data: { items: threeItems } }, ctx);
+    // 3 items at 50% each in a single <tr> totals 150% width, which breaks in Outlook's Word
+    // rendering engine. Chunked into rows of 2, 3 items must produce exactly two <tr> rows:
+    // one full pair + one trailing single-cell row.
+    expect((html.match(/<tr/g) ?? []).length).toBe(2);
+    expect(html).toContain("Donate");
+    expect(html).toContain("Volunteer");
+    expect(html).toContain("Spread the word");
+  });
+
   it("variant 3: single primary CTA — first item only, exactly one button, crimson primary", () => {
     const html = mk(3, { items: threeItems });
     expect(html).toContain("Give now");

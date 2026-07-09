@@ -517,7 +517,7 @@ function stats(b: Block): string {
 // href is present — a label with no href degrades to no button rather than a dead link. Degrades
 // to "" when items is empty/absent (0-2), or when the first item has no href (3, since a CTA
 // block with nothing to link to has nothing to show).
-function wayToHelpItem(item: Record<string, unknown>, titleSize: string, bodySize: string): string {
+function wayToHelpItem(item: Record<string, unknown>): string {
   const icon = str(item, "icon");
   const title = escapeHtml(str(item, "title"));
   const body = str(item, "body");
@@ -528,22 +528,42 @@ function wayToHelpItem(item: Record<string, unknown>, titleSize: string, bodySiz
     ? `<div style="font-size:28px;line-height:1;margin:0 0 8px">${escapeHtml(icon)}</div>`
     : "";
   const bodyEl = body
-    ? `<p style="font-family:${BODY};color:${SLATE};font-size:${bodySize};line-height:1.6;margin:6px 0 0">${escapeHtml(body)}</p>`
+    ? `<p style="font-family:${BODY};color:${SLATE};font-size:13px;line-height:1.6;margin:6px 0 0">${escapeHtml(body)}</p>`
     : "";
   const buttonEl = href
     ? `<div style="margin-top:10px">${brandButton(label, href, "outline")}</div>`
     : "";
-  return `${iconEl}<h3 style="font-family:${HEAD};color:${MAROON};font-size:${titleSize};font-weight:800;margin:0">${title}</h3>${bodyEl}${buttonEl}`;
+  return `${iconEl}<h3 style="font-family:${HEAD};color:${MAROON};font-size:16px;font-weight:800;margin:0">${title}</h3>${bodyEl}${buttonEl}`;
 }
 
 function wayToHelpTable(items: Record<string, unknown>[], columnWidth: string): string {
   const cells = items
     .map(
       (item) =>
-        `<td style="vertical-align:top;width:${columnWidth};padding:0 8px;text-align:center">${wayToHelpItem(item, "16px", "13px")}</td>`,
+        `<td style="vertical-align:top;width:${columnWidth};padding:0 8px;text-align:center">${wayToHelpItem(item)}</td>`,
     )
     .join("");
   return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></div>`;
+}
+
+// wayToHelpTwoUpRows — chunks items into rows of 2 so variant 2 renders a TRUE two-up grid.
+// Each pair becomes its own <tr> with two 50%-width <td> cells; a trailing odd item gets its
+// own <tr> with a single 50% cell (no empty second cell). Rendering all items in one <tr> at
+// 50% each (the previous implementation) totals more than 100% width for 3+ items, which
+// Outlook's Word rendering engine does not gracefully wrap.
+function wayToHelpTwoUpRows(items: Record<string, unknown>[]): string {
+  const rows: string[] = [];
+  for (let i = 0; i < items.length; i += 2) {
+    const pair = items.slice(i, i + 2);
+    const cells = pair
+      .map(
+        (item) =>
+          `<td style="vertical-align:top;width:50%;padding:0 8px;text-align:center">${wayToHelpItem(item)}</td>`,
+      )
+      .join("");
+    rows.push(`<tr>${cells}</tr>`);
+  }
+  return rows.join("");
 }
 
 function waysToHelp(b: Block): string {
@@ -566,15 +586,16 @@ function waysToHelp(b: Block): string {
     const rows = items
       .map(
         (item) =>
-          `<div style="padding:12px 0;border-bottom:1px solid #e5ded3">${wayToHelpItem(item, "16px", "13px")}</div>`,
+          `<div style="padding:12px 0;border-bottom:1px solid #e5ded3">${wayToHelpItem(item)}</div>`,
       )
       .join("");
     return `<div style="padding:12px 40px">${rows}</div>`;
   }
 
   if (b.variant === 2) {
-    // two-up — two columns
-    return wayToHelpTable(items, "50%");
+    // two-up — a true two-column grid: items chunked into rows of 2, each row its own <tr>
+    // (see wayToHelpTwoUpRows). Never puts 3+ 50%-width cells in a single <tr>.
+    return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${wayToHelpTwoUpRows(items)}</table></div>`;
   }
 
   // variant 0 (default): three icon columns

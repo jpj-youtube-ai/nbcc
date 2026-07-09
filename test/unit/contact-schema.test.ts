@@ -9,7 +9,8 @@ describe("contactEnquirySchema", () => {
   });
 
   it("defaults a missing lastName to empty string", () => {
-    const { lastName, ...noLast } = valid;
+    const noLast = { ...valid };
+    delete (noLast as Partial<typeof valid>).lastName;
     expect(contactEnquirySchema.parse(noLast).lastName).toBe("");
   });
 

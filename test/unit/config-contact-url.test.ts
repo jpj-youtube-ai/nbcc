@@ -31,7 +31,8 @@ describe("CONTACT_DATABASE_URL config", () => {
   });
 
   it("fails to boot when missing", () => {
-    const { CONTACT_DATABASE_URL, ...withoutContact } = base;
+    const withoutContact = { ...base };
+    delete (withoutContact as Partial<typeof base>).CONTACT_DATABASE_URL;
     expect(() => configSchema.parse(withoutContact)).toThrow();
   });
 });

@@ -6,6 +6,8 @@ import { configSchema } from "../../src/config/schema";
 const validEnv = (): Record<string, string> => ({
   DATABASE_URL: "postgres://app:app@localhost:5432/charity",
   STORIES_DATABASE_URL: "postgres://stories_app:stories@localhost:5432/stories",
+  // Contact form inbox (2026-07-10 spec): required, never defaulted (src/config/schema.ts).
+  CONTACT_DATABASE_URL: "postgres://contact_app:contact@localhost:5432/contact",
   EXTERNAL_API_ONE_BASE_URL: "https://sandbox.api-one.example",
   EXTERNAL_API_ONE_KEY: "k",
   EXTERNAL_API_TWO_KEY: "k",

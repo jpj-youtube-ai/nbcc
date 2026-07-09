@@ -151,3 +151,27 @@ jobs:
           TAG="release-$(date +%Y%m%d)-${GITHUB_SHA::7}"
           git tag "$TAG"
           git push origin "$TAG"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+
+      # Surface the validated image SHA + the exact prod-promote command in the run's
+      # job summary (rendered markdown, easy to copy). Runs last, so a SHA only appears
+      # once build + migrate + deploy + smoke + unit + BDD have all passed — i.e. the SHA
+      # shown is always safe to promote.
+      - name: Promotion hint — validated SHA for production
+        if: success()
+        run: |
+          {
+            echo "## ✅ Staging validated — promote to production"
+            echo ""
+            echo "Copy this to deploy the same image to prod:"
+            echo ""
+            echo '```'
+            echo "gh workflow run deploy-prod.yml -f image_sha=${GITHUB_SHA}"
+            echo '```'
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Image SHA | \`${GITHUB_SHA}\` |"
+            echo "| Release tag | \`${RELEASE_TAG}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "PROMOTE → gh workflow run deploy-prod.yml -f image_sha=${GITHUB_SHA}"

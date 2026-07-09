@@ -80,6 +80,26 @@ describe("thank-you letter (REQ-069 · TASK-163)", () => {
       expect(html).toContain("giving@nbcc.scot");
     });
 
+    it("includes the branded lockup: the real logo (absolute URL) and the tagline", () => {
+      const html = buildThankYouEmailHtml(base);
+      expect(html).toContain("https://nbcc.scot/assets/img/nbcc-logo.png");
+      expect(html).toContain("Here all year");
+    });
+
+    it("carries the letterhead sender, pull-quote and donate CTA from the mockup", () => {
+      const html = buildThankYouEmailHtml(base);
+      expect(html).toContain("Elves Workshop");
+      expect(html).toContain("One random act of kindness at a time.");
+      expect(html).toContain("nbcc.scot/donate");
+      expect(html).toContain("7,657"); // the impact stat paragraph
+    });
+
+    it("sets the signature in the script font stack, not the heading font", () => {
+      const html = buildThankYouEmailHtml(base);
+      // the signer's name sits in a span whose font-family is the cursive/script stack
+      expect(html).toMatch(/font-family:[^"]*Snell Roundhand[^"]*cursive[^"]*">Jodie McFarlane</);
+    });
+
     it("HTML-escapes donor-supplied fields", () => {
       const html = buildThankYouEmailHtml({
         ...base,

@@ -734,3 +734,105 @@ describe("newsletter blocks — waysToHelp variants", () => {
     expect(result).toBe("");
   });
 });
+
+describe("newsletter blocks — events variants", () => {
+  const mk = (variant: number, data: Record<string, unknown>) =>
+    renderNewsletter({ blocks: [{ type: "events", variant, data }] }, ctx);
+
+  const twoItems = [
+    {
+      day: "12",
+      month: "Dec",
+      name: "Carols on the Green",
+      location: "Church Street",
+      label: "Register",
+      href: "https://nbcc.scot/events/carols",
+    },
+    {
+      day: "20",
+      month: "Dec",
+      name: "Santa's Grotto",
+      location: "Town Hall",
+    },
+  ];
+
+  it("variant 0: date-badge rows — both item names present", () => {
+    const html = mk(0, { items: twoItems });
+    expect(html).toContain("Carols on the Green");
+    expect(html).toContain("Santa's Grotto");
+  });
+
+  it("variant 0: renders the day inside a maroon badge (MAROON near the day)", () => {
+    const html = renderBlock({ type: "events", variant: 0, data: { items: twoItems } }, ctx);
+    const badgeMatch = html.match(new RegExp(`<td[^>]*${MAROON}[^>]*>[\\s\\S]*?</td>`));
+    expect(badgeMatch).not.toBeNull();
+    expect(badgeMatch![0]).toContain("12");
+    expect(badgeMatch![0]).toContain("Dec");
+  });
+
+  it("an item with href gets the Register label and link, the other does not", () => {
+    const html = mk(0, { items: twoItems });
+    expect(html).toContain("Register");
+    expect(html).toContain('href="https://nbcc.scot/events/carols"');
+  });
+
+  it("degrades to no Register button when an item has no href", () => {
+    const html = renderBlock(
+      { type: "events", variant: 0, data: { items: [{ day: "20", month: "Dec", name: "Santa's Grotto" }] } },
+      ctx,
+    );
+    expect(html).not.toContain("<a ");
+  });
+
+  it("variant 1: simple list — names + dates inline, no table markup", () => {
+    const html = renderBlock({ type: "events", variant: 1, data: { items: twoItems } }, ctx);
+    expect(html).toContain("Carols on the Green");
+    expect(html).toContain("Santa's Grotto");
+    expect(html).toContain("12");
+    expect(html).toContain("Dec");
+    expect(html).not.toContain("<table");
+  });
+
+  it("variant 2: cards — each event in its own bordered card", () => {
+    const html = mk(2, { items: twoItems });
+    expect(html).toContain("Carols on the Green");
+    expect(html).toContain("Santa's Grotto");
+    expect(html).toContain("border:1px solid");
+  });
+
+  it("variant 3: single featured event — first item only, larger heading", () => {
+    const html = mk(3, { items: twoItems });
+    expect(html).toContain("Carols on the Green");
+    expect(html).not.toContain("Santa's Grotto");
+    expect(html).toContain("<h2");
+  });
+
+  it("escapes name/location/label strings", () => {
+    const html = mk(0, {
+      items: [
+        {
+          day: "12",
+          month: "Dec",
+          name: "<script>evil()</script>",
+          location: "Tea & biscuits",
+          label: "Go <now>",
+          href: "https://nbcc.scot/events/x",
+        },
+      ],
+    });
+    expect(html).toContain("&lt;script&gt;evil()&lt;/script&gt;");
+    expect(html).toContain("Tea &amp; biscuits");
+    expect(html).toContain("Go &lt;now&gt;");
+    expect(html).not.toContain("<script>evil()</script>");
+  });
+
+  it("degrades to exactly '' when items is empty", () => {
+    const result = renderBlock({ type: "events", variant: 0, data: { items: [] } }, ctx);
+    expect(result).toBe("");
+  });
+
+  it("degrades to exactly '' when items is absent entirely", () => {
+    const result = renderBlock({ type: "events", variant: 0, data: {} }, ctx);
+    expect(result).toBe("");
+  });
+});

@@ -602,6 +602,110 @@ function waysToHelp(b: Block): string {
   return wayToHelpTable(items, `${Math.floor(100 / items.length)}%`);
 }
 
+// events — date badge + name + location + Register (upcoming events list).
+//   0: date-badge rows — each item: a MAROON square badge (day over month) beside name/location,
+//      then a Register button (brandButton) when href is present
+//   1: simple list — name + date inline, minimal, no table markup
+//   2: cards — each event in its own bordered card
+//   3: single featured event — the FIRST item only, rendered larger
+//
+// data contract: items (array of {day, month, name, location?, label?, href?}, optional — read
+// via the `list` helper). All fields are read as strings via `str`. An item's Register button is
+// rendered via brandButton only when href is present — a label with no href degrades to no button
+// rather than a dead link. Degrades to "" when items is empty/absent.
+function eventLocationLine(location: string, size: string): string {
+  return location
+    ? `<div style="font-family:${BODY};color:${SLATE_SOFT};font-size:${size};margin-top:2px">${escapeHtml(location)}</div>`
+    : "";
+}
+
+function eventRegisterButton(item: Record<string, unknown>, style: "outline" | "primary"): string {
+  const href = str(item, "href");
+  if (!href) return "";
+  const label = str(item, "label") || "Register";
+  return `<div style="margin-top:8px">${brandButton(label, href, style)}</div>`;
+}
+
+function eventBadge(day: string, month: string): string {
+  return `<td style="vertical-align:top;width:64px;background:${MAROON};color:${CREAM};text-align:center;padding:10px 0;border-radius:6px">
+    <div style="font-family:${HEAD};font-size:22px;font-weight:800;line-height:1">${day}</div>
+    <div style="font-family:${BODY};font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-top:2px">${month}</div>
+  </td>`;
+}
+
+function eventRow(item: Record<string, unknown>): string {
+  const day = escapeHtml(str(item, "day"));
+  const month = escapeHtml(str(item, "month"));
+  const name = escapeHtml(str(item, "name"));
+  const location = str(item, "location");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px"><tr>
+  ${eventBadge(day, month)}
+  <td style="vertical-align:top;padding-left:16px">
+    <h3 style="font-family:${HEAD};color:${MAROON};font-size:16px;font-weight:800;margin:0">${name}</h3>
+    ${eventLocationLine(location, "13px")}
+    ${eventRegisterButton(item, "outline")}
+  </td>
+</tr></table>`;
+}
+
+function events(b: Block): string {
+  const items = list(b.data, "items");
+  if (items.length === 0) return "";
+
+  if (b.variant === 1) {
+    // simple list — name + date inline, minimal, no table markup
+    const rows = items
+      .map((item) => {
+        const day = escapeHtml(str(item, "day"));
+        const month = escapeHtml(str(item, "month"));
+        const name = escapeHtml(str(item, "name"));
+        return `<div style="padding:8px 0;border-bottom:1px solid #e5ded3">
+  <span style="font-family:${BODY};color:${CRIMSON};font-weight:700;font-size:13px">${day} ${month}</span>
+  <span style="font-family:${BODY};color:${SLATE};font-size:14px;margin-left:8px">${name}</span>
+</div>`;
+      })
+      .join("");
+    return `<div style="padding:12px 40px">${rows}</div>`;
+  }
+
+  if (b.variant === 2) {
+    // cards — each event in its own bordered card
+    const cards = items
+      .map((item) => {
+        const day = escapeHtml(str(item, "day"));
+        const month = escapeHtml(str(item, "month"));
+        const name = escapeHtml(str(item, "name"));
+        const location = str(item, "location");
+        return `<div style="border:1px solid #e5ded3;border-radius:8px;padding:16px;margin-bottom:12px">
+  <div style="font-family:${HEAD};color:${CRIMSON};font-size:13px;font-weight:800;text-transform:uppercase">${day} ${month}</div>
+  <h3 style="font-family:${HEAD};color:${MAROON};font-size:16px;font-weight:800;margin:4px 0 0">${name}</h3>
+  ${eventLocationLine(location, "13px")}
+  ${eventRegisterButton(item, "outline")}
+</div>`;
+      })
+      .join("");
+    return `<div style="padding:12px 40px">${cards}</div>`;
+  }
+
+  if (b.variant === 3) {
+    // single featured event — first item only, rendered larger
+    const first = items[0];
+    const day = escapeHtml(str(first, "day"));
+    const month = escapeHtml(str(first, "month"));
+    const name = escapeHtml(str(first, "name"));
+    const location = str(first, "location");
+    return `<div style="padding:12px 40px;text-align:center">
+  <div style="font-family:${HEAD};color:${CRIMSON};font-size:15px;font-weight:800;text-transform:uppercase;letter-spacing:1px">${day} ${month}</div>
+  <h2 style="font-family:${HEAD};color:${MAROON};font-size:26px;font-weight:800;margin:8px 0 0">${name}</h2>
+  ${eventLocationLine(location, "15px")}
+  ${eventRegisterButton(first, "primary")}
+</div>`;
+  }
+
+  // variant 0 (default): date-badge rows
+  return `<div style="padding:12px 40px">${items.map(eventRow).join("")}</div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
@@ -615,7 +719,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   spotlight,
   stats,
   waysToHelp,
-  events: stub,
+  events,
   donationCta: stub,
   button,
   divider,

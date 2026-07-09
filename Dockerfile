@@ -15,10 +15,19 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+# Stories DB migrations (My Story / TASK-B2): a SEPARATE `stories` database on the same
+# RDS instance, migrated via `npm run migrate:stories` (-m migrations-stories) as a one-off
+# ECS task in the staging deploy. Its own directory must ship in the image or the step fails
+# with MODULE_NOT_FOUND at deploy time (guarded by test/unit/dockerfile-scripts-shipped).
+COPY migrations-stories ./migrations-stories
 # Demo-data seed (scripts/seed-demo.mjs), run as a one-off ECS task against a
 # non-prod DB to populate the admin dashboard. Never invoked by CMD; it self-guards
 # against NODE_ENV=production. Uses `pg` (a runtime dependency).
 COPY scripts/seed-demo.mjs ./scripts/seed-demo.mjs
+# Stories DB bootstrap (scripts/bootstrap-stories-db.mjs, My Story / TASK-B2): a one-off ECS
+# task (`npm run bootstrap:stories`) that provisions the separate `stories` database + role
+# before migrate:stories. Must ship in the image or the deploy step fails with MODULE_NOT_FOUND.
+COPY scripts/bootstrap-stories-db.mjs ./scripts/bootstrap-stories-db.mjs
 # Static marketing site served by the app (TASK-005 / REQ-033): every served page,
 # their shared assets, and the clean-URL rules. The site router resolves its root
 # to /app (this WORKDIR) at runtime. Every .html the app serves must be here — the

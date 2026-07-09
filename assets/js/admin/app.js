@@ -720,6 +720,112 @@
   }
 
   // ---- newsletter ----
+
+  // Block builder model (TASK-168). Each def: label, default data, and how many of the 4 variants
+  // are meaningful (all 4 unless noted). The renderer server-side owns the visual variants; the UI
+  // just carries type/variant/data.
+  var nlBlockDefs = {
+    masthead: { label: "Masthead", data: { issueTitle: "July Newsletter" } },
+    greeting: { label: "Greeting", data: { heading: "", lead: "" } },
+    text: { label: "Text", data: { text: "Your text here." } },
+    heading: { label: "Heading", data: { kicker: "", title: "Section title" } },
+    image: { label: "Image", data: { url: "", alt: "", caption: "" } },
+    story: { label: "Story", data: { imageUrl: "", title: "Story title", body: "Story text.", label: "Read more", href: "" } },
+    spotlight: { label: "Spotlight", data: { photoUrl: "", name: "Name", quote: "Quote", role: "" } },
+    stats: { label: "Impact stats", data: { items: [{ number: "7,657", label: "Red Bags delivered" }] } },
+    waysToHelp: { label: "Ways to help", data: { items: [{ icon: "🎁", title: "Donate", body: "", label: "Donate", href: "https://nbcc.scot/donate" }] } },
+    events: { label: "Events", data: { items: [{ day: "15", month: "JUL", name: "Event name", location: "", label: "Register", href: "" }] } },
+    donationCta: { label: "Donation CTA", data: { imageUrl: "", heading: "Support our work", label: "Make a donation today", href: "https://nbcc.scot/donate" } },
+    button: { label: "Button", data: { label: "Learn more", href: "" } },
+    divider: { label: "Divider", data: {} },
+  };
+
+  var nlDoc = { blocks: [] };
+
+  function nlRenderPalette() {
+    var host = el("nlPalette");
+    host.innerHTML = "";
+    Object.keys(nlBlockDefs).forEach(function (type) {
+      var b = doc.createElement("button");
+      b.type = "button";
+      b.textContent = "+ " + nlBlockDefs[type].label;
+      b.addEventListener("click", function () { nlAddBlock(type); });
+      host.appendChild(b);
+    });
+  }
+
+  function nlAddBlock(type) {
+    nlDoc.blocks.push({ type: type, variant: 0, data: JSON.parse(JSON.stringify(nlBlockDefs[type].data)) });
+    nlRenderCanvas();
+    nlSchedulePreview();
+  }
+
+  function nlRenderCanvas() {
+    var host = el("nlCanvas");
+    host.innerHTML = "";
+    nlDoc.blocks.forEach(function (block, i) {
+      var li = doc.createElement("li");
+      li.className = "nl-block";
+      var head = doc.createElement("div");
+      head.className = "nl-block-head";
+      head.innerHTML =
+        '<span class="nl-block-title">' + nlBlockDefs[block.type].label + "</span>" +
+        '<span class="nl-block-ctrls">' +
+        '<button type="button" data-nl="up">↑</button>' +
+        '<button type="button" data-nl="down">↓</button>' +
+        '<button type="button" data-nl="dup">⧉</button>' +
+        '<button type="button" data-nl="del">✕</button>' +
+        "</span>";
+      li.appendChild(head);
+
+      var variants = doc.createElement("div");
+      variants.className = "nl-variants";
+      for (var v = 0; v < 4; v++) {
+        var vb = doc.createElement("button");
+        vb.type = "button";
+        vb.textContent = "Style " + (v + 1);
+        vb.setAttribute("aria-pressed", String(block.variant === v));
+        (function (vi) { vb.addEventListener("click", function () { block.variant = vi; nlRenderCanvas(); nlSchedulePreview(); }); })(v);
+        variants.appendChild(vb);
+      }
+      li.appendChild(variants);
+
+      var fields = doc.createElement("div");
+      fields.className = "nl-fields";
+      nlRenderFields(fields, block); // Task 24
+      li.appendChild(fields);
+
+      head.querySelector('[data-nl="up"]').addEventListener("click", function () { nlMove(i, -1); });
+      head.querySelector('[data-nl="down"]').addEventListener("click", function () { nlMove(i, 1); });
+      head.querySelector('[data-nl="dup"]').addEventListener("click", function () { nlDup(i); });
+      head.querySelector('[data-nl="del"]').addEventListener("click", function () { nlDoc.blocks.splice(i, 1); nlRenderCanvas(); nlSchedulePreview(); });
+
+      host.appendChild(li);
+    });
+  }
+
+  function nlMove(i, delta) {
+    var j = i + delta;
+    if (j < 0 || j >= nlDoc.blocks.length) return;
+    var tmp = nlDoc.blocks[i];
+    nlDoc.blocks[i] = nlDoc.blocks[j];
+    nlDoc.blocks[j] = tmp;
+    nlRenderCanvas();
+    nlSchedulePreview();
+  }
+
+  function nlDup(i) {
+    nlDoc.blocks.splice(i + 1, 0, JSON.parse(JSON.stringify(nlDoc.blocks[i])));
+    nlRenderCanvas();
+    nlSchedulePreview();
+  }
+
+  // Filled in Task 24/25:
+  function nlRenderFields() {}
+  function nlSchedulePreview() {}
+
+  if (el("nlPalette")) nlRenderPalette();
+
   function renderNewsletterList(rows) {
     if (!rows.length) return '<p class="admin-loading">No newsletters yet.</p>';
     var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Recipients</th><th></th></tr></thead><tbody>';

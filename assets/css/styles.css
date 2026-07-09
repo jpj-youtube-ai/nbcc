@@ -629,6 +629,9 @@ fieldset.give-field{border:0;margin:0 0 16px;padding:0;min-width:0}
 fieldset.give-field legend{display:block;font-family:var(--font-head);font-weight:700;font-size:1rem;color:var(--maroon);margin:0 0 10px;padding:0;line-height:1.3}
 .story-reveal{border-top:1px solid var(--line);padding-top:14px;margin-top:2px}
 [data-reveal][hidden]{display:none}
+/* Warm appreciative note under the intro, and the light general-feedback line below the form. */
+.story-note{max-width:60ch;margin:16px auto 0;font-size:1.02rem;line-height:1.7}
+.story-feedback-note{text-align:center;max-width:54ch;margin:24px auto 0;font-size:.9rem;color:var(--slate-soft)}
 
 /* clear per-question rhythm: a light divider between each give-field/fieldset so the
    step reads as distinct questions rather than a wall of inputs. No heavy borders or

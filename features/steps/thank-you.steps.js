@@ -20,18 +20,21 @@ async function login(email, password) {
 }
 
 Before({ tags: "@thankyou" }, async function () {
-  // FK-safe order: donations RESTRICT-reference donors, so clear them first;
-  // thank_you_sent SET-NULLs on donor delete but is cleared to avoid carryover.
+  // Scope cleanup to THIS feature's own rows so we never trip other features'
+  // FKs (e.g. declarations -> donors) or wipe their seed data. Test donors carry
+  // a marker in business_name; thank_you_sent has no inbound FK so is cleared whole.
   await pool.query("DELETE FROM thank_you_sent");
-  await pool.query("DELETE FROM donations");
-  await pool.query("DELETE FROM donors");
-  await pool.query("DELETE FROM users");
+  await pool.query("DELETE FROM donations WHERE donor_id IN (SELECT id FROM donors WHERE business_name = 'TYBDD')");
+  await pool.query("DELETE FROM donors WHERE business_name = 'TYBDD'");
+  await pool.query("DELETE FROM users WHERE email = 'ty.viewer@example.com'");
   this.tyDonorIds = {};
 });
 
 async function seedDonor(world, name, email, emailConsent, giftPence) {
   const donor = await pool.query(
-    "INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', $1, $2, $3) RETURNING id",
+    // business_name = 'TYBDD' marks the row for this feature's scoped cleanup; it is
+    // ignored by recipientName for individuals, so it doesn't affect assertions.
+    "INSERT INTO donors (donor_type, full_name, business_name, email, email_consent) VALUES ('individual', $1, 'TYBDD', $2, $3) RETURNING id",
     [name, email, emailConsent],
   );
   const id = donor.rows[0].id;

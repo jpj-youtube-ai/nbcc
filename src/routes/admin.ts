@@ -197,6 +197,13 @@ function compileNewsletterBody(data: z.infer<typeof newsletterBodySchema>): {
   return { bodyHtml: data.bodyHtml as string, bodyJson: null };
 }
 
+// First name for the greeting merge: first whitespace-delimited token of the donor's full name,
+// falling back to "friend" when we have no usable name.
+function firstNameOf(fullName: string | null): string {
+  const token = (fullName ?? "").trim().split(/\s+/)[0];
+  return token.length > 0 ? token : "friend";
+}
+
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
 export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
   if (!authorizeAdmin(req, res, "editor")) return;
@@ -274,10 +281,16 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   }
 
   const recipients = await listNewsletterRecipients();
+  const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
   for (const r of recipients) {
     const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
-    const html = buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
+    // Block-doc newsletters render per recipient (merge the first name); legacy raw-HTML rows
+    // (no valid bodyJson) fall back to the stored, already-compiled body_html.
+    const rendered = parsedDoc.success
+      ? renderNewsletter(parsedDoc.data, { firstName: firstNameOf(r.fullName) })
+      : newsletter.bodyHtml;
+    const html = buildNewsletterHtml(rendered, unsubscribeUrl);
     try {
       await sendNewsletter({
         email: r.email,

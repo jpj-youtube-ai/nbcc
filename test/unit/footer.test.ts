@@ -29,10 +29,10 @@ const PAGES = [
 ];
 
 // Pages whose footer is byte-identical to index.html's (full brand paragraph,
-// "Find us at nbcc.scot" handle line, four-item "Ways to give" with the
-// Amazon Wishlist link). Some pages (portal/privacy/gift-aid/thank-you) ship
-// a legitimately shorter footer (no handle line, only two "Ways to give"
-// items) and are intentionally excluded from the byte-identity group below.
+// "Find us at nbcc.scot" handle line, three-item "Ways to give"). Some pages
+// (portal/privacy/gift-aid/thank-you) ship a legitimately shorter footer (no
+// handle line, only two "Ways to give" items) and are intentionally excluded
+// from the byte-identity group below.
 const IDENTICAL_FOOTER_GROUP = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html", "my-story.html"];
 
 describe.each(PAGES)("%s footer", (file) => {

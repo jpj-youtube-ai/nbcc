@@ -45,6 +45,8 @@ import {
   claimNewsletterForSend,
   setNewsletterRecipientCount,
 } from "../db/newsletters";
+import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
+import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { sendNewsletter, sendThankYou } from "../clients/email";
@@ -170,10 +172,37 @@ function newsletterId(req: Request, res: Response): number | null {
   return id;
 }
 
-const newsletterBodySchema = z.object({
-  subject: z.string().min(1),
-  bodyHtml: z.string().min(1),
-});
+// A newsletter arrives as EITHER a block document (bodyJson, the builder) OR raw HTML (bodyHtml,
+// legacy + BDD). At least one is required. When bodyJson is present it is the source of truth and
+// body_html is the compiled render; otherwise the raw HTML is stored as-is (rawHtml passthrough).
+const newsletterBodySchema = z
+  .object({
+    subject: z.string().min(1),
+    bodyJson: newsletterDocSchema.optional(),
+    bodyHtml: z.string().min(1).optional(),
+  })
+  .refine((v) => v.bodyJson !== undefined || v.bodyHtml !== undefined, {
+    message: "Provide bodyJson or bodyHtml",
+  });
+
+// Compile the posted payload into { bodyHtml, bodyJson } for storage. Preview name is neutral for
+// the stored render — the real per-recipient name is applied at send time.
+function compileNewsletterBody(data: z.infer<typeof newsletterBodySchema>): {
+  bodyHtml: string;
+  bodyJson: unknown | null;
+} {
+  if (data.bodyJson !== undefined) {
+    return { bodyHtml: renderNewsletter(data.bodyJson, { firstName: "friend" }), bodyJson: data.bodyJson };
+  }
+  return { bodyHtml: data.bodyHtml as string, bodyJson: null };
+}
+
+// First name for the greeting merge: first whitespace-delimited token of the donor's full name,
+// falling back to "friend" when we have no usable name.
+function firstNameOf(fullName: string | null): string {
+  const token = (fullName ?? "").trim().split(/\s+/)[0];
+  return token.length > 0 ? token : "friend";
+}
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
 export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
@@ -198,8 +227,20 @@ export async function postAdminNewsletter(req: Request, res: Response): Promise<
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
   }
-  const created = await createNewsletter(parsed.data.subject, parsed.data.bodyHtml);
+  const { bodyHtml, bodyJson } = compileNewsletterBody(parsed.data);
+  const created = await createNewsletter(parsed.data.subject, bodyHtml, bodyJson);
   return res.status(201).json(created);
+}
+
+// POST /api/admin/newsletters/preview — render a block document to email HTML for the live builder
+// preview (Editor+). Stateless, no DB. Uses a sample first name so merge fields show realistically.
+export async function postAdminNewsletterPreview(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const parsed = z.object({ bodyJson: newsletterDocSchema }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
+  }
+  return res.json({ html: renderNewsletter(parsed.data.bodyJson, { firstName: "Jane" }) });
 }
 
 // PUT /api/admin/newsletters/:id — edit a draft (Editor+). A sent newsletter is immutable → 409.
@@ -216,7 +257,8 @@ export async function putAdminNewsletter(req: Request, res: Response): Promise<R
   if (existing.status === "sent") {
     return res.status(409).json({ error: "A sent newsletter cannot be edited" });
   }
-  const updated = await updateNewsletterDraft(id, parsed.data.subject, parsed.data.bodyHtml);
+  const { bodyHtml, bodyJson } = compileNewsletterBody(parsed.data);
+  const updated = await updateNewsletterDraft(id, parsed.data.subject, bodyHtml, bodyJson);
   if (!updated) return res.status(409).json({ error: "A sent newsletter cannot be edited" });
   return res.json(updated);
 }
@@ -239,10 +281,16 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   }
 
   const recipients = await listNewsletterRecipients();
+  const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
   for (const r of recipients) {
     const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
-    const html = buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
+    // Block-doc newsletters render per recipient (merge the first name); legacy raw-HTML rows
+    // (no valid bodyJson) fall back to the stored, already-compiled body_html.
+    const rendered = parsedDoc.success
+      ? renderNewsletter(parsedDoc.data, { firstName: firstNameOf(r.fullName) })
+      : newsletter.bodyHtml;
+    const html = buildNewsletterHtml(rendered, unsubscribeUrl);
     try {
       await sendNewsletter({
         email: r.email,
@@ -1012,7 +1060,33 @@ adminRouter.delete("/api/admin/stories/:id", deleteAdminStory);
 
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);
+adminRouter.post("/api/admin/newsletters/preview", postAdminNewsletterPreview);
 adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);
 adminRouter.post("/api/admin/newsletters/:id/send", postAdminSendNewsletter);
+
+// POST /api/admin/newsletter-images — upload one image for use in a newsletter block (Editor+).
+// Body { mime, dataBase64 }. Validates mime allow-list + 2 MB cap, stores the bytes, returns the
+// public serve URL. See src/routes/newsletter-images.ts for the GET side.
+export async function postAdminNewsletterImage(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const parsed = z
+    .object({ mime: z.string().min(1), dataBase64: z.string().min(1), filename: z.string().optional() })
+    .safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid upload" });
+
+  const bytes = Buffer.from(parsed.data.dataBase64, "base64");
+  const check = validateUpload(parsed.data.mime, bytes.length);
+  if (!check.ok) {
+    const status = check.reason === "size" ? 413 : 400;
+    return res
+      .status(status)
+      .json({ error: check.reason === "size" ? "Image too large (2 MB max)" : "Unsupported image type" });
+  }
+  const { id } = await insertNewsletterImage(parsed.data.mime, bytes, claims.sub);
+  return res.status(201).json({ id, url: `${config.PORTAL_BASE_URL}/media/newsletter/${id}` });
+}
+
+adminRouter.post("/api/admin/newsletter-images", postAdminNewsletterImage);

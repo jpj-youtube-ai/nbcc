@@ -90,6 +90,11 @@
               </ul>
 
               <form id="contactForm" class="reveal" action="/api/contact" method="post" novalidate>
+                <div hidden aria-hidden="true">
+                  <label for="company">Leave blank
+                    <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+                  </label>
+                </div>
                 <div class="row2">
                   <div class="field">
                     <label for="firstName">First name <span class="req" aria-hidden="true">*</span></label>

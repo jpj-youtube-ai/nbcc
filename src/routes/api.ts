@@ -4,7 +4,6 @@ import { resolve } from "node:path";
 import type StripeNS from "stripe";
 import { z } from "zod";
 import { stripe, stripeConfigured, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
-import { forwardEnquiry } from "../clients/contact";
 import {
   selectDeclarationWording,
   declarationScopeForMode,
@@ -18,6 +17,8 @@ import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render"
 import { config } from "../config";
 import { storySubmissionSchema, buildStoryRecord } from "../stories/schema";
 import { insertStory } from "../db/stories";
+import { contactEnquirySchema } from "../contact/schema";
+import { insertEnquiry } from "../db/contact";
 import { createRateLimiter } from "../portal/request-limiter";
 
 // Marketing-site API endpoints, both implemented.
@@ -378,18 +379,24 @@ export async function postChangePlan(req: Request, res: Response): Promise<Respo
 
 apiRouter.post("/api/subscription/change-plan", postChangePlan);
 
-// Contact enquiry (REQ-030). Mirrors the checkout handler: zod-first validation,
-// then forward via the contact client. The body matches the payload initContactForm
-// posts (REQ-027): firstName/email/message required, lastName optional.
-const contactBodySchema = z.object({
-  firstName: z.string().min(1),
-  lastName: z.string().optional().default(""),
-  email: z.string().email(),
-  message: z.string().min(1),
-});
+// Contact enquiry (2026-07-10 contact-inbox spec, Task 5). Validates a website enquiry and
+// STORES it in the isolated contact DB (contactPool, via insertEnquiry) — no external forward.
+// A honeypot (`company`) filled by a bot is silently accepted (200) but never stored, matching
+// the my-story honeypot pattern. A per-IP rate limit guards the public, unauthenticated endpoint.
+const contactLimiter = createRateLimiter({ max: 5, windowMs: 60_000 });
 
 export async function postContact(req: Request, res: Response): Promise<Response> {
-  const parsed = contactBodySchema.safeParse(req.body);
+  // Honeypot: a real browser never fills the hidden `company` field. Pretend success, store nothing.
+  if (typeof req.body?.company === "string" && req.body.company.trim() !== "") {
+    return res.status(200).json({ status: "sent" });
+  }
+
+  const key = req.ip ?? "unknown";
+  if (!contactLimiter.allow(key, Date.now())) {
+    return res.status(429).json({ error: "Too many messages. Please try again shortly." });
+  }
+
+  const parsed = contactEnquirySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
       error: "Invalid contact request",
@@ -398,16 +405,19 @@ export async function postContact(req: Request, res: Response): Promise<Response
   }
 
   try {
-    await forwardEnquiry(parsed.data);
+    await insertEnquiry(parsed.data);
     return res.status(200).json({ status: "sent" });
-  } catch {
-    // Upstream forwarding failure: the front-end (initContactForm) degrades to its
-    // mailto fallback when it cannot reach the endpoint (REQ-027).
-    return res.status(502).json({ error: "Could not send your message right now" });
+  } catch (err) {
+    console.error("contact store failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Could not send your message right now" });
   }
 }
 
-apiRouter.post("/api/contact", postContact);
+apiRouter.post(
+  "/api/contact",
+  express.urlencoded({ extended: false, limit: "16kb" }),
+  postContact,
+);
 
 // Token-scoped Gift Aid declaration completion (REQ-048/TASK-076). The in-person
 // confirmation email/QR (TASK-075) links a walk-in donor here with their donation's unique

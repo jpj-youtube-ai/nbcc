@@ -84,6 +84,36 @@ jobs:
           echo "migration exit code: $CODE"
           [ "$CODE" = "0" ]
 
+      - name: Bootstrap stories database (idempotent)
+        # My Story (TASK-B2): one-off provisioning of the SEPARATE `stories` database +
+        # `stories_app` role on the same RDS instance (no Terraform postgresql provider,
+        # private RDS — see scripts/bootstrap-stories-db.mjs). Safe to re-run every deploy;
+        # it only creates/re-syncs what's missing. Must run BEFORE migrate:stories.
+        run: |
+          TASK=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE \
+            --task-definition "$TASK_ARN" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"app","command":["npm","run","bootstrap:stories"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK"
+          CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" \
+                   --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "bootstrap exit code: $CODE"
+          [ "$CODE" = "0" ]
+
+      - name: Run stories DB migrations
+        run: |
+          TASK=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE \
+            --task-definition "$TASK_ARN" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"app","command":["npm","run","migrate:stories"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK"
+          CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" \
+                   --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "stories migration exit code: $CODE"
+          [ "$CODE" = "0" ]
+
       - name: Deploy service
         run: |
           aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" \

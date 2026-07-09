@@ -521,3 +521,96 @@ describe("newsletter blocks — spotlight variants", () => {
     expect(html).not.toContain("<img");
   });
 });
+
+describe("newsletter blocks — stats variants", () => {
+  const mk = (variant: number, data: Record<string, unknown>) =>
+    renderNewsletter({ blocks: [{ type: "stats", variant, data }] }, ctx);
+
+  it("variant 0: one big number + label, using the FIRST item only", () => {
+    const html = mk(0, {
+      items: [
+        { number: "500+", label: "Meals served" },
+        { number: "1,234", label: "Families housed" },
+      ],
+    });
+    expect(html).toContain("500+");
+    expect(html).toContain("Meals served");
+    expect(html).toContain(HEAD);
+    expect(html).toContain(CRIMSON);
+    // only the first item's figures — the second item's are not rendered by variant 0
+    expect(html).not.toContain("1,234");
+    expect(html).not.toContain("Families housed");
+  });
+
+  it("variant 1: three-across row — a table rendering ALL items' numbers and labels", () => {
+    const html = mk(1, {
+      items: [
+        { number: "500+", label: "Meals served" },
+        { number: "40", label: "Families housed" },
+      ],
+    });
+    expect(html).toContain("<table");
+    expect(html).toContain("500+");
+    expect(html).toContain("Meals served");
+    expect(html).toContain("40");
+    expect(html).toContain("Families housed");
+  });
+
+  it("variant 2: number + label + caption (first item), caption shown when present", () => {
+    const html = mk(2, {
+      items: [
+        {
+          number: "500+",
+          label: "Meals served",
+          caption: "Across twelve winter weeks",
+        },
+      ],
+    });
+    expect(html).toContain("500+");
+    expect(html).toContain("Meals served");
+    expect(html).toContain("Across twelve winter weeks");
+  });
+
+  it("variant 2: degrades to no caption markup when caption is absent", () => {
+    const html = mk(2, { items: [{ number: "500+", label: "Meals served" }] });
+    expect(html).toContain("500+");
+    expect(html).toContain("Meals served");
+    expect(html).not.toContain(SLATE_SOFT);
+  });
+
+  it("variant 3: inline highlighted — all items' numbers rendered inline, tinted", () => {
+    const html = mk(3, {
+      items: [
+        { number: "500+", label: "Meals served" },
+        { number: "40", label: "Families housed" },
+      ],
+    });
+    expect(html).toContain("500+");
+    expect(html).toContain("Meals served");
+    expect(html).toContain("40");
+    expect(html).toContain("Families housed");
+    expect(html).toContain(TAN_SOFT);
+  });
+
+  it("escapes number/label/caption strings", () => {
+    const html = mk(2, {
+      items: [{ number: "<b>500</b>", label: "Meals & drinks", caption: "12 <weeks>" }],
+    });
+    expect(html).toContain("&lt;b&gt;500&lt;/b&gt;");
+    expect(html).toContain("Meals &amp; drinks");
+    expect(html).toContain("12 &lt;weeks&gt;");
+    expect(html).not.toContain("<b>500</b>");
+  });
+
+  it("degrades to exactly '' when items is empty", () => {
+    const result0 = renderBlock({ type: "stats", variant: 0, data: { items: [] } }, ctx);
+    const result1 = renderBlock({ type: "stats", variant: 1, data: { items: [] } }, ctx);
+    expect(result0).toBe("");
+    expect(result1).toBe("");
+  });
+
+  it("degrades to exactly '' when items is absent entirely", () => {
+    const result = renderBlock({ type: "stats", variant: 0, data: {} }, ctx);
+    expect(result).toBe("");
+  });
+});

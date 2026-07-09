@@ -447,6 +447,64 @@ function spotlight(b: Block): string {
 </tr></table></div>`;
 }
 
+// stats — impact numbers (donation totals, meals served, etc.).
+//   0: one big number (HEAD font ~40px, CRIMSON) + label — uses the FIRST item only
+//   1: three-across row — a table rendering ALL items (number over label)
+//   2: number + label + caption — first item, with an optional caption line
+//   3: inline highlighted — all items' numbers rendered inline as tinted pills
+//
+// data contract: items (array of {number, label, caption?}, optional — read via the `list`
+// helper). All fields are read as strings via `str` since impact figures are author-formatted
+// display text (e.g. "500+", "£12,000"), not numbers to compute with. Degrades to "" when items
+// is empty/absent — an impact block with no figures has nothing to show.
+function statFigure(item: Record<string, unknown>, size: string): string {
+  const number = escapeHtml(str(item, "number"));
+  const label = escapeHtml(str(item, "label"));
+  return `<div style="font-family:${HEAD};color:${CRIMSON};font-size:${size};font-weight:800">${number}</div>
+  <div style="font-family:${BODY};color:${SLATE};font-size:13px;margin-top:4px">${label}</div>`;
+}
+
+function stats(b: Block): string {
+  const items = list(b.data, "items");
+  if (items.length === 0) return "";
+
+  if (b.variant === 1) {
+    // three-across row: a table rendering ALL items, number over label
+    const cells = items
+      .map(
+        (item) =>
+          `<td style="vertical-align:top;text-align:center;padding:0 8px">${statFigure(item, "24px")}</td>`,
+      )
+      .join("");
+    return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></div>`;
+  }
+
+  if (b.variant === 2) {
+    // number + label + caption — first item only
+    const first = items[0];
+    const caption = str(first, "caption");
+    const captionEl = caption
+      ? `<div style="font-family:${BODY};color:${SLATE_SOFT};font-size:13px;margin-top:4px">${escapeHtml(caption)}</div>`
+      : "";
+    return `<div style="padding:12px 40px;text-align:center">${statFigure(first, "36px")}${captionEl}</div>`;
+  }
+
+  if (b.variant === 3) {
+    // inline highlighted — all items' numbers rendered inline as tinted pills
+    const pills = items
+      .map((item) => {
+        const number = escapeHtml(str(item, "number"));
+        const label = escapeHtml(str(item, "label"));
+        return `<span style="display:inline-block;background:${TAN_SOFT};border-radius:999px;padding:6px 16px;margin:0 4px 8px"><strong style="font-family:${HEAD};color:${CRIMSON}">${number}</strong> <span style="font-family:${BODY};color:${SLATE};font-size:13px">${label}</span></span>`;
+      })
+      .join("");
+    return `<div style="padding:12px 40px;text-align:center">${pills}</div>`;
+  }
+
+  // variant 0 (default): one big number + label, using the FIRST item only
+  return `<div style="padding:12px 40px;text-align:center">${statFigure(items[0], "40px")}</div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
@@ -458,7 +516,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   image,
   story,
   spotlight,
-  stats: stub,
+  stats,
   waysToHelp: stub,
   events: stub,
   donationCta: stub,

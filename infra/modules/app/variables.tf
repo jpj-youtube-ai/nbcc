@@ -130,3 +130,11 @@ variable "newsletter_from_email" {
   type        = string
   default     = "newsletter@nbcc.scot"
 }
+
+# From/Reply-To for admin thank-you letters (TASK-165). Non-secret; injected like
+# newsletter_from_email. Override per env in infra/envs/*/main.tf if needed.
+variable "giving_from_email" {
+  description = "From/Reply-To address for admin thank-you letters"
+  type        = string
+  default     = "giving@nbcc.scot"
+}

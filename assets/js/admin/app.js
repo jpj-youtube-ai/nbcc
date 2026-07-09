@@ -958,14 +958,17 @@
           r.giftType === "in_kind"
             ? "Gift in kind" + (r.giftInKind ? ': <span class="admin-sub">' + H.escapeHtml(r.giftInKind) + "</span>" : "")
             : H.formatPence(r.giftAmountPence) + (r.giftAided ? ' <span class="ty-pill ty-pill-ga">Gift Aided</span>' : "");
+        var view = r.printUrl
+          ? '<a class="admin-link" href="' + H.escapeHtml(r.printUrl) + '" target="_blank" rel="noopener">View letter</a>'
+          : "";
         return (
           "<tr><td>" + H.fmtDate(r.sentAt) + "</td><td>" + H.escapeHtml(r.thankYouName) + '<span class="admin-sub">' + H.escapeHtml(r.recipientEmail) +
-          "</span></td><td>" + gift + "</td><td>" + H.escapeHtml(r.signedByName) + "</td><td>" + H.escapeHtml(r.sentBy) + "</td></tr>"
+          "</span></td><td>" + gift + "</td><td>" + H.escapeHtml(r.signedByName) + "</td><td>" + H.escapeHtml(r.sentBy) + "</td><td>" + view + "</td></tr>"
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Sent</th><th>Recipient</th><th>Gift</th><th>Signed by</th><th>By</th></tr></thead><tbody>' +
+      '<table class="admin-table"><thead><tr><th>Sent</th><th>Recipient</th><th>Gift</th><th>Signed by</th><th>By</th><th></th></tr></thead><tbody>' +
       body +
       "</tbody></table>"
     );

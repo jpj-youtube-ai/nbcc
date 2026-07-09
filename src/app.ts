@@ -6,6 +6,7 @@ import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { unsubscribeRouter } from "./routes/unsubscribe";
+import { thankYouLetterRouter } from "./routes/thank-you";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -25,6 +26,9 @@ export function createApp() {
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.
   app.use(unsubscribeRouter);
+  // Public printable thank-you letter page (TASK-165/REQ-069). Also before the site catch-all so its
+  // wildcard doesn't shadow /thank-you/letter/:token.
+  app.use(thankYouLetterRouter);
   // Static marketing site: the four pages, their clean URLs, and /assets.
   // siteRoot resolves relative to this module — the repo root locally and under
   // tsx, /app in the container (where the Dockerfile copies the site files).

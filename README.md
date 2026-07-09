@@ -1325,15 +1325,34 @@ letter fields, `sentBy` is taken from the authed admin (never the client), and t
 `thank_you.sent` audit entry are written atomically (`recordThankYouSent`) before the donor is
 **best-effort** emailed the branded letter via `sendThankYou` (`src/clients/email.ts`) — a failed
 send is logged, not fatal, so the letter is still recorded. `signedByRole` and `letterDate` are
-presentation-only (not stored). The email is routed by the relay's dedicated `thankYou` branch
+`letterDate` is presentation-only (not stored — the print page below uses the row's `sent_at`);
+`signedByRole` **is** stored (TASK-165, additive `signed_by_role` column) so a re-opened letter keeps
+the signatory's title. The email is routed by the relay's dedicated `thankYou` branch
 (`services/email-relay/src/index.js`), which honours the message's own subject + repliable
-`from`/`replyTo` (`NEWSLETTER_FROM_EMAIL`). The UI (`admin.html` view `view-thank-you` + the `ty-*`
-styles in `assets/css/admin.css` + `assets/js/admin/app.js` `loadThankYou`) shows **Send** only to
-Editor/Admin (the server enforces regardless). Proven by `test/unit/thank-you-letter.test.ts`,
+`from`/`replyTo`. The UI (`admin.html` view `view-thank-you` + the `ty-*` styles in
+`assets/css/admin.css` + `assets/js/admin/app.js` `loadThankYou`) shows **Send** only to Editor/Admin
+(the server enforces regardless). Proven by `test/unit/thank-you-letter.test.ts`,
 `test/unit/email-relay-build.test.ts` and the `@thankyou @db` `features/thank-you.feature`
-send/history/role scenarios. A **PDF attachment** (the mockup's aspiration) is a deliberate
-follow-up: the repo has no PDF/headless-browser subsystem, so this slice emails the branded HTML
-letter.
+send/history/role scenarios.
+
+**Thank-you from-address, deliverability + printable-letter page (REQ-069 · TASK-165).** Three
+follow-ons to the tab above. **(a)** Thank-yous now send From **and** Reply-To
+**`GIVING_FROM_EMAIL`** (`giving@nbcc.scot` — a repliable giving inbox, not a `noreply`; see
+**Configuration**), authenticating on the verified `nbcc.scot` Resend domain. **(b)** The email now
+carries a **plain-text alternative** (`buildThankYouEmailText`) alongside the HTML — HTML-only mail
+scores as more spam-like — improving inbox placement. **(c)** Instead of a PDF attachment (which
+raises spam scores and needs a PDF/headless subsystem the repo doesn't have), the email links to a
+public **printable-letter page**: `GET /thank-you/letter/:token` (`src/routes/thank-you.ts`,
+mounted before the site catch-all) renders the stored letter as a print-ready A4 page
+(`buildThankYouLetterPage`, faithful to `assets/thankyou-letter-print.html`) that the donor prints or
+saves as a PDF from the browser. The token is a stateless HMAC of the sent-letter id
+(`src/thank-you/letter-token.ts`, signed with `ADMIN_SESSION_SECRET`) so letters can't be enumerated;
+a bad token → 400, a missing row → 404. The admin sent-history also exposes each letter's print URL
+("View letter"). Covered by `test/unit/thank-you-letter-token.test.ts`,
+`test/unit/thank-you-letter-page.test.ts`, the extended `thank-you-letter` text/print-button tests,
+and `@thankyou @db` print-page scenarios. **Ops:** the relay Worker must be **redeployed**
+(`services/email-relay` — a manual `wrangler deploy`) for the `giving@` sender + `thankYou` branch to
+take effect, and the new `GIVING_FROM_EMAIL` SSM param needs an infra apply.
 
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
@@ -2501,6 +2520,18 @@ must be redeployed (`cd services/email-relay && wrangler deploy`) for the newsle
 effect — one Worker serves both staging and production; (2) `newsletter@nbcc.scot` must be a real
 **receiving mailbox** (Resend is send-only) for replies to land, and its domain `nbcc.scot` must stay
 verified in Resend.
+
+`GIVING_FROM_EMAIL` (TASK-165 · REQ-069) is the From **and** Reply-To for admin **thank-you** letters
+(`giving@nbcc.scot`) — a repliable giving inbox, not a `noreply`, sent on the verified `nbcc.scot`
+domain for deliverability. Wired identically to `NEWSLETTER_FROM_EMAIL`: **not** a secret, a plain
+SSM `String` injected via `valueFrom` (ARN in `exec_secrets`), validated as an email and **defaulted**
+to `giving@nbcc.scot`. `sendThankYou` POSTs its own `subject`/`from`/`replyTo`/`text` + a
+`thankYou: true` discriminator; the relay's `thankYou` branch honours them. **Ops prerequisites:**
+(1) the relay Worker must be **redeployed** for the `thankYou` branch + `giving@` sender to take
+effect; (2) `giving@nbcc.scot` should be a real **receiving mailbox** for replies; (3) the new
+`GIVING_FROM_EMAIL` SSM param requires an infra apply. Deliverability beyond the sender is DNS:
+`nbcc.scot` needs SPF + DKIM (already applied for Resend) and a **DMARC** record for best inbox
+placement.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

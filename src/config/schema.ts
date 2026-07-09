@@ -81,6 +81,11 @@ export const configSchema = z.object({
   // ADMIN_NOTIFICATION_EMAIL (SSM String → task-def). Validated as an email address. Defaulted
   // to the production address so local dev / CI boot without extra setup.
   NEWSLETTER_FROM_EMAIL: z.string().email().default("newsletter@nbcc.scot"),
+  // The From/Reply-To address for admin thank-you letters (TASK-165/REQ-069). A repliable brand
+  // giving inbox (not a noreply) so a donor's reply reaches a real person, sent on the verified
+  // nbcc.scot domain for deliverability. NOT a secret; wired exactly like NEWSLETTER_FROM_EMAIL
+  // (SSM String → task-def). Defaulted to the production address so local dev / CI boot with no setup.
+  GIVING_FROM_EMAIL: z.string().email().default("giving@nbcc.scot"),
 });
 
 export type Config = z.infer<typeof configSchema>;

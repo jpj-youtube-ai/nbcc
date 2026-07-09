@@ -52,3 +52,17 @@ Feature: Admin thank-you eligible-donors list (REQ-069 · TASK-162)
     Given an admin user "ty.editor2@example.com" with role "editor" and password "edit2-pw-123"
     When I send a thank-you letter as "ty.editor2@example.com" with password "edit2-pw-123" to "not-an-email" for "Bad Email"
     Then the admin response status should be 400
+
+  # TASK-165: the sent letter has a public, tokenised print-your-letter page.
+
+  Scenario: the sent letter is reachable at its signed print link
+    Given an admin user "ty.editor3@example.com" with role "editor" and password "edit3-pw-123"
+    When I send a thank-you letter as "ty.editor3@example.com" with password "edit3-pw-123" to "print.me@example.com" for "Print Me"
+    Then the admin response status should be 201
+    When I open the print page for that sent letter
+    Then the print page status should be 200
+    And the print page should show "Thank you, Print Me."
+
+  Scenario: an invalid print link is rejected
+    When I open the print page with an invalid token
+    Then the print page status should be 400

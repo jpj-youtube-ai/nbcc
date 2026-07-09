@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildThankYouEmailHtml, thankYouSubject, type ThankYouLetterView } from "../../src/thank-you/letter";
+import {
+  buildThankYouEmailHtml,
+  buildThankYouEmailText,
+  thankYouSubject,
+  type ThankYouLetterView,
+} from "../../src/thank-you/letter";
 
 // TASK-163 (REQ-069): the pure, branded thank-you letter → email HTML builder.
 // DB-free and config-free (CLAUDE.md rule 5 — logic gets a unit test); the route
@@ -109,6 +114,41 @@ describe("thank-you letter (REQ-069 · TASK-163)", () => {
       expect(html).not.toContain("<script>alert(1)</script>");
       expect(html).toContain("&lt;script&gt;");
       expect(html).toContain("Tom &amp; Jerry &lt;3");
+    });
+
+    it("adds a 'View & print your letter' button only when a printUrl is given (TASK-165)", () => {
+      expect(buildThankYouEmailHtml(base)).not.toContain("View &amp; print your letter");
+      const withLink = buildThankYouEmailHtml({ ...base, printUrl: "https://nbcc.scot/thank-you/letter/7.sig" });
+      expect(withLink).toContain("View &amp; print your letter");
+      expect(withLink).toContain('href="https://nbcc.scot/thank-you/letter/7.sig"');
+    });
+  });
+
+  describe("buildThankYouEmailText (TASK-165 deliverability)", () => {
+    it("produces a plain-text alternative with the key letter content", () => {
+      const text = buildThankYouEmailText({ ...base, printUrl: "https://nbcc.scot/thank-you/letter/7.sig" });
+      expect(text).toContain("Thank you, Margaret.");
+      expect(text).toContain("Dear Mrs Robertson,");
+      expect(text).toContain("£1500.00");
+      expect(text).toContain("£1875.00"); // Gift Aid uplift
+      expect(text).toContain("It was lovely to meet you at the Elves Workshop.");
+      expect(text).toContain("Jodie McFarlane");
+      expect(text).toContain("View & print your letter: https://nbcc.scot/thank-you/letter/7.sig");
+      expect(text).toContain("SC047995");
+      // plain text carries no HTML tags
+      expect(text).not.toMatch(/<[a-z]/i);
+    });
+
+    it("uses the in-kind wording and omits the uplift for an in-kind gift", () => {
+      const text = buildThankYouEmailText({
+        ...base,
+        giftType: "in_kind",
+        giftAmountPence: null,
+        giftInKind: "40 selection boxes",
+        giftAided: false,
+      });
+      expect(text).toContain("your donation of 40 selection boxes");
+      expect(text).not.toContain("25%");
     });
   });
 });

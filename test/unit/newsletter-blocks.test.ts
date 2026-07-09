@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderNewsletter, newsletterDocSchema, renderBlock } from "../../src/newsletter/blocks";
-import { HEAD, CRIMSON, MAROON } from "../../src/newsletter/theme";
+import { HEAD, CRIMSON, MAROON, TAN_SOFT, SLATE_SOFT } from "../../src/newsletter/theme";
 
 const ctx = { firstName: "Jane" };
 
@@ -433,5 +433,91 @@ describe("newsletter blocks — story variants", () => {
     expect(html).toContain("A Winter to Remember");
     expect(html).toContain("Forty families helped.");
     expect(html).not.toContain("&rarr;");
+  });
+});
+
+describe("newsletter blocks — spotlight variants", () => {
+  const mk = (variant: number, data: Record<string, unknown>) =>
+    renderNewsletter({ blocks: [{ type: "spotlight", variant, data }] }, ctx);
+
+  it("variant 0: photo-left + quote — two-column table with photo, name, quote, role", () => {
+    const html = mk(0, {
+      photoUrl: "https://example.org/margaret.jpg",
+      name: "Margaret Kerr",
+      quote: "The shelter gave my family somewhere warm to be.",
+      role: "Volunteer",
+    });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).toContain("The shelter gave my family somewhere warm to be.");
+    expect(html).toContain('src="https://example.org/margaret.jpg"');
+    expect(html).toContain('alt="Margaret Kerr"');
+    expect(html).toContain("<table");
+    expect(html).toContain("Volunteer");
+  });
+
+  it("variant 0: degrades to no photo markup when photoUrl is absent, name/quote still render", () => {
+    const html = mk(0, { name: "Margaret Kerr", quote: "Thank you for everything." });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).toContain("Thank you for everything.");
+    expect(html).not.toContain("<img");
+  });
+
+  it("variant 0: no role line when role is absent", () => {
+    const html = mk(0, { name: "Margaret Kerr", quote: "Thank you for everything." });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).not.toContain(SLATE_SOFT);
+  });
+
+  it("variant 1: centered round avatar (border-radius:50%) + quote below", () => {
+    const html = mk(1, {
+      photoUrl: "https://example.org/margaret.jpg",
+      name: "Margaret Kerr",
+      quote: "The shelter gave my family somewhere warm to be.",
+    });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).toContain("The shelter gave my family somewhere warm to be.");
+    expect(html).toContain('src="https://example.org/margaret.jpg"');
+    expect(html).toContain("border-radius:50%");
+  });
+
+  it("variant 1: degrades to no photo markup when photoUrl is absent", () => {
+    const html = mk(1, { name: "Margaret Kerr", quote: "Thank you for everything." });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).toContain("Thank you for everything.");
+    expect(html).not.toContain("<img");
+  });
+
+  it("variant 2: big-quote in the HEAD font with name/role attribution, no photo", () => {
+    const html = mk(2, {
+      photoUrl: "https://example.org/margaret.jpg",
+      name: "Margaret Kerr",
+      quote: "The shelter gave my family somewhere warm to be.",
+      role: "Volunteer",
+    });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).toContain("The shelter gave my family somewhere warm to be.");
+    expect(html).toContain("Volunteer");
+    expect(html).toContain(HEAD);
+    // big-quote variant never shows a photo, even when photoUrl is provided
+    expect(html).not.toContain("<img");
+  });
+
+  it("variant 3: tinted card (TAN_SOFT background) with name and quote", () => {
+    const html = mk(3, {
+      photoUrl: "https://example.org/margaret.jpg",
+      name: "Margaret Kerr",
+      quote: "The shelter gave my family somewhere warm to be.",
+    });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).toContain("The shelter gave my family somewhere warm to be.");
+    expect(html).toContain(TAN_SOFT);
+    expect(html).toContain("#F3E4DD");
+  });
+
+  it("variant 3: degrades to no photo markup when photoUrl is absent", () => {
+    const html = mk(3, { name: "Margaret Kerr", quote: "Thank you for everything." });
+    expect(html).toContain("Margaret Kerr");
+    expect(html).toContain("Thank you for everything.");
+    expect(html).not.toContain("<img");
   });
 });

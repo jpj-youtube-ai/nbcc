@@ -378,6 +378,75 @@ function story(b: Block): string {
   return `<div style="padding:12px 40px">${imgEl}${storyBody(b.data, "18px", "14px")}</div>`;
 }
 
+// spotlight — a person's photo + name + quote (volunteer/donor/beneficiary spotlight).
+//   0: photo-left + quote (two-column table: photo left, name/quote/role right)
+//   1: centered round avatar + quote below
+//   2: big-quote (HEAD font, ~22px) with name/role attribution, never shows a photo
+//   3: tinted card (TAN_SOFT background) with photo, quote, name/role
+//
+// data contract: photoUrl (string, optional), name (string, optional — falls back to ""), quote
+// (string, optional — falls back to ""), role (string, optional — rendered only when present).
+// Degrades to no photo markup when photoUrl is absent (variant 2 never shows one at all).
+function spotlightRoleLine(role: string): string {
+  return role
+    ? `<div style="font-family:${BODY};color:${SLATE_SOFT};font-size:13px;margin-top:2px">${escapeHtml(role)}</div>`
+    : "";
+}
+
+function spotlightPhoto(photoUrl: string, alt: string, size: number): string {
+  if (!photoUrl) return "";
+  return `<img src="${escapeHtml(photoUrl)}" alt="${alt}" width="${size}" style="display:inline-block;width:${size}px;height:${size}px;border-radius:50%;object-fit:cover" />`;
+}
+
+function spotlight(b: Block): string {
+  const photoUrl = str(b.data, "photoUrl");
+  const name = escapeHtml(str(b.data, "name"));
+  const quote = escapeHtml(str(b.data, "quote"));
+  const role = str(b.data, "role");
+
+  if (b.variant === 1) {
+    // centered round avatar + quote below
+    return `<div style="padding:12px 40px;text-align:center">
+  ${spotlightPhoto(photoUrl, name, 96)}
+  <p style="font-family:${HEAD};color:${CRIMSON};font-style:italic;font-size:18px;line-height:1.5;margin:12px 0 0">&ldquo;${quote}&rdquo;</p>
+  <div style="font-family:${HEAD};color:${MAROON};font-size:15px;font-weight:800;margin-top:8px">${name}</div>
+  ${spotlightRoleLine(role)}
+</div>`;
+  }
+
+  if (b.variant === 2) {
+    // big-quote with attribution — quote-focused, no photo even when photoUrl is provided
+    return `<div style="padding:12px 40px;text-align:center">
+  <p style="font-family:${HEAD};color:${MAROON};font-style:italic;font-size:22px;line-height:1.5;margin:0">&ldquo;${quote}&rdquo;</p>
+  <div style="font-family:${HEAD};color:${CRIMSON};font-size:14px;font-weight:800;margin-top:12px">${name}</div>
+  ${spotlightRoleLine(role)}
+</div>`;
+  }
+
+  if (b.variant === 3) {
+    // tinted card
+    return `<div style="padding:12px 40px"><div style="background:${TAN_SOFT};padding:20px 24px;text-align:center">
+  ${spotlightPhoto(photoUrl, name, 72)}
+  <p style="font-family:${HEAD};color:${MAROON};font-style:italic;font-size:16px;line-height:1.5;margin:12px 0 0">&ldquo;${quote}&rdquo;</p>
+  <div style="font-family:${HEAD};color:${CRIMSON};font-size:14px;font-weight:800;margin-top:8px">${name}</div>
+  ${spotlightRoleLine(role)}
+</div></div>`;
+  }
+
+  // variant 0 (default): photo-left + quote, two-column table
+  const imgCell = photoUrl
+    ? `<td style="vertical-align:top;width:100px">${spotlightPhoto(photoUrl, name, 80)}</td>`
+    : "";
+  return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+  ${imgCell}
+  <td style="vertical-align:top;padding-left:${photoUrl ? "16px" : "0"}">
+    <p style="font-family:${HEAD};color:${CRIMSON};font-style:italic;font-size:16px;line-height:1.5;margin:0">&ldquo;${quote}&rdquo;</p>
+    <div style="font-family:${HEAD};color:${MAROON};font-size:14px;font-weight:800;margin-top:8px">${name}</div>
+    ${spotlightRoleLine(role)}
+  </td>
+</tr></table></div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
@@ -388,7 +457,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   heading,
   image,
   story,
-  spotlight: stub,
+  spotlight,
   stats: stub,
   waysToHelp: stub,
   events: stub,

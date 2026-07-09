@@ -119,6 +119,18 @@ These complement, and don't replace, the required superpowers workflow above.
 
 ## PR workflow (Claude drives this in-session: lint → wait for green → merge)
 
+> **Standing rule for everyone (all machines): finish every task with `/ship`.**
+> This repo ships the `ship` skill (`.claude/skills/ship/`), and it is the
+> required way to land work — not an option. When a change is ready, invoke
+> `/ship`: it assigns the task number (latest in GitHub Actions **+1**), opens the
+> PR, watches `pr.yml` to green, self-merges, applies staging infra if the diff
+> touches `infra/`, watches the staging deploy, then **stops at the production
+> boundary** and hands back the manual prod-promote command (`/ship` never
+> deploys production). Don't hand-run the steps below when `/ship` covers them —
+> they document what `/ship` automates and how to fix a red gate. If `/ship`
+> doesn't appear in your session, reload Claude Code (`.claude/` changed) so the
+> committed skill is picked up.
+
 Don't open a PR and walk away — take it to a green merge in the same session,
 acting as the watcher:
 

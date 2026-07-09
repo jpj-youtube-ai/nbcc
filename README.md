@@ -2409,6 +2409,9 @@ so run the staging pipeline (below) right after.
    builds + pushes the image (tagged by commit SHA, to the shared ECR repo),
    runs migrations as a one-off task, deploys to ECS, smoke-tests `/health`,
    runs **unit + BDD against the live staging URL**, then tags a release.
+   On success it also writes a **promotion hint** to the run's job summary — the
+   validated image SHA plus the ready-to-run `deploy-prod.yml` command — so you can
+   copy the exact SHA straight into the prod promote (below).
    The staging BDD runs `--tags "not @db and not @stub-only"`: `@db` scenarios
    need a direct Postgres connection (staging's RDS is private), and `@stub-only`
    scenarios are happy-path Stripe flows that only pass against the offline stub
@@ -2417,7 +2420,8 @@ so run the staging pipeline (below) right after.
    has no counterpart for). Both sets are fully covered by `pr.yml`'s BDD.
 3. **Promote to production manually** -> run `deploy-prod.yml`
    (**Actions -> Deploy production -> Run workflow**) with the staging-validated
-   commit SHA. It deploys the *same image* to production and smoke-tests it.
+   commit SHA (copy it from the staging run's job-summary promotion hint). It
+   deploys the *same image* to production and smoke-tests it.
    Production does **not** auto-deploy on staging success; the `production`
    environment's **required-reviewer approval** gate still applies.
 

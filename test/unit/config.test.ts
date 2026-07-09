@@ -100,6 +100,16 @@ describe("config schema — contact forwarding key (REQ-030)", () => {
     expect(configSchema.safeParse({ ...validEnv(), ADMIN_SESSION_SECRET: "" }).success).toBe(false); // non-empty
   });
 
+  it("defaults GIVING_FROM_EMAIL to giving@nbcc.scot and validates it as an email (REQ-069)", () => {
+    // Defaulted (like NEWSLETTER_FROM_EMAIL) so local/CI boot without extra setup; the default is
+    // the real sender address for donor thank-you letters, so lock it here.
+    const parsed = configSchema.safeParse(validEnv());
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.GIVING_FROM_EMAIL).toBe("giving@nbcc.scot");
+    // A malformed address must be rejected, not silently stripped.
+    expect(configSchema.safeParse({ ...validEnv(), GIVING_FROM_EMAIL: "not-an-email" }).success).toBe(false);
+  });
+
   it("treats STRIPE_DONATION_PRODUCT as optional", () => {
     // absent is fine (validEnv omits it)...
     expect(configSchema.safeParse(validEnv()).success).toBe(true);

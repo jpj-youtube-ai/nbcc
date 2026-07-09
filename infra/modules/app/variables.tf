@@ -130,3 +130,11 @@ variable "newsletter_from_email" {
   type        = string
   default     = "newsletter@nbcc.scot"
 }
+
+# From/Reply-To for donor thank-you letters (TASK-165/REQ-069). Held in SSM and injected via the
+# task-def secrets list like newsletter_from_email. Override per env in infra/envs/*/main.tf if needed.
+variable "giving_from_email" {
+  description = "From/Reply-To address for donor thank-you letters"
+  type        = string
+  default     = "giving@nbcc.scot"
+}

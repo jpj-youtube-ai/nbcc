@@ -24,6 +24,11 @@ jobs:
       # B2) - the point here is DB isolation (own database, own migrations table), not
       # credential isolation.
       STORIES_DATABASE_URL: postgres://app:app@localhost:5432/stories
+      # Contact form inbox (2026-07-10 spec): a SEPARATE database, same Postgres service,
+      # same isolation rationale as STORIES_DATABASE_URL above (own database, own
+      # migrations table, CI reuses the `app` role — credential isolation is a prod/infra
+      # concern handled by the bootstrap script + Terraform).
+      CONTACT_DATABASE_URL: postgres://app:app@localhost:5432/contact
       EXTERNAL_API_ONE_BASE_URL: https://sandbox.api-one.example
       EXTERNAL_API_ONE_KEY: ci-dummy
       EXTERNAL_API_TWO_KEY: ci-dummy
@@ -78,6 +83,12 @@ jobs:
       - name: Create stories database
         run: PGPASSWORD=app psql -h localhost -U app -d charity -c 'CREATE DATABASE stories'
       - run: npm run migrate:stories
+      # Contact form inbox (2026-07-10 spec): create the separate `contact` database in the
+      # same Postgres service, then run its own migration against it (own pgmigrations table,
+      # never touching the `charity` DB's or the `stories` DB's migrations).
+      - name: Create contact database
+        run: PGPASSWORD=app psql -h localhost -U app -d charity -c 'CREATE DATABASE contact'
+      - run: npm run migrate:contact
       - run: npm run test:unit
       - name: Start app + BDD against it
         run: |

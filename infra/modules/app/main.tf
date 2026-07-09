@@ -83,6 +83,25 @@ resource "aws_ssm_parameter" "stories_db_url" {
   value = "postgres://stories_app:${random_password.stories.result}@${aws_db_instance.app.address}:5432/stories?sslmode=no-verify"
 }
 
+# Contact form inbox (2026-07-10 spec): a SEPARATE database on the same RDS instance, with its
+# own name (`contact`) and its own role (`contact_app`) — never the `charity` DB's `app` master
+# user, never the `stories` DB. Same rationale as random_password.stories / stories_db_url above:
+# Terraform can only generate the credential + publish it; the database and role are created
+# imperatively by scripts/bootstrap-contact-db.mjs (run as a one-off ECS task in the deploy
+# workflow, BEFORE migrate:contact).
+resource "random_password" "contact" {
+  length  = 24
+  special = false
+}
+
+resource "aws_ssm_parameter" "contact_db_url" {
+  name  = "/${var.project}/${var.environment}/CONTACT_DATABASE_URL"
+  type  = "SecureString"
+  # Same sslmode=no-verify requirement as db_url above (RDS enforces TLS). The
+  # bootstrap script and node-pg-migrate (migrate:contact) both parse this URL.
+  value = "postgres://contact_app:${random_password.contact.result}@${aws_db_instance.app.address}:5432/contact?sslmode=no-verify"
+}
+
 # App / third-party secrets: placeholders. Set REAL values out of band:
 #   aws ssm put-parameter --name /charity-site/staging/EXTERNAL_API_ONE_KEY \
 #     --type SecureString --value 'real-key' --overwrite

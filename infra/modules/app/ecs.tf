@@ -63,6 +63,10 @@ data "aws_iam_policy_document" "exec_secrets" {
       # must be able to read it. Needed by the running app AND by the one-off bootstrap/
       # migrate:stories tasks (they reuse this task definition with a command override).
       aws_ssm_parameter.stories_db_url.arn,
+      # Contact form inbox (2026-07-10 spec): a SecureString injected via valueFrom, so the exec
+      # role must be able to read it. Needed by the running app AND by the one-off bootstrap:contact/
+      # migrate:contact tasks (they reuse this task definition with a command override).
+      aws_ssm_parameter.contact_db_url.arn,
       # Newsletter From/Reply-To address (TASK-161): non-secret String injected via valueFrom, so
       # the exec role must be able to read it.
       aws_ssm_parameter.newsletter_from_email.arn,
@@ -163,6 +167,10 @@ resource "aws_ecs_task_definition" "app" {
       # used by scripts/bootstrap-stories-db.mjs) and STORIES_DATABASE_URL (used by the app and
       # by migrate:stories).
       { name = "STORIES_DATABASE_URL", valueFrom = aws_ssm_parameter.stories_db_url.arn },
+      # Contact form inbox (2026-07-10 spec): a SecureString, injected like a secret — so its ARN
+      # must also appear in exec_secrets above. Used by the app and by the one-off
+      # bootstrap:contact / migrate:contact tasks.
+      { name = "CONTACT_DATABASE_URL", valueFrom = aws_ssm_parameter.contact_db_url.arn },
       # Newsletter From/Reply-To address (TASK-161/REQ-069): non-secret SSM String, injected via
       # valueFrom like PORTAL_BASE_URL — so its ARN must also appear in exec_secrets below.
       { name = "NEWSLETTER_FROM_EMAIL", valueFrom = aws_ssm_parameter.newsletter_from_email.arn },

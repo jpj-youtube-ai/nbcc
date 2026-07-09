@@ -1019,6 +1019,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
 | `GET /api/admin/subscriptions/dunning` | **implemented** | REQ-066 (at-risk / lapsed monthly gifts) |
 | `GET /api/admin/thank-you/eligible?threshold=` | **implemented** | REQ-069 · TASK-162 (donors whose largest single paid gift ≥ threshold pence, default £1,000, tagged with send-state + already-thanked) |
+| `POST /api/admin/thank-you/send` | **implemented** | REQ-069 · TASK-163 (Editor+; record + audit a thank-you letter and email the donor the branded letter) |
+| `GET /api/admin/thank-you/sent?limit&offset` | **implemented** | REQ-069 · TASK-163 (sent-letter history, most recent first) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1306,6 +1308,27 @@ The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed 
 confirmation page (no new static `.html` file, so there's no Dockerfile-COPY / page-list guard to
 update). An invalid or tampered token renders the same page shape with **400** instead of writing
 anything. Covered by the `@newsletter @db` `features/newsletter.feature` unsubscribe scenarios.
+
+**Thank-you letters tab (REQ-069 · TASK-163).** An eighth admin nav section (between Newsletter and
+Audit) for thanking significant givers. It has three panels: **(1) Donors to thank** reads
+`GET /api/admin/thank-you/eligible` (TASK-162) and lists eligible donors with a send-state pill;
+**(2) Compose & send** is a form with a **live A4 letter preview** (the exact branded letter the
+donor is emailed, mirroring the pure `src/thank-you/letter.ts`) that updates as you type — a
+`Write` on a listed donor prefills it; **(3) Sent history** reads `GET /api/admin/thank-you/sent`.
+Sending posts `POST /api/admin/thank-you/send` (**Editor+**): the body is the `thankYouInputSchema`
+letter fields, `sentBy` is taken from the authed admin (never the client), and the row + its
+`thank_you.sent` audit entry are written atomically (`recordThankYouSent`) before the donor is
+**best-effort** emailed the branded letter via `sendThankYou` (`src/clients/email.ts`) — a failed
+send is logged, not fatal, so the letter is still recorded. `signedByRole` and `letterDate` are
+presentation-only (not stored). The email is routed by the relay's dedicated `thankYou` branch
+(`services/email-relay/src/index.js`), which honours the message's own subject + repliable
+`from`/`replyTo` (`NEWSLETTER_FROM_EMAIL`). The UI (`admin.html` view `view-thank-you` + the `ty-*`
+styles in `assets/css/admin.css` + `assets/js/admin/app.js` `loadThankYou`) shows **Send** only to
+Editor/Admin (the server enforces regardless). Proven by `test/unit/thank-you-letter.test.ts`,
+`test/unit/email-relay-build.test.ts` and the `@thankyou @db` `features/thank-you.feature`
+send/history/role scenarios. A **PDF attachment** (the mockup's aspiration) is a deliberate
+follow-up: the repo has no PDF/headless-browser subsystem, so this slice emails the branded HTML
+letter.
 
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC

@@ -45,6 +45,14 @@ export function buildEmail(p) {
     return { to, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
   }
 
+  // Thank-you letter (src/clients/email.ts sendThankYou, REQ-069 · TASK-163): like the newsletter,
+  // the app ships its OWN subject + fully rendered, branded html plus a repliable from/reply-to, so
+  // the letter reaches a real NBCC inbox on reply. Discriminated by the explicit `thankYou` flag so
+  // it never falls through to the donation-confirmation default (which would hijack the subject).
+  if (p.thankYou && (p.html || p.text)) {
+    return { to, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
+  }
+
   // Types that already ship rendered text + html — just wrap with a subject.
   if (p.declarationLink) {
     return {

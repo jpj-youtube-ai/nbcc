@@ -56,6 +56,7 @@
               <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
             </ul>
           </nav>
@@ -174,6 +175,121 @@
                 </p>
                 <p id="newsletterMsg" aria-live="polite"></p>
               </form>
+            </section>
+
+            <!-- Thank you: pick a donor over the threshold, personalise the letter, watch it update
+                 live, and send it (Editor+). Every send is recorded and audited; a sent-letter
+                 history sits below. Wired in app.js (loadThankYou); styles are the .ty-* rules. -->
+            <section class="admin-view" id="view-thank-you" aria-labelledby="thankyou-heading" hidden>
+              <h2 id="thankyou-heading">Thank you letters</h2>
+              <p class="admin-view-intro">Pick a donor over the threshold (or start a fresh one), personalise the letter and watch it update live before you send. It goes to the donor as a branded email from the NBCC giving inbox, and every send is logged to the Audit trail.</p>
+
+              <h3 class="admin-subhead">1. Donors to thank</h3>
+              <p class="admin-help">Donors whose largest single paid gift crosses the threshold, most generous first. “Write” prefills the letter below.</p>
+              <div class="ty-controls">
+                <label class="ty-inline">Single gift over £<input type="text" id="tyThreshold" value="1000" inputmode="decimal" aria-label="Threshold amount in pounds" /></label>
+                <button class="admin-btn" type="button" id="tyRefresh">Refresh</button>
+                <span class="ty-count" id="tyEligibleCount" aria-live="polite"></span>
+                <span class="ty-spacer"></span>
+                <button class="btn btn-primary" type="button" id="tyNew">+ New thank-you</button>
+              </div>
+              <div class="admin-table-wrap" id="tyEligibleTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+
+              <h3 class="admin-subhead">2. Compose &amp; send</h3>
+              <p class="admin-help">The preview on the right is the letter the donor receives. It updates as you type.</p>
+              <div class="ty-compose">
+                <form class="ty-panel" id="tyForm" autocomplete="off">
+                  <div class="ty-field">
+                    <label for="tyName">Thank-you name <span class="ty-muted">(person or organisation)</span></label>
+                    <input id="tyName" type="text" value="friend" spellcheck="true" lang="en-GB" />
+                    <span class="ty-hint">Appears as “Thank you, &lt;name&gt;.” For a company, use the organisation name.</span>
+                  </div>
+                  <div class="ty-field">
+                    <label for="tyDear">Addressed to</label>
+                    <input id="tyDear" type="text" value="friend" spellcheck="true" lang="en-GB" />
+                    <span class="ty-hint">Appears as “Dear &lt;name&gt;,”. For an organisation, name the contact person.</span>
+                  </div>
+                  <div class="ty-field">
+                    <label>Type of gift</label>
+                    <div class="ty-seg" role="group" aria-label="Gift type">
+                      <button id="tyGtMoney" type="button" aria-pressed="true">Monetary</button>
+                      <button id="tyGtKind" type="button" aria-pressed="false">Gift in kind</button>
+                    </div>
+                  </div>
+                  <div class="ty-field" id="tyWrapAmount">
+                    <label for="tyAmount">Amount (£)</label>
+                    <input id="tyAmount" type="text" value="1000" inputmode="decimal" />
+                    <label class="ty-check"><input id="tyGiftAid" type="checkbox" checked /> <span>Gift Aided (show the 25% uplift line)</span></label>
+                  </div>
+                  <div class="ty-field" id="tyWrapInKind" hidden>
+                    <label for="tyInKind">What was given</label>
+                    <textarea id="tyInKind" rows="2" spellcheck="true" lang="en-GB"></textarea>
+                  </div>
+                  <div class="ty-field">
+                    <label for="tyPersonal">Personal message <span class="ty-muted">(optional)</span></label>
+                    <textarea id="tyPersonal" rows="3" spellcheck="true" lang="en-GB"></textarea>
+                  </div>
+                  <div class="ty-row">
+                    <div class="ty-field">
+                      <label for="tySigner">Signed by</label>
+                      <select id="tySigner">
+                        <option data-role="Head Elf (Trustee), Night Before Christmas Campaign">Jodie McFarlane</option>
+                        <option data-role="Procurement (Trustee), Night Before Christmas Campaign">Isabella McFarlane</option>
+                        <option data-role="Marketing, Night Before Christmas Campaign">Jon McFarlane</option>
+                        <option data-role="Project Manager, Night Before Christmas Campaign">Jaimie Wakefield</option>
+                      </select>
+                    </div>
+                    <div class="ty-field">
+                      <label for="tyDate">Letter date</label>
+                      <input id="tyDate" type="text" />
+                    </div>
+                  </div>
+                  <div class="ty-field">
+                    <label for="tyEmail">Recipient email</label>
+                    <input id="tyEmail" type="email" />
+                  </div>
+                  <input type="hidden" id="tyDonorId" />
+                  <div class="ty-actions">
+                    <button class="btn btn-primary" type="submit" id="tySend">Send thank you</button>
+                  </div>
+                  <p class="ty-status" id="tyStatus" role="status" aria-live="polite"></p>
+                </form>
+
+                <div class="ty-preview">
+                  <div class="ty-preview-bar">
+                    <span class="admin-eyebrow">Live preview</span>
+                    <small class="ty-live"><span class="ty-dot"></span> updates as you type</small>
+                  </div>
+                  <div class="ty-paper-wrap" id="tyPaperWrap">
+                    <div class="ty-paper" id="tyPaper">
+                      <div class="ty-page"><div class="ty-sheet">
+                        <div class="ty-sheet-body">
+                          <div class="ty-letter-meta"><span class="ty-ldate" id="tyPDate"></span></div>
+                          <h1 class="ty-letter-title" id="tyPTitle">Thank you, friend.</h1>
+                          <p class="ty-salutation" id="tyPSalutation">Dear friend,</p>
+                          <p class="ty-lbody">On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.</p>
+                          <div class="ty-callout" id="tyPCallout"></div>
+                          <p class="ty-personal" id="tyPPersonal" hidden></p>
+                          <p class="ty-lbody">Gifts like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. We are volunteer-run and here all year round, not just at Christmas.</p>
+                          <div class="ty-signoff">
+                            <p>With warmest thanks,</p>
+                            <div class="ty-signame" id="tyPSigName">Jodie McFarlane</div>
+                            <div class="ty-sigrole" id="tyPSigRole">Head Elf (Trustee), Night Before Christmas Campaign</div>
+                          </div>
+                        </div>
+                        <div class="ty-letter-foot">
+                          <div class="ty-foot-row">01292 811 015 · giving@nbcc.scot · nbcc.scot</div>
+                          <div class="ty-foot-legal">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
+                        </div>
+                      </div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <h3 class="admin-subhead">3. Sent history</h3>
+              <p class="admin-help">Every thank-you letter sent, most recent first.</p>
+              <div class="admin-table-wrap" id="tySentTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Audit trail (append-only governance log). -->

@@ -32,8 +32,9 @@ import { cancelSubscription } from "../clients/stripe";
 import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
 import { declarationFieldsSchema } from "../declarations/fields";
 import { getGasdsPoolReport } from "../gasds/pool";
-import { listThankYouEligible } from "../db/thank-you";
-import { DEFAULT_THANK_YOU_THRESHOLD_PENCE } from "../thank-you/model";
+import { listThankYouEligible, recordThankYouSent, listThankYouSent } from "../db/thank-you";
+import { DEFAULT_THANK_YOU_THRESHOLD_PENCE, thankYouInputSchema, giftSummary } from "../thank-you/model";
+import { buildThankYouEmailHtml, thankYouSubject } from "../thank-you/letter";
 import {
   listNewsletters,
   getNewsletter,
@@ -45,7 +46,8 @@ import {
 } from "../db/newsletters";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
-import { sendNewsletter } from "../clients/email";
+import { sendNewsletter, sendThankYou } from "../clients/email";
+import { clampPage } from "../db/admin";
 import { config } from "../config";
 
 // The role-based admin login endpoint (REQ-062 · TASK-105). POST /api/admin/login verifies a staff
@@ -696,6 +698,80 @@ export async function getThankYouEligible(req: Request, res: Response): Promise<
 }
 
 adminRouter.get("/api/admin/thank-you/eligible", getThankYouEligible);
+
+// POST /api/admin/thank-you/send (REQ-069 · TASK-163). The compose form in the admin "Thank you"
+// view posts the letter fields here. `sentBy` is taken from the authed admin (never trusted from the
+// client), then the whole shape is validated by the shared thankYouInputSchema. We record the row +
+// its audit entry atomically (recordThankYouSent), then BEST-EFFORT email the donor the branded
+// letter — a failed send is logged, not fatal, so the letter is still recorded and the donor marked
+// thanked. `signedByRole` and `letterDate` are presentation-only (not stored): the role is the
+// signer's title on the letter, the date defaults to today. Editor+ (a send is an outbound write).
+export async function postAdminThankYouSend(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const parsed = thankYouInputSchema.safeParse({ ...body, sentBy: claims.email });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid thank-you", details: parsed.error.flatten() });
+  }
+  const input = parsed.data;
+  const signedByRole =
+    typeof body.signedByRole === "string" && body.signedByRole.trim() ? body.signedByRole.trim() : null;
+  const letterDate =
+    typeof body.letterDate === "string" && body.letterDate.trim()
+      ? body.letterDate.trim()
+      : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  try {
+    const id = await recordThankYouSent(input);
+    try {
+      const html = buildThankYouEmailHtml({
+        thankYouName: input.thankYouName,
+        addressedTo: input.addressedTo,
+        giftType: input.giftType,
+        giftAmountPence: input.giftAmountPence,
+        giftInKind: input.giftInKind,
+        giftAided: input.giftAided,
+        personalMessage: input.personalMessage,
+        signedByName: input.signedByName,
+        signedByRole,
+        letterDate,
+      });
+      await sendThankYou({
+        email: input.recipientEmail,
+        from: config.NEWSLETTER_FROM_EMAIL,
+        replyTo: config.NEWSLETTER_FROM_EMAIL,
+        subject: thankYouSubject(input),
+        html,
+      });
+    } catch (err) {
+      // Best-effort: the row is recorded and the donor is marked thanked regardless of the send.
+      console.error(`thank-you email to ${input.recipientEmail} failed`, err);
+    }
+    return res.status(201).json({ id, giftSummary: giftSummary(input) });
+  } catch (err) {
+    console.error("admin thank-you send failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/thank-you/send", postAdminThankYouSend);
+
+// GET /api/admin/thank-you/sent?limit&offset (REQ-069 · TASK-163). The sent-letter history, most
+// recent first (paginated), backing the "Sent history" table in the admin "Thank you" view. Paging is
+// clamped to a safe window (clampPage). Read-only, Viewer+.
+export async function getAdminThankYouSent(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const raw = pageArgs(req);
+    const { limit, offset } = clampPage(raw.limit, raw.offset);
+    return res.status(200).json(await listThankYouSent(limit, offset));
+  } catch (err) {
+    console.error("admin thank-you sent list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/thank-you/sent", getAdminThankYouSent);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
 // Read-only lists that back the admin cockpit UI. Browsing/reads are Viewer and up; the Charities

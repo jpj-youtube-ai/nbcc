@@ -60,7 +60,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(html).toContain('src="/assets/js/admin/app.js"');
   });
 
-  it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds · TASK-161 newsletter)", () => {
+  it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds · TASK-161 newsletter · TASK-163 thank-you)", () => {
     const navViews = [...doc.querySelectorAll(".admin-nav-link")].map((b) => b.getAttribute("data-view"));
     expect(navViews).toEqual([
       "overview",
@@ -70,9 +70,10 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "gasds",
       "subscriptions",
       "newsletter",
+      "thank-you",
       "audit",
     ]);
-    for (const v of ["donations", "claims", "gasds", "subscriptions", "newsletter", "audit", "donor"]) {
+    for (const v of ["donations", "claims", "gasds", "subscriptions", "newsletter", "thank-you", "audit", "donor"]) {
       expect(doc.getElementById("view-" + v), `#view-${v}`).not.toBeNull();
     }
     // Donor detail is reached from a row, not the nav, and has a Back control + status region.

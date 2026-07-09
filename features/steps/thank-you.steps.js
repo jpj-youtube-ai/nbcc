@@ -26,7 +26,7 @@ Before({ tags: "@thankyou" }, async function () {
   await pool.query("DELETE FROM thank_you_sent");
   await pool.query("DELETE FROM donations WHERE donor_id IN (SELECT id FROM donors WHERE business_name = 'TYBDD')");
   await pool.query("DELETE FROM donors WHERE business_name = 'TYBDD'");
-  await pool.query("DELETE FROM users WHERE email = 'ty.viewer@example.com'");
+  await pool.query("DELETE FROM users WHERE email LIKE 'ty.%@example.com'");
   this.tyDonorIds = {};
 });
 
@@ -120,6 +120,63 @@ Then("the thank-you eligible donor {string} should be marked already thanked", f
   const r = findByName(this, name);
   assert.ok(r, `expected results to include ${name}`);
   assert.equal(r.alreadyThanked, true);
+});
+
+// ---- TASK-163: compose + send, and the sent-letter history ----
+
+When(
+  "I send a thank-you letter as {string} with password {string} to {string} for {string}",
+  async function (email, password, recipient, name) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/thank-you/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        donorId: null,
+        thankYouName: name,
+        addressedTo: name,
+        recipientEmail: recipient,
+        giftType: "money",
+        giftAmountPence: 150000,
+        giftInKind: null,
+        giftAided: true,
+        personalMessage: null,
+        signedByName: "Jodie McFarlane",
+        signedByRole: "Head Elf (Trustee), Night Before Christmas Campaign",
+      }),
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+    if (this.adminBody && this.adminBody.id) this.tySentId = this.adminBody.id;
+  },
+);
+
+Then("a thank-you letter to {string} should be recorded", async function (recipient) {
+  const r = await pool.query("SELECT COUNT(*)::int AS n FROM thank_you_sent WHERE recipient_email = $1", [recipient]);
+  assert.ok(r.rows[0].n >= 1, `expected a recorded thank_you_sent to ${recipient}`);
+});
+
+Then("the sent thank-you should have an audit row", async function () {
+  assert.ok(this.tySentId, "expected a sent-letter id from the send response");
+  const r = await pool.query(
+    "SELECT COUNT(*)::int AS n FROM audit_log WHERE action = 'thank_you.sent' AND (data->>'thankYouSentId')::int = $1",
+    [this.tySentId],
+  );
+  assert.ok(r.rows[0].n >= 1, `no thank_you.sent audit row for id ${this.tySentId}`);
+});
+
+When("I list sent thank-you letters as {string} with password {string}", async function (email, password) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/thank-you/sent`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+Then("the sent thank-you history should include a letter to {string}", function (recipient) {
+  const found = (this.adminBody.results || []).some((r) => r.recipientEmail === recipient);
+  assert.ok(found, `expected sent history to include a letter to ${recipient}`);
 });
 
 AfterAll(async function () {

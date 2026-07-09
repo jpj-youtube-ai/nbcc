@@ -29,3 +29,26 @@ Feature: Admin thank-you eligible-donors list (REQ-069 · TASK-162)
   Scenario: the list requires an admin session
     When I list thank-you eligible donors over 100000 pence with no token
     Then the admin response status should be 401
+
+  # TASK-163: composing + sending a thank-you letter, and the sent-letter history.
+
+  Scenario: an Editor sends a thank-you letter; it is recorded, audited and listed in the history
+    Given an admin user "ty.editor@example.com" with role "editor" and password "edit-pw-123"
+    When I send a thank-you letter as "ty.editor@example.com" with password "edit-pw-123" to "grace.bell@example.com" for "Grace Bell"
+    Then the admin response status should be 201
+    And a thank-you letter to "grace.bell@example.com" should be recorded
+    And the sent thank-you should have an audit row
+    When I list sent thank-you letters as "ty.editor@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the sent thank-you history should include a letter to "grace.bell@example.com"
+
+  Scenario: a Viewer may read the sent history but cannot send a letter
+    When I send a thank-you letter as "ty.viewer@example.com" with password "view-pw-123" to "blocked@example.com" for "Blocked Sender"
+    Then the admin response status should be 403
+    When I list sent thank-you letters as "ty.viewer@example.com" with password "view-pw-123"
+    Then the admin response status should be 200
+
+  Scenario: a thank-you with no recipient email is rejected
+    Given an admin user "ty.editor2@example.com" with role "editor" and password "edit2-pw-123"
+    When I send a thank-you letter as "ty.editor2@example.com" with password "edit2-pw-123" to "not-an-email" for "Bad Email"
+    Then the admin response status should be 400

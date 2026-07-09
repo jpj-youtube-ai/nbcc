@@ -126,6 +126,7 @@
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
     else if (name === "newsletter") loadNewsletters();
+    else if (name === "thank-you") loadThankYou();
     else if (name === "audit") loadAudit();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
@@ -839,6 +840,297 @@
       var exp = t.closest("[data-export-batch]");
       if (exp) return exportBatch(exp.getAttribute("data-export-batch"));
     });
+  }
+
+  // ---- thank-you letters (REQ-069 · TASK-163) ----
+  // Three panels: the eligible-donor list (GET /thank-you/eligible), a compose form with a LIVE A4
+  // letter preview (the letter the donor is emailed), and the sent history (GET /thank-you/sent).
+  // "Write" prefills the form from a listed donor; submitting POSTs /thank-you/send (Editor+, the
+  // server enforces). Bindings are wired once (tyWired); the preview mirrors src/thank-you/letter.ts.
+  var tyWired = false;
+  var tyEligibleById = {};
+  var TY_A4W = 794; // 210mm @96dpi
+  var TY_A4H = 1123; // 297mm @96dpi
+
+  function tyMoney(v) {
+    var n = typeof v === "number" ? v : parseFloat(String(v).replace(/[^0-9.]/g, "")) || 0;
+    return "£" + n.toLocaleString("en-GB");
+  }
+  function tyTodayLong() {
+    try {
+      return new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    } catch (e) {
+      return "";
+    }
+  }
+  // Scale the A4 letter to fit the preview column.
+  function tyFit() {
+    var wrap = el("tyPaperWrap"), paper = el("tyPaper");
+    if (!wrap || !paper) return;
+    var w = wrap.clientWidth;
+    if (!w) return;
+    var s = Math.min(1, w / TY_A4W);
+    paper.style.transform = "scale(" + s + ")";
+    wrap.style.height = TY_A4H * s + "px";
+  }
+
+  function tyUpdateTitle() {
+    el("tyPTitle").textContent = "Thank you, " + (el("tyName").value || "friend") + ".";
+    tyFit();
+  }
+  function tyUpdateDear() {
+    el("tyPSalutation").textContent = "Dear " + (el("tyDear").value || "friend") + ",";
+  }
+  function tyUpdateDate() {
+    el("tyPDate").textContent = el("tyDate").value;
+  }
+  function tyUpdatePersonal() {
+    var v = el("tyPersonal").value;
+    var p = el("tyPPersonal");
+    p.textContent = v; // textContent auto-escapes
+    p.hidden = !v;
+    tyFit();
+  }
+  function tyUpdateSigner() {
+    var opt = el("tySigner").selectedOptions[0];
+    el("tyPSigName").textContent = opt.value;
+    el("tyPSigRole").textContent = opt.getAttribute("data-role");
+  }
+  function tyRenderGift() {
+    var kind = el("tyGtKind").getAttribute("aria-pressed") === "true";
+    var callout = el("tyPCallout");
+    if (kind) {
+      var items = el("tyInKind").value || "your kind donation";
+      callout.innerHTML = "With heartfelt thanks for your donation of <b>" + H.escapeHtml(items) + "</b>.";
+    } else {
+      var n = parseFloat(String(el("tyAmount").value).replace(/[^0-9.]/g, "")) || 0;
+      var html = "With heartfelt thanks for your gift of <b>" + tyMoney(n) + "</b>.";
+      if (el("tyGiftAid").checked) {
+        html +=
+          '<span class="ty-ganote">Because you Gift Aided it, HMRC adds 25%, making your gift worth <b>' +
+          tyMoney(n * 1.25) +
+          "</b> to our work, at no extra cost to you.</span>";
+      }
+      callout.innerHTML = html;
+    }
+    tyFit();
+  }
+  function tySetMode(kind) {
+    el("tyGtMoney").setAttribute("aria-pressed", kind ? "false" : "true");
+    el("tyGtKind").setAttribute("aria-pressed", kind ? "true" : "false");
+    el("tyWrapAmount").hidden = kind;
+    el("tyWrapInKind").hidden = !kind;
+    tyRenderGift();
+  }
+
+  function tyEligibleTable(rows, canWrite) {
+    if (!rows.length) return '<p class="admin-empty">No donors over the threshold yet.</p>';
+    var body = rows
+      .map(function (r) {
+        var ga = r.giftAided ? '<span class="ty-pill ty-pill-ga">Gift Aided</span>' : "";
+        var status;
+        if (r.sendState === "no_email") status = '<span class="ty-pill ty-pill-blocked">No email</span>';
+        else if (r.sendState === "opted_out") status = '<span class="ty-pill ty-pill-blocked">Opted out</span>';
+        else if (r.alreadyThanked) status = '<span class="ty-pill ty-pill-thanked">Thanked ' + H.fmtDate(r.lastThankedAt) + "</span>";
+        else status = '<span class="ty-pill ty-pill-ready">Ready</span>';
+        var canEmail = r.sendState === "ready";
+        var action =
+          canWrite && canEmail
+            ? '<button class="admin-link" type="button" data-ty-donor="' + r.donorId + '">' + (r.alreadyThanked ? "Thank again" : "Write") + "</button>"
+            : "";
+        return (
+          "<tr><td>" + H.escapeHtml(r.name) + '<span class="admin-sub">' + H.escapeHtml(r.email || "no email") + "</span></td>" +
+          '<td class="admin-num">' + H.formatPence(r.maxGiftPence) + "</td><td>" + ga + "</td><td>" + status + "</td><td>" + action + "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>Donor</th><th>Largest gift</th><th>Gift Aid</th><th>Status</th><th></th></tr></thead><tbody>' +
+      body +
+      "</tbody></table>"
+    );
+  }
+  function tySentTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No thank-you letters sent yet.</p>';
+    var body = rows
+      .map(function (r) {
+        var gift =
+          r.giftType === "in_kind"
+            ? "Gift in kind" + (r.giftInKind ? ': <span class="admin-sub">' + H.escapeHtml(r.giftInKind) + "</span>" : "")
+            : H.formatPence(r.giftAmountPence) + (r.giftAided ? ' <span class="ty-pill ty-pill-ga">Gift Aided</span>' : "");
+        return (
+          "<tr><td>" + H.fmtDate(r.sentAt) + "</td><td>" + H.escapeHtml(r.thankYouName) + '<span class="admin-sub">' + H.escapeHtml(r.recipientEmail) +
+          "</span></td><td>" + gift + "</td><td>" + H.escapeHtml(r.signedByName) + "</td><td>" + H.escapeHtml(r.sentBy) + "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>Sent</th><th>Recipient</th><th>Gift</th><th>Signed by</th><th>By</th></tr></thead><tbody>' +
+      body +
+      "</tbody></table>"
+    );
+  }
+
+  function loadThankYouEligible() {
+    var canWrite = H.roleCan(currentRole, "editor");
+    var thr = parseFloat(String(el("tyThreshold").value).replace(/[^0-9.]/g, "")) || 1000;
+    var pence = Math.round(thr * 100);
+    el("tyEligibleTable").innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/thank-you/eligible?threshold=" + pence)
+      .then(j)
+      .then(function (d) {
+        var rows = d.results || [];
+        tyEligibleById = {};
+        rows.forEach(function (r) {
+          tyEligibleById[r.donorId] = r;
+        });
+        el("tyEligibleTable").innerHTML = tyEligibleTable(rows, canWrite);
+        var ready = rows.filter(function (r) {
+          return r.sendState === "ready" && !r.alreadyThanked;
+        }).length;
+        el("tyEligibleCount").textContent = rows.length + " listed · " + ready + " ready";
+      })
+      .catch(function () {
+        el("tyEligibleTable").innerHTML = '<p class="admin-empty">Could not load donors.</p>';
+      });
+  }
+  function loadThankYouSent() {
+    el("tySentTable").innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/thank-you/sent")
+      .then(j)
+      .then(function (d) {
+        el("tySentTable").innerHTML = tySentTable(d.results || []);
+      })
+      .catch(function () {
+        el("tySentTable").innerHTML = '<p class="admin-empty">Could not load the sent history.</p>';
+      });
+  }
+
+  function tyPrefill(r) {
+    el("tyDonorId").value = r.donorId;
+    el("tyName").value = r.name;
+    el("tyDear").value = r.name;
+    el("tyEmail").value = r.email || "";
+    tySetMode(false);
+    el("tyAmount").value = String(r.maxGiftPence / 100);
+    el("tyGiftAid").checked = !!r.giftAided;
+    tyUpdateTitle();
+    tyUpdateDear();
+    tyRenderGift();
+    el("tyForm").scrollIntoView({ block: "nearest" });
+  }
+  function tyNewLetter() {
+    el("tyDonorId").value = "";
+    el("tyName").value = "friend";
+    el("tyDear").value = "friend";
+    el("tyEmail").value = "";
+    el("tyPersonal").value = "";
+    el("tyInKind").value = "";
+    el("tyAmount").value = "1000";
+    el("tyGiftAid").checked = true;
+    tySetMode(false);
+    tyUpdateTitle();
+    tyUpdateDear();
+    tyUpdatePersonal();
+  }
+  function tySubmit(e) {
+    e.preventDefault();
+    var kind = el("tyGtKind").getAttribute("aria-pressed") === "true";
+    var status = el("tyStatus");
+    var donorIdRaw = el("tyDonorId").value;
+    var amount = parseFloat(String(el("tyAmount").value).replace(/[^0-9.]/g, "")) || 0;
+    var payload = {
+      donorId: donorIdRaw ? Number(donorIdRaw) : null,
+      thankYouName: (el("tyName").value || "").trim(),
+      addressedTo: (el("tyDear").value || "").trim(),
+      recipientEmail: (el("tyEmail").value || "").trim(),
+      giftType: kind ? "in_kind" : "money",
+      giftAmountPence: kind ? null : Math.round(amount * 100),
+      giftInKind: kind ? (el("tyInKind").value || "").trim() || null : null,
+      giftAided: kind ? false : el("tyGiftAid").checked,
+      personalMessage: (el("tyPersonal").value || "").trim() || null,
+      signedByName: el("tySigner").value,
+      signedByRole: el("tySigner").selectedOptions[0].getAttribute("data-role"),
+      letterDate: (el("tyDate").value || "").trim(),
+    };
+    var btn = el("tySend");
+    btn.disabled = true;
+    status.className = "ty-status";
+    status.textContent = "Sending…";
+    authFetch("/api/admin/thank-you/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function (res) {
+        return res.json().then(function (b) {
+          return { ok: res.ok, code: res.status, body: b };
+        });
+      })
+      .then(function (r) {
+        btn.disabled = false;
+        if (r.ok) {
+          status.className = "ty-status is-ok";
+          status.textContent = "Sent and logged — the donor has been emailed this letter.";
+          loadThankYouSent();
+          loadThankYouEligible();
+        } else {
+          status.className = "ty-status is-error";
+          status.textContent = (r.body && r.body.error) || "Could not send (" + r.code + ").";
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+        status.className = "ty-status is-error";
+        status.textContent = "Could not send the letter.";
+      });
+  }
+
+  function tyBindInput(id, fn) {
+    var e = el(id);
+    if (e) e.addEventListener("input", fn);
+  }
+  function tyWire() {
+    if (tyWired) return;
+    tyWired = true;
+    el("tySend").hidden = !H.roleCan(currentRole, "editor");
+    tyBindInput("tyName", tyUpdateTitle);
+    tyBindInput("tyDear", tyUpdateDear);
+    tyBindInput("tyDate", tyUpdateDate);
+    tyBindInput("tyPersonal", tyUpdatePersonal);
+    tyBindInput("tyAmount", tyRenderGift);
+    tyBindInput("tyInKind", tyRenderGift);
+    el("tyGiftAid").addEventListener("change", tyRenderGift);
+    el("tySigner").addEventListener("change", tyUpdateSigner);
+    el("tyGtMoney").addEventListener("click", function () {
+      tySetMode(false);
+    });
+    el("tyGtKind").addEventListener("click", function () {
+      tySetMode(true);
+    });
+    el("tyRefresh").addEventListener("click", loadThankYouEligible);
+    el("tyThreshold").addEventListener("change", loadThankYouEligible);
+    el("tyNew").addEventListener("click", tyNewLetter);
+    el("tyEligibleTable").addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-ty-donor]");
+      if (!b) return;
+      var r = tyEligibleById[b.getAttribute("data-ty-donor")];
+      if (r) tyPrefill(r);
+    });
+    el("tyForm").addEventListener("submit", tySubmit);
+    window.addEventListener("resize", tyFit);
+  }
+  function loadThankYou() {
+    if (!el("tyForm")) return;
+    tyWire();
+    if (!el("tyDate").value) el("tyDate").value = tyTodayLong();
+    tyUpdateDate();
+    tyUpdateSigner();
+    tyRenderGift();
+    loadThankYouEligible();
+    loadThankYouSent();
+    tyFit();
+    setTimeout(tyFit, 200); // after webfonts settle
   }
 
   // ---- boot: restore an in-tab session ----

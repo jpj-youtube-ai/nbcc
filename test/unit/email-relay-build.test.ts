@@ -40,3 +40,25 @@ describe("email-relay buildEmail — newsletter payload", () => {
     expect(built.subject).toMatch(/donation/i);
   });
 });
+
+describe("email-relay buildEmail — thank-you payload (REQ-069 · TASK-163)", () => {
+  const payload = {
+    thankYou: true,
+    email: "margaret@example.com",
+    from: "newsletter@nbcc.scot",
+    replyTo: "newsletter@nbcc.scot",
+    subject: "Thank you, Margaret",
+    html: "<h1>Thank you, Margaret.</h1>",
+  };
+
+  it("recognises a thank-you payload and keeps its own subject, from and reply-to", () => {
+    const built = buildEmail(payload);
+    expect(built).not.toBeNull();
+    expect(built.to).toBe("margaret@example.com");
+    expect(built.subject).toBe("Thank you, Margaret");
+    expect(built.subject).not.toMatch(/donation/i);
+    expect(built.from).toBe("newsletter@nbcc.scot");
+    expect(built.replyTo).toBe("newsletter@nbcc.scot");
+    expect(built.html).toBe("<h1>Thank you, Margaret.</h1>");
+  });
+});

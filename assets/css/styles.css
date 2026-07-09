@@ -131,6 +131,8 @@ p{margin:0 0 1rem}
 .skip-link{position:absolute;left:12px;top:-60px;background:var(--maroon);color:var(--cream);padding:10px 16px;border-radius:10px;z-index:1000;transition:top .2s;text-decoration:none;font-weight:600}
 .skip-link:focus,.skip-link:focus-visible{top:12px}
 :focus-visible{outline:3px solid var(--holly);outline-offset:3px;border-radius:6px}
+/* visually hidden but still readable by screen readers (e.g. the story step announce region) */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
 /* =================================================================
    NAV (REQ-002) — sticky, scroll state, per-page active link
@@ -617,7 +619,7 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
   html{scroll-behavior:auto}
   *,*::before,*::after{animation:none !important;transition:none !important}
   .reveal{opacity:1 !important;transform:none !important}
-  .btn:hover,.tier:hover,.give-tier:hover,.nav-cta:hover,.member:hover img{transform:none}
+  .btn:hover,.tier:hover,.give-tier:hover,.nav-cta:hover,.member:hover img,.consent-card:hover{transform:none}
 }
 /* ===== MY STORY PAGE (REQ-NNN) =====
    The 3-step form reuses the donate wizard's .give-* chrome (progress list,
@@ -653,9 +655,10 @@ fieldset.give-field legend{display:block;font-family:var(--font-head);font-weigh
 @media(min-width:640px){.consent-cards{grid-template-columns:1fr 1fr}}
 .consent-card{
   align-items:flex-start;margin:0;padding:16px;border:1.6px solid var(--line);
-  border-radius:var(--radius);background:var(--cream);transition:border-color .18s ease,background .18s ease;
+  border-radius:var(--radius);background:var(--cream);
+  transition:border-color .18s ease,background .18s ease,transform .18s ease,box-shadow .18s ease;
 }
-.consent-card:hover{border-color:var(--crimson)}
+.consent-card:hover{border-color:var(--crimson);transform:translateY(-2px);box-shadow:var(--shadow-sm)}
 .consent-card:has(.give-check-box:checked){
   border-color:var(--crimson);background:var(--tan-soft);
 }
@@ -670,3 +673,7 @@ fieldset.give-field legend{display:block;font-family:var(--font-head);font-weigh
 /* the final legal confirm + submit read as a distinct closing block, not just
    another field in the list. */
 .story-final{padding-top:20px;border-top:1px solid var(--line);margin-top:4px}
+
+/* a little extra warmth and presence on the success message once a story is
+   shared, without altering the shared .form-status chrome other forms rely on. */
+#storyStatus.is-success{padding:16px 18px;font-size:1rem;line-height:1.5}

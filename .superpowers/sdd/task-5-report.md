@@ -132,9 +132,7 @@ watched in the PR checks.
 
 ## Commit
 
-Commit message: `[TASK-177] contact inbox: store submissions, retire external forward`
-(hash recorded after commit — see final status line for the actual commit hash created in this
-session.)
+Commit: `b26a3ac` — `[TASK-177] contact inbox: store submissions, retire external forward`
 
 ## Concerns / notes for reviewers
 

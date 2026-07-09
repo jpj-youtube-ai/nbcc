@@ -1117,7 +1117,12 @@ change); guarded by `test/unit/admin-seed-migration.test.ts` and applied by CI's
 later data-only migration `1783345566569_update-admin-emails-nbcc-scot.js` (TASK-147) repoints those
 two identities onto the **nbcc.scot** domain (`kenny@`/`isabella@nbcc.scot`, matching the public
 contact addresses) and adds a third admin, `paul.popa1995@yahoo.ro`; same idempotent
-`ON CONFLICT (email) DO UPDATE`, guarded by `test/unit/admin-email-migration.test.ts`.
+`ON CONFLICT (email) DO UPDATE`, guarded by `test/unit/admin-email-migration.test.ts`. Two further
+data-only grants extend the roster the same way: `1783353707219_grant-paul-jaimie-admin-revoke-yahoo.js`
+(adds `paul.popa@`/`jaimie.wakefield@nbcc.scot`, revokes the interim `paul.popa1995@yahoo.ro`), and
+`1783591722822_grant-jon-admin.js` (TASK-164 — adds `jon@nbcc.scot`, Jon McFarlane, guarded by
+`test/unit/grant-jon-admin-migration.test.ts`). Each is idempotent and sets no `password_hash`, so a
+new admin still can't log in until its password is set out of band (see the ops utility below).
 
 **`GET`/`PATCH /api/admin/donors/:id`, `POST …/subscription/cancel`, `POST …/gift-aid/cancel`
 (REQ-062 · TASK-106).** The role-gated admin actions that let an Editor/Admin act on a donor's

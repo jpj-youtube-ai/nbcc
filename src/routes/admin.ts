@@ -224,6 +224,17 @@ export async function postAdminNewsletter(req: Request, res: Response): Promise<
   return res.status(201).json(created);
 }
 
+// POST /api/admin/newsletters/preview — render a block document to email HTML for the live builder
+// preview (Editor+). Stateless, no DB. Uses a sample first name so merge fields show realistically.
+export async function postAdminNewsletterPreview(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const parsed = z.object({ bodyJson: newsletterDocSchema }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid document", details: parsed.error.flatten() });
+  }
+  return res.json({ html: renderNewsletter(parsed.data.bodyJson, { firstName: "Jane" }) });
+}
+
 // PUT /api/admin/newsletters/:id — edit a draft (Editor+). A sent newsletter is immutable → 409.
 export async function putAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
   if (!authorizeAdmin(req, res, "editor")) return;
@@ -1006,6 +1017,7 @@ adminRouter.delete("/api/admin/stories/:id", deleteAdminStory);
 
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);
+adminRouter.post("/api/admin/newsletters/preview", postAdminNewsletterPreview);
 adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);

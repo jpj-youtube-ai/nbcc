@@ -62,3 +62,7 @@ Feature: Admin newsletter (REQ-069)
     Given a newsletter admin "editor5.newsletter.bdd@example.com" with role "editor" and password "pw-e5"
     When I upload an oversize newsletter image
     Then the image upload status should be 413
+
+  Scenario: a malformed newsletter image id is rejected, not crashed on
+    When I fetch a malformed newsletter image id
+    Then the image fetch status should be 404

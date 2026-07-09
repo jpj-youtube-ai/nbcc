@@ -395,6 +395,16 @@ describe("newsletter blocks — story variants", () => {
     expect(html).toContain("Tom's family had a place to stay.");
   });
 
+  it("variant 2: empty items falls back to a single item from the top-level fields (never blank)", () => {
+    const html = mk(2, {
+      items: [],
+      title: "A Winter to Remember",
+      body: "Forty families helped.",
+    });
+    expect(html).toContain("A Winter to Remember");
+    expect(html).toContain("Forty families helped.");
+  });
+
   it("variant 3: text-only with a top rule — no image markup even when imageUrl is provided", () => {
     const html = mk(3, {
       imageUrl: "https://example.org/story.jpg",

@@ -228,6 +228,13 @@ When("I fetch the uploaded image", async function () {
   this.imgContentType = res.headers.get("content-type");
 });
 
+// A non-uuid id must 404, not crash the process (TASK-168 fix — Postgres throws 22P02 on a
+// malformed uuid literal, which an unhandled rejection would otherwise turn into a process crash).
+When("I fetch a malformed newsletter image id", async function () {
+  const res = await fetch(`${BASE_URL}/media/newsletter/not-a-uuid`);
+  this.imgFetchStatus = res.status;
+});
+
 Then("the image fetch status should be {int}", function (expected) {
   assert.equal(this.imgFetchStatus, expected);
 });

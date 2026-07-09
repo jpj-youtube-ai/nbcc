@@ -890,6 +890,7 @@
       stats: ["number", "label", "caption"],
       waysToHelp: ["icon", "title", "body", "label", "href"],
       events: ["day", "month", "name", "location", "label", "href"],
+      story: ["imageUrl", "title", "body", "label", "href"],
     };
     var keys = keysByType[block.type];
     (block.data.items || []).forEach(function (item, idx) {
@@ -954,6 +955,10 @@
         nlText(host, block, "body", "Body", true);
         nlText(host, block, "label", "Button label", false);
         nlText(host, block, "href", "Button link", false);
+        // Variant 2 (two-up) reads data.items[] instead of the top-level fields above (which it
+        // falls back to only when items is empty) — also render the repeater so an editor can
+        // author multiple story cards. nlRenderFields re-runs on variant change, so this is safe.
+        if (block.variant === 2) nlRenderItems(host, block);
         break;
       case "spotlight":
         nlImageField(host, block, "photoUrl", "Photo");

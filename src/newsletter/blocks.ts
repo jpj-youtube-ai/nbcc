@@ -297,7 +297,8 @@ function image(b: Block): string {
   }
 
   if (b.variant === 3) {
-    return `<div style="padding:12px 40px"><div style="border:1px solid #e5ded3;padding:6px"><img src="${safeUrl}" alt="${alt}" width="580" style="display:block;width:100%;max-width:568px;height:auto" /></div></div>`;
+    // width=566 matches max-width:566px (580 total minus 2x(6px padding + 1px border)).
+    return `<div style="padding:12px 40px"><div style="border:1px solid #e5ded3;padding:6px"><img src="${safeUrl}" alt="${alt}" width="566" style="display:block;width:100%;max-width:566px;height:auto" /></div></div>`;
   }
 
   // variant 0 (default): full-width
@@ -307,14 +308,16 @@ function image(b: Block): string {
 // story — a news item: image + title + body + optional Read-more link.
 //   0: image-top (image above title/body)
 //   1: image-left (two-column table: image left, text right)
-//   2: two-up row — reads data.items[] and renders each item side by side
+//   2: two-up row — reads data.items[] and renders each item side by side; when items is empty,
+//      falls back to a single synthetic item from the top-level fields so it is never blank
 //   3: text-only with a top rule (no image, even if imageUrl is present)
 //
 // data contract: imageUrl (string, optional), title (string, optional — falls back to ""), body
 // (string, optional — falls back to ""), label (string, optional — read-more link text, falls
 // back to "Read more"), href (string, optional). items (array of {imageUrl?, title, body, label?,
-// href?}, optional) is read ONLY by variant 2, ignoring the top-level imageUrl/title/body/label/
-// href fields. Degrades to nothing for a missing image, and to no link for a missing href.
+// href?}, optional) is read by variant 2, which renders every item; if items is empty, variant 2
+// instead renders one item built from the top-level imageUrl/title/body/label/href fields.
+// Degrades to nothing for a missing image, and to no link for a missing href.
 function readMoreLink(label: string, href: string): string {
   if (!href) return "";
   return `<div style="margin-top:8px">${brandButton(label || "Read more", href, "link")}</div>`;
@@ -347,8 +350,12 @@ function story(b: Block): string {
   }
 
   if (b.variant === 2) {
-    // two-up row: each item side by side, reading data.items[] only
-    const items = list(b.data, "items");
+    // two-up row: each item side by side, reading data.items[] only. The builder UI added an
+    // items repeater for story (TASK-168 fix), but a doc with no items yet (or a legacy/hand-
+    // authored doc) would otherwise render an empty table — fall back to a single synthetic item
+    // built from the top-level fields so the variant is never blank.
+    const rawItems = list(b.data, "items");
+    const items = rawItems.length > 0 ? rawItems : [b.data];
     const cells = items
       .map((item) => {
         const itemImageUrl = str(item, "imageUrl");

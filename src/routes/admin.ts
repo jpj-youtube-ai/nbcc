@@ -238,7 +238,7 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
   if (!authorizeAdmin(req, res, "editor")) return;
   const parsed = z.object({ bodyJson: newsletterDocSchema }).safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid document", details: parsed.error.flatten() });
+    return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
   }
   return res.json({ html: renderNewsletter(parsed.data.bodyJson, { firstName: "Jane" }) });
 }

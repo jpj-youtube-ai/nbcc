@@ -39,8 +39,12 @@ machinery rather than inventing anything new.
    and time**.
 4. **Marking "Replied".** We cannot detect an actual Gmail send (that happens
    entirely inside Google). So clicking **"Reply in Gmail"** both opens the
-   compose tab **and** flips the enquiry to **Replied** in the same action
-   (reversible back to New). No Gmail-API integration.
+   compose tab **and** flips the enquiry to **Replied** in the same action. The
+   enquiry records **who** marked it replied — the logged-in admin's email, taken
+   from the session claims (`authorizeAdmin` already exposes `claims.email`; same
+   source as the donor-audit `actorOf`) — and **when** (`replied_at`). Any admin
+   can **unmark** it back to New (which clears `replied_at`/`replied_by`). No
+   Gmail-API integration.
 5. **One admin page.** This is the same `/admin` panel and login that already
    exists — a new tab beside Overview, Donations, Gift Aid, Stories, etc. The
    only thing "separate" is the database behind that one tab.
@@ -77,6 +81,7 @@ One additive table `contact_enquiries` in the `contact` DB
 | `status`     | text not null default 'new' | CHECK IN ('new','replied') — defence in depth |
 | `created_at` | timestamptz not null default now() |                                    |
 | `replied_at` | timestamptz             | set when marked replied; null otherwise      |
+| `replied_by` | text                    | email of the admin who marked it replied; null otherwise |
 
 No `audit_log` table (mirrors the stories DB — this DB holds only contact
 enquiries and nothing references an audit table).

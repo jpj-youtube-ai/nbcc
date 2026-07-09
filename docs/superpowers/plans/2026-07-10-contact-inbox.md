@@ -273,7 +273,7 @@ git commit -m "[TASK-NNN] contact inbox: submission schema"
   - `type ContactRow = { id: number; first_name: string; last_name: string; email: string; message: string; status: string; created_at: Date; replied_at: Date | null }`
   - `listEnquiries(status?: string): Promise<ContactRow[]>` — newest-first, optional status filter.
   - `getEnquiry(id: number): Promise<ContactRow | null>`
-  - `markReplied(id: number, replied: boolean): Promise<ContactRow | null>` — sets `status` + `replied_at` (`now()` when replied, `null` when reverted to `new`).
+  - `markReplied(id: number, replied: boolean, repliedBy: string | null): Promise<ContactRow | null>` — sets `status`, `replied_at` (`now()` when replied, `null` when reverted to `new`), and `replied_by` (the admin email when replied, `null` when reverted).
   - `deleteEnquiry(id: number): Promise<boolean>`
 
 - [ ] **Step 1: Add the npm scripts**
@@ -318,6 +318,7 @@ exports.up = (pgm) => {
       status: { type: "text", notNull: true, default: "new" }, // new/replied
       created_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
       replied_at: { type: "timestamptz" }, // set when marked replied; null otherwise
+      replied_by: { type: "text" }, // email of the admin who marked it replied; null otherwise
     },
     {
       comment:
@@ -357,6 +358,7 @@ export interface ContactRow {
   status: string; // new | replied
   created_at: Date;
   replied_at: Date | null;
+  replied_by: string | null; // admin email who marked it replied; null otherwise
 }
 
 export async function insertEnquiry(e: ContactEnquiry): Promise<{ id: number }> {
@@ -379,7 +381,7 @@ export async function listEnquiries(status?: string): Promise<ContactRow[]> {
     where = ` WHERE status = $1`;
   }
   const result = await contactPool.query<ContactRow>(
-    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at
+    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at, replied_by
      FROM contact_enquiries${where}
      ORDER BY created_at DESC`,
     params,
@@ -389,22 +391,29 @@ export async function listEnquiries(status?: string): Promise<ContactRow[]> {
 
 export async function getEnquiry(id: number): Promise<ContactRow | null> {
   const result = await contactPool.query<ContactRow>(
-    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at
+    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at, replied_by
      FROM contact_enquiries WHERE id = $1`,
     [id],
   );
   return result.rows[0] ?? null;
 }
 
-// Set status to 'replied' (replied_at = now()) or back to 'new' (replied_at = null). Returns the
+// Set status to 'replied' (replied_at = now(), replied_by = the admin email) or back to 'new'
+// (replied_at = null, replied_by = null). `repliedBy` is ignored when reverting. Returns the
 // updated row, or null when the id does not exist.
-export async function markReplied(id: number, replied: boolean): Promise<ContactRow | null> {
+export async function markReplied(
+  id: number,
+  replied: boolean,
+  repliedBy: string | null,
+): Promise<ContactRow | null> {
   const result = await contactPool.query<ContactRow>(
     `UPDATE contact_enquiries
-     SET status = $2, replied_at = ${replied ? "now()" : "NULL"}
+     SET status = $2,
+         replied_at = ${replied ? "now()" : "NULL"},
+         replied_by = $3
      WHERE id = $1
-     RETURNING id, first_name, last_name, email, message, status, created_at, replied_at`,
-    [id, replied ? "replied" : "new"],
+     RETURNING id, first_name, last_name, email, message, status, created_at, replied_at, replied_by`,
+    [id, replied ? "replied" : "new", replied ? repliedBy : null],
   );
   return result.rows[0] ?? null;
 }
@@ -969,12 +978,16 @@ git commit -m "[TASK-NNN] contact inbox: Gmail reply URL builder"
 - Produces:
   - `GET /api/admin/contact?status=` — Viewer+ → `{ results: ContactRow[] }`.
   - `GET /api/admin/contact/:id` — Viewer+ → `ContactRow` or 404.
-  - `PATCH /api/admin/contact/:id` — Editor+ — body `{ status: 'new' | 'replied' }` → updated row or 404.
+  - `PATCH /api/admin/contact/:id` — Editor+ — body `{ status: 'new' | 'replied' }`. When `replied`, records the logged-in admin's email (`claims.email`) as `replied_by`; when `new` (unmark), clears it. → updated row or 404.
   - `DELETE /api/admin/contact/:id` — Editor+ → `{ deleted: true, id }` or 404.
 
-- [ ] **Step 1: Write the failing route test**
+- [ ] **Step 1: Understand how existing admin route tests authenticate**
 
-Create `test/unit/admin-contact-routes.test.ts`. Mock the DB module and the auth helper the same way the existing admin route tests do (read an existing `test/unit/admin-*.test.ts` first to match the `authorizeAdmin` mock shape). Skeleton:
+`authorizeAdmin` is a **local function in `src/routes/admin.ts`** (not a separate module) that verifies a real HMAC-signed session token via `verifyAdminSession` and returns `AdminSessionClaims` (`{ sub, email, role }`) or null. So you CANNOT mock it with `vi.mock` on a module path. Read an existing `test/unit/admin-*.test.ts` (e.g. a donor PATCH test) FIRST and copy exactly how it builds an authenticated request — it will mint a real token with `signAdminSession(...)` (from `src/admin/session`) carrying an `email`, and set it as the request's bearer token / cookie the way `authorizeAdmin` reads it. Reuse that helper verbatim; do not invent an auth shape.
+
+- [ ] **Step 2: Write the failing route test**
+
+Create `test/unit/admin-contact-routes.test.ts`, mocking only the DB module and authenticating with a real signed token (mirroring the existing admin test). The key contact-specific assertion is that a `replied` PATCH passes the **logged-in email** to `markReplied`. Skeleton (adapt the `authedReq` helper to match the existing admin test exactly):
 
 ```ts
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -985,11 +998,16 @@ const markReplied = vi.fn();
 const deleteEnquiry = vi.fn();
 vi.mock("../../src/db/contact", () => ({ listEnquiries, getEnquiry, markReplied, deleteEnquiry }));
 
-// authorizeAdmin is imported by admin.ts; mock it to allow (return true) by default.
-// Match the exact module path/spelling used by the existing admin route unit tests.
-vi.mock("../../src/routes/admin-auth", () => ({ authorizeAdmin: () => true }));
-
 import { getAdminContact, getAdminContactItem, patchAdminContact, deleteAdminContact } from "../../src/routes/admin";
+// import { signAdminSession } from "../../src/admin/session";  // use as the existing admin test does
+
+// Build a request authenticated as an editor with a known email. COPY the exact shape
+// (header vs cookie, token field names) from the existing admin route test.
+function authedReq(extra: Record<string, unknown>, email = "tester@nbcc.scot") {
+  // e.g. const token = signAdminSession({ sub: 1, email, role: "editor" });
+  //      return { headers: { authorization: `Bearer ${token}` }, ...extra } as any;
+  return { /* ...auth wiring copied from existing admin test..., */ ...extra } as any;
+}
 
 function res() {
   const r: any = {};
@@ -1006,7 +1024,7 @@ describe("admin contact routes", () => {
   it("lists newest-first with optional status", async () => {
     listEnquiries.mockResolvedValue([{ id: 1 }]);
     const r = res();
-    await getAdminContact({ query: { status: "new" } } as any, r);
+    await getAdminContact(authedReq({ query: { status: "new" } }), r);
     expect(listEnquiries).toHaveBeenCalledWith("new");
     expect(r.status).toHaveBeenCalledWith(200);
   });
@@ -1014,21 +1032,29 @@ describe("admin contact routes", () => {
   it("404s a missing item", async () => {
     getEnquiry.mockResolvedValue(null);
     const r = res();
-    await getAdminContactItem({ params: { id: "9" } } as any, r);
+    await getAdminContactItem(authedReq({ params: { id: "9" } }), r);
     expect(r.status).toHaveBeenCalledWith(404);
   });
 
-  it("marks replied via PATCH", async () => {
-    markReplied.mockResolvedValue({ id: 1, status: "replied" });
+  it("marks replied via PATCH and records the logged-in email", async () => {
+    markReplied.mockResolvedValue({ id: 1, status: "replied", replied_by: "tester@nbcc.scot" });
     const r = res();
-    await patchAdminContact({ params: { id: "1" }, body: { status: "replied" } } as any, r);
-    expect(markReplied).toHaveBeenCalledWith(1, true);
+    await patchAdminContact(authedReq({ params: { id: "1" }, body: { status: "replied" } }, "tester@nbcc.scot"), r);
+    expect(markReplied).toHaveBeenCalledWith(1, true, "tester@nbcc.scot");
+    expect(r.status).toHaveBeenCalledWith(200);
+  });
+
+  it("unmarks (status=new) clearing replied_by", async () => {
+    markReplied.mockResolvedValue({ id: 1, status: "new", replied_by: null });
+    const r = res();
+    await patchAdminContact(authedReq({ params: { id: "1" }, body: { status: "new" } }), r);
+    expect(markReplied).toHaveBeenCalledWith(1, false, null);
     expect(r.status).toHaveBeenCalledWith(200);
   });
 
   it("rejects a bad PATCH status with 400", async () => {
     const r = res();
-    await patchAdminContact({ params: { id: "1" }, body: { status: "bogus" } } as any, r);
+    await patchAdminContact(authedReq({ params: { id: "1" }, body: { status: "bogus" } }), r);
     expect(r.status).toHaveBeenCalledWith(400);
     expect(markReplied).not.toHaveBeenCalled();
   });
@@ -1036,21 +1062,19 @@ describe("admin contact routes", () => {
   it("deletes an item", async () => {
     deleteEnquiry.mockResolvedValue(true);
     const r = res();
-    await deleteAdminContact({ params: { id: "1" } } as any, r);
+    await deleteAdminContact(authedReq({ params: { id: "1" } }), r);
     expect(deleteEnquiry).toHaveBeenCalledWith(1);
     expect(r.status).toHaveBeenCalledWith(200);
   });
 });
 ```
 
-Note for implementer: confirm the real `authorizeAdmin` import path/spelling in `admin.ts` and mock that exact module. If `authorizeAdmin` is a local function in `admin.ts` (not a separate module), instead inject an authenticated request shape the way the existing admin route tests do — mirror an existing `test/unit/admin-*.test.ts` precisely rather than guessing.
-
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **Step 3: Run test to verify it fails**
 
 Run: `npx vitest run test/unit/admin-contact-routes.test.ts`
 Expected: FAIL — the handlers don't exist yet.
 
-- [ ] **Step 3: Add the routes**
+- [ ] **Step 4: Add the routes**
 
 In `src/routes/admin.ts`, after the stories routes (line ~1011), add — mirroring the stories handlers' structure (`authorizeAdmin` gate, `storyId`-style id parse, try/catch with `console.error`):
 
@@ -1097,15 +1121,20 @@ export async function getAdminContactItem(req: Request, res: Response): Promise<
 const contactPatchSchema = z.object({ status: z.enum(["new", "replied"]) }).strict();
 
 export async function patchAdminContact(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  // Capture the claims (not just the boolean gate) so we can record WHO marked it replied —
+  // mirrors how patchAdminDonor uses claims for the audit actor. authorizeAdmin returns the
+  // claims (with .email) on success, or null after sending the 401/403.
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
   const id = contactId(req, res);
   if (id == null) return;
   const parsed = contactPatchSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid enquiry update", details: parsed.error.flatten() });
   }
+  const replied = parsed.data.status === "replied";
   try {
-    const row = await markReplied(id, parsed.data.status === "replied");
+    const row = await markReplied(id, replied, replied ? claims.email : null);
     if (!row) return res.status(404).json({ error: "Enquiry not found" });
     return res.status(200).json(row);
   } catch (err) {
@@ -1140,14 +1169,14 @@ Add the import at the top of `admin.ts` (next to the stories import ~line 27):
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
 ```
 
-- [ ] **Step 4: Run test + build**
+- [ ] **Step 5: Run test + build**
 
 Run: `npx vitest run test/unit/admin-contact-routes.test.ts`
 Expected: PASS.
 Run: `npm run build`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/routes/admin.ts test/unit/admin-contact-routes.test.ts
@@ -1207,8 +1236,9 @@ Match the exact class names / segmented-control markup the Stories view uses (re
 
 Read how `app.js` registers the `stories` view (its `data-view` switch, `loadStories`, the row-click → detail, the status filter, and the action-status helper), then add a parallel `contact` implementation:
 - `loadContact(status)` → `GET /api/admin/contact?status=` → render a table into `#contactTable`: columns **Received** (`formatReceived(created_at)`), **Name** (`first_name last_name`), **Email**, **Status** badge (New/Replied), and a message snippet (first ~80 chars). Each row opens the detail view for that id.
-- Detail view: `GET /api/admin/contact/:id` → render sender, email, full received timestamp, full message into `#contactDetail`, plus two buttons: **Reply in Gmail** and **Delete**.
-- **Reply in Gmail**: `import { buildGmailReplyUrl } from "./gmail-reply.js"` at the top of `app.js`; on click `window.open(buildGmailReplyUrl(row), "_blank", "noopener")` AND `PATCH /api/admin/contact/:id` with `{ status: "replied" }`, then refresh the detail/list and show "Marked as replied" in `#contactActionStatus`. (If `app.js` is a classic script, not a module, expose `buildGmailReplyUrl` the same way other shared helpers are shared there instead of `import`.)
+- Detail view: `GET /api/admin/contact/:id` → render sender, email, full received timestamp, full message into `#contactDetail`. When the enquiry is **replied**, also show a line **"Replied by `replied_by` · `formatReceived(replied_at)`"** so staff can see who handled it and when. Buttons: **Reply in Gmail**, **Delete**, and — only when status is `replied` — **Mark as new** (unmark).
+- **Reply in Gmail**: `import { buildGmailReplyUrl } from "./gmail-reply.js"` at the top of `app.js`; on click `window.open(buildGmailReplyUrl(row), "_blank", "noopener")` AND `PATCH /api/admin/contact/:id` with `{ status: "replied" }`, then refresh the detail/list and show "Marked as replied by `<you>`" in `#contactActionStatus`. (If `app.js` is a classic script, not a module, expose `buildGmailReplyUrl` the same way other shared helpers are shared there instead of `import`.) After the refresh the detail now shows the "Replied by …" line and the **Mark as new** button.
+- **Mark as new** (unmark, shown only when replied): `PATCH /api/admin/contact/:id` with `{ status: "new" }`, then refresh — the "Replied by" line and this button disappear. (The server clears `replied_at`/`replied_by`.)
 - **Delete**: confirm, then `DELETE /api/admin/contact/:id`, return to the list.
 - Status filter `#contactStatusFilter`: clicking a segment reloads `loadContact(status)` and toggles `.is-active`.
 - Wire `loadContact("")` into the same view-switch that Stories uses when `data-view="contact"` is selected.
@@ -1339,7 +1369,7 @@ These are infra-only edits; they're validated by the `infra.yml` plan on the PR 
 
 **Placeholder scan:** No TBD/TODO. The two deploy-workflow steps (Task 4 Step 9) and the compose entries (Step 7) are described as "copy the stories step, swap the script name" rather than pasted verbatim — acceptable because the source is an exact, named, in-repo block the implementer copies mechanically; every other code step shows full code.
 
-**Type consistency:** `ContactRow` (Task 3) is consumed unchanged by Tasks 7/8; `buildGmailReplyUrl` expects `{ email, first_name, last_name?, message, created_at }` — matches `ContactRow`. `markReplied(id, replied: boolean)` is called as `markReplied(id, true)` in Task 7. Endpoint returns `{ status: "sent" }`; the form checks `res.ok`. Consistent. ✅
+**Type consistency:** `ContactRow` (Task 3, now includes `replied_by: string | null`) is consumed unchanged by Tasks 7/8; `buildGmailReplyUrl` expects `{ email, first_name, last_name?, message, created_at }` — matches `ContactRow`. `markReplied(id: number, replied: boolean, repliedBy: string | null)` is called in Task 7 as `markReplied(id, true, claims.email)` (reply) and `markReplied(id, false, null)` (unmark). `patchAdminContact` captures claims via `const claims = authorizeAdmin(...); if (!claims) return;` (not the boolean gate) so `claims.email` is available. Endpoint returns `{ status: "sent" }`; the form checks `res.ok`. Consistent. ✅
 
 ## Notes for the executor
 

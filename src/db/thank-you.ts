@@ -5,7 +5,7 @@
 // is exercised via BDD against a real DB (CLAUDE.md rule 5).
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
-import { writeWithAudit } from "./donations";
+import { writeWithAudit, insertAudit } from "./donations";
 import {
   giftSummary,
   deriveSendState,
@@ -184,4 +184,38 @@ export async function listThankYouEligible(thresholdPence: number): Promise<Than
     lastThankedAt: r.last_thanked_at ? r.last_thanked_at.toISOString() : null,
     sendState: deriveSendState({ email: r.email, emailConsent: r.email_consent }),
   }));
+}
+
+// Delete one sent-letter history row (TASK-168), returning whether a row was removed. The delete and
+// its `thank_you.deleted` audit entry commit together, and the audit is written ONLY when a row was
+// actually deleted (a no-op delete of a missing id writes nothing and returns false → the route 404s).
+// The append-only audit_log keeps the original `thank_you.sent` entry, so the governance trail records
+// both the send and the deletion.
+export async function deleteThankYouSent(id: number, actor: string): Promise<boolean> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const del = await client.query<{ id: number }>(
+      `DELETE FROM thank_you_sent WHERE id = $1 RETURNING id`,
+      [id],
+    );
+    if (del.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await insertAudit(client, {
+      actor,
+      action: "thank_you.deleted",
+      entity: "thank_you",
+      entityId: id,
+      data: { thankYouSentId: id },
+    });
+    await client.query("COMMIT");
+    return true;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }

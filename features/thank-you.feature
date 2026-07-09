@@ -52,3 +52,34 @@ Feature: Admin thank-you eligible-donors list (REQ-069 · TASK-162)
     Given an admin user "ty.editor2@example.com" with role "editor" and password "edit2-pw-123"
     When I send a thank-you letter as "ty.editor2@example.com" with password "edit2-pw-123" to "not-an-email" for "Bad Email"
     Then the admin response status should be 400
+
+  # TASK-168: deleting a sent thank-you from the history, and copying someone via CC.
+
+  Scenario: an Editor deletes a sent thank-you from the history, and it is audited
+    Given an admin user "ty.editor.del@example.com" with role "editor" and password "del-pw-123"
+    When I send a thank-you letter as "ty.editor.del@example.com" with password "del-pw-123" to "del.me@example.com" for "Del Me"
+    Then the admin response status should be 201
+    When I delete that sent thank-you as "ty.editor.del@example.com" with password "del-pw-123"
+    Then the admin response status should be 200
+    And a thank-you letter to "del.me@example.com" should not be recorded
+    And there should be a "thank_you.deleted" audit row for the deleted thank-you
+
+  Scenario: a Viewer cannot delete a sent thank-you
+    Given an admin user "ty.editor.del2@example.com" with role "editor" and password "del2-pw-123"
+    When I send a thank-you letter as "ty.editor.del2@example.com" with password "del2-pw-123" to "keep.me@example.com" for "Keep Me"
+    Then the admin response status should be 201
+    When I delete that sent thank-you as "ty.viewer@example.com" with password "view-pw-123"
+    Then the admin response status should be 403
+    And a thank-you letter to "keep.me@example.com" should be recorded
+
+  Scenario: deleting a thank-you that does not exist is a 404
+    Given an admin user "ty.editor.del3@example.com" with role "editor" and password "del3-pw-123"
+    When I delete thank-you letter id 999999 as "ty.editor.del3@example.com" with password "del3-pw-123"
+    Then the admin response status should be 404
+
+  Scenario: a CC address is accepted, and an invalid CC is rejected
+    Given an admin user "ty.editor.cc@example.com" with role "editor" and password "cc-pw-123"
+    When I send a thank-you letter as "ty.editor.cc@example.com" with password "cc-pw-123" to "cc.recip@example.com" for "Cc Recip" cc "colleague@example.com"
+    Then the admin response status should be 201
+    When I send a thank-you letter as "ty.editor.cc@example.com" with password "cc-pw-123" to "cc.recip2@example.com" for "Cc Recip2" cc "not-an-email"
+    Then the admin response status should be 400

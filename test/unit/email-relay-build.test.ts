@@ -61,4 +61,10 @@ describe("email-relay buildEmail — thank-you payload (REQ-069 · TASK-163)", (
     expect(built.replyTo).toBe("newsletter@nbcc.scot");
     expect(built.html).toBe("<h1>Thank you, Margaret.</h1>");
   });
+
+  it("forwards an optional CC when present, and omits it otherwise (TASK-168)", () => {
+    expect(buildEmail(payload).cc).toBeUndefined();
+    const withCc = buildEmail({ ...payload, cc: "colleague@nbcc.scot" });
+    expect(withCc.cc).toBe("colleague@nbcc.scot");
+  });
 });

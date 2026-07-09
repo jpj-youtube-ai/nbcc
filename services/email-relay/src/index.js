@@ -50,7 +50,8 @@ export function buildEmail(p) {
   // the letter reaches a real NBCC inbox on reply. Discriminated by the explicit `thankYou` flag so
   // it never falls through to the donation-confirmation default (which would hijack the subject).
   if (p.thankYou && (p.html || p.text)) {
-    return { to, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
+    // cc is optional (TASK-168): an admin can copy someone on the thank-you.
+    return { to, cc: p.cc, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
   }
 
   // Types that already ship rendered text + html — just wrap with a subject.
@@ -144,6 +145,7 @@ async function sendViaResend(env, msg) {
     text: msg.text,
   };
   if (msg.replyTo) body.reply_to = msg.replyTo;
+  if (msg.cc) body.cc = msg.cc; // optional CC (TASK-168)
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },

@@ -1150,7 +1150,7 @@
       "</tbody></table>"
     );
   }
-  function tySentTable(rows) {
+  function tySentTable(rows, canWrite) {
     if (!rows.length) return '<p class="admin-empty">No thank-you letters sent yet.</p>';
     var body = rows
       .map(function (r) {
@@ -1158,14 +1158,17 @@
           r.giftType === "in_kind"
             ? "Gift in kind" + (r.giftInKind ? ': <span class="admin-sub">' + H.escapeHtml(r.giftInKind) + "</span>" : "")
             : H.formatPence(r.giftAmountPence) + (r.giftAided ? ' <span class="ty-pill ty-pill-ga">Gift Aided</span>' : "");
+        var del = canWrite
+          ? '<button class="admin-link ty-del" type="button" data-ty-delete="' + r.id + '" data-ty-name="' + H.escapeHtml(r.thankYouName) + '">Delete</button>'
+          : "";
         return (
           "<tr><td>" + H.fmtDate(r.sentAt) + "</td><td>" + H.escapeHtml(r.thankYouName) + '<span class="admin-sub">' + H.escapeHtml(r.recipientEmail) +
-          "</span></td><td>" + gift + "</td><td>" + H.escapeHtml(r.signedByName) + "</td><td>" + H.escapeHtml(r.sentBy) + "</td></tr>"
+          "</span></td><td>" + gift + "</td><td>" + H.escapeHtml(r.signedByName) + "</td><td>" + H.escapeHtml(r.sentBy) + "</td><td>" + del + "</td></tr>"
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Sent</th><th>Recipient</th><th>Gift</th><th>Signed by</th><th>By</th></tr></thead><tbody>' +
+      '<table class="admin-table"><thead><tr><th>Sent</th><th>Recipient</th><th>Gift</th><th>Signed by</th><th>By</th><th></th></tr></thead><tbody>' +
       body +
       "</tbody></table>"
     );
@@ -1195,14 +1198,27 @@
       });
   }
   function loadThankYouSent() {
+    var canWrite = H.roleCan(currentRole, "editor");
     el("tySentTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/thank-you/sent")
       .then(j)
       .then(function (d) {
-        el("tySentTable").innerHTML = tySentTable(d.results || []);
+        el("tySentTable").innerHTML = tySentTable(d.results || [], canWrite);
       })
       .catch(function () {
         el("tySentTable").innerHTML = '<p class="admin-empty">Could not load the sent history.</p>';
+      });
+  }
+  // Delete a sent-letter row (Editor+; server enforces), after a confirm. Then refresh the history.
+  function tyDeleteSent(id, name) {
+    if (!window.confirm('Delete the thank-you letter to "' + name + '" from the history? This cannot be undone.')) return;
+    authFetch("/api/admin/thank-you/sent/" + encodeURIComponent(id), { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("delete failed: " + res.status);
+        loadThankYouSent();
+      })
+      .catch(function () {
+        el("tySentTable").innerHTML = '<p class="admin-empty">Could not delete that letter. Please try again.</p>';
       });
   }
 
@@ -1252,6 +1268,7 @@
       signedByName: el("tySigner").value,
       signedByRole: el("tySigner").selectedOptions[0].getAttribute("data-role"),
       letterDate: (el("tyDate").value || "").trim(),
+      ccEmail: (el("tyCc").value || "").trim() || null,
     };
     var btn = el("tySend");
     btn.disabled = true;
@@ -1316,6 +1333,11 @@
       if (!b) return;
       var r = tyEligibleById[b.getAttribute("data-ty-donor")];
       if (r) tyPrefill(r);
+    });
+    el("tySentTable").addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-ty-delete]");
+      if (!b) return;
+      tyDeleteSent(b.getAttribute("data-ty-delete"), b.getAttribute("data-ty-name") || "this donor");
     });
     el("tyForm").addEventListener("submit", tySubmit);
     window.addEventListener("resize", tyFit);

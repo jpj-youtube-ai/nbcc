@@ -45,6 +45,7 @@ import {
   claimNewsletterForSend,
   setNewsletterRecipientCount,
 } from "../db/newsletters";
+import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { sendNewsletter, sendThankYou } from "../clients/email";
@@ -170,10 +171,30 @@ function newsletterId(req: Request, res: Response): number | null {
   return id;
 }
 
-const newsletterBodySchema = z.object({
-  subject: z.string().min(1),
-  bodyHtml: z.string().min(1),
-});
+// A newsletter arrives as EITHER a block document (bodyJson, the builder) OR raw HTML (bodyHtml,
+// legacy + BDD). At least one is required. When bodyJson is present it is the source of truth and
+// body_html is the compiled render; otherwise the raw HTML is stored as-is (rawHtml passthrough).
+const newsletterBodySchema = z
+  .object({
+    subject: z.string().min(1),
+    bodyJson: newsletterDocSchema.optional(),
+    bodyHtml: z.string().min(1).optional(),
+  })
+  .refine((v) => v.bodyJson !== undefined || v.bodyHtml !== undefined, {
+    message: "Provide bodyJson or bodyHtml",
+  });
+
+// Compile the posted payload into { bodyHtml, bodyJson } for storage. Preview name is neutral for
+// the stored render — the real per-recipient name is applied at send time.
+function compileNewsletterBody(data: z.infer<typeof newsletterBodySchema>): {
+  bodyHtml: string;
+  bodyJson: unknown | null;
+} {
+  if (data.bodyJson !== undefined) {
+    return { bodyHtml: renderNewsletter(data.bodyJson, { firstName: "friend" }), bodyJson: data.bodyJson };
+  }
+  return { bodyHtml: data.bodyHtml as string, bodyJson: null };
+}
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
 export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
@@ -198,7 +219,8 @@ export async function postAdminNewsletter(req: Request, res: Response): Promise<
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
   }
-  const created = await createNewsletter(parsed.data.subject, parsed.data.bodyHtml, null);
+  const { bodyHtml, bodyJson } = compileNewsletterBody(parsed.data);
+  const created = await createNewsletter(parsed.data.subject, bodyHtml, bodyJson);
   return res.status(201).json(created);
 }
 
@@ -216,7 +238,8 @@ export async function putAdminNewsletter(req: Request, res: Response): Promise<R
   if (existing.status === "sent") {
     return res.status(409).json({ error: "A sent newsletter cannot be edited" });
   }
-  const updated = await updateNewsletterDraft(id, parsed.data.subject, parsed.data.bodyHtml, null);
+  const { bodyHtml, bodyJson } = compileNewsletterBody(parsed.data);
+  const updated = await updateNewsletterDraft(id, parsed.data.subject, bodyHtml, bodyJson);
   if (!updated) return res.status(409).json({ error: "A sent newsletter cannot be edited" });
   return res.json(updated);
 }

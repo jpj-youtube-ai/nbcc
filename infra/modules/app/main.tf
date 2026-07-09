@@ -216,3 +216,12 @@ resource "aws_ssm_parameter" "admin_session_secret" {
   value = "REPLACE_ME"
   lifecycle { ignore_changes = [value] }
 }
+
+# From/Reply-To address for the admin newsletter (TASK-161/REQ-069). NOT a secret (it ships in
+# the email headers), but SSM-held and injected like ADMIN_NOTIFICATION_EMAIL so it varies per
+# environment. A plain String; the value is the real production address.
+resource "aws_ssm_parameter" "newsletter_from_email" {
+  name  = "/${var.project}/${var.environment}/NEWSLETTER_FROM_EMAIL"
+  type  = "String"
+  value = var.newsletter_from_email
+}

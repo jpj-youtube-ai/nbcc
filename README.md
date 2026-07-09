@@ -1026,6 +1026,9 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
 | `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
 | `GET /api/admin/subscriptions/dunning` | **implemented** | REQ-066 (at-risk / lapsed monthly gifts) |
+| `GET /api/admin/thank-you/eligible?threshold=` | **implemented** | REQ-069 · TASK-162 (donors whose largest single paid gift ≥ threshold pence, default £1,000, tagged with send-state + already-thanked) |
+| `POST /api/admin/thank-you/send` | **implemented** | REQ-069 · TASK-163 (Editor+; record + audit a thank-you letter and email the donor the branded letter) |
+| `GET /api/admin/thank-you/sent?limit&offset` | **implemented** | REQ-069 · TASK-163 (sent-letter history, most recent first) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1122,7 +1125,12 @@ change); guarded by `test/unit/admin-seed-migration.test.ts` and applied by CI's
 later data-only migration `1783345566569_update-admin-emails-nbcc-scot.js` (TASK-147) repoints those
 two identities onto the **nbcc.scot** domain (`kenny@`/`isabella@nbcc.scot`, matching the public
 contact addresses) and adds a third admin, `paul.popa1995@yahoo.ro`; same idempotent
-`ON CONFLICT (email) DO UPDATE`, guarded by `test/unit/admin-email-migration.test.ts`.
+`ON CONFLICT (email) DO UPDATE`, guarded by `test/unit/admin-email-migration.test.ts`. Two further
+data-only grants extend the roster the same way: `1783353707219_grant-paul-jaimie-admin-revoke-yahoo.js`
+(adds `paul.popa@`/`jaimie.wakefield@nbcc.scot`, revokes the interim `paul.popa1995@yahoo.ro`), and
+`1783591722822_grant-jon-admin.js` (TASK-164 — adds `jon@nbcc.scot`, Jon McFarlane, guarded by
+`test/unit/grant-jon-admin-migration.test.ts`). Each is idempotent and sets no `password_hash`, so a
+new admin still can't log in until its password is set out of band (see the ops utility below).
 
 **`GET`/`PATCH /api/admin/donors/:id`, `POST …/subscription/cancel`, `POST …/gift-aid/cancel`
 (REQ-062 · TASK-106).** The role-gated admin actions that let an Editor/Admin act on a donor's
@@ -1283,6 +1291,57 @@ from any donor/donation row and shows the snapshot plus role-gated actions — e
 endpoints (the UI hides write controls below Editor via `roleCan`; the server still enforces). The CSV
 export is fetched with the bearer token and saved via a blob download (a plain link cannot carry the
 `Authorization` header). `admin-shell.test.ts` covers the six nav sections + the donor detail view.
+
+**Newsletter tab (REQ-069 · TASK-161).** A seventh admin nav section for authoring and sending an
+HTML newsletter to consenting donors, over a new `newsletters` table (one row per newsletter,
+`status` `draft`|`sent`). Reads and drafting are **Editor+**: `GET /api/admin/newsletters` lists
+summaries, `GET /api/admin/newsletters/:id` returns one newsletter's full `body_html`,
+`POST /api/admin/newsletters` creates a draft (`{ subject, bodyHtml }`), `PUT
+/api/admin/newsletters/:id` edits a draft — a `sent` newsletter is immutable (**409**). Sending is
+**Admin only**: `POST /api/admin/newsletters/:id/send` reads every consenting donor
+(`listNewsletterRecipients`, deduped on `email_consent=true`) and sends **one individual email per
+recipient** via `sendNewsletter` (`src/clients/email.ts`), each wrapped by the pure
+`buildNewsletterHtml` with a **per-recipient unsubscribe link**
+(`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC token signed with `ADMIN_SESSION_SECRET` —
+reused, not a new secret), From and Reply-To `NEWSLETTER_FROM_EMAIL` (see **Configuration**). A
+single failed send is logged and does not abort the batch. The send is **idempotent**: the draft is
+claimed atomically (`claimNewsletterForSend`, stamping the sender) **before** any email goes out, so
+a double-click or two concurrent admins cannot both send — the second claim finds no draft and is
+rejected with **409** rather than double-blasting donors (the recipient count is stamped afterwards). The admin UI (`admin.html`
++ `assets/js/admin/app.js`) lists newsletters, edits the subject/body for any draft (Editor+), and
+shows **Send** only to `role === "admin"` on an unsent newsletter (the server enforces regardless
+of what the UI hides). Proven by `test/unit/newsletter-html.test.ts`,
+`test/unit/unsubscribe-token.test.ts` and the `@newsletter @db` `features/newsletter.feature`.
+
+**Public unsubscribe route (REQ-069 · TASK-161).** `GET /unsubscribe/:token`
+(`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
+The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with
+`ADMIN_SESSION_SECRET`); a valid token flips that donor's `email_consent` to `false`
+(`unsubscribeDonor`, idempotent — unsubscribing twice is a no-op) and renders a small inline
+confirmation page (no new static `.html` file, so there's no Dockerfile-COPY / page-list guard to
+update). An invalid or tampered token renders the same page shape with **400** instead of writing
+anything. Covered by the `@newsletter @db` `features/newsletter.feature` unsubscribe scenarios.
+
+**Thank-you letters tab (REQ-069 · TASK-163).** An eighth admin nav section (between Newsletter and
+Audit) for thanking significant givers. It has three panels: **(1) Donors to thank** reads
+`GET /api/admin/thank-you/eligible` (TASK-162) and lists eligible donors with a send-state pill;
+**(2) Compose & send** is a form with a **live A4 letter preview** (the exact branded letter the
+donor is emailed, mirroring the pure `src/thank-you/letter.ts`) that updates as you type — a
+`Write` on a listed donor prefills it; **(3) Sent history** reads `GET /api/admin/thank-you/sent`.
+Sending posts `POST /api/admin/thank-you/send` (**Editor+**): the body is the `thankYouInputSchema`
+letter fields, `sentBy` is taken from the authed admin (never the client), and the row + its
+`thank_you.sent` audit entry are written atomically (`recordThankYouSent`) before the donor is
+**best-effort** emailed the branded letter via `sendThankYou` (`src/clients/email.ts`) — a failed
+send is logged, not fatal, so the letter is still recorded. `signedByRole` and `letterDate` are
+presentation-only (not stored). The email is routed by the relay's dedicated `thankYou` branch
+(`services/email-relay/src/index.js`), which honours the message's own subject + repliable
+`from`/`replyTo` (`NEWSLETTER_FROM_EMAIL`). The UI (`admin.html` view `view-thank-you` + the `ty-*`
+styles in `assets/css/admin.css` + `assets/js/admin/app.js` `loadThankYou`) shows **Send** only to
+Editor/Admin (the server enforces regardless). Proven by `test/unit/thank-you-letter.test.ts`,
+`test/unit/email-relay-build.test.ts` and the `@thankyou @db` `features/thank-you.feature`
+send/history/role scenarios. A **PDF attachment** (the mockup's aspiration) is a deliberate
+follow-up: the repo has no PDF/headless-browser subsystem, so this slice emails the branded HTML
+letter.
 
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
@@ -1521,6 +1580,19 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   the single `donations.declaration_id` FK, a partnership records **one declaration per
   partner** here, each with that partner's share — and the shares must sum exactly to the
   donation total (see **Partnership shares** below, REQ-051).
+- **`thank_you_sent`** — one row per admin thank-you letter sent (additive migration
+  `1783544630090_thank-you-sent.js`, REQ-069 · TASK-161). A **nullable** `donor_id` FK
+  (`onDelete SET NULL`, so an in-kind giver that isn't a donor row — a company or church — is
+  allowed and the history row survives a donor removal), the recipient names
+  (`thank_you_name`/`addressed_to`/`recipient_email`), a gift snapshot (`gift_type` `money`|`in_kind`
+  with `gift_amount_pence` **or** `gift_in_kind`, enforced by a table CHECK, plus a `gift_aided`
+  flag), the optional `personal_message`, the `signed_by_name`, and `sent_by` (the logged-in admin,
+  which may differ from the signatory). It powers the "already thanked" dedupe, an `audit_log` entry
+  per send, and the **Sent history** — storing enough to re-render the PDF. Pure model
+  `src/thank-you/model.ts` (`thankYouInputSchema`, `giftAidUpliftPence`, `formatGiftAmount`,
+  `giftSummary`; unit-tested DB-free in `test/unit/thank-you-model.test.ts`); write/read layer
+  `src/db/thank-you.ts` (`recordThankYouSent` via `writeWithAudit`, `hasBeenThanked`,
+  `listThankYouSent`).
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,
@@ -2456,6 +2528,21 @@ injected via `valueFrom` with its ARN in `exec_secrets`, required and **never de
 schema (`z.string().min(1)`) so a missing key fails boot rather than letting anyone forge a session,
 with a placeholder in `.env.example` and the CI env. Wired through all six touch-points (schema,
 `.env.example`, `pr.yml` env, SSM param, task-def `secrets`, `exec_secrets` IAM).
+
+`NEWSLETTER_FROM_EMAIL` (TASK-161 · REQ-069) is the From **and** Reply-To address stamped on every
+admin-newsletter email, so a donor can reply to a real inbox rather than a noreply. **Not** a
+secret (it ships in the email headers) — a plain SSM `String` injected via `valueFrom` like
+`DECLARATION_FORM_BASE_URL`/`PORTAL_BASE_URL` (its ARN still lives in the `exec_secrets` policy,
+matching that pattern), validated as an email address and **defaulted** to
+`newsletter@nbcc.scot`, so local dev / CI boot without extra setup. `sendNewsletter`
+(`src/clients/email.ts`) POSTs the recipient in `email`, its own `subject`/`from`/`replyTo`, and a
+`newsletter: true` discriminator; the relay Worker (`services/email-relay/src/index.js`) has a
+dedicated newsletter branch that maps those to a Resend send honouring the per-message `from`/`reply_to`
+(other payloads fall through to the fixed `MAIL_FROM`). **Ops prerequisites:** (1) the relay Worker
+must be redeployed (`cd services/email-relay && wrangler deploy`) for the newsletter branch to take
+effect — one Worker serves both staging and production; (2) `newsletter@nbcc.scot` must be a real
+**receiving mailbox** (Resend is send-only) for replies to land, and its domain `nbcc.scot` must stay
+verified in Resend.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

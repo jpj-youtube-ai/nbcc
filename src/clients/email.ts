@@ -200,3 +200,63 @@ export async function sendSubscriptionLapsedAdmin(message: SubscriptionLapsedAdm
     throw new Error(`Subscription lapsed (admin) email send responded ${res.status}`);
   }
 }
+
+// The admin newsletter send (TASK-161/REQ-069; relay contract fixed TASK-162). Sends ONE individual
+// message per consenting donor, with From + Reply-To set to config.NEWSLETTER_FROM_EMAIL so replies
+// reach a real inbox (not noreply). Each message's html already carries the recipient's unsubscribe
+// link (built by the route from buildNewsletterHtml). Same stub-seam + best-effort contract as the
+// other sends: a placeholder EMAIL_SEND_URL means no network outside production.
+//
+// The recipient rides in `email` (the field the relay Worker reads — services/email-relay), and the
+// posted body carries `newsletter: true` so the relay maps it via its dedicated newsletter branch
+// (honouring this message's subject + from + replyTo) instead of the donation-confirmation default.
+export interface NewsletterEmail {
+  email: string; // recipient — the relay's recipient field
+  from: string; // config.NEWSLETTER_FROM_EMAIL
+  replyTo: string; // same as from
+  subject: string;
+  html: string;
+}
+
+export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ ...message, newsletter: true }),
+  });
+  if (!res.ok) {
+    throw new Error(`Newsletter email send responded ${res.status}`);
+  }
+}
+
+// The admin thank-you letter send (TASK-163/REQ-069). After an admin composes a thank-you in the
+// "Thank you" view, the platform emails the donor the fully rendered, branded letter (built by the
+// pure src/thank-you/letter.ts). Like sendNewsletter, From + Reply-To are set to
+// config.NEWSLETTER_FROM_EMAIL so a reply reaches a real NBCC inbox, and the body carries
+// `thankYou: true` so the relay maps it via its dedicated thank-you branch (honouring this message's
+// subject + from + replyTo) instead of the donation-confirmation default. Same stub-seam + best-effort
+// contract as the other sends: a placeholder EMAIL_SEND_URL means no network outside production.
+export interface ThankYouLetterEmail {
+  email: string; // recipient — the relay's recipient field
+  from: string; // config.NEWSLETTER_FROM_EMAIL
+  replyTo: string; // same as from
+  subject: string;
+  html: string;
+}
+
+export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ ...message, thankYou: true }),
+  });
+  if (!res.ok) {
+    throw new Error(`Thank-you email send responded ${res.status}`);
+  }
+}

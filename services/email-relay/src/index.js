@@ -34,8 +34,24 @@ const page = (subject, bodyHtml, bodyText) => ({
 });
 
 // Map an app payload to a Resend send. Returns {from-independent} {subject, html, text, to}.
-function buildEmail(p) {
+export function buildEmail(p) {
   const to = p.email;
+
+  // Newsletter (src/clients/email.ts sendNewsletter): the app ships its OWN subject + rendered html,
+  // plus a per-message from/reply-to (newsletter@nbcc.scot) so the send is repliable, not a noreply.
+  // Discriminated by the explicit `newsletter` flag so it never falls through to the donation default
+  // below (which would hijack the subject). from/replyTo are honoured by sendViaResend.
+  if (p.newsletter && (p.html || p.text)) {
+    return { to, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
+  }
+
+  // Thank-you letter (src/clients/email.ts sendThankYou, REQ-069 · TASK-163): like the newsletter,
+  // the app ships its OWN subject + fully rendered, branded html plus a repliable from/reply-to, so
+  // the letter reaches a real NBCC inbox on reply. Discriminated by the explicit `thankYou` flag so
+  // it never falls through to the donation-confirmation default (which would hijack the subject).
+  if (p.thankYou && (p.html || p.text)) {
+    return { to, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
+  }
 
   // Types that already ship rendered text + html — just wrap with a subject.
   if (p.declarationLink) {
@@ -121,7 +137,7 @@ function buildContact(p, env) {
 
 async function sendViaResend(env, msg) {
   const body = {
-    from: env.MAIL_FROM,
+    from: msg.from || env.MAIL_FROM,
     to: msg.to,
     subject: msg.subject,
     html: msg.html,

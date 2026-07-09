@@ -1290,7 +1290,14 @@ from any donor/donation row and shows the snapshot plus role-gated actions — e
 (`PATCH /api/admin/donors/:id`), cancel subscription and cancel Gift Aid — reusing the REQ-062 write
 endpoints (the UI hides write controls below Editor via `roleCan`; the server still enforces). The CSV
 export is fetched with the bearer token and saved via a blob download (a plain link cannot carry the
-`Authorization` header). `admin-shell.test.ts` covers the six nav sections + the donor detail view.
+`Authorization` header). `admin-shell.test.ts` covers the nav sections + the donor detail view.
+
+**Nav grouping (TASK-171).** The sidebar nav links are clustered under four presentational group
+labels — **Monitor** (Overview, Search), **Giving** (Donations, Claims, GASDS, Subscriptions),
+**Content** (Stories, Newsletter, Thank you) and **Governance** (Audit) — so related tools sit
+together instead of one flat list. Purely cosmetic: the labels are `aria-hidden` `<li>`s
+(`.admin-nav-group`) that leave the `.admin-nav-link` buttons, their order and `data-view` targets
+untouched, so `admin-shell.test.ts`'s nav-order assertion still holds.
 
 **Newsletter tab (REQ-069 · TASK-161).** A seventh admin nav section for authoring and sending an
 HTML newsletter to consenting donors, over a new `newsletters` table (one row per newsletter,

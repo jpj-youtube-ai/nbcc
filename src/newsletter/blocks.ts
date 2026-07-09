@@ -60,7 +60,6 @@ export const newsletterDocSchema = z.object({
 // --- small readers so every renderer treats data as untrusted --------------------------------
 const str = (d: Record<string, unknown>, k: string, fallback = ""): string =>
   typeof d[k] === "string" ? (d[k] as string) : fallback;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- vocabulary for tasks 7–15
 const list = (d: Record<string, unknown>, k: string): Record<string, unknown>[] =>
   Array.isArray(d[k]) ? (d[k] as Record<string, unknown>[]) : [];
 
@@ -305,6 +304,80 @@ function image(b: Block): string {
   return `<div style="padding:12px 40px"><img src="${safeUrl}" alt="${alt}" width="580" style="display:block;width:100%;max-width:580px;height:auto" /></div>`;
 }
 
+// story — a news item: image + title + body + optional Read-more link.
+//   0: image-top (image above title/body)
+//   1: image-left (two-column table: image left, text right)
+//   2: two-up row — reads data.items[] and renders each item side by side
+//   3: text-only with a top rule (no image, even if imageUrl is present)
+//
+// data contract: imageUrl (string, optional), title (string, optional — falls back to ""), body
+// (string, optional — falls back to ""), label (string, optional — read-more link text, falls
+// back to "Read more"), href (string, optional). items (array of {imageUrl?, title, body, label?,
+// href?}, optional) is read ONLY by variant 2, ignoring the top-level imageUrl/title/body/label/
+// href fields. Degrades to nothing for a missing image, and to no link for a missing href.
+function readMoreLink(label: string, href: string): string {
+  if (!href) return "";
+  return `<div style="margin-top:8px">${brandButton(label || "Read more", href, "link")}</div>`;
+}
+
+function storyBody(data: Record<string, unknown>, titleSize: string, bodySize: string): string {
+  const title = escapeHtml(str(data, "title"));
+  const body = escapeHtml(str(data, "body"));
+  const label = str(data, "label");
+  const href = str(data, "href");
+  return `<h3 style="font-family:${HEAD};color:${MAROON};font-size:${titleSize};font-weight:800;margin:0">${title}</h3>
+    <p style="font-family:${BODY};color:${SLATE};font-size:${bodySize};line-height:1.6;margin:6px 0 0">${body}</p>
+    ${readMoreLink(label, href)}`;
+}
+
+function story(b: Block): string {
+  const imageUrl = str(b.data, "imageUrl");
+
+  if (b.variant === 1) {
+    // image-left / text-right two-column table
+    const imgCell = imageUrl
+      ? `<td style="vertical-align:top;width:200px"><img src="${escapeHtml(imageUrl)}" alt="" width="200" style="display:block;width:100%;max-width:200px;height:auto" /></td>`
+      : "";
+    return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+  ${imgCell}
+  <td style="vertical-align:top;padding-left:${imageUrl ? "16px" : "0"}">
+    ${storyBody(b.data, "18px", "14px")}
+  </td>
+</tr></table></div>`;
+  }
+
+  if (b.variant === 2) {
+    // two-up row: each item side by side, reading data.items[] only
+    const items = list(b.data, "items");
+    const cells = items
+      .map((item) => {
+        const itemImageUrl = str(item, "imageUrl");
+        const itemImg = itemImageUrl
+          ? `<img src="${escapeHtml(itemImageUrl)}" alt="" width="260" style="display:block;width:100%;max-width:260px;height:auto" />`
+          : "";
+        return `<td style="vertical-align:top;width:50%;padding:0 8px">
+    ${itemImg}
+    ${storyBody(item, "16px", "13px")}
+  </td>`;
+      })
+      .join("");
+    return `<div style="padding:12px 40px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>${cells}</tr></table></div>`;
+  }
+
+  if (b.variant === 3) {
+    // text-only with a top rule — never shows an image, even if imageUrl is present
+    return `<div style="padding:12px 40px"><hr style="border:none;border-top:1px solid #e5ded3;margin:0 0 12px" />
+  ${storyBody(b.data, "18px", "14px")}
+</div>`;
+  }
+
+  // variant 0 (default): image-top
+  const imgEl = imageUrl
+    ? `<img src="${escapeHtml(imageUrl)}" alt="" width="580" style="display:block;width:100%;max-width:580px;height:auto;margin:0 0 12px" />`
+    : "";
+  return `<div style="padding:12px 40px">${imgEl}${storyBody(b.data, "18px", "14px")}</div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
@@ -314,7 +387,7 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
   text,
   heading,
   image,
-  story: stub,
+  story,
   spotlight: stub,
   stats: stub,
   waysToHelp: stub,

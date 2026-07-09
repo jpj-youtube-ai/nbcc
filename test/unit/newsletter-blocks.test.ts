@@ -337,3 +337,101 @@ describe("newsletter blocks — image variants", () => {
     expect(result).not.toContain("<img");
   });
 });
+
+describe("newsletter blocks — story variants", () => {
+  const mk = (variant: number, data: Record<string, unknown>) =>
+    renderNewsletter({ blocks: [{ type: "story", variant, data }] }, ctx);
+
+  it("variant 0: image-top — image renders above the title and body", () => {
+    const html = mk(0, {
+      imageUrl: "https://example.org/story.jpg",
+      title: "A Winter to Remember",
+      body: "Our shelter welcomed forty families this year.",
+    });
+    expect(html).toContain('src="https://example.org/story.jpg"');
+    expect(html).toContain("A Winter to Remember");
+    expect(html).toContain("Our shelter welcomed forty families this year.");
+    // image markup precedes the title in document order (image-top)
+    expect(html.indexOf("story.jpg")).toBeLessThan(html.indexOf("A Winter to Remember"));
+  });
+
+  it("variant 0: degrades to no image markup when imageUrl is absent, title/body still render", () => {
+    const html = mk(0, { title: "A Winter to Remember", body: "Forty families helped." });
+    expect(html).toContain("A Winter to Remember");
+    expect(html).toContain("Forty families helped.");
+    expect(html).not.toContain("<img");
+  });
+
+  it("variant 1: image-left / text-right two-column table layout", () => {
+    const result = renderBlock(
+      {
+        type: "story",
+        variant: 1,
+        data: {
+          imageUrl: "https://example.org/story.jpg",
+          title: "A Winter to Remember",
+          body: "Forty families helped.",
+        },
+      },
+      ctx,
+    );
+    expect(result).toContain("A Winter to Remember");
+    expect(result).toContain('src="https://example.org/story.jpg"');
+    expect(result).toContain("<table");
+    // two-column layout: an image <td> and a text <td> side by side in one row
+    expect((result.match(/<td/g) || []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("variant 2: two-up row renders both items' titles and bodies side by side", () => {
+    const html = mk(2, {
+      items: [
+        { title: "Sarah's Story", body: "Sarah found warmth this winter." },
+        { title: "Tom's Story", body: "Tom's family had a place to stay." },
+      ],
+    });
+    expect(html).toContain("Sarah's Story");
+    expect(html).toContain("Sarah found warmth this winter.");
+    expect(html).toContain("Tom's Story");
+    expect(html).toContain("Tom's family had a place to stay.");
+  });
+
+  it("variant 3: text-only with a top rule — no image markup even when imageUrl is provided", () => {
+    const html = mk(3, {
+      imageUrl: "https://example.org/story.jpg",
+      title: "A Winter to Remember",
+      body: "Forty families helped.",
+    });
+    expect(html).toContain("A Winter to Remember");
+    expect(html).toContain("Forty families helped.");
+    expect(html).toContain("<hr");
+    expect(html).not.toContain("<img");
+  });
+
+  it("with href present: renders the read-more link using the given label", () => {
+    const html = mk(0, {
+      title: "A Winter to Remember",
+      body: "Forty families helped.",
+      label: "Read Sarah's story",
+      href: "https://nbcc.scot/stories/sarah",
+    });
+    expect(html).toContain("Read Sarah's story");
+    expect(html).toContain('href="https://nbcc.scot/stories/sarah"');
+  });
+
+  it("read-more label falls back to 'Read more' when label is absent", () => {
+    const html = mk(0, {
+      title: "A Winter to Remember",
+      body: "Forty families helped.",
+      href: "https://nbcc.scot/stories/sarah",
+    });
+    expect(html).toContain("Read more");
+    expect(html).toContain('href="https://nbcc.scot/stories/sarah"');
+  });
+
+  it("degrades to no read-more link when href is absent, title/body still render", () => {
+    const html = mk(0, { title: "A Winter to Remember", body: "Forty families helped." });
+    expect(html).toContain("A Winter to Remember");
+    expect(html).toContain("Forty families helped.");
+    expect(html).not.toContain("&rarr;");
+  });
+});

@@ -205,3 +205,12 @@ resource "aws_ssm_parameter" "newsletter_from_email" {
   type  = "String"
   value = var.newsletter_from_email
 }
+
+# From/Reply-To address for donor thank-you letters (TASK-165/REQ-069). NOT a secret (it ships in
+# the email headers), but SSM-held and injected like newsletter_from_email so it varies per
+# environment. A plain String; the value is the real giving inbox address.
+resource "aws_ssm_parameter" "giving_from_email" {
+  name  = "/${var.project}/${var.environment}/GIVING_FROM_EMAIL"
+  type  = "String"
+  value = var.giving_from_email
+}

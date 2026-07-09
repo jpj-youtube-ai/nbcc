@@ -738,8 +738,8 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
       });
       await sendThankYou({
         email: input.recipientEmail,
-        from: config.NEWSLETTER_FROM_EMAIL,
-        replyTo: config.NEWSLETTER_FROM_EMAIL,
+        from: config.GIVING_FROM_EMAIL,
+        replyTo: config.GIVING_FROM_EMAIL,
         subject: thankYouSubject(input),
         html,
       });

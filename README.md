@@ -2502,6 +2502,18 @@ effect — one Worker serves both staging and production; (2) `newsletter@nbcc.s
 **receiving mailbox** (Resend is send-only) for replies to land, and its domain `nbcc.scot` must stay
 verified in Resend.
 
+`GIVING_FROM_EMAIL` (TASK-165 · REQ-069) is the equivalent From **and** Reply-To address for donor
+**thank-you letters**, so a donor's reply reaches the giving inbox rather than a noreply. Same shape
+as `NEWSLETTER_FROM_EMAIL`: **not** a secret, a plain SSM `String` injected via `valueFrom` (its ARN
+in `exec_secrets`), validated as an email and **defaulted** to `giving@nbcc.scot`. `sendThankYou`
+(`src/clients/email.ts`) POSTs its own `subject`/`from`/`replyTo` plus a `thankYou: true`
+discriminator; the relay Worker's dedicated thank-you branch honours the per-message `from`/`reply_to`.
+**Ops prerequisites** mirror the newsletter's: (1) redeploy the relay Worker (`cd services/email-relay
+&& wrangler deploy`) so the thank-you branch takes effect (one Worker serves both envs); (2)
+`giving@nbcc.scot` must be a real **receiving mailbox** (Resend is send-only) for replies to land, and
+`nbcc.scot` must stay verified in Resend. A `DMARC` record on `nbcc.scot` (with SPF/DKIM) is
+recommended for inbox placement.
+
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in
   `infra/modules/app/main.tf` if you must.

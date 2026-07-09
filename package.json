@@ -13,6 +13,8 @@
     "migrate:down": "node-pg-migrate down",
     "migrate:stories": "node-pg-migrate -m migrations-stories -d STORIES_DATABASE_URL up",
     "bootstrap:stories": "node scripts/bootstrap-stories-db.mjs",
+    "migrate:contact": "node-pg-migrate -m migrations-contact -d CONTACT_DATABASE_URL up",
+    "bootstrap:contact": "node scripts/bootstrap-contact-db.mjs",
     "lint": "eslint . --ext .ts",
     "test:unit": "vitest run",
     "test:bdd": "cucumber-js",

@@ -1018,6 +1018,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/claim-batches/:id/export` | **implemented** | REQ-052/REQ-066 (Charities Online CSV export) |
 | `GET /api/admin/audit` | **implemented** | REQ-066 (append-only audit trail) |
 | `GET /api/admin/subscriptions/dunning` | **implemented** | REQ-066 (at-risk / lapsed monthly gifts) |
+| `GET /api/admin/thank-you/eligible?threshold=` | **implemented** | REQ-069 · TASK-162 (donors whose largest single paid gift ≥ threshold pence, default £1,000, tagged with send-state + already-thanked) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).

@@ -32,6 +32,8 @@ import { cancelSubscription } from "../clients/stripe";
 import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
 import { declarationFieldsSchema } from "../declarations/fields";
 import { getGasdsPoolReport } from "../gasds/pool";
+import { listThankYouEligible } from "../db/thank-you";
+import { DEFAULT_THANK_YOU_THRESHOLD_PENCE } from "../thank-you/model";
 import {
   listNewsletters,
   getNewsletter,
@@ -675,6 +677,25 @@ adminRouter.get("/api/admin/queues/gasds-deadline", getAdminGasdsDeadline);
 adminRouter.post("/api/admin/queues/gasds-deadline/mark-claimed", postAdminMarkGasdsClaimed);
 adminRouter.get("/api/admin/queues/gasds-pool", getAdminGasdsPool);
 adminRouter.get("/api/admin/queues/declaration-review", getAdminDeclarationReview);
+
+// --- Thank-you letters: eligible-donors list (REQ-069 · TASK-162) --------------------------------
+// Donors whose largest single PAID gift is >= the threshold (pence; ?threshold, default £1,000),
+// most generous first, each tagged with whether they can be emailed (sendState) and whether they
+// have been thanked. Read-only, Viewer+.
+export async function getThankYouEligible(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const thresholdNum = Number(req.query.threshold);
+    const thresholdPence =
+      Number.isInteger(thresholdNum) && thresholdNum > 0 ? thresholdNum : DEFAULT_THANK_YOU_THRESHOLD_PENCE;
+    return res.status(200).json({ thresholdPence, results: await listThankYouEligible(thresholdPence) });
+  } catch (err) {
+    console.error("admin thank-you eligible list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/thank-you/eligible", getThankYouEligible);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
 // Read-only lists that back the admin cockpit UI. Browsing/reads are Viewer and up; the Charities

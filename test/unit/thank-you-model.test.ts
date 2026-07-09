@@ -4,6 +4,8 @@ import {
   formatGiftAmount,
   giftSummary,
   thankYouInputSchema,
+  deriveSendState,
+  recipientName,
 } from "../../src/thank-you/model";
 
 // TASK-161 (REQ-069): the pure thank-you model. DB-free (no pool, no config),
@@ -105,6 +107,37 @@ describe("thank-you model (REQ-069)", () => {
     });
     it("rejects a blank thank-you name", () => {
       expect(thankYouInputSchema.safeParse({ ...base, thankYouName: "   " }).success).toBe(false);
+    });
+  });
+
+  describe("deriveSendState (REQ-069 · TASK-162)", () => {
+    it("is ready when the donor has an email and consent", () => {
+      expect(deriveSendState({ email: "a@b.com", emailConsent: true })).toBe("ready");
+    });
+    it("is no_email when the donor has no email", () => {
+      expect(deriveSendState({ email: null, emailConsent: true })).toBe("no_email");
+    });
+    it("is opted_out when the donor has an email but no consent", () => {
+      expect(deriveSendState({ email: "a@b.com", emailConsent: false })).toBe("opted_out");
+    });
+    it("treats a missing email as no_email even without consent", () => {
+      expect(deriveSendState({ email: null, emailConsent: false })).toBe("no_email");
+    });
+  });
+
+  describe("recipientName (REQ-069 · TASK-162)", () => {
+    it("uses a company's business name when present", () => {
+      expect(
+        recipientName({ donorType: "company", fullName: "Jean Baxter", businessName: "Ayrshire Operatic Society" }),
+      ).toBe("Ayrshire Operatic Society");
+    });
+    it("falls back to the full name for a company with no business name", () => {
+      expect(recipientName({ donorType: "company", fullName: "Jean Baxter", businessName: null })).toBe("Jean Baxter");
+    });
+    it("uses the full name for an individual", () => {
+      expect(
+        recipientName({ donorType: "individual", fullName: "Margaret Robertson", businessName: null }),
+      ).toBe("Margaret Robertson");
     });
   });
 });

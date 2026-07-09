@@ -12,6 +12,7 @@
     "migrate": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
     "migrate:stories": "node-pg-migrate -m migrations-stories -d STORIES_DATABASE_URL up",
+    "bootstrap:stories": "node scripts/bootstrap-stories-db.mjs",
     "lint": "eslint . --ext .ts",
     "test:unit": "vitest run",
     "test:bdd": "cucumber-js",

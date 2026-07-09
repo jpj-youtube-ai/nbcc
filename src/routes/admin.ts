@@ -24,6 +24,7 @@ import {
   listDunning,
 } from "../db/admin";
 import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError } from "../db/donations";
+import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
@@ -869,6 +870,116 @@ adminRouter.get("/api/admin/claim-batches", getAdminClaimBatches);
 adminRouter.get("/api/admin/claim-batches/:id/export", getAdminClaimBatchExport);
 adminRouter.get("/api/admin/audit", getAdminAuditLog);
 adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);
+
+// --- Admin Stories (Task C): list/view/manage My Story submissions -------------------------------
+// Reads/writes go to the SEPARATE stories DB only (src/db/stories, storiesPool) — never
+// src/db/pool.ts / the charity DB, and never audited via audit_log (that table lives in the
+// charity DB; see src/db/stories.ts's comment). Browsing is Viewer+; changing status/tags/notes
+// is an Editor+ write (mirrors patchAdminDonor).
+
+// Parse and validate the story id in the path; sends a 400 and returns null when it is not a
+// positive integer (mirrors donorId/claimBatchId).
+function storyId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid story id" });
+    return null;
+  }
+  return id;
+}
+
+// GET /api/admin/stories?status=&use_scope= — newest-first, optionally filtered. Viewer+. The list
+// projection is already PII-minimised by listStories (no story_text, no email/phone).
+export async function getAdminStories(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    const status = typeof req.query.status === "string" ? req.query.status : undefined;
+    const useScope = typeof req.query.use_scope === "string" ? req.query.use_scope : undefined;
+    return res.status(200).json({ results: await listStories({ status, useScope }) });
+  } catch (err) {
+    console.error("admin stories list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/stories/:id — the full record for the detail view. Viewer+.
+export async function getAdminStory(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  const id = storyId(req, res);
+  if (id == null) return;
+  try {
+    const story = await getStory(id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    return res.status(200).json(story);
+  } catch (err) {
+    console.error("admin story read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// The story statuses recognised by the workflow (mirrors migrations-stories's `status` comment):
+// new -> reviewed -> used, or withdrawn at any point (e.g. the submitter asks to withdraw consent).
+const STORY_STATUSES = ["new", "reviewed", "used", "withdrawn"] as const;
+
+// PATCH body: status / admin_tags / admin_notes, all optional but at least one required (mirrors
+// adminPatchSchema's "no fields to update" refine).
+// adminNotes/adminTags are capped (2000 chars / 50 tags of up to 100 chars each) so a
+// staff PATCH can never smuggle an unbounded payload into the stories DB — mirrors the
+// story submission schema's own length caps (src/stories/schema.ts).
+const storyPatchSchema = z
+  .object({
+    status: z.enum(STORY_STATUSES).optional(),
+    adminTags: z.array(z.string().max(100)).max(50).optional(),
+    adminNotes: z.string().max(2000).optional(),
+  })
+  .strict()
+  .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });
+
+// PATCH /api/admin/stories/:id — update status / admin_tags / admin_notes (e.g. Withdraw). Editor/
+// Admin only (mirrors patchAdminDonor). No audit_log row — see src/db/stories.ts's comment.
+export async function patchAdminStory(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const id = storyId(req, res);
+  if (id == null) return;
+
+  const parsed = storyPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid story update", details: parsed.error.flatten() });
+  }
+  try {
+    const story = await updateStory(id, parsed.data);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    return res.status(200).json(story);
+  } catch (err) {
+    console.error("admin story update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+// DELETE /api/admin/stories/:id — G2 item 6: real hard-delete (erasure). Distinct from the
+// PATCH status='withdrawn' path above, which only STOPS a story being used but keeps the
+// row for the permanent archive: this permanently removes the row and everything it holds,
+// for a submitter's actual right-to-erasure request. Editor/Admin only (mirrors patchAdminStory).
+// No audit_log row (see src/db/stories.ts's comment — this feature is deliberately
+// self-contained, and an erasure request should not itself retain the erased data anywhere).
+export async function deleteAdminStory(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const id = storyId(req, res);
+  if (id == null) return;
+  try {
+    const deleted = await deleteStory(id);
+    if (!deleted) return res.status(404).json({ error: "Story not found" });
+    return res.status(200).json({ deleted: true, id });
+  } catch (err) {
+    console.error("admin story delete failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin delete is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/stories", getAdminStories);
+adminRouter.get("/api/admin/stories/:id", getAdminStory);
+adminRouter.patch("/api/admin/stories/:id", patchAdminStory);
+adminRouter.delete("/api/admin/stories/:id", deleteAdminStory);
 
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);

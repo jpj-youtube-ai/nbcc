@@ -32,8 +32,19 @@ const snapshot = {
   fullName: "Ada Test", email: "ada@x.co", emailConsent: true, anonymous: false,
   subscriptionPlan: "silver", subscriptionId: "sub_1", giftAid: true,
 };
+const storyRow = {
+  id: 9, created_at: "2026-06-01T00:00:00Z", consent_captured_at: "2026-06-01T00:00:00Z",
+  submitter_role: "family_carer", use_scope: "public", consent_share_first_name: true,
+  consent_share_town: false, third_party_consent: true, status: "new", short_quote: "It helped us.",
+};
+const storyDetail = {
+  ...storyRow, story_text: "The full story text.", contact_for_more: false, photo_interest: false,
+  submitter_first_name: "Ada", submitter_email: "ada@x.co", submitter_phone: null,
+  submitter_town: "Ayr", age_band: "25_44", gender: "female", recipient_type: "child",
+  heard_about: "Facebook", confirmed_over_16: true, admin_tags: ["funding"], admin_notes: "note",
+};
 
-function respond(url: string) {
+function respond(url: string, init?: { method?: string; body?: string }) {
   const j = (body: unknown, status = 200) => ({
     status,
     ok: status < 400,
@@ -44,6 +55,15 @@ function respond(url: string) {
   if (url.includes("/api/admin/login")) return j({ token: loginToken, user: { email: "s@nbcc", role: "editor" } });
   if (url.includes("/api/admin/donors/")) return j(snapshot);
   if (url.includes("/api/admin/donations")) return j({ results: [donation], total: 1 });
+  if (/\/api\/admin\/stories\/\d+/.test(url) && init?.method === "PATCH") {
+    const patch = JSON.parse(init.body || "{}");
+    return j({ ...storyDetail, ...patch });
+  }
+  if (/\/api\/admin\/stories\/\d+/.test(url) && init?.method === "DELETE") {
+    return j({ deleted: true, id: 9 });
+  }
+  if (/\/api\/admin\/stories\/\d+/.test(url)) return j(storyDetail);
+  if (url.includes("/api/admin/stories")) return j({ results: [storyRow] });
   return j({ results: [] }); // queues / adjustment-due
 }
 
@@ -65,8 +85,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
-    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown) =>
-      Promise.resolve(respond(String(url))),
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string })),
     );
     // eslint-disable-next-line no-eval
     (0, eval)(appSrc); // run the IIFE against this DOM
@@ -122,5 +142,108 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("donorEditForm")).toBeNull();
     expect(el("cancelSubBtn")).toBeNull();
     expect(el("cancelGaBtn")).toBeNull();
+  });
+
+  // Task C: Stories tab — list renders scope/consent/status badges, opening a row shows the full
+  // story (HTML-escaped), and an Editor can withdraw it via the PATCH endpoint.
+  it("lists stories, opens the detail, and withdraws it", async () => {
+    await signIn();
+
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    expect(document.querySelector("#storiesTable table")).not.toBeNull();
+    expect(el("storiesTable").textContent).toContain("Public");
+
+    const row = document.querySelector("#storiesTable [data-story]") as HTMLElement;
+    expect(row).not.toBeNull();
+    row.click();
+    await flush();
+    await flush();
+    expect(el("view-story").hidden).toBe(false);
+    expect(el("storyDetail").textContent).toContain("The full story text.");
+    // Editor => the manage form + Withdraw control are present
+    expect(el("storyEditForm")).not.toBeNull();
+    const withdrawBtn = el("withdrawStoryBtn") as HTMLButtonElement;
+    expect(withdrawBtn).not.toBeNull();
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    withdrawBtn.click();
+    await flush();
+    await flush();
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(el("storyDetail").textContent).toContain("Withdrawn");
+    expect(el("storyActionStatus").textContent).toContain("withdrawn");
+  });
+
+  it("hides the story manage form for a Viewer", async () => {
+    loginToken = tokenFor("viewer");
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+    expect(el("storyDetail").textContent).toContain("The full story text.");
+    expect(el("storyEditForm")).toBeNull();
+    expect(el("withdrawStoryBtn")).toBeNull();
+  });
+
+  // G2 item 6: permanent erasure — a distinct, danger-styled control from Withdraw, behind its
+  // own confirm() guard, calling DELETE and returning to the (refreshed) Stories list.
+  it("shows a Delete permanently control distinct from Withdraw, and deletes on confirm", async () => {
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    const deleteBtn = el("deleteStoryBtn") as HTMLButtonElement;
+    expect(deleteBtn).not.toBeNull();
+    expect(deleteBtn).not.toBe(el("withdrawStoryBtn"));
+    expect(deleteBtn.className).toContain("btn-danger");
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    deleteBtn.click();
+    await flush();
+    await flush();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    // A confirmed delete returns to the Stories list view.
+    expect(el("view-stories").hidden).toBe(false);
+    expect(el("view-story").hidden).toBe(true);
+  });
+
+  it("does not delete when the confirm is declined", async () => {
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    (el("deleteStoryBtn") as HTMLButtonElement).click();
+    await flush();
+    await flush();
+
+    // Declined => still on the story detail view, nothing deleted.
+    expect(el("view-story").hidden).toBe(false);
+  });
+
+  it("hides the Delete permanently control for a Viewer", async () => {
+    loginToken = tokenFor("viewer");
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+    expect(el("deleteStoryBtn")).toBeNull();
   });
 });

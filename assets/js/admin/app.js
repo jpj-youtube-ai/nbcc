@@ -12,6 +12,8 @@
   var currentRole = "viewer"; // decoded from the session token; gates the write actions (server still enforces)
   var donationsOffset = 0; // Donations view paging cursor
   var currentDonorId = null; // the donor open in the detail view
+  var currentStoryId = null; // the story open in the detail view
+  var storiesStatusFilter = ""; // Stories view status filter ("" = all)
 
   function token() {
     return sessionStorage.getItem(TOKEN_KEY);
@@ -125,6 +127,7 @@
     } else if (name === "claims") loadClaims();
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
+    else if (name === "stories") loadStories();
     else if (name === "newsletter") loadNewsletters();
     else if (name === "thank-you") loadThankYou();
     else if (name === "audit") loadAudit();
@@ -494,6 +497,201 @@
       });
   }
 
+  // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
+  Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (b) {
+    b.addEventListener("click", function () {
+      storiesStatusFilter = b.getAttribute("data-status") || "";
+      Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (x) {
+        x.classList.toggle("is-active", x === b);
+      });
+      loadStories();
+    });
+  });
+  function scopeConsentBadges(r) {
+    var badges = '<span class="admin-pill">' + H.escapeHtml(H.storyLabel("useScope", r.use_scope)) + "</span>";
+    if (r.consent_share_first_name) badges += ' <span class="admin-pill">First name</span>';
+    if (r.consent_share_town) badges += ' <span class="admin-pill">Town</span>';
+    if (r.third_party_consent) badges += ' <span class="admin-pill">3rd-party OK</span>';
+    return badges;
+  }
+  function storiesTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No stories yet.</p>';
+    var body = rows
+      .map(function (r) {
+        return (
+          "<tr><td>" + r.id + "</td><td>" + H.escapeHtml(H.storyLabel("submitterRole", r.submitter_role)) +
+          "</td><td>" + scopeConsentBadges(r) + '</td><td><span class="admin-pill">' +
+          H.escapeHtml(H.storyLabel("status", r.status)) + "</span></td><td>" +
+          H.escapeHtml(H.consentAge(r.consent_captured_at)) + "</td><td>" + H.fmtDate(r.created_at) +
+          '</td><td><button class="admin-link" type="button" data-story="' + r.id + '">View</button></td></tr>'
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>ID</th><th>Role</th><th>Scope / consent</th>' +
+      "<th>Status</th><th>Consent age</th><th>Submitted</th><th></th></tr></thead><tbody>" +
+      body + "</tbody></table>"
+    );
+  }
+  function loadStories() {
+    var wrap = el("storiesTable");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    var path = "/api/admin/stories" + (storiesStatusFilter ? "?status=" + encodeURIComponent(storiesStatusFilter) : "");
+    authFetch(path)
+      .then(j)
+      .then(function (d) {
+        wrap.innerHTML = storiesTable(d.results || []);
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+  function storyStatus(msg) {
+    el("storyActionStatus").textContent = msg || "";
+  }
+  function openStory(id) {
+    currentStoryId = id;
+    showOnly("view-story");
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+      b.classList.remove("is-active");
+    });
+    storyStatus("");
+    var wrap = el("storyDetail");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/stories/" + id)
+      .then(function (res) {
+        if (res.status === 404) {
+          wrap.innerHTML = '<p class="admin-empty">Story not found.</p>';
+          throw new Error("not found");
+        }
+        return res.json();
+      })
+      .then(renderStory)
+      .catch(function () {});
+  }
+  function renderStory(s) {
+    var canWrite = H.roleCan(currentRole, "editor");
+    var info =
+      '<dl class="admin-dl">' +
+      dl("Role", H.storyLabel("submitterRole", s.submitter_role)) +
+      dl("Use scope", H.storyLabel("useScope", s.use_scope)) +
+      dl("Share first name", s.consent_share_first_name ? "Yes" : "No") +
+      dl("Share town", s.consent_share_town ? "Yes" : "No") +
+      dl("Third-party consent", s.third_party_consent ? "Yes" : "No") +
+      dl("Contact for more", s.contact_for_more ? "Yes" : "No") +
+      dl("Photo interest", s.photo_interest ? "Yes" : "No") +
+      dl("Status", H.storyLabel("status", s.status)) +
+      dl("Consent captured", H.fmtDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ")") +
+      dl("Submitted", H.fmtDate(s.created_at)) +
+      dl("First name", s.submitter_first_name || "Not given") +
+      dl("Email", s.submitter_email || "Not given") +
+      dl("Phone", s.submitter_phone || "Not given") +
+      dl("Town", s.submitter_town || "Not given") +
+      dl("Age band", H.storyLabel("ageBand", s.age_band)) +
+      dl("Gender", s.gender || "Not given") +
+      dl("Recipient type", H.storyLabel("recipientType", s.recipient_type)) +
+      dl("Heard about us via", s.heard_about || "Not given") +
+      dl("Confirmed 16+", s.confirmed_over_16 ? "Yes" : "No") +
+      "</dl>" +
+      '<h3 class="admin-subhead">Story</h3><p class="admin-story-text">' + H.escapeHtml(s.story_text || "") + "</p>" +
+      (s.short_quote ? '<h3 class="admin-subhead">Short quote</h3><p class="admin-story-text">' + H.escapeHtml(s.short_quote) + "</p>" : "");
+    var actions = "";
+    if (canWrite) {
+      var statusOptions = ["new", "reviewed", "used", "withdrawn"]
+        .map(function (st) {
+          return '<option value="' + st + '"' + (s.status === st ? " selected" : "") + ">" + H.escapeHtml(H.storyLabel("status", st)) + "</option>";
+        })
+        .join("");
+      actions =
+        '<form class="admin-edit" id="storyEditForm"><h3 class="admin-subhead">Manage story</h3>' +
+        '<div class="admin-field"><label for="edit-storyStatus">Status</label>' +
+        '<select id="edit-storyStatus" name="status">' + statusOptions + "</select></div>" +
+        editField("storyTags", "Tags (comma-separated)", "text", (s.admin_tags || []).join(", ")) +
+        '<div class="admin-field"><label for="edit-storyNotes">Notes</label>' +
+        '<textarea id="edit-storyNotes" name="adminNotes" rows="4">' + H.escapeHtml(s.admin_notes || "") + "</textarea></div>" +
+        '<button class="btn btn-primary" type="submit">Save changes</button> ' +
+        '<button class="btn btn-ghost" type="button" id="withdrawStoryBtn">Withdraw</button>' +
+        "</form>" +
+        // Permanent erasure (G2 item 6): visually distinct from the reversible Withdraw
+        // above (its own danger zone, a destructive btn style) and gated by an
+        // irreversible-erasure confirm() guard (see deleteStory below) — never the same
+        // click surface as the Save/Withdraw form.
+        '<div class="admin-danger-zone">' +
+        '<h3 class="admin-subhead">Delete permanently</h3>' +
+        '<p class="admin-danger-copy">This permanently erases the story and every detail the submitter gave us. There is no way to undo this, and it is different from Withdraw, which only stops the story being used.</p>' +
+        '<button class="btn btn-danger" type="button" id="deleteStoryBtn">Delete permanently</button>' +
+        "</div>";
+    }
+    el("storyDetail").innerHTML = info + actions;
+    if (canWrite) wireStoryActions(s);
+  }
+  function patchStory(body, okMsg, errMsg) {
+    return authFetch("/api/admin/stories/" + currentStoryId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (updated) {
+        if (updated) {
+          renderStory(updated);
+          storyStatus(okMsg);
+        } else storyStatus(errMsg);
+      })
+      .catch(function () {
+        storyStatus(errMsg);
+      });
+  }
+  function wireStoryActions(s) {
+    var form = el("storyEditForm");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var tagsRaw = (el("edit-storyTags").value || "").trim();
+        var body = {
+          status: el("edit-storyStatus").value,
+          adminTags: tagsRaw ? tagsRaw.split(",").map(function (t) { return t.trim(); }).filter(Boolean) : [],
+          adminNotes: el("edit-storyNotes").value || "",
+        };
+        patchStory(body, "Saved.", "Could not save the changes.");
+      });
+    }
+    bindClick("withdrawStoryBtn", function () {
+      if (!window.confirm("Withdraw this story? It will no longer be treated as usable.")) return;
+      patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.");
+    });
+    bindClick("deleteStoryBtn", deleteStory);
+  }
+  // Permanent erasure (G2 item 6): a stronger, explicit confirm() than Withdraw's, naming the
+  // action as permanent erasure rather than a generic "are you sure", since this cannot be
+  // undone (DELETE /api/admin/stories/:id, not a status flag). On success, returns to the
+  // Stories list and refreshes it, since the detail view has nothing left to show.
+  function deleteStory() {
+    if (
+      !window.confirm(
+        "Permanently delete this story? This erases the story and the submitter's details for good. This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    authFetch("/api/admin/stories/" + currentStoryId, { method: "DELETE" })
+      .then(function (res) {
+        if (res.ok) {
+          selectView("stories");
+        } else {
+          storyStatus("Could not delete the story.");
+        }
+      })
+      .catch(function () {
+        storyStatus("Could not delete the story.");
+      });
+  }
+  bindClick("storyBack", function () {
+    selectView("stories");
+  });
+
   // ---- audit ----
   function loadAudit() {
     var wrap = el("auditTable");
@@ -835,6 +1033,8 @@
       if (!t || !t.closest) return;
       var donor = t.closest("[data-donor]");
       if (donor) return openDonor(donor.getAttribute("data-donor"));
+      var story = t.closest("[data-story]");
+      if (story) return openStory(story.getAttribute("data-story"));
       var sub = t.closest("[data-submit-batch]");
       if (sub) return submitBatch(sub.getAttribute("data-submit-batch"));
       var exp = t.closest("[data-export-batch]");

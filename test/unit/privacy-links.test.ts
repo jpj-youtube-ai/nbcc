@@ -51,4 +51,57 @@ describe("privacy notice links next to consent controls (REQ-064)", () => {
     expect(link, "no visible /privacy link inside .give-contact").not.toBeNull();
     expect((link?.textContent ?? "").toLowerCase()).toContain("privacy");
   });
+
+  it("my-story.html links to /privacy near the final confirm (G2 item 8)", () => {
+    const doc = docOf(read("my-story.html"));
+    const step3 = doc.querySelector('.give-step[data-step="3"]');
+    expect(step3).not.toBeNull();
+    const link = step3?.querySelector('a[href="/privacy"]');
+    expect(link, "no visible /privacy link inside step 3").not.toBeNull();
+    expect((link?.textContent ?? "").toLowerCase()).toContain("privacy");
+  });
+});
+
+// G2 item 9: privacy.html gets a dedicated "Stories you share with us" section covering the My
+// Story feature's own consent/retention model, distinct from the general "Sharing your data" /
+// "How long we keep it" sections above (which describe donor/enquiry data, not story submissions).
+describe("privacy notice covers My Story submissions (G2 item 9)", () => {
+  const doc = docOf(read("privacy.html"));
+  const headings = [...doc.querySelectorAll(".privacy-body h2")];
+  const storiesHeading = headings.find((h) => /stories you share with us/i.test(h.textContent ?? ""));
+
+  it("has a 'Stories you share with us' section after Sharing your data / How long we keep it", () => {
+    expect(storiesHeading, "no 'Stories you share with us' h2 found").not.toBeUndefined();
+    const sharingIdx = headings.findIndex((h) => /sharing your data/i.test(h.textContent ?? ""));
+    const storiesIdx = headings.indexOf(storiesHeading as Element);
+    expect(storiesIdx).toBeGreaterThan(sharingIdx);
+  });
+
+  it("covers what's collected, consent as the legal basis, third party permission, the separate database, and retention", () => {
+    let node = storiesHeading?.nextElementSibling;
+    const parts: string[] = [];
+    while (node && node.tagName !== "H2") {
+      parts.push(node.textContent ?? "");
+      node = node.nextElementSibling;
+    }
+    const text = parts.join(" ").toLowerCase();
+    expect(text).toContain("consent");
+    expect(text).toMatch(/third party|children|vulnerable adult/);
+    expect(text).toMatch(/separate database/);
+    expect(text).toMatch(/archive|permanent/);
+    expect(text).toMatch(/withdraw/);
+    expect(text).toMatch(/delete/);
+  });
+
+  it("gives a real withdraw/delete route (mailto and/or contact form)", () => {
+    let node = storiesHeading?.nextElementSibling;
+    let hasMailto = false;
+    let hasContactLink = false;
+    while (node && node.tagName !== "H2") {
+      if (node.querySelector('a[href^="mailto:"]')) hasMailto = true;
+      if (node.querySelector('a[href="/contact"]')) hasContactLink = true;
+      node = node.nextElementSibling;
+    }
+    expect(hasMailto || hasContactLink).toBe(true);
+  });
 });

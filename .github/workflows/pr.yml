@@ -19,6 +19,11 @@ jobs:
           --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       DATABASE_URL: postgres://app:app@localhost:5432/charity
+      # My Story submissions (TASK-B1): a SEPARATE database, same Postgres service. CI
+      # reuses the `app` role against it (a separate role is a prod/infra concern, Task
+      # B2) - the point here is DB isolation (own database, own migrations table), not
+      # credential isolation.
+      STORIES_DATABASE_URL: postgres://app:app@localhost:5432/stories
       EXTERNAL_API_ONE_BASE_URL: https://sandbox.api-one.example
       EXTERNAL_API_ONE_KEY: ci-dummy
       EXTERNAL_API_TWO_KEY: ci-dummy
@@ -67,6 +72,12 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm run migrate
+      # My Story (TASK-B1): create the separate `stories` database in the same Postgres
+      # service, then run its own migration against it (own pgmigrations table, never
+      # touching the `charity` DB's migrations).
+      - name: Create stories database
+        run: PGPASSWORD=app psql -h localhost -U app -d charity -c 'CREATE DATABASE stories'
+      - run: npm run migrate:stories
       - run: npm run test:unit
       - name: Start app + BDD against it
         run: |

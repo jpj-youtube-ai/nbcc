@@ -5,6 +5,7 @@ import { configSchema } from "../../src/config/schema";
 // clone this and drop or break one key to prove it is required/validated.
 const validEnv = (): Record<string, string> => ({
   DATABASE_URL: "postgres://app:app@localhost:5432/charity",
+  STORIES_DATABASE_URL: "postgres://stories_app:stories@localhost:5432/stories",
   EXTERNAL_API_ONE_BASE_URL: "https://sandbox.api-one.example",
   EXTERNAL_API_ONE_KEY: "k",
   EXTERNAL_API_TWO_KEY: "k",
@@ -117,6 +118,15 @@ describe("config schema — contact forwarding key (REQ-030)", () => {
     expect(
       configSchema.safeParse({ ...validEnv(), STRIPE_DONATION_PRODUCT: "prod_abc123" }).success,
     ).toBe(true);
+  });
+
+  it("requires STORIES_DATABASE_URL and validates it as a URL (separate stories DB)", () => {
+    const { STORIES_DATABASE_URL, ...without } = validEnv();
+    void STORIES_DATABASE_URL;
+    expect(configSchema.safeParse(without).success).toBe(false); // required, never defaulted
+    expect(
+      configSchema.safeParse({ ...validEnv(), STORIES_DATABASE_URL: "not-a-url" }).success,
+    ).toBe(false);
   });
 
   it("parses the Stripe values onto the typed config", () => {

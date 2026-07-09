@@ -55,6 +55,7 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/donate/thank-you` | `thank-you.html` |
 | `/donor-portal` | `portal.html` |
 | `/privacy` | `privacy.html` |
+| `/my-story` | `my-story.html` |
 
 `/donate/thank-you` is the post-payment confirmation page Stripe returns the
 donor to on a successful checkout (`STRIPE_SUCCESS_URL`, REQ-028/REQ-029); it is a
@@ -63,7 +64,11 @@ donor portal page (REQ-061), reached via the magic-link token in the URL query
 string (`?token=…`); it is a private landing page (`noindex`), not a nav
 destination. `/privacy` is the data-protection privacy notice (REQ-064), linked
 from the footer and from the consent controls on the contact and donate pages,
-not a primary nav destination.
+not a primary nav destination. `/my-story` is the public story submission page:
+a guided 3 step form linked from the footer Explore list on every page, not a
+primary nav destination; the form posts to `POST /api/my-story` (Task B1),
+which persists submissions to a SEPARATE `stories` database (own name +
+credentials, same server as the main app DB — never the main `charity` DB).
 
 The mapping lives in the repo-root **`_redirects`** file, a host-agnostic
 Netlify-style format. The Express site router (`src/routes/site.ts`) parses it
@@ -78,6 +83,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /donate/thank-you /thank-you.html   200
 /donor-portal     /portal.html      200
 /privacy          /privacy.html     200
+/my-story         /my-story.html    200
 /index.html       /                 301!   # canonicalise raw .html onto the clean URL
 /about.html       /about-us         301!   # ! forces the redirect over the real file
 /donate.html      /donate           301!
@@ -86,6 +92,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /thank-you.html   /donate/thank-you 301!
 /portal.html      /donor-portal     301!
 /privacy.html     /privacy          301!
+/my-story.html    /my-story         301!
 ```
 
 `200` is a *rewrite* (content served, address bar unchanged); `301!` is a forced
@@ -991,6 +998,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/subscription/change-plan` | **implemented** | REQ-055 (tier up/down) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form) |
+| `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
@@ -2317,6 +2325,40 @@ staging RDS to seed there. Local-dev / demo only, never production donor data.
 
 Or run the whole thing in containers: `docker compose up` (and
 `docker compose run --rm migrate` once to migrate).
+
+My Story submissions persist to a SEPARATE `stories` database (own name +
+credentials, same Postgres server as `charity`, never the main DB — see
+`src/db/stories-pool.ts`). Its migration lives in its own `migrations-stories/`
+directory, with its own `pgmigrations` tracking table, applied via:
+
+```bash
+npm run migrate:stories          # node-pg-migrate -m migrations-stories -d STORIES_DATABASE_URL up
+```
+
+Locally this requires a `stories` database + `stories_app` role to exist alongside
+`charity` on the same Postgres instance. `docker compose up` gets this for free — a
+`docker-entrypoint-initdb.d` script (`docker/initdb/10-stories-db.sql`) creates both
+on first container init (only on a **fresh** `pgdata` volume; if you already have one
+from before this existed, either run the two statements in that file manually or
+`docker compose down -v` to pick it up). Running Postgres another way, create them
+by hand: `createdb stories && psql -c "CREATE ROLE stories_app LOGIN PASSWORD
+'stories'" -c 'ALTER DATABASE stories OWNER TO stories_app'`. CI creates the database
+explicitly in `pr.yml` (reusing the `app` role there — credential isolation is a
+staging/production concern, not CI's).
+
+**Staging/production provisioning** (Task B2): Terraform generates the
+`stories_app` credential and publishes it as the `STORIES_DATABASE_URL` SSM
+parameter (`infra/modules/app/main.tf`), wired through the task definition like
+any other secret (`infra/modules/app/ecs.tf`). It can't create the database or
+role itself (no `postgresql` Terraform provider, private RDS), so
+`scripts/bootstrap-stories-db.mjs` does that imperatively — idempotent
+`CREATE ROLE`/`ALTER ROLE`, `CREATE DATABASE`, `GRANT` statements run outside a
+transaction (Postgres can't `CREATE DATABASE` inside one), connecting with the
+**master** `DATABASE_URL`. Both deploy workflows run it as a one-off
+`ecs run-task` (`npm run bootstrap:stories`) right after the `charity` migration
+step and before `migrate:stories`, every deploy — safe because it's idempotent.
+See `infra/README.md` → "My Story: the separate `stories` database" for the full
+walkthrough.
 
 Tests:
 

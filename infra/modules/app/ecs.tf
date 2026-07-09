@@ -59,6 +59,10 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
       # role must be able to read it.
       aws_ssm_parameter.admin_session_secret.arn,
+      # My Story stories DB (TASK-B2): a SecureString injected via valueFrom, so the exec role
+      # must be able to read it. Needed by the running app AND by the one-off bootstrap/
+      # migrate:stories tasks (they reuse this task definition with a command override).
+      aws_ssm_parameter.stories_db_url.arn,
       # Newsletter From/Reply-To address (TASK-161): non-secret String injected via valueFrom, so
       # the exec role must be able to read it.
       aws_ssm_parameter.newsletter_from_email.arn,
@@ -154,6 +158,11 @@ resource "aws_ecs_task_definition" "app" {
       # Admin session signing key (TASK-105): a SecureString, injected like a secret — so its ARN
       # must also appear in exec_secrets above.
       { name = "ADMIN_SESSION_SECRET", valueFrom = aws_ssm_parameter.admin_session_secret.arn },
+      # My Story stories DB (TASK-B2): a SecureString, injected like a secret — so its ARN must
+      # also appear in exec_secrets above. The task-def now carries BOTH DATABASE_URL (master,
+      # used by scripts/bootstrap-stories-db.mjs) and STORIES_DATABASE_URL (used by the app and
+      # by migrate:stories).
+      { name = "STORIES_DATABASE_URL", valueFrom = aws_ssm_parameter.stories_db_url.arn },
       # Newsletter From/Reply-To address (TASK-161/REQ-069): non-secret SSM String, injected via
       # valueFrom like PORTAL_BASE_URL — so its ARN must also appear in exec_secrets below.
       { name = "NEWSLETTER_FROM_EMAIL", valueFrom = aws_ssm_parameter.newsletter_from_email.arn },

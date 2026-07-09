@@ -63,6 +63,26 @@ resource "aws_ssm_parameter" "db_url" {
   value = "postgres://app:${random_password.db.result}@${aws_db_instance.app.address}:5432/charity?sslmode=no-verify"
 }
 
+# My Story submissions (TASK-B2/REQ intent: "Persist My Story submissions to a
+# dedicated stories database..."). A SEPARATE database on the same RDS instance,
+# with its own name (`stories`) and its own role (`stories_app`) — never the
+# `charity` DB's `app` master user. Terraform has no `postgresql` provider wired
+# here and RDS is private, so it can only generate the credential + publish it;
+# the database and role are created imperatively by scripts/bootstrap-stories-db.mjs
+# (run as a one-off ECS task in the deploy workflow, BEFORE migrate:stories).
+resource "random_password" "stories" {
+  length  = 24
+  special = false
+}
+
+resource "aws_ssm_parameter" "stories_db_url" {
+  name  = "/${var.project}/${var.environment}/STORIES_DATABASE_URL"
+  type  = "SecureString"
+  # Same sslmode=no-verify requirement as db_url above (RDS enforces TLS). The
+  # bootstrap script and node-pg-migrate (migrate:stories) both parse this URL.
+  value = "postgres://stories_app:${random_password.stories.result}@${aws_db_instance.app.address}:5432/stories?sslmode=no-verify"
+}
+
 # App / third-party secrets: placeholders. Set REAL values out of band:
 #   aws ssm put-parameter --name /charity-site/staging/EXTERNAL_API_ONE_KEY \
 #     --type SecureString --value 'real-key' --overwrite

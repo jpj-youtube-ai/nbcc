@@ -26,6 +26,10 @@ export function createApp() {
   // skips a body already parsed at the 100kb default). Scoped to the one path; it only
   // reads a header, never the body, so it is safe ahead of the parser.
   app.use("/api/my-story", rejectOversizedMyStoryJson);
+  // The newsletter image upload carries a base64 payload up to ~2 MB (×1.37 encoded), which exceeds
+  // the global express.json 100kb cap. Give just this path a larger parser BEFORE the global one;
+  // body-parser then sees the body already parsed and skips it. Mirrors the /api/my-story guard.
+  app.use("/api/admin/newsletter-images", express.json({ limit: "3mb" }));
   app.use(express.json());
   app.use(apiRouter);
   app.use(portalRouter);

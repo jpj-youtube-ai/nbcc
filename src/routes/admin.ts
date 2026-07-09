@@ -46,6 +46,7 @@ import {
   setNewsletterRecipientCount,
 } from "../db/newsletters";
 import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
+import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { sendNewsletter, sendThankYou } from "../clients/email";
@@ -1022,3 +1023,28 @@ adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);
 adminRouter.post("/api/admin/newsletters/:id/send", postAdminSendNewsletter);
+
+// POST /api/admin/newsletter-images — upload one image for use in a newsletter block (Editor+).
+// Body { mime, dataBase64 }. Validates mime allow-list + 2 MB cap, stores the bytes, returns the
+// public serve URL. See src/routes/newsletter-images.ts for the GET side.
+export async function postAdminNewsletterImage(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const parsed = z
+    .object({ mime: z.string().min(1), dataBase64: z.string().min(1), filename: z.string().optional() })
+    .safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid upload" });
+
+  const bytes = Buffer.from(parsed.data.dataBase64, "base64");
+  const check = validateUpload(parsed.data.mime, bytes.length);
+  if (!check.ok) {
+    const status = check.reason === "size" ? 413 : 400;
+    return res
+      .status(status)
+      .json({ error: check.reason === "size" ? "Image too large (2 MB max)" : "Unsupported image type" });
+  }
+  const { id } = await insertNewsletterImage(parsed.data.mime, bytes, claims.sub);
+  return res.status(201).json({ id, url: `${config.PORTAL_BASE_URL}/media/newsletter/${id}` });
+}
+
+adminRouter.post("/api/admin/newsletter-images", postAdminNewsletterImage);

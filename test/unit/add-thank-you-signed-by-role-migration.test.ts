@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 // safe to ship with a code-level rollback. This encodes that so the migration can't drift destructive.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const src = readFileSync(resolve(ROOT, "migrations/1783600275343_add-thank-you-signed-by-role.js"), "utf8");
+const src = readFileSync(resolve(ROOT, "migrations/1783620000000_add-thank-you-signed-by-role.js"), "utf8");
 const up = src.slice(src.indexOf("exports.up"), src.indexOf("exports.down"));
 
 describe("add-thank-you-signed-by-role migration", () => {

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
 vi.mock("../../src/db/stories-pool", () => ({ storiesPool: { query: queryMock } }));
 
-import { listStories, getStory, updateStory } from "../../src/db/stories";
+import { listStories, getStory, updateStory, deleteStory } from "../../src/db/stories";
 
 beforeEach(() => {
   queryMock.mockReset();
@@ -106,6 +106,34 @@ describe("updateStory", () => {
   it("never queries the audit_log table (no cross-DB audit for stories)", async () => {
     queryMock.mockResolvedValueOnce({ rows: [{ id: 3 }] });
     await updateStory(3, { status: "withdrawn" });
+    const sqls = queryMock.mock.calls.map((c) => String(c[0]));
+    expect(sqls.some((s) => /audit_log/i.test(s))).toBe(false);
+  });
+});
+
+// G2 item 6: real hard-delete (erasure). A DELETE FROM stories via storiesPool — the ONLY
+// way a submitter's details are permanently erased rather than merely marked withdrawn
+// (updateStory's status='withdrawn' above STOPS the story being used, but keeps the row).
+describe("deleteStory", () => {
+  it("deletes the row by id via storiesPool and returns true when a row was removed", async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 1 });
+    const result = await deleteStory(3);
+    expect(result).toBe(true);
+    const [sql, params] = queryMock.mock.calls[0];
+    expect(sql).toMatch(/delete from stories/i);
+    expect(sql).toMatch(/where id = \$1/i);
+    expect(params).toEqual([3]);
+  });
+
+  it("returns false when no row matched the id", async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 0 });
+    const result = await deleteStory(404);
+    expect(result).toBe(false);
+  });
+
+  it("never queries the audit_log table (no cross-DB audit for stories)", async () => {
+    queryMock.mockResolvedValueOnce({ rowCount: 1 });
+    await deleteStory(3);
     const sqls = queryMock.mock.calls.map((c) => String(c[0]));
     expect(sqls.some((s) => /audit_log/i.test(s))).toBe(false);
   });

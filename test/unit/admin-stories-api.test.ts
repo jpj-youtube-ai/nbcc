@@ -7,15 +7,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // donor admin-api.test.ts mock/req/res style, but mocks ../../src/db/stories directly
 // instead of the pool, since that module is Task C's only access to story data.
 
-const { listStoriesMock, getStoryMock, updateStoryMock } = vi.hoisted(() => ({
+const { listStoriesMock, getStoryMock, updateStoryMock, deleteStoryMock } = vi.hoisted(() => ({
   listStoriesMock: vi.fn(),
   getStoryMock: vi.fn(),
   updateStoryMock: vi.fn(),
+  deleteStoryMock: vi.fn(),
 }));
 vi.mock("../../src/db/stories", () => ({
   listStories: listStoriesMock,
   getStory: getStoryMock,
   updateStory: updateStoryMock,
+  deleteStory: deleteStoryMock,
 }));
 vi.mock("../../src/config", () => ({
   config: {
@@ -30,7 +32,7 @@ vi.mock("../../src/config", () => ({
 // stub them minimally so importing the router doesn't require a real pool/DB.
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
-import { getAdminStories, getAdminStory, patchAdminStory } from "../../src/routes/admin";
+import { getAdminStories, getAdminStory, patchAdminStory, deleteAdminStory } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
 const SECRET = "test-admin-secret";
@@ -59,12 +61,14 @@ function req(opts: { id?: string; role?: string; token?: string; body?: unknown;
 const runList = async (o: any) => { const res = mockRes(); await getAdminStories(req(o) as any, res as any); return res; };
 const runGet = async (o: any) => { const res = mockRes(); await getAdminStory(req(o) as any, res as any); return res; };
 const runPatch = async (o: any) => { const res = mockRes(); await patchAdminStory(req(o) as any, res as any); return res; };
+const runDelete = async (o: any) => { const res = mockRes(); await deleteAdminStory(req(o) as any, res as any); return res; };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 beforeEach(() => {
   listStoriesMock.mockReset();
   getStoryMock.mockReset();
   updateStoryMock.mockReset();
+  deleteStoryMock.mockReset();
 });
 
 describe("GET /api/admin/stories (list)", () => {
@@ -213,5 +217,41 @@ describe("PATCH /api/admin/stories/:id (editor+ gate)", () => {
     const res = await runPatch({ role: "editor", id: "abc", body: { status: "reviewed" } });
     expect(res.statusCode).toBe(400);
     expect(updateStoryMock).not.toHaveBeenCalled();
+  });
+});
+
+// G2 item 6: DELETE /api/admin/stories/:id — real hard-delete (erasure), distinct from the
+// PATCH status='withdrawn' path above. Gated identically to PATCH (Editor/Admin only, mirrors
+// patchAdminDonor/patchAdminStory).
+describe("DELETE /api/admin/stories/:id (editor+ gate, permanent erasure)", () => {
+  it("401s with no token", async () => {
+    const res = await runDelete({ token: "" });
+    expect(res.statusCode).toBe(401);
+    expect(deleteStoryMock).not.toHaveBeenCalled();
+  });
+
+  it("403s a Viewer", async () => {
+    const res = await runDelete({ role: "viewer" });
+    expect(res.statusCode).toBe(403);
+    expect(deleteStoryMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["editor", "admin"])("%s can permanently delete a story (200)", async (role) => {
+    deleteStoryMock.mockResolvedValueOnce(true);
+    const res = await runDelete({ role });
+    expect(res.statusCode).toBe(200);
+    expect(deleteStoryMock).toHaveBeenCalledWith(7);
+  });
+
+  it("404s when the story does not exist", async () => {
+    deleteStoryMock.mockResolvedValueOnce(false);
+    const res = await runDelete({ role: "editor" });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("400s a non-numeric id and never calls deleteStory", async () => {
+    const res = await runDelete({ role: "editor", id: "abc" });
+    expect(res.statusCode).toBe(400);
+    expect(deleteStoryMock).not.toHaveBeenCalled();
   });
 });

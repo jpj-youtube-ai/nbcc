@@ -609,7 +609,16 @@
         '<textarea id="edit-storyNotes" name="adminNotes" rows="4">' + H.escapeHtml(s.admin_notes || "") + "</textarea></div>" +
         '<button class="btn btn-primary" type="submit">Save changes</button> ' +
         '<button class="btn btn-ghost" type="button" id="withdrawStoryBtn">Withdraw</button>' +
-        "</form>";
+        "</form>" +
+        // Permanent erasure (G2 item 6): visually distinct from the reversible Withdraw
+        // above (its own danger zone, a destructive btn style) and gated by an
+        // irreversible-erasure confirm() guard (see deleteStory below) — never the same
+        // click surface as the Save/Withdraw form.
+        '<div class="admin-danger-zone">' +
+        '<h3 class="admin-subhead">Delete permanently</h3>' +
+        '<p class="admin-danger-copy">This permanently erases the story and every detail the submitter gave us. There is no way to undo this, and it is different from Withdraw, which only stops the story being used.</p>' +
+        '<button class="btn btn-danger" type="button" id="deleteStoryBtn">Delete permanently</button>' +
+        "</div>";
     }
     el("storyDetail").innerHTML = info + actions;
     if (canWrite) wireStoryActions(s);
@@ -651,6 +660,31 @@
       if (!window.confirm("Withdraw this story? It will no longer be treated as usable.")) return;
       patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.");
     });
+    bindClick("deleteStoryBtn", deleteStory);
+  }
+  // Permanent erasure (G2 item 6): a stronger, explicit confirm() than Withdraw's, naming the
+  // action as permanent erasure rather than a generic "are you sure", since this cannot be
+  // undone (DELETE /api/admin/stories/:id, not a status flag). On success, returns to the
+  // Stories list and refreshes it, since the detail view has nothing left to show.
+  function deleteStory() {
+    if (
+      !window.confirm(
+        "Permanently delete this story? This erases the story and the submitter's details for good. This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    authFetch("/api/admin/stories/" + currentStoryId, { method: "DELETE" })
+      .then(function (res) {
+        if (res.ok) {
+          selectView("stories");
+        } else {
+          storyStatus("Could not delete the story.");
+        }
+      })
+      .catch(function () {
+        storyStatus("Could not delete the story.");
+      });
   }
   bindClick("storyBack", function () {
     selectView("stories");

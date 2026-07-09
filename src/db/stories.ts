@@ -124,6 +124,17 @@ export interface StoryPatch {
 // from only the provided fields (mirrors updateDonorPortal's partial-update style), so a status-only
 // patch never touches admin_tags/admin_notes. Returns the updated row, or null when the id does not
 // exist. No audit_log row (see insertStory's comment — this feature is deliberately self-contained).
+// G2 item 6: real hard-delete (erasure). Distinct from updateStory's status='withdrawn'
+// (which STOPS a story being used but keeps the row for the archive): this permanently
+// removes the row and every field it carries — a submitter's actual right-to-erasure
+// request, not a soft flag. Single DELETE via storiesPool, no paired audit_log row (see
+// insertStory's comment — this feature is deliberately self-contained in its own DB).
+// Returns true when a row was removed, false when the id did not exist (caller 404s).
+export async function deleteStory(id: number): Promise<boolean> {
+  const result = await storiesPool.query(`DELETE FROM stories WHERE id = $1`, [id]);
+  return (result.rowCount ?? 0) > 0;
+}
+
 export async function updateStory(id: number, patch: StoryPatch): Promise<StoryRow | null> {
   const sets: string[] = [];
   const params: unknown[] = [];

@@ -92,6 +92,15 @@
 .admin-field select:focus,.admin-field textarea:focus{border:1.6px solid var(--holly);outline:none}
 .admin-story-text{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:16px 20px;max-width:64ch;line-height:1.6}
 
+/* Permanent erasure (G2 item 6): a visually distinct danger zone, set apart from the reversible
+   Withdraw action above it, so a staff user cannot mistake one for the other. Token-only (--crimson
+   is the existing danger/active-state red used elsewhere in this file, e.g. .admin-seg.is-active). */
+.admin-danger-zone{max-width:480px;margin-top:22px;background:var(--card);border:1.6px solid var(--crimson);border-radius:var(--radius);box-shadow:var(--shadow-sm);padding:20px 24px}
+.admin-danger-zone .admin-subhead{color:var(--crimson);margin-top:0}
+.admin-danger-copy{font-size:.88rem;color:var(--slate-soft);margin:0 0 16px}
+.btn-danger{background:var(--crimson);color:var(--cream);border:1.6px solid var(--crimson)}
+.btn-danger:hover{background:var(--maroon);border-color:var(--maroon)}
+
 @media (max-width:760px){
   .admin-body-grid{grid-template-columns:1fr}
   .admin-nav{position:static;padding:12px}

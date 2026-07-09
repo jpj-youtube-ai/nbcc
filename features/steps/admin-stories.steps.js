@@ -95,6 +95,43 @@ Then("the story is withdrawn in the stories database", async function () {
   assert.equal(row.rows[0].status, "withdrawn");
 });
 
+// G2 item 6: real hard-delete (erasure), distinct from the withdraw PATCH above.
+When(
+  "I DELETE the admin story as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/stories/${this.adminStoryId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When(
+  "I DELETE a non existent admin story as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/stories/999999999`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the story still exists in the stories database", async function () {
+  const row = await storiesPool.query("SELECT id FROM stories WHERE id = $1", [this.adminStoryId]);
+  assert.equal(row.rowCount, 1);
+});
+
+Then("the story no longer exists in the stories database", async function () {
+  const row = await storiesPool.query("SELECT id FROM stories WHERE id = $1", [this.adminStoryId]);
+  assert.equal(row.rowCount, 0);
+});
+
 // "the admin response status should be {int}" and "the admin response field {string} should be
 // {string}" are defined in admin-auth.steps.js / admin-api.steps.js (shared @admin).
 

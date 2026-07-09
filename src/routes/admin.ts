@@ -24,7 +24,7 @@ import {
   listDunning,
 } from "../db/admin";
 import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError } from "../db/donations";
-import { listStories, getStory, updateStory } from "../db/stories";
+import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
@@ -745,6 +745,27 @@ export async function patchAdminStory(req: Request, res: Response): Promise<Resp
   }
 }
 
+// DELETE /api/admin/stories/:id — G2 item 6: real hard-delete (erasure). Distinct from the
+// PATCH status='withdrawn' path above, which only STOPS a story being used but keeps the
+// row for the permanent archive: this permanently removes the row and everything it holds,
+// for a submitter's actual right-to-erasure request. Editor/Admin only (mirrors patchAdminStory).
+// No audit_log row (see src/db/stories.ts's comment — this feature is deliberately
+// self-contained, and an erasure request should not itself retain the erased data anywhere).
+export async function deleteAdminStory(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "editor")) return;
+  const id = storyId(req, res);
+  if (id == null) return;
+  try {
+    const deleted = await deleteStory(id);
+    if (!deleted) return res.status(404).json({ error: "Story not found" });
+    return res.status(200).json({ deleted: true, id });
+  } catch (err) {
+    console.error("admin story delete failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin delete is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/stories", getAdminStories);
 adminRouter.get("/api/admin/stories/:id", getAdminStory);
 adminRouter.patch("/api/admin/stories/:id", patchAdminStory);
+adminRouter.delete("/api/admin/stories/:id", deleteAdminStory);

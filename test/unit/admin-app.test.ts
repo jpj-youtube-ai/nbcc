@@ -59,6 +59,9 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     const patch = JSON.parse(init.body || "{}");
     return j({ ...storyDetail, ...patch });
   }
+  if (/\/api\/admin\/stories\/\d+/.test(url) && init?.method === "DELETE") {
+    return j({ deleted: true, id: 9 });
+  }
   if (/\/api\/admin\/stories\/\d+/.test(url)) return j(storyDetail);
   if (url.includes("/api/admin/stories")) return j({ results: [storyRow] });
   return j({ results: [] }); // queues / adjustment-due
@@ -185,5 +188,62 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("storyDetail").textContent).toContain("The full story text.");
     expect(el("storyEditForm")).toBeNull();
     expect(el("withdrawStoryBtn")).toBeNull();
+  });
+
+  // G2 item 6: permanent erasure — a distinct, danger-styled control from Withdraw, behind its
+  // own confirm() guard, calling DELETE and returning to the (refreshed) Stories list.
+  it("shows a Delete permanently control distinct from Withdraw, and deletes on confirm", async () => {
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    const deleteBtn = el("deleteStoryBtn") as HTMLButtonElement;
+    expect(deleteBtn).not.toBeNull();
+    expect(deleteBtn).not.toBe(el("withdrawStoryBtn"));
+    expect(deleteBtn.className).toContain("btn-danger");
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    deleteBtn.click();
+    await flush();
+    await flush();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    // A confirmed delete returns to the Stories list view.
+    expect(el("view-stories").hidden).toBe(false);
+    expect(el("view-story").hidden).toBe(true);
+  });
+
+  it("does not delete when the confirm is declined", async () => {
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    (el("deleteStoryBtn") as HTMLButtonElement).click();
+    await flush();
+    await flush();
+
+    // Declined => still on the story detail view, nothing deleted.
+    expect(el("view-story").hidden).toBe(false);
+  });
+
+  it("hides the Delete permanently control for a Viewer", async () => {
+    loginToken = tokenFor("viewer");
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+    expect(el("deleteStoryBtn")).toBeNull();
   });
 });

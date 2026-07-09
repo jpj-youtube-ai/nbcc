@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,6 +162,8 @@ describe("contact form behaviour (jsdom)", () => {
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   const status = () => document.getElementById("formStatus")!;
   const invalid = (id: string) => document.getElementById(id)?.getAttribute("aria-invalid");
+  // Let the fetch promise chain (and its .then/.catch/.then handlers) settle before assertions.
+  const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   beforeEach(() => {
     document.body.innerHTML = `<main>${formHtml}</main>`;
@@ -194,15 +196,61 @@ describe("contact form behaviour (jsdom)", () => {
     expect(status().classList.contains("is-success")).toBe(false);
   });
 
-  it("a valid submit shows a visible success message and clears errors", () => {
+  it("a valid submit shows a visible success message and clears errors only after a 200 (honest-save)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    (window as unknown as { fetch: unknown }).fetch = fetchMock;
     set("firstName", "Ada");
     set("email", "ada@example.com");
     set("message", "Hello NBCC, I would love to help.");
     submit();
+    await flushPromises();
     const s = status();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/contact",
+      expect.objectContaining({ method: "POST" }),
+    );
     expect(norm(s.textContent).length).toBeGreaterThan(0);
     expect(norm(s.textContent).toLowerCase()).toContain("thank you");
     expect(s.classList.contains("is-success")).toBe(true);
     expect(invalid("email")).toBe("false");
+    expect((document.getElementById("message") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("a failed submit (res.ok false) shows an error, keeps the typed message, and re-enables the button", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false });
+    (window as unknown as { fetch: unknown }).fetch = fetchMock;
+    set("firstName", "Ada");
+    set("email", "ada@example.com");
+    set("message", "Hello NBCC, I would love to help.");
+    submit();
+    await flushPromises();
+    const s = status();
+    expect(norm(s.textContent).length).toBeGreaterThan(0);
+    expect(s.classList.contains("is-success")).toBe(false);
+    expect(s.classList.contains("is-error")).toBe(true);
+    expect((document.getElementById("message") as HTMLTextAreaElement).value).toBe(
+      "Hello NBCC, I would love to help.",
+    );
+    const submitBtn = document.querySelector('#contactForm button[type="submit"]') as HTMLButtonElement;
+    expect(submitBtn.disabled).toBe(false);
+  });
+
+  it("disables the submit button while the request is in flight", async () => {
+    let resolveFetch!: (v: { ok: boolean }) => void;
+    const fetchMock = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+    (window as unknown as { fetch: unknown }).fetch = fetchMock;
+    set("firstName", "Ada");
+    set("email", "ada@example.com");
+    set("message", "Hello NBCC, I would love to help.");
+    submit();
+    const submitBtn = document.querySelector('#contactForm button[type="submit"]') as HTMLButtonElement;
+    expect(submitBtn.disabled).toBe(true);
+    resolveFetch({ ok: true });
+    await flushPromises();
+    expect(submitBtn.disabled).toBe(false);
   });
 });

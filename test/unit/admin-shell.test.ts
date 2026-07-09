@@ -60,7 +60,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(html).toContain('src="/assets/js/admin/app.js"');
   });
 
-  it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds · TASK-161 newsletter · TASK-163 thank-you)", () => {
+  it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds · TASK-161 newsletter · TASK-163 thank-you · 2026-07-10 contact inbox)", () => {
     const navViews = [...doc.querySelectorAll(".admin-nav-link")].map((b) => b.getAttribute("data-view"));
     expect(navViews).toEqual([
       "overview",
@@ -71,6 +71,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "subscriptions",
       "stories",
       "ticker",
+      "contact",
       "newsletter",
       "thank-you",
       "audit",
@@ -82,6 +83,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "subscriptions",
       "stories",
       "ticker",
+      "contact",
       "newsletter",
       "thank-you",
       "audit",

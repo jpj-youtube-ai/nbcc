@@ -59,6 +59,10 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
       # role must be able to read it.
       aws_ssm_parameter.admin_session_secret.arn,
+      # My Story stories DB (TASK-B2): a SecureString injected via valueFrom, so the exec role
+      # must be able to read it. Needed by the running app AND by the one-off bootstrap/
+      # migrate:stories tasks (they reuse this task definition with a command override).
+      aws_ssm_parameter.stories_db_url.arn,
       # Admin password bootstrap: a TRANSIENT, operator-managed SecureString (not a Terraform
       # resource and not read by the running service) that the one-off `node dist/ops/set-admin-
       # password.js` ECS task injects as the ADMIN_PASSWORD secret. Granting read here lets that
@@ -148,6 +152,11 @@ resource "aws_ecs_task_definition" "app" {
       # Admin session signing key (TASK-105): a SecureString, injected like a secret — so its ARN
       # must also appear in exec_secrets above.
       { name = "ADMIN_SESSION_SECRET", valueFrom = aws_ssm_parameter.admin_session_secret.arn },
+      # My Story stories DB (TASK-B2): a SecureString, injected like a secret — so its ARN must
+      # also appear in exec_secrets above. The task-def now carries BOTH DATABASE_URL (master,
+      # used by scripts/bootstrap-stories-db.mjs) and STORIES_DATABASE_URL (used by the app and
+      # by migrate:stories).
+      { name = "STORIES_DATABASE_URL", valueFrom = aws_ssm_parameter.stories_db_url.arn },
     ]
 
     logConfiguration = {

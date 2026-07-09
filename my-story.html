@@ -77,8 +77,8 @@
                     <div class="give-main" data-story-steps>
                       <ol class="give-progress" aria-hidden="true">
                         <li class="is-active" data-pstep="1"><span class="p-n">Step 1</span> Your story</li>
-                        <li data-pstep="2"><span class="p-n">Step 2</span> How we can use it</li>
-                        <li data-pstep="3"><span class="p-n">Step 3</span> About you</li>
+                        <li data-pstep="2"><span class="p-n">Step 2</span> A little about you</li>
+                        <li data-pstep="3"><span class="p-n">Step 3</span> How we can use it</li>
                       </ol>
                       <form id="storyForm" class="give-steps" action="/api/my-story" method="post">
                         <section class="give-step" data-step="1" aria-labelledby="storyStep1Title" tabindex="-1">
@@ -133,58 +133,8 @@
                         </section>
 
                         <section class="give-step" data-step="2" aria-labelledby="storyStep2Title" tabindex="-1">
-                          <h3 class="give-step-title" id="storyStep2Title">How we can use it</h3>
-                          <p class="give-step-sub">You are always in control of how your story is used.</p>
-
-                          <fieldset class="give-field">
-                            <legend>How can we use your story? <span class="give-req" aria-hidden="true">*</span></legend>
-                            <label class="give-check" for="scopePublic">
-                              <input class="give-check-box" type="radio" id="scopePublic" name="useScope" value="public" required aria-required="true" />
-                              <span class="give-check-text">Publicly. You are happy for us to share it on our website, social media, newsletters, press or funding reports.</span>
-                            </label>
-                            <p class="give-field-help public-edit-note">We may share your story in full or in part, and we may edit it lightly for length or clarity while keeping your meaning.</p>
-                            <label class="give-check" for="scopeInternal">
-                              <input class="give-check-box" type="radio" id="scopeInternal" name="useScope" value="internal_only" />
-                              <span class="give-check-text">Internally only, for volunteer training, funding bids and service improvement. Never published.</span>
-                            </label>
-                          </fieldset>
-
-                          <div class="give-field story-reveal" data-reveal="public" hidden>
-                            <p class="give-field-help">Since you are happy for us to share your story publicly, would you also let us include either of these details.</p>
-                            <label class="give-check" for="shareFirstName">
-                              <input class="give-check-box" type="checkbox" id="shareFirstName" name="shareFirstName" />
-                              <span class="give-check-text">You can share my first name</span>
-                            </label>
-                            <label class="give-check" for="shareTown">
-                              <input class="give-check-box" type="checkbox" id="shareTown" name="shareTown" />
-                              <span class="give-check-text">You can share my town or area</span>
-                            </label>
-                          </div>
-
-                          <div class="give-field story-reveal" data-reveal="professional" hidden>
-                            <label class="give-check" for="thirdPartyConsent">
-                              <input class="give-check-box" type="checkbox" id="thirdPartyConsent" name="thirdPartyConsent" />
-                              <span class="give-check-text">I have the permission of the person this story is about, or their parent or guardian, to share it.</span>
-                            </label>
-                          </div>
-
-                          <label class="give-check" for="contactForMore">
-                            <input class="give-check-box" type="checkbox" id="contactForMore" name="contactForMore" />
-                            <span class="give-check-text">Would you be happy for us to contact you to hear more? This can help build a fuller case study for funding bids.</span>
-                          </label>
-
-                          <p class="give-field-help">We keep stories as part of our permanent archive, to show the difference NBCC makes over time, unless you ask us to withdraw or delete yours. Withdrawing means we stop using your story and mark it withdrawn; deleting means we erase your details for good. You can ask us to do either at any time by emailing <a href="mailto:info@nbcc.scot">info@nbcc.scot</a> or using our <a href="/contact">contact form</a>.</p>
-
-                          <p class="give-step-err" data-err="2">Please tell us how we can use your story to continue.</p>
-                          <div class="give-nav">
-                            <button class="give-back" type="button" data-story-prev><span aria-hidden="true">←</span> Back</button>
-                            <button class="btn primary" type="button" data-story-next>Continue</button>
-                          </div>
-                        </section>
-
-                        <section class="give-step" data-step="3" aria-labelledby="storyStep3Title" tabindex="-1">
-                          <h3 class="give-step-title" id="storyStep3Title">A little about you</h3>
-                          <p class="give-step-sub">All optional, except the final confirmation below.</p>
+                          <h3 class="give-step-title" id="storyStep2Title">A little about you</h3>
+                          <p class="give-step-sub">All optional. Skip anything you would rather not share.</p>
 
                           <div class="give-field">
                             <label for="firstName">First name <span class="give-optional">(optional)</span></label>
@@ -256,12 +206,74 @@
                             <input class="give-field-input" type="text" id="heardAbout" name="heardAbout" />
                           </div>
 
-                          <label class="give-check" for="confirmOver16">
-                            <input class="give-check-box" type="checkbox" id="confirmOver16" name="confirmOver16" required aria-required="true" />
-                            <span class="give-check-text">I am 16 or over, the information I have given is accurate, and where my story involves someone else I have their permission to share it. <span class="give-req" aria-hidden="true">*</span></span>
-                          </label>
+                          <p class="give-step-err" data-err="2">Please check the details above before continuing.</p>
+                          <div class="give-nav">
+                            <button class="give-back" type="button" data-story-prev><span aria-hidden="true">←</span> Back</button>
+                            <button class="btn primary" type="button" data-story-next>Continue</button>
+                          </div>
+                        </section>
 
-                          <p class="give-field-help">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
+                        <section class="give-step" data-step="3" aria-labelledby="storyStep3Title" tabindex="-1">
+                          <h3 class="give-step-title" id="storyStep3Title">How we can use it</h3>
+                          <p class="give-step-sub">You are always in control of how your story is used.</p>
+
+                          <fieldset class="give-field">
+                            <legend>How can we use your story? <span class="give-req" aria-hidden="true">*</span></legend>
+                            <div class="consent-cards">
+                              <label class="give-check consent-card" for="scopePublic">
+                                <input class="give-check-box" type="radio" id="scopePublic" name="useScope" value="public" required aria-required="true" />
+                                <span class="consent-card-body">
+                                  <span class="consent-card-title">Yes, you can share my story publicly</span>
+                                  <span class="consent-card-help">We may use it on our website, social media, newsletters, press and funding reports. We may share it in full or in part, and edit lightly for length or clarity while keeping your meaning.</span>
+                                </span>
+                              </label>
+                              <label class="give-check consent-card" for="scopeInternal">
+                                <input class="give-check-box" type="radio" id="scopeInternal" name="useScope" value="internal_only" />
+                                <span class="consent-card-body">
+                                  <span class="consent-card-title">Please keep it private to NBCC</span>
+                                  <span class="consent-card-help">Only the NBCC team will see it, to learn from and to support our funding bids. We will never publish it.</span>
+                                </span>
+                              </label>
+                            </div>
+                          </fieldset>
+
+                          <div class="give-field story-reveal" data-reveal="public" hidden>
+                            <p class="give-field-help">Since you are happy for us to share your story publicly, would you also let us include either of these details.</p>
+                            <label class="give-check" for="shareFirstName">
+                              <input class="give-check-box" type="checkbox" id="shareFirstName" name="shareFirstName" />
+                              <span class="give-check-text">You can share my first name</span>
+                            </label>
+                            <label class="give-check" for="shareTown">
+                              <input class="give-check-box" type="checkbox" id="shareTown" name="shareTown" />
+                              <span class="give-check-text">You can share my town or area</span>
+                            </label>
+                          </div>
+
+                          <div class="give-field story-reveal" data-reveal="professional" hidden>
+                            <label class="give-check" for="thirdPartyConsent">
+                              <input class="give-check-box" type="checkbox" id="thirdPartyConsent" name="thirdPartyConsent" />
+                              <span class="give-check-text">I have the permission of the person this story is about, or their parent or guardian, to share it.</span>
+                            </label>
+                          </div>
+
+                          <div class="give-field">
+                            <label class="give-check" for="contactForMore">
+                              <input class="give-check-box" type="checkbox" id="contactForMore" name="contactForMore" />
+                              <span class="give-check-text">Would you be happy for us to contact you to hear more? This can help build a fuller case study for funding bids.</span>
+                            </label>
+                          </div>
+
+                          <div class="give-field">
+                            <p class="give-field-help">We keep stories as part of our permanent archive, to show the difference NBCC makes over time, unless you ask us to withdraw or delete yours. Withdrawing means we stop using your story and mark it withdrawn; deleting means we erase your details for good. You can ask us to do either at any time by emailing <a href="mailto:info@nbcc.scot">info@nbcc.scot</a> or using our <a href="/contact">contact form</a>.</p>
+                          </div>
+
+                          <div class="give-field story-final">
+                            <label class="give-check" for="confirmOver16">
+                              <input class="give-check-box" type="checkbox" id="confirmOver16" name="confirmOver16" required aria-required="true" />
+                              <span class="give-check-text">I am 16 or over, the information I have given is accurate, and where my story involves someone else I have their permission to share it. <span class="give-req" aria-hidden="true">*</span></span>
+                            </label>
+                            <p class="give-field-help">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
+                          </div>
 
                           <div hidden aria-hidden="true">
                             <label for="website">Leave blank

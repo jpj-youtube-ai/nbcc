@@ -15,7 +15,6 @@ const validJsonPayload = () => ({
   shareTown: false,
   thirdPartyConsent: false,
   contactForMore: true,
-  photoInterest: false,
   firstName: "Ada",
   email: "ada@example.com",
   phone: "07700 900000",
@@ -245,7 +244,6 @@ describe("buildStoryRecord", () => {
       consent_share_town: false,
       third_party_consent: false,
       contact_for_more: true,
-      photo_interest: false,
       submitter_first_name: "Ada",
       submitter_email: "ada@example.com",
       submitter_phone: "07700 900000",
@@ -271,7 +269,6 @@ describe("buildStoryRecord", () => {
     expect(record.consent_share_town).toBe(false);
     expect(record.third_party_consent).toBe(false);
     expect(record.contact_for_more).toBe(false);
-    expect(record.photo_interest).toBe(false);
     expect(record.confirmed_over_16).toBe(true);
     expect(record.submitter_role ?? null).toBeNull();
     expect(record.short_quote ?? null).toBeNull();

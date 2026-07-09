@@ -1452,7 +1452,6 @@
         shareTown: fieldChecked("shareTown"),
         thirdPartyConsent: fieldChecked("thirdPartyConsent"),
         contactForMore: fieldChecked("contactForMore"),
-        photoInterest: fieldChecked("photoInterest"),
         firstName: fieldValue("firstName"),
         email: fieldValue("email"),
         phone: fieldValue("phone"),

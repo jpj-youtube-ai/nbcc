@@ -579,7 +579,6 @@
       dl("Share town", s.consent_share_town ? "Yes" : "No") +
       dl("Third-party consent", s.third_party_consent ? "Yes" : "No") +
       dl("Contact for more", s.contact_for_more ? "Yes" : "No") +
-      dl("Photo interest", s.photo_interest ? "Yes" : "No") +
       dl("Status", H.storyLabel("status", s.status)) +
       dl("Consent captured", H.fmtDate(s.consent_captured_at) + " (" + H.consentAge(s.consent_captured_at) + ")") +
       dl("Submitted", H.fmtDate(s.created_at)) +

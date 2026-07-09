@@ -20,7 +20,6 @@ const record: StoryRecord = {
   consent_share_town: false,
   third_party_consent: false,
   contact_for_more: false,
-  photo_interest: false,
   submitter_first_name: null,
   submitter_email: null,
   submitter_phone: null,

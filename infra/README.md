@@ -67,6 +67,7 @@ roots.**
 | ECS `desired_count` | 1 | 2 |
 | RDS | `db.t4g.micro`, single-AZ | `db.t4g.micro`, **multi-AZ** |
 | `deletion_protection` | off | **on** |
+| Backup retention (`backup_retention_days`) | 7 (default) | **5** |
 | Final snapshot on destroy | skipped | **taken** |
 | State key | `staging/terraform.tfstate` | `production/terraform.tfstate` |
 

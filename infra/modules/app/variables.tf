@@ -92,6 +92,19 @@ variable "skip_final_snapshot" {
   default = true
 }
 
+# Days of automated RDS backups to retain (daily snapshots + point-in-time
+# recovery), stored in AWS-managed backup storage. 1-35; 0 disables backups.
+# Default 7 (staging); production caps at 5 in infra/envs/production/main.tf.
+variable "backup_retention_days" {
+  type    = number
+  default = 7
+
+  validation {
+    condition     = var.backup_retention_days >= 1 && var.backup_retention_days <= 35
+    error_message = "backup_retention_days must be between 1 and 35 (0 disables backups; not allowed here)."
+  }
+}
+
 # Public HTTPS domain (REQ-034). Empty => HTTP-only: staging keeps the port-80
 # listener and provisions no Route53 zone / ACM cert (zero change). Set to the real
 # apex domain in the env root (e.g. "nbcc.scot") to provision a Route53 hosted zone,

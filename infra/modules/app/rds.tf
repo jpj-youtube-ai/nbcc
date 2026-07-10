@@ -18,7 +18,7 @@ resource "aws_db_instance" "app" {
   multi_az               = var.multi_az
   publicly_accessible    = false
 
-  backup_retention_period = 7 # daily backups + point-in-time recovery
+  backup_retention_period = var.backup_retention_days # daily backups + point-in-time recovery
   deletion_protection     = var.deletion_protection
   skip_final_snapshot     = var.skip_final_snapshot
   final_snapshot_identifier = var.skip_final_snapshot ? null : "${local.name}-final"

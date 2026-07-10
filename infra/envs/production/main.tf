@@ -16,6 +16,10 @@ module "app" {
   deletion_protection = true
   skip_final_snapshot = false
 
+  # Daily automated backups (snapshots + PITR), retained 5 days in AWS-managed
+  # backup storage. Staging keeps the module default (7).
+  backup_retention_days = 5
+
   # HTTPS: provisions the Route53 zone, ACM cert (nbcc.scot + www), 443 listener and
   # 80->443 redirect. After the first apply, delegate the domain by pasting the
   # `route53_nameservers` output into Freeola. See infra/README.md.

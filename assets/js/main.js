@@ -1630,8 +1630,19 @@
         var names = (data && data.supporters ? data.supporters : []).slice();
         if (!names.length) return;
         names.sort(function (a, b) { return String(a).localeCompare(String(b), "en", { sensitivity: "base" }); });
+        // Render each partner in the SAME card as the donors above (icon + name + kind), so the two
+        // sections read as one consistent design.
+        var heart =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M12 21s-7-4.35-9.5-8.5C1 9.5 2.5 6 6 6c2 0 3.2 1.1 4 2.3C10.8 7.1 12 6 14 6c3.5 0 5 3.5 3.5 6.5C19 16.65 12 21 12 21z"/></svg>';
         list.innerHTML = names
-          .map(function (n) { return '<li class="partner">' + tickerEscape(n) + "</li>"; })
+          .map(function (n) {
+            return (
+              '<li class="card supporter" data-type="partner">' +
+              '<span class="supporter-icon">' + heart + "</span>" +
+              '<span class="supporter-meta"><span class="supporter-name">' + tickerEscape(n) +
+              '</span><span class="supporter-kind">Partner</span></span></li>'
+            );
+          })
           .join("");
         var section = doc.getElementById("partners");
         if (section) section.hidden = false;

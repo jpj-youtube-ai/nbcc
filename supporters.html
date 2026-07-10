@@ -89,7 +89,8 @@
            update-mechanism tradeoff:
            docs/superpowers/specs/2026-07-01-supporters-list-design.md. Ties to the
            Donors Page references in REQ-024/REQ-025. -->
-      <section class="page-sections" data-region="sections">
+      <section class="page-sections list-block" data-region="sections" aria-labelledby="donors-heading">
+        <h2 class="list-heading" id="donors-heading">Donors</h2>
         <div class="supporter-tiers">
           <section class="supporter-tier reveal" aria-labelledby="tier-bronze-heading">
             <h2 class="supporter-tier-name" id="tier-bronze-heading">Bronze</h2>
@@ -157,12 +158,12 @@
         </div>
       </section>
 
-      <!-- Partners (REQ-003 · TASK-180): the admin-curated ticker list, shown alphabetically in
-           three columns. Hidden until main.js (initPartners) fills it from /api/supporters/ticker. -->
-      <section class="partners reveal" id="partners" aria-labelledby="partners-heading" hidden>
-        <h2 class="partners-heading" id="partners-heading">Partners</h2>
+      <!-- Partners (REQ-003 · TASK-180): the admin-curated list, alphabetical, in the SAME card grid
+           as the donors above. Hidden until main.js (initPartners) fills it from the ticker feed. -->
+      <section class="page-sections list-block partners" id="partners" aria-labelledby="partners-heading" hidden>
+        <h2 class="list-heading" id="partners-heading">Partners</h2>
         <p class="partners-intro">With heartfelt thanks to the businesses and people who partner with us all year round. Your ongoing support helps us bring comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland.</p>
-        <ul class="partners-grid" id="partnersList"></ul>
+        <ul class="supporter-grid" id="partnersList"></ul>
       </section>
     </main>
 

@@ -1447,11 +1447,15 @@ and respects `prefers-reduced-motion` (no animation, a scrollable strip instead)
 hide/delete → removed; Viewer → 403). The ticker + admin tab are labelled **"Partners"** (TASK-180);
 the underlying table/route/`view-ticker` names are unchanged.
 
-**Partners list on the Supporters page (REQ-003 · TASK-180).** The same active list is also shown on
-`supporters.html` **below the donors** as a **"Partners"** section: a heading + thank-you line and an
-**alphabetical, three-column** grid (`.partners-grid`, responsive to 2/1 columns). `initPartners` in
-`assets/js/main.js` fetches `GET /api/supporters/ticker`, sorts by `localeCompare`, fills
-`#partnersList`, and unhides the section — so an empty list shows nothing (no bare "Partners" heading).
+**Partners list on the Supporters page (REQ-003 · TASK-180/181).** The same active list is also shown
+on `supporters.html` **below the donors**. The page is now two clearly-defined `.list-block` sections —
+**Donors** and **Partners** — each introduced by a large `.list-heading`, and both rendered in the
+**same** `.supporter-grid` cards (icon + name + kind), so they read as one design. `initPartners` in
+`assets/js/main.js` fetches `GET /api/supporters/ticker`, sorts by `localeCompare`, renders a
+`.card.supporter` per partner into `#partnersList`, and unhides the section — so an empty list shows
+nothing (no bare heading). The real partner roster is seeded into `supporter_ticker` by the data-only,
+idempotent `1783709948147_seed-partners.js` migration (TASK-181; `INSERT … WHERE NOT EXISTS`), so it
+ships to staging + production; guarded by `test/unit/seed-partners-migration.test.ts`.
 **Contact form tab (2026-07-10 contact-inbox spec).** A "Contact form" admin nav section (between
 Stories and Newsletter) for the public enquiry form (`contact.html`), backed entirely by the
 **isolated `contact` database** (`src/db/contact.ts`, `contactPool` — never `src/db/pool.ts` or the

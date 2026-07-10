@@ -2,6 +2,12 @@
 
 **Date:** 2026-07-10
 **Status:** Design approved in brainstorming. **Build decision: phased** (Phase 1 first). For user review before writing the Phase 1 plan.
+
+**Revision (2026-07-10, second pass) — two changes to fold into the sections below when the Phase 1 plan is written:**
+1. **2FA is email one-time codes, not an authenticator app.** Emailed 6-digit code on login (reuses the email + token machinery). Removes the `ADMIN_TOTP_ENC_KEY` secret, the TOTP/QR enrolment, and `src/auth/totp.ts` / `crypto.ts`. Trade-off: strength depends on the admin's email account (Google Workspace, which can itself enforce 2FA). Login OTPs are short-lived, single-use, and hashed at rest (or stateless + signed); never logged.
+2. **Access is a per-person, per-section view/edit matrix, not three fixed roles.** Each admin user has, for every admin section (Overview, Donations, Claims, GASDS, Subscriptions, Stories, Partners, Contact, Newsletter, Thank you, Audit, Team), one of **none / view / edit**. `edit` on the **Team** section = the "can manage people" capability (replaces the old `admin` role). The nav shows only sections the user can view or edit. Anti-lockout guard becomes "can't remove the last person with edit on Team." This replaces the global `viewer/editor/admin` role in `authorizeAdmin` with a section+level check on every admin route.
+
+A separate admin **navigation + homepage redesign** (the sidebar is feature-heavy) is being explored in parallel; the new nav renders each person's permitted sections from the matrix above.
 **Feature:** Identity & access management for the `/admin` dashboard — manage admin users from the UI (no more migrations), password resets, authenticator-app 2FA, an audit trail, and self-service profile.
 
 ## Goal

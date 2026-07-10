@@ -1586,8 +1586,11 @@
     bar.className = "supporter-ticker";
     bar.setAttribute("role", "complementary");
     bar.setAttribute("aria-label", "Our supporters");
-    // Duplicate the run for a seamless loop (the animation shifts by one run's width).
-    var trackHtml = reduced ? items : items + sep + items;
+    // Seamless loop: the animation shifts the track by exactly -50%, so the two halves must be
+    // IDENTICAL. Each "run" therefore ends with a separator (items + sep), and we render run + run —
+    // otherwise a middle-only separator makes the halves unequal and the marquee visibly jumps back.
+    var run = items + sep;
+    var trackHtml = reduced ? items : run + run;
     bar.innerHTML =
       '<span class="supporter-ticker__label">Our supporters</span>' +
       '<div class="supporter-ticker__viewport"><div class="supporter-ticker__track' +
@@ -1597,12 +1600,17 @@
     nav.parentNode.insertBefore(bar, nav.nextSibling);
     doc.body.classList.add("has-ticker");
 
-    // Constant speed regardless of list length: duration = one-run width / ~60px per second.
+    // Seamless + constant speed: measure ONE run's width as the gap between the first item of run 1
+    // and the first item of run 2 (independent of the track's left padding), scroll exactly that far,
+    // and set the duration for ~60px/second.
     if (!reduced) {
       var track = bar.querySelector(".supporter-ticker__track");
-      var oneRun = track.scrollWidth / 2;
-      var seconds = Math.max(16, Math.round(oneRun / 60));
-      track.style.animationDuration = seconds + "s";
+      var firstItems = track.querySelectorAll(".supporter-ticker__item");
+      var half = firstItems.length / 2;
+      var runWidth =
+        firstItems.length >= 2 ? firstItems[half].offsetLeft - firstItems[0].offsetLeft : track.scrollWidth / 2;
+      track.style.setProperty("--ticker-run", runWidth + "px");
+      track.style.animationDuration = Math.max(16, Math.round(runWidth / 60)) + "s";
     }
   }
 

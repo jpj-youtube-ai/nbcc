@@ -164,7 +164,9 @@ body.has-ticker{padding-top:var(--ticker-h)}
 .supporter-ticker:hover .supporter-ticker__track{animation-play-state:paused}
 .supporter-ticker__item{font-family:var(--font-body);font-weight:600;font-size:.82rem;color:var(--cream)}
 .supporter-ticker__sep{color:var(--tan-soft);font-size:.5rem;padding:0 15px;position:relative;top:-1px}
-@keyframes supporter-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+/* Shift by exactly one run's width (set by main.js as --ticker-run px) so the loop is seamless
+   regardless of the track's left padding; falls back to -50% if JS hasn't measured yet. */
+@keyframes supporter-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(calc(-1 * var(--ticker-run,50%)))}}
 /* Reduced motion (or the JS static fallback): no marquee — a manually scrollable strip instead. */
 .supporter-ticker__track.is-static{animation:none;padding-left:16px}
 @media (prefers-reduced-motion: reduce){

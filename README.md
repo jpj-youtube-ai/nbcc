@@ -1444,7 +1444,14 @@ there are supporters, renders a seamless CSS marquee fixed at `top:var(--nav-h)`
 `body.has-ticker` (which reserves `--ticker-h` so nothing else shifts otherwise). It pauses on hover
 and respects `prefers-reduced-motion` (no animation, a scrollable strip instead). Proven by
 `test/unit/ticker-model.test.ts` and the `@ticker @db` `features/ticker.feature` (add → public feed;
-hide/delete → removed; Viewer → 403).
+hide/delete → removed; Viewer → 403). The ticker + admin tab are labelled **"Partners"** (TASK-180);
+the underlying table/route/`view-ticker` names are unchanged.
+
+**Partners list on the Supporters page (REQ-003 · TASK-180).** The same active list is also shown on
+`supporters.html` **below the donors** as a **"Partners"** section: a heading + thank-you line and an
+**alphabetical, three-column** grid (`.partners-grid`, responsive to 2/1 columns). `initPartners` in
+`assets/js/main.js` fetches `GET /api/supporters/ticker`, sorts by `localeCompare`, fills
+`#partnersList`, and unhides the section — so an empty list shows nothing (no bare "Partners" heading).
 **Contact form tab (2026-07-10 contact-inbox spec).** A "Contact form" admin nav section (between
 Stories and Newsletter) for the public enquiry form (`contact.html`), backed entirely by the
 **isolated `contact` database** (`src/db/contact.ts`, `contactPool` — never `src/db/pool.ts` or the

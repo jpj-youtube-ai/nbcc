@@ -156,6 +156,14 @@
           </section>
         </div>
       </section>
+
+      <!-- Partners (REQ-003 · TASK-180): the admin-curated ticker list, shown alphabetically in
+           three columns. Hidden until main.js (initPartners) fills it from /api/supporters/ticker. -->
+      <section class="partners reveal" id="partners" aria-labelledby="partners-heading" hidden>
+        <h2 class="partners-heading" id="partners-heading">Partners</h2>
+        <p class="partners-intro">With heartfelt thanks to the businesses and people who partner with us all year round. Your ongoing support helps us bring comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland.</p>
+        <ul class="partners-grid" id="partnersList"></ul>
+      </section>
     </main>
 
     <!-- Site footer (REQ-003). Identical across all five pages. -->

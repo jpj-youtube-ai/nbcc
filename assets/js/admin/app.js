@@ -2044,7 +2044,7 @@
     s.textContent = msg || "";
   }
   function tickerTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No supporters yet. Add one above.</p>';
+    if (!rows.length) return '<p class="admin-empty">No partners yet. Add one above.</p>';
     var body = rows
       .map(function (r) {
         var state = r.active
@@ -2059,7 +2059,7 @@
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Supporter</th><th>Status</th><th></th></tr></thead><tbody>' +
+      '<table class="admin-table"><thead><tr><th>Partner</th><th>Status</th><th></th></tr></thead><tbody>' +
       body +
       "</tbody></table>"
     );
@@ -2122,7 +2122,7 @@
       }
       var del = t.closest("[data-ticker-delete]");
       if (del) {
-        if (!window.confirm('Remove "' + (del.getAttribute("data-ticker-name") || "this supporter") + '" from the ticker?')) return;
+        if (!window.confirm('Remove "' + (del.getAttribute("data-ticker-name") || "this partner") + '" from the partners list?')) return;
         authFetch("/api/admin/ticker/" + del.getAttribute("data-ticker-delete"), { method: "DELETE" })
           .then(function (res) { if (res.ok) loadTicker(); })
           .catch(function () {});

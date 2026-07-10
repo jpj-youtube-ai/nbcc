@@ -63,7 +63,15 @@ describe("Dockerfile ships every file the deploy's one-off tasks run", () => {
   const invoked = [...deployInvokedScripts()];
 
   it("finds the deploy-invoked npm scripts (guards against the regex silently matching nothing)", () => {
-    expect(invoked).toEqual(expect.arrayContaining(["migrate", "bootstrap:stories", "migrate:stories"]));
+    expect(invoked).toEqual(
+      expect.arrayContaining([
+        "migrate",
+        "bootstrap:stories",
+        "migrate:stories",
+        "bootstrap:contact",
+        "migrate:contact",
+      ]),
+    );
   });
 
   it("bakes each deploy-invoked script's files/migrations into the image", () => {

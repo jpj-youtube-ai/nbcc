@@ -1,7 +1,7 @@
-Feature: Contact endpoint (REQ-030)
+Feature: Contact endpoint (REQ-030, 2026-07-10 contact-inbox)
   POST /api/contact validates a website enquiry ({ firstName, lastName, email,
-  message }, REQ-027) and forwards it to the configured form service, returning
-  success. Invalid bodies are rejected with 400. (Reuses the JSON-POST step from
+  message }, REQ-027) and STORES it in the isolated contact database (no external
+  forward). Invalid bodies are rejected with 400. (Reuses the JSON-POST step from
   checkout.steps.js.)
 
   Scenario: a valid enquiry is accepted

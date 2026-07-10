@@ -28,3 +28,6 @@ crash.log
 
 # Local Claude Code preview launcher (machine-specific paths)
 .claude/launch.json
+
+# Subagent-driven-development scratch (ledger + task reports) — never part of the shipped site.
+.superpowers/

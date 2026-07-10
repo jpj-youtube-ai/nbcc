@@ -16,6 +16,13 @@ export const configSchema = z.object({
   // fall back to the main database.
   STORIES_DATABASE_URL: z.string().url(),
 
+  // Contact form inbox (2026-07-10 contact-inbox spec). Lives in a SEPARATE Postgres
+  // database (own name + credentials, same RDS server) so the contact feature can never
+  // read/write the main `charity` DB or the `stories` DB — accessed only via
+  // src/db/contact-pool.ts. Required, never defaulted (mirrors DATABASE_URL /
+  // STORIES_DATABASE_URL): a missing value must fail boot, not silently fall back.
+  CONTACT_DATABASE_URL: z.string().url(),
+
   EXTERNAL_API_ONE_BASE_URL: z.string().url(),
   EXTERNAL_API_ONE_KEY: z.string().min(1),
   EXTERNAL_API_TWO_KEY: z.string().min(1),

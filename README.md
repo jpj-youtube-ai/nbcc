@@ -997,7 +997,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 |---|---|---|
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/subscription/change-plan` | **implemented** | REQ-055 (tier up/down) |
-| `POST /api/contact` | **implemented** | REQ-030 (contact form) |
+| `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
@@ -1032,6 +1032,10 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `DELETE /api/admin/thank-you/sent/:id` | **implemented** | REQ-069 · TASK-168 (Editor+; remove a sent-letter row, audited as `thank_you.deleted`) |
 | `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
 | `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
+| `GET /api/admin/contact` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; list enquiries, optional `?status=new\|replied`) |
+| `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
+| `PATCH /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Editor+; `{status:'new'\|'replied'}`, records/clears `replied_by`+`replied_at`) |
+| `DELETE /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Editor+; delete an enquiry permanently) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1433,6 +1437,46 @@ there are supporters, renders a seamless CSS marquee fixed at `top:var(--nav-h)`
 and respects `prefers-reduced-motion` (no animation, a scrollable strip instead). Proven by
 `test/unit/ticker-model.test.ts` and the `@ticker @db` `features/ticker.feature` (add → public feed;
 hide/delete → removed; Viewer → 403).
+**Contact form tab (2026-07-10 contact-inbox spec).** A "Contact form" admin nav section (between
+Stories and Newsletter) for the public enquiry form (`contact.html`), backed entirely by the
+**isolated `contact` database** (`src/db/contact.ts`, `contactPool` — never `src/db/pool.ts` or the
+stories DB; see **Configuration** and the migration walkthrough below). Reads are **Viewer+**:
+`GET /api/admin/contact` lists enquiries newest-first (optional `?status=new|replied`),
+`GET /api/admin/contact/:id` returns one enquiry in full. The list table shows Received
+(`formatReceived`), Name, Email, a Status badge and an ~80-character message snippet; opening a row
+shows the full message (line breaks preserved) and, once replied, a **"Replied by `<email>` ·
+`<when>`"** line. Writes are **Editor+** (the server enforces regardless of what the UI hides, via
+`H.roleCan`): **Reply in Gmail** opens a prefilled Gmail compose tab
+(`buildGmailReplyUrl`/`formatReceived`, `assets/js/gmail-reply.js` — pure, unit-tested in
+`test/unit/gmail-reply.test.js`) and `PATCH /api/admin/contact/:id` with `{ status: "replied" }`,
+which records the signed-in admin's email as `replied_by` and stamps `replied_at`; **Mark as new**
+(shown only once replied) `PATCH`es `{ status: "new" }`, clearing both; **Delete**
+(`DELETE /api/admin/contact/:id`, after a confirm) removes the enquiry for good and returns to the
+list. Since `assets/js/admin/app.js` is a classic script (not a module) but `gmail-reply.js` is an ES
+module, `admin.html` bridges the two with a tiny `<script type="module">` that imports
+`buildGmailReplyUrl`/`formatReceived` and assigns them onto `window`, which `app.js` then calls
+directly. The tab mirrors the Stories tab's markup/classes exactly (`.admin-view`,
+`.admin-table-wrap`, `.admin-segmented`/`.admin-seg`, the detail/back pattern) — no new CSS, no new
+visual system. `loadContact`/`contactTable`/`openContact`/`renderContact` in `app.js` are DOM glue,
+exercised by hand rather than the unit suite (mirroring the rest of `app.js`); the route logic is
+proven by `test/unit/admin-contact-routes.test.ts` (mocked `src/db/contact`, no real DB).
+
+**`POST /api/contact` now stores, not forwards (2026-07-10 contact-inbox spec).** The public enquiry
+endpoint (REQ-030) still validates `{ firstName, lastName, email, message }` zod-first
+(`contactEnquirySchema`, `firstName`/`email`/`message` required, `lastName` optional, **400** on a
+bad/missing field), but a valid enquiry is now **stored** directly via `insertEnquiry`
+(`src/db/contact.ts`) into the isolated `contact` database, returning `{ status: "sent" }` on
+success and **500** on a store failure. The previous external form-service forward
+(`src/clients/contact.ts`'s `forwardEnquiry`, `CONTACT_FORWARD_URL`) is **retired from this path** —
+the client module and its config value are left in place (unused) rather than removed, so no other
+touch-point changes. A honeypot field (`company`) filled by a bot is silently accepted (**200**,
+nothing stored) and a per-IP rate limiter (5/minute) guards the endpoint, matching the My Story
+submission pattern. `initContactForm` (`assets/js/main.js`) is now **honest-save**: the success
+message and form reset show **only** on a genuine `res.ok` from this endpoint; a non-2xx response or
+network failure shows an inline error and **keeps the typed message** (nothing is discarded, no
+silent mailto fallback), and the submit button is disabled only while the request is in flight.
+Verified by `test/unit/contact.test.ts` (jsdom, mocked `fetch`) and `test/unit/contact-endpoint.test.ts`
+(mocked `insertEnquiry`).
 
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
@@ -2265,25 +2309,15 @@ treated as three *independent* ceilings and the minimum taken (the conservative 
 can only under-claim). Setting `gasds_eligible` on ingestion and reading the pool are wired in
 **TASK-078** (above); the downstream GASDS claim pipeline is a later task.
 
-**`POST /api/contact` (REQ-030).** Validates a website enquiry
-`{ firstName, lastName, email, message }` (the payload `initContactForm` posts,
-REQ-027) zod-first — `firstName`/`email`/`message` required, `lastName` optional —
-rejecting bad/missing fields with **400**. A valid enquiry is forwarded to the
-configured form service via `src/clients/contact.ts` (`forwardEnquiry`, a thin
-`fetch` wrapper reading `CONTACT_FORWARD_URL` through config) and returns
-`{ status: "sent" }`. An upstream forwarding failure returns **502**, at which
-point the front-end degrades to its `mailto:` fallback (REQ-027) — the documented
-behaviour whenever the endpoint is missing or unavailable; this task does **not**
-change `initContactForm`.
-
-> **Stub seam (no live form-service account needed).** `src/clients/contact.ts`
-> POSTs to a real URL when one is configured. **Outside production**, when
-> `CONTACT_FORWARD_URL` is a `.example` placeholder (local dev, CI, fresh SSM
-> param), the forward is stubbed (no network) so the request → success flow runs
-> end to end (see `features/contact.feature`) without a form service. Production
-> **never** stubs, so a missing/placeholder URL there returns 502 (→ mailto
-> fallback). Verified by `test/unit/contact-endpoint.test.ts` (mocked client) +
-> the BDD scenarios.
+**`POST /api/contact` (REQ-030, storage revised by the 2026-07-10 contact-inbox spec).** Validates a
+website enquiry `{ firstName, lastName, email, message }` (the payload `initContactForm` posts,
+REQ-027) zod-first — `firstName`/`email`/`message` required, `lastName` optional — rejecting
+bad/missing fields with **400**. A valid enquiry is **stored** (`insertEnquiry`, `src/db/contact.ts`)
+in the isolated `contact` database and returns `{ status: "sent" }`; a store failure returns **500**.
+See **Contact form tab** above for the honest-save front-end behaviour this enables (success shows
+only on a real 200) and the admin side (`/api/admin/contact*`) that reads these rows. The former
+external form-service forward (`src/clients/contact.ts`, `CONTACT_FORWARD_URL`) is retired from this
+path — see the note under **Configuration**.
 
 > **Hosting (REQ-033):** the marketing site and these endpoints are served by the
 > **existing Express service on ECS/Fargate behind the ALB** — not a static host
@@ -2451,6 +2485,30 @@ step and before `migrate:stories`, every deploy — safe because it's idempotent
 See `infra/README.md` → "My Story: the separate `stories` database" for the full
 walkthrough.
 
+Contact form enquiries (2026-07-10 contact-inbox spec) persist to a THIRD, equally isolated
+`contact` database (own name + credentials, same Postgres server, never `charity` or `stories` —
+see `src/db/contact-pool.ts`). Its migration lives in its own `migrations-contact/` directory, with
+its own `pgmigrations` tracking table, applied via:
+
+```bash
+npm run migrate:contact          # node-pg-migrate -m migrations-contact -d CONTACT_DATABASE_URL up
+```
+
+Locally this requires a `contact` database + `contact_app` role alongside `charity` and `stories`
+on the same Postgres instance. `docker compose up` gets this for free — `docker/initdb/20-contact-db.sql`
+creates both on first container init (fresh `pgdata` volume only; `docker compose down -v` to pick it
+up on an existing one), and `docker compose run --rm migrate-contact` applies the migration.
+Running Postgres another way, create them by hand: `createdb contact && psql -c "CREATE ROLE
+contact_app LOGIN PASSWORD 'contact'" -c 'ALTER DATABASE contact OWNER TO contact_app'`. CI creates
+the database explicitly in `pr.yml`, mirroring the `stories` setup.
+
+**Staging/production provisioning** mirrors the `stories` database exactly: Terraform generates the
+`contact_app` credential and publishes it as the `CONTACT_DATABASE_URL` SSM parameter
+(`infra/modules/app/main.tf`), wired through the task definition (`infra/modules/app/ecs.tf`);
+`scripts/bootstrap-contact-db.mjs` (`npm run bootstrap:contact`) idempotently creates the role/database
+outside a transaction using the **master** `DATABASE_URL`, run as a one-off `ecs run-task` before
+`migrate:contact`, every deploy.
+
 Tests:
 
 ```bash
@@ -2596,8 +2654,19 @@ endpoint). It is a secret (it authorises submissions), so it is an SSM
 `SecureString` injected via `valueFrom` with its ARN in `exec_secrets`, and is
 validated as a URL. Its placeholder is a valid `.example` URL (not `REPLACE_ME`,
 which would fail URL validation); `src/clients/contact.ts` treats a `.example`
-host as unconfigured and stubs the forward outside production. Set the real value
-with `put-parameter` (above) when the form service is chosen.
+host as unconfigured and stubs the forward outside production. **Retired from the
+live path** by the 2026-07-10 contact-inbox spec — `POST /api/contact` now stores
+enquiries instead of forwarding them (see **Contact form tab** above) — the config
+value and `src/clients/contact.ts` are left in place, unused, rather than removed.
+
+`CONTACT_DATABASE_URL` (2026-07-10 contact-inbox spec) is the connection string for
+the **isolated `contact` database** the public enquiry form and its admin tab read
+and write (`src/db/contact-pool.ts`, `contactPool` — never the main `charity` DB or
+the `stories` DB). Same treatment as `STORIES_DATABASE_URL`: a required, never-defaulted
+`z.string().url()` in the schema (a missing value fails boot), an SSM `SecureString`
+assembled with `sslmode=no-verify` and injected via `valueFrom` with its ARN in
+`exec_secrets`. See **Local development** below for the local DB/role setup and
+`migrate:contact` / `bootstrap:contact` scripts.
 
 `EMAIL_SEND_URL` (TASK-070) is the transactional-email provider endpoint the
 donation-confirmation email is POSTed to after a successful payment. Same treatment

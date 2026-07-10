@@ -28,6 +28,12 @@ COPY scripts/seed-demo.mjs ./scripts/seed-demo.mjs
 # task (`npm run bootstrap:stories`) that provisions the separate `stories` database + role
 # before migrate:stories. Must ship in the image or the deploy step fails with MODULE_NOT_FOUND.
 COPY scripts/bootstrap-stories-db.mjs ./scripts/bootstrap-stories-db.mjs
+# Contact inbox (2026-07-10 spec): a SEPARATE `contact` database on the same RDS instance,
+# migrated via `npm run migrate:contact` (-m migrations-contact) and provisioned by
+# `npm run bootstrap:contact` (scripts/bootstrap-contact-db.mjs) as one-off ECS tasks. Both must
+# ship in the image or the deploy step fails with MODULE_NOT_FOUND (as the stories bootstrap did).
+COPY migrations-contact ./migrations-contact
+COPY scripts/bootstrap-contact-db.mjs ./scripts/bootstrap-contact-db.mjs
 # Static marketing site served by the app (TASK-005 / REQ-033): every served page,
 # their shared assets, and the clean-URL rules. The site router resolves its root
 # to /app (this WORKDIR) at runtime. Every .html the app serves must be here — the

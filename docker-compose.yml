@@ -8,6 +8,10 @@ services:
       # the app directly on the host); inside the compose network the DB is reachable as
       # `db`, so override it here the same way DATABASE_URL is overridden above.
       STORIES_DATABASE_URL: postgres://stories_app:stories@db:5432/stories
+      # Contact inbox (2026-07-10 spec): same override pattern as STORIES_DATABASE_URL above —
+      # .env's CONTACT_DATABASE_URL points at localhost; inside the compose network the DB is
+      # reachable as `db`.
+      CONTACT_DATABASE_URL: postgres://contact_app:contact@db:5432/contact
     ports:
       - "3000:3000"
     depends_on:
@@ -26,6 +30,8 @@ services:
       - pgdata:/var/lib/postgresql/data
       # My Story (TASK-B2): creates the SEPARATE `stories` database + `stories_app` role
       # on first init, mirroring scripts/bootstrap-stories-db.mjs in staging/production.
+      # Contact inbox (2026-07-10 spec): same mechanism creates the SEPARATE `contact`
+      # database + `contact_app` role, mirroring scripts/bootstrap-contact-db.mjs.
       # Postgres only runs docker-entrypoint-initdb.d on a FRESH data volume — see the
       # SQL file's header if you already have an existing local pgdata volume.
       - ./docker/initdb:/docker-entrypoint-initdb.d
@@ -61,6 +67,19 @@ services:
       db:
         condition: service_healthy
     command: npm run migrate:stories
+
+  # Contact inbox (2026-07-10 spec): the contact-DB counterpart of `migrate`, same pattern.
+  # Run explicitly:  docker compose run --rm migrate-contact
+  migrate-contact:
+    build: .
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      CONTACT_DATABASE_URL: postgres://contact_app:contact@db:5432/contact
+    depends_on:
+      db:
+        condition: service_healthy
+    command: npm run migrate:contact
 
 volumes:
   pgdata:

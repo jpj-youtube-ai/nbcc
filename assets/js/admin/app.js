@@ -512,7 +512,8 @@
     });
   });
   function scopeConsentBadges(r) {
-    var badges = '<span class="admin-pill">' + H.escapeHtml(H.storyLabel("useScope", r.use_scope)) + "</span>";
+    var scopeClass = r.use_scope === "public" ? "is-public" : "is-internal";
+    var badges = '<span class="admin-pill ' + scopeClass + '">' + H.escapeHtml(H.storyLabel("useScope", r.use_scope)) + "</span>";
     if (r.consent_share_first_name) badges += ' <span class="admin-pill">First name</span>';
     if (r.consent_share_town) badges += ' <span class="admin-pill">Town</span>';
     if (r.third_party_consent) badges += ' <span class="admin-pill">3rd-party OK</span>';
@@ -712,7 +713,9 @@
     return s.length > 80 ? s.slice(0, 80) + "…" : s;
   }
   function contactStatusBadge(status) {
-    return '<span class="admin-pill">' + (status === "replied" ? "Replied" : "New") + "</span>";
+    return status === "replied"
+      ? '<span class="admin-pill is-replied">Replied</span>'
+      : '<span class="admin-pill is-new">New</span>';
   }
   function contactTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No enquiries yet.</p>';
@@ -787,7 +790,9 @@
       actions =
         '<div class="admin-donor-actions">' +
         '<button class="btn btn-primary" type="button" id="contactReplyBtn">Reply in Gmail</button> ' +
-        (c.status === "replied" ? '<button class="btn btn-ghost" type="button" id="contactMarkNewBtn">Mark as new</button> ' : "") +
+        (c.status === "replied"
+          ? '<button class="btn btn-ghost" type="button" id="contactMarkNewBtn">Mark as new</button> '
+          : '<button class="btn btn-ghost" type="button" id="contactMarkRepliedBtn">Mark as replied</button> ') +
         '<button class="btn btn-danger" type="button" id="contactDeleteBtn">Delete</button>' +
         "</div>";
     }
@@ -815,7 +820,12 @@
   }
   function wireContactActions(c) {
     bindClick("contactReplyBtn", function () {
+      // Opening a Gmail draft is not the same as having replied, so this only opens
+      // the draft. The user records it via the Mark as replied button (which stamps
+      // who replied and when).
       window.open(window.buildGmailReplyUrl(c), "_blank", "noopener");
+    });
+    bindClick("contactMarkRepliedBtn", function () {
       patchContact({ status: "replied" }, "Marked as replied", "Could not mark the enquiry as replied.");
     });
     bindClick("contactMarkNewBtn", function () {

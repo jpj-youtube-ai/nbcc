@@ -19,7 +19,7 @@ function notice(status: number, message: string): (res: Response) => Response {
       .send(
         `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Thank-you letter — NBCC</title></head>
+<title>Thank-you letter | NBCC</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem">
 <h1>Thank-you letter</h1><p>${message}</p></body></html>`,
       );

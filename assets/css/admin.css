@@ -59,6 +59,12 @@
 .admin-table tbody tr:hover{background:var(--tint)}
 .admin-num{font-variant-numeric:tabular-nums;text-align:right}
 .admin-pill{display:inline-block;font-size:.72rem;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--tan-soft);color:var(--maroon)}
+/* Status-meaning colours so a glance tells New from Replied, Public from Internal.
+   New / Internal draw the eye (needs attention / kept private); Replied / Public read as settled. */
+.admin-pill.is-new{background:color-mix(in srgb,var(--crimson) 16%,var(--cream));color:var(--crimson)}
+.admin-pill.is-replied{background:var(--holly-soft);color:var(--holly-dark)}
+.admin-pill.is-public{background:var(--holly-soft);color:var(--holly-dark)}
+.admin-pill.is-internal{background:color-mix(in srgb,var(--slate-soft) 16%,var(--cream));color:var(--slate-soft)}
 .admin-empty{padding:22px;color:var(--slate-soft);font-size:.92rem}
 
 /* ---- search ---- */

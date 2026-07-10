@@ -78,7 +78,7 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>Your thank-you letter — NBCC</title>
+  <title>Your thank-you letter | NBCC</title>
   <link rel="stylesheet" href="/assets/css/styles.css" />
   <style>
     *{box-sizing:border-box}

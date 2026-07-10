@@ -40,7 +40,7 @@ COPY scripts/bootstrap-contact-db.mjs ./scripts/bootstrap-contact-db.mjs
 # clean-URL pages (thank-you.html backs /donate/thank-you) AND gift-aid.html (the
 # declaration-form template read by src/routes/api.ts). test/unit/dockerfile-site-assets
 # guards this list against the served files so a new page can't ship a route with no file.
-COPY index.html about.html donate.html contact.html supporters.html thank-you.html gift-aid.html portal.html privacy.html admin.html my-story.html _redirects ./
+COPY index.html about.html donate.html contact.html supporters.html thank-you.html gift-aid.html portal.html privacy.html admin.html my-story.html workshop.html _redirects ./
 COPY assets ./assets
 EXPOSE 3000
 USER node

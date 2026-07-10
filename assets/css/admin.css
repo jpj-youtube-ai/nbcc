@@ -31,13 +31,15 @@
 .admin-logout:hover{background:var(--cream-12)}
 
 .admin-body-grid{display:grid;grid-template-columns:210px 1fr;align-items:start;max-width:1280px;margin-inline:auto}
-.admin-nav{position:sticky;top:60px;padding:20px 12px}
-.admin-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
-.admin-nav-link{width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:11px 14px;font-family:var(--font-body);font-weight:600;font-size:.95rem;color:var(--slate);cursor:pointer;transition:background .15s,color .15s}
+.admin-nav{position:sticky;top:60px;padding:18px 12px}
+.admin-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.admin-nav-link{width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:10px 14px;font-family:var(--font-body);font-weight:600;font-size:.93rem;color:var(--slate);cursor:pointer;transition:background .15s,color .15s}
 .admin-nav-link:hover{background:var(--card)}
 .admin-nav-link.is-active{background:var(--crimson);color:var(--cream)}
-.admin-nav-group{margin:16px 0 4px;padding:0 14px;font-family:var(--font-body);font-weight:700;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-soft)}
-.admin-nav-group:first-child{margin-top:0}
+/* Clearly separated, always-expanded groups: a hairline rule plus its own spacing sets
+   each labelled section apart, so the nav reads as distinct groups, not one long list. */
+.admin-nav-group{margin:20px 0 8px;padding:16px 14px 0;border-top:1px solid var(--line);font-family:var(--font-body);font-weight:700;font-size:.7rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate)}
+.admin-nav-group:first-child{margin-top:2px;padding-top:0;border-top:0}
 .admin-content{padding:clamp(20px,3vw,36px) clamp(16px,3vw,32px)}
 .admin-view h2{font-size:clamp(1.5rem,1.3rem + 1vw,2rem);margin-bottom:18px}
 .admin-subhead{font-size:1.15rem;color:var(--maroon);margin:28px 0 12px}

@@ -72,6 +72,8 @@
               <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
               <li class="admin-nav-group" aria-hidden="true">Governance</li>
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
+              <li class="admin-nav-group" id="teamNavGroup" aria-hidden="true">Admin</li>
+              <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
             </ul>
           </nav>
 
@@ -411,6 +413,32 @@
             <section class="admin-view" id="view-audit" aria-labelledby="audit-heading" hidden>
               <h2 id="audit-heading">Audit trail</h2>
               <div class="admin-table-wrap" id="auditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Team: who can sign in to this dashboard - invite, change role, disable/enable, or
+                 remove access (admin-management Phase 1, Task 8). Admin-role only: app.js gates every
+                 write control behind H.roleCan(currentRole, "admin"); the server enforces it too. -->
+            <section class="admin-view" id="view-team" aria-labelledby="team-heading" hidden>
+              <h2 id="team-heading">Team</h2>
+              <p class="admin-view-intro">Everyone who can sign in to this dashboard. Invite someone by email, change their role, or disable, re-enable or remove their access. Only an Admin can make changes here; there must always be at least one enabled Admin.</p>
+              <form id="teamInviteForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Email
+                  <input id="teamInviteEmail" type="email" required style="width:220px" />
+                </label>
+                <label class="ty-inline">Full name
+                  <input id="teamInviteName" type="text" required maxlength="120" style="width:180px" />
+                </label>
+                <label class="ty-inline">Role
+                  <select id="teamInviteRole">
+                    <option value="viewer">Viewer</option>
+                    <option value="editor" selected>Editor</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                <button class="btn btn-primary" type="submit" id="teamInviteBtn">Invite</button>
+              </form>
+              <p class="ty-status" id="teamStatus" role="status" aria-live="polite"></p>
+              <div class="admin-table-wrap" id="teamTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Donor detail (reached from a donor/donation row); role-gated actions. -->

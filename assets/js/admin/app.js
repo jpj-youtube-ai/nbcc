@@ -46,6 +46,14 @@
     currentRole = claims.role || "viewer";
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
+    // The Team tab manages who can sign in at all, so /api/admin/users* is Admin-role ONLY on the
+    // server (viewer/editor get 403 even to read it) - hide the nav entry entirely for them rather
+    // than showing a tab that always errors.
+    var teamAdmin = H.roleCan(currentRole, "admin");
+    var teamNavBtn = doc.querySelector('.admin-nav-link[data-view="team"]');
+    if (teamNavBtn) teamNavBtn.hidden = !teamAdmin;
+    var teamNavGroup = el("teamNavGroup");
+    if (teamNavGroup) teamNavGroup.hidden = !teamAdmin;
     selectView("overview");
     loadOverview();
   }
@@ -135,6 +143,7 @@
     else if (name === "thank-you") loadThankYou();
     else if (name === "ticker") loadTicker();
     else if (name === "audit") loadAudit();
+    else if (name === "team") loadTeam();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
     b.addEventListener("click", function () {
@@ -876,6 +885,228 @@
       .catch(function () {
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
       });
+  }
+
+  // ---- team (admin-management Phase 1, Task 8) ----
+  // Who can sign in to this dashboard: invite, change role, disable/enable, or remove. The whole
+  // surface (GET/POST/PATCH/DELETE /api/admin/users*) is Admin-role only on the server, so every
+  // write control here is also gated behind H.roleCan(currentRole, "admin") - a non-admin never
+  // reaches this view at all (showApp hides the nav entry), but the gating stays defence in depth.
+  var teamWired = false;
+  function teamStatus(msg, cls) {
+    var s = el("teamStatus");
+    if (!s) return;
+    s.className = "ty-status" + (cls ? " " + cls : "");
+    s.textContent = msg || "";
+  }
+  function teamStatusPill(status) {
+    if (status === "active") return '<span class="ty-pill ty-pill-ready">Active</span>';
+    if (status === "disabled") return '<span class="ty-pill ty-pill-blocked">Disabled</span>';
+    return '<span class="ty-pill ty-pill-thanked">Invited</span>';
+  }
+  var TEAM_ROLES = ["viewer", "editor", "admin"];
+  function teamRoleCell(u, canWrite) {
+    if (!canWrite) return H.escapeHtml(cap(u.role));
+    var opts = TEAM_ROLES.map(function (r) {
+      return '<option value="' + r + '"' + (r === u.role ? " selected" : "") + ">" + cap(r) + "</option>";
+    }).join("");
+    return '<select data-team-role="' + u.id + '" aria-label="Role for ' + H.escapeHtml(u.email) + '">' + opts + "</select>";
+  }
+  function teamActionsCell(u, canWrite) {
+    if (!canWrite) return "";
+    var toggle =
+      u.status === "disabled"
+        ? '<button class="admin-link" type="button" data-team-enable="' + u.id + '">Enable</button>'
+        : '<button class="admin-link" type="button" data-team-disable="' + u.id + '">Disable</button>';
+    return (
+      '<button class="admin-link" type="button" data-team-reset="' + u.id + '">Reset password</button> · ' +
+      toggle +
+      " · " +
+      '<button class="admin-link ty-del" type="button" data-team-remove="' + u.id + '" data-team-email="' +
+      H.escapeHtml(u.email) + '">Remove</button>'
+    );
+  }
+  function teamTable(rows, canWrite) {
+    if (!rows.length) return '<p class="admin-empty">No team members yet. Invite one above.</p>';
+    var body = rows
+      .map(function (u) {
+        return (
+          "<tr><td>" + H.escapeHtml(u.full_name) + "</td><td>" + H.escapeHtml(u.email) + "</td><td>" +
+          teamRoleCell(u, canWrite) + "</td><td>" + teamStatusPill(u.status) + "</td><td>" +
+          (H.fmtDate(u.last_login_at) || "Never") + "</td><td>" + teamActionsCell(u, canWrite) + "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th>' +
+      "<th>Last login</th><th></th></tr></thead><tbody>" + body + "</tbody></table>"
+    );
+  }
+  function loadTeam() {
+    teamWire();
+    var canWrite = H.roleCan(currentRole, "admin");
+    var form = el("teamInviteForm");
+    if (form) form.hidden = !canWrite;
+    el("teamTable").innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/users")
+      .then(j)
+      .then(function (d) {
+        el("teamTable").innerHTML = teamTable(d.results || [], canWrite);
+      })
+      .catch(function () {
+        el("teamTable").innerHTML = '<p class="admin-empty">Could not load the team.</p>';
+      });
+  }
+  function teamLastAdminMessage() {
+    return "That is the last admin. Promote someone else first.";
+  }
+  function teamWire() {
+    if (teamWired) return;
+    teamWired = true;
+    var form = el("teamInviteForm");
+    if (form) {
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var email = (el("teamInviteEmail").value || "").trim();
+        var fullName = (el("teamInviteName").value || "").trim();
+        var role = el("teamInviteRole").value;
+        if (!email || !fullName) return;
+        teamStatus("Inviting…");
+        authFetch("/api/admin/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email, fullName: fullName, role: role }),
+        })
+          .then(function (res) {
+            return res.ok
+              ? res.json()
+              : res.json().then(function (b) {
+                  throw new Error((b && b.error) || "Invite failed");
+                });
+          })
+          .then(function () {
+            el("teamInviteEmail").value = "";
+            el("teamInviteName").value = "";
+            teamStatus("Invited. They will get an email with a link to set a password.", "is-ok");
+            loadTeam();
+          })
+          .catch(function (e2) {
+            teamStatus(e2.message || "Could not send that invite.", "is-error");
+          });
+      });
+    }
+
+    var table = el("teamTable");
+    if (!table) return;
+    table.addEventListener("change", function (e) {
+      var t = e.target;
+      if (!t || !t.matches || !t.matches("[data-team-role]")) return;
+      var id = t.getAttribute("data-team-role");
+      authFetch("/api/admin/users/" + id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: t.value }),
+      })
+        .then(function (res) {
+          if (res.status === 409) {
+            teamStatus(teamLastAdminMessage(), "is-error");
+            loadTeam();
+            return;
+          }
+          if (!res.ok) {
+            teamStatus("Could not change that role.", "is-error");
+            loadTeam();
+            return;
+          }
+          teamStatus("Role updated.", "is-ok");
+          loadTeam();
+        })
+        .catch(function () {
+          teamStatus("Could not change that role.", "is-error");
+        });
+    });
+    table.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+
+      var reset = t.closest("[data-team-reset]");
+      if (reset) {
+        authFetch("/api/admin/users/" + reset.getAttribute("data-team-reset") + "/reset", { method: "POST" })
+          .then(function (res) {
+            teamStatus(res.ok ? "Password reset email sent." : "Could not send the reset email.", res.ok ? "is-ok" : "is-error");
+          })
+          .catch(function () {
+            teamStatus("Could not send the reset email.", "is-error");
+          });
+        return;
+      }
+      var disable = t.closest("[data-team-disable]");
+      if (disable) {
+        authFetch("/api/admin/users/" + disable.getAttribute("data-team-disable"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "disabled" }),
+        })
+          .then(function (res) {
+            if (res.status === 409) {
+              teamStatus(teamLastAdminMessage(), "is-error");
+              return;
+            }
+            if (!res.ok) {
+              teamStatus("Could not disable that person.", "is-error");
+              return;
+            }
+            teamStatus("Disabled.", "is-ok");
+            loadTeam();
+          })
+          .catch(function () {
+            teamStatus("Could not disable that person.", "is-error");
+          });
+        return;
+      }
+      var enable = t.closest("[data-team-enable]");
+      if (enable) {
+        authFetch("/api/admin/users/" + enable.getAttribute("data-team-enable"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "active" }),
+        })
+          .then(function (res) {
+            if (!res.ok) {
+              teamStatus("Could not enable that person.", "is-error");
+              return;
+            }
+            teamStatus("Enabled.", "is-ok");
+            loadTeam();
+          })
+          .catch(function () {
+            teamStatus("Could not enable that person.", "is-error");
+          });
+        return;
+      }
+      var remove = t.closest("[data-team-remove]");
+      if (remove) {
+        var name = remove.getAttribute("data-team-email") || "this person";
+        if (!window.confirm('Remove "' + name + '" from the team? This cannot be undone.')) return;
+        authFetch("/api/admin/users/" + remove.getAttribute("data-team-remove"), { method: "DELETE" })
+          .then(function (res) {
+            if (res.status === 409) {
+              teamStatus(teamLastAdminMessage(), "is-error");
+              return;
+            }
+            if (!res.ok) {
+              teamStatus("Could not remove that person.", "is-error");
+              return;
+            }
+            teamStatus("Removed.", "is-ok");
+            loadTeam();
+          })
+          .catch(function () {
+            teamStatus("Could not remove that person.", "is-error");
+          });
+        return;
+      }
+    });
   }
 
   // ---- newsletter ----

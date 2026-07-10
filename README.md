@@ -1036,6 +1036,13 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
 | `PATCH /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Editor+; `{status:'new'\|'replied'}`, records/clears `replied_by`+`replied_at`) |
 | `DELETE /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Editor+; delete an enquiry permanently) |
+| `GET /api/admin/users` | **implemented** | admin-management Phase 1 (Admin only; the Team list) |
+| `POST /api/admin/users` | **implemented** | admin-management Phase 1 (Admin only; invite a staff user, emails an invite link, `409` on a duplicate email) |
+| `PATCH /api/admin/users/:id` | **implemented** | admin-management Phase 1 (Admin only; change role and/or status, audited; `409 {error:"last_admin"}` if it would orphan admins) |
+| `DELETE /api/admin/users/:id` | **implemented** | admin-management Phase 1 (Admin only; remove a user, audited; same last-admin guard) |
+| `POST /api/admin/users/:id/reset` | **implemented** | admin-management Phase 1 (Admin only; admin-initiated password reset, emails a reset link) |
+| `POST /api/admin/forgot` | **implemented** | admin-management Phase 1 (public, rate-limited; self-service "forgot password", always `200` — no account enumeration) |
+| `POST /api/admin/set-password` | **implemented** | admin-management Phase 1 (public, rate-limited; accepts an invite or reset token + a new password) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1299,12 +1306,13 @@ endpoints (the UI hides write controls below Editor via `roleCan`; the server st
 export is fetched with the bearer token and saved via a blob download (a plain link cannot carry the
 `Authorization` header). `admin-shell.test.ts` covers the nav sections + the donor detail view.
 
-**Nav grouping (TASK-171).** The sidebar nav links are clustered under four presentational group
-labels — **Monitor** (Overview, Search), **Giving** (Donations, Claims, GASDS, Subscriptions),
-**Content** (Stories, Newsletter, Thank you) and **Governance** (Audit) — so related tools sit
-together instead of one flat list. Purely cosmetic: the labels are `aria-hidden` `<li>`s
-(`.admin-nav-group`) that leave the `.admin-nav-link` buttons, their order and `data-view` targets
-untouched, so `admin-shell.test.ts`'s nav-order assertion still holds.
+**Nav grouping (TASK-171, extended by the Team tab below).** The sidebar nav links are clustered
+under presentational group labels — **Monitor** (Overview, Search), **Giving** (Donations, Claims,
+GASDS, Subscriptions), **Content** (Stories, Partners, Contact form, Newsletter, Thank you),
+**Governance** (Audit) and **Admin** (Team) — so related tools sit together instead of one flat
+list. Purely cosmetic: the labels are `aria-hidden` `<li>`s (`.admin-nav-group`) that leave the
+`.admin-nav-link` buttons, their order and `data-view` targets untouched, so
+`admin-shell.test.ts`'s nav-order assertion still holds.
 
 **Newsletter tab (REQ-069 · TASK-161, block builder TASK-168).** A seventh admin nav section for
 authoring and sending an HTML newsletter to consenting donors, over the `newsletters` table (one
@@ -1484,6 +1492,59 @@ directly. The tab mirrors the Stories tab's markup/classes exactly (`.admin-view
 visual system. `loadContact`/`contactTable`/`openContact`/`renderContact` in `app.js` are DOM glue,
 exercised by hand rather than the unit suite (mirroring the rest of `app.js`); the route logic is
 proven by `test/unit/admin-contact-routes.test.ts` (mocked `src/db/contact`, no real DB).
+
+**Admin user management: the Team tab (admin-management Phase 1).** An Admin manages who can sign
+in to `/admin` — invite, remove, disable, and set each person's role — from the dashboard, with no
+migration or manual DB write needed. It extends the existing `users` table and admin auth (role
+stays `viewer`/`editor`/`admin`; the per-section view/edit matrix is deferred to a later phase)
+rather than replacing it.
+
+- **Data model.** An additive migration (`migrations/1783724491770_admin-user-lifecycle.js`) adds
+  `status` (`invited`\|`active`\|`disabled`, default `active` so every existing admin keeps signing
+  in unchanged), `invited_at` and `last_login_at` to `users`. `POST /api/admin/login` now stamps
+  `last_login_at` on a successful sign-in and rejects a `disabled` or still-`invited` account with
+  the same generic `401` as a wrong password (no enumeration of which accounts exist).
+- **Invite / reset tokens (`src/admin/tokens.ts`).** Stateless, purpose-scoped (`invite`\|`reset`),
+  short-lived HMAC tokens signed with the existing `ADMIN_SESSION_SECRET` (no new config/secret) —
+  same shape as the admin session token. `bind` is the user's `password_hash` at issue time
+  (`""` for an invite, since an invited user has none); the accept endpoint re-checks `bind`
+  against the *live* row, so a link stops working the moment the password is set — single-use, with
+  no token storage needed. Invite links last 48h, reset links 1h.
+- **Routes (`src/routes/admin-users.ts`, mounted in `src/app.ts`).** `GET/POST /api/admin/users` and
+  `PATCH/DELETE /api/admin/users/:id` and `POST /api/admin/users/:id/reset` are **Admin role only**
+  (viewer/editor get `403`) — tighter than the read-only Viewer/Editor lists elsewhere, since this
+  surface controls who can sign in at all. `POST /api/admin/forgot` and `POST /api/admin/set-password`
+  are **public** (rate-limited): `forgot` always returns `200 {ok:true}` whether or not the email is
+  known and only emails a reset link to an **enabled** (`active`) account (no enumeration); `set-password`
+  verifies the token, re-checks the `bind`/live-hash match, hashes the new password
+  (`src/admin/password.ts`), and activates the account. Every mutating write is audited in the same
+  transaction as the DB write (`src/db/admin-users.ts`, `writeWithAudit`) — `admin_user.invited`,
+  `.role_changed`, `.status_changed`, `.removed`, `.activated`, `.password_reset`.
+- **Anti-lockout guard.** `isLastEnabledAdmin` / the pure `wouldOrphanAdmins` (unit-tested in
+  `test/unit/admin-users-guard.test.ts`) blocks a role change away from `admin`, a disable, or a
+  delete that would drop the enabled-admin count to zero, returning `409 {error:"last_admin"}`
+  **before** any write.
+- **`set-password.html`.** A standalone page (mirrors `portal.html`'s style, outside the marketing
+  nav/footer) that both `/invite` and `/reset` redirect to (`_redirects`; the token's `purpose`
+  claim only changes which audit action is recorded — the accept flow is identical). It reads
+  `?token=` from the URL and `POST`s `{token, password}` to `/api/admin/set-password`; success shows
+  a link to `/admin`, an expired/already-used link shows "this link has expired or already been
+  used — ask an admin to re-send."
+- **Team tab UI (`admin.html` view `view-team`, `loadTeam` in `assets/js/admin/app.js`).** An
+  eighth admin nav section, under a new **Admin** group, visible only to Admins (the nav entry
+  itself is hidden for viewer/editor at sign-in, since the API is Admin-only and would otherwise
+  always fail for them). An invite form (email, full name, a role select) posts to
+  `POST /api/admin/users`; the table lists every user — Name, Email, an inline **Role** select
+  (`PATCH {role}`), a **Status** pill (Invited/Active/Disabled), **Last login**, and actions
+  **Reset password** (`POST /:id/reset`), **Disable**/**Enable** (`PATCH {status}`) and **Remove**
+  (`DELETE`, after a `confirm`). Every interpolated value is HTML-escaped (`H.escapeHtml`); a
+  `409 {error:"last_admin"}` from any write shows the inline message "That is the last admin.
+  Promote someone else first." and reloads the table so an optimistic UI change (e.g. the role
+  select) reverts to the real state. Like the rest of `app.js`, `loadTeam` is DOM glue exercised by
+  hand rather than the unit suite; `admin-shell.test.ts` covers the nav entry + `#view-team` markup,
+  and `features/admin-users.feature` (`@admin @db`) covers the API end to end: invite, accept via
+  set-password then log in, forgot-password's no-enumeration `200`, a disabled user's login being
+  blocked, a non-admin's `403`, and the last-admin `409` guard.
 
 **`POST /api/contact` now stores, not forwards (2026-07-10 contact-inbox spec).** The public enquiry
 endpoint (REQ-030) still validates `{ firstName, lastName, email, message }` zod-first

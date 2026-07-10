@@ -731,4 +731,4 @@ fieldset.give-field legend{display:block;font-family:var(--font-head);font-weigh
 .workshop-link a{display:flex;flex-direction:column;gap:6px;padding:22px 22px;text-decoration:none;height:100%}
 .workshop-link-title{font-family:var(--font-head);font-size:1.3rem;color:var(--maroon)}
 .workshop-link-desc{font-size:.95rem;line-height:1.5;color:var(--slate-soft)}
-.workshop-link:hover,.workshop-link:focus-within{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--tan)}
+.workshop-link:hover,.workshop-link:focus-within{transform:translateY(-3px);box-shadow:var(--shadow);border:1px solid var(--tan)}

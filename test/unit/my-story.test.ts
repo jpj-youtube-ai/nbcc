@@ -116,14 +116,14 @@ describe("my story form structure (REQ-NNN)", () => {
       "Yes, you can share my story publicly",
     );
     expect(norm(publicCard?.querySelector(".consent-card-help")?.textContent)).toBe(
-      "We may use it on our website, social media, newsletters, press and funding reports. We may share it in full or in part, and edit lightly for length or clarity while keeping your meaning.",
+      "We may use it on our website, social media, newsletters, press, and to show funders the difference we make. We may share it in full or in part, and edit lightly for length or clarity while keeping your meaning.",
     );
 
     expect(norm(internalCard?.querySelector(".consent-card-title")?.textContent)).toBe(
       "Please keep it private to NBCC",
     );
     expect(norm(internalCard?.querySelector(".consent-card-help")?.textContent)).toBe(
-      "Only the NBCC team will see it, to learn from and to support our funding bids. We will never publish it.",
+      "Only the NBCC team will see it, to learn from and to help us secure the funding that keeps our work going. We will never publish it.",
     );
   });
 

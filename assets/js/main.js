@@ -1585,14 +1585,14 @@
     var bar = doc.createElement("div");
     bar.className = "supporter-ticker";
     bar.setAttribute("role", "complementary");
-    bar.setAttribute("aria-label", "Our supporters");
+    bar.setAttribute("aria-label", "Partners");
     // Seamless loop: the animation shifts the track by exactly -50%, so the two halves must be
     // IDENTICAL. Each "run" therefore ends with a separator (items + sep), and we render run + run —
     // otherwise a middle-only separator makes the halves unequal and the marquee visibly jumps back.
     var run = items + sep;
     var trackHtml = reduced ? items : run + run;
     bar.innerHTML =
-      '<span class="supporter-ticker__label">Our supporters</span>' +
+      '<span class="supporter-ticker__label">Partners</span>' +
       '<div class="supporter-ticker__viewport"><div class="supporter-ticker__track' +
       (reduced ? " is-static" : "") +
       '">' + trackHtml + "</div></div>";
@@ -1612,6 +1612,28 @@
       track.style.setProperty("--ticker-run", runWidth + "px");
       track.style.animationDuration = Math.max(16, Math.round(runWidth / 60)) + "s";
     }
+  }
+
+  // Partners list on the Supporters page (REQ-003 · TASK-180): the SAME admin-curated list that feeds
+  // the ticker, rendered below the donors as an alphabetical grid. Only runs where #partnersList
+  // exists (the Supporters page). The section stays hidden if there are no partners.
+  function initPartners(doc, win) {
+    var list = doc.getElementById("partnersList");
+    if (!list || !win.fetch) return;
+    win
+      .fetch("/api/supporters/ticker")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var names = (data && data.supporters ? data.supporters : []).slice();
+        if (!names.length) return;
+        names.sort(function (a, b) { return String(a).localeCompare(String(b), "en", { sensitivity: "base" }); });
+        list.innerHTML = names
+          .map(function (n) { return '<li class="partner">' + tickerEscape(n) + "</li>"; })
+          .join("");
+        var section = doc.getElementById("partners");
+        if (section) section.hidden = false;
+      })
+      .catch(function () {});
   }
 
   if (typeof module !== "undefined" && module.exports) {
@@ -1634,6 +1656,7 @@
   } else {
     initNav(document, window);
     initSupporterTicker(document, window);
+    initPartners(document, window);
     initReveal(document, window);
     initGiveToggle(document);
     initDeclarationCapture(document);

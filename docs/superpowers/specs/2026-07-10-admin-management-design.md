@@ -1,7 +1,7 @@
 # Admin Management System — Design Spec
 
 **Date:** 2026-07-10
-**Status:** Design approved in brainstorming → for user review before writing-plans
+**Status:** Design approved in brainstorming. **Build decision: phased** (Phase 1 first). For user review before writing the Phase 1 plan.
 **Feature:** Identity & access management for the `/admin` dashboard — manage admin users from the UI (no more migrations), password resets, authenticator-app 2FA, an audit trail, and self-service profile.
 
 ## Goal

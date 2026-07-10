@@ -28,6 +28,7 @@ import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
+import { touchLastLogin } from "../db/admin-users";
 import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
 import { getDonorPortalSnapshot, updateDonorPortal, getActiveDeclarationForDonor } from "../db/portal";
 import { cancelSubscription } from "../clients/stripe";
@@ -91,6 +92,13 @@ export async function postAdminLogin(req: Request, res: Response): Promise<Respo
     if (!user || !ok) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
+    // Admin management Phase 1 (Task 6): a disabled or still-invited (no password accepted yet)
+    // account is rejected with the SAME generic 401 as a bad password — no account enumeration of
+    // the account's lifecycle status via a distinct error.
+    if (user.status === "disabled" || user.status === "invited") {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+    await touchLastLogin(user.id);
 
     const { token, claims } = signAdminSession({
       sub: user.id,

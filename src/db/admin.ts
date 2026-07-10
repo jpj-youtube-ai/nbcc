@@ -18,14 +18,16 @@ export interface AdminUserRow {
   full_name: string;
   role: string; // viewer | editor | admin
   password_hash: string | null; // scrypt hash; NULL for an account with no password set
+  status: string; // invited | active | disabled (admin management Phase 1, Task 6)
 }
 
 // Look up a user by email, or null when none matches. Returns the password_hash so the caller can
-// verify it — this row never leaves the server unredacted.
+// verify it — this row never leaves the server unredacted. Also returns `status` (Task 6) so
+// postAdminLogin can reject a disabled/invited account after the password check.
 export async function findUserByEmail(email: string): Promise<AdminUserRow | null> {
   const row = (
     await pool.query<AdminUserRow>(
-      `SELECT id, email, full_name, role, password_hash FROM users WHERE email = $1`,
+      `SELECT id, email, full_name, role, password_hash, status FROM users WHERE email = $1`,
       [email],
     )
   ).rows[0];

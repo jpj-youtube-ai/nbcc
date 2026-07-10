@@ -873,21 +873,217 @@
   // Block builder model (TASK-168). Each def: label, default data, and how many of the 4 variants
   // are meaningful (all 4 unless noted). The renderer server-side owns the visual variants; the UI
   // just carries type/variant/data.
+  // Each block def carries: label, a line icon, default data, and a `variants` array. Every variant
+  // names the style the admin is choosing (not "Style 1"), a one-line hint describing it, and the
+  // EXACT set of fields that variant actually renders — so the field editor only shows inputs that
+  // will appear in the email (progressive disclosure). This is the source of truth that keeps the
+  // builder's fields in lock-step with the server renderer in src/newsletter/blocks.ts; a field the
+  // chosen variant ignores is never shown, so "I typed it but it didn't show" can't happen.
+  // A list-shaped variant uses `items:{fields, firstOnly?, note?}` instead of `fields`.
+  var TXT = { k: "text", label: "Text", kind: "textarea", hint: "Use {{firstName}} to personalise" };
   var nlBlockDefs = {
-    masthead: { label: "Masthead", data: { issueTitle: "July Newsletter" } },
-    greeting: { label: "Greeting", data: { heading: "", lead: "" } },
-    text: { label: "Text", data: { text: "Your text here." } },
-    heading: { label: "Heading", data: { kicker: "", title: "Section title" } },
-    image: { label: "Image", data: { url: "", alt: "", caption: "" } },
-    story: { label: "Story", data: { imageUrl: "", title: "Story title", body: "Story text.", label: "Read more", href: "" } },
-    spotlight: { label: "Spotlight", data: { photoUrl: "", name: "Name", quote: "Quote", role: "" } },
-    stats: { label: "Impact stats", data: { items: [{ number: "7,657", label: "Red Bags delivered" }] } },
-    waysToHelp: { label: "Ways to help", data: { items: [{ icon: "🎁", title: "Donate", body: "", label: "Donate", href: "https://nbcc.scot/donate" }] } },
-    events: { label: "Events", data: { items: [{ day: "15", month: "JUL", name: "Event name", location: "", label: "Register", href: "" }] } },
-    donationCta: { label: "Donation CTA", data: { imageUrl: "", heading: "Support our work", label: "Make a donation today", href: "https://nbcc.scot/donate" } },
-    button: { label: "Button", data: { label: "Learn more", href: "" } },
-    divider: { label: "Divider", data: {} },
+    masthead: {
+      label: "Masthead", icon: "masthead",
+      data: { issueTitle: "July Newsletter" },
+      variants: [
+        { name: "Centered", hint: "Logo and title centred, with an optional hero below.",
+          fields: [{ k: "issueTitle", label: "Issue title" }, { k: "heroUrl", label: "Hero image", kind: "image" }] },
+        { name: "Logo + title", hint: "Logo left; title and date on the right.",
+          fields: [{ k: "issueTitle", label: "Issue title" }, { k: "date", label: "Date", hint: "e.g. July 2026" }] },
+        { name: "Hero banner", hint: "Title sits over a full-width hero image.",
+          fields: [{ k: "issueTitle", label: "Issue title" }, { k: "heroUrl", label: "Hero image", kind: "image" }] },
+        { name: "Slim strip", hint: "Compact small logo and title on one line.",
+          fields: [{ k: "issueTitle", label: "Issue title" }] },
+      ],
+    },
+    greeting: {
+      label: "Greeting", icon: "greeting",
+      data: { heading: "", lead: "" },
+      variants: [
+        { name: "Dear …", hint: "“Dear {{firstName}},” — personalised automatically.", fields: [] },
+        { name: "With intro", hint: "The greeting plus a short intro paragraph.",
+          fields: [{ k: "lead", label: "Intro paragraph", kind: "textarea" }] },
+        { name: "With heading", hint: "A heading above the greeting line.",
+          fields: [{ k: "heading", label: "Heading" }] },
+        { name: "Casual", hint: "“Hi {{firstName}} 👋” — personalised automatically.", fields: [] },
+      ],
+    },
+    text: {
+      label: "Text", icon: "text",
+      data: { text: "Your text here." },
+      variants: [
+        { name: "Paragraph", hint: "A standard body paragraph.", fields: [TXT] },
+        { name: "Lead", hint: "A larger opening paragraph.", fields: [TXT] },
+        { name: "Pull-quote", hint: "Centred italic serif quote.", fields: [TXT] },
+        { name: "Callout", hint: "Tinted box with an accent bar.", fields: [TXT] },
+      ],
+    },
+    heading: {
+      label: "Heading", icon: "heading",
+      data: { kicker: "", title: "Section title" },
+      variants: [
+        { name: "Centered", hint: "Crimson serif title, centred.", fields: [{ k: "title", label: "Title" }] },
+        { name: "With kicker", hint: "A small kicker line above the title.",
+          fields: [{ k: "kicker", label: "Kicker" }, { k: "title", label: "Title" }] },
+        { name: "Maroon band", hint: "Title on a full-width maroon band.", fields: [{ k: "title", label: "Title" }] },
+        { name: "Eyebrow", hint: "Small uppercase label only.", fields: [{ k: "title", label: "Title" }] },
+      ],
+    },
+    image: {
+      label: "Image", icon: "image",
+      data: { url: "", alt: "", caption: "" },
+      variants: [
+        { name: "Full width", hint: "Edge-to-edge image.",
+          fields: [{ k: "url", label: "Image", kind: "image" }, { k: "alt", label: "Alt text", hint: "Describes the image for screen readers" }] },
+        { name: "Rounded", hint: "Full width with rounded corners.",
+          fields: [{ k: "url", label: "Image", kind: "image" }, { k: "alt", label: "Alt text", hint: "Describes the image for screen readers" }] },
+        { name: "With caption", hint: "Image with a caption underneath.",
+          fields: [{ k: "url", label: "Image", kind: "image" }, { k: "alt", label: "Alt text", hint: "Describes the image for screen readers" }, { k: "caption", label: "Caption" }] },
+        { name: "Framed", hint: "Thin border around the image.",
+          fields: [{ k: "url", label: "Image", kind: "image" }, { k: "alt", label: "Alt text", hint: "Describes the image for screen readers" }] },
+      ],
+    },
+    story: {
+      label: "Story", icon: "story",
+      data: { imageUrl: "", title: "Story title", body: "Story text.", label: "Read more", href: "" },
+      variants: [
+        { name: "Image top", hint: "Image above the title and body.",
+          fields: [{ k: "imageUrl", label: "Image", kind: "image" }, { k: "title", label: "Title" }, { k: "body", label: "Body", kind: "textarea" }, { k: "label", label: "Link label" }, { k: "href", label: "Link", kind: "url" }] },
+        { name: "Image left", hint: "Image on the left, text on the right.",
+          fields: [{ k: "imageUrl", label: "Image", kind: "image" }, { k: "title", label: "Title" }, { k: "body", label: "Body", kind: "textarea" }, { k: "label", label: "Link label" }, { k: "href", label: "Link", kind: "url" }] },
+        { name: "Two-up cards", hint: "Two (or more) stories side by side.",
+          items: { fields: [{ k: "imageUrl", label: "Image" }, { k: "title", label: "Title" }, { k: "body", label: "Body" }, { k: "label", label: "Link label" }, { k: "href", label: "Link" }] } },
+        { name: "Text only", hint: "No image; a top rule then title and body.",
+          fields: [{ k: "title", label: "Title" }, { k: "body", label: "Body", kind: "textarea" }, { k: "label", label: "Link label" }, { k: "href", label: "Link", kind: "url" }] },
+      ],
+    },
+    spotlight: {
+      label: "Spotlight", icon: "spotlight",
+      data: { photoUrl: "", name: "Name", quote: "Quote", role: "" },
+      variants: [
+        { name: "Photo left", hint: "Photo on the left, quote on the right.",
+          fields: [{ k: "photoUrl", label: "Photo", kind: "image" }, { k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
+        { name: "Avatar centered", hint: "Round avatar above a centred quote.",
+          fields: [{ k: "photoUrl", label: "Photo", kind: "image" }, { k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
+        { name: "Big quote", hint: "Large quote with attribution — no photo.",
+          fields: [{ k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
+        { name: "Tinted card", hint: "Photo and quote inside a tinted card.",
+          fields: [{ k: "photoUrl", label: "Photo", kind: "image" }, { k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
+      ],
+    },
+    stats: {
+      label: "Impact stats", icon: "stats",
+      data: { items: [{ number: "7,657", label: "Red Bags delivered" }] },
+      variants: [
+        { name: "One big number", hint: "A single large figure.",
+          items: { firstOnly: true, note: "Only the first figure is shown in this style.", fields: [{ k: "number", label: "Number" }, { k: "label", label: "Label" }] } },
+        { name: "Three across", hint: "Every figure in a row.",
+          items: { fields: [{ k: "number", label: "Number" }, { k: "label", label: "Label" }] } },
+        { name: "Number + caption", hint: "One figure with a caption line.",
+          items: { firstOnly: true, note: "Only the first figure is shown in this style.", fields: [{ k: "number", label: "Number" }, { k: "label", label: "Label" }, { k: "caption", label: "Caption" }] } },
+        { name: "Inline pills", hint: "Every figure as a tinted pill.",
+          items: { fields: [{ k: "number", label: "Number" }, { k: "label", label: "Label" }] } },
+      ],
+    },
+    waysToHelp: {
+      label: "Ways to help", icon: "waysToHelp",
+      data: { items: [{ icon: "🎁", title: "Donate", body: "", label: "Donate", href: "https://nbcc.scot/donate" }] },
+      variants: [
+        { name: "Three columns", hint: "Icon columns side by side.",
+          items: { fields: [{ k: "icon", label: "Icon", hint: "An emoji, e.g. 🎁" }, { k: "title", label: "Title" }, { k: "body", label: "Body" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
+        { name: "Stacked list", hint: "Each way stacked vertically.",
+          items: { fields: [{ k: "icon", label: "Icon", hint: "An emoji, e.g. 🎁" }, { k: "title", label: "Title" }, { k: "body", label: "Body" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
+        { name: "Two-up", hint: "A two-column grid.",
+          items: { fields: [{ k: "icon", label: "Icon", hint: "An emoji, e.g. 🎁" }, { k: "title", label: "Title" }, { k: "body", label: "Body" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
+        { name: "Single CTA", hint: "One button only.",
+          items: { firstOnly: true, note: "Only the first item is used, as a single button.", fields: [{ k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
+      ],
+    },
+    events: {
+      label: "Events", icon: "events",
+      data: { items: [{ day: "15", month: "JUL", name: "Event name", location: "", label: "Register", href: "" }] },
+      variants: [
+        { name: "Date badges", hint: "Date badge beside each event.",
+          items: { fields: [{ k: "day", label: "Day" }, { k: "month", label: "Month" }, { k: "name", label: "Name" }, { k: "location", label: "Location" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
+        { name: "Simple list", hint: "Date and name inline — no button.",
+          items: { fields: [{ k: "day", label: "Day" }, { k: "month", label: "Month" }, { k: "name", label: "Name" }] } },
+        { name: "Cards", hint: "Each event in its own card.",
+          items: { fields: [{ k: "day", label: "Day" }, { k: "month", label: "Month" }, { k: "name", label: "Name" }, { k: "location", label: "Location" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
+        { name: "Featured", hint: "One event, shown large.",
+          items: { firstOnly: true, note: "Only the first event is shown in this style.", fields: [{ k: "day", label: "Day" }, { k: "month", label: "Month" }, { k: "name", label: "Name" }, { k: "location", label: "Location" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
+      ],
+    },
+    donationCta: {
+      label: "Donation CTA", icon: "donationCta",
+      data: { imageUrl: "", heading: "Support our work", label: "Make a donation today", href: "https://nbcc.scot/donate" },
+      variants: [
+        { name: "Image + CTA", hint: "Image, heading and button, centred.",
+          fields: [{ k: "imageUrl", label: "Image", kind: "image" }, { k: "heading", label: "Heading" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link", kind: "url" }] },
+        { name: "Tinted band", hint: "Heading and button on a tinted band.",
+          fields: [{ k: "heading", label: "Heading" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link", kind: "url" }] },
+        { name: "Split", hint: "Heading left, button right.",
+          fields: [{ k: "heading", label: "Heading" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link", kind: "url" }] },
+        { name: "Centered", hint: "Heading and button, centred.",
+          fields: [{ k: "heading", label: "Heading" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link", kind: "url" }] },
+      ],
+    },
+    button: {
+      label: "Button", icon: "button",
+      data: { label: "Learn more", href: "" },
+      variants: [
+        { name: "Primary", hint: "Solid crimson button.", fields: [{ k: "label", label: "Label" }, { k: "href", label: "Link", kind: "url" }] },
+        { name: "Outline", hint: "Outlined button.", fields: [{ k: "label", label: "Label" }, { k: "href", label: "Link", kind: "url" }] },
+        { name: "Full width", hint: "Full-width solid button.", fields: [{ k: "label", label: "Label" }, { k: "href", label: "Link", kind: "url" }] },
+        { name: "Text link", hint: "A plain text link with an arrow.", fields: [{ k: "label", label: "Label" }, { k: "href", label: "Link", kind: "url" }] },
+      ],
+    },
+    divider: {
+      label: "Divider", icon: "divider",
+      data: {},
+      variants: [
+        { name: "Hairline", hint: "A thin full-width rule.", fields: [] },
+        { name: "Short rule", hint: "A short crimson rule, centred.", fields: [] },
+        { name: "Spacer", hint: "Blank vertical space.", fields: [] },
+        { name: "Dot", hint: "A small centred dot.", fields: [] },
+      ],
+    },
   };
+
+  // Inline line icons (16px, currentColor) for the palette + block headers and controls. SVG, not
+  // emoji, so they inherit theme colour and stay crisp — the admin chrome standard.
+  var NL_ICONS = {
+    masthead: '<rect x="3" y="4" width="18" height="4" rx="1"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="16" x2="12" y2="16"/>',
+    greeting: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
+    text: '<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/>',
+    heading: '<path d="M6 4v16M18 4v16M6 12h12"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+    story: '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/>',
+    spotlight: '<circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/>',
+    stats: '<line x1="5" y1="20" x2="5" y2="12"/><line x1="10" y1="20" x2="10" y2="6"/><line x1="15" y1="20" x2="15" y2="14"/><line x1="20" y1="20" x2="20" y2="9"/>',
+    waysToHelp: '<path d="M12 21s-8-5-8-11a4 4 0 0 1 8-1 4 4 0 0 1 8 1c0 6-8 11-8 11z"/>',
+    events: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/>',
+    donationCta: '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
+    button: '<rect x="3" y="8" width="18" height="8" rx="4"/><line x1="8" y1="12" x2="14" y2="12"/>',
+    divider: '<line x1="3" y1="12" x2="21" y2="12"/>',
+    up: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/>',
+    down: '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/>',
+    dup: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
+    del: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+    plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  };
+  function nlIcon(name) {
+    return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      (NL_ICONS[name] || "") + "</svg>";
+  }
+  function nlVariants(block) {
+    var def = nlBlockDefs[block.type];
+    return (def && def.variants) || [];
+  }
+  function nlActiveVariant(block) {
+    var vs = nlVariants(block);
+    return vs[block.variant] || vs[0] || { name: "", hint: "", fields: [] };
+  }
 
   var nlDoc = { blocks: [] };
 
@@ -895,9 +1091,13 @@
     var host = el("nlPalette");
     host.innerHTML = "";
     Object.keys(nlBlockDefs).forEach(function (type) {
+      var def = nlBlockDefs[type];
       var b = doc.createElement("button");
       b.type = "button";
-      b.textContent = "+ " + nlBlockDefs[type].label;
+      b.className = "nl-add";
+      b.innerHTML = '<span class="nl-add-ic">' + nlIcon(def.icon) + "</span>" +
+        '<span class="nl-add-label">' + def.label + "</span>";
+      b.setAttribute("aria-label", "Add " + def.label + " block");
       b.addEventListener("click", function () { nlAddBlock(type); });
       host.appendChild(b);
     });
@@ -909,46 +1109,73 @@
     nlSchedulePreview();
   }
 
+  function nlCtrlBtn(icon, label, disabled, onClick) {
+    var b = doc.createElement("button");
+    b.type = "button";
+    b.className = "nl-ctrl" + (icon === "del" ? " nl-ctrl-danger" : "");
+    b.setAttribute("data-nl", icon);
+    b.innerHTML = nlIcon(icon);
+    b.setAttribute("aria-label", label);
+    b.title = label;
+    if (disabled) b.disabled = true;
+    else b.addEventListener("click", onClick);
+    return b;
+  }
+
   function nlRenderCanvas() {
     var host = el("nlCanvas");
     host.innerHTML = "";
+    if (nlDoc.blocks.length === 0) {
+      var empty = doc.createElement("li");
+      empty.className = "nl-empty";
+      empty.innerHTML = '<div class="nl-empty-ic">' + nlIcon("plus") + "</div>" +
+        "<p><strong>No blocks yet</strong></p>" +
+        "<p>Add a block from the palette to start building your newsletter.</p>";
+      host.appendChild(empty);
+      return;
+    }
     nlDoc.blocks.forEach(function (block, i) {
       var li = doc.createElement("li");
       li.className = "nl-block";
-      var def = nlBlockDefs[block.type] || { label: "Raw HTML" };
+      var def = nlBlockDefs[block.type] || { label: "Raw HTML", icon: "text" };
+
       var head = doc.createElement("div");
       head.className = "nl-block-head";
       head.innerHTML =
-        '<span class="nl-block-title">' + def.label + "</span>" +
-        '<span class="nl-block-ctrls">' +
-        '<button type="button" data-nl="up">↑</button>' +
-        '<button type="button" data-nl="down">↓</button>' +
-        '<button type="button" data-nl="dup">⧉</button>' +
-        '<button type="button" data-nl="del">✕</button>' +
-        "</span>";
+        '<span class="nl-block-ic">' + nlIcon(def.icon) + "</span>" +
+        '<span class="nl-block-title">' + def.label + "</span>";
+      var ctrls = doc.createElement("span");
+      ctrls.className = "nl-block-ctrls";
+      ctrls.appendChild(nlCtrlBtn("up", "Move up", i === 0, function () { nlMove(i, -1); }));
+      ctrls.appendChild(nlCtrlBtn("down", "Move down", i === nlDoc.blocks.length - 1, function () { nlMove(i, 1); }));
+      ctrls.appendChild(nlCtrlBtn("dup", "Duplicate", false, function () { nlDup(i); }));
+      ctrls.appendChild(nlCtrlBtn("del", "Delete", false, function () { nlDoc.blocks.splice(i, 1); nlRenderCanvas(); nlSchedulePreview(); }));
+      head.appendChild(ctrls);
       li.appendChild(head);
 
-      var variants = doc.createElement("div");
-      variants.className = "nl-variants";
-      for (var v = 0; v < 4; v++) {
-        var vb = doc.createElement("button");
-        vb.type = "button";
-        vb.textContent = "Style " + (v + 1);
-        vb.setAttribute("aria-pressed", String(block.variant === v));
-        (function (vi) { vb.addEventListener("click", function () { block.variant = vi; nlRenderCanvas(); nlSchedulePreview(); }); })(v);
-        variants.appendChild(vb);
+      // Named style picker (segmented control) — replaces the meaningless "Style 1..4".
+      var variants = nlVariants(block);
+      if (variants.length > 1) {
+        var seg = doc.createElement("div");
+        seg.className = "nl-variants admin-segmented";
+        seg.setAttribute("role", "group");
+        seg.setAttribute("aria-label", "Style");
+        variants.forEach(function (vdef, v) {
+          var vb = doc.createElement("button");
+          vb.type = "button";
+          vb.className = "admin-seg" + (block.variant === v ? " is-active" : "");
+          vb.textContent = vdef.name;
+          vb.setAttribute("aria-pressed", String(block.variant === v));
+          vb.addEventListener("click", function () { block.variant = v; nlRenderCanvas(); nlSchedulePreview(); });
+          seg.appendChild(vb);
+        });
+        li.appendChild(seg);
       }
-      li.appendChild(variants);
 
       var fields = doc.createElement("div");
       fields.className = "nl-fields";
-      nlRenderFields(fields, block); // Task 24
+      nlRenderFields(fields, block);
       li.appendChild(fields);
-
-      head.querySelector('[data-nl="up"]').addEventListener("click", function () { nlMove(i, -1); });
-      head.querySelector('[data-nl="down"]').addEventListener("click", function () { nlMove(i, 1); });
-      head.querySelector('[data-nl="dup"]').addEventListener("click", function () { nlDup(i); });
-      head.querySelector('[data-nl="del"]').addEventListener("click", function () { nlDoc.blocks.splice(i, 1); nlRenderCanvas(); nlSchedulePreview(); });
 
       host.appendChild(li);
     });
@@ -980,21 +1207,35 @@
     { label: "Story — Tygan", url: "https://nbcc.scot/assets/img/story-tygan.jpg" },
   ];
 
-  // A labelled text input (or textarea) bound to block.data[key].
-  function nlText(host, block, key, label, multiline) {
+  // A labelled text input (or textarea) bound to obj[key] (obj is a block's data or a repeater item).
+  // opts: { multiline, hint, type } — hint renders muted helper text under the input; type sets the
+  // input type (e.g. "url") for the right mobile keyboard.
+  function nlText(host, obj, key, label, opts) {
+    opts = opts || {};
     var wrap = doc.createElement("label");
-    wrap.textContent = label;
-    var input = doc.createElement(multiline ? "textarea" : "input");
-    if (multiline) input.rows = 3;
-    input.value = block.data[key] != null ? block.data[key] : "";
-    input.addEventListener("input", function () { block.data[key] = input.value; nlSchedulePreview(); });
+    wrap.className = "nl-field";
+    var lab = doc.createElement("span");
+    lab.className = "nl-field-label";
+    lab.textContent = label;
+    wrap.appendChild(lab);
+    var input = doc.createElement(opts.multiline ? "textarea" : "input");
+    if (opts.multiline) input.rows = 3;
+    else if (opts.type) input.type = opts.type;
+    input.value = obj[key] != null ? obj[key] : "";
+    input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
     wrap.appendChild(input);
+    if (opts.hint) {
+      var h = doc.createElement("span");
+      h.className = "nl-field-hint";
+      h.textContent = opts.hint;
+      wrap.appendChild(h);
+    }
     host.appendChild(wrap);
   }
 
   // An image field: URL input + "NBCC library" quick-pick + Upload (POSTs base64 to the endpoint).
   function nlImageField(host, block, key, label) {
-    nlText(host, block, key, label + " URL", false);
+    nlText(host, block.data, key, label, { type: "url", hint: "Paste a URL, choose from the NBCC library, or upload." });
     var row = doc.createElement("div");
     row.className = "nl-img-tools";
 
@@ -1032,30 +1273,41 @@
     host.appendChild(row);
   }
 
-  // Repeater for the list-shaped blocks (stats/waysToHelp/events). Renders each item's fields + an
-  // add/remove control. Item shape depends on block.type (see nlBlockDefs defaults).
-  function nlRenderItems(host, block) {
-    var keysByType = {
-      stats: ["number", "label", "caption"],
-      waysToHelp: ["icon", "title", "body", "label", "href"],
-      events: ["day", "month", "name", "location", "label", "href"],
-      story: ["imageUrl", "title", "body", "label", "href"],
-    };
-    var keys = keysByType[block.type];
-    (block.data.items || []).forEach(function (item, idx) {
+  // Repeater for the list-shaped variants (stats/waysToHelp/events, and story "two-up"). `spec` is
+  // the active variant's items descriptor: { fields:[{k,label,hint?}], firstOnly?, note? }. Only the
+  // fields the variant actually renders are shown, so what you type always maps to what appears.
+  function nlRenderItems(host, block, spec) {
+    var fields = spec.fields || [];
+    // Ensure items exists. For story switching into two-up, seed one item from the top-level fields
+    // so any copy already written carries over instead of vanishing.
+    if (!Array.isArray(block.data.items)) {
+      if (block.type === "story") {
+        block.data.items = [{
+          imageUrl: block.data.imageUrl || "", title: block.data.title || "",
+          body: block.data.body || "", label: block.data.label || "", href: block.data.href || "",
+        }];
+      } else {
+        block.data.items = [];
+      }
+    }
+    if (spec.note) {
+      var note = doc.createElement("p");
+      note.className = "nl-note";
+      note.textContent = spec.note;
+      host.appendChild(note);
+    }
+    block.data.items.forEach(function (item, idx) {
       var fs = doc.createElement("fieldset");
-      fs.innerHTML = "<legend>Item " + (idx + 1) + "</legend>";
-      keys.forEach(function (k) {
-        var wrap = doc.createElement("label");
-        wrap.textContent = k;
-        var input = doc.createElement("input");
-        input.value = item[k] != null ? item[k] : "";
-        input.addEventListener("input", function () { item[k] = input.value; nlSchedulePreview(); });
-        wrap.appendChild(input);
-        fs.appendChild(wrap);
+      fs.className = "nl-item";
+      var lg = doc.createElement("legend");
+      lg.textContent = "Item " + (idx + 1);
+      fs.appendChild(lg);
+      fields.forEach(function (f) {
+        nlText(fs, item, f.k, f.label, { hint: f.hint });
       });
       var rm = doc.createElement("button");
       rm.type = "button";
+      rm.className = "nl-item-remove";
       rm.textContent = "Remove item";
       rm.addEventListener("click", function () { block.data.items.splice(idx, 1); nlRenderCanvas(); nlSchedulePreview(); });
       fs.appendChild(rm);
@@ -1063,77 +1315,55 @@
     });
     var add = doc.createElement("button");
     add.type = "button";
-    add.textContent = "+ Add item";
+    add.className = "nl-item-add";
+    add.innerHTML = nlIcon("plus") + "<span>Add item</span>";
     add.addEventListener("click", function () {
       var blank = {};
-      keys.forEach(function (k) { blank[k] = ""; });
-      block.data.items = (block.data.items || []).concat([blank]);
+      fields.forEach(function (f) { blank[f.k] = ""; });
+      block.data.items = block.data.items.concat([blank]);
       nlRenderCanvas();
       nlSchedulePreview();
     });
     host.appendChild(add);
   }
 
-  // Task 24: editable fields per block type, bound to block.data.
+  // Editable fields for the block's ACTIVE variant, driven by nlBlockDefs. Only the fields that the
+  // chosen style renders are shown (progressive disclosure) — so a value the style ignores is never
+  // offered, and every value you enter appears in the preview.
   function nlRenderFields(host, block) {
     host.innerHTML = "";
-    switch (block.type) {
-      case "masthead":
-        nlText(host, block, "issueTitle", "Issue title", false);
-        nlImageField(host, block, "heroUrl", "Hero image");
-        break;
-      case "greeting":
-        nlText(host, block, "heading", "Heading (optional)", false);
-        nlText(host, block, "lead", "Intro paragraph (optional)", true);
-        break;
-      case "text":
-        nlText(host, block, "text", "Text (use {{firstName}} to merge)", true);
-        break;
-      case "heading":
-        nlText(host, block, "kicker", "Kicker (optional)", false);
-        nlText(host, block, "title", "Title", false);
-        break;
-      case "image":
-        nlImageField(host, block, "url", "Image");
-        nlText(host, block, "alt", "Alt text", false);
-        nlText(host, block, "caption", "Caption (optional)", false);
-        break;
-      case "story":
-        nlImageField(host, block, "imageUrl", "Image");
-        nlText(host, block, "title", "Title", false);
-        nlText(host, block, "body", "Body", true);
-        nlText(host, block, "label", "Button label", false);
-        nlText(host, block, "href", "Button link", false);
-        // Variant 2 (two-up) reads data.items[] instead of the top-level fields above (which it
-        // falls back to only when items is empty) — also render the repeater so an editor can
-        // author multiple story cards. nlRenderFields re-runs on variant change, so this is safe.
-        if (block.variant === 2) nlRenderItems(host, block);
-        break;
-      case "spotlight":
-        nlImageField(host, block, "photoUrl", "Photo");
-        nlText(host, block, "name", "Name", false);
-        nlText(host, block, "quote", "Quote", true);
-        nlText(host, block, "role", "Role (optional)", false);
-        break;
-      case "donationCta":
-        nlImageField(host, block, "imageUrl", "Image");
-        nlText(host, block, "heading", "Heading", false);
-        nlText(host, block, "label", "Button label", false);
-        nlText(host, block, "href", "Button link", false);
-        break;
-      case "button":
-        nlText(host, block, "label", "Label", false);
-        nlText(host, block, "href", "Link", false);
-        break;
-      case "stats":
-      case "waysToHelp":
-      case "events":
-        nlRenderItems(host, block); // repeaters
-        break;
-      case "divider":
-      default:
-        break;
+    var def = nlBlockDefs[block.type];
+    if (!def) { // legacy rawHtml draft — offer the raw HTML directly
+      nlText(host, block.data, "html", "HTML", { multiline: true });
+      return;
     }
+    var vdef = nlActiveVariant(block);
+    if (vdef.hint) {
+      var h = doc.createElement("p");
+      h.className = "nl-vhint";
+      h.textContent = vdef.hint;
+      host.appendChild(h);
+    }
+    if (vdef.items) {
+      nlRenderItems(host, block, vdef.items);
+      return;
+    }
+    var fields = vdef.fields || [];
+    if (fields.length === 0) {
+      var none = doc.createElement("p");
+      none.className = "nl-note";
+      none.textContent = "This style has no fields to fill.";
+      host.appendChild(none);
+      return;
+    }
+    fields.forEach(function (f) {
+      if (f.kind === "image") nlImageField(host, block, f.k, f.label);
+      else nlText(host, block.data, f.k, f.label, {
+        multiline: f.kind === "textarea",
+        type: f.kind === "url" ? "url" : undefined,
+        hint: f.hint,
+      });
+    });
   }
 
   // Debounced live preview: renders the current nlDoc server-side and streams it into the iframe.

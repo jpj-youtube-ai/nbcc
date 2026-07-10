@@ -721,12 +721,12 @@ fieldset.give-field legend{display:block;font-family:var(--font-head);font-weigh
    shared, without altering the shared .form-status chrome other forms rely on. */
 #storyStatus.is-success{padding:16px 18px;font-size:1rem;line-height:1.5}
 
-/* The Workshop (internal volunteer launchpad, /workshop): a simple grid of tool
+/* The Hub (internal volunteer launchpad, /hub): a simple grid of tool
    shortcut cards. Reuses the shared .card chrome so it sits inside the brand. */
-.workshop-logo{display:block;margin:0 auto 14px}
-.workshop-links{list-style:none;margin:0;padding:0;display:grid;gap:clamp(14px,2vw,20px);grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
-.workshop-link{padding:0;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-.workshop-link a{display:flex;flex-direction:column;gap:6px;padding:22px 22px;text-decoration:none;height:100%}
-.workshop-link-title{font-family:var(--font-head);font-size:1.3rem;color:var(--maroon)}
-.workshop-link-desc{font-size:.95rem;line-height:1.5;color:var(--slate-soft)}
-.workshop-link:hover,.workshop-link:focus-within{transform:translateY(-3px);box-shadow:var(--shadow);border:1px solid var(--tan)}
+.hub-logo{display:block;margin:0 auto 14px}
+.hub-links{list-style:none;margin:0;padding:0;display:grid;gap:clamp(14px,2vw,20px);grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.hub-link{padding:0;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.hub-link a{display:flex;flex-direction:column;gap:6px;padding:22px 22px;text-decoration:none;height:100%}
+.hub-link-title{font-family:var(--font-head);font-size:1.3rem;color:var(--maroon)}
+.hub-link-desc{font-size:.95rem;line-height:1.5;color:var(--slate-soft)}
+.hub-link:hover,.hub-link:focus-within{transform:translateY(-3px);box-shadow:var(--shadow);border:1px solid var(--tan)}

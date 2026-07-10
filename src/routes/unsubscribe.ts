@@ -13,7 +13,7 @@ export const unsubscribeRouter = Router();
 function page(message: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Newsletter | North Berwick Christmas Committee</title></head>
+<title>Newsletter | Night Before Christmas Campaign</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem">
 <h1>Newsletter</h1><p>${message}</p></body></html>`;
 }

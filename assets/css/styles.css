@@ -50,6 +50,7 @@
   --cream-12:rgba(248,245,238,.12);
 
   --nav-h:78px;
+  --ticker-h:40px; /* supporter ticker band height (TASK-178); only reserved when the ticker is shown */
   --maxw:1180px;
   --pad:clamp(20px,5vw,48px);
   --radius:16px;
@@ -145,6 +146,33 @@ p{margin:0 0 1rem}
 .nav.scrolled{background:color-mix(in srgb,var(--cream) 90%,transparent);backdrop-filter:saturate(150%) blur(10px);
   -webkit-backdrop-filter:saturate(150%) blur(10px);box-shadow:var(--shadow-sm);border-bottom:1px solid var(--line)}
 .nav .wrap{display:flex;align-items:center;justify-content:space-between;gap:18px;width:100%}
+
+/* ---- supporter ticker (REQ-003 · TASK-178) ---- */
+/* A maroon marquee fixed just under the nav. main.js injects it and adds body.has-ticker only when
+   there are supporters, so page content shifts down by --ticker-h just once, and nothing shifts
+   otherwise. The nav (fixed, viewport-relative) is unaffected by the body padding. */
+body.has-ticker{padding-top:var(--ticker-h)}
+.supporter-ticker{position:fixed;top:var(--nav-h);left:0;right:0;height:var(--ticker-h);z-index:99;
+  display:flex;align-items:center;overflow:hidden;background:var(--maroon);color:var(--cream);
+  box-shadow:var(--shadow-sm)}
+.supporter-ticker__label{flex:0 0 auto;display:flex;align-items:center;height:100%;padding:0 16px;
+  font-family:var(--font-body);text-transform:uppercase;letter-spacing:.16em;font-size:.62rem;font-weight:700;
+  color:var(--cream-82);white-space:nowrap;border-right:1px solid var(--cream-24)}
+.supporter-ticker__viewport{flex:1;min-width:0;height:100%;display:flex;align-items:center;overflow:hidden}
+.supporter-ticker__track{display:inline-flex;align-items:center;white-space:nowrap;padding-left:28px;
+  will-change:transform;animation:supporter-ticker-scroll linear infinite}
+.supporter-ticker:hover .supporter-ticker__track{animation-play-state:paused}
+.supporter-ticker__item{font-family:var(--font-body);font-weight:600;font-size:.82rem;color:var(--cream)}
+.supporter-ticker__sep{color:var(--tan-soft);font-size:.5rem;padding:0 15px;position:relative;top:-1px}
+@keyframes supporter-ticker-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+/* Reduced motion (or the JS static fallback): no marquee — a manually scrollable strip instead. */
+.supporter-ticker__track.is-static{animation:none;padding-left:16px}
+@media (prefers-reduced-motion: reduce){
+  .supporter-ticker__track{animation:none !important;padding-left:16px}
+  .supporter-ticker__viewport{overflow-x:auto}
+}
+/* On the narrowest screens drop the label so the names get the width. */
+@media (max-width:520px){.supporter-ticker__label{display:none}}
 .brand{display:flex;align-items:center;gap:12px;text-decoration:none}
 .brand img{height:50px;width:auto}
 .nav-links{display:flex;align-items:center;gap:4px;list-style:none;margin:0;padding:0}

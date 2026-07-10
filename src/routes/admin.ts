@@ -37,6 +37,8 @@ import { listThankYouEligible, recordThankYouSent, listThankYouSent, deleteThank
 import { DEFAULT_THANK_YOU_THRESHOLD_PENCE, thankYouInputSchema, giftSummary } from "../thank-you/model";
 import { buildThankYouEmailHtml, buildThankYouEmailText, thankYouSubject } from "../thank-you/letter";
 import { signThankYouLetterToken } from "../thank-you/letter-token";
+import { listSupporters, createSupporter, updateSupporter, deleteSupporter } from "../db/ticker";
+import { supporterCreateSchema, supporterUpdateSchema } from "../ticker/model";
 import {
   listNewsletters,
   getNewsletter,
@@ -862,6 +864,87 @@ export async function deleteAdminThankYouSent(req: Request, res: Response): Prom
 }
 
 adminRouter.delete("/api/admin/thank-you/sent/:id", deleteAdminThankYouSent);
+
+// --- Supporter ticker (REQ-003 · TASK-178) ------------------------------------------------------
+// Admin-curated list of ongoing supporters shown in the site's scrolling ticker. Reads are Viewer+;
+// writes (add/edit/delete) are Editor+ and audited. Parse the :id path param to a positive int.
+function supporterId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid supporter id" });
+    return null;
+  }
+  return id;
+}
+
+// GET /api/admin/ticker — every supporter (active + hidden), display order. Viewer+.
+export async function getAdminTicker(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "viewer")) return;
+  try {
+    return res.status(200).json({ results: await listSupporters() });
+  } catch (err) {
+    console.error("admin ticker list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/ticker — add a supporter. Editor+.
+export async function postAdminTicker(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const parsed = supporterCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid supporter", details: parsed.error.flatten() });
+  }
+  try {
+    const id = await createSupporter(parsed.data, actorOf(claims));
+    return res.status(201).json({ id });
+  } catch (err) {
+    console.error("admin ticker create failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// PATCH /api/admin/ticker/:id — edit a supporter's name/active/sortOrder. Editor+.
+export async function patchAdminTicker(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = supporterId(req, res);
+  if (id === null) return;
+  const parsed = supporterUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid update", details: parsed.error.flatten() });
+  }
+  try {
+    const updated = await updateSupporter(id, parsed.data, actorOf(claims));
+    if (!updated) return res.status(404).json({ error: "Supporter not found" });
+    return res.status(200).json({ updated: true });
+  } catch (err) {
+    console.error("admin ticker update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// DELETE /api/admin/ticker/:id — remove a supporter. Editor+.
+export async function deleteAdminTicker(req: Request, res: Response): Promise<Response | void> {
+  const claims = authorizeAdmin(req, res, "editor");
+  if (!claims) return;
+  const id = supporterId(req, res);
+  if (id === null) return;
+  try {
+    const deleted = await deleteSupporter(id, actorOf(claims));
+    if (!deleted) return res.status(404).json({ error: "Supporter not found" });
+    return res.status(200).json({ deleted: true });
+  } catch (err) {
+    console.error("admin ticker delete failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ticker", getAdminTicker);
+adminRouter.post("/api/admin/ticker", postAdminTicker);
+adminRouter.patch("/api/admin/ticker/:id", patchAdminTicker);
+adminRouter.delete("/api/admin/ticker/:id", deleteAdminTicker);
 
 // --- Admin dashboard read lists (REQ-066 · TASK-114) --------------------------------------------
 // Read-only lists that back the admin cockpit UI. Browsing/reads are Viewer and up; the Charities

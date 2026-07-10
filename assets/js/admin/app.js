@@ -130,6 +130,7 @@
     else if (name === "stories") loadStories();
     else if (name === "newsletter") loadNewsletters();
     else if (name === "thank-you") loadThankYou();
+    else if (name === "ticker") loadTicker();
     else if (name === "audit") loadAudit();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
@@ -1649,6 +1650,103 @@
     loadThankYouSent();
     tyFit();
     setTimeout(tyFit, 200); // after webfonts settle
+  }
+
+  // ---- supporters ticker (REQ-003 · TASK-178) ----
+  // Admin-curated list shown scrolling under the site nav. List (Viewer+) + add/toggle/delete
+  // (Editor+, server-enforced). Wired once (tickerWired); the table's actions are delegated.
+  var tickerWired = false;
+  function tickerStatus(msg, cls) {
+    var s = el("tickerStatus");
+    if (!s) return;
+    s.className = "ty-status" + (cls ? " " + cls : "");
+    s.textContent = msg || "";
+  }
+  function tickerTable(rows, canWrite) {
+    if (!rows.length) return '<p class="admin-empty">No supporters yet. Add one above.</p>';
+    var body = rows
+      .map(function (r) {
+        var state = r.active
+          ? '<span class="ty-pill ty-pill-ready">Showing</span>'
+          : '<span class="ty-pill ty-pill-blocked">Hidden</span>';
+        var actions = canWrite
+          ? '<button class="admin-link" type="button" data-ticker-toggle="' + r.id + '" data-active="' + (r.active ? "1" : "0") + '">' +
+            (r.active ? "Hide" : "Show") + "</button>" +
+            ' · <button class="admin-link ty-del" type="button" data-ticker-delete="' + r.id + '" data-ticker-name="' + H.escapeHtml(r.name) + '">Delete</button>'
+          : "";
+        return "<tr><td>" + H.escapeHtml(r.name) + "</td><td>" + state + "</td><td>" + actions + "</td></tr>";
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>Supporter</th><th>Status</th><th></th></tr></thead><tbody>' +
+      body +
+      "</tbody></table>"
+    );
+  }
+  function loadTicker() {
+    tickerWire();
+    var canWrite = H.roleCan(currentRole, "editor");
+    el("tickerTable").innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/ticker")
+      .then(j)
+      .then(function (d) {
+        var rows = d.results || [];
+        el("tickerTable").innerHTML = tickerTable(rows, canWrite);
+        var showing = rows.filter(function (r) { return r.active; }).length;
+        el("tickerCount").textContent = rows.length + " total · " + showing + " showing";
+      })
+      .catch(function () {
+        el("tickerTable").innerHTML = '<p class="admin-empty">Could not load supporters.</p>';
+      });
+  }
+  function tickerWire() {
+    if (tickerWired) return;
+    tickerWired = true;
+    var canWrite = H.roleCan(currentRole, "editor");
+    el("tickerAdd").hidden = !canWrite;
+    el("tickerForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var name = (el("tickerName").value || "").trim();
+      if (!name) return;
+      tickerStatus("Adding…");
+      authFetch("/api/admin/ticker", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name }),
+      })
+        .then(function (res) {
+          if (!res.ok) throw new Error("add failed");
+          el("tickerName").value = "";
+          tickerStatus("Added.", "is-ok");
+          loadTicker();
+        })
+        .catch(function () {
+          tickerStatus("Could not add that supporter.", "is-error");
+        });
+    });
+    el("tickerTable").addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var toggle = t.closest("[data-ticker-toggle]");
+      if (toggle) {
+        var makeActive = toggle.getAttribute("data-active") === "0";
+        authFetch("/api/admin/ticker/" + toggle.getAttribute("data-ticker-toggle"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ active: makeActive }),
+        })
+          .then(function (res) { if (res.ok) loadTicker(); })
+          .catch(function () {});
+        return;
+      }
+      var del = t.closest("[data-ticker-delete]");
+      if (del) {
+        if (!window.confirm('Remove "' + (del.getAttribute("data-ticker-name") || "this supporter") + '" from the ticker?')) return;
+        authFetch("/api/admin/ticker/" + del.getAttribute("data-ticker-delete"), { method: "DELETE" })
+          .then(function (res) { if (res.ok) loadTicker(); })
+          .catch(function () {});
+      }
+    });
   }
 
   // ---- boot: restore an in-tab session ----

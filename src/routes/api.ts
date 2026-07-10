@@ -549,7 +549,7 @@ function myStoryThankYouHtml(): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Thank you — Night Before Christmas Campaign</title>
+<title>Thank you | Night Before Christmas Campaign</title>
 <link rel="stylesheet" href="/assets/css/styles.css" />
 </head>
 <body>
@@ -588,7 +588,7 @@ export async function postMyStory(req: Request, res: Response): Promise<Response
   // postRequestAccess). Over-limit responds exactly like an honeypot drop: no insert.
   if (!myStoryLimiter.allow(req.ip ?? "unknown", Date.now())) {
     return isJson
-      ? res.status(429).json({ error: "Too many submissions — please try again later" })
+      ? res.status(429).json({ error: "Too many submissions, please try again later" })
       : res.status(429).type("html").send(
           "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\" /><title>Please try again later</title></head>" +
             "<body><main><h1>Please try again later</h1><p>Too many submissions from this connection. Please try again later.</p></main></body></html>",

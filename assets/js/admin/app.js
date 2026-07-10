@@ -258,7 +258,7 @@
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
         el("donationsInfo").textContent = total
-          ? donationsOffset + 1 + "–" + Math.min(donationsOffset + 25, total) + " of " + total
+          ? donationsOffset + 1 + "-" + Math.min(donationsOffset + 25, total) + " of " + total
           : "";
         el("donationsPrev").disabled = donationsOffset <= 0;
         el("donationsNext").disabled = donationsOffset + 25 >= total;
@@ -910,12 +910,12 @@
       label: "Greeting", icon: "greeting",
       data: { heading: "", lead: "" },
       variants: [
-        { name: "Dear …", hint: "“Dear {{firstName}},” — personalised automatically.", fields: [] },
+        { name: "Dear …", hint: "Personalised automatically as “Dear {{firstName}},”.", fields: [] },
         { name: "With intro", hint: "The greeting plus a short intro paragraph.",
           fields: [{ k: "lead", label: "Intro paragraph", kind: "textarea" }] },
         { name: "With heading", hint: "A heading above the greeting line.",
           fields: [{ k: "heading", label: "Heading" }] },
-        { name: "Casual", hint: "“Hi {{firstName}} 👋” — personalised automatically.", fields: [] },
+        { name: "Casual", hint: "Personalised automatically as “Hi {{firstName}} 👋”.", fields: [] },
       ],
     },
     text: {
@@ -975,7 +975,7 @@
           fields: [{ k: "photoUrl", label: "Photo", kind: "image" }, { k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
         { name: "Avatar centered", hint: "Round avatar above a centred quote.",
           fields: [{ k: "photoUrl", label: "Photo", kind: "image" }, { k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
-        { name: "Big quote", hint: "Large quote with attribution — no photo.",
+        { name: "Big quote", hint: "Large quote with attribution, no photo.",
           fields: [{ k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
         { name: "Tinted card", hint: "Photo and quote inside a tinted card.",
           fields: [{ k: "photoUrl", label: "Photo", kind: "image" }, { k: "name", label: "Name" }, { k: "quote", label: "Quote", kind: "textarea" }, { k: "role", label: "Role" }] },
@@ -1015,7 +1015,7 @@
       variants: [
         { name: "Date badges", hint: "Date badge beside each event.",
           items: { fields: [{ k: "day", label: "Day" }, { k: "month", label: "Month" }, { k: "name", label: "Name" }, { k: "location", label: "Location" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
-        { name: "Simple list", hint: "Date and name inline — no button.",
+        { name: "Simple list", hint: "Date and name inline, no button.",
           items: { fields: [{ k: "day", label: "Day" }, { k: "month", label: "Month" }, { k: "name", label: "Name" }] } },
         { name: "Cards", hint: "Each event in its own card.",
           items: { fields: [{ k: "day", label: "Day" }, { k: "month", label: "Month" }, { k: "name", label: "Name" }, { k: "location", label: "Location" }, { k: "label", label: "Button label" }, { k: "href", label: "Button link" }] } },
@@ -1214,7 +1214,7 @@
     { label: "Elf", url: "https://nbcc.scot/assets/img/nbcc-elf.png" },
     { label: "Red bags handover", url: "https://nbcc.scot/assets/img/home-red-bags-handover.jpg" },
     { label: "Why packing", url: "https://nbcc.scot/assets/img/why-packing.jpg" },
-    { label: "Story — Tygan", url: "https://nbcc.scot/assets/img/story-tygan.jpg" },
+    { label: "Story: Tygan", url: "https://nbcc.scot/assets/img/story-tygan.jpg" },
   ];
 
   // A labelled text input (or textarea) bound to obj[key] (obj is a block's data or a repeater item).
@@ -1401,8 +1401,8 @@
     rows.forEach(function (n) {
       html +=
         "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" + n.status + "</td><td>" +
-        (n.sentAt ? new Date(n.sentAt).toLocaleString() : "—") + "</td><td>" +
-        (n.recipientCount == null ? "—" : n.recipientCount) +
+        (n.sentAt ? new Date(n.sentAt).toLocaleString() : "-") + "</td><td>" +
+        (n.recipientCount == null ? "-" : n.recipientCount) +
         '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button></td></tr>';
     });
     return html + "</tbody></table>";
@@ -1976,7 +1976,7 @@
         btn.disabled = false;
         if (r.ok) {
           status.className = "ty-status is-ok";
-          status.textContent = "Sent and logged — the donor has been emailed this letter.";
+          status.textContent = "Sent and logged: the donor has been emailed this letter.";
           loadThankYouSent();
           loadThankYouEligible();
         } else {

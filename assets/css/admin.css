@@ -322,4 +322,51 @@
 .nl-preview { width: 100%; height: 760px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-sm); }
 .nl-preview-label { margin: 0 0 .5rem; font-family: var(--font-body); font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--slate-soft); }
 .nl-actions { margin: .75rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }
+
+/* Send confirmation dialog — centered scrim + card. */
+.nl-modal-overlay {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 1rem; background: rgba(64, 12, 12, .5);
+}
+.nl-modal {
+  width: 100%; max-width: 420px; background: var(--card); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg); padding: 1.5rem 1.5rem 1.25rem; text-align: center;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .nl-modal { animation: nl-modal-in .18s ease-out; }
+  @keyframes nl-modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+}
+.nl-modal-title { font-family: var(--font-head); font-size: 1.35rem; color: var(--maroon); margin: 0 0 .5rem; }
+.nl-modal-text { font-size: .95rem; color: var(--slate); margin: 0 0 .35rem; line-height: 1.5; }
+.nl-modal-count { font-size: .82rem; color: var(--slate-soft); margin: 0 0 1.1rem; line-height: 1.45; }
+
+/* Inline info affordance + hover/focus tooltip listing the recipient emails. */
+.nl-recipients { position: relative; display: inline-flex; vertical-align: middle; margin-left: .35rem; }
+.nl-info {
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px;
+  color: var(--slate-soft); background: transparent; border: 0; border-radius: 50%; cursor: help; padding: 0;
+}
+.nl-info:hover, .nl-info:focus-visible { color: var(--crimson); background: var(--tan-soft); outline: none; }
+.nl-tooltip {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  width: 260px; max-height: 210px; overflow-y: auto; z-index: 1; text-align: left;
+  background: var(--maroon); color: var(--cream); border-radius: 10px; padding: 10px 12px;
+  box-shadow: var(--shadow); opacity: 0; visibility: hidden; transition: opacity .12s;
+  font-size: .78rem; line-height: 1.5;
+}
+.nl-recipients:hover .nl-tooltip, .nl-recipients:focus-within .nl-tooltip { opacity: 1; visibility: visible; }
+.nl-tooltip-head { display: block; font-weight: 700; color: var(--cream); margin-bottom: 5px; font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; }
+.nl-tooltip-email { display: block; color: var(--cream-90); word-break: break-all; padding: 1px 0; }
+
+.nl-modal-actions { display: flex; gap: .6rem; justify-content: center; }
+.nl-modal-cancel, .nl-modal-confirm {
+  font-family: var(--font-body); font-weight: 600; font-size: .9rem; cursor: pointer;
+  border-radius: 999px; padding: 10px 20px; border: 1.6px solid var(--line); transition: background .15s, color .15s, border-color .15s;
+}
+.nl-modal-cancel { background: var(--card); color: var(--slate); }
+.nl-modal-cancel:hover { border-color: var(--slate-soft); }
+.nl-modal-confirm { background: var(--crimson); color: var(--cream); border-color: var(--crimson); }
+.nl-modal-confirm:hover { background: var(--maroon); border-color: var(--maroon); }
+.nl-modal-confirm:disabled, .nl-modal-cancel:disabled { opacity: .55; cursor: default; }
+.nl-modal-cancel:focus-visible, .nl-modal-confirm:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .ty-foot-legal{text-align:center;font-family:var(--font-body);font-weight:400;font-size:7.5pt;color:var(--cream-82);margin-top:3mm}

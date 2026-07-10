@@ -130,6 +130,25 @@ Then("the newsletter recipient count should be at least {int}", function (min) {
   assert.ok(this.nlBody.recipientCount >= min, `recipientCount ${this.nlBody.recipientCount} < ${min}`);
 });
 
+// The recipient-list preview behind the send-confirmation dialog (admin-only).
+When("I fetch the newsletter recipients", async function () {
+  const r = await authFetch("/api/admin/newsletters/recipients", "GET", undefined, this.token);
+  this.recipStatus = r.status;
+  this.recipBody = r.json;
+});
+
+Then("the newsletter recipients status should be {int}", function (expected) {
+  assert.equal(this.recipStatus, expected);
+});
+
+Then("the newsletter recipients should include {string}", function (email) {
+  assert.ok((this.recipBody.emails || []).includes(email), `expected ${email} in recipients`);
+});
+
+Then("the newsletter recipients should not include {string}", function (email) {
+  assert.ok(!(this.recipBody.emails || []).includes(email), `did not expect ${email} in recipients`);
+});
+
 function signUnsubscribeToken(donorId, secret) {
   const body = String(donorId);
   const sig = createHmac("sha256", secret).update(body).digest("base64url");

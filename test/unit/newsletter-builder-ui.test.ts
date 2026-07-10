@@ -38,6 +38,8 @@ const legacyNewsletter = {
 let newsletterListRows: unknown[] = []; // what GET /api/admin/newsletters (list) returns; per-test
 const savedRequests: { url: string; method: string; body: Record<string, unknown> }[] = [];
 const previewRequests: { body: Record<string, unknown> }[] = [];
+const sendRequests: { url: string }[] = []; // POST /:id/send calls (the actual blast)
+const recipientsFixture = { count: 2, emails: ["ann@bdd.example", "ben@bdd.example"] };
 
 function respond(url: string, init?: { method?: string; body?: string }) {
   const j = (body: unknown, status = 200) => ({
@@ -54,6 +56,13 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (url.includes("/api/admin/newsletters/preview")) {
     previewRequests.push({ body: parsedBody });
     return j({ html: "<html><body>preview</body></html>" });
+  }
+  if (url.includes("/api/admin/newsletters/recipients") && method === "GET") {
+    return j(recipientsFixture);
+  }
+  if (/\/api\/admin\/newsletters\/\d+\/send$/.test(url) && method === "POST") {
+    sendRequests.push({ url });
+    return j({ status: "sent", recipientCount: recipientsFixture.count });
   }
   if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "GET") {
     return j(legacyNewsletter); // the only single-newsletter fixture the tests need
@@ -226,6 +235,60 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect(savedRequests.length).toBe(1);
     expect(savedRequests[0].method).toBe("PUT");
     expect(savedRequests[0].url).toBe("/api/admin/newsletters/41");
+  });
+
+  // Send-confirmation dialog: an Admin opening a saved draft sees the Send button; clicking it opens
+  // a centered confirm dialog that lists the recipients and only sends after "Yes, send".
+  async function openDraftAsAdmin() {
+    loginToken = tokenFor("admin");
+    newsletterListRows = [
+      { id: 41, subject: legacyNewsletter.subject, status: "draft", sentAt: null, recipientCount: null },
+    ];
+    await openNewsletterTab(); // auto-opens id 41; Send button is revealed for an admin on a draft
+    await flush();
+  }
+  const overlay = () => document.querySelector(".nl-modal-overlay");
+
+  it("clicking Send opens a confirmation dialog that lists recipients and does not send yet", async () => {
+    await openDraftAsAdmin();
+    expect((el("newsletterSend") as HTMLElement).hidden).toBe(false);
+
+    el("newsletterSend").click();
+    await flush(); // let the recipients fetch resolve
+
+    const modal = overlay();
+    expect(modal).toBeTruthy();
+    expect(modal!.textContent).toContain("Are you sure you want to send this newsletter?");
+    expect(modal!.querySelector(".nl-modal-count")!.textContent).toContain("2 consenting subscribers");
+    const tip = modal!.querySelector(".nl-tooltip")!;
+    expect(tip.textContent).toContain("ann@bdd.example");
+    expect(tip.textContent).toContain("ben@bdd.example");
+    // Crucially, opening the dialog must NOT send.
+    expect(sendRequests.length).toBe(0);
+  });
+
+  it("Cancel dismisses the dialog without sending", async () => {
+    await openDraftAsAdmin();
+    el("newsletterSend").click();
+    await flush();
+
+    (overlay()!.querySelector(".nl-modal-cancel") as HTMLElement).click();
+    expect(overlay()).toBeNull();
+    expect(sendRequests.length).toBe(0);
+  });
+
+  it("Yes, send posts the send and closes the dialog", async () => {
+    await openDraftAsAdmin();
+    el("newsletterSend").click();
+    await flush();
+
+    (overlay()!.querySelector(".nl-modal-confirm") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    expect(sendRequests.length).toBe(1);
+    expect(sendRequests[0].url).toBe("/api/admin/newsletters/41/send");
+    expect(overlay()).toBeNull(); // dialog closes after the send resolves
   });
 });
 

@@ -131,7 +131,9 @@ function bearerToken(req: Request): string | null {
 
 // Verify the admin session token and enforce the minimum role. On failure it sends the 401/403
 // response and returns null; on success it returns the session claims (mirrors portal's authOrReject).
-function authorizeAdmin(req: Request, res: Response, minRole: string): AdminSessionClaims | null {
+// Exported (admin-management Phase 1, Task 5) so src/routes/admin-users.ts can gate its
+// /api/admin/users* + reset routes on it without duplicating the session-verification logic.
+export function authorizeAdmin(req: Request, res: Response, minRole: string): AdminSessionClaims | null {
   const token = bearerToken(req);
   if (!token) {
     res.status(401).json({ error: "Missing admin session token" });
@@ -163,7 +165,8 @@ function donorId(req: Request, res: Response): number | null {
 }
 
 // The admin's audit actor label, so a donor-record change records WHICH admin acted on their behalf.
-const actorOf = (claims: AdminSessionClaims): string => `admin:${claims.email}`;
+// Exported (Task 5) so src/routes/admin-users.ts records the same actor shape on its audited writes.
+export const actorOf = (claims: AdminSessionClaims): string => `admin:${claims.email}`;
 
 // Parse and validate the newsletter id in the path; sends a 400 and returns null when it is not a
 // positive integer (mirrors donorId above).

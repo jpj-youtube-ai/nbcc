@@ -53,6 +53,27 @@ export async function getManagedUser(id: number): Promise<ManagedUser | null> {
   return row ?? null;
 }
 
+// A single managed user by email, or null — backs the public /api/admin/forgot lookup (Task 5),
+// which needs the live `status` (to decide whether to send a reset email) without ever touching
+// password_hash. Mirrors getManagedUser; never selects the hash.
+export async function getManagedUserByEmail(email: string): Promise<ManagedUser | null> {
+  const row = (
+    await pool.query<ManagedUser>(`SELECT ${MANAGED_USER_COLUMNS} FROM users WHERE email = $1`, [email])
+  ).rows[0];
+  return row ?? null;
+}
+
+// The user's current password_hash, for computing/verifying an invite or reset token's `bind`
+// (Task 2/5) — NEVER returned from an API response, only compared server-side. Returns null both
+// when the user doesn't exist and when they have no password set yet (an invited user); either way
+// the caller treats it as the empty-string bind, matching how inviteUser seeds bind="".
+export async function getPasswordHash(id: number): Promise<string | null> {
+  const row = (
+    await pool.query<{ password_hash: string | null }>(`SELECT password_hash FROM users WHERE id = $1`, [id])
+  ).rows[0];
+  return row?.password_hash ?? null;
+}
+
 // Invite a new admin/staff user (Task 5's POST /api/admin/users). Inserts status='invited',
 // password_hash=NULL (no password until the invite is accepted via set-password), invited_at=now().
 // Audited admin_user.invited in the same transaction (writeWithAudit). A duplicate email hits the

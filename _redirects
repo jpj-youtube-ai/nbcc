@@ -21,6 +21,13 @@
 /my-story      /my-story.html    200
 /hub           /hub.html         200
 
+# Admin invite/reset accept links (admin-management Phase 1, Task 7). Both are entry
+# URLs onto the SAME file: the token's purpose (invite vs reset) differs, the accept
+# flow (set a password) is identical, so set-password.html is deliberately not given
+# a single canonical clean URL like the other pages below.
+/invite        /set-password.html  200
+/reset         /set-password.html  200
+
 # Canonicalise the raw .html paths onto the clean URL so each page has exactly
 # one address. The `!` force flag is required because the .html files physically
 # exist and would otherwise be served directly instead of redirecting.

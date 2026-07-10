@@ -36,8 +36,16 @@ jobs:
       - name: Build & push image (shared repo, tagged by SHA = build once)
         run: |
           IMAGE="${{ steps.ecr.outputs.registry }}/${PROJECT}:${GITHUB_SHA}"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
+          # Idempotent by design: the SHA tag is immutable, so if this commit's image is
+          # already in ECR (e.g. a re-run after a *later* step failed — a raced infra apply,
+          # a flaky migration), reuse it instead of failing on "tag already exists". A fresh
+          # SHA still builds normally; only an existing tag short-circuits.
+          if aws ecr describe-images --repository-name "${PROJECT}" --image-ids imageTag="${GITHUB_SHA}" >/dev/null 2>&1; then
+            echo "Image ${GITHUB_SHA} already present in ECR — reusing (build once by SHA)."
+          else
+            docker build -t "$IMAGE" .
+            docker push "$IMAGE"
+          fi
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
 
       - uses: hashicorp/setup-terraform@v3

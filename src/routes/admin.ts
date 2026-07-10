@@ -247,6 +247,15 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
   return res.json({ html: renderNewsletter(parsed.data.bodyJson, { firstName: "Jane" }) });
 }
 
+// GET /api/admin/newsletters/recipients — Admin only. The deduped list of consenting donor emails a
+// send would go to, for the send-confirmation dialog. Admin-gated (matches send) because it exposes
+// donor PII; returns the same recipient set the send loop uses, so the confirmation can't drift.
+export async function getAdminNewsletterRecipients(req: Request, res: Response): Promise<Response | void> {
+  if (!authorizeAdmin(req, res, "admin")) return;
+  const recipients = await listNewsletterRecipients();
+  return res.json({ count: recipients.length, emails: recipients.map((r) => r.email) });
+}
+
 // PUT /api/admin/newsletters/:id — edit a draft (Editor+). A sent newsletter is immutable → 409.
 export async function putAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
   if (!authorizeAdmin(req, res, "editor")) return;
@@ -1240,6 +1249,8 @@ adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);
 adminRouter.post("/api/admin/newsletters/preview", postAdminNewsletterPreview);
+// /recipients must precede /:id so the literal path isn't captured as an :id param.
+adminRouter.get("/api/admin/newsletters/recipients", getAdminNewsletterRecipients);
 adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);

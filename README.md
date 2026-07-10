@@ -1333,7 +1333,12 @@ newsletter's full `body_html` (+ `body_json` for the builder to hydrate), `POST
 /api/admin/newsletters` creates a draft (`{ subject, bodyJson }`, or legacy `{ subject, bodyHtml }`),
 `PUT /api/admin/newsletters/:id` edits a draft — a `sent` newsletter is immutable (**409**), and
 `POST /api/admin/newsletters/preview` (Editor+, stateless, no DB) renders a posted `bodyJson`
-document to HTML for the live preview. Sending is **Admin only**: `POST
+document to HTML for the live preview. Sending is **Admin only** and gated behind a **confirmation
+dialog**: clicking _Send to subscribers_ opens a centered "Are you sure you want to send this
+newsletter?" modal with an **info tooltip listing the exact recipient emails** — fetched from
+`GET /api/admin/newsletters/recipients` (**Admin only**, since it exposes donor PII; returns
+`{ count, emails }` from the same `listNewsletterRecipients` the send uses). Only pressing _Yes,
+send_ fires the send; Cancel / Esc / backdrop dismiss it. `POST
 /api/admin/newsletters/:id/send` reads every consenting donor (`listNewsletterRecipients`, deduped
 on `email_consent=true`) and sends **one individual email per recipient** via `sendNewsletter`
 (`src/clients/email.ts`). For a block-doc newsletter, each recipient's email is **re-rendered**

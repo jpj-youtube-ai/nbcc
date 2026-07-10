@@ -66,3 +66,19 @@ Feature: Admin newsletter (REQ-069)
   Scenario: a malformed newsletter image id is rejected, not crashed on
     When I fetch a malformed newsletter image id
     Then the image fetch status should be 404
+
+  Scenario: an Admin previews the recipient list that a send would reach
+    Given a newsletter admin "recip.admin.newsletter.bdd@example.com" with role "admin" and password "pw-recip"
+    And a consenting donor with email "yes1.recip.newsletter.bdd@example.com"
+    And a consenting donor with email "yes2.recip.newsletter.bdd@example.com"
+    And a non-consenting donor with email "no.recip.newsletter.bdd@example.com"
+    When I fetch the newsletter recipients
+    Then the newsletter recipients status should be 200
+    And the newsletter recipients should include "yes1.recip.newsletter.bdd@example.com"
+    And the newsletter recipients should include "yes2.recip.newsletter.bdd@example.com"
+    And the newsletter recipients should not include "no.recip.newsletter.bdd@example.com"
+
+  Scenario: an Editor cannot see the recipient list (donor PII, Admin only)
+    Given a newsletter admin "recip.editor.newsletter.bdd@example.com" with role "editor" and password "pw-re"
+    When I fetch the newsletter recipients
+    Then the newsletter recipients status should be 403

@@ -1491,24 +1491,96 @@
     el("newsletterSend").addEventListener("click", function () {
       var id = el("newsletterId").value;
       if (!id) return;
-      var sendBtn = el("newsletterSend");
-      sendBtn.disabled = true;
-      el("newsletterMsg").textContent = "Sending…";
-      authFetch("/api/admin/newsletters/" + id + "/send", { method: "POST" })
-        .then(function (res) {
-          if (!res.ok) throw new Error("send failed: " + res.status);
-          return res.json();
-        })
-        .then(function (r) {
-          el("newsletterMsg").textContent = "Sent to " + r.recipientCount + " subscriber(s).";
-          loadNewsletters();
-          loadNewsletterInto(id);
-        })
-        .catch(function () {
-          sendBtn.disabled = false;
-          el("newsletterMsg").textContent = "Send failed (already sent, or not permitted).";
-        });
+      nlShowSendConfirm(id, el("newsletterSend"));
     });
+  }
+
+  // The actual send POST, run only after the admin confirms in the dialog.
+  function nlDoSend(id, sendBtn, closeModal) {
+    sendBtn.disabled = true;
+    el("newsletterMsg").textContent = "Sending…";
+    authFetch("/api/admin/newsletters/" + id + "/send", { method: "POST" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("send failed: " + res.status);
+        return res.json();
+      })
+      .then(function (r) {
+        el("newsletterMsg").textContent = "Sent to " + r.recipientCount + " subscriber(s).";
+        loadNewsletters();
+        loadNewsletterInto(id);
+      })
+      .catch(function () {
+        sendBtn.disabled = false;
+        el("newsletterMsg").textContent = "Send failed (already sent, or not permitted).";
+      })
+      .finally(function () { if (closeModal) closeModal(); });
+  }
+
+  // Centered confirmation dialog for sending. Shows the recipient count and an info tooltip listing
+  // the consenting donor emails the send will reach (fetched from the admin-only recipients endpoint,
+  // the same list the server sends to). Cancel / Esc / backdrop click dismiss without sending; "Yes,
+  // send" runs nlDoSend. Focus moves into the dialog on open and returns to the Send button on close.
+  function nlShowSendConfirm(id, sendBtn) {
+    var prevFocus = doc.activeElement;
+    var overlay = doc.createElement("div");
+    overlay.className = "nl-modal-overlay";
+    overlay.innerHTML =
+      '<div class="nl-modal" role="dialog" aria-modal="true" aria-labelledby="nlModalTitle">' +
+      '<h3 class="nl-modal-title" id="nlModalTitle">Send this newsletter?</h3>' +
+      '<p class="nl-modal-text">Are you sure you want to send this newsletter?' +
+      '<span class="nl-recipients"><button type="button" class="nl-info" aria-label="Who will receive this?">' +
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+      '</button><span class="nl-tooltip" role="tooltip"><span class="nl-tooltip-head">Loading recipients…</span></span></span></p>' +
+      '<p class="nl-modal-count" aria-live="polite">Loading recipient list…</p>' +
+      '<div class="nl-modal-actions">' +
+      '<button type="button" class="nl-modal-cancel">Cancel</button>' +
+      '<button type="button" class="nl-modal-confirm">Yes, send</button>' +
+      "</div></div>";
+    doc.body.appendChild(overlay);
+
+    var confirmBtn = overlay.querySelector(".nl-modal-confirm");
+    var cancelBtn = overlay.querySelector(".nl-modal-cancel");
+    var tooltip = overlay.querySelector(".nl-tooltip");
+    var countEl = overlay.querySelector(".nl-modal-count");
+    var closed = false;
+
+    function close() {
+      if (closed) return;
+      closed = true;
+      doc.removeEventListener("keydown", onKey);
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (prevFocus && prevFocus.focus) prevFocus.focus();
+    }
+    function onKey(e) {
+      if (e.key === "Escape") { e.preventDefault(); close(); }
+    }
+    doc.addEventListener("keydown", onKey);
+    overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) close(); });
+    cancelBtn.addEventListener("click", close);
+    confirmBtn.addEventListener("click", function () {
+      confirmBtn.disabled = true;
+      cancelBtn.disabled = true;
+      confirmBtn.textContent = "Sending…";
+      nlDoSend(id, sendBtn, close);
+    });
+    confirmBtn.focus();
+
+    // Populate the recipient count + email list. Send stays available even if this lookup fails —
+    // the server recomputes the authoritative list at send time.
+    authFetch("/api/admin/newsletters/recipients")
+      .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
+      .then(function (r) {
+        var emails = r.emails || [];
+        var n = typeof r.count === "number" ? r.count : emails.length;
+        countEl.textContent = "This will be sent to " + n + " consenting subscriber" + (n === 1 ? "" : "s") + ".";
+        var list = emails.map(function (e) { return '<span class="nl-tooltip-email">' + H.escapeHtml(e) + "</span>"; }).join("");
+        tooltip.innerHTML = '<span class="nl-tooltip-head">Recipients (' + n + ')</span>' +
+          (list || '<span class="nl-tooltip-email">No consenting subscribers.</span>');
+      })
+      .catch(function () {
+        countEl.textContent = "Recipient count unavailable — the send will still reach all consenting subscribers.";
+        tooltip.innerHTML = '<span class="nl-tooltip-head">Could not load the recipient list.</span>';
+      });
   }
 
   // ---- donor search results (with a View action) ----

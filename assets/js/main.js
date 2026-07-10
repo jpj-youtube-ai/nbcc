@@ -1524,7 +1524,10 @@
         })
         .then(function (res) {
           if (res.ok) {
-            setStatus("Thank you, your story becomes part of ours.", "is-success");
+            setStatus(
+              "Thank you, your story is safely with us. We're honoured you shared it, and it is now part of ours. With love, the Elves at NBCC ❤️",
+              "is-success",
+            );
             form.reset();
             if (revealPublic) revealPublic.hidden = true;
             if (revealProfessional) revealProfessional.hidden = true;

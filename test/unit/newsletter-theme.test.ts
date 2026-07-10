@@ -18,6 +18,15 @@ describe("newsletter theme", () => {
     expect(html).toContain("info@nbcc.scot");
     expect(html).toContain("#F8F5EE"); // cream card
   });
+  it("footer mirrors the thank-you letter: circular contact icons around the text", () => {
+    const html = renderFrame("<p>x</p>");
+    // inline SVGs (phone/envelope/social) render in clients that support them and
+    // degrade to the plain contact text where they're stripped.
+    expect((html.match(/<svg/g) || []).length).toBeGreaterThanOrEqual(3);
+    expect(html).toContain("01292 811 015");
+    expect(html).toContain("nbcc.scot");
+    expect(html).toContain("border-radius:50%"); // the circular icon chips
+  });
   it("brandButton renders an anchor with the label and href", () => {
     const b = brandButton("Donate", "https://nbcc.scot/donate", "primary");
     expect(b).toContain("https://nbcc.scot/donate");

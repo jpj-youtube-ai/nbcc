@@ -1311,9 +1311,17 @@ authoring and sending an HTML newsletter to consenting donors, over the `newslet
 row per newsletter, `status` `draft`|`sent`). The tab is a two-pane **block builder**: a left rail
 palette to add typed content blocks — masthead, greeting, text, heading, image, story, spotlight,
 impact stats, ways to help, events, donation CTA, button and divider — each block offering **4
-style variants**, plus per-block fields, reordering, duplication and deletion; the right rail shows
-a **live preview** that is the exact HTML the email will render, recomputed on every edit
-(debounced) via `POST /api/admin/newsletters/preview`. A newsletter is stored as a JSON **block
+named style variants** (a labelled segmented picker with a one-line description, e.g. masthead
+_Centered · Logo + title · Hero banner · Slim strip_), reordering, duplication and deletion. The
+field editor is **variant-aware**: it shows only the fields the chosen style actually renders
+(progressive disclosure), so a value you enter always appears — the per-style field map in
+`assets/js/admin/app.js` (`nlBlockDefs[type].variants[].fields`) is the single source of truth kept
+in lock-step with the server renderer. The right rail shows a **live preview** that is the exact
+HTML the email will render, recomputed on every edit (debounced) via
+`POST /api/admin/newsletters/preview`. Both the newsletter and thank-you email frames share the
+maroon contact/legal footer bar in `src/newsletter/theme.ts` / `src/thank-you/letter.ts`, with
+circular phone/envelope/social icon chips that degrade to plain contact text where a mail client
+strips inline SVG. A newsletter is stored as a JSON **block
 document** (`{ blocks: [{ type, variant, data }, …] }`) in the `newsletters.body_json` column
 (nullable — legacy raw-HTML drafts from before TASK-168 keep `body_json` `NULL` and hydrate into a
 single `rawHtml` block in the builder). One pure renderer, `renderNewsletter` in

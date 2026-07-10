@@ -95,11 +95,14 @@ async function openNewsletterTab() {
 function clickPalette(label: string) {
   const btn = Array.prototype.find.call(
     el("nlPalette").querySelectorAll("button"),
-    (b: HTMLButtonElement) => b.textContent === "+ " + label,
+    (b: HTMLButtonElement) => (b.textContent || "").trim() === label,
   ) as HTMLButtonElement;
   expect(btn).toBeTruthy();
   btn.click();
 }
+
+// The canvas renders an empty-state placeholder when there are no blocks; count real block cards.
+const blockCount = () => el("nlCanvas").querySelectorAll(".nl-block").length;
 
 describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
   beforeEach(() => {
@@ -121,17 +124,18 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     await signIn();
     // The palette is built at script-eval time, independent of tab selection.
     expect(el("nlPalette").childElementCount).toBeGreaterThan(0);
-    expect(el("nlPalette").textContent).toContain("+ Text");
+    expect(el("nlPalette").textContent).toContain("Text");
   });
 
   it("New newsletter starts an empty block doc and the palette adds a block to the canvas", async () => {
     await openNewsletterTab();
     (el("newsletterNew") as HTMLElement).click();
-    expect(el("nlCanvas").childElementCount).toBe(0);
+    expect(blockCount()).toBe(0); // no block cards yet…
+    expect(el("nlCanvas").textContent).toContain("No blocks yet"); // …just the empty-state prompt
 
     clickPalette("Text");
 
-    expect(el("nlCanvas").childElementCount).toBe(1);
+    expect(blockCount()).toBe(1);
     expect(el("nlCanvas").textContent).toContain("Text");
   });
 

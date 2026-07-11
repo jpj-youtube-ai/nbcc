@@ -1045,7 +1045,9 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/admin/forgot` | **implemented** | admin-management Phase 1 (public, rate-limited; self-service "forgot password", always `200` — no account enumeration) |
 | `POST /api/admin/set-password` | **implemented** | admin-management Phase 1 (public, rate-limited; accepts an invite or reset token + a new password) |
 | `PATCH /api/admin/users/:id/permissions` | **implemented** | admin-management Phase 2 (TASK-186; `team:edit` only; sets a person's complete 13-section view/edit matrix, audited `admin_user.permissions_changed`; `409 {error:"last_admin"}` if it would leave zero users with effective `team:edit`) |
-| `GET /api/admin/me` | **implemented** | admin-management Phase 2 (TASK-186; any valid, non-disabled session; returns the caller's own effective permissions for nav filtering + write-control gating client-side) |
+| `GET /api/admin/me` | **implemented** | admin-management Phase 2 (TASK-186; any valid, non-disabled session; returns the caller's own effective permissions for nav filtering + write-control gating client-side); extended in Phase 4 (TASK-197) to also return `fullName` |
+| `PATCH /api/admin/me` | **implemented** | admin-management Phase 4 (TASK-197; any valid, non-disabled session; changes the CALLER's own `fullName` only, always via `claims.sub`; audited `admin_user.name_changed`) |
+| `POST /api/admin/me/password` | **implemented** | admin-management Phase 4 (TASK-197; any valid, non-disabled session, rate-limited; changes the CALLER's own password, requires the correct current password, `400 {error:"wrong_password"}` on mismatch; audited `admin_user.password_changed`) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1734,6 +1736,65 @@ login, not a replacement for it.
   `if (p.thankYou …)` pattern, discriminated the same way) before this reaches production — tracked as
   a follow-up, not blocking this PR because staging and local dev never depend on it (`devCode`
   covers both, per the stub-safety note above).
+
+**My account: self-service name + password (admin-management Phase 4, TASK-197).** Any signed-in
+admin, of any role, can change their own display name and password from a **My account** panel —
+no `team:edit` or any other section permission needed, since a person managing their own account
+isn't managing the team.
+
+- **Reaching it.** A **My account** button sits in the topbar next to the signed-in email/sign-out
+  (`#accountBtn`, `admin.html`), opening `#view-account`. This view is deliberately **not** part of
+  the permission-filtered section nav (it has no `data-view` entry and isn't one of the 13 sections
+  in `src/admin/permissions.ts`) — every signed-in user reaches it the same way, regardless of their
+  matrix.
+- **Endpoints (`src/routes/admin-users.ts`), gated by `authorizeAny` (a valid, non-disabled session;
+  no section/level check) and always acting on `claims.sub` — never an id from the request body or
+  path, so a caller can only ever change their OWN name/password here:
+  - `GET /api/admin/me` now also returns `fullName` (alongside the existing `email` + `permissions`
+    from Phase 2), read via the same `getManagedUser` lookup the Team table uses.
+  - `PATCH /api/admin/me` `{ fullName }` (1-120 chars, `meNameSchema`) updates the caller's
+    `full_name`; audited `admin_user.name_changed`.
+  - `POST /api/admin/me/password` `{ currentPassword, newPassword }` (`newPassword` 10-200 chars,
+    `mePasswordSchema`, matching the invite/reset minimum) loads the caller's own `password_hash`
+    server-side and verifies `currentPassword` against it (`verifyPassword`) — a mismatch is
+    `400 {error:"wrong_password"}`, no write. On success the new password is hashed
+    (`hashPassword`) and `status` is left untouched (unlike an invite/reset accept, a self-service
+    change is never an activation event). Audited `admin_user.password_changed`. Rate-limited per
+    caller and per IP (`createRateLimiter`, mirroring `postAdminForgot`'s dual-limiter shape) so
+    repeated wrong guesses can't brute-force the current password.
+- **Email is not self-editable here** — it's both the login identity and the audit actor label
+  (`actorOf`), so only an Admin can change it, via the Team tab's existing user-management flow.
+- **DB helpers (`src/db/admin-users.ts`).** `setOwnName` / `setOwnPassword` are audited single-column
+  writes (`writeWithAudit`) that mirror `setUserRole`/`setUserStatus`'s shape but never touch
+  role/status/permissions and never run the anti-lockout guard (a name or password change can't
+  orphan the admin team).
+- **UI (`admin.html` `#view-account`, `assets/js/admin/app.js`).** The email field is read-only; a
+  name form (prefilled from `GET /api/admin/me`) saves via `PATCH /api/admin/me` and, on success,
+  also updates the topbar's displayed name; a password form (current + new + confirm) checks the
+  new/confirm fields match and are 10+ characters client-side before ever calling the API. Both are
+  **honest-save**: a status message only shows on a genuine `200`; a `400 {error:"wrong_password"}`
+  shows an inline "current password is incorrect" rather than a generic failure. Every interpolated
+  value is HTML-escaped; no passwords are ever logged.
+- Proven by `test/unit/admin-users-routes.test.ts` (`/me` returns `fullName`; `PATCH /me` changes
+  only the caller's own name and ignores any `id` in the body; a password change with the right
+  current password succeeds and the wrong one is rejected with no write; a disabled/invalid session
+  is `401`) and end to end by `features/admin-account.feature` (`@admin @db`): changing your own
+  name; changing your own password with the correct current password (then logging in with the new
+  one); a wrong current password rejected `400`; a name and a password change each landing in the
+  audit log as `admin_user.name_changed` / `admin_user.password_changed`.
+
+**Audit visibility for admin-user events (admin-management Phase 4, TASK-197).** No new plumbing was
+needed: every `admin_user.*` action from Phases 1-4 — `invited`, `role_changed`, `status_changed`,
+`permissions_changed`, `removed`, `activated`, `password_reset`, `name_changed`,
+`password_changed` — is already written to `audit_log` (`entity: "user"`) in the same transaction as
+its DB write via `writeWithAudit`, and the existing **Audit** tab (`GET /api/admin/audit`,
+`listAuditLog` in `src/db/admin.ts`, `loadAudit` in `assets/js/admin/app.js`) lists every
+`audit_log` row newest-first with no entity filter applied by default — so admin-user events already
+surface there, interleaved with donor/donation/declaration events, identifiable by their `Action`
+column (`admin_user.*`) and `Entity` column (`user <id>`). `listAuditLog` already supports an
+`entity`/`entityId` query-string filter (`GET /api/admin/audit?entity=user`) for narrowing the list
+to just user-management events if needed; the UI doesn't expose a filter control for it today, left
+as-is since the flat list was confirmed usable without one.
 
 **`POST /api/contact` now stores, not forwards (2026-07-10 contact-inbox spec).** The public enquiry
 endpoint (REQ-030) still validates `{ firstName, lastName, email, message }` zod-first

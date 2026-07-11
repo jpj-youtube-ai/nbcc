@@ -25,9 +25,11 @@ Feature: Admin newsletter (REQ-069)
     When I send that newsletter
     Then the newsletter response status should be 409
 
-  Scenario: an Editor cannot send
-    Given a newsletter admin "editor2.newsletter.bdd@example.com" with role "editor" and password "pw-e2"
+  Scenario: a Viewer cannot send (newsletter is Editor+; Admin creates, Viewer is refused)
+    Given a newsletter admin "sendadmin2.newsletter.bdd@example.com" with role "admin" and password "pw-sa2"
     When I create a newsletter with subject "Nope" and body "<p>x</p>"
+    Then the newsletter response status should be 201
+    Given a newsletter admin "sendviewer2.newsletter.bdd@example.com" with role "viewer" and password "pw-sv2"
     And I send that newsletter
     Then the newsletter response status should be 403
 
@@ -78,7 +80,7 @@ Feature: Admin newsletter (REQ-069)
     And the newsletter recipients should include "yes2.recip.newsletter.bdd@example.com"
     And the newsletter recipients should not include "no.recip.newsletter.bdd@example.com"
 
-  Scenario: an Editor cannot see the recipient list (donor PII, Admin only)
-    Given a newsletter admin "recip.editor.newsletter.bdd@example.com" with role "editor" and password "pw-re"
+  Scenario: a Viewer cannot see the recipient list (newsletter:edit gates the donor PII)
+    Given a newsletter admin "recip.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-rv"
     When I fetch the newsletter recipients
     Then the newsletter recipients status should be 403

@@ -27,6 +27,14 @@ describe("newsletter theme", () => {
     expect(html).toContain("nbcc.scot");
     expect(html).toContain("border-radius:50%"); // the circular icon chips
   });
+  it("footer contacts are cream-coloured anchors so clients don't auto-link them blue", () => {
+    const html = renderFrame("<p>x</p>");
+    // Each contact is an explicit <a> with an inline cream colour — pre-empts the phone/email/URL
+    // auto-linkification that would otherwise render them as default blue links.
+    expect(html).toContain('<a href="tel:+441292811015" style="color:#F8F5EE;text-decoration:none">01292 811 015</a>');
+    expect(html).toContain('<a href="mailto:info@nbcc.scot" style="color:#F8F5EE;text-decoration:none">info@nbcc.scot</a>');
+    expect(html).toContain('<a href="https://nbcc.scot" style="color:#F8F5EE;text-decoration:none">nbcc.scot</a>');
+  });
   it("brandButton renders an anchor with the label and href", () => {
     const b = brandButton("Donate", "https://nbcc.scot/donate", "primary");
     expect(b).toContain("https://nbcc.scot/donate");

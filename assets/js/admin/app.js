@@ -107,6 +107,9 @@
     function proceed(perms) {
       myPermissions = perms;
       applyNavFiltering();
+      // The newsletter palette is built at script-eval time (before permissions are known); re-render
+      // it now so a user without newsletter:edit sees the read-only note, not the add-block buttons.
+      nlRenderPalette();
       selectView("overview");
       loadOverview();
     }
@@ -1535,10 +1538,27 @@
   }
 
   var nlDoc = { blocks: [] };
+  var nlSent = false; // the open newsletter has been sent → its blocks are read-only
+
+  // Read mode: no newsletter:edit permission, or an already-sent newsletter. In read mode the builder is
+  // view-only — no adding, removing, reordering or editing of components.
+  function nlReadOnly() {
+    return !canEdit("newsletter") || nlSent;
+  }
 
   function nlRenderPalette() {
     var host = el("nlPalette");
+    if (!host) return;
     host.innerHTML = "";
+    if (nlReadOnly()) {
+      var note = doc.createElement("p");
+      note.className = "nl-readonly-note";
+      note.textContent = nlSent
+        ? "This newsletter has been sent — it is read-only."
+        : "You have read-only access — you cannot add or edit blocks.";
+      host.appendChild(note);
+      return;
+    }
     Object.keys(nlBlockDefs).forEach(function (type) {
       var def = nlBlockDefs[type];
       var b = doc.createElement("button");
@@ -1553,6 +1573,7 @@
   }
 
   function nlAddBlock(type) {
+    if (nlReadOnly()) return;
     nlDoc.blocks.push({ type: type, variant: 0, data: JSON.parse(JSON.stringify(nlBlockDefs[type].data)) });
     nlRenderCanvas();
     nlSchedulePreview();
@@ -1574,12 +1595,15 @@
   function nlRenderCanvas() {
     var host = el("nlCanvas");
     host.innerHTML = "";
+    var readOnly = nlReadOnly();
     if (nlDoc.blocks.length === 0) {
       var empty = doc.createElement("li");
       empty.className = "nl-empty";
-      empty.innerHTML = '<div class="nl-empty-ic">' + nlIcon("plus") + "</div>" +
-        "<p><strong>No blocks yet</strong></p>" +
-        "<p>Add a block from the palette to start building your newsletter.</p>";
+      empty.innerHTML = readOnly
+        ? "<p><strong>No blocks</strong></p><p>This newsletter has no content blocks.</p>"
+        : '<div class="nl-empty-ic">' + nlIcon("plus") + "</div>" +
+          "<p><strong>No blocks yet</strong></p>" +
+          "<p>Add a block from the palette to start building your newsletter.</p>";
       host.appendChild(empty);
       return;
     }
@@ -1593,16 +1617,20 @@
       head.innerHTML =
         '<span class="nl-block-ic">' + nlIcon(def.icon) + "</span>" +
         '<span class="nl-block-title">' + def.label + "</span>";
-      var ctrls = doc.createElement("span");
-      ctrls.className = "nl-block-ctrls";
-      ctrls.appendChild(nlCtrlBtn("up", "Move up", i === 0, function () { nlMove(i, -1); }));
-      ctrls.appendChild(nlCtrlBtn("down", "Move down", i === nlDoc.blocks.length - 1, function () { nlMove(i, 1); }));
-      ctrls.appendChild(nlCtrlBtn("dup", "Duplicate", false, function () { nlDup(i); }));
-      ctrls.appendChild(nlCtrlBtn("del", "Delete", false, function () { nlDoc.blocks.splice(i, 1); nlRenderCanvas(); nlSchedulePreview(); }));
-      head.appendChild(ctrls);
+      // In read mode the mutation controls (move / duplicate / delete) are omitted entirely.
+      if (!readOnly) {
+        var ctrls = doc.createElement("span");
+        ctrls.className = "nl-block-ctrls";
+        ctrls.appendChild(nlCtrlBtn("up", "Move up", i === 0, function () { nlMove(i, -1); }));
+        ctrls.appendChild(nlCtrlBtn("down", "Move down", i === nlDoc.blocks.length - 1, function () { nlMove(i, 1); }));
+        ctrls.appendChild(nlCtrlBtn("dup", "Duplicate", false, function () { nlDup(i); }));
+        ctrls.appendChild(nlCtrlBtn("del", "Delete", false, function () { nlDoc.blocks.splice(i, 1); nlRenderCanvas(); nlSchedulePreview(); }));
+        head.appendChild(ctrls);
+      }
       li.appendChild(head);
 
-      // Named style picker (segmented control) — replaces the meaningless "Style 1..4".
+      // Named style picker (segmented control) — replaces the meaningless "Style 1..4". Disabled in
+      // read mode (switching style is an edit), but still shows which style is active.
       var variants = nlVariants(block);
       if (variants.length > 1) {
         var seg = doc.createElement("div");
@@ -1615,7 +1643,8 @@
           vb.className = "admin-seg" + (block.variant === v ? " is-active" : "");
           vb.textContent = vdef.name;
           vb.setAttribute("aria-pressed", String(block.variant === v));
-          vb.addEventListener("click", function () { block.variant = v; nlRenderCanvas(); nlSchedulePreview(); });
+          if (readOnly) vb.disabled = true;
+          else vb.addEventListener("click", function () { block.variant = v; nlRenderCanvas(); nlSchedulePreview(); });
           seg.appendChild(vb);
         });
         li.appendChild(seg);
@@ -1671,7 +1700,8 @@
     if (opts.multiline) input.rows = 3;
     else if (opts.type) input.type = opts.type;
     input.value = obj[key] != null ? obj[key] : "";
-    input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
+    if (nlReadOnly()) input.disabled = true;
+    else input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
     wrap.appendChild(input);
     if (opts.hint) {
       var h = doc.createElement("span");
@@ -1685,6 +1715,7 @@
   // An image field: URL input + "NBCC library" quick-pick + Upload (POSTs base64 to the endpoint).
   function nlImageField(host, block, key, label) {
     nlText(host, block.data, key, label, { type: "url", hint: "Paste a URL, choose from the NBCC library, or upload." });
+    if (nlReadOnly()) return; // read mode: the disabled URL field is shown, but no library/upload tools
     var row = doc.createElement("div");
     row.className = "nl-img-tools";
 
@@ -1745,6 +1776,7 @@
       note.textContent = spec.note;
       host.appendChild(note);
     }
+    var readOnly = nlReadOnly();
     block.data.items.forEach(function (item, idx) {
       var fs = doc.createElement("fieldset");
       fs.className = "nl-item";
@@ -1754,14 +1786,17 @@
       fields.forEach(function (f) {
         nlText(fs, item, f.k, f.label, { hint: f.hint });
       });
-      var rm = doc.createElement("button");
-      rm.type = "button";
-      rm.className = "nl-item-remove";
-      rm.textContent = "Remove item";
-      rm.addEventListener("click", function () { block.data.items.splice(idx, 1); nlRenderCanvas(); nlSchedulePreview(); });
-      fs.appendChild(rm);
+      if (!readOnly) {
+        var rm = doc.createElement("button");
+        rm.type = "button";
+        rm.className = "nl-item-remove";
+        rm.textContent = "Remove item";
+        rm.addEventListener("click", function () { block.data.items.splice(idx, 1); nlRenderCanvas(); nlSchedulePreview(); });
+        fs.appendChild(rm);
+      }
       host.appendChild(fs);
     });
+    if (readOnly) return; // no "Add item" control in read mode
     var add = doc.createElement("button");
     add.type = "button";
     add.className = "nl-item-add";
@@ -1860,11 +1895,18 @@
           nlDoc = { blocks: [{ type: "rawHtml", variant: 0, data: { html: n.bodyHtml || "" } }] };
         }
         var sent = n.status === "sent";
-        // Send is gated to newsletter:edit (the server's authorizeSection level for this route) and
-        // only shown for an unsent newsletter.
-        el("newsletterSend").hidden = !(canEdit("newsletter") && !sent);
-        el("newsletterSave").disabled = sent;
-        el("newsletterMsg").textContent = sent ? "This newsletter has been sent and is read-only." : "";
+        nlSent = sent;
+        // Read mode = no newsletter:edit permission OR an already-sent newsletter. Send/Save/New are
+        // all gated to newsletter:edit (the server's authorizeSection level for these routes).
+        var canWrite = canEdit("newsletter");
+        el("newsletterSend").hidden = !(canWrite && !sent);
+        el("newsletterSave").hidden = !canWrite;
+        el("newsletterSave").disabled = sent || !canWrite;
+        el("newsletterNew").disabled = !canWrite;
+        el("newsletterMsg").textContent = sent
+          ? "This newsletter has been sent and is read-only."
+          : (!canWrite ? "You have read-only access to newsletters." : "");
+        nlRenderPalette();
         nlRenderCanvas();
         nlRefreshPreview();
       })
@@ -1890,12 +1932,15 @@
   var nlForm = el("newsletterForm");
   if (nlForm) {
     el("newsletterNew").addEventListener("click", function () {
+      if (!canEdit("newsletter")) return; // read mode: no new drafts
       el("newsletterId").value = "";
       el("newsletterSubject").value = "";
       nlDoc = { blocks: [] };
+      nlSent = false;
       el("newsletterSend").hidden = true; // save first to get an id
       el("newsletterSave").disabled = false;
       el("newsletterMsg").textContent = "";
+      nlRenderPalette();
       nlRenderCanvas();
       nlRefreshPreview();
     });

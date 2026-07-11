@@ -691,7 +691,9 @@ describe("newsletter blocks — waysToHelp variants", () => {
   });
 
   it("variant 3: single primary CTA — first item only, exactly one button, crimson primary", () => {
-    const html = mk(3, { items: threeItems });
+    // Render the block alone (not the full frame) so the anchor count reflects the block's single
+    // CTA, not the frame footer's contact links.
+    const html = renderBlock({ type: "waysToHelp", variant: 3, data: { items: threeItems } }, ctx);
     expect(html).toContain("Give now");
     expect(html).toContain('href="https://nbcc.scot/donate"');
     expect(html).not.toContain("https://nbcc.scot/volunteer");
@@ -709,7 +711,11 @@ describe("newsletter blocks — waysToHelp variants", () => {
   });
 
   it("degrades to no button markup when an item has no href (variants 0-2)", () => {
-    const html = mk(0, { items: [{ title: "Spread the word", body: "Tell a friend." }] });
+    // Block-only render: the frame footer's contact anchors would otherwise mask a leaked button <a>.
+    const html = renderBlock(
+      { type: "waysToHelp", variant: 0, data: { items: [{ title: "Spread the word", body: "Tell a friend." }] } },
+      ctx,
+    );
     expect(html).toContain("Spread the word");
     expect(html).not.toContain("<a ");
   });

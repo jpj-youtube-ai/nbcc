@@ -1332,12 +1332,16 @@ _Centered · Logo + title · Hero banner · Slim strip_), reordering, duplicatio
 field editor is **variant-aware**: it shows only the fields the chosen style actually renders
 (progressive disclosure), so a value you enter always appears — the per-style field map in
 `assets/js/admin/app.js` (`nlBlockDefs[type].variants[].fields`) is the single source of truth kept
-in lock-step with the server renderer. The right rail shows a **live preview** that is the exact
-HTML the email will render, recomputed on every edit (debounced) via
+in lock-step with the server renderer. The builder is **read-only in read mode** — for a Viewer (no
+editor role) or an already-**sent** newsletter — where the palette, block controls (move / dup /
+delete), item add/remove and all field inputs are withheld/disabled so nothing can be added, removed
+or edited (the server also gates writes at Editor+). The right rail shows a **live preview** that is
+the exact HTML the email will render, recomputed on every edit (debounced) via
 `POST /api/admin/newsletters/preview`. Both the newsletter and thank-you email frames share the
 maroon contact/legal footer bar in `src/newsletter/theme.ts` / `src/thank-you/letter.ts`, with
 circular phone/envelope/social icon chips that degrade to plain contact text where a mail client
-strips inline SVG. A newsletter is stored as a JSON **block
+strips inline SVG; each footer contact is an **explicit cream-coloured `<a>`** (`tel:` / `mailto:` /
+the site URL) so mail clients and the preview iframe don't auto-link the bare text into blue. A newsletter is stored as a JSON **block
 document** (`{ blocks: [{ type, variant, data }, …] }`) in the `newsletters.body_json` column
 (nullable — legacy raw-HTML drafts from before TASK-168 keep `body_json` `NULL` and hydrate into a
 single `rawHtml` block in the builder). One pure renderer, `renderNewsletter` in

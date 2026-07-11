@@ -300,6 +300,27 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect(sendRequests[0].url).toBe("/api/admin/newsletters/41/send");
     expect(overlay()).toBeNull(); // dialog closes after the send resolves
   });
+
+  it("a Viewer sees the builder in read mode: no add/remove, and fields are disabled", async () => {
+    loginToken = tokenFor("viewer");
+    newsletterListRows = [
+      { id: 41, subject: legacyNewsletter.subject, status: "draft", sentAt: null, recipientCount: null },
+    ];
+    await openNewsletterTab(); // auto-opens id 41 as a viewer
+    await flush();
+
+    // Palette: no "add block" chips, just a read-only note.
+    expect(el("nlPalette").querySelectorAll(".nl-add").length).toBe(0);
+    expect(el("nlPalette").textContent).toMatch(/read-only/i);
+    // Save/New are hidden/disabled; the block card carries no move/dup/delete controls.
+    expect((el("newsletterSave") as HTMLElement).hidden).toBe(true);
+    expect((el("newsletterNew") as HTMLButtonElement).disabled).toBe(true);
+    expect(el("nlCanvas").querySelectorAll(".nl-block").length).toBe(1);
+    expect(el("nlCanvas").querySelector(".nl-block-ctrls")).toBeNull();
+    // Field inputs are disabled — a viewer can look but not edit.
+    const field = el("nlCanvas").querySelector("textarea, input") as HTMLInputElement;
+    expect(field.disabled).toBe(true);
+  });
 });
 
 describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {

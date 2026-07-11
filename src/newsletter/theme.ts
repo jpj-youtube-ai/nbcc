@@ -70,6 +70,14 @@ function contactCell(inner: string, divider: boolean): string {
   return `<td style="${border}padding:0 20px;font-family:${BODY};font-weight:700;font-size:14px;color:${CREAM};white-space:nowrap">${inner}</td>`;
 }
 
+// The contact text as an explicitly cream-coloured anchor. Wrapping it pre-empts the auto-linking
+// that mail clients and browsers apply to bare phone numbers / emails / URLs — which would otherwise
+// render them as default blue links (in the sent email AND the admin preview iframe). Because it is
+// already an <a> with an inline colour, the client leaves it cream instead of recolouring it.
+function contactLink(href: string, text: string): string {
+  return `<a href="${href}" style="color:${CREAM};text-decoration:none">${text}</a>`;
+}
+
 // Wrap the concatenated block HTML in the fixed email frame + NBCC contact/legal footer bar. The
 // contact bar mirrors the thank-you letter footer: circular phone / envelope / social icon chips
 // around the contact text (they degrade to plain text in clients that strip inline SVG).
@@ -79,9 +87,9 @@ export function renderFrame(innerHtml: string): string {
     `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;border:1px solid ${CREAM_82};border-radius:50%;margin:0 8px 0 4px;vertical-align:middle">${ICON_IG}</span>`;
   const footRow =
     `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>` +
-    contactCell(`${iconChip(ICON_PHONE)}01292 811 015`, false) +
-    contactCell(`${iconChip(ICON_MAIL)}info@nbcc.scot`, true) +
-    contactCell(`${socialChips}nbcc.scot`, true) +
+    contactCell(`${iconChip(ICON_PHONE)}${contactLink("tel:+441292811015", "01292 811 015")}`, false) +
+    contactCell(`${iconChip(ICON_MAIL)}${contactLink("mailto:info@nbcc.scot", "info@nbcc.scot")}`, true) +
+    contactCell(`${socialChips}${contactLink("https://nbcc.scot", "nbcc.scot")}`, true) +
     `</tr></table>`;
   return `<!doctype html>
 <html lang="en-GB">

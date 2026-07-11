@@ -257,6 +257,7 @@
 .nl-add:hover { border-color: var(--crimson); color: var(--crimson); box-shadow: var(--shadow-sm); }
 .nl-add-ic { display: inline-flex; color: var(--crimson); }
 .nl-add:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
+.nl-readonly-note { margin: 0; padding: .35rem .5rem; font-size: .85rem; color: var(--slate-soft); font-style: italic; }
 
 /* Canvas — the stack of block cards, plus an empty state. */
 .nl-canvas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }

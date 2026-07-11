@@ -270,6 +270,22 @@
 .nl-subscriber-form .nl-item-add { margin-top: 0; }
 .nl-sub-msg { margin: 10px 0 0; font-size: .85rem; color: var(--slate); min-height: 1.1em; }
 
+/* Manage-subscribers panel. */
+.nl-manage { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+.nl-manage summary { cursor: pointer; font-family: var(--font-body); font-weight: 600; font-size: .88rem; color: var(--maroon); }
+.nl-manage summary:hover { color: var(--crimson); }
+.nl-manage-body { margin-top: 12px; }
+.nl-manage-tools { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 12px; }
+.nl-manage-tools input { flex: 1 1 220px; min-width: 180px; font-family: var(--font-body); font-size: .92rem; color: var(--slate); background: var(--cream); border: 1.4px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+.nl-manage-tools input:focus { outline: none; border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(192,34,56,.12); }
+.nl-manage-tools .nl-item-add { margin-top: 0; }
+.nl-sub-count { margin: 0 0 8px; font-size: .78rem; font-weight: 600; color: var(--slate-soft); }
+.nl-sub-remove { color: var(--maroon); }
+.nl-sub-remove:hover { color: var(--crimson); }
+
+/* Delivery-outcome failure badge in the newsletter list. */
+.nl-fail-badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #fbe9e9; color: var(--crimson); margin-left: 6px; }
+
 /* Canvas — the stack of block cards, plus an empty state. */
 .nl-canvas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
 .nl-empty {

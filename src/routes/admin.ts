@@ -49,8 +49,10 @@ import {
   updateNewsletterDraft,
   listNewsletterRecipients,
   addNewsletterSubscriber,
+  listNewsletterSubscribers,
+  unsubscribeSubscriberByEmail,
   claimNewsletterForSend,
-  setNewsletterRecipientCount,
+  setNewsletterDeliverySummary,
 } from "../db/newsletters";
 import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
 import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
@@ -296,6 +298,7 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
 
   const recipients = await listNewsletterRecipients();
   const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
+  const failedEmails: string[] = [];
   for (const r of recipients) {
     const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
@@ -314,13 +317,93 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
         html,
       });
     } catch (err) {
-      // Best-effort: a single failed send is logged, not fatal to the batch.
+      // Best-effort: a single failed send is recorded (not fatal to the batch) so the delivery
+      // summary can surface which addresses did not get it.
       console.error(`newsletter send to ${r.email} failed`, err);
+      failedEmails.push(r.email);
     }
   }
 
-  await setNewsletterRecipientCount(id, recipients.length);
-  return res.json({ status: "sent", recipientCount: recipients.length });
+  const sentCount = recipients.length - failedEmails.length;
+  await setNewsletterDeliverySummary(id, {
+    recipientCount: recipients.length,
+    sentCount,
+    failedCount: failedEmails.length,
+    failedEmails,
+  });
+  return res.json({
+    status: "sent",
+    recipientCount: recipients.length,
+    sentCount,
+    failedCount: failedEmails.length,
+    failedEmails,
+  });
+}
+
+// POST /api/admin/newsletters/test-send — send ONE copy of the posted draft to the signed-in admin's
+// own email (Editor+), so they can check how it lands in a real inbox before blasting everyone. Does
+// not touch newsletter state (no claim, no status change). Mirrors the preview body ({ subject,
+// bodyJson }); the subject is prefixed [TEST] and a placeholder unsubscribe URL is used.
+const testSendSchema = z.object({ subject: z.string().trim().min(1), bodyJson: newsletterDocSchema });
+export async function postAdminNewsletterTestSend(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const parsed = testSendSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
+  }
+  const html = renderNewsletter(parsed.data.bodyJson, {
+    firstName: firstNameOf(claims.email),
+    unsubscribeUrl: `${config.PORTAL_BASE_URL}/unsubscribe/preview`,
+  });
+  try {
+    await sendNewsletter({
+      email: claims.email,
+      from: config.NEWSLETTER_FROM_EMAIL,
+      replyTo: config.NEWSLETTER_FROM_EMAIL,
+      subject: `[TEST] ${parsed.data.subject}`,
+      html,
+    });
+  } catch (err) {
+    console.error("newsletter test-send failed", err);
+    return res.status(502).json({ error: "Could not send the test email." });
+  }
+  return res.json({ sentTo: claims.email });
+}
+
+// GET /api/admin/newsletters/subscribers[?q=] — the managed subscriber list (Editor+, donor PII).
+export async function getAdminNewsletterSubscribers(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const q = typeof req.query.q === "string" ? req.query.q : undefined;
+  const subscribers = await listNewsletterSubscribers(q);
+  return res.json({ count: subscribers.length, subscribers });
+}
+
+// GET /api/admin/newsletters/subscribers.csv — the full subscriber list as CSV (Editor+).
+export async function getAdminNewsletterSubscribersCsv(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const subscribers = await listNewsletterSubscribers();
+  const esc = (v: string): string => `"${v.replace(/"/g, '""')}"`;
+  const csv = ["email,name", ...subscribers.map((s) => `${esc(s.email)},${esc(s.name ?? "")}`)].join("\r\n");
+  return res
+    .status(200)
+    .type("text/csv")
+    .set("Content-Disposition", 'attachment; filename="newsletter-subscribers.csv"')
+    .send(csv);
+}
+
+// POST /api/admin/newsletters/subscribers/remove — unsubscribe an address (Editor+). Idempotent; a
+// 404 when the address was not a consenting subscriber.
+const removeSubscriberSchema = z.object({ email: z.string().trim().email() });
+export async function postAdminRemoveNewsletterSubscriber(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const parsed = removeSubscriberSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid subscriber", details: parsed.error.flatten() });
+  }
+  const removed = await unsubscribeSubscriberByEmail(parsed.data.email);
+  if (removed === 0) return res.status(404).json({ error: "That address is not a current subscriber" });
+  return res.json({ email: parsed.data.email.trim().toLowerCase(), removed });
 }
 
 // GET /api/admin/donors/:id — the donor snapshot (reuses getDonorPortalSnapshot). Read-only, so any
@@ -1250,9 +1333,13 @@ adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);
 adminRouter.post("/api/admin/newsletters/preview", postAdminNewsletterPreview);
-// /recipients and /subscribers must precede /:id so the literal paths aren't captured as an :id param.
+// The literal paths below must precede /:id so they aren't captured as an :id param.
 adminRouter.get("/api/admin/newsletters/recipients", getAdminNewsletterRecipients);
+adminRouter.post("/api/admin/newsletters/test-send", postAdminNewsletterTestSend);
+adminRouter.get("/api/admin/newsletters/subscribers.csv", getAdminNewsletterSubscribersCsv);
+adminRouter.get("/api/admin/newsletters/subscribers", getAdminNewsletterSubscribers);
 adminRouter.post("/api/admin/newsletters/subscribers", postAdminNewsletterSubscriber);
+adminRouter.post("/api/admin/newsletters/subscribers/remove", postAdminRemoveNewsletterSubscriber);
 adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);

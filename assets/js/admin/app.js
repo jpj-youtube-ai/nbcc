@@ -110,9 +110,11 @@
       // The newsletter palette is built at script-eval time (before permissions are known); re-render
       // it now so a user without newsletter:edit sees the read-only note, not the add-block buttons.
       nlRenderPalette();
-      // Manual add-subscriber is an edit action → hidden for read-only (Viewer) users.
+      // Manual add-subscriber + test-send are edit actions → hidden for read-only (Viewer) users.
       var subCard = el("nlSubscriberCard");
       if (subCard) subCard.hidden = !canEdit("newsletter");
+      var testBtn0 = el("newsletterTest");
+      if (testBtn0) testBtn0.hidden = !canEdit("newsletter");
       selectView("overview");
       loadOverview();
     }
@@ -1872,14 +1874,23 @@
 
   if (el("nlPalette")) nlRenderPalette();
 
+  function nlDeliveryCell(n) {
+    if (n.recipientCount == null) return "-";
+    // Sent newsletters carry a delivery summary; show delivered/total and flag any failures.
+    if (n.sentCount == null) return String(n.recipientCount);
+    var cell = n.sentCount + " / " + n.recipientCount;
+    if (n.failedCount) cell += ' <span class="nl-fail-badge">' + n.failedCount + " failed</span>";
+    return cell;
+  }
+
   function renderNewsletterList(rows) {
     if (!rows.length) return '<p class="admin-loading">No newsletters yet.</p>';
-    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Recipients</th><th></th></tr></thead><tbody>';
+    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Delivered</th><th></th></tr></thead><tbody>';
     rows.forEach(function (n) {
       html +=
         "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" + n.status + "</td><td>" +
         (n.sentAt ? new Date(n.sentAt).toLocaleString() : "-") + "</td><td>" +
-        (n.recipientCount == null ? "-" : n.recipientCount) +
+        nlDeliveryCell(n) +
         '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button></td></tr>';
     });
     return html + "</tbody></table>";
@@ -1905,6 +1916,7 @@
         el("newsletterSend").hidden = !(canWrite && !sent);
         el("newsletterSave").hidden = !canWrite;
         el("newsletterSave").disabled = sent || !canWrite;
+        el("newsletterTest").hidden = !canWrite;
         el("newsletterNew").disabled = !canWrite;
         el("newsletterMsg").textContent = sent
           ? "This newsletter has been sent and is read-only."
@@ -1961,10 +1973,79 @@
             : "Added " + r.b.email + " to the newsletter.";
           el("subEmail").value = "";
           el("subName").value = "";
+          if (el("subManage") && el("subManage").open) nlLoadSubscribers();
         })
         .catch(function () { el("subMsg").textContent = "Could not add that email."; })
         .finally(function () { btn.disabled = false; });
     });
+  }
+
+  // Subscriber management: list (with search), remove, and CSV export. Loaded on first panel open.
+  function nlRenderSubscribers(subs) {
+    var host = el("subList");
+    if (!subs.length) { host.innerHTML = '<p class="admin-empty">No subscribers found.</p>'; return; }
+    var rows = subs.map(function (s) {
+      return '<tr><td>' + H.escapeHtml(s.email) + "</td><td>" + H.escapeHtml(s.name || "") +
+        '</td><td><button class="admin-link nl-sub-remove" type="button" data-remove-sub="' + H.escapeHtml(s.email) +
+        '">Remove</button></td></tr>';
+    }).join("");
+    host.innerHTML = '<p class="nl-sub-count">' + subs.length + ' subscriber' + (subs.length === 1 ? "" : "s") + '</p>' +
+      '<table class="admin-table"><thead><tr><th>Email</th><th>Name</th><th></th></tr></thead><tbody>' + rows + "</tbody></table>";
+    Array.prototype.forEach.call(host.querySelectorAll("[data-remove-sub]"), function (b) {
+      b.addEventListener("click", function () { nlRemoveSubscriber(b.getAttribute("data-remove-sub")); });
+    });
+  }
+  function nlLoadSubscribers() {
+    var host = el("subList");
+    if (!host) return;
+    var q = el("subSearch") ? el("subSearch").value.trim() : "";
+    host.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/newsletters/subscribers" + (q ? "?q=" + encodeURIComponent(q) : ""))
+      .then(j)
+      .then(function (d) { nlRenderSubscribers(d.subscribers || []); })
+      .catch(function () { host.innerHTML = '<p class="admin-empty">Could not load subscribers.</p>'; });
+  }
+  function nlRemoveSubscriber(email) {
+    if (!canEdit("newsletter")) return;
+    authFetch("/api/admin/newsletters/subscribers/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email }),
+    })
+      .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
+      .then(function () { nlLoadSubscribers(); })
+      .catch(function () { el("subMsg").textContent = "Could not remove " + email + "."; });
+  }
+  if (el("subManage")) {
+    var subLoaded = false;
+    el("subManage").addEventListener("toggle", function () {
+      if (el("subManage").open && !subLoaded) { subLoaded = true; nlLoadSubscribers(); }
+    });
+    var subSearchTimer = null;
+    if (el("subSearch")) {
+      el("subSearch").addEventListener("input", function () {
+        if (subSearchTimer) clearTimeout(subSearchTimer);
+        subSearchTimer = setTimeout(nlLoadSubscribers, 250);
+      });
+    }
+    if (el("subExport")) {
+      el("subExport").addEventListener("click", function () {
+        authFetch("/api/admin/newsletters/subscribers.csv")
+          .then(function (res) { return res.text(); })
+          .then(function (csv) {
+            var blob = new Blob([csv], { type: "text/csv" });
+            var url = URL.createObjectURL(blob);
+            var a = doc.createElement("a");
+            a.href = url;
+            a.download = "newsletter-subscribers.csv";
+            doc.body.appendChild(a);
+            a.click();
+            doc.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          })
+          .catch(function () { el("subMsg").textContent = "Could not export subscribers."; });
+      });
+    }
   }
 
   var nlForm = el("newsletterForm");
@@ -1981,6 +2062,28 @@
       nlRenderPalette();
       nlRenderCanvas();
       nlRefreshPreview();
+    });
+
+    // Send a single test copy to the signed-in admin's own inbox — the current builder doc, unsaved
+    // changes and all (mirrors the preview payload). Lets you check real-inbox rendering before a blast.
+    el("newsletterTest").addEventListener("click", function () {
+      if (!canEdit("newsletter")) return;
+      var testBtn = el("newsletterTest");
+      testBtn.disabled = true;
+      el("newsletterMsg").textContent = "Sending test…";
+      authFetch("/api/admin/newsletters/test-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: el("newsletterSubject").value || "Newsletter", bodyJson: nlDoc }),
+      })
+        .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+        .then(function (r) {
+          el("newsletterMsg").textContent = r.ok
+            ? "Test sent to " + r.b.sentTo + "."
+            : (r.b && r.b.error) || "Could not send the test.";
+        })
+        .catch(function () { el("newsletterMsg").textContent = "Could not send the test."; })
+        .finally(function () { testBtn.disabled = false; });
     });
 
     nlForm.addEventListener("submit", function (e) {
@@ -2028,7 +2131,9 @@
         return res.json();
       })
       .then(function (r) {
-        el("newsletterMsg").textContent = "Sent to " + r.recipientCount + " subscriber(s).";
+        var msg = "Sent to " + (r.sentCount != null ? r.sentCount : r.recipientCount) + " of " + r.recipientCount + " subscriber(s).";
+        if (r.failedCount) msg += " " + r.failedCount + " failed: " + (r.failedEmails || []).join(", ");
+        el("newsletterMsg").textContent = msg;
         loadNewsletters();
         loadNewsletterInto(id);
       })

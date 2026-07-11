@@ -164,6 +164,58 @@ Then("the subscriber response field {string} should be {string}", function (fiel
   assert.equal(String(this.subBody[field]), value);
 });
 
+Then("the newsletter response field {string} should be at least {int}", function (field, min) {
+  assert.ok(Number(this.nlBody[field]) >= min, `${field} ${this.nlBody[field]} < ${min}`);
+});
+
+// Test-send (feature 1): one copy to the signed-in admin.
+When("I test-send the block newsletter with subject {string}", async function (subject) {
+  const r = await authFetch("/api/admin/newsletters/test-send", "POST", { subject, bodyJson: SAMPLE_DOC }, this.token);
+  this.testStatus = r.status;
+  this.testBody = r.json;
+});
+Then("the test-send response status should be {int}", function (expected) {
+  assert.equal(this.testStatus, expected);
+});
+
+// Subscriber management (feature 3): list, export, remove.
+When("I list the newsletter subscribers", async function () {
+  const r = await authFetch("/api/admin/newsletters/subscribers", "GET", undefined, this.token);
+  this.subsStatus = r.status;
+  this.subsBody = r.json;
+});
+Then("the subscriber list status should be {int}", function (expected) {
+  assert.equal(this.subsStatus, expected);
+});
+Then("the subscriber list should include {string}", function (email) {
+  assert.ok((this.subsBody.subscribers || []).some((s) => s.email === email), `expected ${email} in list`);
+});
+Then("the subscriber list should not include {string}", function (email) {
+  assert.ok(!(this.subsBody.subscribers || []).some((s) => s.email === email), `did not expect ${email} in list`);
+});
+
+When("I remove the newsletter subscriber {string}", async function (email) {
+  const r = await authFetch("/api/admin/newsletters/subscribers/remove", "POST", { email }, this.token);
+  this.removeStatus = r.status;
+});
+Then("the remove-subscriber response status should be {int}", function (expected) {
+  assert.equal(this.removeStatus, expected);
+});
+
+When("I export the newsletter subscribers as CSV", async function () {
+  const res = await fetch(`${BASE_URL}/api/admin/newsletters/subscribers.csv`, {
+    headers: { Authorization: "Bearer " + this.token },
+  });
+  this.csvStatus = res.status;
+  this.csvText = await res.text();
+});
+Then("the CSV status should be {int}", function (expected) {
+  assert.equal(this.csvStatus, expected);
+});
+Then("the CSV should contain {string}", function (needle) {
+  assert.ok((this.csvText || "").includes(needle), `expected CSV to contain ${needle}`);
+});
+
 function signUnsubscribeToken(donorId, secret) {
   const body = String(donorId);
   const sig = createHmac("sha256", secret).update(body).digest("base64url");

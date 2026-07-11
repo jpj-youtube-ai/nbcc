@@ -39,6 +39,21 @@
             <p class="admin-login-error" id="loginError" role="alert" aria-live="polite" hidden></p>
             <button class="btn btn-primary admin-login-submit" type="submit">Sign in</button>
           </form>
+
+          <!-- Mandatory email 2FA (Admin Phase 3): revealed by app.js after step 1 returns
+               { step: "2fa" }. Hidden until a password check succeeds. -->
+          <form id="twoFactorPanel" novalidate hidden>
+            <h2 id="twoFactorHeading">Check your email</h2>
+            <p class="admin-login-sub">We emailed a 6-digit code to your address. Enter it below to finish signing in.</p>
+            <div class="admin-field">
+              <label for="twoFactorCode">Verification code</label>
+              <input id="twoFactorCode" name="code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required aria-required="true" />
+            </div>
+            <label class="admin-check"><input type="checkbox" id="twoFactorRemember" /> Remember this device for 30 days</label>
+            <p class="admin-login-error" id="twoFactorError" role="alert" aria-live="polite" hidden></p>
+            <p class="admin-login-sub" id="twoFactorDevNote" hidden></p>
+            <button class="btn btn-primary admin-login-submit" type="submit">Verify</button>
+          </form>
         </div>
       </section>
 

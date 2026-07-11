@@ -162,6 +162,54 @@
   }
 
   // ---- sign in / out ----
+  var DEVICE_KEY = "nbcc_admin_device"; // 30-day trusted-device token (Admin Phase 3); persists
+  // across sign-out, since it only skips the second factor - the password is always still required.
+  var pendingTwoFactorEmail = null; // email carried from step 1 into the 2FA panel
+
+  function deviceToken() {
+    return localStorage.getItem(DEVICE_KEY);
+  }
+  function setDeviceToken(t) {
+    localStorage.setItem(DEVICE_KEY, t);
+  }
+
+  function completeLogin(data) {
+    setToken(data.token);
+    var claims = H.parseClaims(data.token) || {
+      email: (data.user || {}).email,
+      role: (data.user || {}).role,
+    };
+    if (data.deviceToken) setDeviceToken(data.deviceToken);
+    showApp(claims);
+  }
+
+  function showTwoFactorPanel(email, devCode) {
+    pendingTwoFactorEmail = email;
+    el("loginForm").hidden = true;
+    var panel = el("twoFactorPanel");
+    panel.hidden = false;
+    var codeInput = el("twoFactorCode");
+    codeInput.value = "";
+    el("twoFactorRemember").checked = false;
+    var err = el("twoFactorError");
+    err.hidden = true;
+    var note = el("twoFactorDevNote");
+    if (devCode) {
+      note.textContent = "Email delivery is off in this environment. Your code is " + devCode + ".";
+      note.hidden = false;
+    } else {
+      note.textContent = "";
+      note.hidden = true;
+    }
+    if (codeInput.focus) codeInput.focus();
+  }
+
+  function showLoginPasswordStep() {
+    pendingTwoFactorEmail = null;
+    el("twoFactorPanel").hidden = true;
+    el("loginForm").hidden = false;
+  }
+
   var loginForm = el("loginForm");
   if (loginForm) {
     loginForm.addEventListener("submit", function (e) {
@@ -170,10 +218,13 @@
       err.hidden = true;
       var email = el("adminEmail").value.trim();
       var password = el("adminPassword").value;
+      var body = { email: email, password: password };
+      var dt = deviceToken();
+      if (dt) body.deviceToken = dt;
       fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email, password: password }),
+        body: JSON.stringify(body),
       })
         .then(function (res) {
           return res.ok
@@ -183,12 +234,11 @@
               });
         })
         .then(function (data) {
-          setToken(data.token);
-          var claims = H.parseClaims(data.token) || {
-            email: (data.user || {}).email,
-            role: (data.user || {}).role,
-          };
-          showApp(claims);
+          if (data && data.step === "2fa") {
+            showTwoFactorPanel(data.email || email, data.devCode);
+            return;
+          }
+          completeLogin(data);
           loginForm.reset();
         })
         .catch(function (e2) {
@@ -198,10 +248,44 @@
     });
   }
 
+  var twoFactorForm = el("twoFactorPanel");
+  if (twoFactorForm) {
+    twoFactorForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var err = el("twoFactorError");
+      err.hidden = true;
+      var code = el("twoFactorCode").value.trim();
+      var remember = el("twoFactorRemember").checked;
+      fetch("/api/admin/login/2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pendingTwoFactorEmail, code: code, remember: remember }),
+      })
+        .then(function (res) {
+          return res.ok
+            ? res.json()
+            : res.json().then(function (b) {
+                throw new Error((b && b.error) || "Verification failed");
+              });
+        })
+        .then(function (data) {
+          completeLogin(data);
+          twoFactorForm.reset();
+          showLoginPasswordStep();
+          loginForm.reset();
+        })
+        .catch(function (e2) {
+          err.textContent = e2.message || "Verification failed";
+          err.hidden = false;
+        });
+    });
+  }
+
   var logout = el("logoutBtn");
   if (logout) {
     logout.addEventListener("click", function () {
       clearToken();
+      showLoginPasswordStep();
       showLogin();
     });
   }

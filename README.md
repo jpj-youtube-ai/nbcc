@@ -1004,7 +1004,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
 | `POST /api/portal/request` | **implemented** | REQ-061 (donor self-request portal magic link) |
-| `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login) |
+| `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login; step 1 of mandatory email 2FA — admin-management Phase 3/TASK-188 — issues a session directly only for a valid 30-day trusted-device token, else `{step:"2fa"}`) |
+| `POST /api/admin/login/2fa` | **implemented** | admin-management Phase 3 (TASK-188; step 2 — verifies the emailed one-time code, 10-min expiry/5-attempt cap, issues the session and optionally a device token when `remember` is set) |
 | `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read; incl. postal address — declaration for an individual, billing for a company) |
 | `PATCH /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor update) |
 | `PATCH /api/admin/donors/:id/declaration` | **implemented** | REQ-059 (admin correct declaration address — amend; TASK-130) |
@@ -1127,7 +1128,10 @@ with `ADMIN_SESSION_SECRET` over `{ sub, email, role, iat, exp }` (`signAdminSes
 `verifyAdminSession`, `src/admin/session.ts`, pure with an injected clock like `src/portal/tokens.ts`),
 default 8h TTL. Invalid credentials (unknown email, wrong password, or a null-hash account) all return a
 generic **401**; a malformed body is **400**. The role-gated admin actions that consume the token are
-**TASK-106**. Proven by `test/unit/admin-auth.test.ts` (mocked pool — both paths, the pure
+**TASK-106**. As of admin-management Phase 3 (TASK-188, documented below), this success path is now the
+**trusted-device** case only — absent a valid 30-day device token, valid credentials get a mandatory
+email 2FA challenge (`{step:"2fa"}`) instead of a token; see "Mandatory email 2FA on admin login" below
+for the full two-step flow. Proven by `test/unit/admin-auth.test.ts` (mocked pool — both paths, the pure
 password/session helpers, and that the migration is additive-only) and end to end by the `@db`
 `features/admin-auth.feature`.
 
@@ -1665,6 +1669,71 @@ disabled user's still-valid token kept working until it expired (up to 8h).
   a new section unblocks a write there; a non-`team:edit` user is `403`'d from the permissions
   endpoint itself; removing the last effective `team:edit` holder is `409 last_admin`; and `GET
   /api/admin/me` reports the caller's own effective matrix.
+
+**Mandatory email 2FA on admin login (admin-management Phase 3, TASK-188).** Every admin sign-in now
+requires a one-time emailed code, unless the browser already holds a valid 30-day "remember this
+device" token — no authenticator app, no enrolment. Password verification, roles, and the per-section
+permission matrix (Phase 2, above) are all **unchanged**: 2FA is a second gate on top of the existing
+login, not a replacement for it.
+
+- **Two-step login.** `POST /api/admin/login` `{ email, password, deviceToken? }` still verifies the
+  password + account status exactly as before (same generic `401` for a wrong password, unknown
+  email, or a disabled/still-invited account). On success:
+  - If `deviceToken` is present and verifies (`verifyDeviceToken`) for **this** user, the session is
+    issued immediately, exactly as pre-Phase-3 — a trusted device skips the code step entirely. A
+    device token for a *different* user (e.g. stolen from another admin's `localStorage`) is silently
+    rejected and falls through to the code challenge, not accepted.
+  - Otherwise a 6-digit code is generated (`generateLoginCode`, `src/admin/two-factor.ts`), its keyed
+    HMAC hash stored (`admin_login_codes`, one row per user, upserted — additive migration
+    `1783785596017_admin-login-codes.js`), best-effort emailed (`sendAdminLoginCode`,
+    `src/clients/email.ts`), and the response is `200 { step: "2fa", email }` — **no session yet**.
+  - `POST /api/admin/login/2fa` `{ email, code, remember? }` verifies the code: expired (10 minutes)
+    or missing → `401`; wrong code → `401` and the attempt counter increments; a **6th** wrong attempt
+    → `401` and the pending code is deleted outright (forcing a fresh step-1 code request, not just a
+    reset counter). The correct code issues the session token and, if `remember` was set, also a
+    signed 30-day device token (`issueDeviceToken`) returned as `deviceToken`.
+- **Crypto (`src/admin/two-factor.ts`, pure, no DB/Express).** Both the login-code hash and the
+  device token are HMAC'd with the **existing** `ADMIN_SESSION_SECRET` — no new config/secret — each
+  under a distinct domain prefix (`"admincode.v1:"` / `"admindevice.v1:"`, mirroring
+  `src/admin/tokens.ts`'s `ACTION_TOKEN_DOMAIN` pattern) so a device token can never be replayed as a
+  session or action token, or vice versa, even under the same secret. The code is **never stored in
+  the clear** — only its keyed hash — so a DB leak of `admin_login_codes` can't be brute-forced
+  offline without also having the secret. Code and token comparisons are constant-time
+  (`timingSafeEqual`).
+- **Front end (`admin.html`, `assets/js/admin/app.js`).** The login form posts step 1 with
+  `deviceToken: localStorage["nbcc_admin_device"] || undefined`. A `{ step: "2fa" }` response reveals
+  a code-entry panel (6-digit input, a "Remember this device for 30 days" checkbox, Verify), which
+  posts step 2; on success the returned `token` is stored as before and, if a `deviceToken` came back
+  (remembered), it is written to `localStorage["nbcc_admin_device"]` for the 30-day skip on future
+  logins. A wrong code shows an inline error and stays on the code panel (honest-save).
+- **Non-production dev code (stub safety).** `src/clients/email.ts` stubs outbound email (no network)
+  outside production whenever `EMAIL_SEND_URL` is a placeholder (`emailStubbed`) — which is the case
+  in local dev and CI by default. Since a stubbed send never actually delivers the code, step 1's
+  response includes it directly as `devCode` **only when `config.NODE_ENV !== "production"`** — so
+  staging/local admins can always complete 2FA even without live email — and this is **never** true in
+  production, where the code is always emailed and never echoed back. The BDD suite
+  (`features/admin-2fa.feature`) relies on this to log in end to end without a real mail provider.
+- **Rate limiting.** Both endpoints are limited per email and per client IP (`createRateLimiter`,
+  `src/portal/request-limiter.ts` — in-memory, per-task, same documented follow-up as the donor
+  portal's limiter), and neither the code, its hash, nor a device token is ever logged.
+- Proven by `test/unit/admin-two-factor.test.ts` (the pure crypto: code shape, hash/verify
+  round-trips, device-token round-trip/tamper/expiry/cross-domain rejection) and
+  `test/unit/admin-auth.test.ts` (the two routes against a mocked pool: trusted-device session,
+  step-1 challenge + devCode, a device token scoped to a different user falling through to 2FA, the
+  correct/wrong/expired/6th-attempt code paths, and `remember` producing a verifying device token);
+  end to end by the `@db` `features/admin-2fa.feature` (step 1 returns a devCode; a wrong code then
+  the right code; a device token skips the code step; the 6th wrong attempt locks out) plus the
+  updated `features/admin-auth.feature` / `features/admin-users.feature` scenarios that now complete
+  the 2FA step to obtain a session.
+- **Known follow-up.** The Cloudflare Worker email relay (`services/email-relay/src/index.js`) maps
+  each of the app's transactional payload shapes to a Resend send by sniffing its fields
+  (`buildEmail`); it has no branch for the login-code payload
+  (`{ email, fullName, subject, text }` from `sendAdminLoginCode`), so today it silently falls through
+  to the generic donation-confirmation default and sends the **wrong subject**. Real email delivery of
+  login codes needs a small relay branch (mirroring the newsletter/thank-you `if (p.newsletter …)` /
+  `if (p.thankYou …)` pattern, discriminated the same way) before this reaches production — tracked as
+  a follow-up, not blocking this PR because staging and local dev never depend on it (`devCode`
+  covers both, per the stub-safety note above).
 
 **`POST /api/contact` now stores, not forwards (2026-07-10 contact-inbox spec).** The public enquiry
 endpoint (REQ-030) still validates `{ firstName, lastName, email, message }` zod-first

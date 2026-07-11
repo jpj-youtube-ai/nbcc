@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { createHmac } from "node:crypto";
 import { issueAdminActionToken, verifyAdminActionToken, AdminActionTokenError, adminActionLink } from "../../src/admin/tokens";
 
 const secret = "test-secret";
@@ -23,5 +24,17 @@ describe("admin action tokens", () => {
   });
   it("builds a link", () => {
     expect(adminActionLink("https://nbcc.scot", "/invite", "TOK")).toBe("https://nbcc.scot/invite?token=TOK");
+  });
+
+  // Security review FIX #2: action tokens must sign with a distinct HMAC domain from session
+  // tokens (src/admin/session.ts), so a signature can never validate across the two token types
+  // even if their claim shapes ever happened to coincide.
+  it("signs the body with a distinct domain prefix, not a bare HMAC over the body", () => {
+    const t = issueAdminActionToken({ sub: 7, purpose: "invite", bind: "", now, secret });
+    const [body, sig] = t.split(".");
+    const bareSig = createHmac("sha256", secret).update(body).digest("base64url");
+    expect(sig).not.toBe(bareSig);
+    const domainSig = createHmac("sha256", secret).update(`adminaction.v1:${body}`).digest("base64url");
+    expect(sig).toBe(domainSig);
   });
 });

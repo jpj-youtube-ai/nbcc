@@ -5,9 +5,18 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 // signed with ADMIN_SESSION_SECRET. The `purpose` claim means an invite token can never be replayed
 // as a session or a reset. `bind` is the user's password_hash at issue time; the caller re-checks it
 // against the live row so a link stops working once the password has been set/changed (single-use).
+//
+// Security review FIX #2: session.ts signs `hmacSha256(body)` with the SAME secret — an
+// otherwise byte-identical HMAC scheme separated only incidentally by claim shape. To make an
+// action-token signature cryptographically incapable of ever validating as a session token (or
+// vice versa), the signed input here is prefixed with a fixed domain string
+// (ACTION_TOKEN_DOMAIN + body) instead of signing the bare body. session.ts is deliberately left
+// unchanged — giving IT a domain too would invalidate every live admin session on deploy.
 
 export const ADMIN_INVITE_TTL_MS = 48 * 60 * 60 * 1000;
 export const ADMIN_RESET_TTL_MS = 60 * 60 * 1000;
+
+const ACTION_TOKEN_DOMAIN = "adminaction.v1:";
 
 export interface AdminActionClaims {
   sub: number;
@@ -43,7 +52,7 @@ export function issueAdminActionToken(input: {
   const ttl = input.ttlMs ?? (input.purpose === "invite" ? ADMIN_INVITE_TTL_MS : ADMIN_RESET_TTL_MS);
   const claims: AdminActionClaims = { sub: input.sub, purpose: input.purpose, bind: input.bind, iat, exp: iat + ttl };
   const body = b64url(JSON.stringify(claims));
-  return `${body}.${signBody(body, input.secret)}`;
+  return `${body}.${signBody(ACTION_TOKEN_DOMAIN + body, input.secret)}`;
 }
 
 export function verifyAdminActionToken(
@@ -54,7 +63,7 @@ export function verifyAdminActionToken(
   const parts = (token ?? "").split(".");
   if (parts.length !== 2 || !parts[0] || !parts[1]) throw new AdminActionTokenError("malformed");
   const [body, sig] = parts;
-  const expected = signBody(body, secret);
+  const expected = signBody(ACTION_TOKEN_DOMAIN + body, secret);
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw new AdminActionTokenError("bad_signature");

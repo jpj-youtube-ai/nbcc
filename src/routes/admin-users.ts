@@ -11,6 +11,7 @@ import {
   setUserPassword,
   isLastEnabledAdmin,
   DuplicateEmailError,
+  LastAdminError,
   type ManagedUser,
 } from "../db/admin-users";
 import { inviteSchema, userPatchSchema, setPasswordSchema, forgotSchema } from "../admin/user-schema";
@@ -138,6 +139,13 @@ export async function patchAdminUser(req: Request, res: Response): Promise<Respo
     }
     return res.status(200).json(updated);
   } catch (err) {
+    // Security review FIX #4: the pre-check above is fast but not atomic with the write; the db
+    // layer's transactional guard (assertAdminsRemain) is authoritative and throws LastAdminError
+    // when a concurrent request raced past the pre-check. Map it to the same 409 the pre-check
+    // returns — the write has already been rolled back by the time this is caught.
+    if (err instanceof LastAdminError) {
+      return res.status(409).json({ error: "last_admin" });
+    }
     console.error("admin user update failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin update is temporarily unavailable" });
   }
@@ -161,6 +169,10 @@ export async function deleteAdminUser(req: Request, res: Response): Promise<Resp
     if (!deleted) return res.status(404).json({ error: "User not found" });
     return res.status(200).json({ deleted: true });
   } catch (err) {
+    // Security review FIX #4: same TOCTOU race as PATCH — see patchAdminUser's catch comment.
+    if (err instanceof LastAdminError) {
+      return res.status(409).json({ error: "last_admin" });
+    }
     console.error("admin user delete failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin delete is temporarily unavailable" });
   }
@@ -205,6 +217,12 @@ export async function postAdminUserReset(req: Request, res: Response): Promise<R
 // src/routes/portal.ts). Only an ENABLED user (status === 'active'; not disabled, not still-invited
 // — an invited user has no password to reset, they need the invite link) gets a reset email.
 // Rate-limited per email + per IP (same dual-limiter shape as portal's request-access).
+//
+// Security review FIX #3: the send is fire-and-forget (never awaited), so response latency is
+// identical whether or not an email actually goes out — awaiting it would leak, via timing, which
+// emails belong to an active account. The admin-initiated /users/:id/reset MAY still await its
+// send: that route is admin-authenticated and already reveals the account exists (404 vs sent),
+// so there is no enumeration signal left to protect there.
 const forgotEmailLimiter = createRateLimiter({ max: 3, windowMs: 15 * 60 * 1000 });
 const forgotIpLimiter = createRateLimiter({ max: 20, windowMs: 15 * 60 * 1000 });
 
@@ -232,7 +250,13 @@ export async function postAdminForgot(req: Request, res: Response): Promise<Resp
           secret: config.ADMIN_SESSION_SECRET,
         });
         const link = adminActionLink(config.PORTAL_BASE_URL, "/reset", token);
-        await sendAdminReset({ email: user.email, fullName: user.full_name, link });
+        // Fire-and-forget: do NOT await, so the response latency below never reveals whether a
+        // send happened. Wrapped in Promise.resolve() so a synchronous throw is caught the same
+        // way as a rejected promise. Errors are swallowed here (not fatal) — the generic 200
+        // below is the response either way.
+        Promise.resolve(sendAdminReset({ email: user.email, fullName: user.full_name, link })).catch((err) => {
+          console.error(`admin forgot-password reset email to ${user.email} failed`, err);
+        });
       }
     } catch (err) {
       // Best-effort + no-enumeration: any failure here still yields the generic 200 below.
@@ -264,6 +288,14 @@ export async function postAdminSetPassword(req: Request, res: Response): Promise
     const claims = verifyAdminActionToken(parsed.data.token, config.ADMIN_SESSION_SECRET, new Date());
     const target = await getManagedUser(claims.sub);
     if (!target) {
+      return res.status(400).json({ error: INVALID_LINK_MESSAGE });
+    }
+    // Security review FIX #5: disabling a user does NOT clear password_hash, so a disabled
+    // user's reset-token bind can still match the live row. Without this check, completing
+    // set-password would flip status back to 'active' (setUserPassword), letting a disabled
+    // admin self-reactivate. Same generic invalid-link 400 as a bad token — no detail that would
+    // reveal the account is disabled. Only an invited or active target may proceed.
+    if (target.status === "disabled") {
       return res.status(400).json({ error: INVALID_LINK_MESSAGE });
     }
     const passwordHash = await getPasswordHash(claims.sub);

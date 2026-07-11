@@ -34,13 +34,19 @@ const {
   isLastEnabledAdminMock: vi.fn(),
 }));
 
-const { MockDuplicateEmailError } = vi.hoisted(() => ({
+const { MockDuplicateEmailError, MockLastAdminError } = vi.hoisted(() => ({
   MockDuplicateEmailError: class MockDuplicateEmailError extends Error {
     email: string;
     constructor(email: string) {
       super(`a user with email ${email} already exists`);
       this.name = "DuplicateEmailError";
       this.email = email;
+    }
+  },
+  MockLastAdminError: class MockLastAdminError extends Error {
+    constructor() {
+      super("this change would leave zero enabled admins");
+      this.name = "LastAdminError";
     }
   },
 }));
@@ -57,6 +63,7 @@ vi.mock("../../src/db/admin-users", () => ({
   setUserPassword: setUserPasswordMock,
   isLastEnabledAdmin: isLastEnabledAdminMock,
   DuplicateEmailError: MockDuplicateEmailError,
+  LastAdminError: MockLastAdminError,
 }));
 
 const { sendAdminInviteMock, sendAdminResetMock } = vi.hoisted(() => ({
@@ -347,6 +354,28 @@ describe("PATCH /api/admin/users/:id", () => {
     expect(res.statusCode).toBe(400);
     expect(getManagedUserMock).not.toHaveBeenCalled();
   });
+
+  // Security review FIX #4: the fast pre-check (isLastEnabledAdmin) is good UX but is NOT atomic
+  // with the write — a concurrent request can race past it. The db layer's authoritative,
+  // same-transaction guard throws LastAdminError when a role change would leave zero enabled
+  // admins; the route must map that to the same 409 the pre-check produces.
+  it("409s { error: 'last_admin' } when the db's transactional guard rejects a role change that raced past the pre-check", async () => {
+    getManagedUserMock.mockResolvedValueOnce(ADMIN_USER);
+    isLastEnabledAdminMock.mockResolvedValueOnce(false);
+    setUserRoleMock.mockRejectedValueOnce(new MockLastAdminError());
+    const res = await runPatch({ role: "admin", body: { role: "editor" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "last_admin" });
+  });
+
+  it("409s { error: 'last_admin' } when the db's transactional guard rejects a status disable that raced past the pre-check", async () => {
+    getManagedUserMock.mockResolvedValueOnce(ADMIN_USER);
+    isLastEnabledAdminMock.mockResolvedValueOnce(false);
+    setUserStatusMock.mockRejectedValueOnce(new MockLastAdminError());
+    const res = await runPatch({ role: "admin", body: { status: "disabled" } });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "last_admin" });
+  });
 });
 
 describe("DELETE /api/admin/users/:id", () => {
@@ -374,6 +403,17 @@ describe("DELETE /api/admin/users/:id", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ deleted: true });
     expect(deleteUserMock).toHaveBeenCalledWith(7, "admin:boss@nbcc.test");
+  });
+
+  // Security review FIX #4: same TOCTOU race as PATCH — the pre-check can be raced, so the db
+  // layer's same-transaction guard is authoritative. LastAdminError from the delete -> 409.
+  it("409s { error: 'last_admin' } when the db's transactional guard rejects a delete that raced past the pre-check", async () => {
+    getManagedUserMock.mockResolvedValueOnce(EDITOR_USER);
+    isLastEnabledAdminMock.mockResolvedValueOnce(false);
+    deleteUserMock.mockRejectedValueOnce(new MockLastAdminError());
+    const res = await runDelete({ role: "admin" });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "last_admin" });
   });
 });
 
@@ -434,6 +474,23 @@ describe("POST /api/admin/forgot (public, no account enumeration)", () => {
     const res = await runForgot({ token: "", body: { email: "not-an-email" }, ip: "1.1.1.5" });
     expect(res.statusCode).toBe(400);
     expect(getManagedUserByEmailMock).not.toHaveBeenCalled();
+  });
+
+  // Security review FIX #3: the response must not wait on the send, or its latency leaks whether
+  // an active account exists. Prove it's fire-and-forget by having the send hang forever and
+  // asserting the route still resolves (this test would time out under the old awaited code).
+  it("200s immediately without waiting for the reset email send (no timing leak)", async () => {
+    // A fresh email — forgotEmailLimiter is created once at module scope (not reset between
+    // tests), so reusing "admin@nbcc.test" here would trip its max:3 window from earlier tests.
+    getManagedUserByEmailMock.mockResolvedValueOnce({ ...ADMIN_USER, id: 9, email: "hangs@nbcc.test" });
+    getPasswordHashMock.mockResolvedValueOnce("scrypt$abc$def");
+    // A send that never resolves: if the route awaited it, this test would hang until Vitest's
+    // per-test timeout and fail — proving the fix actually stopped awaiting the send.
+    sendAdminResetMock.mockImplementationOnce(() => new Promise(() => {}));
+    const res = await runForgot({ token: "", body: { email: "hangs@nbcc.test" }, ip: "1.1.1.6" });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(sendAdminResetMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -563,6 +620,27 @@ describe("POST /api/admin/set-password (public)", () => {
     const res = await runSetPassword({ token: "", body: { token, password: "short" }, ip: "2.2.2.7" });
     expect(res.statusCode).toBe(400);
     expect(getManagedUserMock).not.toHaveBeenCalled();
+    expect(setUserPasswordMock).not.toHaveBeenCalled();
+  });
+
+  // Security review FIX #5: a disabled account's reset-token bind can still match its (never
+  // cleared) password_hash. Completing set-password must NOT be able to reactivate it — same
+  // generic invalid-link 400 as a bad token, and the password/status must never be touched.
+  it("400s a valid, correctly-bound token whose target is disabled, and never sets the password (cannot self-reactivate)", async () => {
+    const token = issueAdminActionToken({
+      sub: 8,
+      purpose: "reset",
+      bind: "scrypt$abc$def",
+      now: new Date(),
+      secret: SECRET,
+    });
+    getManagedUserMock.mockResolvedValueOnce({ ...ADMIN_USER, id: 8, status: "disabled" });
+    const res = await runSetPassword({
+      token: "",
+      body: { token, password: "a-long-enough-password" },
+      ip: "2.2.2.8",
+    });
+    expect(res.statusCode).toBe(400);
     expect(setUserPasswordMock).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { writeWithAudit } from "./donations";
 
@@ -34,6 +35,34 @@ export class DuplicateEmailError extends Error {
 // pg-specific error class, since node-postgres throws a plain Error with `code` attached.
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
+}
+
+// Security review FIX #4: thrown by setUserRole/setUserStatus/deleteUser's transactional
+// anti-lockout guard (assertAdminsRemain) when the mutation just performed would leave zero
+// enabled admins. Distinct from wouldOrphanAdmins/isLastEnabledAdmin (the route's fast, but
+// non-atomic, PRE-check) — this is the AUTHORITATIVE guard, run inside the same transaction as
+// the write, so a concurrent request can no longer race past the pre-check and commit anyway.
+// The route layer (src/routes/admin-users.ts) catches this and maps it to the same 409
+// { error: "last_admin" } the pre-check produces.
+export class LastAdminError extends Error {
+  constructor() {
+    super("this change would leave zero enabled admins");
+    this.name = "LastAdminError";
+  }
+}
+
+// Count remaining enabled admins USING THE CALLER'S TRANSACTION CLIENT (not the pool), so the
+// count reflects the mutation just performed in the same BEGIN…COMMIT, and throw LastAdminError
+// if it is zero. writeWithAudit's catch rolls the whole transaction back on any throw, so the
+// mutation, its audit row, and this check either all commit or all roll back together — closing
+// the TOCTOU gap between the route's pre-check and the write.
+async function assertAdminsRemain(client: PoolClient): Promise<void> {
+  const row = (
+    await client.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM users WHERE role = 'admin' AND status <> 'disabled'`,
+    )
+  ).rows[0];
+  if (row.n === 0) throw new LastAdminError();
 }
 
 // All users, newest first — backs the admin Team table (Task 8). Read-only (pool.query, no
@@ -110,11 +139,14 @@ export async function inviteUser(
   }
 }
 
-// Change a user's role (Task 5's PATCH /api/admin/users/:id). The caller (route layer) is
-// responsible for running wouldOrphanAdmins first when this is a demotion away from 'admin' — this
-// function performs the write unconditionally. Audited admin_user.role_changed. Returns the updated
-// ManagedUser, or null when the id doesn't exist (RETURNING is empty — no audit row is written, since
-// writeWithAudit's toAudit only runs after a successful write; a no-op PATCH stays silent).
+// Change a user's role (Task 5's PATCH /api/admin/users/:id). The caller (route layer) runs the
+// fast wouldOrphanAdmins pre-check first (good UX, but not atomic with this write); this function
+// then re-checks INSIDE ITS OWN TRANSACTION after the mutation (assertAdminsRemain) — the
+// authoritative anti-lockout guard, closing the TOCTOU gap the pre-check alone leaves open.
+// Throws LastAdminError (rolling the write back) if the change just made leaves zero enabled
+// admins. Audited admin_user.role_changed. Returns the updated ManagedUser, or null when the id
+// doesn't exist (RETURNING is empty — no audit row is written, since writeWithAudit's toAudit only
+// runs after a successful write; a no-op PATCH stays silent, and the admin-count check is skipped).
 export async function setUserRole(id: number, role: string, actor: string): Promise<ManagedUser | null> {
   return writeWithAudit(
     async (client) => {
@@ -124,7 +156,9 @@ export async function setUserRole(id: number, role: string, actor: string): Prom
           [role, id],
         )
       ).rows[0];
-      return row ?? null;
+      if (!row) return null;
+      await assertAdminsRemain(client);
+      return row;
     },
     () => ({
       actor,
@@ -136,8 +170,10 @@ export async function setUserRole(id: number, role: string, actor: string): Prom
   );
 }
 
-// Enable/disable a user (Task 5's PATCH /api/admin/users/:id). The caller is responsible for running
-// wouldOrphanAdmins first when status is moving to 'disabled'. Audited admin_user.status_changed.
+// Enable/disable a user (Task 5's PATCH /api/admin/users/:id). The caller runs the fast
+// wouldOrphanAdmins pre-check first when status is moving to 'disabled'; this function then
+// re-checks INSIDE ITS OWN TRANSACTION after the mutation (assertAdminsRemain) — see setUserRole's
+// comment for why the pre-check alone is not sufficient. Audited admin_user.status_changed.
 export async function setUserStatus(
   id: number,
   status: "active" | "disabled",
@@ -151,7 +187,9 @@ export async function setUserStatus(
           [status, id],
         )
       ).rows[0];
-      return row ?? null;
+      if (!row) return null;
+      await assertAdminsRemain(client);
+      return row;
     },
     () => ({
       actor,
@@ -163,9 +201,11 @@ export async function setUserStatus(
   );
 }
 
-// Remove a user (Task 5's DELETE /api/admin/users/:id). The caller is responsible for running
-// wouldOrphanAdmins first. Audited admin_user.removed — the audit row carries a snapshot of the
-// deleted row's email/role since the user itself no longer exists to look up later.
+// Remove a user (Task 5's DELETE /api/admin/users/:id). The caller runs the fast
+// wouldOrphanAdmins pre-check first; this function then re-checks INSIDE ITS OWN TRANSACTION
+// after the delete (assertAdminsRemain) — see setUserRole's comment for why the pre-check alone
+// is not sufficient. Audited admin_user.removed — the audit row carries a snapshot of the deleted
+// row's email/role since the user itself no longer exists to look up later.
 export async function deleteUser(id: number, actor: string): Promise<boolean> {
   return writeWithAudit(
     async (client) => {
@@ -175,7 +215,9 @@ export async function deleteUser(id: number, actor: string): Promise<boolean> {
           [id],
         )
       ).rows[0];
-      return row ?? null;
+      if (!row) return null;
+      await assertAdminsRemain(client);
+      return row;
     },
     (deleted) => ({
       actor,
@@ -188,9 +230,12 @@ export async function deleteUser(id: number, actor: string): Promise<boolean> {
 }
 
 // Set a user's password (invite acceptance or admin/self-service reset, Task 5's set-password
-// endpoint) — sets password_hash and flips status to 'active' (an invited user becomes active on
-// first password set; a disabled user cannot reach this path since its reset link check is against
-// the live row). The specific audit action distinguishes the two flows for the audit trail.
+// endpoint) — sets password_hash and, ONLY when the user is currently 'invited', flips status to
+// 'active' (first password set = invite acceptance). Security review FIX #5: a 'disabled' or
+// already-'active' user's status is left UNCHANGED — status is never unconditionally forced to
+// 'active' here. The route layer independently rejects a disabled target before ever calling this
+// (postAdminSetPassword), but this CASE guard is defense in depth: even if that route-level check
+// were bypassed, this UPDATE can never promote a disabled account back to active.
 export async function setUserPassword(
   id: number,
   passwordHash: string,
@@ -199,10 +244,12 @@ export async function setUserPassword(
 ): Promise<void> {
   await writeWithAudit(
     async (client) => {
-      await client.query(`UPDATE users SET password_hash = $1, status = 'active' WHERE id = $2`, [
-        passwordHash,
-        id,
-      ]);
+      await client.query(
+        `UPDATE users
+         SET password_hash = $1, status = CASE WHEN status = 'invited' THEN 'active' ELSE status END
+         WHERE id = $2`,
+        [passwordHash, id],
+      );
       return { id };
     },
     (r) => ({

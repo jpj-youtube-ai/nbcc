@@ -4,6 +4,7 @@ import { healthRouter } from "./routes/health";
 import { apiRouter, rejectOversizedMyStoryJson } from "./routes/api";
 import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
+import { adminUsersRouter } from "./routes/admin-users";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
@@ -39,6 +40,8 @@ export function createApp() {
   app.use(tickerRouter);
   app.use(portalRouter);
   app.use(adminRouter);
+  // Admin user management + forgot/set-password (admin-management Phase 1, Task 5).
+  app.use(adminUsersRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

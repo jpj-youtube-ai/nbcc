@@ -156,6 +156,51 @@ export async function sendPortalMagicLink(message: PortalMagicLinkEmail): Promis
   }
 }
 
+// Admin team invite / password-reset emails (admin-management Phase 1, Task 5). A staff invite or
+// an admin/self-service password reset is a one-time, expiring, purpose-scoped link (built by
+// adminActionLink on PORTAL_BASE_URL, signed with ADMIN_SESSION_SECRET — src/admin/tokens.ts).
+// Mirrors sendPortalMagicLink exactly: same minimal payload shape, same stub-seam + best-effort
+// contract as the other sends (no network outside production when EMAIL_SEND_URL is a placeholder).
+export interface AdminInviteEmail {
+  email: string;
+  fullName: string;
+  link: string; // the one-time, expiring invite-accept URL (/invite?token=...)
+}
+
+export async function sendAdminInvite(message: AdminInviteEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Admin invite email send responded ${res.status}`);
+  }
+}
+
+export interface AdminResetEmail {
+  email: string;
+  fullName: string;
+  link: string; // the one-time, expiring password-reset URL (/reset?token=...)
+}
+
+export async function sendAdminReset(message: AdminResetEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(message),
+  });
+  if (!res.ok) {
+    throw new Error(`Admin reset email send responded ${res.status}`);
+  }
+}
+
 // Subscription-lapsed notices (TASK-092/REQ-065). When a monthly subscription lapses (Stripe
 // Smart Retries exhausted) the platform sends, post-commit and best-effort, two messages: a
 // notice to the donor (only when they gave an email + consent — gated by the caller) and a fixed

@@ -23,6 +23,9 @@ vi.mock("../../src/config", () => ({
   },
 }));
 
+const { touchLastLoginMock } = vi.hoisted(() => ({ touchLastLoginMock: vi.fn() }));
+vi.mock("../../src/db/admin-users", () => ({ touchLastLogin: touchLastLoginMock }));
+
 import { hashPassword, verifyPassword } from "../../src/admin/password";
 import { signAdminSession, verifyAdminSession, AdminSessionError } from "../../src/admin/session";
 import { postAdminLogin } from "../../src/routes/admin";
@@ -102,15 +105,25 @@ beforeAll(async () => {
 });
 
 // The admin user row findUserByEmail returns for the known email; undefined = unknown email.
-let userRow: { id: number; email: string; full_name: string; role: string; password_hash: string | null } | undefined;
+let userRow:
+  | { id: number; email: string; full_name: string; role: string; password_hash: string | null; status: string }
+  | undefined;
 
 beforeEach(() => {
   queryMock.mockReset();
+  touchLastLoginMock.mockReset();
   queryMock.mockImplementation(async (_sql: string, params: unknown[]) => {
     const email = params?.[0];
     return { rows: userRow && userRow.email === email ? [userRow] : [], rowCount: 0 };
   });
-  userRow = { id: 1, email: "kenny@nbcc.test", full_name: "Kenny Admin", role: "admin", password_hash: ADMIN_HASH };
+  userRow = {
+    id: 1,
+    email: "kenny@nbcc.test",
+    full_name: "Kenny Admin",
+    role: "admin",
+    password_hash: ADMIN_HASH,
+    status: "active",
+  };
 });
 
 describe("POST /api/admin/login (REQ-062)", () => {
@@ -125,6 +138,40 @@ describe("POST /api/admin/login (REQ-062)", () => {
     expect(body.user).toMatchObject({ id: 1, role: "admin", email: "kenny@nbcc.test" });
     // The password hash is never echoed back.
     expect(JSON.stringify(res.body)).not.toContain(ADMIN_HASH);
+    // A successful login stamps last_login_at (Task 6).
+    expect(touchLastLoginMock).toHaveBeenCalledWith(1);
+  });
+
+  it("returns 401 for a disabled user with the CORRECT password, and does not issue a session (Task 6)", async () => {
+    userRow = {
+      id: 3,
+      email: "kenny@nbcc.test",
+      full_name: "Kenny",
+      role: "admin",
+      password_hash: ADMIN_HASH,
+      status: "disabled",
+    };
+    const res = await login({ email: "kenny@nbcc.test", password: "s3cret-admin-pw" });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toHaveProperty("token");
+    // Same generic message as a bad password — no account enumeration of the disabled status.
+    expect(res.body).toEqual({ error: "Invalid email or password" });
+    expect(touchLastLoginMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 for an invited (no-password-yet) user even if somehow a password is supplied (Task 6)", async () => {
+    userRow = {
+      id: 4,
+      email: "kenny@nbcc.test",
+      full_name: "Kenny",
+      role: "admin",
+      password_hash: ADMIN_HASH,
+      status: "invited",
+    };
+    const res = await login({ email: "kenny@nbcc.test", password: "s3cret-admin-pw" });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toHaveProperty("token");
+    expect(touchLastLoginMock).not.toHaveBeenCalled();
   });
 
   it("returns 401 for a wrong password", async () => {

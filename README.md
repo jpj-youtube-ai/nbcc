@@ -1043,6 +1043,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/admin/users/:id/reset` | **implemented** | admin-management Phase 1 (Admin only; admin-initiated password reset, emails a reset link) |
 | `POST /api/admin/forgot` | **implemented** | admin-management Phase 1 (public, rate-limited; self-service "forgot password", always `200` — no account enumeration) |
 | `POST /api/admin/set-password` | **implemented** | admin-management Phase 1 (public, rate-limited; accepts an invite or reset token + a new password) |
+| `PATCH /api/admin/users/:id/permissions` | **implemented** | admin-management Phase 2 (TASK-186; `team:edit` only; sets a person's complete 13-section view/edit matrix, audited `admin_user.permissions_changed`; `409 {error:"last_admin"}` if it would leave zero users with effective `team:edit`) |
+| `GET /api/admin/me` | **implemented** | admin-management Phase 2 (TASK-186; any valid, non-disabled session; returns the caller's own effective permissions for nav filtering + write-control gating client-side) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1151,9 +1153,13 @@ new admin still can't log in until its password is set out of band (see the ops 
 behalf — the mirror of the self-serve donor-portal routes (`src/routes/portal.ts`), but authorised by
 the **admin session token** (`Authorization: Bearer …`) instead of a magic-link token, and addressing
 a donor by id. A shared `authorizeAdmin(req, res, minRole)` helper (the admin analogue of portal's
-`authOrReject`) rejects a **missing/invalid/expired token with 401** and enforces the role rank
-`viewer < editor < admin`: **GET** needs `viewer` (read-only, any role); the three writes need
-`editor`, so a **Viewer gets 403** on any of them. Each endpoint **reuses the existing audited write
+`authOrReject`) rejected a **missing/invalid/expired token with 401** and enforced the role rank
+`viewer < editor < admin`: **GET** needed `viewer` (read-only, any role); the three writes needed
+`editor`, so a **Viewer got 403** on any of them. As of admin-management Phase 2 (TASK-186, below)
+`authorizeAdmin` is retired — these routes now call `authorizeSection(req, res, "donations", "view"
+| "edit")`, which preserves the exact same effective access (a `viewer`-role user's default matrix
+grants `donations:view`, `editor`+ grants `donations:edit`) while also honouring any per-user
+override. Each endpoint **reuses the existing audited write
 helpers** rather than duplicating logic: **PATCH** → `updateDonorPortal` (same `donor.updated`
 `writeWithAudit` transaction as self-serve, now with the admin as `actor`); **subscription cancel** →
 the same reduce-instead gate (REQ-055), then `cancelSubscription` (Stripe) + a
@@ -1181,8 +1187,9 @@ transaction (`reviseDeclaration`'s `syncDonorFullName`, TASK-131). Proven by
 
 **`GET /api/admin/search/{donors,declarations,donations}?q=` (REQ-062 · TASK-108).** Read-only admin
 search over the three core tables by a free `?q=` query — a name, email, id or postcode. Each is
-authorised by the same `authorizeAdmin` gate at **`viewer`** (read-only, so any staff role may search),
-so a **missing/invalid token is 401**; a **missing/blank `q` is 400**. The queries live in
+authorised (post-Phase-2) by `authorizeSection(req, res, "search", "view")` — read-only, so any
+role/matrix that grants `search:view` may call it — so a **missing/invalid token is 401**; a
+**missing/blank `q` is 400**. The queries live in
 `src/db/admin.ts` (`searchDonors`/`searchDeclarations`/`searchDonations`, read-only `pool.query` like
 the other admin reads): each matches the query case-insensitively (`ILIKE '%q%'`) across the relevant
 text columns — donor name/business/email; declaration first/last name + postcode; donation donor
@@ -1194,7 +1201,8 @@ the blank-`q` 400) and end to end by the `@db` `features/admin-api.feature`.
 
 **`POST /api/admin/claim-batches/:id/submit` + `GET /api/admin/claims/adjustment-due` (REQ-052/REQ-063
 · TASK-109).** The admin claim operations. **Submit** marks a claim batch submitted — a state change,
-so `authorizeAdmin` at **`editor`** (a Viewer gets 403). `submitClaimBatch` (`src/db/admin.ts`) mirrors
+so (post-Phase-2) `authorizeSection(req, res, "claims", "edit")` — a user without `claims:edit`
+gets 403. `submitClaimBatch` (`src/db/admin.ts`) mirrors
 `assignDonationToBatch`: in one `writeWithAudit` transaction it locks the batch row `FOR UPDATE`,
 rejects an unknown id (**404**) or a non-`open` batch (already submitted / adjustment_due → **409**),
 sets `status='submitted', submitted_at=now()` and appends **exactly one `claim_batch.submitted` audit
@@ -1496,8 +1504,8 @@ proven by `test/unit/admin-contact-routes.test.ts` (mocked `src/db/contact`, no 
 **Admin user management: the Team tab (admin-management Phase 1).** An Admin manages who can sign
 in to `/admin` — invite, remove, disable, and set each person's role — from the dashboard, with no
 migration or manual DB write needed. It extends the existing `users` table and admin auth (role
-stays `viewer`/`editor`/`admin`; the per-section view/edit matrix is deferred to a later phase)
-rather than replacing it.
+stays `viewer`/`editor`/`admin`; the per-section view/edit matrix — Phase 2, documented below —
+lets an admin fine-tune a person's access beyond their role's defaults) rather than replacing it.
 
 - **Data model.** An additive migration (`migrations/1783724491770_admin-user-lifecycle.js`) adds
   `status` (`invited`\|`active`\|`disabled`, default `active` so every existing admin keeps signing
@@ -1545,6 +1553,72 @@ rather than replacing it.
   and `features/admin-users.feature` (`@admin @db`) covers the API end to end: invite, accept via
   set-password then log in, forgot-password's no-enumeration `200`, a disabled user's login being
   blocked, a non-admin's `403`, and the last-admin `409` guard.
+
+**Per-section view/edit permission matrix (admin-management Phase 2, TASK-186).** Replaces the flat
+`viewer < editor < admin` role gate with a per-person, per-section `none`/`view`/`edit` matrix,
+enforced fresh on every admin request — closing the stale-session gap Phase 1 left, where a
+disabled user's still-valid token kept working until it expired (up to 8h).
+
+- **The matrix (`src/admin/permissions.ts`, pure, no DB/Express).** 13 sections — `overview`,
+  `search`, `donations`, `claims`, `gasds`, `subscriptions`, `stories`, `ticker`, `contact`,
+  `newsletter`, `thank-you`, `audit`, `team` — each `none`\|`view`\|`edit` (`edit` implies `view`).
+  `overview` has no gated route of its own (it aggregates other sections' widgets, which enforce
+  their own gates) and is always visible in the nav. `roleToPermissions(role)` gives each role's
+  **default** matrix (`admin` → edit everywhere incl. `team`; `editor` → edit on the operational
+  sections, view on `audit`, none on `team`; `viewer` → view everywhere except `team`, no edit
+  anywhere) — a person's **effective** permissions (`effectivePermissions`) are their stored
+  `permissions` JSONB if non-empty, else their role's defaults, so every existing user kept exactly
+  their pre-Phase-2 access with **zero data migration**. `can(perms, section, level)` is the single
+  predicate both the gate and the anti-lockout guard use to check a level.
+- **Storage.** An additive migration (`migrations/1783729848662_user-permissions.js`) adds
+  `permissions jsonb NOT NULL DEFAULT '{}'` to `users` (an empty map = "use my role's defaults").
+  `getUserAuthRow` (`src/db/admin-users.ts`) is a minimal, hot-path SELECT of `id, email, status,
+  role, permissions` — never `password_hash` — reloaded fresh on every gated request.
+- **`authorizeSection` (`src/routes/admin-authz.ts`), replacing `authorizeAdmin`.** `async
+  authorizeSection(req, res, section, level)` verifies the bearer session token (same parsing/401
+  messages as the old `authorizeAdmin`), loads the caller's **live** row, rejects a **missing or
+  `disabled`** user with the same generic `401` (no enumeration), computes their effective
+  permissions and checks `can(perms, section, level)` — insufficient access is `403 {error:
+  "forbidden"}`. All ~48 `/api/admin/*` handlers (`src/routes/admin.ts`, `src/routes/admin-users.ts`)
+  were refactored from `authorizeAdmin(req, res, minRole)` to `await authorizeSection(req, res,
+  section, level)`, preserving each route's pre-Phase-2 access exactly (`level` was `view` where
+  the old gate was `viewer`, else `edit`); `authorizeAdmin` no longer has any caller.
+  `authorizeAny(req, res)` is a lighter variant — a valid, non-disabled session, no section check —
+  used only by `/me` below. The three public auth routes (`login`, `forgot`, `set-password`) are
+  untouched.
+- **`PATCH /api/admin/users/:id/permissions`** (`team:edit` only, `src/routes/admin-users.ts`).
+  Body is a **complete** 13-section matrix (`permissionsSchema`, `.strict()` on both the outer body
+  and the inner map, so an unknown key is a `400`, not silently ignored) — matching what the Team
+  matrix editor always submits. `setUserPermissions` (`src/db/admin-users.ts`) writes it and appends
+  an audited `admin_user.permissions_changed` row in the same transaction (`writeWithAudit`).
+- **Anti-lockout guard, re-expressed for the matrix.** "Last admin" is now "the last non-disabled
+  user with **effective `team:edit`**" rather than "the last `role='admin'`" — `ADMIN_HOLDER_SQL`
+  (`src/db/admin-users.ts`) and the pure `wouldOrphanAdmins` predicate both key off a stored
+  `permissions.team === "edit"`, falling back to `role === 'admin'` only when a user has no stored
+  matrix at all (an empty `{}`). The same fast pre-check + transactional `assertAdminsRemain`
+  pattern as Phase 1's role/status/delete guards applies to a permissions `PATCH` that would move
+  the target's `team` level away from `edit`: `409 {error:"last_admin"}`, no write.
+- **`GET /api/admin/me`** — any valid, non-disabled session (via `authorizeAny`, no section check).
+  Returns `{ email, permissions }` — the caller's own effective matrix — so the front-end can filter
+  its nav and gate write controls without a second source of truth. **Not itself a security
+  boundary**: every other route's `authorizeSection` call is what actually enforces access: hiding a
+  nav link or a button is UX, not authorization.
+- **Team matrix editor + permission-aware nav (`admin.html`, `assets/js/admin/app.js`).** Opening a
+  Team row now offers a **Manage access** view: the 13 sections as rows, a none/view/edit control
+  per row, pre-filled from the person's effective permissions, plus **Viewer / Editor / Admin**
+  preset buttons that fill the matrix from `roleToPermissions` (a UX convenience only — the actual
+  access is whatever gets saved). Save calls `PATCH .../permissions`; a `409 last_admin` shows the
+  same inline "that is the last admin" message Phase 1 uses elsewhere. The editor itself is gated
+  behind the caller having `team:edit` (`canEdit("team")`). On load, `GET /api/admin/me` populates a
+  module-level `myPermissions`; the nav hides any `.admin-nav-link` whose `data-view` section the
+  caller cannot `view` (`overview` always stays visible), and every `load*` view's write controls
+  are gated by a `canEdit(section)` helper, replacing Phase 1's flat `roleCan(currentRole,
+  "editor")` checks throughout.
+- Proven end to end by `features/admin-permissions.feature` (`@admin @db`): a view-only user reads
+  their permitted section but is `403`'d on a write and on a section they cannot even view; granting
+  a new section unblocks a write there; a non-`team:edit` user is `403`'d from the permissions
+  endpoint itself; removing the last effective `team:edit` holder is `409 last_admin`; and `GET
+  /api/admin/me` reports the caller's own effective matrix.
 
 **`POST /api/contact` now stores, not forwards (2026-07-10 contact-inbox spec).** The public enquiry
 endpoint (REQ-030) still validates `{ firstName, lastName, email, message }` zod-first

@@ -115,6 +115,8 @@
       if (subCard) subCard.hidden = !canEdit("newsletter");
       var testBtn0 = el("newsletterTest");
       if (testBtn0) testBtn0.hidden = !canEdit("newsletter");
+      var tmplBtn0 = el("newsletterTemplate");
+      if (tmplBtn0) tmplBtn0.disabled = !canEdit("newsletter");
       nlRefreshAttachments();
       selectView("overview");
       loadOverview();
@@ -1951,6 +1953,8 @@
         el("newsletterSave").disabled = sent || !canWrite;
         el("newsletterTest").hidden = !canWrite;
         el("newsletterNew").disabled = !canWrite;
+        var tmplBtn = el("newsletterTemplate");
+        if (tmplBtn) tmplBtn.disabled = !canWrite;
         el("newsletterMsg").textContent = sent
           ? "This newsletter has been sent and is read-only."
           : (!canWrite ? "You have read-only access to newsletters." : "");
@@ -2154,6 +2158,51 @@
     });
   }
 
+  // A ready-made starter newsletter that shows off the full range of blocks (every type, varied
+  // styles) with real NBCC content. "Start from template" loads it into the builder so an admin can
+  // tweak the copy and send, rather than starting from a blank canvas.
+  var NL_TEMPLATE = { blocks: [
+    { type: "masthead", variant: 0, data: { issueTitle: "The Night Before Christmas — Winter Update" } },
+    { type: "greeting", variant: 1, data: { lead: "Thank you for being part of the Night Before Christmas Campaign. Here is what your kindness has made possible across South West Scotland this year." } },
+    { type: "heading", variant: 1, data: { kicker: "Our impact", title: "What your gift made possible" } },
+    { type: "stats", variant: 1, data: { items: [
+      { number: "7,657", label: "Red Bags delivered" },
+      { number: "£128k", label: "Raised together" },
+      { number: "420", label: "Volunteers" },
+    ] } },
+    { type: "story", variant: 0, data: {
+      imageUrl: "https://nbcc.scot/assets/img/why-packing.jpg",
+      title: "Packing night",
+      body: "In a single evening our volunteers filled thousands of Red Bags Full of Joy — thoughtful gifts that bring dignity, comfort and a moment of joy to children, young people and vulnerable adults.",
+      label: "Read more", href: "https://nbcc.scot",
+    } },
+    { type: "divider", variant: 1, data: {} },
+    { type: "spotlight", variant: 1, data: {
+      photoUrl: "https://nbcc.scot/assets/img/nbcc-elf.png",
+      name: "A volunteer", role: "Red Bag packer",
+      quote: "Seeing the bags come together, knowing each one reaches someone who needs it — that is what Christmas is about.",
+    } },
+    { type: "text", variant: 3, data: { text: "Every gift matters. £10 fills a Red Bag; £25 brightens a whole family's Christmas morning." } },
+    { type: "heading", variant: 2, data: { title: "Ways you can help" } },
+    { type: "waysToHelp", variant: 0, data: { items: [
+      { icon: "🎁", title: "Donate", body: "Fund a Red Bag Full of Joy.", label: "Donate", href: "https://nbcc.scot/donate" },
+      { icon: "🤝", title: "Volunteer", body: "Give a little time this season.", label: "Join us", href: "https://nbcc.scot" },
+      { icon: "📣", title: "Spread the word", body: "Share our story with a friend.", label: "Share", href: "https://nbcc.scot" },
+    ] } },
+    { type: "events", variant: 0, data: { items: [
+      { day: "14", month: "DEC", name: "Community packing night", location: "Ayr", label: "Register", href: "https://nbcc.scot" },
+      { day: "20", month: "DEC", name: "Red Bag delivery day", location: "South West Scotland", label: "Register", href: "https://nbcc.scot" },
+    ] } },
+    { type: "image", variant: 2, data: {
+      url: "https://nbcc.scot/assets/img/home-red-bags-handover.jpg",
+      alt: "Volunteers handing over Red Bags", caption: "Red Bags on their way to families across the region.",
+    } },
+    { type: "donationCta", variant: 1, data: { heading: "Help us reach even more this Christmas", label: "Make a donation today", href: "https://nbcc.scot/donate" } },
+    { type: "button", variant: 3, data: { label: "Read more stories", href: "https://nbcc.scot" } },
+    { type: "divider", variant: 3, data: {} },
+    { type: "text", variant: 2, data: { text: "How do we change the world? One random act of kindness at a time." } },
+  ] };
+
   var nlForm = el("newsletterForm");
   if (nlForm) {
     el("newsletterNew").addEventListener("click", function () {
@@ -2170,6 +2219,24 @@
       nlRefreshPreview();
       nlRefreshAttachments();
     });
+
+    // Start a fresh (unsaved) newsletter pre-filled with the showcase template.
+    if (el("newsletterTemplate")) {
+      el("newsletterTemplate").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        el("newsletterId").value = "";
+        el("newsletterSubject").value = "Winter Update";
+        nlDoc = JSON.parse(JSON.stringify(NL_TEMPLATE));
+        nlSent = false;
+        el("newsletterSend").hidden = true; // save first to get an id
+        el("newsletterSave").disabled = false;
+        el("newsletterMsg").textContent = "Loaded the template — edit the copy, then Save.";
+        nlRenderPalette();
+        nlRenderCanvas();
+        nlRefreshPreview();
+        nlRefreshAttachments();
+      });
+    }
 
     // Send a single test copy to the signed-in admin's own inbox — the current builder doc, unsaved
     // changes and all (mirrors the preview payload). Lets you check real-inbox rendering before a blast.

@@ -364,7 +364,17 @@
 .nl-item-add:hover { border-color: var(--crimson); color: var(--crimson); }
 
 /* Live preview column. */
-.nl-preview { width: 100%; height: 760px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-sm); }
+/* min-width:0 lets the grid tracks shrink below the 660px preview iframe's intrinsic width, so the
+   preview scales to fit the column instead of forcing the column (and page) wider. */
+.nl-left, .nl-right { min-width: 0; }
+/* Preview column sticks so it stays on screen while you scroll a long list of blocks. */
+.nl-right { position: sticky; top: 16px; align-self: start; }
+/* The wrapper is the (capped) scroll viewport; the iframe inside is the true 660px email, zoomed
+   down by JS (nlFitPreview) to fit the column width — so there is no horizontal scroll, and vertical
+   scrolling happens on the wrapper (its position is preserved across live-preview reloads). */
+.nl-preview-wrap { height: min(760px, 78vh); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-sm); }
+.nl-preview { display: block; width: 660px; border: 0; background: #fff; }
+@media (max-width: 900px) { .nl-right { position: static; } }
 .nl-preview-label { margin: 0 0 .5rem; font-family: var(--font-body); font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--slate-soft); }
 .nl-actions { margin: .75rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }
 

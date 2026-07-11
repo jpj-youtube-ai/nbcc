@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
+import { roleToPermissions } from "../../src/admin/permissions";
 
 // TASK-168 (Task 25): jsdom coverage for the newsletter block builder wiring in
 // assets/js/admin/app.js — the browser-only IIFE that isn't exercised by the pure unit suite
@@ -41,7 +42,7 @@ const previewRequests: { body: Record<string, unknown> }[] = [];
 const sendRequests: { url: string }[] = []; // POST /:id/send calls (the actual blast)
 const recipientsFixture = { count: 2, emails: ["ann@bdd.example", "ben@bdd.example"] };
 
-function respond(url: string, init?: { method?: string; body?: string }) {
+function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
     status,
     ok: status < 400,
@@ -53,6 +54,15 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   const parsedBody = init?.body ? JSON.parse(init.body) : {};
 
   if (url.includes("/api/admin/login")) return j({ token: loginToken, user: { email: "s@nbcc", role: "editor" } });
+  if (url.includes("/api/admin/me")) {
+    // Admin Phase 2 (TASK-186): app.js calls GET /api/admin/me on init to filter the nav and gate
+    // write controls (e.g. the newsletterSend button) via canEdit(section). Decode the bearer
+    // token's role so this mock matches the server's effectivePermissions with no stored overrides.
+    const auth = init?.headers?.Authorization || "";
+    const claims = helpers.parseClaims(auth.replace(/^Bearer\s+/, "")) as { role?: string; email?: string } | null;
+    const role = claims?.role || "viewer";
+    return j({ email: claims?.email || "", permissions: roleToPermissions(role) });
+  }
   if (url.includes("/api/admin/newsletters/preview")) {
     previewRequests.push({ body: parsedBody });
     return j({ html: "<html><body>preview</body></html>" });
@@ -123,7 +133,7 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
-      Promise.resolve(respond(String(url), init as { method?: string; body?: string })),
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
     );
     // eslint-disable-next-line no-eval
     (0, eval)(appSrc); // run the IIFE against this DOM
@@ -302,7 +312,7 @@ describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
-      Promise.resolve(respond(String(url), init as { method?: string; body?: string })),
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
     );
     // eslint-disable-next-line no-eval
     (0, eval)(appSrc);

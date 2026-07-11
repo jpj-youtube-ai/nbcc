@@ -1,14 +1,15 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { writeWithAudit } from "./donations";
+import { effectivePermissions, can, type PermissionMap } from "../admin/permissions";
 
 // Admin user CRUD + the last-admin anti-lockout guard (Admin management Phase 1, Task 3). Every
 // mutating function is audited via writeWithAudit (one audit_log row per write, in the same
 // transaction as the state change — mirrors submitClaimBatch/createClaimBatch/markGasdsClaimed in
 // src/db/admin.ts). ManagedUser NEVER carries password_hash: every SELECT here lists the safe
-// columns explicitly (id, email, full_name, role, status, invited_at, last_login_at) rather than
-// SELECT * or reusing AdminUserRow (src/db/admin.ts), which does carry the hash for login-time
-// verification only.
+// columns explicitly (id, email, full_name, role, status, invited_at, last_login_at, permissions)
+// rather than SELECT * or reusing AdminUserRow (src/db/admin.ts), which does carry the hash for
+// login-time verification only.
 
 export type ManagedUser = {
   id: number;
@@ -18,9 +19,10 @@ export type ManagedUser = {
   status: string; // invited | active | disabled
   invited_at: Date | null;
   last_login_at: Date | null;
+  permissions: PermissionMap; // per-section view/edit overrides (Admin Phase 2); {} = fall back to role
 };
 
-const MANAGED_USER_COLUMNS = `id, email, full_name, role, status, invited_at, last_login_at`;
+const MANAGED_USER_COLUMNS = `id, email, full_name, role, status, invited_at, last_login_at, permissions`;
 
 // Thrown by inviteUser when the email already has a users row (pg unique-violation on
 // users.email, err.code === "23505"). The route layer (Task 5) maps this to 409.
@@ -37,9 +39,10 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
 }
 
-// Security review FIX #4: thrown by setUserRole/setUserStatus/deleteUser's transactional
-// anti-lockout guard (assertAdminsRemain) when the mutation just performed would leave zero
-// enabled admins. Distinct from wouldOrphanAdmins/isLastEnabledAdmin (the route's fast, but
+// Security review FIX #4: thrown by setUserRole/setUserStatus/deleteUser/setUserPermissions's
+// transactional anti-lockout guard (assertAdminsRemain) when the mutation just performed would
+// leave zero enabled "admins" — see the ADMIN_HOLDER_SQL comment below for what "admin" means
+// post-Phase-2. Distinct from wouldOrphanAdmins/isLastEnabledAdmin (the route's fast, but
 // non-atomic, PRE-check) — this is the AUTHORITATIVE guard, run inside the same transaction as
 // the write, so a concurrent request can no longer race past the pre-check and commit anyway.
 // The route layer (src/routes/admin-users.ts) catches this and maps it to the same 409
@@ -51,6 +54,38 @@ export class LastAdminError extends Error {
   }
 }
 
+// Admin Phase 2 (TASK-186): the anti-lockout guard is re-expressed from "role = 'admin'" to "a
+// non-disabled user whose EFFECTIVE permissions grant team:edit" — matching
+// effectivePermissions/can (src/admin/permissions.ts) exactly: a non-empty stored `permissions`
+// map is authoritative (checked via the `team` key), and only an EMPTY stored map falls back to
+// the role default (where only 'admin' grants team:edit). Expressed directly in SQL (rather than
+// pulled into JS + filtered) so the same predicate is reused, verbatim, by both the fast
+// pre-check's count (countEnabledAdmins) and the authoritative in-transaction guard
+// (assertAdminsRemain) below.
+const ADMIN_HOLDER_SQL = `status <> 'disabled' AND (
+  (permissions ? 'team' AND permissions->>'team' = 'edit')
+  OR (permissions = '{}'::jsonb AND role = 'admin')
+)`;
+
+// Write-skew fix (TASK-186): assertAdminsRemain's SELECT is unlocked, so under Postgres's
+// default READ COMMITTED, two concurrent team-affecting mutations on DIFFERENT rows (e.g.
+// disable admin A + disable admin B, run in parallel) each run their own SELECT before either
+// COMMITs — so each sees the OTHER admin as still-enabled (their write is uncommitted from this
+// transaction's point of view), both guards pass, both COMMIT, and the team ends up with zero
+// enabled admins even though the guard was supposed to make that impossible (classic write-skew:
+// two transactions each individually preserve the invariant against what they can see, but not
+// against what the other is doing). Fix: serialize the four team-affecting mutations
+// (setUserRole/setUserStatus/deleteUser/setUserPermissions) on one shared Postgres
+// transaction-level ADVISORY LOCK, acquired via pg_advisory_xact_lock at the top of each
+// transaction, before its SELECT/UPDATE/DELETE. Only one such transaction can be "inside" the
+// locked section at a time; pg_advisory_xact_lock blocks the second caller until the first
+// COMMITs or ROLLBACKs (auto-releasing the lock either way), so by the time the second
+// transaction's assertAdminsRemain SELECT runs, the first transaction's change is already
+// committed and visible. That makes "count remaining admins" and "mutate a row" effectively
+// atomic across concurrent team-affecting requests, closing the race without changing the guard's
+// predicate.
+const TEAM_MUTATION_LOCK = 0x6e626363; // 'nbcc' packed into a 32-bit advisory lock key
+
 // Count remaining enabled admins USING THE CALLER'S TRANSACTION CLIENT (not the pool), so the
 // count reflects the mutation just performed in the same BEGIN…COMMIT, and throw LastAdminError
 // if it is zero. writeWithAudit's catch rolls the whole transaction back on any throw, so the
@@ -58,9 +93,7 @@ export class LastAdminError extends Error {
 // the TOCTOU gap between the route's pre-check and the write.
 async function assertAdminsRemain(client: PoolClient): Promise<void> {
   const row = (
-    await client.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM users WHERE role = 'admin' AND status <> 'disabled'`,
-    )
+    await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM users WHERE ${ADMIN_HOLDER_SQL}`)
   ).rows[0];
   if (row.n === 0) throw new LastAdminError();
 }
@@ -88,6 +121,23 @@ export async function getManagedUser(id: number): Promise<ManagedUser | null> {
 export async function getManagedUserByEmail(email: string): Promise<ManagedUser | null> {
   const row = (
     await pool.query<ManagedUser>(`SELECT ${MANAGED_USER_COLUMNS} FROM users WHERE email = $1`, [email])
+  ).rows[0];
+  return row ?? null;
+}
+
+// The auth-relevant fields only (id, email, status, role, permissions) — NEVER password_hash.
+// Backs authorizeSection (Admin Phase 2, Task 3), which re-loads this fresh on EVERY admin
+// request so a disable or a permissions edit takes effect immediately, without waiting for the
+// session to expire. Deliberately a separate, minimal SELECT rather than reusing getManagedUser,
+// so the hot per-request path only ever touches the columns it needs.
+export async function getUserAuthRow(
+  id: number,
+): Promise<{ id: number; email: string; status: string; role: string; permissions: PermissionMap } | null> {
+  const row = (
+    await pool.query<{ id: number; email: string; status: string; role: string; permissions: PermissionMap }>(
+      `SELECT id, email, status, role, permissions FROM users WHERE id = $1`,
+      [id],
+    )
   ).rows[0];
   return row ?? null;
 }
@@ -150,6 +200,9 @@ export async function inviteUser(
 export async function setUserRole(id: number, role: string, actor: string): Promise<ManagedUser | null> {
   return writeWithAudit(
     async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
       const row = (
         await client.query<ManagedUser>(
           `UPDATE users SET role = $1 WHERE id = $2 RETURNING ${MANAGED_USER_COLUMNS}`,
@@ -181,6 +234,9 @@ export async function setUserStatus(
 ): Promise<ManagedUser | null> {
   return writeWithAudit(
     async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
       const row = (
         await client.query<ManagedUser>(
           `UPDATE users SET status = $1 WHERE id = $2 RETURNING ${MANAGED_USER_COLUMNS}`,
@@ -201,6 +257,43 @@ export async function setUserStatus(
   );
 }
 
+// Set a user's per-section permission matrix (Admin Phase 2, Task 5's PATCH
+// /api/admin/users/:id/permissions). The route layer runs a fast, non-atomic pre-check first
+// (isLastEnabledAdmin, mirroring setUserRole/setUserStatus's pattern); this function then
+// re-checks INSIDE ITS OWN TRANSACTION after the mutation (assertAdminsRemain) — the
+// AUTHORITATIVE guard, closing the same TOCTOU gap a concurrent request could otherwise race
+// past (see setUserRole's comment). Audited admin_user.permissions_changed. Returns the updated
+// ManagedUser, or null when the id doesn't exist (assertAdminsRemain is skipped on a no-op write).
+export async function setUserPermissions(
+  id: number,
+  permissions: PermissionMap,
+  actor: string,
+): Promise<ManagedUser | null> {
+  return writeWithAudit(
+    async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
+      const row = (
+        await client.query<ManagedUser>(
+          `UPDATE users SET permissions = $1 WHERE id = $2 RETURNING ${MANAGED_USER_COLUMNS}`,
+          [permissions, id],
+        )
+      ).rows[0];
+      if (!row) return null;
+      await assertAdminsRemain(client);
+      return row;
+    },
+    () => ({
+      actor,
+      action: "admin_user.permissions_changed",
+      entity: "user",
+      entityId: id,
+      data: { permissions },
+    }),
+  );
+}
+
 // Remove a user (Task 5's DELETE /api/admin/users/:id). The caller runs the fast
 // wouldOrphanAdmins pre-check first; this function then re-checks INSIDE ITS OWN TRANSACTION
 // after the delete (assertAdminsRemain) — see setUserRole's comment for why the pre-check alone
@@ -209,6 +302,9 @@ export async function setUserStatus(
 export async function deleteUser(id: number, actor: string): Promise<boolean> {
   return writeWithAudit(
     async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
       const row = (
         await client.query<{ id: number; email: string; role: string }>(
           `DELETE FROM users WHERE id = $1 RETURNING id, email, role`,
@@ -268,29 +364,31 @@ export async function touchLastLogin(id: number): Promise<void> {
   await pool.query(`UPDATE users SET last_login_at = now() WHERE id = $1`, [id]);
 }
 
-// Count enabled admins (role='admin' AND status != 'disabled') — the input to the anti-lockout guard.
-// 'invited' admins count as enabled (they are not disabled), matching wouldOrphanAdmins's target
-// check below, which only cares about role/status as currently persisted.
+// Count remaining "admin holders" (see ADMIN_HOLDER_SQL above) — the input to the anti-lockout
+// guard. 'invited' holders count as enabled (they are not disabled), matching wouldOrphanAdmins's
+// target check below, which only cares about status/permissions/role as currently persisted.
 export async function countEnabledAdmins(): Promise<number> {
   const row = (
-    await pool.query<{ count: number }>(
-      `SELECT count(*)::int AS count FROM users WHERE role = 'admin' AND status != 'disabled'`,
-    )
+    await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM users WHERE ${ADMIN_HOLDER_SQL}`)
   ).rows[0];
   return row.count;
 }
 
 // The pure anti-lockout decision (unit-tested DB-free — test/unit/admin-users-guard.test.ts): would
-// applying `change` to `target` drop the enabled-admin count to zero? True only when the target is
-// itself currently an enabled admin (role='admin' and status!=='disabled') AND it is the only one
-// (enabledAdminCount <= 1). A non-admin target, or an admin when others remain, is always false.
+// applying `change` to `target` drop the count of "admin holders" to zero? True only when the
+// target itself CURRENTLY holds effective team:edit (a non-disabled user whose stored permissions
+// grant team:edit, or — when they have no stored overrides — whose role is 'admin'; see
+// effectivePermissions/can in src/admin/permissions.ts) AND it is the only one (enabledAdminCount
+// <= 1). `permissions` is optional here (defaults to the role fallback) so existing callers that
+// only ever dealt with role/status (e.g. the guard's own unit tests) keep working unchanged.
 export function wouldOrphanAdmins(
-  target: Pick<ManagedUser, "role" | "status">,
+  target: { role: string; status: string; permissions?: PermissionMap | null },
   change: "demote" | "disable" | "delete",
   enabledAdminCount: number,
 ): boolean {
-  const targetIsEnabledAdmin = target.role === "admin" && target.status !== "disabled";
-  if (!targetIsEnabledAdmin) return false;
+  const perms = effectivePermissions({ role: target.role, permissions: target.permissions ?? null });
+  const targetHasTeamEdit = target.status !== "disabled" && can(perms, "team", "edit");
+  if (!targetHasTeamEdit) return false;
   return enabledAdminCount <= 1;
 }
 

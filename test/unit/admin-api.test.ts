@@ -1,21 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// TASK-106 (REQ-062): role-gated admin endpoints mirroring the self-serve donor actions. An admin
-// acts on a donor's behalf: GET/PATCH /api/admin/donors/:id, POST …/subscription/cancel and POST
-// …/gift-aid/cancel. Each requires a valid admin session token (401 otherwise) and enforces the role
-// rank — Viewer is read-only (403 on any write), Editor and Admin may write. Every successful write
+// TASK-106 (REQ-062) + Admin management Phase 2 (TASK-186): role-gated admin endpoints mirroring the
+// self-serve donor actions. An admin acts on a donor's behalf: GET/PATCH /api/admin/donors/:id,
+// POST …/subscription/cancel and POST …/gift-aid/cancel. Each requires a valid admin session token
+// (401 otherwise) and is now gated by authorizeSection's per-section view/edit matrix (Phase 2) —
+// donations/claims/gasds/search sections here. A Viewer-equivalent (view-only) permission is
+// read-only (403 on any write); an editor/admin-equivalent (edit) permission may write. The DB row
+// authorizeSection loads (getUserAuthRow, src/db/admin-users) is mocked here so each test's `role`
+// still drives the same view/edit outcome it always did, via the role->permissions fallback
+// (effectivePermissions), matching the routes' new section+level gates 1:1. Every successful write
 // appends its audit_log row in the same transaction (writeWithAudit — the truth model). DB-free:
 // pool (reads + the writeWithAudit transaction) and config are mocked, and the Stripe client stubbed.
 
-const { queryMock, clientQueryMock, mockClient, connect, cancelSubscriptionMock } = vi.hoisted(() => {
-  const queryMock = vi.fn(); // pool.query — reads
-  const clientQueryMock = vi.fn(); // client.query — writeWithAudit transactions
-  const mockClient = { query: clientQueryMock, release: vi.fn() };
-  const connect = vi.fn(async () => mockClient);
-  const cancelSubscriptionMock = vi.fn(async () => ({ id: "sub_123", status: "canceled" }));
-  return { queryMock, clientQueryMock, mockClient, connect, cancelSubscriptionMock };
-});
+const { queryMock, clientQueryMock, mockClient, connect, cancelSubscriptionMock, getUserAuthRowMock } = vi.hoisted(
+  () => {
+    const queryMock = vi.fn(); // pool.query — reads
+    const clientQueryMock = vi.fn(); // client.query — writeWithAudit transactions
+    const mockClient = { query: clientQueryMock, release: vi.fn() };
+    const connect = vi.fn(async () => mockClient);
+    const cancelSubscriptionMock = vi.fn(async () => ({ id: "sub_123", status: "canceled" }));
+    const getUserAuthRowMock = vi.fn(); // authorizeSection's fresh per-request DB row (Phase 2)
+    return { queryMock, clientQueryMock, mockClient, connect, cancelSubscriptionMock, getUserAuthRowMock };
+  },
+);
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect } }));
+vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
   config: {
     NODE_ENV: "development",
@@ -45,10 +54,25 @@ import {
   getAdminGasdsPool,
 } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
+import type { PermissionMap } from "../../src/admin/permissions";
 
 const SECRET = "test-admin-secret";
-const tokenFor = (role: string) =>
-  signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: SECRET }).token;
+
+// authorizeSection re-loads the user's row fresh per request (getUserAuthRowMock) rather than
+// trusting the role baked into the token — so tokenFor sets BOTH the token's role claim (used only
+// for display/actor purposes now) AND the mocked DB row for that sub, keeping every existing
+// `role: "viewer"/"editor"/"admin"` test driving the same effective access as before Phase 2.
+let authRow: { id: number; email: string; status: string; role: string; permissions: PermissionMap } = {
+  id: 1,
+  email: "kenny@nbcc.test",
+  status: "active",
+  role: "viewer",
+  permissions: {},
+};
+const tokenFor = (role: string) => {
+  authRow = { ...authRow, role };
+  return signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: SECRET }).token;
+};
 
 // --- mock req/res --------------------------------------------------------------------------------
 type MockRes = {
@@ -111,6 +135,9 @@ beforeEach(() => {
   mockClient.release.mockClear();
   connect.mockClear();
   cancelSubscriptionMock.mockClear();
+  authRow = { id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: {} };
+  getUserAuthRowMock.mockReset();
+  getUserAuthRowMock.mockImplementation(async () => authRow);
 
   queryMock.mockImplementation(async (sql: string) => {
     // `from donors` (getDonorPortalSnapshot, searchDonors) is checked before `from donations` so the
@@ -546,5 +573,63 @@ describe("GET /api/admin/donors/:id — postal address", () => {
     const b = res.body as { postcode?: string; address?: string };
     expect(b.postcode).toBe("SW1A 1AA");
     expect(b.address).toBe("1 Office Park, London");
+  });
+});
+
+// --- Admin management Phase 2 (TASK-186): authorizeSection replaces the role gate ----------------
+// These exercise the DB-backed per-section matrix directly (bypassing the role->permissions
+// fallback the rest of this file relies on), proving the routes are genuinely gated by SECTION +
+// LEVEL now, not just by the token's role claim.
+describe("Admin Phase 2: per-section permission gating (authorizeSection)", () => {
+  it("401s (generic, no enumeration) when the user's live row is disabled, even with a valid token", async () => {
+    getUserAuthRowMock.mockResolvedValueOnce({
+      id: 1,
+      email: "kenny@nbcc.test",
+      status: "disabled",
+      role: "admin",
+      permissions: {},
+    });
+    const res = await runGet({ role: "admin" });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid or expired admin session" });
+  });
+
+  it("403s a write when the caller's stored permissions grant donations:view only (not edit)", async () => {
+    getUserAuthRowMock.mockResolvedValue({
+      id: 1,
+      email: "kenny@nbcc.test",
+      status: "active",
+      role: "viewer",
+      permissions: { donations: "view" },
+    });
+    const readRes = await runGet({ role: "viewer" });
+    expect(readRes.statusCode).toBe(200);
+    const writeRes = await runPatch({ role: "viewer", body: { fullName: "New" } });
+    expect(writeRes.statusCode).toBe(403);
+    expect(writeRes.body).toEqual({ error: "forbidden" });
+  });
+
+  it("200s a write when the caller's stored permissions explicitly grant donations:edit, overriding a viewer role default", async () => {
+    getUserAuthRowMock.mockResolvedValue({
+      id: 1,
+      email: "kenny@nbcc.test",
+      status: "active",
+      role: "viewer",
+      permissions: { donations: "edit" },
+    });
+    const res = await runPatch({ role: "viewer", body: { fullName: "New" } });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("403s the claims section when the caller only has donations permissions (sections are independent)", async () => {
+    getUserAuthRowMock.mockResolvedValue({
+      id: 1,
+      email: "kenny@nbcc.test",
+      status: "active",
+      role: "viewer",
+      permissions: { donations: "edit" },
+    });
+    const res = await runSubmitBatch({ role: "viewer", id: "9" });
+    expect(res.statusCode).toBe(403);
   });
 });

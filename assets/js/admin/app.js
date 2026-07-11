@@ -9,13 +9,64 @@
   var H = window.AdminHelpers;
   var doc = document;
   var TOKEN_KEY = "nbcc_admin_token";
-  var currentRole = "viewer"; // decoded from the session token; gates the write actions (server still enforces)
+  var currentRole = "viewer"; // decoded from the session token; used for display (the badge) only -
+  // write gating now runs on myPermissions (Admin Phase 2, Task 6) since a person's real access can
+  // differ from their role once they carry per-section overrides.
+  var myPermissions = null; // this user's EFFECTIVE per-section permissions, from GET /api/admin/me
   var donationsOffset = 0; // Donations view paging cursor
   var currentDonorId = null; // the donor open in the detail view
   var currentStoryId = null; // the story open in the detail view
   var storiesStatusFilter = ""; // Stories view status filter ("" = all)
   var currentContactId = null; // the contact enquiry open in the detail view
   var contactStatusFilter = ""; // Contact form view status filter ("" = all)
+  var teamRows = []; // last-loaded Team rows, cached so "Manage access" doesn't need a single-user GET
+  var currentTeamPermUserId = null; // the user id open in the Manage access (matrix) view
+
+  // ---- permission model (Admin Phase 2 · TASK-186) ----
+  // A small client-side mirror of src/admin/permissions.ts. The server is the real gate on every
+  // route (authorizeSection) - this only drives nav filtering and write-control visibility, plus the
+  // Team matrix editor's presets/pre-fill, all of which are UX conveniences, not security.
+  var SECTIONS = [
+    "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
+    "ticker", "contact", "newsletter", "thank-you", "audit", "team",
+  ];
+  var OPERATIONAL_EDITOR_SECTIONS = [
+    "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
+  ];
+  var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
+  // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.
+  function permCan(perms, section, level) {
+    var actual = (perms && perms[section]) || "none";
+    return (LEVEL_RANK[actual] || 0) >= LEVEL_RANK[level];
+  }
+  function canView(section) {
+    return permCan(myPermissions, section, "view");
+  }
+  function canEdit(section) {
+    return permCan(myPermissions, section, "edit");
+  }
+  // Mirrors roleToPermissions in src/admin/permissions.ts - a role's default matrix, used to pre-fill
+  // the Team matrix editor for a person with no per-section overrides, and by its preset buttons.
+  function rolePresetPermissions(role) {
+    var perms = {};
+    if (role === "admin") {
+      SECTIONS.forEach(function (s) { perms[s] = "edit"; });
+      return perms;
+    }
+    if (role === "editor") {
+      perms = { overview: "view", audit: "view", team: "none" };
+      OPERATIONAL_EDITOR_SECTIONS.forEach(function (s) { perms[s] = "edit"; });
+      return perms;
+    }
+    SECTIONS.forEach(function (s) { perms[s] = s === "team" ? "none" : "view"; });
+    return perms;
+  }
+  // Mirrors effectivePermissions in src/admin/permissions.ts: a team member's stored map if it has
+  // any keys, else their role's preset.
+  function effectiveTeamPermissions(u) {
+    if (u.permissions && Object.keys(u.permissions).length > 0) return u.permissions;
+    return rolePresetPermissions(u.role);
+  }
 
   function token() {
     return sessionStorage.getItem(TOKEN_KEY);
@@ -46,16 +97,43 @@
     currentRole = claims.role || "viewer";
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
-    // The Team tab manages who can sign in at all, so /api/admin/users* is Admin-role ONLY on the
-    // server (viewer/editor get 403 even to read it) - hide the nav entry entirely for them rather
-    // than showing a tab that always errors.
-    var teamAdmin = H.roleCan(currentRole, "admin");
-    var teamNavBtn = doc.querySelector('.admin-nav-link[data-view="team"]');
-    if (teamNavBtn) teamNavBtn.hidden = !teamAdmin;
+    loadMyPermissions();
+  }
+
+  // Admin Phase 2 (TASK-186): fetch this user's EFFECTIVE per-section permissions and use them to
+  // filter the nav before showing any view. /me already returns effective permissions (stored
+  // overrides, else the role default), so no client-side fallback is needed here.
+  function loadMyPermissions() {
+    function proceed(perms) {
+      myPermissions = perms;
+      applyNavFiltering();
+      selectView("overview");
+      loadOverview();
+    }
+    authFetch("/api/admin/me")
+      .then(j)
+      .then(function (d) {
+        proceed(d.permissions || {});
+      })
+      .catch(function () {
+        // authFetch already sent an expired/invalid session back to login on 401; any other failure
+        // falls back to "nothing granted" so the nav hides everything but Overview rather than
+        // showing tabs that would just 403.
+        proceed({});
+      });
+  }
+
+  // Hide every nav link (and the Team-only group label) for a section the signed-in user cannot even
+  // view. Overview always stays visible - it has no gated route of its own; its widgets call section
+  // routes that enforce their own gate. UX only: the server is the real enforcement on every route.
+  function applyNavFiltering() {
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+      var section = b.getAttribute("data-view");
+      if (section === "overview") return;
+      b.hidden = !canView(section);
+    });
     var teamNavGroup = el("teamNavGroup");
-    if (teamNavGroup) teamNavGroup.hidden = !teamAdmin;
-    selectView("overview");
-    loadOverview();
+    if (teamNavGroup) teamNavGroup.hidden = !canView("team");
   }
 
   // Fetch an admin API path with the bearer token; a 401 means the session is gone -> back to login.
@@ -289,7 +367,7 @@
 
   // ---- GASDS deadline: small gifts near the 2-year cliff → mark claimed (editor+) ----
   function loadGasds() {
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("gasds");
     var actions = el("gasdsActions");
     authFetch("/api/admin/queues/gasds-deadline")
       .then(j)
@@ -348,7 +426,7 @@
 
   // ---- claims: eligible → batch → export → submit (writes are editor+) ----
   function loadClaims() {
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("claims");
     var actions = el("eligibleActions");
     if (actions) actions.hidden = !canWrite;
     authFetch("/api/admin/claims/eligible")
@@ -439,7 +517,7 @@
   }
   function batchesTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No claim batches.</p>';
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("claims");
     var body = rows
       .map(function (b) {
         var actions = "";
@@ -584,7 +662,7 @@
       .catch(function () {});
   }
   function renderStory(s) {
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("stories");
     var info =
       '<dl class="admin-dl">' +
       dl("Role", H.storyLabel("submitterRole", s.submitter_role)) +
@@ -782,7 +860,7 @@
       .catch(function () {});
   }
   function renderContact(c) {
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("contact");
     var info =
       '<dl class="admin-dl">' +
       dl("Name", ((c.first_name || "") + " " + (c.last_name || "")).trim()) +
@@ -887,11 +965,12 @@
       });
   }
 
-  // ---- team (admin-management Phase 1, Task 8) ----
-  // Who can sign in to this dashboard: invite, change role, disable/enable, or remove. The whole
-  // surface (GET/POST/PATCH/DELETE /api/admin/users*) is Admin-role only on the server, so every
-  // write control here is also gated behind H.roleCan(currentRole, "admin") - a non-admin never
-  // reaches this view at all (showApp hides the nav entry), but the gating stays defence in depth.
+  // ---- team (admin-management Phase 1, Task 8; per-section matrix Admin Phase 2, Task 6) ----
+  // Who can sign in to this dashboard: invite, change role, disable/enable, or remove; and manage
+  // each person's per-section view/edit matrix (teamPerm* below). The whole surface
+  // (GET/POST/PATCH/DELETE /api/admin/users*) requires team:edit on the server, so every write
+  // control here is also gated behind canEdit("team") - a person without it never reaches this view
+  // at all (applyNavFiltering hides the nav entry), but the gating stays defence in depth.
   var teamWired = false;
   function teamStatus(msg, cls) {
     var s = el("teamStatus");
@@ -919,6 +998,7 @@
         ? '<button class="admin-link" type="button" data-team-enable="' + u.id + '">Enable</button>'
         : '<button class="admin-link" type="button" data-team-disable="' + u.id + '">Disable</button>';
     return (
+      '<button class="admin-link" type="button" data-team-perms="' + u.id + '">Manage access</button> · ' +
       '<button class="admin-link" type="button" data-team-reset="' + u.id + '">Reset password</button> · ' +
       toggle +
       " · " +
@@ -944,14 +1024,16 @@
   }
   function loadTeam() {
     teamWire();
-    var canWrite = H.roleCan(currentRole, "admin");
+    teamPermWire();
+    var canWrite = canEdit("team");
     var form = el("teamInviteForm");
     if (form) form.hidden = !canWrite;
     el("teamTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/users")
       .then(j)
       .then(function (d) {
-        el("teamTable").innerHTML = teamTable(d.results || [], canWrite);
+        teamRows = d.results || [];
+        el("teamTable").innerHTML = teamTable(teamRows, canWrite);
       })
       .catch(function () {
         el("teamTable").innerHTML = '<p class="admin-empty">Could not load the team.</p>';
@@ -1029,6 +1111,11 @@
       var t = e.target;
       if (!t || !t.closest) return;
 
+      var manage = t.closest("[data-team-perms]");
+      if (manage) {
+        openTeamPermissions(Number(manage.getAttribute("data-team-perms")));
+        return;
+      }
       var reset = t.closest("[data-team-reset]");
       if (reset) {
         authFetch("/api/admin/users/" + reset.getAttribute("data-team-reset") + "/reset", { method: "POST" })
@@ -1105,6 +1192,127 @@
             teamStatus("Could not remove that person.", "is-error");
           });
         return;
+      }
+    });
+  }
+
+  // ---- team access matrix (Admin Phase 2 · TASK-186) ----
+  // The 13-section none/view/edit grid for one team member, reached via "Manage access" on a Team
+  // row (gated to team:edit - see teamActionsCell). Mirrors the Story/Contact/Donor detail pattern
+  // (its own admin-view + Back button + aria-live container) rather than an inline expander, since
+  // the matrix is 13 rows and would make the Team table unreadably tall inline.
+  var teamPermWorking = {}; // the matrix being edited for currentTeamPermUserId
+  function sectionLabel(section) {
+    // Reuse the nav link's own text (e.g. "GASDS", "Partners" for ticker, "Thank you" for
+    // thank-you) rather than duplicating labels that could drift out of sync with the nav.
+    var btn = doc.querySelector('.admin-nav-link[data-view="' + section + '"]');
+    return btn ? btn.textContent : cap(section);
+  }
+  function teamPermMatrixHtml(perms) {
+    return SECTIONS.map(function (section) {
+      var level = perms[section] || "none";
+      var seg = ["none", "view", "edit"]
+        .map(function (lvl) {
+          return (
+            '<button class="admin-seg' + (level === lvl ? " is-active" : "") + '" type="button" data-perm-level="' +
+            lvl + '">' + cap(lvl) + "</button>"
+          );
+        })
+        .join("");
+      return (
+        '<div class="admin-perm-row"><span class="admin-perm-label">' + H.escapeHtml(sectionLabel(section)) + "</span>" +
+        '<div class="admin-segmented" role="group" aria-label="' + H.escapeHtml(sectionLabel(section)) +
+        ' access" data-perm-section="' + section + '">' + seg + "</div></div>"
+      );
+    }).join("");
+  }
+  function renderTeamPermMatrix(u) {
+    el("teamPermDetail").innerHTML =
+      '<p class="admin-view-intro">' + H.escapeHtml(u.full_name) + " (" + H.escapeHtml(u.email) + "). Role: " +
+      H.escapeHtml(cap(u.role)) + "</p>" +
+      '<div class="admin-perm-presets">' +
+      '<button class="btn btn-ghost" type="button" data-perm-preset="viewer">Viewer</button>' +
+      '<button class="btn btn-ghost" type="button" data-perm-preset="editor">Editor</button>' +
+      '<button class="btn btn-ghost" type="button" data-perm-preset="admin">Admin</button>' +
+      "</div>" +
+      '<div id="teamPermMatrix">' + teamPermMatrixHtml(teamPermWorking) + "</div>" +
+      '<button class="btn btn-primary" type="button" id="teamPermSave" style="margin-top:16px">Save access</button>';
+  }
+  function openTeamPermissions(id) {
+    var u = teamRows.filter(function (r) { return r.id === id; })[0];
+    if (!u) return;
+    currentTeamPermUserId = id;
+    teamPermWorking = Object.assign({}, effectiveTeamPermissions(u));
+    // A stored map is always the full 13-section shape (the PATCH schema requires it), but fill any
+    // gap defensively so the matrix always renders all 13 rows.
+    SECTIONS.forEach(function (s) {
+      if (!teamPermWorking[s]) teamPermWorking[s] = "none";
+    });
+    showOnly("view-team-permissions");
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+      b.classList.remove("is-active");
+    });
+    el("teamPermStatus").textContent = "";
+    renderTeamPermMatrix(u);
+  }
+  bindClick("teamPermBack", function () {
+    selectView("team");
+  });
+  function saveTeamPermissions() {
+    if (currentTeamPermUserId == null) return;
+    el("teamPermStatus").textContent = "Saving…";
+    authFetch("/api/admin/users/" + currentTeamPermUserId + "/permissions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ permissions: teamPermWorking }),
+    })
+      .then(function (res) {
+        if (res.status === 409) {
+          el("teamPermStatus").textContent = teamLastAdminMessage();
+          return null;
+        }
+        if (!res.ok) {
+          el("teamPermStatus").textContent = "Could not save that access.";
+          return null;
+        }
+        return res.json();
+      })
+      .then(function (updated) {
+        if (!updated) return;
+        teamRows = teamRows.map(function (r) {
+          return r.id === updated.id ? updated : r;
+        });
+        el("teamPermStatus").textContent = "Access updated.";
+      })
+      .catch(function () {
+        el("teamPermStatus").textContent = "Could not save that access.";
+      });
+  }
+  var teamPermWired = false;
+  function teamPermWire() {
+    if (teamPermWired) return;
+    teamPermWired = true;
+    var detail = el("teamPermDetail");
+    if (!detail) return;
+    detail.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var levelBtn = t.closest("[data-perm-level]");
+      if (levelBtn) {
+        var group = levelBtn.closest("[data-perm-section]");
+        if (!group) return;
+        teamPermWorking[group.getAttribute("data-perm-section")] = levelBtn.getAttribute("data-perm-level");
+        el("teamPermMatrix").innerHTML = teamPermMatrixHtml(teamPermWorking);
+        return;
+      }
+      var presetBtn = t.closest("[data-perm-preset]");
+      if (presetBtn) {
+        teamPermWorking = rolePresetPermissions(presetBtn.getAttribute("data-perm-preset"));
+        el("teamPermMatrix").innerHTML = teamPermMatrixHtml(teamPermWorking);
+        return;
+      }
+      if (t.closest("#teamPermSave")) {
+        saveTeamPermissions();
       }
     });
   }
@@ -1652,8 +1860,9 @@
           nlDoc = { blocks: [{ type: "rawHtml", variant: 0, data: { html: n.bodyHtml || "" } }] };
         }
         var sent = n.status === "sent";
-        // Send is Admin-only and only for an unsent newsletter.
-        el("newsletterSend").hidden = !(currentRole === "admin" && !sent);
+        // Send is gated to newsletter:edit (the server's authorizeSection level for this route) and
+        // only shown for an unsent newsletter.
+        el("newsletterSend").hidden = !(canEdit("newsletter") && !sent);
         el("newsletterSave").disabled = sent;
         el("newsletterMsg").textContent = sent ? "This newsletter has been sent and is read-only." : "";
         nlRenderCanvas();
@@ -1872,7 +2081,7 @@
     return parts.length ? parts.join(", ") : "None on file";
   }
   function renderDonor(d) {
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("donations");
     var info =
       '<dl class="admin-dl">' +
       dl("Name", d.fullName) +
@@ -2166,7 +2375,7 @@
   }
 
   function loadThankYouEligible() {
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("thank-you");
     var thr = parseFloat(String(el("tyThreshold").value).replace(/[^0-9.]/g, "")) || 1000;
     var pence = Math.round(thr * 100);
     el("tyEligibleTable").innerHTML = '<p class="admin-loading">Loading…</p>';
@@ -2189,7 +2398,7 @@
       });
   }
   function loadThankYouSent() {
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("thank-you");
     el("tySentTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/thank-you/sent")
       .then(j)
@@ -2301,7 +2510,7 @@
   function tyWire() {
     if (tyWired) return;
     tyWired = true;
-    el("tySend").hidden = !H.roleCan(currentRole, "editor");
+    el("tySend").hidden = !canEdit("thank-you");
     tyBindInput("tyName", tyUpdateTitle);
     tyBindInput("tyDear", tyUpdateDear);
     tyBindInput("tyDate", tyUpdateDate);
@@ -2379,7 +2588,7 @@
   }
   function loadTicker() {
     tickerWire();
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("ticker");
     el("tickerTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/ticker")
       .then(j)
@@ -2396,7 +2605,7 @@
   function tickerWire() {
     if (tickerWired) return;
     tickerWired = true;
-    var canWrite = H.roleCan(currentRole, "editor");
+    var canWrite = canEdit("ticker");
     el("tickerAdd").hidden = !canWrite;
     el("tickerForm").addEventListener("submit", function (e) {
       e.preventDefault();

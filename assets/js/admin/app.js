@@ -1861,6 +1861,34 @@
     if (nlPreviewTimer) clearTimeout(nlPreviewTimer);
     nlPreviewTimer = setTimeout(nlRefreshPreview, 300);
   }
+  // Fit the true 660px-wide email into the (narrower) preview column: zoom the iframe down so it fits
+  // horizontally (no left/right scroll) and size it to its full content height so all blocks show and
+  // vertical scrolling happens on the wrapper. `zoom` (unlike transform) shrinks the layout box too,
+  // so the wrapper width matches and there is no horizontal overflow.
+  var EMAIL_W = 660;
+  function nlFitPreview() {
+    var iframe = el("nlPreview"), wrap = el("nlPreviewWrap");
+    if (!iframe || !wrap) return;
+    var cdoc = iframe.contentDocument;
+    if (!cdoc || !cdoc.body) return;
+    var scale = Math.min(1, wrap.clientWidth / EMAIL_W);
+    iframe.style.width = EMAIL_W + "px";
+    iframe.style.height = "0px"; // reset so scrollHeight reflects content, not the old height
+    var h = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight);
+    iframe.style.height = h + "px";
+    iframe.style.zoom = scale; // shrinks the layout box (Chrome/Edge/Firefox/Safari)
+  }
+  // The preview reloads on every edit; keep the wrapper's scroll position so editing a low block does
+  // not snap the preview back to the top, and re-fit once the new content has loaded.
+  function nlPreviewOnLoad() {
+    var wrap = el("nlPreviewWrap");
+    var prevTop = wrap ? wrap.scrollTop : 0;
+    function apply() { nlFitPreview(); if (wrap) wrap.scrollTop = prevTop; }
+    apply();
+    // Re-fit on the next frame too: on first load the grid column may not have its final width yet,
+    // which would otherwise leave the zoom at 1 and a sliver of horizontal overflow.
+    if (window.requestAnimationFrame) window.requestAnimationFrame(apply);
+  }
   function nlRefreshPreview() {
     authFetch("/api/admin/newsletters/preview", {
       method: "POST",
@@ -1870,6 +1898,10 @@
       .then(function (r) { return r.json(); })
       .then(function (j2) { if (j2.html != null) el("nlPreview").srcdoc = j2.html; })
       .catch(function () {});
+  }
+  if (el("nlPreview")) {
+    el("nlPreview").addEventListener("load", nlPreviewOnLoad);
+    window.addEventListener("resize", nlFitPreview);
   }
 
   if (el("nlPalette")) nlRenderPalette();

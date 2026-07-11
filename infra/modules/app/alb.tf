@@ -77,11 +77,21 @@ resource "aws_lb_target_group" "app" {
   vpc_id      = module.vpc.vpc_id
   target_type = "ip" # required for Fargate
 
+  # Drain quickly on deploy. The default is 300s, and `ecs wait services-stable`
+  # blocks until the OLD task finishes deregistering — so the default alone adds
+  # up to five minutes to every rolling deploy. `/health` and the pages serve
+  # short-lived HTTP requests with no long connections to protect, so 5s of
+  # connection draining is ample.
+  deregistration_delay = 5
+
+  # interval 10s x 2 healthy checks puts a new task in service ~20s after it
+  # starts answering, vs ~30s at the old 15s interval. `/health` is cheap by
+  # design (golden rule 6), so the extra poll rate costs nothing.
   health_check {
     path                = "/health"
     healthy_threshold   = 2
     unhealthy_threshold = 3
-    interval            = 15
+    interval            = 10
     matcher             = "200"
   }
 }

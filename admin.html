@@ -222,7 +222,7 @@
               <p class="admin-action-status" id="contactActionStatus" role="status" aria-live="polite"></p>
             </section>
 
-            <!-- Newsletter: author, save (Editor+) and send (Admin only) to consenting donors. -->
+            <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
               <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
@@ -416,8 +416,10 @@
             </section>
 
             <!-- Team: who can sign in to this dashboard - invite, change role, disable/enable, or
-                 remove access (admin-management Phase 1, Task 8). Admin-role only: app.js gates every
-                 write control behind H.roleCan(currentRole, "admin"); the server enforces it too. -->
+                 remove access (admin-management Phase 1, Task 8), and manage each person's per-section
+                 view/edit matrix (Admin Phase 2, Task 6 - see view-team-permissions below). Gated to
+                 team:edit: app.js gates every write control behind canEdit("team"); the server enforces
+                 it too via authorizeSection. -->
             <section class="admin-view" id="view-team" aria-labelledby="team-heading" hidden>
               <h2 id="team-heading">Team</h2>
               <p class="admin-view-intro">Everyone who can sign in to this dashboard. Invite someone by email, change their role, or disable, re-enable or remove their access. Only an Admin can make changes here; there must always be at least one enabled Admin.</p>
@@ -439,6 +441,18 @@
               </form>
               <p class="ty-status" id="teamStatus" role="status" aria-live="polite"></p>
               <div class="admin-table-wrap" id="teamTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Team access matrix (Admin Phase 2, Task 6): reached via "Manage access" on a Team
+                 row. The 13 sections, each a none/view/edit control, pre-filled from that person's
+                 effective permissions; preset buttons fill it from a role's defaults. Mirrors the
+                 Story/Contact/Donor detail pattern (its own view + Back button) rather than an inline
+                 expander. Gated to team:edit (see loadTeam/teamActionsCell in app.js). -->
+            <section class="admin-view" id="view-team-permissions" aria-labelledby="team-permissions-heading" hidden>
+              <button class="admin-back" id="teamPermBack" type="button">&larr; Back</button>
+              <h2 id="team-permissions-heading">Manage access</h2>
+              <div id="teamPermDetail" aria-live="polite"></div>
+              <p class="admin-action-status" id="teamPermStatus" role="status" aria-live="polite"></p>
             </section>
 
             <!-- Donor detail (reached from a donor/donation row); role-gated actions. -->

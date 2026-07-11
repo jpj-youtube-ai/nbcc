@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
+import { roleToPermissions } from "../../src/admin/permissions";
 
 // TASK-118 (REQ-066): an integration test of the admin dashboard app wiring (assets/js/admin/app.js).
 // It mounts admin.html's <body> into jsdom, stubs window.AdminHelpers + a mocked fetch, evaluates
@@ -44,7 +45,7 @@ const storyDetail = {
   heard_about: "Facebook", confirmed_over_16: true, admin_tags: ["funding"], admin_notes: "note",
 };
 
-function respond(url: string, init?: { method?: string; body?: string }) {
+function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
     status,
     ok: status < 400,
@@ -53,6 +54,15 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     headers: { get: () => "application/json" },
   });
   if (url.includes("/api/admin/login")) return j({ token: loginToken, user: { email: "s@nbcc", role: "editor" } });
+  if (url.includes("/api/admin/me")) {
+    // Admin Phase 2 (TASK-186): app.js calls GET /api/admin/me on init to filter the nav and gate
+    // write controls via canEdit(section). Decode the bearer token's role (same as the server's
+    // effectivePermissions with an empty stored map) so this mock stays a faithful stand-in.
+    const auth = init?.headers?.Authorization || "";
+    const claims = helpers.parseClaims(auth.replace(/^Bearer\s+/, "")) as { role?: string; email?: string } | null;
+    const role = claims?.role || "viewer";
+    return j({ email: claims?.email || "", permissions: roleToPermissions(role) });
+  }
   if (url.includes("/api/admin/donors/")) return j(snapshot);
   if (url.includes("/api/admin/donations")) return j({ results: [donation], total: 1 });
   if (/\/api\/admin\/stories\/\d+/.test(url) && init?.method === "PATCH") {
@@ -86,7 +96,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
     (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
-      Promise.resolve(respond(String(url), init as { method?: string; body?: string })),
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
     );
     // eslint-disable-next-line no-eval
     (0, eval)(appSrc); // run the IIFE against this DOM

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Admin-management Phase 1, Task 5: GET/POST /api/admin/users, PATCH/DELETE /api/admin/users/:id,
-// POST /api/admin/users/:id/reset — all Admin-role ONLY (authorizeAdmin(req,res,"admin"); a
-// viewer/editor token gets 403). Plus the two PUBLIC endpoints: POST /api/admin/forgot (uniform
+// Admin-management Phase 1, Task 5 + Admin management Phase 2 (TASK-186): GET/POST /api/admin/users,
+// PATCH/DELETE /api/admin/users/:id, POST /api/admin/users/:id/reset — all gated to the "team"
+// section (authorizeSection(..., "team", "view"|"edit"); a viewer/editor with no team permission
+// gets 403 — under the role->permissions fallback that's still every non-admin role, matching the
+// old Admin-role-ONLY gate exactly). Plus the two PUBLIC endpoints: POST /api/admin/forgot (uniform
 // 200, no account enumeration) and POST /api/admin/set-password (token round-trip). Mirrors
 // admin-contact-routes.test.ts's mock/req/res style: mock the db layer (../../src/db/admin-users)
 // and the email client's two new sends, keep config/pool minimally stubbed so importing the router
@@ -21,6 +23,7 @@ const {
   deleteUserMock,
   setUserPasswordMock,
   isLastEnabledAdminMock,
+  getUserAuthRowMock,
 } = vi.hoisted(() => ({
   listUsersMock: vi.fn(),
   getManagedUserMock: vi.fn(),
@@ -32,6 +35,7 @@ const {
   deleteUserMock: vi.fn(),
   setUserPasswordMock: vi.fn(),
   isLastEnabledAdminMock: vi.fn(),
+  getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
 }));
 
 const { MockDuplicateEmailError, MockLastAdminError } = vi.hoisted(() => ({
@@ -62,6 +66,7 @@ vi.mock("../../src/db/admin-users", () => ({
   deleteUser: deleteUserMock,
   setUserPassword: setUserPasswordMock,
   isLastEnabledAdmin: isLastEnabledAdminMock,
+  getUserAuthRow: getUserAuthRowMock,
   DuplicateEmailError: MockDuplicateEmailError,
   LastAdminError: MockLastAdminError,
 }));
@@ -85,8 +90,8 @@ vi.mock("../../src/config", () => ({
     STRIPE_WEBHOOK_SECRET: "whsec_placeholder",
   },
 }));
-// admin.ts (pulled in via ./admin's authorizeAdmin/actorOf) also imports these at module load time;
-// stub them minimally so importing the router doesn't require a real pool/DB.
+// admin.ts (pulled in via ./admin's actorOf) also imports these at module load time; stub them
+// minimally so importing the router doesn't require a real pool/DB.
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
 import {
@@ -102,8 +107,14 @@ import { signAdminSession } from "../../src/admin/session";
 import { issueAdminActionToken } from "../../src/admin/tokens";
 
 const SECRET = "test-admin-secret";
-const tokenFor = (role: string, email = "kenny@nbcc.test") =>
-  signAdminSession({ sub: 1, email, role, now: new Date(), secret: SECRET }).token;
+// authorizeSection re-loads the caller's row fresh (getUserAuthRowMock) rather than trusting the
+// token's role claim; tokenFor keeps that row's role in sync (role->permissions fallback) — under
+// the defaults only "admin" has any "team" access (view or edit), matching the old Admin-role-ONLY
+// gate exactly (see src/admin/permissions.ts's roleToPermissions).
+const tokenFor = (role: string, email = "kenny@nbcc.test") => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email, status: "active", role, permissions: {} });
+  return signAdminSession({ sub: 1, email, role, now: new Date(), secret: SECRET }).token;
+};
 
 type MockRes = {
   statusCode: number;
@@ -203,6 +214,7 @@ beforeEach(() => {
   deleteUserMock.mockReset();
   setUserPasswordMock.mockReset();
   isLastEnabledAdminMock.mockReset();
+  getUserAuthRowMock.mockReset();
   sendAdminInviteMock.mockReset();
   sendAdminResetMock.mockReset();
 });
@@ -642,5 +654,43 @@ describe("POST /api/admin/set-password (public)", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(setUserPasswordMock).not.toHaveBeenCalled();
+  });
+});
+
+// Admin management Phase 2 (TASK-186): authorizeSection re-loads the caller's live row per request
+// and gates the /api/admin/users* surface by the "team" section specifically (view for the GET
+// list, edit for every mutation), not just the token's role claim.
+describe("Admin Phase 2: per-section permission gating on /api/admin/users*", () => {
+  it("401s (generic) a disabled user's otherwise-valid admin token", async () => {
+    const token = tokenFor("admin");
+    getUserAuthRowMock.mockResolvedValueOnce({ id: 1, email: "kenny@nbcc.test", status: "disabled", role: "admin", permissions: {} });
+    listUsersMock.mockResolvedValueOnce([]);
+    const res = await runList({ token });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid or expired admin session" });
+    expect(listUsersMock).not.toHaveBeenCalled();
+  });
+
+  it("a stored team:view-only permission can GET the list but is 403'd on a mutation (invite)", async () => {
+    // Build the token directly (bypassing tokenFor) so the getUserAuthRowMock override below isn't
+    // clobbered by tokenFor's own default (permissions: {}) — the token's "role" claim is now just
+    // display metadata; the DB row's stored `permissions` is what authorizeSection actually checks.
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "viewer", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: { team: "view" } });
+    listUsersMock.mockResolvedValueOnce([]);
+    const listRes = await runList({ token });
+    expect(listRes.statusCode).toBe(200);
+
+    const inviteRes = await runInvite({ token, body: { email: "a@b.com", fullName: "A B", role: "viewer" } });
+    expect(inviteRes.statusCode).toBe(403);
+    expect(inviteUserMock).not.toHaveBeenCalled();
+  });
+
+  it("a stored team:edit permission can invite even for a non-admin role", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "editor", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "editor", permissions: { team: "edit" } });
+    inviteUserMock.mockResolvedValueOnce({ id: 42 });
+    const res = await runInvite({ token, body: { email: "newbie@nbcc.test", fullName: "New Bie", role: "viewer" } });
+    expect(res.statusCode).toBe(201);
   });
 });

@@ -6,8 +6,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // pure page-clamp are covered here DB-free (pool + config mocked); end-to-end shape is in
 // features/admin-api.feature.
 
-const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
+const { queryMock, getUserAuthRowMock } = vi.hoisted(() => ({
+  queryMock: vi.fn(),
+  getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
+}));
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect: vi.fn() } }));
+vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
   config: {
     NODE_ENV: "development",
@@ -29,8 +33,14 @@ import {
 } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
-const tokenFor = (role: string) =>
-  signAdminSession({ sub: 1, email: "staff@nbcc", role, now: new Date(), secret: "test-admin-secret" }).token;
+// authorizeSection re-loads the caller's row fresh (getUserAuthRowMock) rather than trusting the
+// token's role claim; tokenFor keeps that row's role in sync so every `role: "viewer"/"editor"`
+// case here drives the same effective section+level access as before Phase 2 (role->permissions
+// fallback, src/admin/permissions.ts).
+const tokenFor = (role: string) => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "staff@nbcc", status: "active", role, permissions: {} });
+  return signAdminSession({ sub: 1, email: "staff@nbcc", role, now: new Date(), secret: "test-admin-secret" }).token;
+};
 
 function mockRes() {
   const res: Record<string, unknown> & { statusCode: number; body: unknown; contentType: string } = {
@@ -54,7 +64,10 @@ function req(role: string | null, query: Record<string, unknown> = {}, params: R
   } as never;
 }
 
-beforeEach(() => queryMock.mockReset());
+beforeEach(() => {
+  queryMock.mockReset();
+  getUserAuthRowMock.mockReset();
+});
 
 describe("clampPage (TASK-114)", () => {
   it("defaults limit 50 / offset 0", () => {
@@ -109,5 +122,16 @@ describe("admin read endpoints — auth + role gating (TASK-114)", () => {
     const res = mockRes() as unknown as { statusCode: number };
     await getAdminClaimBatchExport(req("editor", {}, { id: "abc" }), res as never);
     expect(res.statusCode).toBe(400);
+  });
+
+  // Admin management Phase 2 (TASK-186): authorizeSection re-loads the caller's row fresh, so a
+  // disabled account's still-valid token stops working on the very next request.
+  it("401s (generic) a disabled user's otherwise-valid token", async () => {
+    const token = tokenFor("admin");
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "staff@nbcc", status: "disabled", role: "admin", permissions: {} });
+    const res = mockRes() as unknown as { statusCode: number; body: unknown };
+    await getAdminDonations({ headers: { authorization: `Bearer ${token}` }, query: {}, params: {} } as never, res as never);
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid or expired admin session" });
   });
 });

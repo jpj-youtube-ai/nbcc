@@ -1,17 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Task C (REQ intent: "Admin panel can view, tag and manage submitted stories, incl.
-// withdrawal."). GET /api/admin/stories (list), GET /api/admin/stories/:id (detail) and
-// PATCH /api/admin/stories/:id (status/admin_tags/admin_notes) — all behind authorizeAdmin,
-// all via src/db/stories (storiesPool), NEVER src/db/pool.ts / the charity DB. Mirrors the
+// withdrawal.") + Admin management Phase 2 (TASK-186). GET /api/admin/stories (list),
+// GET /api/admin/stories/:id (detail) and PATCH /api/admin/stories/:id (status/admin_tags/
+// admin_notes) — all behind authorizeSection's "stories" section (view for reads, edit for
+// writes), all via src/db/stories (storiesPool), NEVER src/db/pool.ts / the charity DB. Mirrors the
 // donor admin-api.test.ts mock/req/res style, but mocks ../../src/db/stories directly
 // instead of the pool, since that module is Task C's only access to story data.
 
-const { listStoriesMock, getStoryMock, updateStoryMock, deleteStoryMock } = vi.hoisted(() => ({
+const { listStoriesMock, getStoryMock, updateStoryMock, deleteStoryMock, getUserAuthRowMock } = vi.hoisted(() => ({
   listStoriesMock: vi.fn(),
   getStoryMock: vi.fn(),
   updateStoryMock: vi.fn(),
   deleteStoryMock: vi.fn(),
+  getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
 }));
 vi.mock("../../src/db/stories", () => ({
   listStories: listStoriesMock,
@@ -19,6 +21,7 @@ vi.mock("../../src/db/stories", () => ({
   updateStory: updateStoryMock,
   deleteStory: deleteStoryMock,
 }));
+vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
   config: {
     NODE_ENV: "development",
@@ -36,8 +39,12 @@ import { getAdminStories, getAdminStory, patchAdminStory, deleteAdminStory } fro
 import { signAdminSession } from "../../src/admin/session";
 
 const SECRET = "test-admin-secret";
-const tokenFor = (role: string) =>
-  signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: SECRET }).token;
+// authorizeSection re-loads the caller's row fresh (getUserAuthRowMock) rather than trusting the
+// token's role claim; tokenFor keeps that row's role in sync (role->permissions fallback).
+const tokenFor = (role: string) => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role, permissions: {} });
+  return signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: SECRET }).token;
+};
 
 type MockRes = {
   statusCode: number;
@@ -69,6 +76,7 @@ beforeEach(() => {
   getStoryMock.mockReset();
   updateStoryMock.mockReset();
   deleteStoryMock.mockReset();
+  getUserAuthRowMock.mockReset();
 });
 
 describe("GET /api/admin/stories (list)", () => {
@@ -253,5 +261,31 @@ describe("DELETE /api/admin/stories/:id (editor+ gate, permanent erasure)", () =
     const res = await runDelete({ role: "editor", id: "abc" });
     expect(res.statusCode).toBe(400);
     expect(deleteStoryMock).not.toHaveBeenCalled();
+  });
+});
+
+// Admin management Phase 2 (TASK-186): authorizeSection re-loads the caller's live row per request
+// and gates by the "stories" section specifically, not just the token's role claim.
+describe("Admin Phase 2: per-section permission gating on /api/admin/stories", () => {
+  it("401s (generic) a disabled user's otherwise-valid token", async () => {
+    const token = tokenFor("admin");
+    getUserAuthRowMock.mockResolvedValueOnce({ id: 1, email: "kenny@nbcc.test", status: "disabled", role: "admin", permissions: {} });
+    const res = await runList({ token });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid or expired admin session" });
+  });
+
+  it("403s a write when stored permissions restrict an editor to stories:view only, overriding the role default", async () => {
+    // Build the token directly (bypassing tokenFor) so the explicit permissions override below
+    // isn't clobbered by tokenFor's own default (permissions: {}, i.e. the role fallback) — an
+    // "editor" role normally gets stories:edit by default, so this proves the STORED per-section
+    // map, not the role, is what authorizeSection actually checks.
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "editor", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "editor", permissions: { stories: "view" } });
+    const readRes = await runList({ token });
+    expect(readRes.statusCode).toBe(200);
+    const writeRes = await runPatch({ token, body: { status: "reviewed" } });
+    expect(writeRes.statusCode).toBe(403);
+    expect(updateStoryMock).not.toHaveBeenCalled();
   });
 });

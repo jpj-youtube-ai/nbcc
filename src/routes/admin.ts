@@ -29,7 +29,8 @@ import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/con
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { touchLastLogin } from "../db/admin-users";
-import { signAdminSession, verifyAdminSession, type AdminSessionClaims } from "../admin/session";
+import { signAdminSession, type AdminSessionClaims } from "../admin/session";
+import { authorizeSection } from "./admin-authz";
 import { getDonorPortalSnapshot, updateDonorPortal, getActiveDeclarationForDonor } from "../db/portal";
 import { cancelSubscription } from "../clients/stripe";
 import { DeclarationCancellationError, reviseDeclaration } from "../db/declarations";
@@ -123,43 +124,12 @@ adminRouter.post("/api/admin/login", postAdminLogin);
 
 // --- Role-gated admin actions on a donor's behalf (REQ-062 · TASK-106) --------------------------
 // These mirror the self-serve donor-portal routes (src/routes/portal.ts) but are authorised by the
-// admin session token instead of a magic-link token, and act on a donor by id. Authorisation is the
-// authOrReject-style helper below (mirroring portal.ts): a missing/invalid token is 401, and the
-// role rank gates writes — Viewer is read-only (403 on any PATCH/POST), Editor and Admin may write.
-// Every write reuses the existing audited helpers (updateDonorPortal / adminCancelGiftAid /
-// recordAdminSubscriptionCancellation), so its audit_log row commits in the same transaction.
-
-const ROLE_RANK: Record<string, number> = { viewer: 1, editor: 2, admin: 3 };
-
-function bearerToken(req: Request): string | null {
-  const header = req.headers?.authorization ?? "";
-  const match = /^Bearer (.+)$/i.exec(header);
-  return match ? match[1] : null;
-}
-
-// Verify the admin session token and enforce the minimum role. On failure it sends the 401/403
-// response and returns null; on success it returns the session claims (mirrors portal's authOrReject).
-// Exported (admin-management Phase 1, Task 5) so src/routes/admin-users.ts can gate its
-// /api/admin/users* + reset routes on it without duplicating the session-verification logic.
-export function authorizeAdmin(req: Request, res: Response, minRole: string): AdminSessionClaims | null {
-  const token = bearerToken(req);
-  if (!token) {
-    res.status(401).json({ error: "Missing admin session token" });
-    return null;
-  }
-  let claims: AdminSessionClaims;
-  try {
-    claims = verifyAdminSession(token, config.ADMIN_SESSION_SECRET, new Date());
-  } catch {
-    res.status(401).json({ error: "Invalid or expired admin session" });
-    return null;
-  }
-  if ((ROLE_RANK[claims.role] ?? 0) < (ROLE_RANK[minRole] ?? 0)) {
-    res.status(403).json({ error: "Your role does not permit this action" });
-    return null;
-  }
-  return claims;
-}
+// admin session token instead of a magic-link token, and act on a donor by id. Authorisation is
+// authorizeSection (src/routes/admin-authz.ts, Admin management Phase 2): a missing/invalid token is
+// 401, and the DB-backed per-section permission matrix gates writes — Viewer-level access is
+// read-only (403 on any PATCH/POST), Editor/Admin-level ("edit") may write. Every write reuses the
+// existing audited helpers (updateDonorPortal / adminCancelGiftAid / recordAdminSubscriptionCancellation),
+// so its audit_log row commits in the same transaction.
 
 // Parse and validate the donor id in the path; sends a 400 and returns null when it is not a
 // positive integer.
@@ -221,13 +191,13 @@ function firstNameOf(fullName: string | null): string {
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
 export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   return res.json(await listNewsletters());
 }
 
 // GET /api/admin/newsletters/:id — one newsletter incl. body_html (Editor+).
 export async function getAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const id = newsletterId(req, res);
   if (id === null) return;
   const row = await getNewsletter(id);
@@ -237,7 +207,7 @@ export async function getAdminNewsletter(req: Request, res: Response): Promise<R
 
 // POST /api/admin/newsletters — create a new draft (Editor+).
 export async function postAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const parsed = newsletterBodySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
@@ -250,7 +220,7 @@ export async function postAdminNewsletter(req: Request, res: Response): Promise<
 // POST /api/admin/newsletters/preview — render a block document to email HTML for the live builder
 // preview (Editor+). Stateless, no DB. Uses a sample first name so merge fields show realistically.
 export async function postAdminNewsletterPreview(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const parsed = z.object({ bodyJson: newsletterDocSchema }).safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
@@ -262,14 +232,14 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
 // send would go to, for the send-confirmation dialog. Admin-gated (matches send) because it exposes
 // donor PII; returns the same recipient set the send loop uses, so the confirmation can't drift.
 export async function getAdminNewsletterRecipients(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "admin")) return;
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const recipients = await listNewsletterRecipients();
   return res.json({ count: recipients.length, emails: recipients.map((r) => r.email) });
 }
 
 // PUT /api/admin/newsletters/:id — edit a draft (Editor+). A sent newsletter is immutable → 409.
 export async function putAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const id = newsletterId(req, res);
   if (id === null) return;
   const parsed = newsletterBodySchema.safeParse(req.body);
@@ -290,7 +260,7 @@ export async function putAdminNewsletter(req: Request, res: Response): Promise<R
 // POST /api/admin/newsletters/:id/send — Admin only. Sends one email per consenting donor, each with
 // an unsubscribe link, then marks the newsletter sent. Idempotent: an already-sent newsletter → 409.
 export async function postAdminSendNewsletter(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "admin");
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
   if (!claims) return;
   const id = newsletterId(req, res);
   if (id === null) return;
@@ -336,7 +306,7 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
 // GET /api/admin/donors/:id — the donor snapshot (reuses getDonorPortalSnapshot). Read-only, so any
 // authenticated role (Viewer and up) may call it.
 export async function getAdminDonor(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "donations", "view"))) return;
   const id = donorId(req, res);
   if (id == null) return;
   try {
@@ -367,7 +337,7 @@ const adminPatchSchema = z
 // PATCH /api/admin/donors/:id — update the donor's editable fields (reuses updateDonorPortal, which
 // appends a `donor.updated` audit row in the same transaction). Editor/Admin only.
 export async function patchAdminDonor(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "donations", "edit");
   if (!claims) return;
   const id = donorId(req, res);
   if (id == null) return;
@@ -395,7 +365,7 @@ export async function patchAdminDonor(req: Request, res: Response): Promise<Resp
 // record admin:<email>. No active declaration → 404. The amend and the name sync run in ONE
 // transaction (reviseDeclaration's syncDonorFullName, TASK-131) — atomic.
 export async function patchAdminDeclaration(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "donations", "edit");
   if (!claims) return;
   const id = donorId(req, res);
   if (id == null) return;
@@ -439,7 +409,7 @@ const adminCancelSubSchema = z.object({
 // behind the same reduce-instead gate as the self-serve flow (REQ-055). Editor/Admin only. Cancels
 // in Stripe (cancelSubscription) then records the admin action (recordAdminSubscriptionCancellation).
 export async function postAdminCancelSubscription(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "donations", "edit");
   if (!claims) return;
   const id = donorId(req, res);
   if (id == null) return;
@@ -465,7 +435,7 @@ export async function postAdminCancelSubscription(req: Request, res: Response): 
 // their behalf (reuses adminCancelGiftAid → buildDeclarationCancellation + writeWithAudit). No active
 // declaration → 404; a concurrent revoke → 409. Editor/Admin only.
 export async function postAdminCancelGiftAid(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "donations", "edit");
   if (!claims) return;
   const id = donorId(req, res);
   if (id == null) return;
@@ -508,7 +478,7 @@ function searchQuery(req: Request, res: Response): string | null {
 }
 
 export async function getAdminSearchDonors(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "search", "view"))) return;
   const q = searchQuery(req, res);
   if (q == null) return;
   try {
@@ -520,7 +490,7 @@ export async function getAdminSearchDonors(req: Request, res: Response): Promise
 }
 
 export async function getAdminSearchDeclarations(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "search", "view"))) return;
   const q = searchQuery(req, res);
   if (q == null) return;
   try {
@@ -532,7 +502,7 @@ export async function getAdminSearchDeclarations(req: Request, res: Response): P
 }
 
 export async function getAdminSearchDonations(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "search", "view"))) return;
   const q = searchQuery(req, res);
   if (q == null) return;
   try {
@@ -564,7 +534,7 @@ function claimBatchId(req: Request, res: Response): number | null {
 }
 
 export async function postAdminSubmitClaimBatch(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "claims", "edit");
   if (!claims) return;
   const id = claimBatchId(req, res);
   if (id == null) return;
@@ -583,7 +553,7 @@ export async function postAdminSubmitClaimBatch(req: Request, res: Response): Pr
 }
 
 export async function getAdminAdjustmentDue(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "claims", "view"))) return;
   try {
     return res.status(200).json({ results: await listAdjustmentDueDonations() });
   } catch (err) {
@@ -600,7 +570,7 @@ adminRouter.get("/api/admin/claims/adjustment-due", getAdminAdjustmentDue);
 const createBatchBodySchema = z.object({ hmrcReference: z.string().min(1).optional() });
 
 export async function postAdminCreateClaimBatch(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "claims", "edit");
   if (!claims) return;
   const parsed = createBatchBodySchema.safeParse(req.body ?? {});
   if (!parsed.success) return res.status(400).json({ error: "Invalid claim batch request" });
@@ -616,7 +586,7 @@ export async function postAdminCreateClaimBatch(req: Request, res: Response): Pr
 // GET /api/admin/claims/eligible (REQ-052): the eligible-unbatched donations ready to be claimed
 // (the "ready to claim" picker). A read → Viewer and up.
 export async function getAdminEligibleForClaim(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "claims", "view"))) return;
   try {
     return res.status(200).json({ results: await listEligibleForClaim() });
   } catch (err) {
@@ -632,7 +602,7 @@ export async function getAdminEligibleForClaim(req: Request, res: Response): Pro
 const assignBodySchema = z.object({ donationIds: z.array(z.number().int().positive()).min(1) });
 
 export async function postAdminAssignBatchDonations(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "claims", "edit");
   if (!claims) return;
   const id = claimBatchId(req, res);
   if (id == null) return;
@@ -665,7 +635,7 @@ adminRouter.post("/api/admin/claim-batches/:id/donations", postAdminAssignBatchD
 // expired/expiring, and donations whose in-person Gift Aid confirmation was sent but not completed.
 
 export async function getAdminRetentionExpiry(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "claims", "view"))) return;
   try {
     return res.status(200).json({ results: await listRetentionExpiryDeclarations() });
   } catch (err) {
@@ -675,7 +645,7 @@ export async function getAdminRetentionExpiry(req: Request, res: Response): Prom
 }
 
 export async function getAdminAwaitingDeclaration(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "claims", "view"))) return;
   try {
     return res.status(200).json({ results: await listAwaitingDeclarationDonations() });
   } catch (err) {
@@ -687,7 +657,7 @@ export async function getAdminAwaitingDeclaration(req: Request, res: Response): 
 // GASDS 2-year claim-deadline queue (TASK-135): small donations approaching or past the GASDS
 // claim cliff (2 years after the tax-year-end of collection — shorter than Gift Aid's 4 years).
 export async function getAdminGasdsDeadline(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "gasds", "view"))) return;
   try {
     return res.status(200).json({ results: await listGasdsDeadlineDonations() });
   } catch (err) {
@@ -701,7 +671,7 @@ adminRouter.get("/api/admin/queues/awaiting-declaration", getAdminAwaitingDeclar
 // Declaration-review-due queue (TASK-136): active enduring/monthly declarations HMRC recommends
 // re-confirming (made over ~2 years ago). Read-only, Viewer+.
 export async function getAdminDeclarationReview(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "claims", "view"))) return;
   try {
     return res.status(200).json({ results: await listDeclarationsDueReview() });
   } catch (err) {
@@ -717,7 +687,7 @@ const gasdsMarkSchema = z.object({
 });
 
 export async function postAdminMarkGasdsClaimed(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "gasds", "edit");
   if (!claims) return;
   const parsed = gasdsMarkSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -737,7 +707,7 @@ export async function postAdminMarkGasdsClaimed(req: Request, res: Response): Pr
 // of the three GASDS caps). Read-only, Viewer+. Defaults to the current calendar year when ?year is
 // absent or not a positive integer. Surfaces the getGasdsPoolReport logic that had no route until now.
 export async function getAdminGasdsPool(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "gasds", "view"))) return;
   try {
     const yearNum = Number(req.query.year);
     const year = Number.isInteger(yearNum) && yearNum > 0 ? yearNum : new Date().getFullYear();
@@ -758,7 +728,7 @@ adminRouter.get("/api/admin/queues/declaration-review", getAdminDeclarationRevie
 // most generous first, each tagged with whether they can be emailed (sendState) and whether they
 // have been thanked. Read-only, Viewer+.
 export async function getThankYouEligible(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "thank-you", "view"))) return;
   try {
     const thresholdNum = Number(req.query.threshold);
     const thresholdPence =
@@ -780,7 +750,7 @@ adminRouter.get("/api/admin/thank-you/eligible", getThankYouEligible);
 // thanked. `signedByRole` and `letterDate` are presentation-only (not stored): the role is the
 // signer's title on the letter, the date defaults to today. Editor+ (a send is an outbound write).
 export async function postAdminThankYouSend(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "thank-you", "edit");
   if (!claims) return;
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = thankYouInputSchema.safeParse({ ...body, sentBy: claims.email });
@@ -845,7 +815,7 @@ adminRouter.post("/api/admin/thank-you/send", postAdminThankYouSend);
 // recent first (paginated), backing the "Sent history" table in the admin "Thank you" view. Paging is
 // clamped to a safe window (clampPage). Read-only, Viewer+.
 export async function getAdminThankYouSent(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "thank-you", "view"))) return;
   try {
     const raw = pageArgs(req);
     const { limit, offset } = clampPage(raw.limit, raw.offset);
@@ -868,7 +838,7 @@ adminRouter.get("/api/admin/thank-you/sent", getAdminThankYouSent);
 // mistaken send) and audit the deletion. Editor+ (a write); the append-only audit_log keeps both the
 // original `thank_you.sent` and the new `thank_you.deleted` entry, so the governance trail is intact.
 export async function deleteAdminThankYouSent(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "thank-you", "edit");
   if (!claims) return;
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -900,7 +870,7 @@ function supporterId(req: Request, res: Response): number | null {
 
 // GET /api/admin/ticker — every supporter (active + hidden), display order. Viewer+.
 export async function getAdminTicker(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "ticker", "view"))) return;
   try {
     return res.status(200).json({ results: await listSupporters() });
   } catch (err) {
@@ -911,7 +881,7 @@ export async function getAdminTicker(req: Request, res: Response): Promise<Respo
 
 // POST /api/admin/ticker — add a supporter. Editor+.
 export async function postAdminTicker(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "ticker", "edit");
   if (!claims) return;
   const parsed = supporterCreateSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -928,7 +898,7 @@ export async function postAdminTicker(req: Request, res: Response): Promise<Resp
 
 // PATCH /api/admin/ticker/:id — edit a supporter's name/active/sortOrder. Editor+.
 export async function patchAdminTicker(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "ticker", "edit");
   if (!claims) return;
   const id = supporterId(req, res);
   if (id === null) return;
@@ -948,7 +918,7 @@ export async function patchAdminTicker(req: Request, res: Response): Promise<Res
 
 // DELETE /api/admin/ticker/:id — remove a supporter. Editor+.
 export async function deleteAdminTicker(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "ticker", "edit");
   if (!claims) return;
   const id = supporterId(req, res);
   if (id === null) return;
@@ -984,7 +954,7 @@ function pageArgs(req: Request): { limit?: number; offset?: number } {
 
 // GET /api/admin/donations?limit&offset&status&channel — browse all donations. Viewer and up.
 export async function getAdminDonations(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "donations", "view"))) return;
   try {
     const { limit, offset } = pageArgs(req);
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
@@ -998,7 +968,7 @@ export async function getAdminDonations(req: Request, res: Response): Promise<Re
 
 // GET /api/admin/claim-batches — list claim batches with counts/totals. Viewer and up.
 export async function getAdminClaimBatches(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "claims", "view"))) return;
   try {
     return res.status(200).json({ results: await listClaimBatches() });
   } catch (err) {
@@ -1011,7 +981,7 @@ export async function getAdminClaimBatches(req: Request, res: Response): Promise
 // operation, so Editor/Admin only (mirrors submit). Reuses the existing eligible-donations query +
 // the pure CSV serializer; returns text/csv as a download.
 export async function getAdminClaimBatchExport(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "claims", "edit"))) return;
   const id = claimBatchId(req, res);
   if (id == null) return;
   try {
@@ -1033,7 +1003,7 @@ export async function getAdminClaimBatchExport(req: Request, res: Response): Pro
 
 // GET /api/admin/audit?limit&offset&entity&entityId — the append-only governance trail. Viewer+.
 export async function getAdminAuditLog(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "audit", "view"))) return;
   try {
     const { limit, offset } = pageArgs(req);
     const entity = typeof req.query.entity === "string" ? req.query.entity : undefined;
@@ -1048,7 +1018,7 @@ export async function getAdminAuditLog(req: Request, res: Response): Promise<Res
 
 // GET /api/admin/subscriptions/dunning?status — at-risk / lapsed monthly gifts. Viewer and up.
 export async function getAdminDunning(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "subscriptions", "view"))) return;
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     return res.status(200).json({ results: await listDunning(status) });
@@ -1084,7 +1054,7 @@ function storyId(req: Request, res: Response): number | null {
 // GET /api/admin/stories?status=&use_scope= — newest-first, optionally filtered. Viewer+. The list
 // projection is already PII-minimised by listStories (no story_text, no email/phone).
 export async function getAdminStories(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "stories", "view"))) return;
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const useScope = typeof req.query.use_scope === "string" ? req.query.use_scope : undefined;
@@ -1097,7 +1067,7 @@ export async function getAdminStories(req: Request, res: Response): Promise<Resp
 
 // GET /api/admin/stories/:id — the full record for the detail view. Viewer+.
 export async function getAdminStory(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "stories", "view"))) return;
   const id = storyId(req, res);
   if (id == null) return;
   try {
@@ -1131,7 +1101,7 @@ const storyPatchSchema = z
 // PATCH /api/admin/stories/:id — update status / admin_tags / admin_notes (e.g. Withdraw). Editor/
 // Admin only (mirrors patchAdminDonor). No audit_log row — see src/db/stories.ts's comment.
 export async function patchAdminStory(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "stories", "edit"))) return;
   const id = storyId(req, res);
   if (id == null) return;
 
@@ -1156,7 +1126,7 @@ export async function patchAdminStory(req: Request, res: Response): Promise<Resp
 // No audit_log row (see src/db/stories.ts's comment — this feature is deliberately
 // self-contained, and an erasure request should not itself retain the erased data anywhere).
 export async function deleteAdminStory(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "stories", "edit"))) return;
   const id = storyId(req, res);
   if (id == null) return;
   try {
@@ -1189,7 +1159,7 @@ function contactId(req: Request, res: Response): number | null {
 }
 
 export async function getAdminContact(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "contact", "view"))) return;
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     return res.status(200).json({ results: await listEnquiries(status) });
@@ -1200,7 +1170,7 @@ export async function getAdminContact(req: Request, res: Response): Promise<Resp
 }
 
 export async function getAdminContactItem(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "viewer")) return;
+  if (!(await authorizeSection(req, res, "contact", "view"))) return;
   const id = contactId(req, res);
   if (id == null) return;
   try {
@@ -1217,9 +1187,9 @@ const contactPatchSchema = z.object({ status: z.enum(["new", "replied"]) }).stri
 
 export async function patchAdminContact(req: Request, res: Response): Promise<Response | void> {
   // Capture the claims (not just the boolean gate) so we can record WHO marked it replied —
-  // mirrors how patchAdminDonor uses claims for the audit actor. authorizeAdmin returns the
+  // mirrors how patchAdminDonor uses claims for the audit actor. authorizeSection returns the
   // claims (with .email) on success, or null after sending the 401/403.
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "contact", "edit");
   if (!claims) return;
   const id = contactId(req, res);
   if (id == null) return;
@@ -1239,7 +1209,7 @@ export async function patchAdminContact(req: Request, res: Response): Promise<Re
 }
 
 export async function deleteAdminContact(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "editor")) return;
+  if (!(await authorizeSection(req, res, "contact", "edit"))) return;
   const id = contactId(req, res);
   if (id == null) return;
   try {
@@ -1271,7 +1241,7 @@ adminRouter.post("/api/admin/newsletters/:id/send", postAdminSendNewsletter);
 // Body { mime, dataBase64 }. Validates mime allow-list + 2 MB cap, stores the bytes, returns the
 // public serve URL. See src/routes/newsletter-images.ts for the GET side.
 export async function postAdminNewsletterImage(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "editor");
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
   if (!claims) return;
   const parsed = z
     .object({ mime: z.string().min(1), dataBase64: z.string().min(1), filename: z.string().optional() })

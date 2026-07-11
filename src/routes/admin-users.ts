@@ -18,14 +18,16 @@ import { inviteSchema, userPatchSchema, setPasswordSchema, forgotSchema } from "
 import { issueAdminActionToken, verifyAdminActionToken, adminActionLink, AdminActionTokenError } from "../admin/tokens";
 import { hashPassword } from "../admin/password";
 import { sendAdminInvite, sendAdminReset } from "../clients/email";
-import { authorizeAdmin, actorOf } from "./admin";
+import { actorOf } from "./admin";
+import { authorizeSection } from "./admin-authz";
 import { config } from "../config";
 import { createRateLimiter } from "../portal/request-limiter";
 
-// Admin user-management + self/admin-initiated password reset (admin-management Phase 1, Task 5).
-// The /api/admin/users* routes and the admin-initiated reset are Admin-role ONLY (authorizeAdmin
-// with minRole "admin" — viewer/editor get 403); /forgot and /set-password are PUBLIC, since they
-// are how a locked-out user gets back in, and are rate-limited. Every mutating write reuses the
+// Admin user-management + self/admin-initiated password reset (admin-management Phase 2). The
+// /api/admin/users* routes and the admin-initiated reset are gated to the "team" section
+// (authorizeSection(..., "team", "view"|"edit") — a viewer/editor with no team access gets 403);
+// /forgot and /set-password are PUBLIC, since they are how a locked-out user gets back in, and are
+// rate-limited. Every mutating write reuses the
 // audited src/db/admin-users functions (Task 3), so each state change appends its own audit_log row
 // in the same transaction. The anti-lockout guard (isLastEnabledAdmin) runs BEFORE any mutation on a
 // PATCH/DELETE that could orphan the last enabled admin, returning 409 { error: "last_admin" }
@@ -46,7 +48,7 @@ function userId(req: Request, res: Response): number | null {
 // GET /api/admin/users — the Team table (Task 8). Admin only (this whole surface manages who can
 // sign in, so it is gated tighter than the read-only Viewer/Editor lists elsewhere in admin.ts).
 export async function getAdminUsers(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "admin")) return;
+  if (!(await authorizeSection(req, res, "team", "view"))) return;
   try {
     return res.status(200).json({ results: await listUsers() });
   } catch (err) {
@@ -60,7 +62,7 @@ export async function getAdminUsers(req: Request, res: Response): Promise<Respon
 // — mirrors inviteUser's password_hash=NULL). A duplicate email -> 409. The email send is
 // best-effort (logged, not fatal) — the invite row is already committed by the time we send.
 export async function postAdminUsers(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "admin");
+  const claims = await authorizeSection(req, res, "team", "edit");
   if (!claims) return;
   const parsed = inviteSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -105,7 +107,7 @@ export async function postAdminUsers(req: Request, res: Response): Promise<Respo
 // the Task 3 db layer exposes — a PATCH touching both fields yields two audit rows, which is correct
 // (two distinct state changes).
 export async function patchAdminUser(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "admin");
+  const claims = await authorizeSection(req, res, "team", "edit");
   if (!claims) return;
   const id = userId(req, res);
   if (id == null) return;
@@ -155,7 +157,7 @@ export async function patchAdminUser(req: Request, res: Response): Promise<Respo
 // delete. 404 when the id doesn't exist (either at the pre-check or — a benign race — the delete
 // itself finding no row).
 export async function deleteAdminUser(req: Request, res: Response): Promise<Response | void> {
-  const claims = authorizeAdmin(req, res, "admin");
+  const claims = await authorizeSection(req, res, "team", "edit");
   if (!claims) return;
   const id = userId(req, res);
   if (id == null) return;
@@ -184,7 +186,7 @@ export async function deleteAdminUser(req: Request, res: Response): Promise<Resp
 // invited user's credential too (e.g. resending a lost invite as a reset). 404 when the user doesn't
 // exist; the email send is best-effort.
 export async function postAdminUserReset(req: Request, res: Response): Promise<Response | void> {
-  if (!authorizeAdmin(req, res, "admin")) return;
+  if (!(await authorizeSection(req, res, "team", "edit"))) return;
   const id = userId(req, res);
   if (id == null) return;
   try {

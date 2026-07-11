@@ -3,14 +3,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // TASK-138: POST /api/admin/queues/gasds-deadline/mark-claimed stamps gasds_claimed_at on the given
 // GASDS-eligible donations (Editor+) so the deadline queue stops surfacing them. Pool + config mocked.
 
-const { queryMock, clientQueryMock, connect } = vi.hoisted(() => {
+const { queryMock, clientQueryMock, connect, getUserAuthRowMock } = vi.hoisted(() => {
   const queryMock = vi.fn();
   const clientQueryMock = vi.fn();
   const mockClient = { query: clientQueryMock, release: vi.fn() };
   const connect = vi.fn(async () => mockClient);
-  return { queryMock, clientQueryMock, connect };
+  const getUserAuthRowMock = vi.fn(); // authorizeSection's fresh per-request DB row (Admin Phase 2)
+  return { queryMock, clientQueryMock, connect, getUserAuthRowMock };
 });
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect } }));
+vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
   config: {
     NODE_ENV: "development",
@@ -25,8 +27,12 @@ vi.mock("../../src/clients/stripe", () => ({ cancelSubscription: vi.fn() }));
 import { postAdminMarkGasdsClaimed } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
-const tokenFor = (role: string) =>
-  signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: "test-admin-secret" }).token;
+// authorizeSection re-loads the caller's row fresh (getUserAuthRowMock) rather than trusting the
+// token's role claim; tokenFor keeps that row's role in sync (role->permissions fallback).
+const tokenFor = (role: string) => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role, permissions: {} });
+  return signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: "test-admin-secret" }).token;
+};
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const mockRes = () => {
@@ -47,6 +53,7 @@ beforeEach(() => {
   queryMock.mockReset();
   clientQueryMock.mockReset();
   connect.mockClear();
+  getUserAuthRowMock.mockReset();
   clientQueryMock.mockImplementation(async (sql: string) => {
     if (/^\s*(begin|commit|rollback)/i.test(sql)) return {};
     if (/update donations/i.test(sql)) return { rows: [{ id: 5 }, { id: 6 }], rowCount: 2 };

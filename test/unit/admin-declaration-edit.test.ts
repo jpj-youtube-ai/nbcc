@@ -4,14 +4,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // identity/address on a donor's active declaration (amend) + sync the account name, audited as
 // admin:<email>. Pool + config mocked; admin token real (signAdminSession).
 
-const { queryMock, clientQueryMock, connect } = vi.hoisted(() => {
+const { queryMock, clientQueryMock, connect, getUserAuthRowMock } = vi.hoisted(() => {
   const queryMock = vi.fn();
   const clientQueryMock = vi.fn();
   const mockClient = { query: clientQueryMock, release: vi.fn() };
   const connect = vi.fn(async () => mockClient);
-  return { queryMock, clientQueryMock, connect };
+  const getUserAuthRowMock = vi.fn(); // authorizeSection's fresh per-request DB row (Admin Phase 2)
+  return { queryMock, clientQueryMock, connect, getUserAuthRowMock };
 });
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect } }));
+vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
   config: {
     NODE_ENV: "development",
@@ -27,8 +29,12 @@ import { patchAdminDeclaration } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
 const SECRET = "test-admin-secret";
-const tokenFor = (role: string) =>
-  signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: SECRET }).token;
+// authorizeSection re-loads the caller's row fresh (getUserAuthRowMock) rather than trusting the
+// token's role claim; tokenFor keeps that row's role in sync (role->permissions fallback).
+const tokenFor = (role: string) => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role, permissions: {} });
+  return signAdminSession({ sub: 1, email: "kenny@nbcc.test", role, now: new Date(), secret: SECRET }).token;
+};
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type MockRes = { statusCode: number; body: any; status: (c: number) => MockRes; json: (b: any) => MockRes };
@@ -86,6 +92,7 @@ beforeEach(() => {
   queryMock.mockReset();
   clientQueryMock.mockReset();
   connect.mockClear();
+  getUserAuthRowMock.mockReset();
   activeExists = true;
   queryMock.mockImplementation(async (sql: string) => {
     if (/from declarations/i.test(sql)) {

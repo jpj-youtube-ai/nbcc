@@ -3,8 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // TASK-136: GET /api/admin/queues/declaration-review lists active enduring/monthly declarations HMRC
 // recommends re-confirming (made over ~2 years ago). Read-only (Viewer+). Pool + config mocked.
 
-const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
+const { queryMock, getUserAuthRowMock } = vi.hoisted(() => ({
+  queryMock: vi.fn(),
+  getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
+}));
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect: vi.fn() } }));
+vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
   config: {
     NODE_ENV: "development",
@@ -19,6 +23,9 @@ vi.mock("../../src/clients/stripe", () => ({ cancelSubscription: vi.fn() }));
 import { getAdminDeclarationReview } from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
+// authorizeSection loads this fresh per request (Admin Phase 2) instead of trusting the token's
+// role claim; a viewer role falls back to view-everywhere-except-team permissions.
+getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: {} });
 const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "viewer", now: new Date(), secret: "test-admin-secret" }).token;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

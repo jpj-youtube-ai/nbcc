@@ -1,22 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Task 7 (2026-07-10 contact-inbox spec): GET /api/admin/contact (list), GET /api/admin/contact/:id
-// (detail), PATCH /api/admin/contact/:id (status new/replied), DELETE /api/admin/contact/:id — all
-// behind authorizeAdmin, all via src/db/contact (contactPool), NEVER src/db/pool.ts / the charity DB.
+// Task 7 (2026-07-10 contact-inbox spec) + Admin management Phase 2 (TASK-186): GET /api/admin/contact
+// (list), GET /api/admin/contact/:id (detail), PATCH /api/admin/contact/:id (status new/replied),
+// DELETE /api/admin/contact/:id — all behind authorizeSection's "contact" section (view for reads,
+// edit for writes), all via src/db/contact (contactPool), NEVER src/db/pool.ts / the charity DB.
 // Mirrors admin-stories-api.test.ts's mock/req/res style, but mocks ../../src/db/contact directly.
 
-const { listEnquiriesMock, getEnquiryMock, markRepliedMock, deleteEnquiryMock } = vi.hoisted(() => ({
-  listEnquiriesMock: vi.fn(),
-  getEnquiryMock: vi.fn(),
-  markRepliedMock: vi.fn(),
-  deleteEnquiryMock: vi.fn(),
-}));
+const { listEnquiriesMock, getEnquiryMock, markRepliedMock, deleteEnquiryMock, getUserAuthRowMock } = vi.hoisted(
+  () => ({
+    listEnquiriesMock: vi.fn(),
+    getEnquiryMock: vi.fn(),
+    markRepliedMock: vi.fn(),
+    deleteEnquiryMock: vi.fn(),
+    getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
+  }),
+);
 vi.mock("../../src/db/contact", () => ({
   listEnquiries: listEnquiriesMock,
   getEnquiry: getEnquiryMock,
   markReplied: markRepliedMock,
   deleteEnquiry: deleteEnquiryMock,
 }));
+vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
   config: {
     NODE_ENV: "development",
@@ -34,8 +39,12 @@ import { getAdminContact, getAdminContactItem, patchAdminContact, deleteAdminCon
 import { signAdminSession } from "../../src/admin/session";
 
 const SECRET = "test-admin-secret";
-const tokenFor = (role: string, email = "kenny@nbcc.test") =>
-  signAdminSession({ sub: 1, email, role, now: new Date(), secret: SECRET }).token;
+// authorizeSection re-loads the caller's row fresh (getUserAuthRowMock) rather than trusting the
+// token's role claim; tokenFor keeps that row's role in sync (role->permissions fallback).
+const tokenFor = (role: string, email = "kenny@nbcc.test") => {
+  getUserAuthRowMock.mockResolvedValue({ id: 1, email, status: "active", role, permissions: {} });
+  return signAdminSession({ sub: 1, email, role, now: new Date(), secret: SECRET }).token;
+};
 
 type MockRes = {
   statusCode: number;
@@ -67,6 +76,7 @@ beforeEach(() => {
   getEnquiryMock.mockReset();
   markRepliedMock.mockReset();
   deleteEnquiryMock.mockReset();
+  getUserAuthRowMock.mockReset();
 });
 
 describe("GET /api/admin/contact (list)", () => {
@@ -193,5 +203,31 @@ describe("DELETE /api/admin/contact/:id (editor+ gate)", () => {
     const res = await runDelete({ role: "editor", id: "abc" });
     expect(res.statusCode).toBe(400);
     expect(deleteEnquiryMock).not.toHaveBeenCalled();
+  });
+});
+
+// Admin management Phase 2 (TASK-186): authorizeSection re-loads the caller's live row per request
+// and gates by the "contact" section specifically, not just the token's role claim.
+describe("Admin Phase 2: per-section permission gating on /api/admin/contact", () => {
+  it("401s (generic) a disabled user's otherwise-valid token", async () => {
+    const token = tokenFor("admin");
+    getUserAuthRowMock.mockResolvedValueOnce({ id: 1, email: "kenny@nbcc.test", status: "disabled", role: "admin", permissions: {} });
+    const res = await runList({ token });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid or expired admin session" });
+  });
+
+  it("403s a write when stored permissions restrict an editor to contact:view only, overriding the role default", async () => {
+    // Build the token directly (bypassing tokenFor) so the explicit permissions override below
+    // isn't clobbered by tokenFor's own default (permissions: {}, i.e. the role fallback) — an
+    // "editor" role normally gets contact:edit by default, so this proves the STORED per-section
+    // map, not the role, is what authorizeSection actually checks.
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "editor", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "editor", permissions: { contact: "view" } });
+    const readRes = await runList({ token });
+    expect(readRes.statusCode).toBe(200);
+    const writeRes = await runPatch({ token, body: { status: "replied" } });
+    expect(writeRes.statusCode).toBe(403);
+    expect(markRepliedMock).not.toHaveBeenCalled();
   });
 });

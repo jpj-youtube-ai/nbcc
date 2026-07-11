@@ -36,6 +36,12 @@ describe("newsletter theme", () => {
     expect(withUrl).toContain('href="https://nbcc.scot/unsubscribe/abc.def"');
     expect(withUrl).toContain("opted in"); // the PECR reason line
   });
+  it("pins a light color-scheme so dark-mode mail clients don't invert the palette", () => {
+    const html = renderFrame("<p>x</p>");
+    expect(html).toContain('<meta name="color-scheme" content="light">');
+    expect(html).toContain('<meta name="supported-color-schemes" content="light">');
+    expect(html).toContain("color-scheme: light");
+  });
   it("footer contacts are cream-coloured anchors so clients don't auto-link them blue", () => {
     const html = renderFrame("<p>x</p>");
     // Each contact is an explicit <a> with an inline cream colour — pre-empts the phone/email/URL

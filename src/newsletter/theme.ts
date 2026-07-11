@@ -108,6 +108,20 @@ export function renderFrame(innerHtml: string, unsubscribeUrl?: string): string 
     `</tr></table>`;
   return `<!doctype html>
 <html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Keep the fixed maroon/cream palette in dark-mode mail clients: color-scheme "light" + the
+     supported-color-schemes hint tell Apple Mail / iOS / newer Outlook not to auto-invert the
+     colours. Combined with the fully inline colours below, the newsletter renders the same in
+     light and dark. (Gmail's app does its own partial adjustment that ignores these hints; there
+     is no email-wide way to fully override that, but this covers the clients that honour it.) -->
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<style>
+  :root { color-scheme: light; supported-color-schemes: light; }
+</style>
+</head>
 <body style="margin:0;background:${MAROON};padding:24px 0;font-family:${BODY}">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:660px;margin:0 auto;background:${CREAM}">
     <tr><td style="padding:0">${innerHtml}</td></tr>

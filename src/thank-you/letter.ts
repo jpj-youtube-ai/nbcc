@@ -145,6 +145,14 @@ export function buildThankYouEmailHtml(v: ThankYouLetterView): string {
 
   return `<!doctype html>
 <html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- color-scheme: light keeps the maroon/cream palette in dark-mode mail clients (no auto-invert). -->
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<style>:root { color-scheme: light; supported-color-schemes: light; }</style>
+</head>
 <body style="margin:0;background:${MAROON};padding:24px 0;font-family:${BODY}">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:660px;margin:0 auto;background:${CREAM}">
     <tr><td style="padding:30px 40px 12px">

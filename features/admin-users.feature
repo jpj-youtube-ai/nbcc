@@ -19,6 +19,9 @@ Feature: Admin user management (admin-management Phase 1)
     Then the admin response status should be 200
     When I POST to admin login with email "accept.admin.bdd@example.com" and password "brand-new-pw-123"
     Then the admin response status should be 200
+    And the admin response requires a one-time code
+    When I POST to admin login 2fa with email "accept.admin.bdd@example.com" and the code from the login response
+    Then the admin response status should be 200
     And the admin response has a session token
 
   Scenario: forgot-password returns 200 whether or not the email is known (no enumeration)

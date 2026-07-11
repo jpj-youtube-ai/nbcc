@@ -38,6 +38,13 @@ When(
     });
     this.adminStatus = res.status;
     this.adminBody = await res.json().catch(() => ({}));
+    // Admin management Phase 3 (TASK-188): stash a mandatory-2FA devCode separately from
+    // adminBody, which a later step-2 attempt (e.g. a deliberate wrong code) will overwrite —
+    // admin-2fa.steps.js reads this stable field instead of adminBody.devCode so "the code from
+    // the login response" step still works after an intervening wrong-code attempt.
+    if (typeof this.adminBody.devCode === "string") {
+      this.adminLoginDevCode = this.adminBody.devCode;
+    }
   },
 );
 

@@ -21,7 +21,20 @@ async function login(email, password) {
     body: JSON.stringify({ email, password }),
   });
   const body = await res.json().catch(() => ({}));
-  return body.token;
+  if (body.token) return body.token;
+  // Admin management Phase 3 (TASK-188): mandatory email 2FA. In this non-production test
+  // environment the email client is stubbed, so step 1 returns the code as devCode — complete
+  // step 2 here so this helper still yields a real session token for the caller.
+  if (body.step === "2fa" && body.devCode) {
+    const res2 = await fetch(`${BASE_URL}/api/admin/login/2fa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code: body.devCode }),
+    });
+    const body2 = await res2.json().catch(() => ({}));
+    return body2.token;
+  }
+  return undefined;
 }
 
 Before({ tags: "@ticker" }, async function () {

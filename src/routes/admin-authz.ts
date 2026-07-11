@@ -29,12 +29,16 @@ function bearerToken(req: Request): string | null {
   return match ? match[1] : null;
 }
 
-export async function authorizeSection(
+type AuthRow = { id: number; email: string; status: string; role: string; permissions: PermissionMap };
+
+// Shared by authorizeSection and authorizeAny: verify the bearer token and load the live row,
+// writing the appropriate 401 on failure. A single getUserAuthRow call backs both the permission
+// check (authorizeSection) and the plain "is this a valid session" check (authorizeAny), so
+// neither has to duplicate the token-parsing / 401-message steps.
+async function authorizeSession(
   req: Request,
   res: Response,
-  section: Section,
-  level: "view" | "edit",
-): Promise<AdminSessionClaims | null> {
+): Promise<{ claims: AdminSessionClaims; row: AuthRow } | null> {
   const token = bearerToken(req);
   if (!token) {
     res.status(401).json({ error: "Missing admin session token" });
@@ -57,13 +61,35 @@ export async function authorizeSection(
     return null;
   }
 
-  const perms = effectivePermissions(row);
+  return { claims, row };
+}
+
+export async function authorizeSection(
+  req: Request,
+  res: Response,
+  section: Section,
+  level: "view" | "edit",
+): Promise<AdminSessionClaims | null> {
+  const result = await authorizeSession(req, res);
+  if (!result) return null;
+
+  const perms = effectivePermissions(result.row);
   if (!can(perms, section, level)) {
     res.status(403).json({ error: "forbidden" });
     return null;
   }
 
-  return claims;
+  return result.claims;
+}
+
+// A lightweight gate for endpoints that need no section/level check, just a valid, non-disabled
+// session — backs GET /api/admin/me (Task 5): any authenticated staff member may read their OWN
+// effective permissions (used by the front-end to filter its nav and gate write controls),
+// regardless of what sections they can actually access. Same 401 behaviour as authorizeSection's
+// steps 1-2 (missing token / invalid / expired / disabled), never a 403 (there is no section here).
+export async function authorizeAny(req: Request, res: Response): Promise<AdminSessionClaims | null> {
+  const result = await authorizeSession(req, res);
+  return result ? result.claims : null;
 }
 
 // The caller's effective per-section permissions, for the /me + nav-filter endpoint (Task 5). Null

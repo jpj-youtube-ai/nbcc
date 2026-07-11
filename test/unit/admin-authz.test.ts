@@ -17,7 +17,7 @@ vi.mock("../../src/config", () => ({
   },
 }));
 
-import { authorizeSection, loadEffectivePermissions } from "../../src/routes/admin-authz";
+import { authorizeSection, authorizeAny, loadEffectivePermissions } from "../../src/routes/admin-authz";
 import { signAdminSession } from "../../src/admin/session";
 import type { PermissionMap } from "../../src/admin/permissions";
 
@@ -131,6 +131,43 @@ describe("authorizeSection (Admin Phase 2, Task 3)", () => {
   it("returns 401 with 'Invalid or expired admin session' for an invalid/malformed token", async () => {
     const res = mockRes();
     const claims = await authorizeSection(req("garbage"), res as any, "stories", "view");
+    expect(claims).toBeNull();
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid or expired admin session" });
+    expect(getUserAuthRowMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("authorizeAny (Admin Phase 2, Task 5) — session-only gate, no section/level check", () => {
+  it("returns the claims for any valid, non-disabled session regardless of permissions", async () => {
+    getUserAuthRowMock.mockResolvedValue(authRow({ role: "viewer" })); // a viewer has no team access at all
+    const res = mockRes();
+    const claims = await authorizeAny(req(tokenFor(1, "viewer")), res as any);
+    expect(claims).toMatchObject({ sub: 1, email: "kenny@nbcc.test", role: "viewer" });
+    expect(res.statusCode).toBe(200); // no error response sent
+  });
+
+  it("returns 401 (generic) when the user's row is disabled", async () => {
+    getUserAuthRowMock.mockResolvedValue(authRow({ role: "admin", status: "disabled" }));
+    const res = mockRes();
+    const claims = await authorizeAny(req(tokenFor(1, "admin")), res as any);
+    expect(claims).toBeNull();
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Invalid or expired admin session" });
+  });
+
+  it("returns 401 with 'Missing admin session token' when no bearer token is supplied", async () => {
+    const res = mockRes();
+    const claims = await authorizeAny(req(undefined), res as any);
+    expect(claims).toBeNull();
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Missing admin session token" });
+    expect(getUserAuthRowMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 with 'Invalid or expired admin session' for an invalid/malformed token", async () => {
+    const res = mockRes();
+    const claims = await authorizeAny(req("garbage"), res as any);
     expect(claims).toBeNull();
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ error: "Invalid or expired admin session" });

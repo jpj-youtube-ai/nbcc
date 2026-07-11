@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { writeWithAudit } from "./donations";
-import type { PermissionMap } from "../admin/permissions";
+import { effectivePermissions, can, type PermissionMap } from "../admin/permissions";
 
 // Admin user CRUD + the last-admin anti-lockout guard (Admin management Phase 1, Task 3). Every
 // mutating function is audited via writeWithAudit (one audit_log row per write, in the same
@@ -39,9 +39,10 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "23505";
 }
 
-// Security review FIX #4: thrown by setUserRole/setUserStatus/deleteUser's transactional
-// anti-lockout guard (assertAdminsRemain) when the mutation just performed would leave zero
-// enabled admins. Distinct from wouldOrphanAdmins/isLastEnabledAdmin (the route's fast, but
+// Security review FIX #4: thrown by setUserRole/setUserStatus/deleteUser/setUserPermissions's
+// transactional anti-lockout guard (assertAdminsRemain) when the mutation just performed would
+// leave zero enabled "admins" — see the ADMIN_HOLDER_SQL comment below for what "admin" means
+// post-Phase-2. Distinct from wouldOrphanAdmins/isLastEnabledAdmin (the route's fast, but
 // non-atomic, PRE-check) — this is the AUTHORITATIVE guard, run inside the same transaction as
 // the write, so a concurrent request can no longer race past the pre-check and commit anyway.
 // The route layer (src/routes/admin-users.ts) catches this and maps it to the same 409
@@ -53,6 +54,19 @@ export class LastAdminError extends Error {
   }
 }
 
+// Admin Phase 2 (TASK-186): the anti-lockout guard is re-expressed from "role = 'admin'" to "a
+// non-disabled user whose EFFECTIVE permissions grant team:edit" — matching
+// effectivePermissions/can (src/admin/permissions.ts) exactly: a non-empty stored `permissions`
+// map is authoritative (checked via the `team` key), and only an EMPTY stored map falls back to
+// the role default (where only 'admin' grants team:edit). Expressed directly in SQL (rather than
+// pulled into JS + filtered) so the same predicate is reused, verbatim, by both the fast
+// pre-check's count (countEnabledAdmins) and the authoritative in-transaction guard
+// (assertAdminsRemain) below.
+const ADMIN_HOLDER_SQL = `status <> 'disabled' AND (
+  (permissions ? 'team' AND permissions->>'team' = 'edit')
+  OR (permissions = '{}'::jsonb AND role = 'admin')
+)`;
+
 // Count remaining enabled admins USING THE CALLER'S TRANSACTION CLIENT (not the pool), so the
 // count reflects the mutation just performed in the same BEGIN…COMMIT, and throw LastAdminError
 // if it is zero. writeWithAudit's catch rolls the whole transaction back on any throw, so the
@@ -60,9 +74,7 @@ export class LastAdminError extends Error {
 // the TOCTOU gap between the route's pre-check and the write.
 async function assertAdminsRemain(client: PoolClient): Promise<void> {
   const row = (
-    await client.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM users WHERE role = 'admin' AND status <> 'disabled'`,
-    )
+    await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM users WHERE ${ADMIN_HOLDER_SQL}`)
   ).rows[0];
   if (row.n === 0) throw new LastAdminError();
 }
@@ -221,11 +233,12 @@ export async function setUserStatus(
 }
 
 // Set a user's per-section permission matrix (Admin Phase 2, Task 5's PATCH
-// /api/admin/users/:id/permissions). Unlike setUserRole/setUserStatus this does NOT run the
-// last-admin guard here — Task 5 adapts anti-lockout to "cannot remove the last user with team:edit"
-// and that check is computed from effectivePermissions (role fallback included), not from this raw
-// column alone, so it belongs in the route/Task-5 layer, not this DB-only setter. Audited
-// admin_user.permissions_changed. Returns the updated ManagedUser, or null when the id doesn't exist.
+// /api/admin/users/:id/permissions). The route layer runs a fast, non-atomic pre-check first
+// (isLastEnabledAdmin, mirroring setUserRole/setUserStatus's pattern); this function then
+// re-checks INSIDE ITS OWN TRANSACTION after the mutation (assertAdminsRemain) — the
+// AUTHORITATIVE guard, closing the same TOCTOU gap a concurrent request could otherwise race
+// past (see setUserRole's comment). Audited admin_user.permissions_changed. Returns the updated
+// ManagedUser, or null when the id doesn't exist (assertAdminsRemain is skipped on a no-op write).
 export async function setUserPermissions(
   id: number,
   permissions: PermissionMap,
@@ -239,7 +252,9 @@ export async function setUserPermissions(
           [permissions, id],
         )
       ).rows[0];
-      return row ?? null;
+      if (!row) return null;
+      await assertAdminsRemain(client);
+      return row;
     },
     () => ({
       actor,
@@ -318,29 +333,31 @@ export async function touchLastLogin(id: number): Promise<void> {
   await pool.query(`UPDATE users SET last_login_at = now() WHERE id = $1`, [id]);
 }
 
-// Count enabled admins (role='admin' AND status != 'disabled') — the input to the anti-lockout guard.
-// 'invited' admins count as enabled (they are not disabled), matching wouldOrphanAdmins's target
-// check below, which only cares about role/status as currently persisted.
+// Count remaining "admin holders" (see ADMIN_HOLDER_SQL above) — the input to the anti-lockout
+// guard. 'invited' holders count as enabled (they are not disabled), matching wouldOrphanAdmins's
+// target check below, which only cares about status/permissions/role as currently persisted.
 export async function countEnabledAdmins(): Promise<number> {
   const row = (
-    await pool.query<{ count: number }>(
-      `SELECT count(*)::int AS count FROM users WHERE role = 'admin' AND status != 'disabled'`,
-    )
+    await pool.query<{ count: number }>(`SELECT count(*)::int AS count FROM users WHERE ${ADMIN_HOLDER_SQL}`)
   ).rows[0];
   return row.count;
 }
 
 // The pure anti-lockout decision (unit-tested DB-free — test/unit/admin-users-guard.test.ts): would
-// applying `change` to `target` drop the enabled-admin count to zero? True only when the target is
-// itself currently an enabled admin (role='admin' and status!=='disabled') AND it is the only one
-// (enabledAdminCount <= 1). A non-admin target, or an admin when others remain, is always false.
+// applying `change` to `target` drop the count of "admin holders" to zero? True only when the
+// target itself CURRENTLY holds effective team:edit (a non-disabled user whose stored permissions
+// grant team:edit, or — when they have no stored overrides — whose role is 'admin'; see
+// effectivePermissions/can in src/admin/permissions.ts) AND it is the only one (enabledAdminCount
+// <= 1). `permissions` is optional here (defaults to the role fallback) so existing callers that
+// only ever dealt with role/status (e.g. the guard's own unit tests) keep working unchanged.
 export function wouldOrphanAdmins(
-  target: Pick<ManagedUser, "role" | "status">,
+  target: { role: string; status: string; permissions?: PermissionMap | null },
   change: "demote" | "disable" | "delete",
   enabledAdminCount: number,
 ): boolean {
-  const targetIsEnabledAdmin = target.role === "admin" && target.status !== "disabled";
-  if (!targetIsEnabledAdmin) return false;
+  const perms = effectivePermissions({ role: target.role, permissions: target.permissions ?? null });
+  const targetHasTeamEdit = target.status !== "disabled" && can(perms, "team", "edit");
+  if (!targetHasTeamEdit) return false;
   return enabledAdminCount <= 1;
 }
 

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SECTIONS, type Section } from "./permissions";
 
 // Zod request schemas for admin user-management + reset endpoints (admin-management Phase 1
 // plan, Task 4). Pure, DB-free — consumed by the routes in src/routes/admin-users.ts (Task 5).
@@ -38,3 +39,22 @@ export const forgotSchema = z.object({
 });
 
 export type ForgotInput = z.infer<typeof forgotSchema>;
+
+// PATCH /api/admin/users/:id/permissions (Admin Phase 2, Task 5). Requires a COMPLETE matrix — one
+// level per section, matching the Team editor UI (Task 6), which always renders and submits all 13
+// rows — rather than a Partial<PermissionMap> that would let a client silently omit a section. Both
+// the outer object and the inner `permissions` object are `.strict()`, so an unknown top-level key
+// or an unknown section name is rejected (400) rather than silently ignored.
+const levelEnum = z.enum(["none", "view", "edit"]);
+const permissionsShape = Object.fromEntries(SECTIONS.map((section) => [section, levelEnum])) as Record<
+  Section,
+  typeof levelEnum
+>;
+
+export const permissionsSchema = z
+  .object({
+    permissions: z.object(permissionsShape).strict(),
+  })
+  .strict();
+
+export type PermissionsInput = z.infer<typeof permissionsSchema>;

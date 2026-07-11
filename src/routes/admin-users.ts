@@ -11,13 +11,23 @@ import {
   setUserPassword,
   setUserPermissions,
   isLastEnabledAdmin,
+  setOwnName,
+  setOwnPassword,
   DuplicateEmailError,
   LastAdminError,
   type ManagedUser,
 } from "../db/admin-users";
-import { inviteSchema, userPatchSchema, setPasswordSchema, forgotSchema, permissionsSchema } from "../admin/user-schema";
+import {
+  inviteSchema,
+  userPatchSchema,
+  setPasswordSchema,
+  forgotSchema,
+  permissionsSchema,
+  meNameSchema,
+  mePasswordSchema,
+} from "../admin/user-schema";
 import { issueAdminActionToken, verifyAdminActionToken, adminActionLink, AdminActionTokenError } from "../admin/tokens";
-import { hashPassword } from "../admin/password";
+import { hashPassword, verifyPassword } from "../admin/password";
 import { sendAdminInvite, sendAdminReset } from "../clients/email";
 import { actorOf } from "./admin";
 import { authorizeSection, authorizeAny, loadEffectivePermissions } from "./admin-authz";
@@ -261,6 +271,9 @@ export async function patchUserPermissions(req: Request, res: Response): Promise
 // caller's own effective permissions, for the front-end to filter its nav and gate write controls
 // client-side (the server-side authorizeSection gate on every other route remains the real
 // enforcement — this endpoint is not a security boundary, just a read of "what can I do").
+// Admin Phase 4 (TASK-197): also returns fullName (read via getManagedUser, which already selects
+// full_name for the Team table) so the front-end "My account" panel can prefill the name form
+// without a second bespoke query.
 export async function getAdminMe(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeAny(req, res);
   if (!claims) return;
@@ -270,7 +283,69 @@ export async function getAdminMe(req: Request, res: Response): Promise<Response 
     // generic 401 authorizeAny itself would have sent.
     return res.status(401).json({ error: "Invalid or expired admin session" });
   }
-  return res.status(200).json({ email: claims.email, permissions });
+  const managed = await getManagedUser(claims.sub);
+  if (!managed) {
+    // Same race as above (removed between authorizeAny and this load) — same generic 401.
+    return res.status(401).json({ error: "Invalid or expired admin session" });
+  }
+  return res.status(200).json({ email: claims.email, fullName: managed.full_name, permissions });
+}
+
+// PATCH /api/admin/me (Admin Phase 4, TASK-197) — self-only display-name change. Gated by
+// authorizeAny (any valid, non-disabled session; no section/level check — every signed-in staff
+// member may rename themselves). ALWAYS acts on claims.sub; any `id` present in the body is
+// ignored (meNameSchema doesn't even accept one). Audited admin_user.name_changed via setOwnName.
+export async function patchAdminMe(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeAny(req, res);
+  if (!claims) return;
+  const parsed = meNameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid name update", details: parsed.error.flatten() });
+  }
+  try {
+    await setOwnName(claims.sub, parsed.data.fullName, actorOf(claims));
+    return res.status(200).json({ ok: true, fullName: parsed.data.fullName });
+  } catch (err) {
+    console.error("admin self name update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Update is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/me/password (Admin Phase 4, TASK-197) — self-only password change, requiring the
+// CURRENT password (verified server-side via getPasswordHash + verifyPassword; never trusts a
+// client-supplied hash). Rate-limited per-caller AND per-IP (mirrors postAdminForgot's dual-limiter
+// shape) so repeated wrong guesses can't be used to brute-force the current password. ALWAYS acts on
+// claims.sub. Never logs currentPassword/newPassword. Audited admin_user.password_changed via
+// setOwnPassword — status is never touched (see setOwnPassword's comment).
+const mePasswordUserLimiter = createRateLimiter({ max: 5, windowMs: 15 * 60 * 1000 });
+const mePasswordIpLimiter = createRateLimiter({ max: 20, windowMs: 15 * 60 * 1000 });
+
+export async function postAdminMePassword(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeAny(req, res);
+  if (!claims) return;
+  const parsed = mePasswordSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid password update", details: parsed.error.flatten() });
+  }
+  const now = Date.now();
+  const userOk = mePasswordUserLimiter.allow(String(claims.sub), now);
+  const ipOk = mePasswordIpLimiter.allow(req.ip ?? "unknown", now);
+  if (!userOk || !ipOk) {
+    return res.status(429).json({ error: "Too many attempts. Please try again shortly." });
+  }
+  try {
+    const hash = await getPasswordHash(claims.sub);
+    const valid = await verifyPassword(parsed.data.currentPassword, hash);
+    if (!valid) {
+      return res.status(400).json({ error: "wrong_password" });
+    }
+    const newHash = await hashPassword(parsed.data.newPassword);
+    await setOwnPassword(claims.sub, newHash, actorOf(claims));
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("admin self password update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Update is temporarily unavailable" });
+  }
 }
 
 // POST /api/admin/forgot — public, self-service "I forgot my password". ALWAYS returns the same
@@ -384,5 +459,7 @@ adminUsersRouter.delete("/api/admin/users/:id", deleteAdminUser);
 adminUsersRouter.post("/api/admin/users/:id/reset", postAdminUserReset);
 adminUsersRouter.patch("/api/admin/users/:id/permissions", patchUserPermissions);
 adminUsersRouter.get("/api/admin/me", getAdminMe);
+adminUsersRouter.patch("/api/admin/me", patchAdminMe);
+adminUsersRouter.post("/api/admin/me/password", postAdminMePassword);
 adminUsersRouter.post("/api/admin/forgot", postAdminForgot);
 adminUsersRouter.post("/api/admin/set-password", postAdminSetPassword);

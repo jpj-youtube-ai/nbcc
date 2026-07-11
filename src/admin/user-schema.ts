@@ -70,3 +70,19 @@ export const permissionsSchema = z
   .strict();
 
 export type PermissionsInput = z.infer<typeof permissionsSchema>;
+
+// Admin management Phase 4 (TASK-197): self-account endpoints. Both act ONLY on the caller's own
+// row (claims.sub, never an id from the body — the route layer enforces this, these schemas just
+// validate shape). `newPassword`'s min(10) matches the invite/reset rule (setPasswordSchema above).
+export const meNameSchema = z.object({
+  fullName: z.string().trim().min(1).max(120),
+});
+
+export type MeNameInput = z.infer<typeof meNameSchema>;
+
+export const mePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(10).max(200),
+});
+
+export type MePasswordInput = z.infer<typeof mePasswordSchema>;

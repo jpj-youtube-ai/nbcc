@@ -159,6 +159,25 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect(el("nlPalette").textContent).toContain("Text");
   });
 
+  it("Start from template loads a showcase newsletter covering every block type", async () => {
+    await openNewsletterTab();
+    (el("newsletterTemplate") as HTMLElement).click();
+
+    // Every block type has a distinct card title; the template should include all 13.
+    const titles = Array.prototype.map.call(
+      el("nlCanvas").querySelectorAll(".nl-block-title"),
+      (n: HTMLElement) => n.textContent,
+    ) as string[];
+    for (const label of [
+      "Masthead", "Greeting", "Text", "Heading", "Image", "Story", "Spotlight",
+      "Impact stats", "Ways to help", "Events", "Donation CTA", "Button", "Divider",
+    ]) {
+      expect(titles).toContain(label);
+    }
+    expect((el("newsletterSubject") as HTMLInputElement).value).toBe("Winter Update");
+    expect((el("newsletterId") as HTMLInputElement).value).toBe(""); // unsaved — Save creates a new one
+  });
+
   it("New newsletter starts an empty block doc and the palette adds a block to the canvas", async () => {
     await openNewsletterTab();
     (el("newsletterNew") as HTMLElement).click();

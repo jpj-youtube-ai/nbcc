@@ -30,6 +30,15 @@ import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { touchLastLogin } from "../db/admin-users";
 import { signAdminSession, type AdminSessionClaims } from "../admin/session";
+import {
+  generateLoginCode,
+  hashLoginCode,
+  verifyLoginCode,
+  issueDeviceToken,
+  verifyDeviceToken,
+} from "../admin/two-factor";
+import { upsertLoginCode, getLoginCode, bumpLoginCodeAttempts, deleteLoginCode } from "../db/login-codes";
+import { twoFactorSchema } from "../admin/user-schema";
 import { authorizeSection } from "./admin-authz";
 import { getDonorPortalSnapshot, updateDonorPortal, getActiveDeclarationForDonor } from "../db/portal";
 import { cancelSubscription } from "../clients/stripe";
@@ -55,7 +64,8 @@ import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
 import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
-import { sendNewsletter, sendThankYou } from "../clients/email";
+import { sendNewsletter, sendThankYou, sendAdminLoginCode } from "../clients/email";
+import { createRateLimiter } from "../portal/request-limiter";
 import { clampPage } from "../db/admin";
 import { config } from "../config";
 
@@ -76,12 +86,36 @@ const DUMMY_HASH =
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
+  // Admin management Phase 3 (TASK-188): a 30-day "remember this device" token, replayed by the
+  // front end from localStorage. Optional — its absence is the normal case (2FA required).
+  deviceToken: z.string().optional(),
 });
+
+// Abuse control for both login steps (Phase 3 · TASK-188): cap attempts per email AND per client IP
+// (mirrors src/routes/portal.ts's requestAccess). Separate limiter instances per step so a flood of
+// bad codes at step 2 can't also starve step 1 (and vice versa). In-memory, per-task — same
+// documented follow-up as request-limiter.ts.
+const loginEmailLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+const loginIpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
+const twoFactorEmailLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
+const twoFactorIpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
+
+const LOGIN_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+const MAX_LOGIN_CODE_ATTEMPTS = 5;
+const TOO_MANY_ATTEMPTS_MESSAGE = "Too many attempts. Please try again shortly.";
+const INVALID_CODE_MESSAGE = "Invalid or expired code";
 
 export async function postAdminLogin(req: Request, res: Response): Promise<Response> {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid login request", details: parsed.error.flatten() });
+  }
+
+  const now = Date.now();
+  const emailOk = loginEmailLimiter.allow(parsed.data.email, now);
+  const ipOk = loginIpLimiter.allow(req.ip ?? "unknown", now);
+  if (!emailOk || !ipOk) {
+    return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
   }
 
   try {
@@ -99,28 +133,130 @@ export async function postAdminLogin(req: Request, res: Response): Promise<Respo
     if (user.status === "disabled" || user.status === "invited") {
       return res.status(401).json({ error: "Invalid email or password" });
     }
-    await touchLastLogin(user.id);
 
-    const { token, claims } = signAdminSession({
-      sub: user.id,
-      email: user.email,
-      role: user.role,
-      now: new Date(),
-      secret: config.ADMIN_SESSION_SECRET,
+    // Admin management Phase 3 (TASK-188): a valid 30-day device token FOR THIS USER skips the
+    // mandatory 2FA code step — a stolen device token alone grants nothing without also knowing the
+    // password, since we only reach here after the password check above.
+    if (typeof parsed.data.deviceToken === "string" && parsed.data.deviceToken.length > 0) {
+      const deviceClaims = verifyDeviceToken(parsed.data.deviceToken, config.ADMIN_SESSION_SECRET, new Date());
+      if (deviceClaims && deviceClaims.sub === user.id) {
+        await touchLastLogin(user.id);
+        const { token, claims } = signAdminSession({
+          sub: user.id,
+          email: user.email,
+          role: user.role,
+          now: new Date(),
+          secret: config.ADMIN_SESSION_SECRET,
+        });
+        return res.status(200).json({
+          token,
+          expiresAt: new Date(claims.exp).toISOString(),
+          user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
+        });
+      }
+    }
+
+    // Mandatory email 2FA: generate + store a one-time code and best-effort email it. No session is
+    // issued yet — the front end proceeds to POST /api/admin/login/2fa. devCode is included ONLY
+    // outside production (config.NODE_ENV !== "production"), so staging can always complete 2FA even
+    // when the email client is stubbed there; production always emails the code and never echoes it.
+    const code = generateLoginCode();
+    await upsertLoginCode(
+      user.id,
+      hashLoginCode(code, config.ADMIN_SESSION_SECRET),
+      new Date(Date.now() + LOGIN_CODE_TTL_MS),
+    );
+    await sendAdminLoginCode({ email: user.email, fullName: user.full_name, code }).catch((err) => {
+      console.error(`admin login-code email to ${user.email} failed`, err);
     });
     return res.status(200).json({
-      token,
-      expiresAt: new Date(claims.exp).toISOString(),
-      user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
+      step: "2fa",
+      email: user.email,
+      devCode: config.NODE_ENV !== "production" ? code : undefined,
     });
   } catch (err) {
-    // The message is safe to log; no secret or password is included.
+    // The message is safe to log; no secret, password, code, or device token is included.
     console.error("admin login failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Login is temporarily unavailable" });
   }
 }
 
 adminRouter.post("/api/admin/login", postAdminLogin);
+
+// POST /api/admin/login/2fa — step 2 of admin login (Phase 3 · TASK-188). Verifies the one-time
+// email code issued by step 1 and, on success, issues the session token (+ optionally a 30-day
+// device token when the caller ticks "remember this device"). Every failure path — unknown/disabled
+// user, no pending code, expired code, attempt cap exceeded, wrong code — returns the SAME generic
+// 401 (no enumeration, mirrors postAdminLogin's anti-enumeration contract).
+export async function postAdminLoginTwoFactor(req: Request, res: Response): Promise<Response> {
+  const parsed = twoFactorSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid 2FA request", details: parsed.error.flatten() });
+  }
+
+  const now = Date.now();
+  const emailOk = twoFactorEmailLimiter.allow(parsed.data.email, now);
+  const ipOk = twoFactorIpLimiter.allow(req.ip ?? "unknown", now);
+  if (!emailOk || !ipOk) {
+    return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+  }
+
+  try {
+    const user = await findUserByEmail(parsed.data.email);
+    if (!user || user.status === "disabled" || user.status === "invited") {
+      return res.status(401).json({ error: INVALID_CODE_MESSAGE });
+    }
+
+    const row = await getLoginCode(user.id);
+    if (!row || row.expires_at.getTime() <= Date.now()) {
+      return res.status(401).json({ error: INVALID_CODE_MESSAGE });
+    }
+
+    // The attempt counter is bumped on EVERY verification try (including the one that turns out
+    // correct) — a lockout check up front, before the code compare, so a request that arrives after
+    // the cap is already exceeded never gets a free extra guess.
+    const attempts = await bumpLoginCodeAttempts(user.id);
+    if (attempts > MAX_LOGIN_CODE_ATTEMPTS) {
+      await deleteLoginCode(user.id);
+      return res.status(401).json({ error: INVALID_CODE_MESSAGE });
+    }
+
+    if (!verifyLoginCode(parsed.data.code, row.code_hash, config.ADMIN_SESSION_SECRET)) {
+      return res.status(401).json({ error: INVALID_CODE_MESSAGE });
+    }
+
+    // Success: the code is one-time use — delete it immediately so it can't be replayed.
+    await deleteLoginCode(user.id);
+    await touchLastLogin(user.id);
+
+    const { token } = signAdminSession({
+      sub: user.id,
+      email: user.email,
+      role: user.role,
+      now: new Date(),
+      secret: config.ADMIN_SESSION_SECRET,
+    });
+    // deviceToken is genuinely OMITTED (not present-with-undefined) when not remembering — a
+    // conditional spread rather than an `undefined`-valued key, so callers can rely on
+    // `"deviceToken" in body` as well as a truthiness check.
+    const deviceToken =
+      parsed.data.remember === true
+        ? issueDeviceToken({ sub: user.id, now: new Date(), secret: config.ADMIN_SESSION_SECRET })
+        : undefined;
+
+    return res.status(200).json({
+      token,
+      user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
+      ...(deviceToken !== undefined ? { deviceToken } : {}),
+    });
+  } catch (err) {
+    // The message is safe to log; no secret, code, code hash, or device token is included.
+    console.error("admin 2fa login failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Login is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/login/2fa", postAdminLoginTwoFactor);
 
 // --- Role-gated admin actions on a donor's behalf (REQ-062 · TASK-106) --------------------------
 // These mirror the self-serve donor-portal routes (src/routes/portal.ts) but are authorised by the

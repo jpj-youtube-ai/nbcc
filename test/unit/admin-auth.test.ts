@@ -20,15 +20,39 @@ vi.mock("../../src/config", () => ({
     // login tests never touch Stripe.
     STRIPE_SECRET_KEY: "sk_test_aaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     STRIPE_WEBHOOK_SECRET: "whsec_placeholder",
+    // Phase 3 (TASK-188): a non-production NODE_ENV so the login-code response includes devCode —
+    // production must NEVER see it (that path is exercised in the dedicated devCode-gate test below).
+    NODE_ENV: "test",
   },
 }));
 
 const { touchLastLoginMock } = vi.hoisted(() => ({ touchLastLoginMock: vi.fn() }));
 vi.mock("../../src/db/admin-users", () => ({ touchLastLogin: touchLastLoginMock }));
 
+// Phase 3 (TASK-188): the login-code challenge store, mocked so step 1/step 2 tests don't touch a
+// real DB — mirrors touchLastLoginMock above.
+const {
+  upsertLoginCodeMock,
+  getLoginCodeMock,
+  bumpLoginCodeAttemptsMock,
+  deleteLoginCodeMock,
+} = vi.hoisted(() => ({
+  upsertLoginCodeMock: vi.fn(),
+  getLoginCodeMock: vi.fn(),
+  bumpLoginCodeAttemptsMock: vi.fn(),
+  deleteLoginCodeMock: vi.fn(),
+}));
+vi.mock("../../src/db/login-codes", () => ({
+  upsertLoginCode: upsertLoginCodeMock,
+  getLoginCode: getLoginCodeMock,
+  bumpLoginCodeAttempts: bumpLoginCodeAttemptsMock,
+  deleteLoginCode: deleteLoginCodeMock,
+}));
+
 import { hashPassword, verifyPassword } from "../../src/admin/password";
 import { signAdminSession, verifyAdminSession, AdminSessionError } from "../../src/admin/session";
-import { postAdminLogin } from "../../src/routes/admin";
+import { hashLoginCode, issueDeviceToken, verifyDeviceToken } from "../../src/admin/two-factor";
+import { postAdminLogin, postAdminLoginTwoFactor } from "../../src/routes/admin";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -98,6 +122,8 @@ function mockRes(): MockRes {
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const login = async (body: unknown) => { const res = mockRes(); await postAdminLogin({ body } as any, res as any); return res; };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const verify2fa = async (body: unknown) => { const res = mockRes(); await postAdminLoginTwoFactor({ body } as any, res as any); return res; };
 
 let ADMIN_HASH: string;
 beforeAll(async () => {
@@ -112,6 +138,10 @@ let userRow:
 beforeEach(() => {
   queryMock.mockReset();
   touchLastLoginMock.mockReset();
+  upsertLoginCodeMock.mockReset();
+  getLoginCodeMock.mockReset();
+  bumpLoginCodeAttemptsMock.mockReset();
+  deleteLoginCodeMock.mockReset();
   queryMock.mockImplementation(async (_sql: string, params: unknown[]) => {
     const email = params?.[0];
     return { rows: userRow && userRow.email === email ? [userRow] : [], rowCount: 0 };
@@ -127,8 +157,12 @@ beforeEach(() => {
 });
 
 describe("POST /api/admin/login (REQ-062)", () => {
-  it("returns a signed session token for valid admin credentials", async () => {
-    const res = await login({ email: "kenny@nbcc.test", password: "s3cret-admin-pw" });
+  // Admin management Phase 3 (TASK-188) made 2FA mandatory: valid credentials ALONE no longer issue
+  // a session (see the "2FA challenge / trusted device" describe block below for that case) — a
+  // signed session at step 1 now requires a valid device token too (trusted device).
+  it("returns a signed session token for valid admin credentials on a trusted device", async () => {
+    const deviceToken = issueDeviceToken({ sub: 1, now: new Date(), secret: SECRET });
+    const res = await login({ email: "kenny@nbcc.test", password: "s3cret-admin-pw", deviceToken });
     expect(res.statusCode).toBe(200);
     const body = res.body as { token: string; user: { id: number; role: string; email: string } };
     expect(body.token).toBeTruthy();
@@ -194,6 +228,148 @@ describe("POST /api/admin/login (REQ-062)", () => {
   it("returns 400 for a malformed body (missing password / bad email)", async () => {
     expect((await login({ email: "kenny@nbcc.test" })).statusCode).toBe(400);
     expect((await login({ email: "not-an-email", password: "x" })).statusCode).toBe(400);
+  });
+});
+
+// --- Admin management Phase 3 (TASK-188): mandatory email 2FA + trusted device ------------------
+const SECRET = "test-admin-secret";
+
+describe("POST /api/admin/login — step 1 (2FA challenge / trusted device)", () => {
+  it("password ok + no device token -> { step: '2fa' } with a 6-digit devCode (non-production)", async () => {
+    const res = await login({ email: "kenny@nbcc.test", password: "s3cret-admin-pw" });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { step: string; email: string; devCode: string };
+    expect(body).toEqual({ step: "2fa", email: "kenny@nbcc.test", devCode: expect.any(String) });
+    expect(body.devCode).toMatch(/^\d{6}$/);
+    // No session is issued at step 1 — 2FA is mandatory absent a trusted device.
+    expect(res.body).not.toHaveProperty("token");
+    expect(touchLastLoginMock).not.toHaveBeenCalled();
+    // A code was generated, hashed, and stored with a ~10 minute expiry.
+    expect(upsertLoginCodeMock).toHaveBeenCalledTimes(1);
+    const [userId, codeHash, expiresAt] = upsertLoginCodeMock.mock.calls[0] as [number, string, Date];
+    expect(userId).toBe(1);
+    expect(typeof codeHash).toBe("string");
+    expect(expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 10 * 60 * 1000 + 1000);
+  });
+
+  it("a valid device token for this user issues the session directly, no code generated", async () => {
+    const deviceToken = issueDeviceToken({ sub: 1, now: new Date(), secret: SECRET });
+    const res = await login({ email: "kenny@nbcc.test", password: "s3cret-admin-pw", deviceToken });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { token: string; user: { id: number; email: string; role: string } };
+    expect(body.token).toBeTruthy();
+    const claims = verifyAdminSession(body.token, SECRET, new Date());
+    expect(claims).toMatchObject({ sub: 1, email: "kenny@nbcc.test", role: "admin" });
+    expect(body.user).toMatchObject({ id: 1, email: "kenny@nbcc.test", role: "admin" });
+    expect(res.body).not.toHaveProperty("step");
+    expect(touchLastLoginMock).toHaveBeenCalledWith(1);
+    // Trusted device -> 2FA is skipped entirely, so no code is ever generated.
+    expect(upsertLoginCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("a device token for a DIFFERENT user is not accepted — falls through to the 2FA challenge", async () => {
+    const deviceToken = issueDeviceToken({ sub: 999, now: new Date(), secret: SECRET });
+    const res = await login({ email: "kenny@nbcc.test", password: "s3cret-admin-pw", deviceToken });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { step: string }).step).toBe("2fa");
+    expect(res.body).not.toHaveProperty("token");
+    expect(touchLastLoginMock).not.toHaveBeenCalled();
+    expect(upsertLoginCodeMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("POST /api/admin/login/2fa — step 2 (code verification)", () => {
+  it("the correct code issues a session; no deviceToken when remember is not set", async () => {
+    const codeHash = hashLoginCode("482913", SECRET);
+    getLoginCodeMock.mockResolvedValue({ code_hash: codeHash, expires_at: new Date(Date.now() + 5 * 60 * 1000), attempts: 0 });
+    bumpLoginCodeAttemptsMock.mockResolvedValue(1);
+
+    const res = await verify2fa({ email: "kenny@nbcc.test", code: "482913" });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { token: string; user: { id: number }; deviceToken?: string };
+    expect(body.token).toBeTruthy();
+    const claims = verifyAdminSession(body.token, SECRET, new Date());
+    expect(claims).toMatchObject({ sub: 1, email: "kenny@nbcc.test", role: "admin" });
+    expect(body.user).toMatchObject({ id: 1, email: "kenny@nbcc.test" });
+    expect(body).not.toHaveProperty("deviceToken");
+    expect(deleteLoginCodeMock).toHaveBeenCalledWith(1);
+    expect(touchLastLoginMock).toHaveBeenCalledWith(1);
+  });
+
+  it("remember: true returns a deviceToken that itself verifies for this user", async () => {
+    const codeHash = hashLoginCode("482913", SECRET);
+    getLoginCodeMock.mockResolvedValue({ code_hash: codeHash, expires_at: new Date(Date.now() + 5 * 60 * 1000), attempts: 0 });
+    bumpLoginCodeAttemptsMock.mockResolvedValue(1);
+
+    const res = await verify2fa({ email: "kenny@nbcc.test", code: "482913", remember: true });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { deviceToken: string };
+    expect(body.deviceToken).toBeTruthy();
+    const deviceClaims = verifyDeviceToken(body.deviceToken, SECRET, new Date());
+    expect(deviceClaims).toEqual({ sub: 1 });
+  });
+
+  it("a wrong code returns 401 and increments the attempt counter", async () => {
+    const codeHash = hashLoginCode("482913", SECRET);
+    getLoginCodeMock.mockResolvedValue({ code_hash: codeHash, expires_at: new Date(Date.now() + 5 * 60 * 1000), attempts: 1 });
+    bumpLoginCodeAttemptsMock.mockResolvedValue(2);
+
+    const res = await verify2fa({ email: "kenny@nbcc.test", code: "000000" });
+    expect(res.statusCode).toBe(401);
+    expect(res.body).not.toHaveProperty("token");
+    expect(bumpLoginCodeAttemptsMock).toHaveBeenCalledWith(1);
+    expect(deleteLoginCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("the 6th wrong attempt locks out (401) and deletes the pending code", async () => {
+    const codeHash = hashLoginCode("482913", SECRET);
+    getLoginCodeMock.mockResolvedValue({ code_hash: codeHash, expires_at: new Date(Date.now() + 5 * 60 * 1000), attempts: 5 });
+    bumpLoginCodeAttemptsMock.mockResolvedValue(6);
+
+    const res = await verify2fa({ email: "kenny@nbcc.test", code: "000000" });
+    expect(res.statusCode).toBe(401);
+    expect(deleteLoginCodeMock).toHaveBeenCalledWith(1);
+  });
+
+  it("an expired code returns 401 without bumping attempts", async () => {
+    const codeHash = hashLoginCode("482913", SECRET);
+    getLoginCodeMock.mockResolvedValue({ code_hash: codeHash, expires_at: new Date(Date.now() - 1000), attempts: 0 });
+
+    const res = await verify2fa({ email: "kenny@nbcc.test", code: "482913" });
+    expect(res.statusCode).toBe(401);
+    expect(bumpLoginCodeAttemptsMock).not.toHaveBeenCalled();
+  });
+
+  it("no pending code (none requested / already used) returns 401", async () => {
+    getLoginCodeMock.mockResolvedValue(null);
+    const res = await verify2fa({ email: "kenny@nbcc.test", code: "482913" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("a disabled user at step 2 gets the generic 401 without looking up a code", async () => {
+    userRow = {
+      id: 3,
+      email: "kenny@nbcc.test",
+      full_name: "Kenny",
+      role: "admin",
+      password_hash: ADMIN_HASH,
+      status: "disabled",
+    };
+    const res = await verify2fa({ email: "kenny@nbcc.test", code: "482913" });
+    expect(res.statusCode).toBe(401);
+    expect(getLoginCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("an unknown email at step 2 gets the generic 401 (no enumeration)", async () => {
+    const res = await verify2fa({ email: "nobody@nbcc.test", code: "482913" });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns 400 for a malformed body (non-6-digit code / bad email)", async () => {
+    expect((await verify2fa({ email: "kenny@nbcc.test", code: "12a456" })).statusCode).toBe(400);
+    expect((await verify2fa({ email: "kenny@nbcc.test", code: "12345" })).statusCode).toBe(400);
+    expect((await verify2fa({ email: "not-an-email", code: "482913" })).statusCode).toBe(400);
   });
 });
 

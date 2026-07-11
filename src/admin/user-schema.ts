@@ -40,6 +40,18 @@ export const forgotSchema = z.object({
 
 export type ForgotInput = z.infer<typeof forgotSchema>;
 
+// Step 2 of admin login (Phase 3 · TASK-188, mandatory email 2FA): the emailed one-time code plus
+// the optional "remember this device" flag. `code` is exactly 6 digits (matches
+// src/admin/two-factor.ts's generateLoginCode shape) so a malformed guess 400s before it ever
+// reaches the DB-backed attempt counter.
+export const twoFactorSchema = z.object({
+  email: z.string().email(),
+  code: z.string().regex(/^\d{6}$/),
+  remember: z.boolean().optional(),
+});
+
+export type TwoFactorInput = z.infer<typeof twoFactorSchema>;
+
 // PATCH /api/admin/users/:id/permissions (Admin Phase 2, Task 5). Requires a COMPLETE matrix — one
 // level per section, matching the Team editor UI (Task 6), which always renders and submits all 13
 // rows — rather than a Partial<PermissionMap> that would let a client silently omit a section. Both

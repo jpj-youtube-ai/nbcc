@@ -16,14 +16,20 @@ const pkg = JSON.parse(readFileSync(resolve(repoRoot, "package.json"), "utf8")) 
   scripts: Record<string, string>;
 };
 
-// npm scripts that a deploy workflow runs as a one-off ECS task (containerOverrides command
-// ["npm","run","<script>"]).
+// npm scripts that a deploy workflow runs as a one-off ECS task. Two containerOverrides command
+// shapes are recognised: the per-script array form `["npm","run","<script>"]`, and the chained
+// form `["sh","-c","npm run <a> && npm run <b> && …"]` used to run every DB's provisioning +
+// migration in a single Fargate task (one cold-start instead of one per script).
 function deployInvokedScripts(): Set<string> {
   const dir = resolve(repoRoot, ".github/workflows");
   const scripts = new Set<string>();
   for (const f of readdirSync(dir).filter((n) => /^deploy-.*\.ya?ml$/.test(n))) {
     const yml = readFileSync(resolve(dir, f), "utf8");
-    for (const m of yml.matchAll(/"npm"\s*,\s*"run"\s*,\s*"([\w:-]+)"/g)) scripts.add(m[1]);
+    for (const m of yml.matchAll(
+      /"npm"\s*,\s*"run"\s*,\s*"([\w:-]+)"|\bnpm\s+run\s+([\w:-]+)/g,
+    )) {
+      scripts.add(m[1] ?? m[2]);
+    }
   }
   return scripts;
 }

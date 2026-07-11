@@ -2803,7 +2803,9 @@ so run the staging pipeline (below) right after.
 1. **Open a PR** -> `pr.yml` runs lint, build, migrations, **unit + BDD**.
 2. **Merge to main** -> `deploy-staging.yml`:
    builds + pushes the image (tagged by commit SHA, to the shared ECR repo),
-   runs migrations as a one-off task, deploys to ECS, smoke-tests `/health`,
+   provisions + migrates all three databases (main, `stories`, `contact`) in a
+   **single** one-off `ecs run-task` — one Fargate cold-start instead of five —
+   deploys to ECS, smoke-tests `/health`,
    runs **unit + BDD against the live staging URL**, then tags a release.
    On success it also writes a **promotion hint** to the run's job summary — the
    validated image SHA plus the ready-to-run `deploy-prod.yml` command — so you can
@@ -2824,6 +2826,12 @@ so run the staging pipeline (below) right after.
 Rollback is automatic: the ECS deployment circuit breaker reverts to the last
 healthy task set if a deploy fails its health checks, and a failed smoke/BDD
 step fails the run so a bad image never reaches production.
+
+Deploys are tuned to finish quickly: the target group sets
+`deregistration_delay = 5` (the default 300s otherwise blocks
+`ecs wait services-stable` on the old task draining) and a 10s health-check
+interval, both in `infra/modules/app/alb.tf`. These are Terraform changes, so
+they take effect only once the **Infra** workflow applies them per environment.
 
 ## Configuration
 

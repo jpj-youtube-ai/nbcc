@@ -286,6 +286,19 @@
 /* Delivery-outcome failure badge in the newsletter list. */
 .nl-fail-badge { display: inline-block; font-size: .72rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: #fbe9e9; color: var(--crimson); margin-left: 6px; }
 
+/* Newsletter attachments. */
+.nl-attach { margin: 20px 0 4px; }
+.nl-attach .admin-subhead { margin-top: 0; }
+.nl-attach-hint { font-size: .85rem; color: var(--slate-soft); font-style: italic; margin: 0 0 8px; }
+.nl-attach-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: .4rem; }
+.nl-attach-item { display: flex; align-items: center; gap: .75rem; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.nl-attach-name { font-weight: 600; font-size: .9rem; color: var(--slate); word-break: break-all; }
+.nl-attach-size { font-size: .78rem; color: var(--slate-soft); font-variant-numeric: tabular-nums; margin-left: auto; }
+.nl-attach-remove { color: var(--maroon); }
+.nl-attach-remove:hover { color: var(--crimson); }
+.nl-attach-tools { margin-bottom: 6px; }
+.nl-attach-tools input[type="file"] { font-family: var(--font-body); font-size: .85rem; color: var(--slate); }
+
 /* Canvas — the stack of block cards, plus an empty state. */
 .nl-canvas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
 .nl-empty {

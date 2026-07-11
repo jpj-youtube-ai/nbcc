@@ -261,6 +261,10 @@ export interface NewsletterEmail {
   replyTo: string; // same as from
   subject: string;
   html: string;
+  // Optional file attachments (TASK-193), base64-encoded, forwarded verbatim in the send payload.
+  // The email relay must accept an `attachments` array of { filename, content (base64), contentType }
+  // (the Resend attachment shape) for these to reach the recipient.
+  attachments?: { filename: string; content: string; contentType: string }[];
 }
 
 export async function sendNewsletter(message: NewsletterEmail): Promise<void> {

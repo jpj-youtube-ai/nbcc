@@ -216,6 +216,44 @@ Then("the CSV should contain {string}", function (needle) {
   assert.ok((this.csvText || "").includes(needle), `expected CSV to contain ${needle}`);
 });
 
+// Attachments (feature: add an attachment).
+When("I attach a {string} file named {string} to that newsletter", async function (mime, filename) {
+  const dataBase64 = Buffer.from("hello attachment " + filename).toString("base64");
+  const r = await authFetch(
+    `/api/admin/newsletters/${this.newsletterId}/attachments`,
+    "POST",
+    { filename, mime, dataBase64 },
+    this.token,
+  );
+  this.attStatus = r.status;
+  this.attBody = r.json;
+});
+Then("the attachment response status should be {int}", function (expected) {
+  assert.equal(this.attStatus, expected);
+});
+When("I list the attachments for that newsletter", async function () {
+  const r = await authFetch(`/api/admin/newsletters/${this.newsletterId}/attachments`, "GET", undefined, this.token);
+  this.attList = r.json;
+});
+Then("the attachment list should include {string}", function (name) {
+  assert.ok((this.attList.attachments || []).some((a) => a.filename === name), `expected ${name}`);
+});
+Then("the attachment list should not include {string}", function (name) {
+  assert.ok(!(this.attList.attachments || []).some((a) => a.filename === name), `did not expect ${name}`);
+});
+When("I delete that attachment", async function () {
+  const r = await authFetch(
+    `/api/admin/newsletters/${this.newsletterId}/attachments/${this.attBody.id}`,
+    "DELETE",
+    undefined,
+    this.token,
+  );
+  this.attDelStatus = r.status;
+});
+Then("the attachment delete status should be {int}", function (expected) {
+  assert.equal(this.attDelStatus, expected);
+});
+
 function signUnsubscribeToken(donorId, secret) {
   const body = String(donorId);
   const sig = createHmac("sha256", secret).update(body).digest("base64url");

@@ -1399,6 +1399,17 @@ Newsletter tab, all **Editor+** (`newsletter:edit`), hidden in read mode:
   list show *delivered / total* and flag any failed addresses instead of losing them to logs
   (`setNewsletterDeliverySummary`).
 
+**Attachments (TASK-193).** A draft newsletter can carry file attachments, sent to every recipient.
+Bytes are stored in the `newsletter_attachments` table (migration `1783763395350`,
+cascade-deleted with the newsletter), validated by the pure `validateAttachment`
+(`src/newsletter/attachment-validation.ts`: a document/image allow-list, **10 MB** cap).
+`POST/GET/DELETE /api/admin/newsletters/:id/attachments[/:attId]` (Editor+, draft-only) manage them
+from the **Attachments** panel on the Newsletter tab (shown once the newsletter is saved, hidden in
+read mode). At send time the loop base64-encodes each attachment once and passes them on every
+`sendNewsletter` call as `attachments: [{ filename, content, contentType }]` — **the email relay
+(`EMAIL_SEND_URL`) must forward that `attachments` array (Resend's shape)** for them to reach
+recipients; the in-repo path (upload, storage, send payload) is complete either way.
+
 The send is
 **idempotent**: the draft is claimed atomically (`claimNewsletterForSend`, stamping the sender)
 **before** any email goes out, so a double-click or two concurrent admins cannot both send — the

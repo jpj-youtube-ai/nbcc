@@ -133,3 +133,30 @@ Feature: Admin newsletter (REQ-069)
     Given a newsletter admin "mgr.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-mv"
     When I list the newsletter subscribers
     Then the subscriber list status should be 403
+
+  Scenario: an Editor attaches a file, lists it, and removes it
+    Given a newsletter admin "att.editor.newsletter.bdd@example.com" with role "editor" and password "pw-att"
+    When I create a block newsletter with subject "Blocks update"
+    Then the newsletter response status should be 201
+    When I attach a "application/pdf" file named "flyer.pdf" to that newsletter
+    Then the attachment response status should be 201
+    When I list the attachments for that newsletter
+    Then the attachment list should include "flyer.pdf"
+    When I delete that attachment
+    Then the attachment delete status should be 200
+    When I list the attachments for that newsletter
+    Then the attachment list should not include "flyer.pdf"
+
+  Scenario: an unsupported attachment type is rejected
+    Given a newsletter admin "att.mime.newsletter.bdd@example.com" with role "editor" and password "pw-attm"
+    When I create a block newsletter with subject "Blocks update"
+    When I attach a "application/x-msdownload" file named "danger.exe" to that newsletter
+    Then the attachment response status should be 400
+
+  Scenario: a Viewer cannot attach a file
+    Given a newsletter admin "att.admin.newsletter.bdd@example.com" with role "admin" and password "pw-atta"
+    When I create a block newsletter with subject "Blocks update"
+    Then the newsletter response status should be 201
+    Given a newsletter admin "att.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-attv"
+    When I attach a "application/pdf" file named "x.pdf" to that newsletter
+    Then the attachment response status should be 403

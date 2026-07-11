@@ -78,7 +78,7 @@ function masthead(b: Block): string {
   const hero = str(b.data, "heroUrl");
   const date = str(b.data, "date");
   const logo = (width: number): string =>
-    `<img src="${LOGO_URL}" alt="North Berwick Christmas Committee" width="${width}" style="display:inline-block;height:auto;max-width:${width}px" />`;
+    `<img src="${LOGO_URL}" alt="Night Before Christmas Campaign" width="${width}" style="display:inline-block;height:auto;max-width:${width}px" />`;
 
   if (b.variant === 1) {
     // logo left, title (+ optional date) right
@@ -793,5 +793,5 @@ export function renderBlock(block: Block, ctx: RenderCtx): string {
 }
 
 export function renderNewsletter(doc: NewsletterDoc, ctx: RenderCtx): string {
-  return renderFrame(doc.blocks.map((b) => renderBlock(b, ctx)).join(""));
+  return renderFrame(doc.blocks.map((b) => renderBlock(b, ctx)).join(""), ctx.unsubscribeUrl);
 }

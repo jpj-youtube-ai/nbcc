@@ -259,6 +259,17 @@
 .nl-add:focus-visible { outline: 2px solid var(--crimson); outline-offset: 2px; }
 .nl-readonly-note { margin: 0; padding: .35rem .5rem; font-size: .85rem; color: var(--slate-soft); font-style: italic; }
 
+/* Manual add-subscriber card. */
+.nl-subscriber-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 18px 20px; margin-bottom: 22px; }
+.nl-subscriber-card .admin-help { margin: 0 0 12px; }
+.nl-subscriber-form { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.nl-subscriber-form input { font-family: var(--font-body); font-size: .92rem; color: var(--slate); background: var(--cream); border: 1.4px solid var(--line); border-radius: 10px; padding: 9px 12px; }
+.nl-subscriber-form input#subEmail { flex: 1 1 240px; min-width: 200px; }
+.nl-subscriber-form input#subName { flex: 1 1 160px; min-width: 140px; }
+.nl-subscriber-form input:focus { outline: none; border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(192,34,56,.12); }
+.nl-subscriber-form .nl-item-add { margin-top: 0; }
+.nl-sub-msg { margin: 10px 0 0; font-size: .85rem; color: var(--slate); min-height: 1.1em; }
+
 /* Canvas — the stack of block cards, plus an empty state. */
 .nl-canvas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .75rem; }
 .nl-empty {

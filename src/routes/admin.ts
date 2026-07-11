@@ -48,6 +48,7 @@ import {
   createNewsletter,
   updateNewsletterDraft,
   listNewsletterRecipients,
+  addNewsletterSubscriber,
   claimNewsletterForSend,
   setNewsletterRecipientCount,
 } from "../db/newsletters";
@@ -225,7 +226,9 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
   }
-  return res.json({ html: renderNewsletter(parsed.data.bodyJson, { firstName: "Jane" }) });
+  // Pass a placeholder unsubscribe URL so the preview shows the (non-functional) Unsubscribe button
+  // the recipient will get — real sends substitute a signed per-recipient link.
+  return res.json({ html: renderNewsletter(parsed.data.bodyJson, { firstName: "Jane", unsubscribeUrl: "#" }) });
 }
 
 // GET /api/admin/newsletters/recipients — Admin only. The deduped list of consenting donor emails a
@@ -235,6 +238,23 @@ export async function getAdminNewsletterRecipients(req: Request, res: Response):
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const recipients = await listNewsletterRecipients();
   return res.json({ count: recipients.length, emails: recipients.map((r) => r.email) });
+}
+
+// POST /api/admin/newsletters/subscribers — manually add a newsletter subscriber (Editor+), e.g. an
+// email collected verbally on a doorstep. Creates a consenting donor, or re-enables consent if the
+// address is already on file (idempotent). 201 for a new subscriber, 200 for a re-subscribe.
+const newsletterSubscriberSchema = z.object({
+  email: z.string().trim().email(),
+  name: z.string().trim().max(200).optional(),
+});
+export async function postAdminNewsletterSubscriber(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const parsed = newsletterSubscriberSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid subscriber", details: parsed.error.flatten() });
+  }
+  const result = await addNewsletterSubscriber(parsed.data.email, parsed.data.name);
+  return res.status(result.status === "added" ? 201 : 200).json(result);
 }
 
 // PUT /api/admin/newsletters/:id — edit a draft (Editor+). A sent newsletter is immutable → 409.
@@ -279,12 +299,12 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   for (const r of recipients) {
     const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
-    // Block-doc newsletters render per recipient (merge the first name); legacy raw-HTML rows
-    // (no valid bodyJson) fall back to the stored, already-compiled body_html.
-    const rendered = parsedDoc.success
-      ? renderNewsletter(parsedDoc.data, { firstName: firstNameOf(r.fullName) })
-      : newsletter.bodyHtml;
-    const html = buildNewsletterHtml(rendered, unsubscribeUrl);
+    // Block-doc newsletters render per recipient (merge the first name) with the unsubscribe button
+    // built into the branded frame footer. Legacy raw-HTML rows (no valid bodyJson) are not framed,
+    // so they still get the standalone unsubscribe footer appended via buildNewsletterHtml.
+    const html = parsedDoc.success
+      ? renderNewsletter(parsedDoc.data, { firstName: firstNameOf(r.fullName), unsubscribeUrl })
+      : buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
     try {
       await sendNewsletter({
         email: r.email,
@@ -1230,8 +1250,9 @@ adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);
 adminRouter.post("/api/admin/newsletters/preview", postAdminNewsletterPreview);
-// /recipients must precede /:id so the literal path isn't captured as an :id param.
+// /recipients and /subscribers must precede /:id so the literal paths aren't captured as an :id param.
 adminRouter.get("/api/admin/newsletters/recipients", getAdminNewsletterRecipients);
+adminRouter.post("/api/admin/newsletters/subscribers", postAdminNewsletterSubscriber);
 adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);

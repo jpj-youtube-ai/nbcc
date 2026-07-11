@@ -5,6 +5,6 @@ export function buildNewsletterHtml(bodyHtml: string, unsubscribeUrl: string): s
   const footer =
     `<hr>\n<p style="font-size:12px;color:#666">` +
     `You're receiving this because you opted in to updates when you donated to the ` +
-    `North Berwick Christmas Committee. <a href="${unsubscribeUrl}">Unsubscribe</a>.</p>`;
+    `Night Before Christmas Campaign. <a href="${unsubscribeUrl}">Unsubscribe</a>.</p>`;
   return `${bodyHtml}\n${footer}`;
 }

@@ -27,6 +27,15 @@ describe("newsletter theme", () => {
     expect(html).toContain("nbcc.scot");
     expect(html).toContain("border-radius:50%"); // the circular icon chips
   });
+  it("renders a branded Unsubscribe button only when an unsubscribe URL is given", () => {
+    const without = renderFrame("<p>x</p>");
+    expect(without).not.toContain("Unsubscribe");
+
+    const withUrl = renderFrame("<p>x</p>", "https://nbcc.scot/unsubscribe/abc.def");
+    expect(withUrl).toContain(">Unsubscribe<");
+    expect(withUrl).toContain('href="https://nbcc.scot/unsubscribe/abc.def"');
+    expect(withUrl).toContain("opted in"); // the PECR reason line
+  });
   it("footer contacts are cream-coloured anchors so clients don't auto-link them blue", () => {
     const html = renderFrame("<p>x</p>");
     // Each contact is an explicit <a> with an inline cream colour — pre-empts the phone/email/URL

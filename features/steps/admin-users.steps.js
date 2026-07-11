@@ -31,12 +31,15 @@ function b64url(s) {
 function signBody(body, secret) {
   return createHmac("sha256", secret).update(body).digest("base64url");
 }
-// Mirrors issueAdminActionToken (src/admin/tokens.ts): base64url(claims).base64url(hmacSha256(claims)).
+// Domain-separation prefix the server signs over (src/admin/tokens.ts). The signature MUST cover
+// ACTION_TOKEN_DOMAIN + body, or verifyAdminActionToken rejects it as a bad signature (400).
+const ACTION_TOKEN_DOMAIN = "adminaction.v1:";
+// Mirrors issueAdminActionToken (src/admin/tokens.ts): base64url(claims).base64url(hmacSha256(domain+claims)).
 function buildActionToken(sub, purpose, bind, ttlMs) {
   const iat = Date.now();
   const claims = { sub, purpose, bind, iat, exp: iat + (ttlMs ?? 60 * 60 * 1000) };
   const body = b64url(JSON.stringify(claims));
-  return `${body}.${signBody(body, ADMIN_SESSION_SECRET)}`;
+  return `${body}.${signBody(ACTION_TOKEN_DOMAIN + body, ADMIN_SESSION_SECRET)}`;
 }
 
 async function login(email, password) {

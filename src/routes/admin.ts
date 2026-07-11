@@ -56,6 +56,13 @@ import {
 } from "../db/newsletters";
 import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
 import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
+import {
+  validateAttachment,
+  insertNewsletterAttachment,
+  listNewsletterAttachments,
+  listNewsletterAttachmentsForSend,
+  deleteNewsletterAttachment,
+} from "../db/newsletter-attachments";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { sendNewsletter, sendThankYou } from "../clients/email";
@@ -298,6 +305,11 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
 
   const recipients = await listNewsletterRecipients();
   const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
+  // Load any file attachments once and base64-encode them; the same set goes to every recipient.
+  const attachmentRows = await listNewsletterAttachmentsForSend(id);
+  const attachments = attachmentRows.length
+    ? attachmentRows.map((a) => ({ filename: a.filename, content: a.bytes.toString("base64"), contentType: a.mime }))
+    : undefined;
   const failedEmails: string[] = [];
   for (const r of recipients) {
     const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
@@ -315,6 +327,7 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
         replyTo: config.NEWSLETTER_FROM_EMAIL,
         subject: newsletter.subject,
         html,
+        attachments,
       });
     } catch (err) {
       // Best-effort: a single failed send is recorded (not fatal to the batch) so the delivery
@@ -404,6 +417,60 @@ export async function postAdminRemoveNewsletterSubscriber(req: Request, res: Res
   const removed = await unsubscribeSubscriberByEmail(parsed.data.email);
   if (removed === 0) return res.status(404).json({ error: "That address is not a current subscriber" });
   return res.json({ email: parsed.data.email.trim().toLowerCase(), removed });
+}
+
+// --- Newsletter attachments (TASK-193) ---------------------------------------------------------
+// Files attached to a draft newsletter and sent as email attachments to every recipient. Editor+
+// (newsletter:edit); a sent newsletter is immutable, so uploads/deletes are draft-only.
+const attachmentUploadSchema = z.object({
+  filename: z.string().trim().min(1).max(255),
+  mime: z.string().min(1),
+  dataBase64: z.string().min(1),
+});
+
+// POST /api/admin/newsletters/:id/attachments — upload a file to attach to this newsletter.
+export async function postAdminNewsletterAttachment(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const existing = await getNewsletter(id);
+  if (!existing) return res.status(404).json({ error: "Newsletter not found" });
+  if (existing.status === "sent") return res.status(409).json({ error: "A sent newsletter cannot be edited" });
+  const parsed = attachmentUploadSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid upload" });
+  const bytes = Buffer.from(parsed.data.dataBase64, "base64");
+  const check = validateAttachment(parsed.data.mime, bytes.length);
+  if (!check.ok) {
+    const status = check.reason === "size" ? 413 : 400;
+    return res
+      .status(status)
+      .json({ error: check.reason === "size" ? "Attachment too large (10 MB max)" : "Unsupported file type" });
+  }
+  const meta = await insertNewsletterAttachment(id, parsed.data.filename, parsed.data.mime, bytes, claims.sub);
+  return res.status(201).json(meta);
+}
+
+// GET /api/admin/newsletters/:id/attachments — list this newsletter's attachments (metadata only).
+export async function getAdminNewsletterAttachments(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const attachments = await listNewsletterAttachments(id);
+  return res.json({ attachments });
+}
+
+// DELETE /api/admin/newsletters/:id/attachments/:attId — remove an attachment (draft only).
+export async function deleteAdminNewsletterAttachment(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const existing = await getNewsletter(id);
+  if (!existing) return res.status(404).json({ error: "Newsletter not found" });
+  if (existing.status === "sent") return res.status(409).json({ error: "A sent newsletter cannot be edited" });
+  const removed = await deleteNewsletterAttachment(id, String(req.params.attId));
+  if (!removed) return res.status(404).json({ error: "Attachment not found" });
+  return res.json({ removed: true });
 }
 
 // GET /api/admin/donors/:id — the donor snapshot (reuses getDonorPortalSnapshot). Read-only, so any
@@ -1344,6 +1411,9 @@ adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);
 adminRouter.post("/api/admin/newsletters/:id/send", postAdminSendNewsletter);
+adminRouter.get("/api/admin/newsletters/:id/attachments", getAdminNewsletterAttachments);
+adminRouter.post("/api/admin/newsletters/:id/attachments", postAdminNewsletterAttachment);
+adminRouter.delete("/api/admin/newsletters/:id/attachments/:attId", deleteAdminNewsletterAttachment);
 
 // POST /api/admin/newsletter-images — upload one image for use in a newsletter block (Editor+).
 // Body { mime, dataBase64 }. Validates mime allow-list + 2 MB cap, stores the bytes, returns the

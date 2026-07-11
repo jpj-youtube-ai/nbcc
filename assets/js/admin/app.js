@@ -115,6 +115,7 @@
       if (subCard) subCard.hidden = !canEdit("newsletter");
       var testBtn0 = el("newsletterTest");
       if (testBtn0) testBtn0.hidden = !canEdit("newsletter");
+      nlRefreshAttachments();
       selectView("overview");
       loadOverview();
     }
@@ -1956,6 +1957,7 @@
         nlRenderPalette();
         nlRenderCanvas();
         nlRefreshPreview();
+        nlRefreshAttachments();
       })
       .catch(function () {});
   }
@@ -2080,6 +2082,78 @@
     }
   }
 
+  // Newsletter attachments: only available once the newsletter is saved (has an id) and the user can
+  // edit. Renders the current list with remove buttons and wires the file input to upload as base64.
+  function nlAttachHumanSize(bytes) {
+    if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    if (bytes >= 1024) return Math.round(bytes / 1024) + " KB";
+    return bytes + " B";
+  }
+  function nlRenderAttachments(list) {
+    var host = el("nlAttachList");
+    if (!host) return;
+    if (!list.length) { host.innerHTML = '<p class="admin-empty">No attachments yet.</p>'; return; }
+    var rows = list.map(function (a) {
+      return '<li class="nl-attach-item"><span class="nl-attach-name">' + H.escapeHtml(a.filename) +
+        '</span><span class="nl-attach-size">' + nlAttachHumanSize(a.byteSize) + "</span>" +
+        '<button type="button" class="admin-link nl-attach-remove" data-att-remove="' + H.escapeHtml(a.id) + '">Remove</button></li>';
+    }).join("");
+    host.innerHTML = '<ul class="nl-attach-list">' + rows + "</ul>";
+    Array.prototype.forEach.call(host.querySelectorAll("[data-att-remove]"), function (b) {
+      b.addEventListener("click", function () { nlRemoveAttachment(b.getAttribute("data-att-remove")); });
+    });
+  }
+  // Reflect the current newsletter id + edit permission: hint (no id yet), tools + list (saved), or
+  // the whole section hidden in read mode.
+  function nlRefreshAttachments() {
+    var section = el("nlAttachments");
+    if (!section) return;
+    if (!canEdit("newsletter")) { section.hidden = true; return; }
+    section.hidden = false;
+    var id = el("newsletterId").value;
+    var saved = !!id && !nlSent;
+    el("nlAttachHint").hidden = saved;
+    el("nlAttachTools").hidden = !saved;
+    if (!saved) { el("nlAttachList").innerHTML = ""; return; }
+    authFetch("/api/admin/newsletters/" + id + "/attachments")
+      .then(j)
+      .then(function (d) { nlRenderAttachments(d.attachments || []); })
+      .catch(function () { el("nlAttachList").innerHTML = '<p class="admin-empty">Could not load attachments.</p>'; });
+  }
+  function nlRemoveAttachment(attId) {
+    var id = el("newsletterId").value;
+    if (!id) return;
+    authFetch("/api/admin/newsletters/" + id + "/attachments/" + encodeURIComponent(attId), { method: "DELETE" })
+      .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
+      .then(function () { nlRefreshAttachments(); })
+      .catch(function () { el("nlAttachMsg").textContent = "Could not remove that attachment."; });
+  }
+  if (el("nlAttachFile")) {
+    el("nlAttachFile").addEventListener("change", function () {
+      var f = el("nlAttachFile").files[0];
+      var id = el("newsletterId").value;
+      if (!f || !id) return;
+      el("nlAttachMsg").textContent = "Uploading " + f.name + "…";
+      var reader = new FileReader();
+      reader.onload = function () {
+        var base64 = String(reader.result).split(",")[1];
+        authFetch("/api/admin/newsletters/" + id + "/attachments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: f.name, mime: f.type || "application/octet-stream", dataBase64: base64 }),
+        })
+          .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+          .then(function (r) {
+            el("nlAttachMsg").textContent = r.ok ? "Attached " + f.name + "." : (r.b && r.b.error) || "Upload failed.";
+            el("nlAttachFile").value = "";
+            if (r.ok) nlRefreshAttachments();
+          })
+          .catch(function () { el("nlAttachMsg").textContent = "Upload failed."; });
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+
   var nlForm = el("newsletterForm");
   if (nlForm) {
     el("newsletterNew").addEventListener("click", function () {
@@ -2094,6 +2168,7 @@
       nlRenderPalette();
       nlRenderCanvas();
       nlRefreshPreview();
+      nlRefreshAttachments();
     });
 
     // Send a single test copy to the signed-in admin's own inbox — the current builder doc, unsaved

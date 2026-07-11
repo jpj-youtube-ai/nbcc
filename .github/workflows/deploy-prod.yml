@@ -19,6 +19,9 @@ env:
   AWS_REGION: eu-west-2
   PROJECT: charity-site
   ENVIRONMENT: production
+  # `terraform init` re-downloads providers every run without a shared cache; point
+  # it at a cached dir so subsequent deploys reuse the plugins (see Cache step below).
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
 
 jobs:
   deploy:
@@ -45,11 +48,19 @@ jobs:
           SHA="${{ inputs.image_sha }}"
           echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${SHA}" >> "$GITHUB_ENV"
 
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('infra/**/*.tf') }}
+          restore-keys: tf-plugins-${{ runner.os }}-
+
       - uses: hashicorp/setup-terraform@v3
 
       - name: Read infra wiring from state
         working-directory: infra/envs/production
         run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
           terraform init -input=false
           {
             echo "CLUSTER=$(terraform output -raw ecs_cluster)"

@@ -2802,11 +2802,15 @@ so run the staging pipeline (below) right after.
 
 1. **Open a PR** -> `pr.yml` runs lint, build, migrations, **unit + BDD**.
 2. **Merge to main** -> `deploy-staging.yml`:
-   builds + pushes the image (tagged by commit SHA, to the shared ECR repo),
+   builds + pushes the image (tagged by commit SHA, to the shared ECR repo, with
+   Docker layer caching via `buildx` + the GitHub Actions cache so unchanged
+   base/dependency layers are reused across deploys),
    provisions + migrates all three databases (main, `stories`, `contact`) in a
    **single** one-off `ecs run-task` — one Fargate cold-start instead of five —
    deploys to ECS, smoke-tests `/health`,
    runs **unit + BDD against the live staging URL**, then tags a release.
+   Terraform providers are cached (`TF_PLUGIN_CACHE_DIR` + `actions/cache`) so
+   `terraform init` doesn't re-download them each run — both deploy workflows.
    On success it also writes a **promotion hint** to the run's job summary — the
    validated image SHA plus the ready-to-run `deploy-prod.yml` command — so you can
    copy the exact SHA straight into the prod promote (below).

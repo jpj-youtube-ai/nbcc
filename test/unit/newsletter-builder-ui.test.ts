@@ -41,6 +41,7 @@ const savedRequests: { url: string; method: string; body: Record<string, unknown
 const previewRequests: { body: Record<string, unknown> }[] = [];
 const sendRequests: { url: string }[] = []; // POST /:id/send calls (the actual blast)
 const subscriberRequests: { body: Record<string, unknown> }[] = []; // POST .../subscribers
+const testSendRequests: { body: Record<string, unknown> }[] = []; // POST .../test-send
 const recipientsFixture = { count: 2, emails: ["ann@bdd.example", "ben@bdd.example"] };
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
@@ -74,6 +75,10 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   if (/\/api\/admin\/newsletters\/\d+\/send$/.test(url) && method === "POST") {
     sendRequests.push({ url });
     return j({ status: "sent", recipientCount: recipientsFixture.count });
+  }
+  if (url.includes("/api/admin/newsletters/test-send") && method === "POST") {
+    testSendRequests.push({ body: parsedBody });
+    return j({ sentTo: "s@nbcc" });
   }
   if (url.includes("/api/admin/newsletters/subscribers") && method === "POST") {
     subscriberRequests.push({ body: parsedBody });
@@ -136,6 +141,7 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     previewRequests.length = 0;
     sendRequests.length = 0;
     subscriberRequests.length = 0;
+    testSendRequests.length = 0;
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -327,8 +333,9 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     // Field inputs are disabled — a viewer can look but not edit.
     const field = el("nlCanvas").querySelector("textarea, input") as HTMLInputElement;
     expect(field.disabled).toBe(true);
-    // The manual add-subscriber card is an edit action → hidden for a viewer.
+    // The manual add-subscriber card and the test-send button are edit actions → hidden for a viewer.
     expect((el("nlSubscriberCard") as HTMLElement).hidden).toBe(true);
+    expect((el("newsletterTest") as HTMLElement).hidden).toBe(true);
   });
 
   it("an Editor can manually add a subscriber via the form", async () => {
@@ -348,6 +355,23 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect(el("subMsg").textContent).toContain("doorstep@example.com");
     expect((el("subEmail") as HTMLInputElement).value).toBe(""); // cleared on success
   });
+
+  it("Send test to me posts the current builder doc and reports the address", async () => {
+    loginToken = tokenFor("editor");
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    (el("newsletterSubject") as HTMLInputElement).value = "Test subject";
+    clickPalette("Text");
+
+    (el("newsletterTest") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    expect(testSendRequests.length).toBe(1);
+    expect(testSendRequests[0].body.subject).toBe("Test subject");
+    expect((testSendRequests[0].body.bodyJson as { blocks: unknown[] }).blocks.length).toBe(1);
+    expect(el("newsletterMsg").textContent).toContain("Test sent to s@nbcc");
+  });
 });
 
 describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {
@@ -358,6 +382,7 @@ describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {
     previewRequests.length = 0;
     sendRequests.length = 0;
     subscriberRequests.length = 0;
+    testSendRequests.length = 0;
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;

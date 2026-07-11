@@ -10,6 +10,10 @@ export interface NewsletterSummary {
   status: "draft" | "sent";
   sentAt: string | null;
   recipientCount: number | null;
+  // Delivery outcome, stamped after a send (TASK-190). Null until a newsletter has been sent.
+  sentCount: number | null;
+  failedCount: number | null;
+  failedEmails: string[] | null;
 }
 
 export interface Newsletter extends NewsletterSummary {
@@ -23,6 +27,12 @@ export interface NewsletterRecipient {
   fullName: string | null;
 }
 
+// A managed subscriber row: one consenting email address (deduped), for the subscriber list.
+export interface NewsletterSubscriber {
+  email: string;
+  name: string | null;
+}
+
 interface Row {
   id: number;
   subject: string;
@@ -31,6 +41,9 @@ interface Row {
   status: "draft" | "sent";
   sent_at: string | null;
   recipient_count: number | null;
+  sent_count: number | null;
+  failed_count: number | null;
+  failed_emails: string[] | null;
 }
 
 function toNewsletter(r: Row): Newsletter {
@@ -42,13 +55,16 @@ function toNewsletter(r: Row): Newsletter {
     status: r.status,
     sentAt: r.sent_at,
     recipientCount: r.recipient_count,
+    sentCount: r.sent_count ?? null,
+    failedCount: r.failed_count ?? null,
+    failedEmails: r.failed_emails ?? null,
   };
 }
 
 export async function listNewsletters(): Promise<NewsletterSummary[]> {
   const rows = (
     await pool.query<Row>(
-      `SELECT id, subject, body_html, status, sent_at, recipient_count
+      `SELECT id, subject, body_html, status, sent_at, recipient_count, sent_count, failed_count, failed_emails
          FROM newsletters ORDER BY id DESC`,
     )
   ).rows;
@@ -58,7 +74,7 @@ export async function listNewsletters(): Promise<NewsletterSummary[]> {
 export async function getNewsletter(id: number): Promise<Newsletter | null> {
   const row = (
     await pool.query<Row>(
-      `SELECT id, subject, body_html, body_json, status, sent_at, recipient_count
+      `SELECT id, subject, body_html, body_json, status, sent_at, recipient_count, sent_count, failed_count, failed_emails
          FROM newsletters WHERE id = $1`,
       [id],
     )
@@ -75,7 +91,7 @@ export async function createNewsletter(
     await pool.query<Row>(
       `INSERT INTO newsletters (subject, body_html, body_json, status)
        VALUES ($1, $2, $3, 'draft')
-       RETURNING id, subject, body_html, body_json, status, sent_at, recipient_count`,
+       RETURNING id, subject, body_html, body_json, status, sent_at, recipient_count, sent_count, failed_count, failed_emails`,
       [subject, bodyHtml, bodyJson],
     )
   ).rows[0];
@@ -92,7 +108,7 @@ export async function updateNewsletterDraft(
     await pool.query<Row>(
       `UPDATE newsletters SET subject = $2, body_html = $3, body_json = $4, updated_at = now()
         WHERE id = $1 AND status = 'draft'
-       RETURNING id, subject, body_html, body_json, status, sent_at, recipient_count`,
+       RETURNING id, subject, body_html, body_json, status, sent_at, recipient_count, sent_count, failed_count, failed_emails`,
       [id, subject, bodyHtml, bodyJson],
     )
   ).rows[0];
@@ -124,15 +140,58 @@ export async function claimNewsletterForSend(id: number, sentBy: number): Promis
     await pool.query<Row>(
       `UPDATE newsletters SET status = 'sent', sent_at = now(), sent_by = $2
         WHERE id = $1 AND status = 'draft'
-       RETURNING id, subject, body_html, body_json, status, sent_at, recipient_count`,
+       RETURNING id, subject, body_html, body_json, status, sent_at, recipient_count, sent_count, failed_count, failed_emails`,
       [id, sentBy],
     )
   ).rows[0];
   return row ? toNewsletter(row) : null;
 }
 
-export async function setNewsletterRecipientCount(id: number, recipientCount: number): Promise<void> {
-  await pool.query(`UPDATE newsletters SET recipient_count = $2 WHERE id = $1`, [id, recipientCount]);
+// Stamp the delivery outcome after a send: the target list size plus how many actually went out,
+// how many failed, and which addresses failed (TASK-190). failed_emails is stored as a jsonb array.
+export async function setNewsletterDeliverySummary(
+  id: number,
+  summary: { recipientCount: number; sentCount: number; failedCount: number; failedEmails: string[] },
+): Promise<void> {
+  await pool.query(
+    `UPDATE newsletters
+        SET recipient_count = $2, sent_count = $3, failed_count = $4, failed_emails = $5
+      WHERE id = $1`,
+    [id, summary.recipientCount, summary.sentCount, summary.failedCount, JSON.stringify(summary.failedEmails)],
+  );
+}
+
+// The managed subscriber list: consenting donors deduped by address, newest-consent first is not
+// tracked, so ordered by email. An optional case-insensitive query filters on email or name.
+export async function listNewsletterSubscribers(q?: string): Promise<NewsletterSubscriber[]> {
+  const params: unknown[] = [];
+  let filter = "";
+  if (q && q.trim()) {
+    params.push(`%${q.trim().toLowerCase()}%`);
+    filter = `AND (lower(email) LIKE $1 OR lower(coalesce(full_name, '')) LIKE $1)`;
+  }
+  const rows = (
+    await pool.query<{ email: string; name: string | null }>(
+      `SELECT lower(email) AS email, min(full_name) AS name
+         FROM donors
+        WHERE email_consent = true AND email IS NOT NULL ${filter}
+        GROUP BY lower(email)
+        ORDER BY email`,
+      params,
+    )
+  ).rows;
+  return rows.map((r) => ({ email: r.email, name: r.name }));
+}
+
+// Remove a subscriber by address: turn email_consent off for EVERY donor row with that email
+// (case-insensitive), so a person on file under more than one donation stops receiving the
+// newsletter. Returns how many rows were affected (0 = no such consenting address).
+export async function unsubscribeSubscriberByEmail(email: string): Promise<number> {
+  const res = await pool.query(
+    `UPDATE donors SET email_consent = false WHERE lower(email) = $1 AND email_consent = true`,
+    [email.trim().toLowerCase()],
+  );
+  return res.rowCount ?? 0;
 }
 
 export async function unsubscribeDonor(donorId: number): Promise<void> {

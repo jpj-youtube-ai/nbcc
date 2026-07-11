@@ -1381,7 +1381,25 @@ not abort the batch.
 donor (**201**, `status: "added"`) or, if the address is already on file, re-enables its consent
 (**200**, `status: "resubscribed"`) — matched case-insensitively so it never duplicates a recipient.
 A small **Add a subscriber** form on the Newsletter tab (hidden in read mode) posts to it, for emails
-collected in person. Backed by `addNewsletterSubscriber` in `src/db/newsletters.ts`. The send is
+collected in person. Backed by `addNewsletterSubscriber` in `src/db/newsletters.ts`.
+
+**Test send, subscriber management, delivery summary (TASK-190).** Three operator tools on the
+Newsletter tab, all **Editor+** (`newsletter:edit`), hidden in read mode:
+- **Send test to me** — `POST /api/admin/newsletters/test-send` (`{ subject, bodyJson }`, like preview)
+  renders the *current builder doc* and sends one copy to the signed-in admin's own email (subject
+  prefixed `[TEST]`), so real-inbox rendering can be checked before a blast. It never touches
+  newsletter state.
+- **Manage subscribers** — a panel to list (`GET /subscribers[?q=]`, deduped by address, searchable),
+  **remove** (`POST /subscribers/remove` → turns `email_consent` off for every row with that address,
+  **404** if not a current subscriber), and **export CSV** (`GET /subscribers.csv`). Donor PII, so
+  Editor+.
+- **Delivery summary** — the send loop records the outcome in three additive `newsletters` columns
+  (`sent_count`, `failed_count`, `failed_emails` jsonb; migration
+  `1783759279060_newsletter-delivery-summary`) and returns it, so the send message and the newsletter
+  list show *delivered / total* and flag any failed addresses instead of losing them to logs
+  (`setNewsletterDeliverySummary`).
+
+The send is
 **idempotent**: the draft is claimed atomically (`claimNewsletterForSend`, stamping the sender)
 **before** any email goes out, so a double-click or two concurrent admins cannot both send — the
 second claim finds no draft and is rejected with **409** rather than double-blasting donors (the

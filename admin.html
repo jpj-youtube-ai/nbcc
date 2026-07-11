@@ -237,6 +237,18 @@
                   <button type="submit" class="nl-item-add" id="subAddBtn"><span>Add subscriber</span></button>
                 </form>
                 <p id="subMsg" class="nl-sub-msg" aria-live="polite"></p>
+
+                <!-- Manage the full subscriber list: search, remove, export. Loaded on first open. -->
+                <details class="nl-manage" id="subManage">
+                  <summary>Manage subscribers</summary>
+                  <div class="nl-manage-body">
+                    <div class="nl-manage-tools">
+                      <input type="search" id="subSearch" placeholder="Search email or name…" aria-label="Search subscribers" />
+                      <button type="button" class="nl-item-add" id="subExport"><span>Export CSV</span></button>
+                    </div>
+                    <div id="subList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+                  </div>
+                </details>
               </div>
 
               <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
@@ -256,6 +268,7 @@
                 <div class="nl-actions">
                   <button type="button" id="newsletterNew">New newsletter</button>
                   <button type="submit" id="newsletterSave">Save</button>
+                  <button type="button" id="newsletterTest">Send test to me</button>
                   <button type="button" id="newsletterSend" hidden>Send to subscribers</button>
                 </div>
                 <p id="newsletterMsg" aria-live="polite"></p>

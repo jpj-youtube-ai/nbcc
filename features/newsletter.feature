@@ -22,6 +22,8 @@ Feature: Admin newsletter (REQ-069)
     Then the newsletter response status should be 200
     And the newsletter response field "status" should be "sent"
     And the newsletter recipient count should be at least 2
+    And the newsletter response field "sentCount" should be at least 2
+    And the newsletter response field "failedCount" should be "0"
     When I send that newsletter
     Then the newsletter response status should be 409
 
@@ -101,3 +103,33 @@ Feature: Admin newsletter (REQ-069)
     Given a newsletter admin "subviewer.newsletter.bdd@example.com" with role "viewer" and password "pw-sv"
     When I add the newsletter subscriber "nope.sub.newsletter.bdd@example.com"
     Then the subscriber response status should be 403
+
+  Scenario: an Editor sends a test copy to themselves
+    Given a newsletter admin "test.editor.newsletter.bdd@example.com" with role "editor" and password "pw-t"
+    When I test-send the block newsletter with subject "Preview me"
+    Then the test-send response status should be 200
+
+  Scenario: a Viewer cannot test-send
+    Given a newsletter admin "test.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-tv"
+    When I test-send the block newsletter with subject "Nope"
+    Then the test-send response status should be 403
+
+  Scenario: an Editor lists, exports and removes subscribers
+    Given a newsletter admin "mgr.newsletter.bdd@example.com" with role "editor" and password "pw-mgr"
+    And a consenting donor with email "keep.mgr.newsletter.bdd@example.com"
+    And a consenting donor with email "drop.mgr.newsletter.bdd@example.com"
+    When I list the newsletter subscribers
+    Then the subscriber list status should be 200
+    And the subscriber list should include "keep.mgr.newsletter.bdd@example.com"
+    When I export the newsletter subscribers as CSV
+    Then the CSV status should be 200
+    And the CSV should contain "keep.mgr.newsletter.bdd@example.com"
+    When I remove the newsletter subscriber "drop.mgr.newsletter.bdd@example.com"
+    Then the remove-subscriber response status should be 200
+    When I list the newsletter subscribers
+    Then the subscriber list should not include "drop.mgr.newsletter.bdd@example.com"
+
+  Scenario: a Viewer cannot list subscribers (donor PII)
+    Given a newsletter admin "mgr.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-mv"
+    When I list the newsletter subscribers
+    Then the subscriber list status should be 403

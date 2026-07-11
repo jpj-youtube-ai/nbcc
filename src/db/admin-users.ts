@@ -67,6 +67,25 @@ const ADMIN_HOLDER_SQL = `status <> 'disabled' AND (
   OR (permissions = '{}'::jsonb AND role = 'admin')
 )`;
 
+// Write-skew fix (TASK-186): assertAdminsRemain's SELECT is unlocked, so under Postgres's
+// default READ COMMITTED, two concurrent team-affecting mutations on DIFFERENT rows (e.g.
+// disable admin A + disable admin B, run in parallel) each run their own SELECT before either
+// COMMITs — so each sees the OTHER admin as still-enabled (their write is uncommitted from this
+// transaction's point of view), both guards pass, both COMMIT, and the team ends up with zero
+// enabled admins even though the guard was supposed to make that impossible (classic write-skew:
+// two transactions each individually preserve the invariant against what they can see, but not
+// against what the other is doing). Fix: serialize the four team-affecting mutations
+// (setUserRole/setUserStatus/deleteUser/setUserPermissions) on one shared Postgres
+// transaction-level ADVISORY LOCK, acquired via pg_advisory_xact_lock at the top of each
+// transaction, before its SELECT/UPDATE/DELETE. Only one such transaction can be "inside" the
+// locked section at a time; pg_advisory_xact_lock blocks the second caller until the first
+// COMMITs or ROLLBACKs (auto-releasing the lock either way), so by the time the second
+// transaction's assertAdminsRemain SELECT runs, the first transaction's change is already
+// committed and visible. That makes "count remaining admins" and "mutate a row" effectively
+// atomic across concurrent team-affecting requests, closing the race without changing the guard's
+// predicate.
+const TEAM_MUTATION_LOCK = 0x6e626363; // 'nbcc' packed into a 32-bit advisory lock key
+
 // Count remaining enabled admins USING THE CALLER'S TRANSACTION CLIENT (not the pool), so the
 // count reflects the mutation just performed in the same BEGIN…COMMIT, and throw LastAdminError
 // if it is zero. writeWithAudit's catch rolls the whole transaction back on any throw, so the
@@ -181,6 +200,9 @@ export async function inviteUser(
 export async function setUserRole(id: number, role: string, actor: string): Promise<ManagedUser | null> {
   return writeWithAudit(
     async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
       const row = (
         await client.query<ManagedUser>(
           `UPDATE users SET role = $1 WHERE id = $2 RETURNING ${MANAGED_USER_COLUMNS}`,
@@ -212,6 +234,9 @@ export async function setUserStatus(
 ): Promise<ManagedUser | null> {
   return writeWithAudit(
     async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
       const row = (
         await client.query<ManagedUser>(
           `UPDATE users SET status = $1 WHERE id = $2 RETURNING ${MANAGED_USER_COLUMNS}`,
@@ -246,6 +271,9 @@ export async function setUserPermissions(
 ): Promise<ManagedUser | null> {
   return writeWithAudit(
     async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
       const row = (
         await client.query<ManagedUser>(
           `UPDATE users SET permissions = $1 WHERE id = $2 RETURNING ${MANAGED_USER_COLUMNS}`,
@@ -274,6 +302,9 @@ export async function setUserPermissions(
 export async function deleteUser(id: number, actor: string): Promise<boolean> {
   return writeWithAudit(
     async (client) => {
+      // Write-skew fix (TASK-186): serialize against the other three team-affecting mutations —
+      // see TEAM_MUTATION_LOCK's comment. Must run before the SELECT/UPDATE/DELETE below.
+      await client.query("SELECT pg_advisory_xact_lock($1)", [TEAM_MUTATION_LOCK]);
       const row = (
         await client.query<{ id: number; email: string; role: string }>(
           `DELETE FROM users WHERE id = $1 RETURNING id, email, role`,

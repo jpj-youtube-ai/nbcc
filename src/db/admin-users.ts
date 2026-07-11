@@ -1,14 +1,15 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { writeWithAudit } from "./donations";
+import type { PermissionMap } from "../admin/permissions";
 
 // Admin user CRUD + the last-admin anti-lockout guard (Admin management Phase 1, Task 3). Every
 // mutating function is audited via writeWithAudit (one audit_log row per write, in the same
 // transaction as the state change — mirrors submitClaimBatch/createClaimBatch/markGasdsClaimed in
 // src/db/admin.ts). ManagedUser NEVER carries password_hash: every SELECT here lists the safe
-// columns explicitly (id, email, full_name, role, status, invited_at, last_login_at) rather than
-// SELECT * or reusing AdminUserRow (src/db/admin.ts), which does carry the hash for login-time
-// verification only.
+// columns explicitly (id, email, full_name, role, status, invited_at, last_login_at, permissions)
+// rather than SELECT * or reusing AdminUserRow (src/db/admin.ts), which does carry the hash for
+// login-time verification only.
 
 export type ManagedUser = {
   id: number;
@@ -18,9 +19,10 @@ export type ManagedUser = {
   status: string; // invited | active | disabled
   invited_at: Date | null;
   last_login_at: Date | null;
+  permissions: PermissionMap; // per-section view/edit overrides (Admin Phase 2); {} = fall back to role
 };
 
-const MANAGED_USER_COLUMNS = `id, email, full_name, role, status, invited_at, last_login_at`;
+const MANAGED_USER_COLUMNS = `id, email, full_name, role, status, invited_at, last_login_at, permissions`;
 
 // Thrown by inviteUser when the email already has a users row (pg unique-violation on
 // users.email, err.code === "23505"). The route layer (Task 5) maps this to 409.
@@ -88,6 +90,23 @@ export async function getManagedUser(id: number): Promise<ManagedUser | null> {
 export async function getManagedUserByEmail(email: string): Promise<ManagedUser | null> {
   const row = (
     await pool.query<ManagedUser>(`SELECT ${MANAGED_USER_COLUMNS} FROM users WHERE email = $1`, [email])
+  ).rows[0];
+  return row ?? null;
+}
+
+// The auth-relevant fields only (id, email, status, role, permissions) — NEVER password_hash.
+// Backs authorizeSection (Admin Phase 2, Task 3), which re-loads this fresh on EVERY admin
+// request so a disable or a permissions edit takes effect immediately, without waiting for the
+// session to expire. Deliberately a separate, minimal SELECT rather than reusing getManagedUser,
+// so the hot per-request path only ever touches the columns it needs.
+export async function getUserAuthRow(
+  id: number,
+): Promise<{ id: number; email: string; status: string; role: string; permissions: PermissionMap } | null> {
+  const row = (
+    await pool.query<{ id: number; email: string; status: string; role: string; permissions: PermissionMap }>(
+      `SELECT id, email, status, role, permissions FROM users WHERE id = $1`,
+      [id],
+    )
   ).rows[0];
   return row ?? null;
 }
@@ -197,6 +216,37 @@ export async function setUserStatus(
       entity: "user",
       entityId: id,
       data: { status },
+    }),
+  );
+}
+
+// Set a user's per-section permission matrix (Admin Phase 2, Task 5's PATCH
+// /api/admin/users/:id/permissions). Unlike setUserRole/setUserStatus this does NOT run the
+// last-admin guard here — Task 5 adapts anti-lockout to "cannot remove the last user with team:edit"
+// and that check is computed from effectivePermissions (role fallback included), not from this raw
+// column alone, so it belongs in the route/Task-5 layer, not this DB-only setter. Audited
+// admin_user.permissions_changed. Returns the updated ManagedUser, or null when the id doesn't exist.
+export async function setUserPermissions(
+  id: number,
+  permissions: PermissionMap,
+  actor: string,
+): Promise<ManagedUser | null> {
+  return writeWithAudit(
+    async (client) => {
+      const row = (
+        await client.query<ManagedUser>(
+          `UPDATE users SET permissions = $1 WHERE id = $2 RETURNING ${MANAGED_USER_COLUMNS}`,
+          [permissions, id],
+        )
+      ).rows[0];
+      return row ?? null;
+    },
+    () => ({
+      actor,
+      action: "admin_user.permissions_changed",
+      entity: "user",
+      entityId: id,
+      data: { permissions },
     }),
   );
 }

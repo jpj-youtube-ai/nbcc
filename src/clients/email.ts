@@ -34,6 +34,11 @@ function isPlaceholderUrl(url: string): boolean {
 
 export const emailConfigured = !isPlaceholderUrl(config.EMAIL_SEND_URL);
 const useStub = !emailConfigured && config.NODE_ENV !== "production";
+// Exposes the stub seam to callers outside this module (admin-management Phase 3, TASK-188)
+// so the login route can tell whether a login-code email actually left the building. Always
+// false in production (production never stubs) — see the "Stub safety" note on emailStubbed's
+// only production-facing use: the login-code response must never leak the code when this is false.
+export const emailStubbed = useStub;
 
 export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
@@ -198,6 +203,36 @@ export async function sendAdminReset(message: AdminResetEmail): Promise<void> {
   });
   if (!res.ok) {
     throw new Error(`Admin reset email send responded ${res.status}`);
+  }
+}
+
+// Admin login-code email (admin-management Phase 3 · mandatory email 2FA, TASK-188). After a
+// password-valid login from an untrusted device, the platform emails a one-time 6-digit code
+// (generated + hashed by src/admin/two-factor.ts) so the admin can complete step 2. Mirrors
+// sendAdminInvite exactly: same minimal payload shape, same stub-seam + best-effort contract
+// as the other sends (no network outside production when EMAIL_SEND_URL is a placeholder). See
+// emailStubbed above: on non-production, when this stubs, the login route falls back to
+// returning the code directly in its response so 2FA can still be completed.
+export interface AdminLoginCodeEmail {
+  email: string;
+  fullName: string;
+  code: string; // the 6-digit login code (never logged)
+}
+
+export async function sendAdminLoginCode(message: AdminLoginCodeEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const subject = `Your NBCC admin sign-in code is ${message.code}`;
+  const text = `Hello ${message.fullName},\n\n${subject}. This code expires in 10 minutes.\n\nIf you did not request this, you can ignore this email.`;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ email: message.email, fullName: message.fullName, subject, text }),
+  });
+  if (!res.ok) {
+    throw new Error(`Admin login-code email send responded ${res.status}`);
   }
 }
 

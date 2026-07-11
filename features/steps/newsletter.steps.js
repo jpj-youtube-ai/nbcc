@@ -149,6 +149,21 @@ Then("the newsletter recipients should not include {string}", function (email) {
   assert.ok(!(this.recipBody.emails || []).includes(email), `did not expect ${email} in recipients`);
 });
 
+// Manually adding a subscriber (e.g. an email collected verbally).
+When("I add the newsletter subscriber {string}", async function (email) {
+  const r = await authFetch("/api/admin/newsletters/subscribers", "POST", { email }, this.token);
+  this.subStatus = r.status;
+  this.subBody = r.json;
+});
+
+Then("the subscriber response status should be {int}", function (expected) {
+  assert.equal(this.subStatus, expected);
+});
+
+Then("the subscriber response field {string} should be {string}", function (field, value) {
+  assert.equal(String(this.subBody[field]), value);
+});
+
 function signUnsubscribeToken(donorId, secret) {
   const body = String(donorId);
   const sig = createHmac("sha256", secret).update(body).digest("base64url");

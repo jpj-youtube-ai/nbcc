@@ -84,3 +84,20 @@ Feature: Admin newsletter (REQ-069)
     Given a newsletter admin "recip.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-rv"
     When I fetch the newsletter recipients
     Then the newsletter recipients status should be 403
+
+  Scenario: an Editor manually adds a subscriber, who then appears in the recipient list
+    Given a newsletter admin "subadmin.newsletter.bdd@example.com" with role "editor" and password "pw-sub"
+    When I add the newsletter subscriber "verbal.sub.newsletter.bdd@example.com"
+    Then the subscriber response status should be 201
+    And the subscriber response field "status" should be "added"
+    When I fetch the newsletter recipients
+    Then the newsletter recipients status should be 200
+    And the newsletter recipients should include "verbal.sub.newsletter.bdd@example.com"
+    When I add the newsletter subscriber "verbal.sub.newsletter.bdd@example.com"
+    Then the subscriber response status should be 200
+    And the subscriber response field "status" should be "resubscribed"
+
+  Scenario: a Viewer cannot manually add a subscriber
+    Given a newsletter admin "subviewer.newsletter.bdd@example.com" with role "viewer" and password "pw-sv"
+    When I add the newsletter subscriber "nope.sub.newsletter.bdd@example.com"
+    Then the subscriber response status should be 403

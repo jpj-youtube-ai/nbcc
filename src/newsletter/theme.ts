@@ -17,6 +17,9 @@ export const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";
 
 export interface RenderCtx {
   firstName: string;
+  // Per-recipient unsubscribe URL. When present, the frame footer renders a branded Unsubscribe
+  // button + the PECR opt-in reason line. The live preview passes a placeholder so the button shows.
+  unsubscribeUrl?: string;
 }
 
 export function escapeHtml(value: string): string {
@@ -78,10 +81,22 @@ function contactLink(href: string, text: string): string {
   return `<a href="${href}" style="color:${CREAM};text-decoration:none">${text}</a>`;
 }
 
+// The branded unsubscribe row for the footer: the PECR opt-in reason line + a cream pill button
+// linking to the recipient's one-click unsubscribe URL (the /unsubscribe/<token> route flips the
+// donor's email_consent off). Rendered only when a URL is supplied.
+function unsubscribeRow(url: string): string {
+  const safe = escapeHtml(url);
+  return `<div style="margin-top:16px;padding-top:14px;border-top:1px solid ${CREAM_24}">
+      <div style="color:${CREAM_82};font-size:11px;margin-bottom:8px">You're receiving this because you opted in to updates from NBCC.</div>
+      <a href="${safe}" style="display:inline-block;font-family:${BODY};font-weight:600;font-size:12px;color:${CREAM};text-decoration:none;border:1px solid ${CREAM_82};border-radius:999px;padding:7px 18px">Unsubscribe</a>
+    </div>`;
+}
+
 // Wrap the concatenated block HTML in the fixed email frame + NBCC contact/legal footer bar. The
 // contact bar mirrors the thank-you letter footer: circular phone / envelope / social icon chips
-// around the contact text (they degrade to plain text in clients that strip inline SVG).
-export function renderFrame(innerHtml: string): string {
+// around the contact text (they degrade to plain text in clients that strip inline SVG). When an
+// unsubscribe URL is given, a branded Unsubscribe button is appended to the footer.
+export function renderFrame(innerHtml: string, unsubscribeUrl?: string): string {
   const socialChips =
     `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;border:1px solid ${CREAM_82};border-radius:50%;vertical-align:middle">${ICON_FB}</span>` +
     `<span style="display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;border:1px solid ${CREAM_82};border-radius:50%;margin:0 8px 0 4px;vertical-align:middle">${ICON_IG}</span>`;
@@ -99,6 +114,7 @@ export function renderFrame(innerHtml: string): string {
     <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY};font-size:14px;text-align:center">
       ${footRow}
       <div style="color:${CREAM_82};font-size:11px;margin-top:12px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
+      ${unsubscribeUrl ? unsubscribeRow(unsubscribeUrl) : ""}
     </td></tr>
   </table>
 </body>

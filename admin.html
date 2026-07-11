@@ -225,6 +225,20 @@
             <!-- Newsletter: author, save and send (both gated to newsletter:edit) to consenting donors. -->
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
+
+              <!-- Manually add a subscriber (e.g. an email given verbally on a doorstep). Editor+ only;
+                   hidden in read mode by app.js. Adds/re-consents a donor via POST .../subscribers. -->
+              <div class="nl-subscriber-card" id="nlSubscriberCard">
+                <h3 class="admin-subhead" style="margin-top:0">Add a subscriber</h3>
+                <p class="admin-help">Collected an email in person? Add it here — they’ll receive the next newsletter and can unsubscribe any time.</p>
+                <form id="subscriberForm" class="nl-subscriber-form" autocomplete="off">
+                  <input type="email" id="subEmail" placeholder="email@example.com" required aria-label="Subscriber email" />
+                  <input type="text" id="subName" placeholder="Name (optional)" aria-label="Subscriber name" />
+                  <button type="submit" class="nl-item-add" id="subAddBtn"><span>Add subscriber</span></button>
+                </form>
+                <p id="subMsg" class="nl-sub-msg" aria-live="polite"></p>
+              </div>
+
               <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <form id="newsletterForm">
                 <input type="hidden" id="newsletterId" />

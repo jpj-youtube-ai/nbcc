@@ -138,3 +138,31 @@ export async function setNewsletterRecipientCount(id: number, recipientCount: nu
 export async function unsubscribeDonor(donorId: number): Promise<void> {
   await pool.query(`UPDATE donors SET email_consent = false WHERE id = $1`, [donorId]);
 }
+
+// Add a newsletter subscriber captured manually (e.g. an email given verbally on a doorstep). If a
+// donor with this email already exists, (re)enable their consent — "resubscribed"; otherwise create
+// a minimal individual donor row with consent on — "added". Matched case-insensitively, mirroring
+// listNewsletterRecipients' lower(email) dedupe, so a manual add never creates a duplicate consenting
+// recipient for an address already on file. full_name is required by the schema, so it falls back to
+// the email's local part when no name is supplied.
+export async function addNewsletterSubscriber(
+  email: string,
+  name?: string,
+): Promise<{ email: string; status: "added" | "resubscribed" }> {
+  const trimmed = email.trim();
+  const lower = trimmed.toLowerCase();
+  const existing = await pool.query<{ id: number }>(
+    `SELECT id FROM donors WHERE lower(email) = $1 LIMIT 1`,
+    [lower],
+  );
+  if (existing.rows.length > 0) {
+    await pool.query(`UPDATE donors SET email_consent = true WHERE lower(email) = $1`, [lower]);
+    return { email: lower, status: "resubscribed" };
+  }
+  const fullName = name && name.trim() ? name.trim() : trimmed.split("@")[0];
+  await pool.query(
+    `INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', $1, $2, true)`,
+    [fullName, trimmed],
+  );
+  return { email: lower, status: "added" };
+}

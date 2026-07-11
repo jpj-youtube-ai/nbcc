@@ -110,6 +110,9 @@
       // The newsletter palette is built at script-eval time (before permissions are known); re-render
       // it now so a user without newsletter:edit sees the read-only note, not the add-block buttons.
       nlRenderPalette();
+      // Manual add-subscriber is an edit action → hidden for read-only (Viewer) users.
+      var subCard = el("nlSubscriberCard");
+      if (subCard) subCard.hidden = !canEdit("newsletter");
       selectView("overview");
       loadOverview();
     }
@@ -1927,6 +1930,41 @@
         if (rows.length) loadNewsletterInto(rows[0].id);
       })
       .catch(function () {});
+  }
+
+  // Manual "add a subscriber" form: create/re-consent a donor by email (Editor+). The card is hidden
+  // in read mode (see updateNewsletterSubscriberCard, called once permissions load).
+  var subscriberForm = el("subscriberForm");
+  if (subscriberForm) {
+    subscriberForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!canEdit("newsletter")) return;
+      var email = el("subEmail").value.trim();
+      var name = el("subName").value.trim();
+      if (!email) return;
+      var btn = el("subAddBtn");
+      btn.disabled = true;
+      el("subMsg").textContent = "Adding…";
+      authFetch("/api/admin/newsletters/subscribers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(name ? { email: email, name: name } : { email: email }),
+      })
+        .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+        .then(function (r) {
+          if (!r.ok) {
+            el("subMsg").textContent = (r.b && r.b.error) || "Could not add that email.";
+            return;
+          }
+          el("subMsg").textContent = r.b.status === "resubscribed"
+            ? r.b.email + " was already on file — their consent is now on."
+            : "Added " + r.b.email + " to the newsletter.";
+          el("subEmail").value = "";
+          el("subName").value = "";
+        })
+        .catch(function () { el("subMsg").textContent = "Could not add that email."; })
+        .finally(function () { btn.disabled = false; });
+    });
   }
 
   var nlForm = el("newsletterForm");

@@ -1365,10 +1365,23 @@ on `email_consent=true`) and sends **one individual email per recipient** via `s
 per-recipient so the greeting block can carry a **`{{firstName}}` merge** — the first
 whitespace-delimited token of the donor's name, falling back to **"friend"** when there is no
 usable name; a legacy raw-HTML row (no valid `body_json`) falls back to the one stored, already-
-compiled `body_html`. Each send is then wrapped by the pure `buildNewsletterHtml` with a
-**per-recipient unsubscribe link** (`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC token signed
-with `ADMIN_SESSION_SECRET` — reused, not a new secret), From and Reply-To `NEWSLETTER_FROM_EMAIL`
-(see **Configuration**). A single failed send is logged and does not abort the batch. The send is
+compiled `body_html`. Every send carries a **per-recipient unsubscribe button** in the branded
+footer: `renderNewsletter`/`renderFrame` take a `ctx.unsubscribeUrl`
+(`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC of the donor id signed with `ADMIN_SESSION_SECRET`
+— reused, not a new secret) and render a cream pill **Unsubscribe** link + the PECR opt-in reason
+line inside the maroon footer bar; the live preview passes a `#` placeholder so the button is
+visible while composing. Clicking it hits the public `GET /unsubscribe/<token>` route, which flips
+that donor's `email_consent` to `false` (idempotent) and shows a small confirmation page. Legacy
+raw-HTML rows (unframed) still get the standalone footer from `buildNewsletterHtml`. From and
+Reply-To are `NEWSLETTER_FROM_EMAIL` (see **Configuration**). A single failed send is logged and does
+not abort the batch.
+
+**Manually adding a subscriber (doorstep sign-ups).** `POST /api/admin/newsletters/subscribers`
+(**Editor+**, `newsletter:edit`) takes `{ email, name? }` and either creates a consenting individual
+donor (**201**, `status: "added"`) or, if the address is already on file, re-enables its consent
+(**200**, `status: "resubscribed"`) — matched case-insensitively so it never duplicates a recipient.
+A small **Add a subscriber** form on the Newsletter tab (hidden in read mode) posts to it, for emails
+collected in person. Backed by `addNewsletterSubscriber` in `src/db/newsletters.ts`. The send is
 **idempotent**: the draft is claimed atomically (`claimNewsletterForSend`, stamping the sender)
 **before** any email goes out, so a double-click or two concurrent admins cannot both send — the
 second claim finds no draft and is rejected with **409** rather than double-blasting donors (the

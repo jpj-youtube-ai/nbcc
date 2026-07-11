@@ -40,6 +40,7 @@ let newsletterListRows: unknown[] = []; // what GET /api/admin/newsletters (list
 const savedRequests: { url: string; method: string; body: Record<string, unknown> }[] = [];
 const previewRequests: { body: Record<string, unknown> }[] = [];
 const sendRequests: { url: string }[] = []; // POST /:id/send calls (the actual blast)
+const subscriberRequests: { body: Record<string, unknown> }[] = []; // POST .../subscribers
 const recipientsFixture = { count: 2, emails: ["ann@bdd.example", "ben@bdd.example"] };
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
@@ -73,6 +74,10 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   if (/\/api\/admin\/newsletters\/\d+\/send$/.test(url) && method === "POST") {
     sendRequests.push({ url });
     return j({ status: "sent", recipientCount: recipientsFixture.count });
+  }
+  if (url.includes("/api/admin/newsletters/subscribers") && method === "POST") {
+    subscriberRequests.push({ body: parsedBody });
+    return j({ email: String(parsedBody.email || "").toLowerCase(), status: "added" }, 201);
   }
   if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "GET") {
     return j(legacyNewsletter); // the only single-newsletter fixture the tests need
@@ -129,6 +134,8 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     newsletterListRows = [];
     savedRequests.length = 0;
     previewRequests.length = 0;
+    sendRequests.length = 0;
+    subscriberRequests.length = 0;
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -320,6 +327,26 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     // Field inputs are disabled — a viewer can look but not edit.
     const field = el("nlCanvas").querySelector("textarea, input") as HTMLInputElement;
     expect(field.disabled).toBe(true);
+    // The manual add-subscriber card is an edit action → hidden for a viewer.
+    expect((el("nlSubscriberCard") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("an Editor can manually add a subscriber via the form", async () => {
+    loginToken = tokenFor("editor");
+    await openNewsletterTab();
+    await flush();
+
+    expect((el("nlSubscriberCard") as HTMLElement).hidden).toBe(false);
+    (el("subEmail") as HTMLInputElement).value = "doorstep@example.com";
+    (el("subName") as HTMLInputElement).value = "Doorstep Donor";
+    (el("subscriberForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    await flush();
+
+    expect(subscriberRequests.length).toBe(1);
+    expect(subscriberRequests[0].body).toEqual({ email: "doorstep@example.com", name: "Doorstep Donor" });
+    expect(el("subMsg").textContent).toContain("doorstep@example.com");
+    expect((el("subEmail") as HTMLInputElement).value).toBe(""); // cleared on success
   });
 });
 
@@ -329,6 +356,8 @@ describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {
     newsletterListRows = [];
     savedRequests.length = 0;
     previewRequests.length = 0;
+    sendRequests.length = 0;
+    subscriberRequests.length = 0;
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;

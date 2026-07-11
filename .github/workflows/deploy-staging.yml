@@ -16,6 +16,9 @@ env:
   AWS_REGION: eu-west-2
   PROJECT: charity-site
   ENVIRONMENT: staging
+  # `terraform init` re-downloads providers every run without a shared cache; point
+  # it at a cached dir so subsequent deploys reuse the plugins (see Cache step below).
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
 
 jobs:
   deploy:
@@ -33,26 +36,47 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      - name: Build & push image (shared repo, tagged by SHA = build once)
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image + skip build if already in ECR (build once by SHA)
+        id: img
         run: |
-          IMAGE="${{ steps.ecr.outputs.registry }}/${PROJECT}:${GITHUB_SHA}"
+          echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${GITHUB_SHA}" >> "$GITHUB_ENV"
           # Idempotent by design: the SHA tag is immutable, so if this commit's image is
           # already in ECR (e.g. a re-run after a *later* step failed — a raced infra apply,
-          # a flaky migration), reuse it instead of failing on "tag already exists". A fresh
-          # SHA still builds normally; only an existing tag short-circuits.
+          # a flaky migration), reuse it instead of rebuilding. A fresh SHA still builds.
           if aws ecr describe-images --repository-name "${PROJECT}" --image-ids imageTag="${GITHUB_SHA}" >/dev/null 2>&1; then
             echo "Image ${GITHUB_SHA} already present in ECR — reusing (build once by SHA)."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            docker build -t "$IMAGE" .
-            docker push "$IMAGE"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Build & push image (layer-cached via GitHub Actions cache)
+        if: steps.img.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+          # Most commits change only app code, so the base/npm-install layers restore
+          # from the Actions cache instead of rebuilding — build drops from ~40s toward ~15s.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.TF_PLUGIN_CACHE_DIR }}
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('infra/**/*.tf') }}
+          restore-keys: tf-plugins-${{ runner.os }}-
 
       - uses: hashicorp/setup-terraform@v3
 
       - name: Read infra wiring from state
         working-directory: infra/envs/staging
         run: |
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
           terraform init -input=false
           {
             echo "CLUSTER=$(terraform output -raw ecs_cluster)"

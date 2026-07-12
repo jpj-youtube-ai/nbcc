@@ -199,9 +199,15 @@
       if (giftAidRegion) giftAidRegion.hidden = noGiftAid;
       if (noGiftAid && giftAidBox) giftAidBox.checked = false;
       // The single declaration is the individual path; the partnership captures one
-      // declaration per partner in .give-partners instead.
-      if (declaration) declaration.hidden = path !== "individual";
-      if (partners) partners.hidden = path !== "partnership";
+      // declaration per partner in .give-partners instead. Both are GIFT AID declarations,
+      // so they apply only when the donor has opted into Gift Aid — gate them on #giftAid
+      // as well as the donor path, mirroring the on-screen "we ask for these only if you add
+      // Gift Aid" copy. Otherwise a donor who did NOT opt in was still shown these fields and
+      // blocked by their `required` inputs on the confirm step. validate() skips inputs inside
+      // a [hidden] ancestor, so hiding the fieldset also un-requires them (no separate toggle).
+      var giftAidOn = !!(giftAidBox && giftAidBox.checked);
+      if (declaration) declaration.hidden = path !== "individual" || !giftAidOn;
+      if (partners) partners.hidden = path !== "partnership" || !giftAidOn;
       // The company-specific fields show ONLY on the company path; disable their inputs
       // otherwise so a hidden required field never blocks submission or leaks a value.
       if (company) {
@@ -231,6 +237,11 @@
         if (btn.checked) apply();
       });
     });
+
+    // Opting into (or out of) Gift Aid changes whether the declaration/partners fieldsets
+    // apply, so re-run apply() whenever #giftAid toggles. It is only read elsewhere (payload
+    // fold, review summary), never listened to, so this is the single place that reacts to it.
+    if (giftAidBox) giftAidBox.addEventListener("change", apply);
 
     // Sync to the radios marked checked in the markup (individual by default).
     apply();

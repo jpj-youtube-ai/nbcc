@@ -668,7 +668,12 @@ checkbox (`#declNonUk`, no UK postcode — e.g. Channel Islands / Isle of Man) d
 only an HMRC matching detail; Gift Aid **eligibility** is paying UK Income Tax / CGT (the
 verbatim taxpayer declaration the donor agrees to on submit), never a postcode. A short note by
 the declaration says so, so an overseas UK taxpayer knows they can still Gift Aid. Every
-field has a real `<label for>` (REQ-032). `initDeclarationCapture` marks the fieldset
+field has a real `<label for>` (REQ-032). **The whole fieldset applies only when Gift Aid is
+opted in** (TASK-198): `initDonorType` shows `.give-declaration` on the individual path **only
+while `#giftAid` is checked**, re-applying whenever the box toggles, so a donor who does not add
+Gift Aid is never shown — nor blocked at the confirm step by the `required` — declaration fields
+(`validate()` skips inputs inside a `[hidden]` ancestor). That matches the fieldset's own
+"we ask for these only if you add Gift Aid" copy. `initDeclarationCapture` marks the fieldset
 `data-ready`, so `startCheckout` folds a **`declaration`** object (`{ title?, firstName,
 lastName, houseNameNumber, address, postcode?, nonUk, scope }`) into the REQ-028 payload
 **only when `#giftAid` is checked** (mirroring the `donorType` gate) — a declaration is made
@@ -696,7 +701,8 @@ are individuals in law, so Gift Aid stays). `initDonorType` derives the donor pa
 (`currentDonorPath`: `individual` / `company` / `partnership`) from the donor-type +
 sub-type radios and drives visibility: the company path hides + unticks the Gift Aid callout;
 the **partnership** path keeps it and swaps the single `.give-declaration` for the repeatable
-`.give-partners` `<fieldset>` (one Gift Aid declaration per partner). `initPartnershipCapture`
+`.give-partners` `<fieldset>` (one Gift Aid declaration per partner) — which, like the single
+declaration, is shown only once `#giftAid` is opted in (TASK-198). `initPartnershipCapture`
 clones `#partnerRowTemplate` into one partner row on load and wires **add** (`#addPartner`) /
 **remove** (`[data-remove-partner]`, hidden while one partner remains); each row captures the
 same declaration fields as `.give-declaration` (with its own overseas-address postcode toggle) **plus a

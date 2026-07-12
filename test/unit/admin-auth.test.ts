@@ -386,3 +386,34 @@ describe("password_hash migration is additive-only", () => {
     expect(up).not.toMatch(/dropColumn|dropTable|renameColumn|alterColumn/i);
   });
 });
+
+// TASK-200 (fix TASK-188): the mandatory-2FA rate limiters (10/email, 30/IP per 15m) are keyed on
+// req.ip, which behind the ALB (trust proxy = 1) is always the real forwarded client IP — so a
+// request only presents as loopback when it originates ON the box (local `npm run dev`, or the
+// pr.yml BDD suite driving the app over http://localhost). That suite makes ~86 logins from one IP
+// reusing emails 20-25x, which exhausted the in-memory limiter mid-run and 429'd most admin
+// scenarios (login() then returns no token → every admin request 401s). Exempting loopback keeps
+// the caps fully in force for every real external client while letting the local suite log in.
+describe("admin login rate limiting is skipped for same-host (loopback) traffic (TASK-200)", () => {
+  const loginFrom = async (ip: string, body: unknown) => {
+    const res = mockRes();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postAdminLogin({ body, ip } as any, res as any);
+    return res;
+  };
+
+  it("caps a real external IP but never a loopback IP", async () => {
+    const creds = { email: "ratelimit-probe@nbcc.test", password: "whatever" };
+
+    // A real external client IS rate-limited: repeated attempts trip the per-email cap → 429.
+    let real = mockRes();
+    for (let i = 0; i < 12; i += 1) real = await loginFrom("203.0.113.7", creds);
+    expect(real.statusCode).toBe(429);
+
+    // Loopback (127.0.0.1) is exempt: even 40 attempts on the same already-capped email never 429,
+    // so the local BDD suite — one IP, reused emails — can still exercise the login flow.
+    let loop = mockRes();
+    for (let i = 0; i < 40; i += 1) loop = await loginFrom("127.0.0.1", creds);
+    expect(loop.statusCode).not.toBe(429);
+  });
+});

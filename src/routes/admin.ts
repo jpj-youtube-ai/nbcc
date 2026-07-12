@@ -110,6 +110,19 @@ const loginIpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
 const twoFactorEmailLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 const twoFactorIpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
 
+// Same-host (loopback) requests are trusted and exempt from the login rate limiters above. Behind
+// the ALB in staging/production the app runs with `trust proxy = 1`, so req.ip is ALWAYS the real
+// forwarded client IP for external traffic — an attacker cannot forge it to loopback (the ALB
+// appends the true client IP, which trust-proxy-1 selects). A request only presents as loopback when
+// it originates on the box itself: local `npm run dev`, or the pr.yml BDD suite driving the app over
+// http://localhost. Exempting loopback keeps the per-email/per-IP caps fully in force for every real
+// external client, while letting the local test suite — which necessarily hammers one IP with reused
+// emails across many logins — exercise the login flow. Approved explicitly (TASK-200).
+function isLoopbackRequest(req: Request): boolean {
+  const ip = req.ip ?? "";
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+}
+
 const LOGIN_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_LOGIN_CODE_ATTEMPTS = 5;
 const TOO_MANY_ATTEMPTS_MESSAGE = "Too many attempts. Please try again shortly.";
@@ -122,10 +135,12 @@ export async function postAdminLogin(req: Request, res: Response): Promise<Respo
   }
 
   const now = Date.now();
-  const emailOk = loginEmailLimiter.allow(parsed.data.email, now);
-  const ipOk = loginIpLimiter.allow(req.ip ?? "unknown", now);
-  if (!emailOk || !ipOk) {
-    return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+  if (!isLoopbackRequest(req)) {
+    const emailOk = loginEmailLimiter.allow(parsed.data.email, now);
+    const ipOk = loginIpLimiter.allow(req.ip ?? "unknown", now);
+    if (!emailOk || !ipOk) {
+      return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+    }
   }
 
   try {
@@ -205,10 +220,12 @@ export async function postAdminLoginTwoFactor(req: Request, res: Response): Prom
   }
 
   const now = Date.now();
-  const emailOk = twoFactorEmailLimiter.allow(parsed.data.email, now);
-  const ipOk = twoFactorIpLimiter.allow(req.ip ?? "unknown", now);
-  if (!emailOk || !ipOk) {
-    return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+  if (!isLoopbackRequest(req)) {
+    const emailOk = twoFactorEmailLimiter.allow(parsed.data.email, now);
+    const ipOk = twoFactorIpLimiter.allow(req.ip ?? "unknown", now);
+    if (!emailOk || !ipOk) {
+      return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+    }
   }
 
   try {

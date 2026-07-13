@@ -126,6 +126,23 @@ describe("give widget toggle behaviour (jsdom)", () => {
     expect(tiers("tiersOnce").hidden).toBe(true);
   });
 
+  // TASK-201 (REQ-039): monthly giving must be set up by an adult, so the 18+ confirmation is a
+  // REQUIRED field — the wizard's step-2 validate() blocks "Continue" until it is ticked, instead
+  // of letting the donor reach the pay button and fail at Stripe (which rejects a monthly gift
+  // without ageConfirmed). It only applies to monthly: the row hides for a one-off, and validate()
+  // skips inputs inside a [hidden] ancestor, so a one-off gift is unaffected.
+  it("requires the 18+ confirmation and shows it only for monthly (blocks Continue until ticked)", () => {
+    const age = document.getElementById("ageConfirmed") as HTMLInputElement;
+    const ageField = document.getElementById("ageConfirmField") as HTMLElement;
+    expect(age.hasAttribute("required")).toBe(true);
+    expect(age.getAttribute("aria-required")).toBe("true");
+    // Monthly (the default) shows it, so validate() enforces the tick.
+    expect(ageField.hidden).toBe(false);
+    // A one-off gift has no 18+ requirement: the row hides, so validate() skips it.
+    (document.getElementById("giveOnce") as HTMLElement).click();
+    expect(ageField.hidden).toBe(true);
+  });
+
   it("marks the active control with .is-active for styling", () => {
     expect(document.getElementById("giveMonthly")?.classList.contains("is-active")).toBe(true);
     (document.getElementById("giveOnce") as HTMLElement).click();

@@ -76,6 +76,51 @@ export async function getFulfilmentByToken(token: string): Promise<FulfilmentRow
   return res.rows[0] ?? null;
 }
 
+// --- Certificate delivery (TASK-211) ------------------------------------------------------------
+// Everything the per-business Platinum certificate page (GET /business/certificate/:token) needs, in
+// ONE read addressed by the secure-thank-you-link token: the recognition band + the certificate
+// opt-in (the two gates — only a PLATINUM supporter who asked for the certificate may render one), the
+// donor's business_name (the hero, falling back to full_name) and the "Supporting since" date derived
+// from that donor's EARLIEST donation. Read-only (pool.query — mirrors getFulfilmentByToken).
+export interface CertificateContext {
+  band: SupporterBand;
+  wantCertificate: boolean;
+  businessName: string | null;
+  fullName: string;
+  // Earliest donation timestamp for this donor; NULL only in the degenerate case of a fulfilment row
+  // with no donations (the route falls back to "now" so the page still renders).
+  supportingSince: Date | null;
+}
+
+export async function getCertificateContextByToken(token: string): Promise<CertificateContext | null> {
+  const res = await pool.query<{
+    band: SupporterBand;
+    want_certificate: boolean;
+    business_name: string | null;
+    full_name: string;
+    supporting_since: Date | null;
+  }>(
+    `SELECT f.band,
+            f.want_certificate,
+            dn.business_name,
+            dn.full_name,
+            (SELECT MIN(d.created_at) FROM donations d WHERE d.donor_id = f.donor_id) AS supporting_since
+       FROM business_supporter_fulfilment f
+       JOIN donors dn ON dn.id = f.donor_id
+      WHERE f.token = $1`,
+    [token],
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+  return {
+    band: r.band,
+    wantCertificate: r.want_certificate,
+    businessName: r.business_name,
+    fullName: r.full_name,
+    supportingSince: r.supporting_since,
+  };
+}
+
 // --- Admin fulfilment API (TASK-207) ------------------------------------------------------------
 // The read (list every business supporter + their fulfilment state) and the audited write (mark one
 // fulfilment status flag done) behind the Editor+ admin endpoints in src/routes/admin.ts. The list is

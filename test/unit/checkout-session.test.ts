@@ -82,6 +82,8 @@ beforeEach(() => {
     client_secret: "cs_test_secret_123",
   });
   mockConfig.STRIPE_DONATION_PRODUCT = undefined;
+  // Default to a configured publishable key so embedded ENGAGES; the dormant test overrides to "".
+  mockConfig.STRIPE_PUBLISHABLE_KEY = "pk_test_dummy_pk";
 });
 
 describe("POST /api/checkout-session — one-off (REQ-029)", () => {
@@ -768,6 +770,22 @@ describe("POST /api/checkout-session — embedded ui mode (TASK-215)", () => {
     expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_123");
     expect(body.clientSecret).toBeUndefined();
     expect(lastParams().ui_mode).toBeUndefined();
+  });
+
+  it("treats uiMode='embedded' as hosted { url } when no publishable key is configured (dormant)", async () => {
+    // With no key set, embedded stays dormant: the server serves the hosted redirect (never mints an
+    // embedded session the browser could not use), so shipping before the gated infra apply is safe.
+    mockConfig.STRIPE_PUBLISHABLE_KEY = "";
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "embedded" });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { url?: string; clientSecret?: string; publishableKey?: string };
+    expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_123");
+    expect(body.clientSecret).toBeUndefined();
+    expect(body.publishableKey).toBeUndefined();
+    const p = lastParams();
+    expect(p.ui_mode).toBeUndefined();
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you");
+    expect(p.cancel_url).toBe("https://nbcc.test/donate");
   });
 
   it("stamps IDENTICAL metadata, line_items, mode and customer_email across hosted and embedded", async () => {

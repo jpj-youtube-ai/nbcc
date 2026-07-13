@@ -178,6 +178,16 @@ export function embeddedReturnUrl(): string {
   return `${base}${sep}session_id={CHECKOUT_SESSION_ID}`;
 }
 
+// Embedded Checkout only ENGAGES when a publishable key is actually configured (TASK-215). With no
+// key set, a uiMode=embedded request is served exactly like hosted — the browser could not construct
+// Stripe.js without the key anyway — so the server never mints an embedded session that cannot work,
+// and the feature stays DORMANT (hosted redirect) until STRIPE_PUBLISHABLE_KEY + its infra are
+// applied. Used by BOTH buildSessionParams (session shape) and postCheckoutSession (response shape)
+// so the two always agree: an embedded session iff an embedded { clientSecret } response.
+export function embeddedRequested(body: CheckoutBody): boolean {
+  return body.uiMode === "embedded" && Boolean(config.STRIPE_PUBLISHABLE_KEY);
+}
+
 // Assemble the Stripe Checkout session parameters from a validated body.
 export function buildSessionParams(
   body: CheckoutBody,
@@ -277,13 +287,15 @@ export function buildSessionParams(
     // separately in the company object), so no pre-fill there.
     ...(body.email ? { customer_email: body.email } : {}),
     // The ONLY difference between the two UI modes is the redirect surface (TASK-215):
-    // - embedded (inline): Stripe's SDK enum is "embedded_page"; it needs a return_url (Stripe
-    //   redirects the whole page there on completion, defaulting to redirect_on_completion:always)
-    //   and must NOT carry success_url/cancel_url. The return_url reuses the SAME on-site base as
-    //   the hosted success URL, carrying {CHECKOUT_SESSION_ID} (a Stripe template it substitutes).
-    // - hosted (redirect, the default): no ui_mode (Stripe defaults to hosted_page) + the existing
-    //   success_url/cancel_url — byte-for-byte the pre-TASK-215 behaviour.
-    ...(body.uiMode === "embedded"
+    // - embedded (inline), ONLY when a publishable key is configured (embeddedRequested): Stripe's
+    //   SDK enum is "embedded_page"; it needs a return_url (Stripe redirects the whole page there on
+    //   completion, defaulting to redirect_on_completion:always) and must NOT carry
+    //   success_url/cancel_url. The return_url reuses the SAME on-site base as the hosted success URL,
+    //   carrying {CHECKOUT_SESSION_ID} (a Stripe template it substitutes).
+    // - hosted (redirect, the default — and where embedded is requested but no key is set): no
+    //   ui_mode (Stripe defaults to hosted_page) + the existing success_url/cancel_url — byte-for-byte
+    //   the pre-TASK-215 behaviour.
+    ...(embeddedRequested(body)
       ? { ui_mode: "embedded_page", return_url: embeddedReturnUrl() }
       : { success_url: config.STRIPE_SUCCESS_URL, cancel_url: config.STRIPE_CANCEL_URL }),
   };
@@ -347,17 +359,18 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
     const params = buildSessionParams(parsed.data);
     const session = await stripe.checkout.sessions.create(params);
     // Embedded (inline) returns a { clientSecret } the browser mounts on nbcc.scot, plus the PUBLIC
-    // publishable key it needs to construct Stripe.js (TASK-215). Hosted (the default) is UNCHANGED:
-    // it returns { url } exactly as before, so the redirect fallback and any un-updated caller keep
-    // working byte-for-byte. The session metadata/line-items/mode are identical either way, so the
-    // webhook + confirmation email are unaffected.
+    // publishable key it needs to construct Stripe.js (TASK-215) — but ONLY when a key is configured
+    // (embeddedRequested). Hosted (the default, AND the served shape when embedded is requested with
+    // no key set) is UNCHANGED: it returns { url } exactly as before, so the redirect fallback and any
+    // un-updated caller keep working byte-for-byte. The session metadata/line-items/mode are identical
+    // either way, so the webhook + confirmation email are unaffected.
     const body: {
       url?: string | null;
       clientSecret?: string | null;
       publishableKey?: string;
       session?: { id: string; metadata: typeof params.metadata; mode: typeof params.mode };
     } =
-      parsed.data.uiMode === "embedded"
+      embeddedRequested(parsed.data)
         ? { clientSecret: session.client_secret, publishableKey: config.STRIPE_PUBLISHABLE_KEY }
         : { url: session.url };
     // Stub-mode echo (TASK-116): when there is no live Stripe (offline stub) and we are

@@ -1120,12 +1120,16 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 
 - **Request param.** `POST /api/checkout-session` accepts `uiMode: "embedded" |
   "hosted"`, **defaulting to `"hosted"`** when absent — so any un-updated caller and
-  the fallback path are byte-for-byte unchanged. `"embedded"` builds the session with
-  Stripe's `ui_mode: "embedded_page"` + a `return_url` (reusing the `STRIPE_SUCCESS_URL`
-  base, carrying `{CHECKOUT_SESSION_ID}`) and returns `{ clientSecret, publishableKey }`;
-  `"hosted"`/absent returns `{ url }` exactly as before. **Everything else about the
-  session — line items, amount, mode, `customer_email`, and ALL metadata — is identical
-  across both modes**, so the REQ-036 webhook and the confirmation email are unaffected.
+  the fallback path are byte-for-byte unchanged. `"embedded"` engages **only when
+  `STRIPE_PUBLISHABLE_KEY` is configured** (`embeddedRequested`); it then builds the
+  session with Stripe's `ui_mode: "embedded_page"` + a `return_url` (reusing the
+  `STRIPE_SUCCESS_URL` base, carrying `{CHECKOUT_SESSION_ID}`) and returns
+  `{ clientSecret, publishableKey }`. With **no key set, `"embedded"` is served exactly
+  like hosted** (`{ url }`, no `ui_mode`, no embedded session minted) so the feature stays
+  dormant until the key lands; `"hosted"`/absent returns `{ url }` exactly as before.
+  **Everything else about the session — line items, amount, mode, `customer_email`, and
+  ALL metadata — is identical across both modes**, so the REQ-036 webhook and the
+  confirmation email are unaffected.
 - **Client (`assets/js/main.js`).** `startCheckout` tries embedded first, but only when
   `fetch`, **Stripe.js** and the on-page `#embeddedCheckout` mount are all present: it
   requests `uiMode:"embedded"`, constructs `Stripe(publishableKey)`, and mounts
@@ -1142,8 +1146,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
   and **no CSP change was made** (adding one would risk the fonts/images/inline styles).
   If a CSP is ever introduced, allow `script-src`/`frame-src`/`connect-src` for
   `https://js.stripe.com` + `https://api.stripe.com` and `frame-src https://*.stripe.com`.
-- **Publishable key.** `STRIPE_PUBLISHABLE_KEY` (below) is public and reaches the browser
-  in the embedded response, not baked into the static HTML.
+- **Publishable key.** `STRIPE_PUBLISHABLE_KEY` (below) is public, **optional**, and reaches
+  the browser in the embedded response, not baked into the static HTML. Embedded Checkout is
+  **dormant until it is set** (and its terraform wiring applied); until then donors use the
+  hosted redirect with no change, so the code ships safely ahead of the gated infra apply.
 
 ### API endpoints
 
@@ -2031,10 +2037,12 @@ when set, else an inline product — so no per-amount Stripe Product is needed.
 the card method; BACS Direct Debit is offered for our GBP-only UK donations, which
 satisfy Stripe's BACS currency/country requirement — REQ-029 · TASK-089).
 For the hosted mode `success_url` / `cancel_url` come from config; for `uiMode:
-"embedded"` (TASK-215) they are replaced by `ui_mode: "embedded_page"` + a
-`return_url` (built on the `STRIPE_SUCCESS_URL` base with `{CHECKOUT_SESSION_ID}`),
-and the response is `{ clientSecret, publishableKey }` instead of `{ url }` — every
-other session field, and all metadata below, is identical across the two modes. When
+"embedded"` **when `STRIPE_PUBLISHABLE_KEY` is configured** (TASK-215) they are replaced
+by `ui_mode: "embedded_page"` + a `return_url` (built on the `STRIPE_SUCCESS_URL` base with
+`{CHECKOUT_SESSION_ID}`), and the response is `{ clientSecret, publishableKey }` instead of
+`{ url }` — every other session field, and all metadata below, is identical across the two
+modes. With **no key set, `"embedded"` is served exactly as hosted** (`{ url }`), so the
+feature stays dormant until the key lands. When
 `giftAid` is affirmatively true the consent is bound to the **exact verbatim HMRC
 statement** the donor saw (REQ-042 · TASK-053): alongside `metadata.giftAid='true'`,
 the handler stamps `metadata.giftAidWordingVersion` and `metadata.giftAidWording` (the
@@ -3242,10 +3250,14 @@ Secrets are never in code or in the image.
 The **Stripe checkout** keys (TASK-037, REQ-028/REQ-029) follow this pattern:
 `STRIPE_SECRET_KEY` is a secret (SSM `SecureString`, required, never defaulted);
 `STRIPE_PUBLISHABLE_KEY` (TASK-215) is the **public** `pk_…` key the browser needs for
-Embedded Checkout — required and non-empty like the secret key, but **not a secret**: it
-is a plain task-def `environment` value (backed by the `stripe_publishable_key` module
-variable, set per env in `infra/envs/*/main.tf`), **not** an SSM `SecureString` and
-**not** in the `exec_secrets` IAM policy (it ships to every donor's browser). It reaches
+Embedded Checkout — **not a secret**: a plain task-def `environment` value (backed by the
+`stripe_publishable_key` module variable, set per env in `infra/envs/*/main.tf`), **not** an
+SSM `SecureString` and **not** in the `exec_secrets` IAM policy (it ships to every donor's
+browser). It is **OPTIONAL** (may be absent or empty): the app boots fine without it and
+**Embedded Checkout stays dormant** — `uiMode:"embedded"` is served as the hosted redirect —
+until the key is set (its terraform wiring **applied** and a real `pk_…` value in place),
+at which point inline checkout engages automatically with **no code change**. This lets the
+code ship ahead of the gated infra apply instead of crash-looping boot. When set, it reaches
 the client in the `/api/checkout-session` embedded response, not baked into the static HTML;
 `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` are plain redirect URLs (task-def
 `environment`, backed by the `stripe_success_url` / `stripe_cancel_url` module

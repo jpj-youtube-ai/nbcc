@@ -2084,6 +2084,14 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   + our newsletter, platinum additionally the social thank-you, digital badge and certificate). All
   perks are **£0-value recognition perks**, so nothing here affects the HMRC Gift-Aid benefit cap.
   No pool/config/clock, so it is unit-tested DB-free (`test/unit/fulfilment-model.test.ts`).
+  **TASK-206** adds the nullable-unique **`token`** column (additive migration
+  `1783964039569_add-fulfilment-token.js`) for the per-business secure thank-you link, the pure
+  `fulfilmentBandFor` gate (banded **only** for a business monthly gift ≥ £10/mo — `donor_type`
+  `company` **OR** a partnership/sole trader with a non-empty `business_name`), and the DB layer
+  `src/db/fulfilment.ts` (`ensureFulfilmentRecord` — idempotent `ON CONFLICT (donor_id) DO NOTHING`,
+  returns the row id; `getFulfilmentByToken`). The Stripe webhook now **creates** this record (band +
+  a `randomUUID()` token) on a business monthly gift, inside the donation's transaction with a
+  `fulfilment.created` audit row — ready for the later thank-you page / admin / backfill.
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,
@@ -2379,6 +2387,10 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   verbatim) — and links the donation's `declaration_id` to it,
   in the **same** transaction with its own `declaration.created` audit row, so the
   donation derives `claim_status='eligible'` (REQ-037).
+  A **business monthly gift** (an incorporated company, or a partnership/sole trader donating under a
+  business name) additionally **creates a `business_supporter_fulfilment` record** (recognition band +
+  a fresh secure-thank-you `token`) in the **same** transaction, with a `fulfilment.created` audit row
+  — the pure `fulfilmentBandFor` gates it and `ensureFulfilmentRecord` keeps it idempotent (TASK-206).
   The whole donor journey — `POST /api/checkout-session` → the signed
   `checkout.session.completed` Stripe fires → the resulting donor/donation/declaration
   rows — is exercised end to end for every persona (individual UK / non-UK / anonymous,

@@ -9,6 +9,7 @@ import {
   SUPPORTER_BANDS,
   bandForMonthlyAmount,
   bandHasPlatinumPerks,
+  fulfilmentBandFor,
   perksForBand,
   type SupporterBand,
 } from "../../src/donors/fulfilment";
@@ -76,5 +77,49 @@ describe("perksForBand", () => {
       digitalBadge: true,
       certificate: true,
     });
+  });
+});
+
+describe("fulfilmentBandFor — a fulfilment band ONLY for a BUSINESS MONTHLY gift", () => {
+  it("returns null for a one-off business gift (not monthly)", () => {
+    expect(
+      fulfilmentBandFor({ mode: "once", donorType: "company", businessName: "Acme Ltd", amountPence: 10000 }),
+    ).toBeNull();
+  });
+
+  it("returns null for an individual monthly gift with no business name", () => {
+    expect(
+      fulfilmentBandFor({ mode: "monthly", donorType: "individual", businessName: null, amountPence: 5000 }),
+    ).toBeNull();
+  });
+
+  it("treats an empty-string business name on an individual as no business (null)", () => {
+    expect(
+      fulfilmentBandFor({ mode: "monthly", donorType: "individual", businessName: "   ", amountPence: 5000 }),
+    ).toBeNull();
+  });
+
+  it("bands a company monthly gift at each band (business via donorType, no name needed)", () => {
+    expect(fulfilmentBandFor({ mode: "monthly", donorType: "company", amountPence: 1000 })).toBe("bronze");
+    expect(fulfilmentBandFor({ mode: "monthly", donorType: "company", amountPence: 2500 })).toBe("silver");
+    expect(fulfilmentBandFor({ mode: "monthly", donorType: "company", amountPence: 5000 })).toBe("gold");
+    expect(fulfilmentBandFor({ mode: "monthly", donorType: "company", amountPence: 10000 })).toBe("platinum");
+  });
+
+  it("bands a partnership: monthly, donorType individual but WITH a business name", () => {
+    expect(
+      fulfilmentBandFor({
+        mode: "monthly",
+        donorType: "individual",
+        businessName: "Smith & Jones",
+        amountPence: 2500,
+      }),
+    ).toBe("silver");
+  });
+
+  it("returns null for a business monthly gift below the £10 monthly minimum", () => {
+    expect(
+      fulfilmentBandFor({ mode: "monthly", donorType: "company", businessName: "Acme Ltd", amountPence: 999 }),
+    ).toBeNull();
   });
 });

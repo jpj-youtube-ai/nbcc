@@ -11,6 +11,8 @@ import {
   type ClaimStatus,
 } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation, insertClaimAdjustment } from "./donations";
+import { ensureFulfilmentRecord } from "./fulfilment";
+import { fulfilmentBandFor } from "../donors/fulfilment";
 import {
   donationFromCheckoutSession,
   declarationFromCheckoutSession,
@@ -446,6 +448,35 @@ async function handleCheckoutCompleted(
     entityId: donationId,
     data: { eventId: event.id, donorId, giftAid: donation.giftAid, declarationId },
   });
+
+  // Business-supporter fulfilment (TASK-206): a BUSINESS MONTHLY gift at/above the £10/month minimum
+  // — an incorporated company, or a partnership/sole trader donating under a business name — earns a
+  // recognition record. fulfilmentBandFor gates it (null for a one-off, an individual with no
+  // business name, or a sub-£10 gift). When it bands, create the record in the SAME transaction (so
+  // it commits with the donation) with a fresh per-business token for the secure thank-you link, and
+  // audit it. Idempotent: ensureFulfilmentRecord's ON CONFLICT (donor_id) DO NOTHING + the event-id
+  // guard above mean a redelivered event never double-creates. Does not touch the confirmation-email
+  // or company-receipt behaviour below — those payloads are unchanged.
+  const fulfilmentBand = fulfilmentBandFor({
+    mode: donation.mode,
+    donorType: donation.donorType,
+    businessName: donor.businessName,
+    amountPence: donation.amountPence,
+  });
+  if (fulfilmentBand) {
+    const fulfilmentId = await ensureFulfilmentRecord(client, {
+      donorId,
+      band: fulfilmentBand,
+      token: randomUUID(),
+    });
+    await insertAudit(client, {
+      actor: "stripe",
+      action: "fulfilment.created",
+      entity: "business_supporter_fulfilment",
+      entityId: fulfilmentId,
+      data: { eventId: event.id, donorId, band: fulfilmentBand },
+    });
+  }
 
   // Company donation (REQ-053, TASK-088): decide receipt vs trustee-flag from whether NBCC gave
   // anything of value in return. A CLEAN gift (no consideration) gets a Corporation Tax receipt

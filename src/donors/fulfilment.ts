@@ -36,6 +36,28 @@ export function bandForMonthlyAmount(pence: number): SupporterBand | null {
   return null;
 }
 
+// TASK-206 (business-supporter fulfilment — webhook wiring): the pure ELIGIBILITY gate that decides
+// whether a completed gift earns a fulfilment record, and at what band. A record is created ONLY for
+// a BUSINESS MONTHLY gift at or above the £10/month minimum — all three must hold:
+//   - mode is "monthly" (a one-off gift earns no ongoing recognition);
+//   - it is a BUSINESS — either donorType "company" (an incorporated company) OR a non-empty
+//     businessName (a partnership / sole-trader-with-a-name donates under donorType "individual" WITH
+//     a businessName — see donationFromCheckoutSession in src/db/stripe-webhook-model.ts);
+//   - bandForMonthlyAmount(amountPence) is non-null (below £10/month is not a supporter band).
+// Returns that band, else null. Pure — reuses bandForMonthlyAmount, no pool/config/clock — so the
+// webhook wiring (src/db/stripe-webhook.ts) can compute the band without touching the DB.
+export function fulfilmentBandFor(gift: {
+  mode: "once" | "monthly";
+  donorType: "individual" | "company";
+  businessName?: string | null;
+  amountPence: number;
+}): SupporterBand | null {
+  if (gift.mode !== "monthly") return null;
+  const isBusiness = gift.donorType === "company" || (gift.businessName ?? "").trim().length > 0;
+  if (!isBusiness) return null;
+  return bandForMonthlyAmount(gift.amountPence);
+}
+
 // The top band, platinum, unlocks the recognition extras (social thank-you, digital badge,
 // certificate). This predicate captures that "platinum only" rule in one place so perksForBand and
 // any caller stay consistent.

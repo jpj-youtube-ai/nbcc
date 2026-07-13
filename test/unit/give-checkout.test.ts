@@ -53,15 +53,17 @@ describe("donate checkout contract markup (REQ-028)", () => {
     });
   });
 
-  it("wires the choose-your-own control as a native button: once, empty plan, empty amount", () => {
+  it("wires the choose-your-own control on the .give-tier-custom container: once, empty plan, empty amount (TASK-210)", () => {
     const custom = doc.querySelector("#tiersOnce .give-tier-custom");
-    const go = custom?.querySelector("button[data-amount]");
-    expect(go).not.toBeNull();
-    expect(go?.tagName).toBe("BUTTON");
-    expect(go?.getAttribute("data-mode")).toBe("once");
-    expect(go?.getAttribute("data-plan")).toBe("");
-    expect(go?.getAttribute("data-amount")).toBe("");
+    expect(custom).not.toBeNull();
+    // TASK-210: the redundant per-amount Donate button was removed. The container itself now
+    // carries the checkout contract (data-mode/data-plan/data-amount) and the single step CTA
+    // drives startCheckout with it, so the /api/checkout-session payload shape is unchanged.
+    expect(custom?.getAttribute("data-mode")).toBe("once");
+    expect(custom?.getAttribute("data-plan")).toBe("");
+    expect(custom?.getAttribute("data-amount")).toBe("");
     expect(custom?.querySelector("#customAmount")).not.toBeNull();
+    expect(custom?.querySelector("button")).toBeNull();
   });
 
   it("keeps the once/monthly toggle buttons OUT of the contract (no data-amount)", () => {
@@ -119,10 +121,10 @@ describe("startCheckout behaviour (jsdom)", () => {
 
   it("the custom-amount control builds the amount (pence) from the entered value", () => {
     (document.getElementById("customAmount") as HTMLInputElement).value = "30";
-    const go = document.querySelector(
-      "#tiersOnce .give-tier-custom button[data-amount]",
-    ) as HTMLElement;
-    startCheckout(go, window);
+    // TASK-210: startCheckout reads the custom amount from the .give-tier-custom container now
+    // (the per-amount button was removed); the assembled payload shape is unchanged.
+    const custom = document.querySelector("#tiersOnce .give-tier-custom") as HTMLElement;
+    startCheckout(custom, window);
     expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 3000, giftAid: false });
   });
 

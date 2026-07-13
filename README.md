@@ -538,12 +538,16 @@ below describe the underlying contract, which is **unchanged** (every id, name a
 - **Live impact card.** A `.give-impact` card (`#giveImpactText`) below the tiers
   updates on tier/frequency change from a non-definitive impact map in
   `initGiveSteps` — always "could help …", never "£X provides Y" (Code of Fundraising
-  Practice). The `£50` tier is pre-selected on load so the card, summary and Gift
-  Aid uplift are populated (works without JS via the visible default copy).
-- **Tiers select without advancing.** A tier tap now SELECTS (updates the impact
-  card) rather than jumping to step 2; a prominent **"Donate now"** CTA
-  (`[data-give-next]`) advances. The custom-amount "Donate" button still one-taps,
-  and typing a custom amount selects it.
+  Practice). It reads a touch larger and bolder (TASK-210). No amount is pre-selected
+  on load, so the card, summary and Gift Aid uplift start in a neutral "Your donation
+  could help …" state until the donor actively chooses an amount.
+- **Tiers select without advancing; one proceed button.** A tier tap SELECTS (updates
+  the impact card) rather than jumping to step 2; a single prominent **"Donate now"**
+  CTA (`[data-give-next]`) advances. Typing into the choose-your-own box selects that
+  amount. The per-amount "Donate" button was removed (TASK-210): the one step CTA now
+  drives checkout for a preset tier or a custom amount alike, and `validate()` blocks
+  it until a tier is chosen or a custom amount is entered. A selected tile uses a
+  softened holly tint (TASK-210), not a full green fill.
 - **Page 2 opens with a summary.** A `.give-summary` band shows **"You are donating
   £X"** (`#giveSummaryAmount`) with a **"Change"** control (`[data-give-prev]`) back to
   step 1; `initGiveSteps` fills the amount from the selected tier or custom amount.
@@ -575,7 +579,8 @@ columns, collapsing to one ~360px). Each amount is a `.card.tier.give-tier`
 `<button>` — reusing the `.card`/`.tier` surface (REQ-009) and the hover-lift
 (REQ-008) — showing a Playfair crimson `.give-amount` and a `.give-tier-desc`:
 **£10** (cosy essentials), **£25** (towards a Red Bag, marked **"Most popular"**
-via a floating `.give-flag` on the crimson-outlined `.is-featured` tile, TASK-204),
+via a `.give-flag` pill on its own centred line so it never overlaps the label or the
+amount (TASK-210), on the crimson-outlined `.is-featured` tile),
 **£50** (one full Red Bag) and **£100** (a whole family). The custom option is a
 full-width `.give-tier-custom` card with a real `<label for="customAmount">` tied
 to a number `#customAmount` input (REQ-032). Token-only colours, no hex/rgb
@@ -678,7 +683,9 @@ forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 
 Below the donor-type fieldset and above the tiers, a `.give-contact` `<fieldset>`
 (`CONTACT CAPTURE` CSS block) captures consent-based contact details: a **required**
-full name (`#donorName`, `required` + `aria-required`), an **optional** email
+donor name captured as two fields, **First name** (`#donorFirstName`) and **Surname**
+(`#donorSurname`), each `required` + `aria-required` (TASK-210; `startCheckout` combines
+them into the single `fullName` the checkout contract still POSTs), an email
 (`#donorEmail`) paired with an email-consent checkbox (`#emailConsent`) that is
 **never ticked in advance** (NBCC only emails with clear permission), an anonymous
 option (`#anonymousDonor`) that keeps the gift off the public Donors Page, and a
@@ -1029,8 +1036,10 @@ Both lines are guarded by `test/unit/fundraising-governance.test.ts`.
 ### Checkout contract (REQ-028)
 
 Every amount control wires the one front-end → backend integration point. Each
-tier button in `#tiersOnce`/`#tiersMonthly`, and the choose-your-own **Give**
-button, carries:
+tier button in `#tiersOnce`/`#tiersMonthly`, and the choose-your-own
+`.give-tier-custom` container (TASK-210: the per-amount button was removed, so the
+container itself now carries the contract and the single step CTA drives checkout),
+carry:
 
 - `data-mode` — `once` or `monthly`
 - `data-plan` — `bronze`/`silver`/`gold`/`platinum`, **empty** for one-off

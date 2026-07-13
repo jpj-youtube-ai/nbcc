@@ -588,8 +588,14 @@
     // { mode, plan, amount, giftAid } contract is unchanged.
     var contactControl = doc.querySelector(".give-contact[data-ready]");
     if (contactControl) {
-      var fullNameEl = doc.getElementById("donorName");
-      payload.fullName = fullNameEl ? (fullNameEl.value || "").trim() : "";
+      // TASK-210: the donor name is captured as two fields (first name + surname); combine
+      // them into the single `fullName` the checkout contract POSTs — the payload and the
+      // /api/checkout-session schema are unchanged.
+      var firstNameEl = doc.getElementById("donorFirstName");
+      var surnameEl = doc.getElementById("donorSurname");
+      var firstName = firstNameEl ? (firstNameEl.value || "").trim() : "";
+      var surname = surnameEl ? (surnameEl.value || "").trim() : "";
+      payload.fullName = (firstName + " " + surname).trim();
       var emailEl = doc.getElementById("donorEmail");
       payload.email = emailEl ? (emailEl.value || "").trim() : "";
       var consentEl = doc.getElementById("emailConsent");
@@ -1164,8 +1170,14 @@
     function hideErr(n) { var e = root.querySelector('[data-err="' + n + '"]'); if (e) e.classList.remove("show"); }
 
     // ---- tier selection (step 1): select an amount rather than checking out ----
-    var choosers = Array.prototype.slice.call(root.querySelectorAll(".give-tier, .give-custom-go"));
-    function clearSelection() { choosers.forEach(function (b) { b.classList.remove("is-selected"); }); }
+    // TASK-210: tiers are the only click-to-select controls now (the per-amount custom Donate
+    // button was removed); a custom amount is selected by typing into its .give-tier-custom box.
+    var choosers = Array.prototype.slice.call(root.querySelectorAll(".give-tier"));
+    function clearSelection() {
+      Array.prototype.forEach.call(root.querySelectorAll(".give-tier, .give-tier-custom"), function (b) {
+        b.classList.remove("is-selected");
+      });
+    }
     function customInput() {
       // The custom-amount input in the currently visible tier set (once XOR monthly),
       // falling back to the once input by id for older markup.
@@ -1233,58 +1245,44 @@
       }
     }
     function select(btn) { clearSelection(); btn.classList.add("is-selected"); selected = btn; hideErr(1); updateSummary(); }
-    // Default the selection to the featured amount (the £50 tier, index 2) in the visible tier
-    // set, so the impact card, summary and Gift Aid uplift are populated from the start.
-    function selectDefault() {
-      var set = root.querySelector(".give-tiers:not([hidden])");
-      var tiles = set ? set.querySelectorAll(".give-tier") : [];
-      if (tiles.length) select(tiles[Math.min(2, tiles.length - 1)]);
-      else { selected = null; clearSelection(); updateSummary(); }
+    // TASK-210: no amount is pre-selected. The donor must actively choose a tier (or type a custom
+    // amount) before the step CTA advances (validate blocks step 1 until then), so nothing is
+    // defaulted. resetSelection clears any selection and refreshes the impact/summary to the
+    // neutral "Your donation" state — used on load and whenever the give mode is switched.
+    function resetSelection() {
+      selected = null;
+      clearSelection();
+      updateSummary();
     }
 
     choosers.forEach(function (btn) {
       btn.addEventListener("click", function () {
-        if (btn.classList.contains("give-custom-go")) {
-          // The custom "Donate" button both selects the typed amount and advances.
-          if (!customPence()) {
-            showErr(1);
-            var cb = btn.closest ? btn.closest(".give-tier-custom") : null;
-            var ci = cb ? cb.querySelector(".give-custom-input") : null;
-            if (ci && ci.focus) ci.focus();
-            return;
-          }
-          select(btn);
-          go(2, 1);
-          return;
-        }
         // TASK-204: a tier tap SELECTS and updates the live impact/summary, but does NOT
-        // advance — the donor confirms with the "Donate now" button, so the impact card
+        // advance — the donor confirms with the single "Donate now" button, so the impact card
         // updates as they compare amounts. Selecting a tier clears any typed custom amount.
         var typed = customInput();
         if (typed) typed.value = "";
         select(btn);
       });
     });
-    // Typing a custom amount selects that amount (clearing any tier selection); emptying it
-    // drops the selection again.
+    // TASK-210: typing a custom amount SELECTS its .give-tier-custom box (clearing any tier
+    // selection); emptying it drops the selection again. The box carries the checkout contract
+    // (data-mode/data-plan/data-amount) so startCheckout reads the typed amount at the final step.
     Array.prototype.forEach.call(root.querySelectorAll(".give-custom-input"), function (inp) {
       inp.addEventListener("input", function () {
         var container = inp.closest ? inp.closest(".give-tier-custom") : null;
-        var goBtn = container ? container.querySelector(".give-custom-go") : null;
-        if (!goBtn) return;
+        if (!container) return;
         if (parseFloat(inp.value) > 0) {
-          select(goBtn);
-        } else if (selected === goBtn) {
-          selected = null;
-          clearSelection();
-          updateSummary();
+          select(container);
+        } else if (selected === container) {
+          resetSelection();
         }
       });
     });
-    // switching once/monthly changes the visible tier set: re-select the default tier there
-    // so the impact/summary/Gift Aid stay populated for the new mode.
+    // switching once/monthly changes the visible tier set: clear the selection so the donor
+    // actively chooses an amount in the newly shown set (no amount is pre-selected, TASK-210).
     Array.prototype.forEach.call(root.querySelectorAll(".give-mode"), function (m) {
-      m.addEventListener("click", function () { selectDefault(); });
+      m.addEventListener("click", function () { resetSelection(); });
     });
 
     // ---- validation: required, visible, enabled controls in a step ----
@@ -1370,7 +1368,7 @@
     }
 
     function next() {
-      if (current === 1 && (!selected || (selected.classList.contains("give-custom-go") && !customPence()))) {
+      if (current === 1 && (!selected || (selected.classList.contains("give-tier-custom") && !customPence()))) {
         showErr(1); return;
       }
       if (current === 2 && !validate(stepEl(2))) { showErr(2); return; }
@@ -1389,7 +1387,7 @@
     var payBtn = root.querySelector("[data-give-pay]");
     if (payBtn) payBtn.addEventListener("click", pay);
 
-    selectDefault(); // pre-select the featured amount so the impact/summary/Gift Aid are populated
+    resetSelection(); // TASK-210: nothing pre-selected; the impact/summary start in the neutral state
     go(1, 0, true); // initial state, no scroll/focus
   }
 

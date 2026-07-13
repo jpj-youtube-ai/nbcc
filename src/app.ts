@@ -8,6 +8,7 @@ import { adminUsersRouter } from "./routes/admin-users";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
+import { businessRouter } from "./routes/business";
 import { newsletterImagesRouter } from "./routes/newsletter-images";
 import { tickerRouter } from "./routes/ticker";
 import { createSiteRouter } from "./routes/site";
@@ -49,6 +50,9 @@ export function createApp() {
   // Public printable thank-you letter page (TASK-165/REQ-069). Also before the site catch-all so its
   // wildcard doesn't shadow /thank-you/letter/:token.
   app.use(thankYouLetterRouter);
+  // Public per-business Platinum certificate (TASK-211): GET /business/certificate/:token. Before the
+  // site catch-all so its wildcard doesn't shadow the token route.
+  app.use(businessRouter);
   // Public newsletter image serve — before the site catch-all so /media/* isn't shadowed.
   app.use(newsletterImagesRouter);
   // Static marketing site: the four pages, their clean URLs, and /assets.

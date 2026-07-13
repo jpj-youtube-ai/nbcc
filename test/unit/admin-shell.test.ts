@@ -60,7 +60,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(html).toContain('src="/assets/js/admin/app.js"');
   });
 
-  it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds · TASK-161 newsletter · TASK-163 thank-you · 2026-07-10 contact inbox)", () => {
+  it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds · TASK-161 newsletter · TASK-163 thank-you · 2026-07-10 contact inbox · TASK-208 business supporters)", () => {
     const navViews = [...doc.querySelectorAll(".admin-nav-link")].map((b) => b.getAttribute("data-view"));
     expect(navViews).toEqual([
       "overview",
@@ -69,6 +69,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "claims",
       "gasds",
       "subscriptions",
+      "fulfilments",
       "stories",
       "ticker",
       "contact",
@@ -82,6 +83,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "claims",
       "gasds",
       "subscriptions",
+      "fulfilments",
       "stories",
       "ticker",
       "contact",
@@ -110,5 +112,16 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(doc.getElementById("storyBack")).not.toBeNull();
     expect(doc.getElementById("storyDetail")).not.toBeNull();
     expect(doc.getElementById("storyActionStatus")?.getAttribute("role")).toBe("status");
+  });
+
+  // TASK-208: the Business supporters (fulfilment) tab — an Editor+ area, gated in the nav on
+  // donations:edit (data-edit-gate) to match its server route, with its own table + status region.
+  it("has the Business supporters view, gated Editor+ via data-edit-gate on the nav link", () => {
+    const navLink = doc.querySelector('.admin-nav-link[data-view="fulfilments"]');
+    expect(navLink).not.toBeNull();
+    expect(navLink?.getAttribute("data-edit-gate")).toBe("donations");
+    expect(doc.getElementById("view-fulfilments")).not.toBeNull();
+    expect(doc.getElementById("fulfilmentsTable")).not.toBeNull();
+    expect(doc.getElementById("fulfilmentActionStatus")?.getAttribute("role")).toBe("status");
   });
 });

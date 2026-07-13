@@ -36,6 +36,11 @@ export const confirmationInputSchema = z.object({
   currency: z.string().trim().min(1).default("GBP"),
   giftAid: z.boolean(),
   mode: z.enum(["once", "monthly"]),
+  // Receipt details (TASK-203): a per-gift reference (NBCC-000123, from the donation id) and the
+  // payment date, both optional so existing callers are unaffected. When present they render as a
+  // labelled receipt line, so our confirmation email stands in for the Stripe receipt.
+  reference: z.string().trim().min(1).optional(),
+  donationDate: z.union([z.date(), z.string().min(1)]).optional(),
 });
 export type ConfirmationInput = z.input<typeof confirmationInputSchema>;
 
@@ -57,11 +62,19 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// The donor-facing receipt reference (TASK-203): the donation's own id as a tidy, zero-padded code
+// (NBCC-000123) that a donor can quote and staff paste straight into the admin donation search.
+// Pure — no clock/DB. Ids longer than the pad width are kept in full, never truncated.
+export function donationReference(id: number): string {
+  return `NBCC-${String(id).padStart(6, "0")}`;
+}
+
 // Build the confirmation email content. The thank-you always appears; the Gift Aid line only when
 // Gift Aid was opted in (with the enduring clause for a monthly gift); the manage/cancel line only
 // for a monthly gift. A one-off / non-Gift-Aid gift simply omits the parts that don't apply.
 export function buildDonationConfirmation(input: ConfirmationInput): DonationConfirmationContent {
-  const { fullName, amountPence, currency, giftAid, mode } = confirmationInputSchema.parse(input);
+  const { fullName, amountPence, currency, giftAid, mode, reference, donationDate } =
+    confirmationInputSchema.parse(input);
   const amount = formatAmount(amountPence, currency);
   const monthly = mode === "monthly";
 
@@ -71,6 +84,12 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
     : `Thank you ${fullName}, your donation of ${amount} to ${CHARITY_SHORT_NAME} has been received.`;
 
   const paragraphs: string[] = [thanks];
+  // Receipt details (TASK-203): reference and/or payment date, so our email doubles as the receipt
+  // now that Stripe's own receipt email is off. Only the parts we were given are shown.
+  const details: string[] = [];
+  if (reference) details.push(`Reference: ${reference}`);
+  if (donationDate) details.push(`Payment date: ${formatDate(donationDate)}`);
+  if (details.length > 0) paragraphs.push(details.join(". ") + ".");
   if (giftAid) {
     paragraphs.push(GIFT_AID_CONFIRMATION_LINE + (monthly ? GIFT_AID_MONTHLY_CLAUSE : ""));
   }

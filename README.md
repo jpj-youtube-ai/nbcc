@@ -654,7 +654,16 @@ already carries its own required `company.contactEmail`. Email is always
 stored (not gated on `emailConsent`, which now governs marketing consent only)
 so every donor can be sent a thank-you and a donor-portal link; see
 `test/unit/checkout-session.test.ts` and the `features/checkout.feature`
-"without an email is rejected" scenario.
+"without an email is rejected" scenario. That captured email is also pre-filled
+and locked on the Stripe Checkout page via `customer_email` (TASK-203), so the
+donor never retypes it. The confirmation email itself
+(`src/donors/confirmation.ts`) now carries a receipt reference
+(`NBCC-<zero-padded donation id>`, built by `donationReference`) and the payment
+date, so it stands in for the Stripe receipt now that Stripe's own
+successful-payment receipt email is switched off. Both are threaded from the
+committed donation by the webhook (`src/db/stripe-webhook.ts`) for the one-off
+gift and for each monthly charge, and the reference maps 1:1 to the donation id
+so staff can paste it straight into the admin donation search.
 
 ### Gift Aid declaration capture (REQ-043)
 

@@ -254,6 +254,11 @@ export function buildSessionParams(
     success_url: config.STRIPE_SUCCESS_URL,
     cancel_url: config.STRIPE_CANCEL_URL,
     metadata,
+    // Pre-fill and lock the donor's email on the Stripe Checkout page (TASK-203) so they never
+    // retype the address we already captured. Stripe still needs an email for its records, so it is
+    // shown read-only rather than removed. Absent for a company (its contact email is captured
+    // separately in the company object), so no pre-fill there.
+    ...(body.email ? { customer_email: body.email } : {}),
   };
 
   if (body.mode === "monthly") {

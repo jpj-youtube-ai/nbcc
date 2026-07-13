@@ -18,10 +18,11 @@ vi.mock("../../src/config", () => ({
 }));
 
 import { sendConfirmation } from "../../src/db/stripe-webhook";
-import { confirmationEmailFromCheckoutSession } from "../../src/db/stripe-webhook-model";
+import { confirmationEmailFor, confirmationEmailFromCheckoutSession } from "../../src/db/stripe-webhook-model";
 import {
   buildDonationConfirmation,
   buildRefundConfirmation,
+  donationReference,
   GIFT_AID_CONFIRMATION_LINE,
   MANAGE_CANCEL_LINE,
 } from "../../src/donors/confirmation";
@@ -139,6 +140,27 @@ describe("confirmationEmailFromCheckoutSession — pure event→payload mapping"
   });
 });
 
+describe("confirmationEmailFor — receipt detail threading (TASK-203)", () => {
+  it("threads a reference and payment date into the payload when provided", () => {
+    const payload = confirmationEmailFor(
+      { email: "ada@example.com", fullName: "Ada Lovelace" },
+      { amountPence: 5000, currency: "GBP", giftAid: false, mode: "once" },
+      { reference: "NBCC-000123", donationDate: new Date("2026-01-05T00:00:00Z") },
+    );
+    expect(payload).toMatchObject({ email: "ada@example.com", reference: "NBCC-000123" });
+    expect(payload?.donationDate).toBeInstanceOf(Date);
+  });
+
+  it("omits reference/date when no extra is passed (existing callers unaffected)", () => {
+    const payload = confirmationEmailFor(
+      { email: "ada@example.com", fullName: "Ada Lovelace" },
+      { amountPence: 5000, currency: "GBP", giftAid: false, mode: "once" },
+    );
+    expect(payload).not.toHaveProperty("reference");
+    expect(payload).not.toHaveProperty("donationDate");
+  });
+});
+
 describe("buildDonationConfirmation (pure content) — REQ-060 · TASK-098", () => {
   const base = { fullName: "Ada Lovelace", amountPence: 5000, currency: "GBP" } as const;
 
@@ -174,6 +196,39 @@ describe("buildDonationConfirmation (pure content) — REQ-060 · TASK-098", () 
     );
     expect(content.text).toContain("Regulated by the Scottish Charity Regulator, OSCR.");
     expect(content.html).toContain('class="charity-registration"');
+  });
+});
+
+describe("buildDonationConfirmation receipt details (payment date + reference) — TASK-203", () => {
+  const base = { fullName: "Ada Lovelace", amountPence: 5000, currency: "GBP", giftAid: false, mode: "once" } as const;
+
+  it("includes the reference and the formatted payment date when provided", () => {
+    const content = buildDonationConfirmation({
+      ...base,
+      reference: "NBCC-000123",
+      donationDate: "2026-01-05T09:00:00Z",
+    });
+    expect(content.text).toContain("Reference: NBCC-000123");
+    expect(content.text).toContain("Payment date: 05/01/2026");
+    expect(content.html).toContain("NBCC-000123");
+    expect(content.html).toContain("05/01/2026");
+  });
+
+  it("omits the reference/date line entirely when neither is provided (backward compatible)", () => {
+    const content = buildDonationConfirmation({ ...base });
+    expect(content.text).not.toContain("Reference:");
+    expect(content.text).not.toContain("Payment date:");
+  });
+});
+
+describe("donationReference (pure) — the NBCC-000123 receipt reference — TASK-203", () => {
+  it("formats the donation id as a zero-padded NBCC reference", () => {
+    expect(donationReference(123)).toBe("NBCC-000123");
+    expect(donationReference(1)).toBe("NBCC-000001");
+  });
+
+  it("does not truncate an id longer than the pad width", () => {
+    expect(donationReference(1234567)).toBe("NBCC-1234567");
   });
 });
 

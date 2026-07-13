@@ -42,7 +42,7 @@ import {
   buildCompanyRefundNotice,
   type CompanyRefundAction,
 } from "../donors/receipt";
-import { buildDonationConfirmation, buildRefundConfirmation } from "../donors/confirmation";
+import { buildDonationConfirmation, buildRefundConfirmation, donationReference } from "../donors/confirmation";
 import {
   applyDunningEvent,
   canApplyDunningEvent,
@@ -345,6 +345,8 @@ export async function sendConfirmation(email: DonationConfirmationEmail | null):
       currency: email.currency,
       giftAid: email.giftAid,
       mode: email.mode,
+      reference: email.reference,
+      donationDate: email.donationDate,
     });
     await sendDonationConfirmation({
       email: email.email,
@@ -475,8 +477,17 @@ async function handleCheckoutCompleted(
 
   // A company donation's email is its Corporation Tax receipt (above), NOT the individual donor
   // confirmation — so suppress the donor thank-you for companies (an individual/partnership donor
-  // gets it whenever we have an email, consent-independent). Sent after COMMIT.
-  return { action: "donation.created", email: companyRow ? null : confirmationEmailFor(donor, donation), receipt };
+  // gets it whenever we have an email, consent-independent). Sent after COMMIT. The individual
+  // confirmation carries the receipt reference (NBCC-<id>) + the gift date (TASK-203), so it stands
+  // in for the Stripe receipt now that Stripe's own receipt email is off.
+  const donationDate = new Date((event.data.object.created ?? 0) * 1000);
+  return {
+    action: "donation.created",
+    email: companyRow
+      ? null
+      : confirmationEmailFor(donor, donation, { reference: donationReference(donationId), donationDate }),
+    receipt,
+  };
 }
 
 // charge.succeeded → record an IN-PERSON (Stripe Terminal / card_present) donation
@@ -595,13 +606,15 @@ async function handleRecurring(
     data: { eventId: event.id, donorId: parent.donor_id, subscriptionId: rec.subscriptionId },
   });
   // Confirm each recurring charge to a consenting donor (email + consent carried on
-  // the donor row found via the subscription). Sent after COMMIT by the caller.
+  // the donor row found via the subscription). Sent after COMMIT by the caller. Carries this
+  // charge's own receipt reference (NBCC-<id>) + payment date (TASK-203).
   return {
     action: "donation.recurring",
     email: confirmationEmailFor(
       { email: parent.email, emailConsent: parent.email_consent, fullName: parent.full_name },
       // A recurring charge is a monthly gift; Gift Aid is carried from the parent donation.
       { amountPence: rec.amountPence, currency: rec.currency, giftAid: parent.gift_aid, mode: "monthly" },
+      { reference: donationReference(donationId), donationDate: new Date((event.created ?? 0) * 1000) },
     ),
   };
 }

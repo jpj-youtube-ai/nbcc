@@ -1790,15 +1790,51 @@ login, not a replacement for it.
   the right code; a device token skips the code step; the 6th wrong attempt locks out) plus the
   updated `features/admin-auth.feature` / `features/admin-users.feature` scenarios that now complete
   the 2FA step to obtain a session.
-- **Known follow-up.** The Cloudflare Worker email relay (`services/email-relay/src/index.js`) maps
-  each of the app's transactional payload shapes to a Resend send by sniffing its fields
-  (`buildEmail`); it has no branch for the login-code payload
-  (`{ email, fullName, subject, text }` from `sendAdminLoginCode`), so today it silently falls through
-  to the generic donation-confirmation default and sends the **wrong subject**. Real email delivery of
-  login codes needs a small relay branch (mirroring the newsletter/thank-you `if (p.newsletter …)` /
-  `if (p.thankYou …)` pattern, discriminated the same way) before this reaches production — tracked as
-  a follow-up, not blocking this PR because staging and local dev never depend on it (`devCode`
-  covers both, per the stub-safety note above).
+- **Login-code subject (fixed in TASK-209).** The Cloudflare Worker email relay
+  (`services/email-relay/src/index.js`) used to map each transactional payload to a Resend send by
+  sniffing its fields (`buildEmail`), with no branch for the login-code payload, so it silently fell
+  through to the generic donation-confirmation default and sent the **wrong subject** ("Thank you for
+  your donation to NBCC" on a 2FA code). TASK-209 fixed the whole email family: every send now carries
+  an explicit `kind`, the relay routes on it, and each kind gets its OWN branded body + correct subject
+  (the login code now reads "Your NBCC admin sign-in code"). The old field heuristics remain only as a
+  deploy-skew fallback for a no-`kind` payload. See **All transactional emails share one branded shell**
+  below.
+
+**All transactional emails share one branded shell (REQ, TASK-209).** Every transactional send from
+`src/clients/email.ts` now tags its JSON with an explicit `kind`, and the Cloudflare Worker email relay
+(`services/email-relay/src/index.js`, `buildEmail`) routes on that `kind` first, wrapping the body in
+ONE branded shell and giving each email its OWN correct subject. The shell mirrors the admin thank-you
+letter email (`src/thank-you/letter.ts`): a maroon page, a cream content panel, the NBCC logo
+letterhead (hosted absolute URL, not base64), and a maroon footer bar carrying `01292 811 015` /
+`giving@nbcc.scot` / `nbcc.scot`. It stays email-safe (layout tables + inline styles + web-safe
+Georgia/Playfair and Arial/Poppins stacks) and carries a `color-scheme: light` meta so dark-mode
+clients don't invert the palette. The `kind` -> subject map:
+
+| `kind` | subject | body |
+|---|---|---|
+| `donation` | Thank you for your donation to NBCC | app |
+| `receipt` | Your NBCC donation receipt | app |
+| `refund` | Your NBCC refund confirmation | app |
+| `loginCode` | Your NBCC admin sign-in code | relay |
+| `adminInvite` | Your NBCC admin account invitation | relay |
+| `adminReset` | Reset your NBCC admin password | relay |
+| `portal` | Your NBCC donor portal link | relay |
+| `declaration` | Add Gift Aid to your NBCC donation | relay |
+| `lapsedDonor` | Your NBCC monthly donation has stopped | relay |
+| `lapsedAdmin` | A monthly NBCC subscription has lapsed | relay |
+
+This fixes a real bug: the 2FA sign-in code, admin invites and password resets used to fall through the
+relay's field-sniffing to the donation default and get the wrong subject, and almost none were branded.
+The `donation` / `receipt` / `refund` bodies are still built by the app (`src/donors/confirmation.ts`,
+`src/donors/receipt.ts`) and already end with the charity-registration line, so the shell wraps them with
+a contacts-only footer (no duplicate registration); the `relay`-built kinds get the registration in the
+footer. `newsletter` and `thankYou` are unchanged (each already ships its own fully branded html +
+subject). Covered by `test/unit/email-relay-build.test.ts` (each kind's subject, the branded shell,
+the footer contacts on every kind, registration exactly once, the old collisions gone, and the no-`kind`
+skew fallback). **Ops:** the relay Worker is deployed on its own (`cd services/email-relay && wrangler
+deploy`), so it needs its own redeploy for the rebrand + fixed subjects to reach live email; the app
+side ships with the normal ECS deploy. The two tolerate deploy skew in either order (the app keeps
+sending, and the relay keeps its field heuristics, as a fallback).
 
 **`POST /api/contact` now stores, not forwards (2026-07-10 contact-inbox spec).** The public enquiry
 endpoint (REQ-030) still validates `{ firstName, lastName, email, message }` zod-first

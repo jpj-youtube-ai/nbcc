@@ -47,7 +47,7 @@ export async function sendDonationConfirmation(message: DonationConfirmation): P
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "donation" }),
   });
   if (!res.ok) {
     throw new Error(`Email send responded ${res.status}`);
@@ -75,7 +75,7 @@ export async function sendDeclarationEmail(message: DeclarationEmail): Promise<v
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "declaration" }),
   });
   if (!res.ok) {
     throw new Error(`Declaration email send responded ${res.status}`);
@@ -103,7 +103,7 @@ export async function sendCompanyReceipt(message: CompanyReceiptEmail): Promise<
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "receipt" }),
   });
   if (!res.ok) {
     throw new Error(`Company receipt email send responded ${res.status}`);
@@ -131,7 +131,7 @@ export async function sendRefundConfirmation(message: RefundConfirmationEmail): 
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "refund" }),
   });
   if (!res.ok) {
     throw new Error(`Refund confirmation email send responded ${res.status}`);
@@ -154,7 +154,7 @@ export async function sendPortalMagicLink(message: PortalMagicLinkEmail): Promis
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "portal" }),
   });
   if (!res.ok) {
     throw new Error(`Portal magic-link email send responded ${res.status}`);
@@ -179,7 +179,7 @@ export async function sendAdminInvite(message: AdminInviteEmail): Promise<void> 
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "adminInvite" }),
   });
   if (!res.ok) {
     throw new Error(`Admin invite email send responded ${res.status}`);
@@ -199,7 +199,7 @@ export async function sendAdminReset(message: AdminResetEmail): Promise<void> {
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "adminReset" }),
   });
   if (!res.ok) {
     throw new Error(`Admin reset email send responded ${res.status}`);
@@ -223,13 +223,17 @@ export async function sendAdminLoginCode(message: AdminLoginCodeEmail): Promise<
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
+  // TASK-209: the relay now builds the branded, correctly-subjected login-code email from
+  // `kind` + `code`. The plain `subject`/`text` below are kept ONLY as a deploy-skew safety
+  // net, so an OLDER relay (deployed separately via wrangler) still delivers the code rather
+  // than 422-ing on an unrecognised payload while the app and Worker versions are out of step.
   const subject = `Your NBCC admin sign-in code is ${message.code}`;
   const text = `Hello ${message.fullName},\n\n${subject}. This code expires in 10 minutes.\n\nIf you did not request this, you can ignore this email.`;
 
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ email: message.email, fullName: message.fullName, subject, text }),
+    body: JSON.stringify({ kind: "loginCode", email: message.email, fullName: message.fullName, code: message.code, subject, text }),
   });
   if (!res.ok) {
     throw new Error(`Admin login-code email send responded ${res.status}`);
@@ -254,7 +258,7 @@ export async function sendSubscriptionLapsedDonor(message: SubscriptionLapsedDon
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "lapsedDonor" }),
   });
   if (!res.ok) {
     throw new Error(`Subscription lapsed (donor) email send responded ${res.status}`);
@@ -274,7 +278,7 @@ export async function sendSubscriptionLapsedAdmin(message: SubscriptionLapsedAdm
   const res = await fetch(config.EMAIL_SEND_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(message),
+    body: JSON.stringify({ ...message, kind: "lapsedAdmin" }),
   });
   if (!res.ok) {
     throw new Error(`Subscription lapsed (admin) email send responded ${res.status}`);

@@ -22,5 +22,5 @@ module "app" {
   stripe_cancel_url  = "https://staging.nbcc.scot/donate"
   # Stripe publishable key (TASK-215) for Embedded Checkout — PUBLIC, not a secret. Replace with the
   # real Stripe TEST publishable key for staging; a placeholder just falls back to hosted checkout.
-  stripe_publishable_key = "pk_test_REPLACE_ME"
+  stripe_publishable_key = "pk_test_51TY8v74nlOtH58iwRUKafdudpImz3AWydJut2ZAvlrfykboWGm6ouuNpH7A2rxzeBqUi06OFs4Q5ikeaYBIMnQDM00dNYdJ8cu"
 }

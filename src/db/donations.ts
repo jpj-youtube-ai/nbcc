@@ -63,6 +63,20 @@ export async function insertAudit(client: PoolClient, audit: AuditInput): Promis
   );
 }
 
+// Append one audit_log row on its OWN short-lived pool connection, OUTSIDE any transaction. For a
+// caller that needs a standalone audit entry with no accompanying state write in the same tx — e.g.
+// the summary row a best-effort batch appends after it has already done its per-item work (TASK-214's
+// invite backfill). Mirrors insertAudit but manages its own client. Not for audited state changes:
+// those must use writeWithAudit so the row and its audit commit atomically.
+export async function recordAudit(audit: AuditInput): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await insertAudit(client, audit);
+  } finally {
+    client.release();
+  }
+}
+
 // The atomic helper. `write` performs the state change (insert/update on
 // donors/declarations/donations) using the supplied client; `toAudit` maps its
 // result to the audit row. Both the write and the audit INSERT run in one

@@ -804,6 +804,40 @@
         fulfilmentStatus("Could not update that supporter. Please try again.");
       });
   }
+  // ---- catch up invites (TASK-214): email the thank-you invite to supporters who never got it ----
+  // One click POSTs the backfill endpoint (server-side Editor+), then shows how many went out. Safe to
+  // click again: the server only emails supporters who have not been invited yet, so a repeat run
+  // reports "Sent 0". Refetches the list afterwards, mirroring the mark-done refetch pattern above.
+  function backfillStatus(msg) {
+    var s = el("backfillInvitesStatus");
+    if (s) s.textContent = msg || "";
+  }
+  function backfillInvites() {
+    var btn = el("backfillInvitesBtn");
+    if (btn) btn.disabled = true;
+    backfillStatus("Sending…");
+    authFetch("/api/admin/business-supporters/backfill-invites", { method: "POST" })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (out) {
+        if (!out) {
+          backfillStatus("Could not send the invites. Please try again.");
+        } else if (!out.pending) {
+          backfillStatus("No supporters were waiting for an invite.");
+        } else {
+          backfillStatus("Sent " + (out.sent || 0) + ", failed " + (out.failed || 0) + ".");
+        }
+        loadFulfilments();
+      })
+      .catch(function () {
+        backfillStatus("Could not send the invites. Please try again.");
+      })
+      .then(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+  bindClick("backfillInvitesBtn", backfillInvites);
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
   Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (b) {

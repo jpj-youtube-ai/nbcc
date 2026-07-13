@@ -198,6 +198,14 @@
             <section class="admin-view" id="view-fulfilments" aria-labelledby="fulfilments-heading" hidden>
               <h2 id="fulfilments-heading">Business supporters</h2>
               <p class="admin-view-intro">Businesses giving monthly earn a recognition band and pick how they would like to be thanked. This is where the team fulfils that: check what each supporter asked for, then mark each step done once it is sorted. Every mark is logged to the Audit trail.</p>
+              <!-- Catch up invites (TASK-214): email the thank-you invite to any business supporters who
+                   signed up before invites were automatic and so never got their link. Safe to click more
+                   than once: it only emails supporters who have not been invited yet, so a second run
+                   sends none. POSTs /api/admin/business-supporters/backfill-invites. -->
+              <div class="admin-claim-actions" id="fulfilmentBackfillActions">
+                <button class="admin-btn" type="button" id="backfillInvitesBtn">Send catch up invites</button>
+                <span class="admin-action-status" id="backfillInvitesStatus" role="status" aria-live="polite"></span>
+              </div>
               <div class="admin-table-wrap" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <p class="admin-action-status" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
             </section>

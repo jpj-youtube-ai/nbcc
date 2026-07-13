@@ -23,13 +23,16 @@ import {
   listAuditLog,
   listDunning,
 } from "../db/admin";
-import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError } from "../db/donations";
+import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError, recordAudit } from "../db/donations";
 import {
   listBusinessFulfilments,
   markFulfilmentFlag,
   FULFILMENT_FLAGS,
   FulfilmentFlagError,
+  listUninvitedBusinessSupporters,
+  markFulfilmentInvited,
 } from "../db/fulfilment";
+import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
@@ -80,7 +83,7 @@ import {
 } from "../db/newsletter-attachments";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
-import { sendNewsletter, sendThankYou, sendAdminLoginCode } from "../clients/email";
+import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
 import { createRateLimiter } from "../portal/request-limiter";
 import { clampPage } from "../db/admin";
 import { config } from "../config";
@@ -1663,3 +1666,33 @@ export async function postAdminMarkFulfilment(req: Request, res: Response): Prom
 
 adminRouter.get("/api/admin/fulfilments", getAdminFulfilments);
 adminRouter.post("/api/admin/fulfilments/:id/mark", postAdminMarkFulfilment);
+
+// POST /api/admin/business-supporters/backfill-invites (TASK-214) — the one-time, idempotent catch-up
+// that emails the thank-you INVITE to business supporters who became supporters BEFORE the going-
+// forward webhook auto-invite (TASK-213) shipped and so never received it. Editor+ (donations:edit),
+// same gate as the rest of the business-supporter tab. Safe to click more than once: it emails only
+// records with invited_at IS NULL AND captured_at IS NULL, and stamps invited_at after each successful
+// send, so a second run (or a double-click) sends 0. Every send is best-effort — one failure is
+// counted and never aborts the rest — and the run appends one `fulfilment.backfill_invites` audit row.
+// Returns the counts { pending, sent, failed }.
+export async function postAdminBackfillBusinessInvites(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "donations", "edit");
+  if (!claims) return;
+  try {
+    const result = await runBusinessInviteBackfill({
+      listUninvited: listUninvitedBusinessSupporters,
+      sendInvite: sendBusinessSupporterInvite,
+      markInvited: markFulfilmentInvited,
+      recordAudit,
+      baseUrl: config.PORTAL_BASE_URL,
+      from: config.GIVING_FROM_EMAIL,
+      actor: actorOf(claims),
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error("admin business-supporter invite backfill failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/business-supporters/backfill-invites", postAdminBackfillBusinessInvites);

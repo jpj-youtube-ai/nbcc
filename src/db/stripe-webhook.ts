@@ -11,7 +11,7 @@ import {
   type ClaimStatus,
 } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation, insertClaimAdjustment } from "./donations";
-import { ensureFulfilmentRecord } from "./fulfilment";
+import { ensureFulfilmentRecord, markFulfilmentInvited } from "./fulfilment";
 import { fulfilmentBandFor, type SupporterBand } from "../donors/fulfilment";
 import { buildBusinessSupporterInviteEmail } from "../business/invite-email";
 import {
@@ -269,6 +269,10 @@ interface BusinessInviteSend {
   fullName: string;
   band: SupporterBand;
   token: string;
+  // The just-created fulfilment record's id (TASK-214), so a SUCCESSFUL send can stamp invited_at on
+  // it (markFulfilmentInvited) — marking the record invited going forward so the admin catch-up
+  // backfill never re-emails it. A failed send leaves invited_at NULL and the backfill catches it.
+  fulfilmentId: number;
 }
 
 // Post-commit, best-effort business-supporter thank-you invite (TASK-213). Builds the branded invite
@@ -297,6 +301,11 @@ export async function sendBusinessInvite(send: BusinessInviteSend | null): Promi
       html: invite.html,
       text: invite.text,
     });
+    // The send SUCCEEDED — stamp invited_at so this record is not re-emailed by the admin catch-up
+    // backfill (TASK-214). Kept inside this best-effort try (after the send), so a stamp failure is
+    // swallowed like the send itself and never fails the webhook; a FAILED send throws before here and
+    // leaves invited_at NULL, so the backfill catches that supporter on a later run.
+    await markFulfilmentInvited(send.fulfilmentId);
   } catch {
     // best-effort: the fulfilment record + token are durably committed; a failed invite must not fail
     // the webhook (which would make Stripe redeliver and re-run the whole handler).
@@ -550,6 +559,7 @@ async function handleCheckoutCompleted(
           fullName: donor.fullName,
           band: fulfilmentBand,
           token,
+          fulfilmentId,
         };
       }
     }

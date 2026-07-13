@@ -772,7 +772,7 @@ the split **structurally clear**:
 
 - **All monthly donors** — your name (or business name) added to the **Donors
   Page** unless you choose to stay anonymous (cross-linked to the **Supporters
-  page** `/supporters`, REQ-035), plus a post Christmas impact update.
+  page** `/supporters`, REQ-035), plus our donor newsletter.
 - **Platinum donors also receive** — a social media thank you, an optional
   **digital supporter badge**, and a personalised **supporter certificate**.
 

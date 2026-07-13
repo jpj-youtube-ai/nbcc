@@ -1109,6 +1109,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/admin/set-password` | **implemented** | admin-management Phase 1 (public, rate-limited; accepts an invite or reset token + a new password) |
 | `PATCH /api/admin/users/:id/permissions` | **implemented** | admin-management Phase 2 (TASK-186; `team:edit` only; sets a person's complete 13-section view/edit matrix, audited `admin_user.permissions_changed`; `409 {error:"last_admin"}` if it would leave zero users with effective `team:edit`) |
 | `GET /api/admin/me` | **implemented** | admin-management Phase 2 (TASK-186; any valid, non-disabled session; returns the caller's own effective permissions for nav filtering + write-control gating client-side) |
+| `GET /api/admin/fulfilments` | **implemented** | TASK-207 (Editor+ / `donations:edit`; list every business-supporter fulfilment record joined to its donor, most recent first) |
+| `POST /api/admin/fulfilments/:id/mark` | **implemented** | TASK-207 (Editor+ / `donations:edit`; set one of the five status flags true, audited `fulfilment.<flag>` in one transaction; unknown flag → 400, unknown id → 404) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -2092,6 +2094,18 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   returns the row id; `getFulfilmentByToken`). The Stripe webhook now **creates** this record (band +
   a `randomUUID()` token) on a business monthly gift, inside the donation's transaction with a
   `fulfilment.created` audit row — ready for the later thank-you page / admin / backfill.
+  **TASK-207** adds the **admin API** (backend only — no UI yet): **Editor+** staff (`donations:edit`)
+  can **list** every business supporter and their fulfilment state (`GET /api/admin/fulfilments` →
+  `listBusinessFulfilments`, each fulfilment row joined to its donor, most recent first, bounded) and
+  **mark a fulfilment status** done (`POST /api/admin/fulfilments/:id/mark` with `{ flag }` →
+  `markFulfilmentFlag`). The mark is one **audited transaction** (`writeWithAudit`): it sets the single
+  boolean true, bumps `updated_at`, and appends exactly one `fulfilment.<flag>` audit row (actor
+  `admin:<email>`, entity `business_supporter_fulfilment`). `flag` **must** be one of the five
+  allow-listed columns (`certificate_sent`/`certificate_posted`/`badge_sent`/`social_done`/
+  `added_to_supporters`) — validated by the pure `isFulfilmentFlag` (and the route's `z.enum`) **before**
+  any SQL is built, so no arbitrary column can ever be written (an unknown flag → **400**, an unknown id
+  → **404**). Covered by `test/unit/admin-fulfilment-api.test.ts` (auth 401/403, list, mark-flips-and-
+  audits, allowlist).
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,

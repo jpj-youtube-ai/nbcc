@@ -133,3 +133,90 @@ describe("startCheckout behaviour (jsdom)", () => {
     expect(payload).toEqual({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false });
   });
 });
+
+// TASK-215: Stripe Embedded Checkout progressive enhancement. When JS + Stripe.js + the on-page
+// mount are present, startCheckout requests uiMode:"embedded", gets a { clientSecret, publishableKey }
+// and mounts inline. On ANY failure (Stripe.js absent, embedded init throws) it falls back to the
+// EXISTING hosted redirect (POST with no uiMode → { url } → location.href), so the button is never
+// dead. A fake `win` is passed so location.href assignment never triggers jsdom navigation, and the
+// returned/previewed payload stays the exact REQ-028 contract (uiMode rides only on the wire body).
+describe("startCheckout embedded checkout (jsdom, TASK-215)", () => {
+  const { startCheckout } = require(resolve(ROOT, "assets/js/main.js"));
+  const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  function setupDom(): void {
+    document.body.innerHTML =
+      `<main>${cardHtml}</main>` +
+      `<div id="embeddedCheckoutModal" hidden aria-hidden="true">` +
+      `<button id="embeddedCheckoutClose" type="button">Close</button>` +
+      `<div id="embeddedCheckout"></div></div>`;
+  }
+  const onceTier = (i: number) =>
+    document.querySelectorAll("#tiersOnce .give-tier")[i] as HTMLElement;
+
+  it("requests uiMode:embedded and mounts Stripe Embedded Checkout when Stripe.js + container are present", async () => {
+    setupDom();
+    let mountedInto: unknown = null;
+    let sentBody: Record<string, unknown> | null = null;
+    let pkUsed = "";
+    const fakeCheckout = { mount: (el: unknown) => { mountedInto = el; }, destroy: () => {} };
+    const fakeStripe = { initEmbeddedCheckout: () => Promise.resolve(fakeCheckout) };
+    const win = {
+      Stripe: (pk: string) => { pkUsed = pk; return fakeStripe; },
+      fetch: (_url: string, opts: { body: string }) => {
+        sentBody = JSON.parse(opts.body);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ clientSecret: "cs_test_secret", publishableKey: "pk_test_123" }) });
+      },
+    };
+    const payload = startCheckout(onceTier(2), win as unknown as Window); // £50
+    await flush();
+    // The wire body carries uiMode:"embedded"; the RETURNED payload stays the clean REQ-028 contract.
+    expect(sentBody!.uiMode).toBe("embedded");
+    expect(sentBody!.amount).toBe(5000);
+    expect(payload).toEqual({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    expect(pkUsed).toBe("pk_test_123");
+    expect(mountedInto).toBe(document.getElementById("embeddedCheckout"));
+    expect((document.getElementById("embeddedCheckoutModal") as HTMLElement).hidden).toBe(false);
+  });
+
+  it("falls back to the hosted redirect when Stripe.js is unavailable (no dead button)", async () => {
+    setupDom();
+    let sentBody: Record<string, unknown> | null = null;
+    const win = {
+      // no Stripe on the window → embedded cannot run
+      fetch: (_url: string, opts: { body: string }) => {
+        sentBody = JSON.parse(opts.body);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ url: "https://checkout.stripe.com/c/pay/redirect_1" }) });
+      },
+      location: { href: "" },
+    };
+    startCheckout(onceTier(0), win as unknown as Window); // £10
+    await flush();
+    expect(sentBody!.uiMode).toBeUndefined(); // hosted request omits uiMode; the server defaults to hosted
+    expect(win.location.href).toBe("https://checkout.stripe.com/c/pay/redirect_1");
+  });
+
+  it("falls back to the hosted redirect when embedded init throws", async () => {
+    setupDom();
+    let hostedRequested = false;
+    const fakeStripe = { initEmbeddedCheckout: () => Promise.reject(new Error("init failed")) };
+    const win = {
+      Stripe: () => fakeStripe,
+      fetch: (_url: string, opts: { body: string }) => {
+        const body = JSON.parse(opts.body);
+        if (body.uiMode === "embedded") {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ clientSecret: "cs", publishableKey: "pk" }) });
+        }
+        hostedRequested = true;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ url: "https://checkout.stripe.com/c/pay/redirect_2" }) });
+      },
+      location: { href: "" },
+    };
+    startCheckout(onceTier(0), win as unknown as Window);
+    await flush();
+    await flush();
+    expect(hostedRequested).toBe(true);
+    expect(win.location.href).toBe("https://checkout.stripe.com/c/pay/redirect_2");
+  });
+});

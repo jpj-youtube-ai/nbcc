@@ -28,6 +28,9 @@ module "app" {
   # Stripe post-checkout redirects on the live domain (were the example.org default).
   stripe_success_url = "https://nbcc.scot/donate/thank-you"
   stripe_cancel_url  = "https://nbcc.scot/donate"
+  # Stripe publishable key (TASK-215) for Embedded Checkout — PUBLIC, not a secret. Replace with the
+  # real Stripe LIVE publishable key for production; a placeholder just falls back to hosted checkout.
+  stripe_publishable_key = "pk_live_REPLACE_ME"
 
   # Google Workspace DKIM public key, ported so mail keeps signing post-delegation.
   # VERIFY against Google Admin (Gmail -> Authenticate email) before relying on it.

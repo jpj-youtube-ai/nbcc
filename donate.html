@@ -613,5 +613,17 @@
         </div>
       </div>
     </footer>
+<!-- Stripe Embedded Checkout mount (TASK-215). Hidden by default; main.js reveals this overlay and
+     mounts Stripe Embedded Checkout inside #embeddedCheckout so the donor pays inline, without ever
+     leaving nbcc.scot. If JS is off, Stripe.js cannot load, or embedded init fails, this stays
+     hidden and the donate flow uses the hosted Stripe redirect instead, so the button is never dead. -->
+<div class="give-embedded-modal" id="embeddedCheckoutModal" role="dialog" aria-modal="true" aria-label="Complete your donation" hidden aria-hidden="true">
+<div class="give-embedded-panel">
+<div class="give-embedded-bar">
+<button class="give-embedded-close" id="embeddedCheckoutClose" type="button" aria-label="Close and return to your details">Close</button>
+</div>
+<div class="give-embedded-mount" id="embeddedCheckout"></div>
+</div>
+</div>
 </body>
 </html>

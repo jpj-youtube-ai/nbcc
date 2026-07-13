@@ -20,4 +20,7 @@ module "app" {
   # Stripe post-checkout redirects on the staging domain (were the example.org default).
   stripe_success_url = "https://staging.nbcc.scot/donate/thank-you"
   stripe_cancel_url  = "https://staging.nbcc.scot/donate"
+  # Stripe publishable key (TASK-215) for Embedded Checkout — PUBLIC, not a secret. Replace with the
+  # real Stripe TEST publishable key for staging; a placeholder just falls back to hosted checkout.
+  stripe_publishable_key = "pk_test_REPLACE_ME"
 }

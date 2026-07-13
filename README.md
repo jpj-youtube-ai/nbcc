@@ -1103,14 +1103,47 @@ those attributes plus the `#giftAid` checkbox (REQ-023) into a single
 when empty; the choose-your-own amount is built from the `#customAmount` value ×
 100) — and, once the donor-type control (REQ-038) is wired, folds in
 **`donorType`** and an optional **`businessName`** (see **Donor-type routing**
-above). It then mirrors `initContactForm`'s best-effort pattern: in production it
-POSTs the payload to **`/api/checkout-session`** and redirects to the returned
-Stripe `{ url }`; with no working backend (the current `501` stub) it degrades to
-**showing the payload** (an `alert`, the preview). The buttons are native
-`<button>`s (keyboard-activatable, global `:focus-visible` ring; REQ-032). The
-live endpoint is **REQ-029**, out of scope here. Verified by
-`test/unit/give-checkout.test.ts` (markup + jsdom payload behaviour) and the
-per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
+above). It then POSTs the payload to **`/api/checkout-session`**. Two payment UIs
+are supported, chosen by progressive enhancement (see **Embedded Checkout** below):
+by default the donor pays **inline** via Stripe Embedded Checkout without leaving
+nbcc.scot, and if that cannot run it **falls back to the hosted redirect** (the
+returned Stripe `{ url }`). With no working backend at all (fetch unavailable) it
+degrades to **showing the payload** (an `alert`, the preview). The buttons are native
+`<button>`s (keyboard-activatable, global `:focus-visible` ring; REQ-032). Verified by
+`test/unit/give-checkout.test.ts` (markup + jsdom payload behaviour, embedded +
+fallback paths) and the per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
+
+### Embedded Checkout (inline payment, TASK-215)
+
+The donate page pays **inline** so the donor never leaves nbcc.scot, while the
+hosted-Checkout redirect stays the default fallback and no-JS safety net.
+
+- **Request param.** `POST /api/checkout-session` accepts `uiMode: "embedded" |
+  "hosted"`, **defaulting to `"hosted"`** when absent — so any un-updated caller and
+  the fallback path are byte-for-byte unchanged. `"embedded"` builds the session with
+  Stripe's `ui_mode: "embedded_page"` + a `return_url` (reusing the `STRIPE_SUCCESS_URL`
+  base, carrying `{CHECKOUT_SESSION_ID}`) and returns `{ clientSecret, publishableKey }`;
+  `"hosted"`/absent returns `{ url }` exactly as before. **Everything else about the
+  session — line items, amount, mode, `customer_email`, and ALL metadata — is identical
+  across both modes**, so the REQ-036 webhook and the confirmation email are unaffected.
+- **Client (`assets/js/main.js`).** `startCheckout` tries embedded first, but only when
+  `fetch`, **Stripe.js** and the on-page `#embeddedCheckout` mount are all present: it
+  requests `uiMode:"embedded"`, constructs `Stripe(publishableKey)`, and mounts
+  `initEmbeddedCheckout({ clientSecret })` into a modal (`#embeddedCheckoutModal` in
+  `donate.html`). **Stripe.js is loaded by dynamic injection** from
+  `https://js.stripe.com/v3/` (its only supported origin) so `donate.html` keeps its
+  single shared static script. The `payload` object `startCheckout` returns stays the
+  exact REQ-028 contract; `uiMode` rides only on the wire body.
+- **Fallback chain (no dead button).** Stripe.js fails to load, or JS is unavailable,
+  or embedded init/mount throws → the **hosted redirect** (`uiMode` omitted → server
+  default hosted → `location = url`). fetch entirely unavailable → the preview `alert`.
+- **CSP.** The app ships **no** Content-Security-Policy (no helmet, no CSP header/meta,
+  and none at the infra/ALB layer), so nothing blocks `js.stripe.com` / `api.stripe.com`
+  and **no CSP change was made** (adding one would risk the fonts/images/inline styles).
+  If a CSP is ever introduced, allow `script-src`/`frame-src`/`connect-src` for
+  `https://js.stripe.com` + `https://api.stripe.com` and `frame-src https://*.stripe.com`.
+- **Publishable key.** `STRIPE_PUBLISHABLE_KEY` (below) is public and reaches the browser
+  in the embedded response, not baked into the static HTML.
 
 ### API endpoints
 
@@ -1997,7 +2030,11 @@ when set, else an inline product — so no per-amount Stripe Product is needed.
 `['card', 'bacs_debit']` on **both** session shapes (Apple Pay / Google Pay ride on
 the card method; BACS Direct Debit is offered for our GBP-only UK donations, which
 satisfy Stripe's BACS currency/country requirement — REQ-029 · TASK-089).
-`success_url` / `cancel_url` come from config. When
+For the hosted mode `success_url` / `cancel_url` come from config; for `uiMode:
+"embedded"` (TASK-215) they are replaced by `ui_mode: "embedded_page"` + a
+`return_url` (built on the `STRIPE_SUCCESS_URL` base with `{CHECKOUT_SESSION_ID}`),
+and the response is `{ clientSecret, publishableKey }` instead of `{ url }` — every
+other session field, and all metadata below, is identical across the two modes. When
 `giftAid` is affirmatively true the consent is bound to the **exact verbatim HMRC
 statement** the donor saw (REQ-042 · TASK-053): alongside `metadata.giftAid='true'`,
 the handler stamps `metadata.giftAidWordingVersion` and `metadata.giftAidWording` (the
@@ -3204,6 +3241,12 @@ Secrets are never in code or in the image.
 
 The **Stripe checkout** keys (TASK-037, REQ-028/REQ-029) follow this pattern:
 `STRIPE_SECRET_KEY` is a secret (SSM `SecureString`, required, never defaulted);
+`STRIPE_PUBLISHABLE_KEY` (TASK-215) is the **public** `pk_…` key the browser needs for
+Embedded Checkout — required and non-empty like the secret key, but **not a secret**: it
+is a plain task-def `environment` value (backed by the `stripe_publishable_key` module
+variable, set per env in `infra/envs/*/main.tf`), **not** an SSM `SecureString` and
+**not** in the `exec_secrets` IAM policy (it ships to every donor's browser). It reaches
+the client in the `/api/checkout-session` embedded response, not baked into the static HTML;
 `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` are plain redirect URLs (task-def
 `environment`, backed by the `stripe_success_url` / `stripe_cancel_url` module
 variables) — `STRIPE_SUCCESS_URL` now resolves to the live `/donate/thank-you`

@@ -43,6 +43,14 @@ const checkoutBodySchema = z
     plan: z.enum(PLANS).nullable(),
     amount: z.number().int().positive().nullable(),
     giftAid: z.boolean(),
+    // TASK-215: which Stripe Checkout UI to open. "hosted" (the DEFAULT when absent) keeps the
+    // existing behaviour byte-for-byte — Stripe returns a redirect { url } and the donor completes
+    // payment on checkout.stripe.com; it is the no-JS fallback and safety net. "embedded" returns a
+    // { clientSecret } the donor-page mounts inline (Stripe Embedded Checkout) so they never leave
+    // nbcc.scot. Defaulting to "hosted" means any un-updated caller and the fallback path are
+    // unchanged; everything else about the session (line items, amount, mode, customer_email,
+    // ALL metadata) is identical across both modes — only the redirect surface differs.
+    uiMode: z.enum(["hosted", "embedded"]).default("hosted"),
     // REQ-038: individuals (incl. sole traders / partners) take the Gift Aid path,
     // incorporated companies the no-Gift-Aid path. Defaulted to "individual" so the
     // no-JS base contract ({ mode, plan, amount, giftAid }) is still accepted — the
@@ -159,6 +167,17 @@ const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_typ
   "bacs_debit",
 ];
 
+// The return_url for Embedded Checkout (TASK-215). Stripe redirects the whole page here on
+// completion, so it points back to the SAME on-site landing the hosted success URL uses (built on
+// config.STRIPE_SUCCESS_URL, the shared config base), carrying the session id via Stripe's
+// {CHECKOUT_SESSION_ID} template — which Stripe substitutes, so the braces must NOT be URL-encoded.
+// Appended with `?`/`&` so it composes with a success URL that already has a query string.
+export function embeddedReturnUrl(): string {
+  const base = config.STRIPE_SUCCESS_URL;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}session_id={CHECKOUT_SESSION_ID}`;
+}
+
 // Assemble the Stripe Checkout session parameters from a validated body.
 export function buildSessionParams(
   body: CheckoutBody,
@@ -251,14 +270,22 @@ export function buildSessionParams(
 
   const base: StripeNS.Checkout.SessionCreateParams = {
     payment_method_types: PAYMENT_METHODS,
-    success_url: config.STRIPE_SUCCESS_URL,
-    cancel_url: config.STRIPE_CANCEL_URL,
     metadata,
     // Pre-fill and lock the donor's email on the Stripe Checkout page (TASK-203) so they never
     // retype the address we already captured. Stripe still needs an email for its records, so it is
     // shown read-only rather than removed. Absent for a company (its contact email is captured
     // separately in the company object), so no pre-fill there.
     ...(body.email ? { customer_email: body.email } : {}),
+    // The ONLY difference between the two UI modes is the redirect surface (TASK-215):
+    // - embedded (inline): Stripe's SDK enum is "embedded_page"; it needs a return_url (Stripe
+    //   redirects the whole page there on completion, defaulting to redirect_on_completion:always)
+    //   and must NOT carry success_url/cancel_url. The return_url reuses the SAME on-site base as
+    //   the hosted success URL, carrying {CHECKOUT_SESSION_ID} (a Stripe template it substitutes).
+    // - hosted (redirect, the default): no ui_mode (Stripe defaults to hosted_page) + the existing
+    //   success_url/cancel_url — byte-for-byte the pre-TASK-215 behaviour.
+    ...(body.uiMode === "embedded"
+      ? { ui_mode: "embedded_page", return_url: embeddedReturnUrl() }
+      : { success_url: config.STRIPE_SUCCESS_URL, cancel_url: config.STRIPE_CANCEL_URL }),
   };
 
   if (body.mode === "monthly") {
@@ -319,14 +346,26 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
   try {
     const params = buildSessionParams(parsed.data);
     const session = await stripe.checkout.sessions.create(params);
-    const body: { url: string | null; session?: { id: string; metadata: typeof params.metadata; mode: typeof params.mode } } = {
-      url: session.url,
-    };
+    // Embedded (inline) returns a { clientSecret } the browser mounts on nbcc.scot, plus the PUBLIC
+    // publishable key it needs to construct Stripe.js (TASK-215). Hosted (the default) is UNCHANGED:
+    // it returns { url } exactly as before, so the redirect fallback and any un-updated caller keep
+    // working byte-for-byte. The session metadata/line-items/mode are identical either way, so the
+    // webhook + confirmation email are unaffected.
+    const body: {
+      url?: string | null;
+      clientSecret?: string | null;
+      publishableKey?: string;
+      session?: { id: string; metadata: typeof params.metadata; mode: typeof params.mode };
+    } =
+      parsed.data.uiMode === "embedded"
+        ? { clientSecret: session.client_secret, publishableKey: config.STRIPE_PUBLISHABLE_KEY }
+        : { url: session.url };
     // Stub-mode echo (TASK-116): when there is no live Stripe (offline stub) and we are
     // not in production, hand the built session back so the BDD donation journey can
     // replay the REAL stamped metadata into the completion webhook — mirroring how Stripe
     // echoes your session object back in checkout.session.completed. Production NEVER stubs
-    // (see src/clients/stripe.ts), so its response stays { url }. The frontend reads only url.
+    // (see src/clients/stripe.ts), so its response stays { url } / { clientSecret }. Applies to
+    // both UI modes, since the echoed metadata/mode are identical.
     if (!stripeConfigured && config.NODE_ENV !== "production") {
       body.session = { id: session.id, metadata: params.metadata, mode: params.mode };
     }

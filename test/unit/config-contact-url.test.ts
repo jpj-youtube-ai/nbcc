@@ -9,6 +9,7 @@ const base = {
   EXTERNAL_API_ONE_KEY: "k1",
   EXTERNAL_API_TWO_KEY: "k2",
   STRIPE_SECRET_KEY: "sk",
+  STRIPE_PUBLISHABLE_KEY: "pk",
   STRIPE_SUCCESS_URL: "https://x.example/s",
   STRIPE_CANCEL_URL: "https://x.example/c",
   STRIPE_PRICE_BRONZE: "p",

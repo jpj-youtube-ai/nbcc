@@ -46,6 +46,13 @@ function stubStripe(): Stripe {
           url: `https://checkout.stripe.com/c/pay/preview_${params.mode ?? "session"}${
             params.metadata?.giftAid === "true" ? "_giftaid" : ""
           }`,
+          // Embedded Checkout (TASK-215): the stub also hands back a deterministic client_secret so
+          // the inline (ui_mode: embedded_page) flow is observable end to end without a live account.
+          // Real Stripe populates exactly ONE of url / client_secret per ui_mode; the checkout-session
+          // endpoint reads only the field for the requested mode, so returning both here is harmless.
+          client_secret: `cs_preview_secret_${params.mode ?? "session"}${
+            params.metadata?.giftAid === "true" ? "_giftaid" : ""
+          }`,
         }),
       },
     },

@@ -28,6 +28,9 @@ const { mockConfig } = vi.hoisted(() => ({
     STRIPE_SUCCESS_URL: "https://nbcc.test/donate/thank-you",
     STRIPE_CANCEL_URL: "https://nbcc.test/donate",
     STRIPE_DONATION_PRODUCT: undefined as string | undefined,
+    // TASK-215: the public publishable key the embedded response hands to the browser.
+    STRIPE_PUBLISHABLE_KEY: "pk_test_dummy_pk",
+    NODE_ENV: "test",
   },
 }));
 
@@ -71,7 +74,13 @@ const lastParams = (): any => create.mock.calls[create.mock.calls.length - 1][0]
 
 beforeEach(() => {
   create.mockClear();
-  create.mockResolvedValue({ url: "https://checkout.stripe.com/c/pay/test_123" });
+  // A created session carries BOTH a hosted url and an embedded client_secret in the mock so
+  // either mode can be exercised; the endpoint reads only the field for the requested uiMode.
+  create.mockResolvedValue({
+    id: "cs_test_123",
+    url: "https://checkout.stripe.com/c/pay/test_123",
+    client_secret: "cs_test_secret_123",
+  });
   mockConfig.STRIPE_DONATION_PRODUCT = undefined;
 });
 
@@ -710,6 +719,99 @@ describe("POST /api/checkout-session — email pre-fill (TASK-203)", () => {
   it("pre-fills for a monthly gift too", async () => {
     await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "ada@example.com" });
     expect(lastParams().customer_email).toBe("ada@example.com");
+  });
+});
+
+describe("POST /api/checkout-session — embedded ui mode (TASK-215)", () => {
+  it("returns { clientSecret, publishableKey } and no url for uiMode='embedded'", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: false,
+      email: "donor@example.com",
+      uiMode: "embedded",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { clientSecret?: string; publishableKey?: string; url?: string };
+    expect(body.clientSecret).toBe("cs_test_secret_123");
+    expect(body.publishableKey).toBe("pk_test_dummy_pk");
+    expect(body.url).toBeUndefined();
+  });
+
+  it("sets ui_mode='embedded_page' + a return_url carrying {CHECKOUT_SESSION_ID}, and omits success_url/cancel_url", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "embedded" });
+    const p = lastParams();
+    // Stripe SDK enum: the inline UI is "embedded_page"; the hosted redirect is the unset default.
+    expect(p.ui_mode).toBe("embedded_page");
+    // The return_url reuses the SAME on-site base as the hosted success URL and carries the session
+    // id template Stripe substitutes on redirect (the braces must NOT be URL-encoded).
+    expect(p.return_url).toBe("https://nbcc.test/donate/thank-you?session_id={CHECKOUT_SESSION_ID}");
+    expect(p.success_url).toBeUndefined();
+    expect(p.cancel_url).toBeUndefined();
+  });
+
+  it("keeps the hosted redirect { url } as the default when uiMode is absent (unchanged)", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
+    const body = res.body as { url?: string; clientSecret?: string };
+    expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_123");
+    expect(body.clientSecret).toBeUndefined();
+    const p = lastParams();
+    expect(p.ui_mode).toBeUndefined();
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you");
+    expect(p.cancel_url).toBe("https://nbcc.test/donate");
+  });
+
+  it("returns { url } for an explicit uiMode='hosted' (byte-for-byte the existing behaviour)", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "hosted" });
+    const body = res.body as { url?: string; clientSecret?: string };
+    expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_123");
+    expect(body.clientSecret).toBeUndefined();
+    expect(lastParams().ui_mode).toBeUndefined();
+  });
+
+  it("stamps IDENTICAL metadata, line_items, mode and customer_email across hosted and embedded", async () => {
+    // The webhook + confirmation email depend ONLY on the session metadata/line-items/mode, so the
+    // two UI modes must differ solely in the redirect surface. A gift-aided monthly gift exercises
+    // the richest metadata path (wording snapshot + declaration + scope).
+    const bodyBase = {
+      mode: "monthly" as const,
+      plan: "gold" as const,
+      amount: 5000,
+      giftAid: true,
+      ageConfirmed: true,
+      email: "ada@example.com",
+      fullName: "Ada Lovelace",
+      declaration: {
+        firstName: "Ada",
+        lastName: "Lovelace",
+        houseNameNumber: "12",
+        address: "Analytical Avenue, London",
+        postcode: "SW1A 1AA",
+        nonUk: false,
+      },
+    };
+    await run({ ...bodyBase }); // hosted (default)
+    const hosted = lastParams();
+    await run({ ...bodyBase, uiMode: "embedded" }); // embedded
+    const embedded = lastParams();
+    expect(embedded.metadata).toEqual(hosted.metadata);
+    expect(embedded.line_items).toEqual(hosted.line_items);
+    expect(embedded.mode).toEqual(hosted.mode);
+    expect(embedded.customer_email).toEqual(hosted.customer_email);
+    expect(embedded.payment_method_types).toEqual(hosted.payment_method_types);
+  });
+
+  it("validates the body the same way in embedded mode (monthly not confirming 18+ is 400, never calls Stripe)", async () => {
+    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "embedded" });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown uiMode with 400 and never calls Stripe", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "popup" });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
   });
 });
 

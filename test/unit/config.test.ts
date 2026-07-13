@@ -13,6 +13,8 @@ const validEnv = (): Record<string, string> => ({
   EXTERNAL_API_TWO_KEY: "k",
   // Stripe checkout (TASK-037, REQ-028/REQ-029).
   STRIPE_SECRET_KEY: "sk_test_123",
+  // Publishable key (TASK-215): public, non-secret; required so app-boot fails fast if unset.
+  STRIPE_PUBLISHABLE_KEY: "pk_test_123",
   STRIPE_SUCCESS_URL: "https://example.org/donate/thank-you",
   STRIPE_CANCEL_URL: "https://example.org/donate",
   STRIPE_PRICE_BRONZE: "price_bronze",
@@ -45,6 +47,7 @@ describe("config schema", () => {
 describe("config schema — Stripe checkout keys (REQ-028/REQ-029)", () => {
   const REQUIRED = [
     "STRIPE_SECRET_KEY",
+    "STRIPE_PUBLISHABLE_KEY",
     "STRIPE_SUCCESS_URL",
     "STRIPE_CANCEL_URL",
     "STRIPE_PRICE_BRONZE",
@@ -62,6 +65,10 @@ describe("config schema — Stripe checkout keys (REQ-028/REQ-029)", () => {
 
   it("rejects an empty STRIPE_SECRET_KEY (a secret must be non-empty)", () => {
     expect(configSchema.safeParse({ ...validEnv(), STRIPE_SECRET_KEY: "" }).success).toBe(false);
+  });
+
+  it("rejects an empty STRIPE_PUBLISHABLE_KEY (required, non-empty) (TASK-215)", () => {
+    expect(configSchema.safeParse({ ...validEnv(), STRIPE_PUBLISHABLE_KEY: "" }).success).toBe(false);
   });
 
   it.each(["STRIPE_SUCCESS_URL", "STRIPE_CANCEL_URL"])("validates %s as a URL", (key) => {

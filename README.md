@@ -519,6 +519,53 @@ Semantic `<section>` named by its `<h2>` (REQ-032); copy uses "give once"/"give
 monthly" and "NBCC", dash-free (REQ-031). Verified by
 `test/unit/give-widget.test.ts` (static markup + the toggle behaviour in jsdom).
 
+### Donate form redesign (TASK-204)
+
+The donate page was restyled to an approved mockup and given a handful of
+behaviour changes. This is the current shape of the give card; the REQ sections
+below describe the underlying contract, which is **unchanged** (every id, name and
+`data-*` the `startCheckout` payload and the unit tests rely on is preserved).
+
+- **Frequency toggle is monthly first.** The segmented pill now reads **"Donate
+  monthly"** (left, the default/active) then **"Donate once"** (right). `initGiveToggle`
+  keys off ids/`aria-pressed`, so DOM order is free; monthly stays the default
+  (`#giveMonthly aria-pressed="true"`, `#tiersMonthly` visible, `#tiersOnce` hidden).
+- **Amount tiers in a row.** `.give-tiers` is a four-column grid (two columns
+  ≤680px); each tile is compact and centred, and the selected tile is **filled
+  Holly Green** (`--holly` background, `--cream` text). The per-tile head/description
+  are hidden in favour of a shared live impact card (below). **"Most popular"** pills
+  sit on **both** `£25` tiles (one off and monthly `Silver`).
+- **Live impact card.** A `.give-impact` card (`#giveImpactText`) below the tiers
+  updates on tier/frequency change from a non-definitive impact map in
+  `initGiveSteps` — always "could help …", never "£X provides Y" (Code of Fundraising
+  Practice). The `£50` tier is pre-selected on load so the card, summary and Gift
+  Aid uplift are populated (works without JS via the visible default copy).
+- **Tiers select without advancing.** A tier tap now SELECTS (updates the impact
+  card) rather than jumping to step 2; a prominent **"Donate now"** CTA
+  (`[data-give-next]`) advances. The custom-amount "Donate" button still one-taps,
+  and typing a custom amount selects it.
+- **Page 2 opens with a summary.** A `.give-summary` band shows **"You are donating
+  £X"** (`#giveSummaryAmount`) with a **"Change"** control (`[data-give-prev]`) back to
+  step 1; `initGiveSteps` fills the amount from the selected tier or custom amount.
+- **Prominent donor type, nothing preselected.** The "Who is this gift from" cards
+  ship with **neither** radio `checked`; both carry `required`+`aria-required` and
+  `initGiveSteps`' step-2 `validate()` (now handles radio/checkbox groups) blocks
+  **Continue** until one is picked. The business card is colour-accented (`--tan`).
+- **Gift Aid sells the uplift.** The callout leads with **"Make your £X worth £Y"**
+  (`#giftAidHeadline`) and a `£X → £Y` `+£Z` badge (`initGiveSteps` computes the 25%),
+  keeping the `#giftAid` checkbox, the verbatim declaration and the TASK-198 gating
+  intact. Holly *text* uses `--holly-dark` (the `brand-colours` guard forbids `--holly`
+  text on light surfaces); the block stays token-only.
+- **Clear newsletter opt-in.** The `emailConsent` capture is presented as a distinct
+  **"Add me to our donor newsletter … Unsubscribe anytime"** block (still the same
+  `emailConsent` field, still inside `.give-contact`, never pre-ticked).
+- **Wording.** Donor-facing copy prefers "Donate"; step 1 asks **"How much would you
+  like to donate?"**; the primary CTA reads **"Donate now"**.
+
+Verified by the give/gift-aid/donor-type unit tests (updated to the new intent) and
+by driving the wizard in a browser (select/advance, frequency switch, donor-type
+gating, Change, and the live impact/summary/Gift-Aid updates).
+
 ### Give once tiers (REQ-021)
 
 The give-once amounts are mounted into the shell's `#tiersOnce` container
@@ -527,9 +574,9 @@ choose-your-own-amount field, laid out on the shared `.give-tiers` grid (two
 columns, collapsing to one ~360px). Each amount is a `.card.tier.give-tier`
 `<button>` — reusing the `.card`/`.tier` surface (REQ-009) and the hover-lift
 (REQ-008) — showing a Playfair crimson `.give-amount` and a `.give-tier-desc`:
-**£10** (cosy essentials), **£25** (towards a Red Bag, marked **"Most chosen"**
-via a floating `.give-flag` on the crimson-outlined `.is-featured` tile), **£50**
-(one full Red Bag) and **£100** (a whole family). The custom option is a
+**£10** (cosy essentials), **£25** (towards a Red Bag, marked **"Most popular"**
+via a floating `.give-flag` on the crimson-outlined `.is-featured` tile, TASK-204),
+**£50** (one full Red Bag) and **£100** (a whole family). The custom option is a
 full-width `.give-tier-custom` card with a real `<label for="customAmount">` tied
 to a number `#customAmount` input (REQ-032). Token-only colours, no hex/rgb
 outside `:root`; copy is dash-free and uses "NBCC" (REQ-031). These one-off
@@ -550,9 +597,9 @@ CSS block adds only the monthly-specific pieces: the `.give-tier-name`, the
 `.give-tier-head` headline, and the `.give-other` contact line. The four leaflet
 tiers carry their exact copy and order: **Bronze £10 per month** ("Building
 towards Christmas joy"), **Silver £25 per month** ("Halfway to a Red Bag Full of
-Joy"), **Gold £50 per month** ("One Christmas made brighter", marked **"Around
-one Red Bag"** on the featured tile), and **Platinum £100 per month** ("More joy,
-every month"), each with its leaflet description. A `.give-other` line links to
+Joy", marked **"Most popular"** on the `.is-featured` tile, TASK-204), **Gold £50
+per month** ("One Christmas made brighter"), and **Platinum £100 per month** ("More
+joy, every month"), each with its leaflet description. A `.give-other` line links to
 `mailto:giving@nbcc.scot` for other monthly amounts. Token-only
 colours, no hex/rgb outside `:root`; copy is dash-free and uses "NBCC" / "per
 month" (REQ-031). Each tile now carries the `data-mode`/`data-plan`/`data-amount`
@@ -603,10 +650,11 @@ Verified by `test/unit/gift-aid.test.ts`.
 
 At the top of the give-card's `.give-main` column, above the once/monthly toggle,
 the tiers and the Gift Aid callout, a `.give-donor` `<fieldset>` (`DONOR TYPE` CSS
-block) asks **"Are you donating as an individual or on behalf of a business?"** —
-two native radios (`#donorIndividual` / `#donorBusiness`, each with a real
-`<label for>`, REQ-032) defaulting to **individual**, so the Gift Aid path works
-without JS. Helper text explains a **sole trader** and **business partners** are
+block) asks **"Who is this gift from, an individual or a business?"** — two native
+radios (`#donorIndividual` / `#donorBusiness`, each with a real `<label for>`,
+REQ-032). **TASK-204:** neither is preselected; both carry `required`+`aria-required`
+and the wizard's step-2 `validate()` blocks Continue until the donor picks (the
+business card is colour-accented). Helper text explains a **sole trader** and **business partners** are
 individuals in law and keep Gift Aid, while only an **incorporated company (Ltd,
 PLC, LLP)** takes the path with no Gift Aid. An optional business-name field
 (`#businessName`, a real `<label for>`) is a **Donors Page display label only** and

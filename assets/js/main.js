@@ -1166,18 +1166,86 @@
     // ---- tier selection (step 1): select an amount rather than checking out ----
     var choosers = Array.prototype.slice.call(root.querySelectorAll(".give-tier, .give-custom-go"));
     function clearSelection() { choosers.forEach(function (b) { b.classList.remove("is-selected"); }); }
-    function customPence() {
-      // Read the custom-amount input in the currently visible tier set (once XOR monthly),
+    function customInput() {
+      // The custom-amount input in the currently visible tier set (once XOR monthly),
       // falling back to the once input by id for older markup.
-      var el = root.querySelector(".give-tiers:not([hidden]) .give-custom-input") || doc.getElementById("customAmount");
+      return root.querySelector(".give-tiers:not([hidden]) .give-custom-input") || doc.getElementById("customAmount");
+    }
+    function customPence() {
+      var el = customInput();
       var v = el ? parseFloat(el.value) : NaN;
       return isFinite(v) && v > 0 ? Math.round(v * 100) : 0;
     }
-    function select(btn) { clearSelection(); btn.classList.add("is-selected"); selected = btn; hideErr(1); }
+
+    // ---- live impact / summary / Gift Aid uplift (TASK-204) ----
+    // Non-definitive impact copy only (Code of Fundraising Practice): "could help ...",
+    // never "£X provides Y". Keyed by give mode + amount (pence); custom amounts use a
+    // generic line. The visible default in donate.html covers the no-JS case.
+    var IMPACT = {
+      monthly: {
+        1000: "could help build towards the comfort and thoughtful gifts that make someone feel remembered.",
+        2500: "could help bring NBCC closer to a Red Bag Full of Joy each month.",
+        5000: "could help provide support around the value of a Red Bag Full of Joy each month.",
+        10000: "could help reach more people, around the value of two Red Bags Full of Joy each month.",
+      },
+      once: {
+        1000: "could help provide cosy essentials like a hat, gloves, hot chocolate and treats.",
+        2500: "could go towards a Red Bag Full of Joy.",
+        5000: "could help provide around the value of a full Red Bag Full of Joy.",
+        10000: "could help bring Christmas joy to someone who would go without.",
+      },
+    };
+    function fmtGBP(pence) {
+      var pounds = pence / 100;
+      return "£" + (pounds % 1 === 0 ? pounds.toFixed(0) : pounds.toFixed(2));
+    }
+    function selectedMode() {
+      if (selected) return selected.getAttribute("data-mode") || "monthly";
+      var pressed = doc.querySelector('.give-mode[aria-pressed="true"]');
+      return pressed ? pressed.getAttribute("data-mode") : "monthly";
+    }
+    function selectedPence() {
+      if (!selected) return 0;
+      return parseInt(selected.getAttribute("data-amount"), 10) || customPence();
+    }
+    function setText(id, text) { var el = doc.getElementById(id); if (el) el.textContent = text; }
+    function updateSummary() {
+      var pence = selectedPence();
+      var mode = selectedMode();
+      var amountStr = fmtGBP(pence);
+      var suffix = mode === "monthly" ? " a month" : "";
+      // page-2 summary
+      setText("giveSummaryAmount", (pence ? amountStr : "£0") + suffix);
+      // live impact card
+      var impactEl = doc.getElementById("giveImpactText");
+      if (impactEl) {
+        var line =
+          (IMPACT[mode] && IMPACT[mode][pence]) ||
+          "could help bring comfort, dignity and joy to someone this Christmas.";
+        impactEl.innerHTML = "<b>" + (pence ? amountStr + suffix : "Your donation") + "</b> " + line;
+      }
+      // Gift Aid uplift (25% of the donation, straight from HMRC)
+      if (pence) {
+        setText("giftAidHeadline", "Make your " + amountStr + " worth " + fmtGBP(pence * 1.25));
+        setText("giftAidFrom", amountStr);
+        setText("giftAidTo", fmtGBP(pence * 1.25));
+        setText("giftAidPlus", "+" + fmtGBP(pence * 0.25));
+      }
+    }
+    function select(btn) { clearSelection(); btn.classList.add("is-selected"); selected = btn; hideErr(1); updateSummary(); }
+    // Default the selection to the featured amount (the £50 tier, index 2) in the visible tier
+    // set, so the impact card, summary and Gift Aid uplift are populated from the start.
+    function selectDefault() {
+      var set = root.querySelector(".give-tiers:not([hidden])");
+      var tiles = set ? set.querySelectorAll(".give-tier") : [];
+      if (tiles.length) select(tiles[Math.min(2, tiles.length - 1)]);
+      else { selected = null; clearSelection(); updateSummary(); }
+    }
 
     choosers.forEach(function (btn) {
       btn.addEventListener("click", function () {
         if (btn.classList.contains("give-custom-go")) {
+          // The custom "Donate" button both selects the typed amount and advances.
           if (!customPence()) {
             showErr(1);
             var cb = btn.closest ? btn.closest(".give-tier-custom") : null;
@@ -1185,14 +1253,38 @@
             if (ci && ci.focus) ci.focus();
             return;
           }
+          select(btn);
+          go(2, 1);
+          return;
         }
+        // TASK-204: a tier tap SELECTS and updates the live impact/summary, but does NOT
+        // advance — the donor confirms with the "Donate now" button, so the impact card
+        // updates as they compare amounts. Selecting a tier clears any typed custom amount.
+        var typed = customInput();
+        if (typed) typed.value = "";
         select(btn);
-        go(2, 1); // one tap picks the amount and moves on
       });
     });
-    // switching once/monthly changes the visible tier set: clear any selection
+    // Typing a custom amount selects that amount (clearing any tier selection); emptying it
+    // drops the selection again.
+    Array.prototype.forEach.call(root.querySelectorAll(".give-custom-input"), function (inp) {
+      inp.addEventListener("input", function () {
+        var container = inp.closest ? inp.closest(".give-tier-custom") : null;
+        var goBtn = container ? container.querySelector(".give-custom-go") : null;
+        if (!goBtn) return;
+        if (parseFloat(inp.value) > 0) {
+          select(goBtn);
+        } else if (selected === goBtn) {
+          selected = null;
+          clearSelection();
+          updateSummary();
+        }
+      });
+    });
+    // switching once/monthly changes the visible tier set: re-select the default tier there
+    // so the impact/summary/Gift Aid stay populated for the new mode.
     Array.prototype.forEach.call(root.querySelectorAll(".give-mode"), function (m) {
-      m.addEventListener("click", function () { selected = null; clearSelection(); });
+      m.addEventListener("click", function () { selectDefault(); });
     });
 
     // ---- validation: required, visible, enabled controls in a step ----
@@ -1202,10 +1294,26 @@
       var ok = true, firstBad = null;
       ctrls.forEach(function (c) {
         if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
-        var val = (c.value || "").trim();
-        var bad = !val;
-        if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
-        var field = (c.closest && (c.closest(".give-field") || c.closest(".field"))) || null;
+        var bad;
+        if (c.type === "radio" || c.type === "checkbox") {
+          // TASK-204: a required radio group (e.g. the donor-type choice, which now ships with
+          // nothing preselected) is satisfied only when one option in its name group is checked;
+          // a lone required checkbox (the 18+ confirmation) must itself be ticked. This blocks
+          // Continue until the donor actively chooses, instead of failing later at Stripe.
+          var group = root.querySelectorAll('input[name="' + c.name + '"]');
+          bad = !Array.prototype.some.call(group, function (g) { return g.checked; });
+        } else {
+          var val = (c.value || "").trim();
+          bad = !val;
+          if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
+        }
+        var field =
+          (c.closest &&
+            (c.closest(".give-field") ||
+              c.closest(".field") ||
+              c.closest(".give-donor-options") ||
+              c.closest(".give-check"))) ||
+          null;
         if (field) field.classList.toggle("invalid", bad);
         c.setAttribute("aria-invalid", String(bad));
         if (bad) { ok = false; if (!firstBad) firstBad = c; }
@@ -1281,6 +1389,7 @@
     var payBtn = root.querySelector("[data-give-pay]");
     if (payBtn) payBtn.addEventListener("click", pay);
 
+    selectDefault(); // pre-select the featured amount so the impact/summary/Gift Aid are populated
     go(1, 0, true); // initial state, no scroll/focus
   }
 

@@ -141,7 +141,12 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       var section = b.getAttribute("data-view");
       if (section === "overview") return;
-      b.hidden = !canView(section);
+      // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
+      // data-view - e.g. Business supporters is an Editor+ area gated on donations:edit, matching its
+      // server route (authorizeSection "donations" "edit"). Everything else gates on view of its own
+      // section, as before.
+      var editGate = b.getAttribute("data-edit-gate");
+      b.hidden = editGate ? !canEdit(editGate) : !canView(section);
     });
     var teamNavGroup = el("teamNavGroup");
     if (teamNavGroup) teamNavGroup.hidden = !canView("team");
@@ -310,6 +315,7 @@
     } else if (name === "claims") loadClaims();
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
+    else if (name === "fulfilments") loadFulfilments();
     else if (name === "stories") loadStories();
     else if (name === "contact") loadContact();
     else if (name === "newsletter") loadNewsletters();
@@ -680,6 +686,122 @@
       })
       .catch(function () {
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+
+  // ---- business supporters: fulfilment list + mark-done actions (TASK-208, over TASK-207's API) ----
+  // Editor+ area (the whole tab is gated on donations:edit in the nav via data-edit-gate, matching the
+  // server's authorizeSection("donations","edit") on both endpoints). Lists each business supporter's
+  // fulfilment record (GET /api/admin/fulfilments), showing the recognition band, whether they have
+  // submitted their thank-you preferences and a compact view of those prefs, and the five recognition
+  // status flags. Each not-yet-done flag is a button that marks it done
+  // (POST /api/admin/fulfilments/:id/mark) and then refetches the list — mirroring the refetch-after-
+  // write pattern of the GASDS / Claims list actions (the mark is audited server-side).
+  var FULFILMENT_FLAGS = [
+    { key: "certificate_sent", label: "Certificate sent" },
+    { key: "certificate_posted", label: "Posted" },
+    { key: "badge_sent", label: "Badge sent" },
+    { key: "social_done", label: "Social done" },
+    { key: "added_to_supporters", label: "Added to Supporters" },
+  ];
+  function fulfilmentStatus(msg) {
+    var s = el("fulfilmentActionStatus");
+    if (s) s.textContent = msg || "";
+  }
+  function fulfilmentBandPill(band) {
+    // band is always set on a fulfilment record (NOT NULL, set at insert); the empty fallback is
+    // purely defensive.
+    return band ? '<span class="admin-pill">' + H.escapeHtml(cap(band)) + "</span>" : "";
+  }
+  function fulfilmentBusinessCell(r) {
+    var primary = r.business_name || r.donor_name || "Donor " + r.donor_id;
+    var out = '<span class="admin-fulfil-biz">' + H.escapeHtml(primary) + "</span>";
+    if (r.business_name && r.donor_name && r.donor_name !== r.business_name) {
+      out += '<span class="admin-fulfil-sub">' + H.escapeHtml(r.donor_name) + "</span>";
+    }
+    return out;
+  }
+  function fulfilmentPrefsCell(r) {
+    if (!r.captured_at) return '<span class="admin-pill is-internal">Awaiting preferences</span>';
+    var wants = [];
+    if (r.list_on_supporters) wants.push("Listing");
+    if (r.want_social) wants.push("Social");
+    if (r.want_badge) wants.push("Badge");
+    if (r.want_certificate) {
+      wants.push("Certificate" + (r.certificate_delivery ? " (" + cap(r.certificate_delivery) + ")" : ""));
+    }
+    var pills = wants.length
+      ? wants
+          .map(function (w) {
+            return '<span class="admin-pill">' + H.escapeHtml(w) + "</span>";
+          })
+          .join(" ")
+      : '<span class="admin-fulfil-sub">No extras requested</span>';
+    var credit = r.credit_name
+      ? '<span class="admin-fulfil-credit">Credit as: ' + H.escapeHtml(r.credit_name) + "</span>"
+      : "";
+    return (
+      '<div class="admin-fulfil-prefs"><span class="admin-pill is-replied">Submitted ' + H.fmtDate(r.captured_at) +
+      "</span>" + credit + '<span class="admin-fulfil-wants">' + pills + "</span></div>"
+    );
+  }
+  function fulfilmentFlagsCell(r) {
+    var canWrite = canEdit("donations");
+    var items = FULFILMENT_FLAGS.map(function (f) {
+      if (r[f.key]) return '<span class="admin-pill is-replied" title="Done">' + f.label + "</span>";
+      if (!canWrite) return '<span class="admin-pill is-internal" title="Not done">' + f.label + "</span>";
+      return (
+        '<button class="admin-link" type="button" data-fulfil-id="' + r.id + '" data-fulfil-mark="' + f.key +
+        '" title="Mark as done" aria-label="Mark done: ' + f.label + '">' + f.label + "</button>"
+      );
+    }).join(" ");
+    return '<div class="admin-fulfil-flags">' + items + "</div>";
+  }
+  function fulfilmentsTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No business supporters yet.</p>';
+    var body = rows
+      .map(function (r) {
+        return (
+          "<tr><td>" + fulfilmentBusinessCell(r) + "</td><td>" + fulfilmentBandPill(r.band) + "</td><td>" +
+          fulfilmentPrefsCell(r) + "</td><td>" + fulfilmentFlagsCell(r) + "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>Business</th><th>Band</th><th>Preferences</th>' +
+      "<th>Fulfilment</th></tr></thead><tbody>" + body + "</tbody></table>"
+    );
+  }
+  function loadFulfilments() {
+    var wrap = el("fulfilmentsTable");
+    if (!wrap) return;
+    fulfilmentStatus("");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/fulfilments")
+      .then(j)
+      .then(function (d) {
+        wrap.innerHTML = fulfilmentsTable(d.results || []);
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Business supporters are unavailable.</p>';
+      });
+  }
+  function markFulfilment(id, flag) {
+    fulfilmentStatus("");
+    authFetch("/api/admin/fulfilments/" + id + "/mark", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flag: flag }),
+    })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (out) {
+        if (out) loadFulfilments();
+        else fulfilmentStatus("Could not update that supporter. Please try again.");
+      })
+      .catch(function () {
+        fulfilmentStatus("Could not update that supporter. Please try again.");
       });
   }
 
@@ -2681,6 +2803,8 @@
       if (sub) return submitBatch(sub.getAttribute("data-submit-batch"));
       var exp = t.closest("[data-export-batch]");
       if (exp) return exportBatch(exp.getAttribute("data-export-batch"));
+      var fulfil = t.closest("[data-fulfil-mark]");
+      if (fulfil) return markFulfilment(fulfil.getAttribute("data-fulfil-id"), fulfil.getAttribute("data-fulfil-mark"));
     });
   }
 

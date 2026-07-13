@@ -438,3 +438,13 @@
 .nl-modal-confirm:disabled, .nl-modal-cancel:disabled { opacity: .55; cursor: default; }
 .nl-modal-cancel:focus-visible, .nl-modal-confirm:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .ty-foot-legal{text-align:center;font-family:var(--font-body);font-weight:400;font-size:7.5pt;color:var(--cream-82);margin-top:3mm}
+
+/* Business-supporter fulfilment tab (TASK-208). The Preferences + Fulfilment cells pack several pills
+   and mark-done buttons, so they opt out of the table's nowrap and wrap within a capped width. Reuses
+   the shared .admin-pill / .admin-link vocabulary; token-only colours. */
+.admin-fulfil-biz{display:block;font-weight:600;color:var(--slate)}
+.admin-fulfil-sub{display:block;font-size:.78rem;color:var(--slate-soft)}
+.admin-fulfil-prefs{display:flex;flex-direction:column;gap:6px;white-space:normal;max-width:340px}
+.admin-fulfil-credit{font-size:.8rem;color:var(--slate-soft)}
+.admin-fulfil-wants{display:flex;flex-wrap:wrap;gap:5px}
+.admin-fulfil-flags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;white-space:normal;max-width:340px}

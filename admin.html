@@ -79,6 +79,7 @@
               <li><button class="admin-nav-link" type="button" data-view="claims">Claims</button></li>
               <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="fulfilments" data-edit-gate="donations">Business supporters</button></li>
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
@@ -189,6 +190,16 @@
             <section class="admin-view" id="view-subscriptions" aria-labelledby="subs-heading" hidden>
               <h2 id="subs-heading">Subscriptions</h2>
               <div class="admin-table-wrap" id="subsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Business supporters (TASK-208): fulfilment records for monthly business gifts, and the
+                 Editor+ mark buttons that record each recognition step as done. Reads/writes the
+                 charity DB's business_supporter_fulfilment table via /api/admin/fulfilments (TASK-207). -->
+            <section class="admin-view" id="view-fulfilments" aria-labelledby="fulfilments-heading" hidden>
+              <h2 id="fulfilments-heading">Business supporters</h2>
+              <p class="admin-view-intro">Businesses giving monthly earn a recognition band and pick how they would like to be thanked. This is where the team fulfils that: check what each supporter asked for, then mark each step done once it is sorted. Every mark is logged to the Audit trail.</p>
+              <div class="admin-table-wrap" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="admin-action-status" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
             </section>
 
             <!-- Stories: My Story submissions from the separate stories database (Task C). -->

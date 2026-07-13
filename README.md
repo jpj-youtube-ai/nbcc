@@ -1385,7 +1385,7 @@ export is fetched with the bearer token and saved via a blob download (a plain l
 
 **Nav grouping (TASK-171, extended by the Team tab below).** The sidebar nav links are clustered
 under presentational group labels — **Monitor** (Overview, Search), **Giving** (Donations, Claims,
-GASDS, Subscriptions), **Content** (Stories, Partners, Contact form, Newsletter, Thank you),
+GASDS, Subscriptions, Business supporters), **Content** (Stories, Partners, Contact form, Newsletter, Thank you),
 **Governance** (Audit) and **Admin** (Team) — so related tools sit together instead of one flat
 list. Purely cosmetic: the labels are `aria-hidden` `<li>`s (`.admin-nav-group`) that leave the
 `.admin-nav-link` buttons, their order and `data-view` targets untouched, so
@@ -2106,6 +2106,21 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   any SQL is built, so no arbitrary column can ever be written (an unknown flag → **400**, an unknown id
   → **404**). Covered by `test/unit/admin-fulfilment-api.test.ts` (auth 401/403, list, mark-flips-and-
   audits, allowlist).
+  **TASK-208** adds the **admin UI** on top of that API: a **Business supporters** nav tab (in the
+  **Giving** group, `admin.html` view `view-fulfilments`, `loadFulfilments` in
+  `assets/js/admin/app.js`) that lists each supporter's fulfilment record — business name (falling back
+  to the donor name), recognition band, whether they have submitted their thank-you preferences and a
+  compact view of those prefs (credit name, wanted listing/social/badge/certificate + delivery), and
+  the five recognition status flags. Each not-yet-done flag is a **mark-done button**
+  (`Certificate sent`/`Posted`/`Badge sent`/`Social done`/`Added to Supporters`) that POSTs the flag and
+  refetches the list (mirroring the GASDS/Claims refetch-after-write actions); a done flag shows as a
+  settled pill and drops its button. The tab is an **Editor+** area: it authenticates with the same
+  bearer session as every other admin call (`authFetch`), and is hidden in the nav below edit level via
+  a new `data-edit-gate="donations"` attribute on the nav link (honoured by `applyNavFiltering`),
+  matching the server's `donations:edit` gate — so a Viewer never sees it. Driven by
+  `test/unit/admin-app.test.ts` (jsdom: renders the rows, a mark button POSTs the right flag and the row
+  updates) and guarded in `test/unit/admin-shell.test.ts` (nav order + the Editor+ gating wiring). No
+  new backend, no new config.
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,

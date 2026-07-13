@@ -2017,6 +2017,25 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `giftSummary`; unit-tested DB-free in `test/unit/thank-you-model.test.ts`); write/read layer
   `src/db/thank-you.ts` (`recordThankYouSent` via `writeWithAudit`, `hasBeenThanked`,
   `listThankYouSent`).
+- **`business_supporter_fulfilment`** — one thank-you & fulfilment record per business supporter
+  (additive migration `1783961442118_business-supporter-fulfilment.js`, TASK-205 — the **data-model
+  foundation** the later business-supporter PRs build on: thank-you page capture, reminders, admin
+  fulfilment UI, backfill). A **UNIQUE** `donor_id` FK (`onDelete RESTRICT`, so one row per donor and
+  the record is protected like the other donor-referencing financial rows — the UNIQUE constraint
+  supplies the `donor_id` index), the recognition `band` (`bronze`/`silver`/`gold`/`platinum`, CHECK),
+  the **captured preferences** the business submits on the thank-you form (`credit_name`, `website`,
+  `socials`, `list_on_supporters` opt-in, `want_social`/`want_badge`/`want_certificate`,
+  `certificate_delivery` `download`/`post`, `certificate_address`, `consent_featured`, and
+  `captured_at` — NULL until they submit), the **admin fulfilment flags** (booleans only —
+  `certificate_sent`/`certificate_posted`/`badge_sent`/`social_done`/`added_to_supporters`; who/when
+  each was done is recorded separately in the append-only `audit_log`), and the reminder-tracking
+  `reminder_5_at`/`reminder_14_at`. Additive-only: every column is nullable or defaulted, no existing
+  table touched (golden rule 2). The pure banding + perk model is `src/donors/fulfilment.ts`
+  (`bandForMonthlyAmount` maps a monthly gift in pence to a band — below £10/mo is not banded;
+  `bandHasPlatinumPerks`; `perksForBand` — every band gets the supporters listing (subject to opt-in)
+  + our newsletter, platinum additionally the social thank-you, digital badge and certificate). All
+  perks are **£0-value recognition perks**, so nothing here affects the HMRC Gift-Aid benefit cap.
+  No pool/config/clock, so it is unit-tested DB-free (`test/unit/fulfilment-model.test.ts`).
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,

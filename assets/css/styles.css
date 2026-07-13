@@ -381,7 +381,7 @@ h2.h-lg{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
 .toggle button[aria-pressed="true"],.give-mode[aria-pressed="true"],.give-mode.is-active{background:var(--crimson);color:var(--cream);box-shadow:var(--shadow-sm)}
 .mode-line{margin:18px 0 0;font-size:.95rem;color:var(--slate)}
 .mode-line b{color:var(--maroon)}
-.tiers,.give-tiers{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:22px}
+.tiers,.give-tiers{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
 .tier,.give-tier{position:relative;border:1.6px solid var(--line);border-radius:var(--radius);padding:22px;background:var(--cream);transition:border-color .18s,transform .15s,box-shadow .18s;display:flex;flex-direction:column;gap:6px;cursor:pointer;text-align:left;width:100%;font:inherit}
 .tier:hover,.give-tier:hover{border-color:var(--crimson);transform:translateY(-2px);box-shadow:var(--shadow-sm)}
 .tier .name,.give-tier-name{font-family:var(--font-head);font-size:1.35rem;font-weight:700}
@@ -551,12 +551,11 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-step-err{color:var(--maroon);font-weight:600;font-size:.9rem;margin:14px 0 0;display:none}
 .give-step-err.show{display:block}
 
-/* tier selection (wizard: select, not immediate checkout) */
-.give-tier.is-selected{border-color:var(--crimson);box-shadow:0 0 0 2px var(--crimson) inset,var(--shadow-sm)}
-.give-tier{padding-right:46px}
-.give-tier.is-selected::after{content:"\2713";position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:50%;background:var(--crimson);color:var(--cream);font-size:.8rem;display:flex;align-items:center;justify-content:center}
-/* nudge the checkmark below the "Most chosen" flag on featured tiers */
-.give-tier.is-featured.is-selected::after{top:20px}
+/* tier selection (wizard: select, not immediate checkout). TASK-204: the selected tier is
+   filled holly green (no checkmark badge); the tiles read as a compact centred row and the
+   per-tile description moves into the shared live impact card below the tiers. */
+.give-tier.is-selected{border-color:var(--holly);background:var(--holly);color:var(--cream);box-shadow:var(--shadow-sm)}
+.give-tier.is-selected .give-amount,.give-tier.is-selected .give-tier-name,.give-tier.is-selected .give-cadence{color:var(--cream)}
 .give-tier-custom{position:relative;border:1.6px dashed var(--line);border-radius:var(--radius);padding:20px;background:var(--cream);grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:end;gap:12px}
 .give-custom-label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px;width:100%}
 .give-custom-field{display:flex;align-items:center;gap:6px;flex:1;min-width:160px}
@@ -592,6 +591,70 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-review dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;color:var(--slate-soft);font-weight:600}
 .give-review dd{margin:0 0 10px;font-family:var(--font-head);font-weight:700;color:var(--maroon);font-size:1.15rem}
 .give-review dd:last-child{margin-bottom:0}
+
+/* =================================================================
+   TASK-204 donate redesign: monthly-first row tiers, live impact card,
+   page-2 summary, prominent donor type, newsletter opt-in, Gift Aid uplift.
+   All .giftaid-* rules stay token-only (guarded by gift-aid.test.ts).
+   ================================================================= */
+/* frequency toggle: monthly (left) / one off (right), full width, holly when active */
+.give-toggle{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:6px;background:var(--tint);margin-top:6px}
+.give-toggle .give-mode{padding:12px 10px;text-align:center}
+.give-toggle .give-mode[aria-pressed="true"],.give-toggle .give-mode.is-active{background:var(--holly)}
+/* compact centred tiles in a row; per-tile head/description move to the impact card */
+.give-card .give-tier{align-items:center;text-align:center;justify-content:center;padding:16px 8px;gap:2px;min-height:94px}
+.give-card .give-tier:not(.is-selected):hover{border:1.6px solid var(--tan)}
+.give-card .give-tier-name{font-size:.64rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate-soft);font-weight:700;margin-bottom:2px}
+.give-card .give-tier .give-price{flex-direction:column;align-items:center;gap:0}
+.give-card .give-tier .give-amount{font-size:1.5rem}
+.give-card .give-tier .give-cadence{font-size:.64rem}
+.give-card .give-tier-head,.give-card .give-tier-desc{display:none}
+.give-card .give-flag{left:50%;right:auto;transform:translateX(-50%)}
+/* prominent full-width choose-your-own amount (large serif field) */
+.give-tier-custom{background:var(--tint);border-style:solid;align-items:end}
+.give-custom-label{font-family:var(--font-head);font-size:1.05rem;color:var(--maroon)}
+.give-custom-field{border:2px solid var(--line);border-radius:12px;background:var(--white);overflow:hidden;padding:0;gap:0}
+.give-custom-field:focus-within{border:2px solid var(--holly)}
+.give-custom-currency{display:flex;align-items:center;align-self:stretch;padding:0 16px;background:var(--holly-soft);color:var(--maroon);font-size:1.5rem;border-right:1px solid var(--line)}
+.give-custom-input{border:0;border-radius:0;background:transparent;font-family:var(--font-head);font-size:1.5rem;color:var(--maroon);padding:12px 14px}
+.give-custom-input:focus{border:0}
+/* live impact summary card (updates on tier/frequency change) */
+.give-impact{display:flex;gap:14px;align-items:center;margin-top:18px;background:var(--tan-soft);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.give-impact-ic{flex:0 0 54px;height:54px;border-radius:50%;background:var(--holly-soft);display:grid;place-items:center;font-size:26px}
+.give-impact-text{margin:0;font-size:.94rem;color:var(--slate)}
+.give-impact-text b{color:var(--maroon)}
+/* step-1 primary CTA */
+.give-cta-row{margin-top:20px}
+.give-cta{width:100%;justify-content:center;font-size:1.05rem;padding:16px}
+.give-pay-note{text-align:center;font-size:.8rem;color:var(--slate-soft);margin:12px 0 0}
+/* page-2 summary band with a Change control back to step 1 */
+.give-summary{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--holly-soft);border:1px solid var(--holly);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px}
+.give-summary-label{display:block;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--holly-dark);font-weight:700}
+.give-summary-amount{font-family:var(--font-head);font-size:1.4rem;color:var(--maroon);font-weight:800;line-height:1.1}
+.give-summary-change{background:var(--white);border:1.6px solid var(--holly);color:var(--holly-dark);font-family:var(--font-body);font-weight:700;font-size:.9rem;border-radius:var(--radius-pill);padding:9px 18px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.give-summary-change:hover{background:var(--holly);color:var(--cream)}
+/* prominent donor-type cards; the business option is colour accented to draw the eye */
+.give-donor-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+.give-donor-cards .give-donor-option{display:flex;align-items:center;gap:10px;padding:15px 16px;background:var(--cream)}
+.give-donor-option--business{border:1.6px solid var(--tan);background:var(--tan-soft)}
+.give-donor-cards .give-donor-option:has(input:checked){border:1.6px solid var(--holly);background:var(--holly-soft)}
+@media(max-width:520px){.give-donor-cards{grid-template-columns:1fr}}
+/* clear, separate newsletter opt-in (still the emailConsent field) */
+.give-newsletter{border:1.6px solid var(--line);background:var(--tint);border-radius:12px;padding:2px 14px;margin:14px 0}
+.give-newsletter-check .give-check-text strong{display:block;color:var(--maroon)}
+/* Gift Aid callout reframed to sell the 25% uplift (token-only) */
+.giftaid{display:block;padding:18px 20px}
+.giftaid-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.giftaid-headline{font-family:var(--font-head);font-weight:800;color:var(--holly-dark);font-size:1.15rem}
+.giftaid-logo{font-family:var(--font-head);font-style:italic;color:var(--holly-dark);font-size:1.3rem;transform:rotate(-4deg);white-space:nowrap;opacity:.85}
+.giftaid-uplift{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 2px}
+.giftaid-from{font-family:var(--font-head);font-size:1.4rem;color:var(--slate-soft)}
+.giftaid-arrow{color:var(--holly-dark);font-size:1.2rem;font-weight:700}
+.giftaid-to{font-family:var(--font-head);font-size:1.9rem;color:var(--holly-dark);font-weight:800;line-height:1}
+.giftaid-badge{background:var(--holly);color:var(--cream);font-weight:700;font-size:.82rem;padding:5px 12px;border-radius:var(--radius-pill)}
+.giftaid-intro{margin:12px 0 0;font-size:.9rem;color:var(--slate)}
+.giftaid-check-row{display:flex;gap:12px;align-items:flex-start;margin-top:14px;background:var(--card);border:1.6px solid var(--holly);border-radius:12px;padding:14px;cursor:pointer}
+.giftaid-check-row .giftaid-check{margin-top:1px;accent-color:var(--holly-dark)}
 
 /* side panel (real donate .give-side already holly via base rule) */
 .give-side .eyebrow{color:var(--cream-82)}
@@ -647,7 +710,8 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
   .nav.open .burger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
   .nav.open .burger span:nth-child(2){opacity:0}
   .nav.open .burger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-  .pillars,.tiers,.give-tiers,.row2,.benefits{grid-template-columns:1fr}
+  .pillars,.tiers,.row2,.benefits{grid-template-columns:1fr}
+  .give-tiers{grid-template-columns:repeat(2,1fr)}
   .team{grid-template-columns:repeat(2,1fr)}
   footer .wrap{grid-template-columns:1fr}
   .crow{grid-template-columns:22px 1fr auto}

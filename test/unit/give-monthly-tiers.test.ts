@@ -61,6 +61,14 @@ describe("give monthly tiers (REQ-022)", () => {
     );
   });
 
+  it("marks the £25 (Silver) tier with a visible 'Most popular' marker (TASK-204)", () => {
+    const silver = tiers[1];
+    expect(norm(silver.querySelector(".give-amount")?.textContent)).toBe("£25");
+    const flag = silver.querySelector(".give-flag");
+    expect(flag).not.toBeNull();
+    expect(norm(flag?.textContent).toLowerCase()).toContain("most popular");
+  });
+
   it("carries a leaflet description on each tier (REQ-032)", () => {
     for (const t of tiers) {
       expect(t.tagName).toBe("BUTTON");

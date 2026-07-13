@@ -58,8 +58,9 @@ describe("give widget shell (REQ-020)", () => {
       expect(c.getAttribute("aria-pressed")).not.toBeNull();
       expect(c.getAttribute("aria-controls")).not.toBeNull();
     }
-    expect(norm(controls[0].textContent).toLowerCase()).toContain("once");
-    expect(norm(controls[1].textContent).toLowerCase()).toContain("monthly");
+    // TASK-204: monthly is on the LEFT (the default/active mode), one off on the RIGHT.
+    expect(norm(controls[0].textContent).toLowerCase()).toContain("monthly");
+    expect(norm(controls[1].textContent).toLowerCase()).toContain("once");
   });
 
   it("has both tier containers filled: #tiersOnce by REQ-021, #tiersMonthly by REQ-022", () => {

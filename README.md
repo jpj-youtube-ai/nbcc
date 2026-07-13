@@ -1171,6 +1171,7 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/me` | **implemented** | admin-management Phase 2 (TASK-186; any valid, non-disabled session; returns the caller's own effective permissions for nav filtering + write-control gating client-side) |
 | `GET /api/admin/fulfilments` | **implemented** | TASK-207 (Editor+ / `donations:edit`; list every business-supporter fulfilment record joined to its donor, most recent first) |
 | `POST /api/admin/fulfilments/:id/mark` | **implemented** | TASK-207 (Editor+ / `donations:edit`; set one of the five status flags true, audited `fulfilment.<flag>` in one transaction; unknown flag → 400, unknown id → 404) |
+| `POST /api/admin/business-supporters/backfill-invites` | **implemented** | TASK-214 (Editor+ / `donations:edit`; one-time, idempotent catch-up that emails the thank-you invite to un-invited business supporters — `invited_at IS NULL` + `captured_at IS NULL` + has email; stamps `invited_at` on each success so a repeat run sends 0; best-effort sends; `fulfilment.backfill_invites` audit; returns `{ pending, sent, failed }`) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -2228,6 +2229,38 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `test/unit/admin-app.test.ts` (jsdom: renders the rows, a mark button POSTs the right flag and the row
   updates) and guarded in `test/unit/admin-shell.test.ts` (nav order + the Editor+ gating wiring). No
   new backend, no new config.
+
+  **TASK-214** backfills the thank-you invite to business supporters who signed up **before** the
+  going-forward webhook auto-invite (TASK-213) shipped and so never got their link. The safety
+  mechanism is an **invite-tracking** column, **`invited_at timestamptz`** (nullable, no default,
+  additive migration `1783980218955_add-fulfilment-invited-at.js` — expand-contract, existing rows stay
+  NULL). `invited_at` is stamped `now()` the moment a record's invite is sent: the **webhook auto-invite
+  now calls `markFulfilmentInvited(fulfilmentId)` after a successful send** (still inside its best-effort
+  try, so a stamp failure never fails the webhook; a *failed* send leaves `invited_at` NULL so the
+  backfill catches it later), and the backfill does the same. `markFulfilmentInvited` is idempotent —
+  `UPDATE … SET invited_at = now() WHERE id = $1 AND invited_at IS NULL` — so re-running or a webhook
+  redelivery never re-stamps. `listUninvitedBusinessSupporters` (`src/db/fulfilment.ts`) returns exactly
+  the records that still need one: `invited_at IS NULL` **and** `captured_at IS NULL` (anyone who already
+  completed the thank-you page plainly already had the link) **and** a non-empty donor email **and** a
+  non-NULL `token`. The orchestrator `runBusinessInviteBackfill` (`src/business/backfill.ts`) is **pure
+  over injected seams** (list/send/mark/audit + the env-correct base + from + actor), so it is fully
+  DB-free and config-free and reuses the **same** `buildBusinessSupporterInviteEmail` builder as the
+  webhook: it walks the un-invited list **sequentially** (dozens of supporters at most; respects the
+  relay's rate limits), and for each **best-effort** builds + sends the invite (on `PORTAL_BASE_URL`,
+  From/Reply-To `GIVING_FROM_EMAIL`) and **only on a successful send** stamps it invited — one failure is
+  counted and never aborts the rest — then appends one `fulfilment.backfill_invites` audit row and
+  returns `{ pending, sent, failed }`. The admin trigger is **`POST /api/admin/business-supporters/backfill-invites`**
+  (Editor+ / `donations:edit`, same gate as the rest of the tab), surfaced in the **Business supporters**
+  tab as a **"Send catch up invites"** button (`backfillInvites` in `assets/js/admin/app.js`) that shows
+  the result (e.g. "Sent 12, failed 0"). **It is idempotent — safe to click more than once:** because
+  every send is gated on `invited_at IS NULL` and stamps on success, a second run (or a double-click)
+  emails no one and reports "Sent 0". No new dependency, no new config key (reuses `PORTAL_BASE_URL` +
+  `GIVING_FROM_EMAIL`), and the email relay + money path are untouched. Covered by
+  `test/unit/fulfilment-backfill.test.ts` (the idempotent stamp, the un-invited gate, and the
+  orchestrator: env-correct tokenised link, mark-on-success, skip/second-run-sends-0, a failed send is
+  counted without aborting), the extended `test/unit/stripe-webhook-business-supporter.test.ts`
+  (mark-on-success, a failed send left un-stamped, and marking never affecting the webhook), and
+  `test/unit/admin-business-invite-backfill.test.ts` (auth 401/403, the counts, and the summary audit).
 
   **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
   per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).

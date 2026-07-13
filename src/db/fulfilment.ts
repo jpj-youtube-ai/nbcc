@@ -35,6 +35,9 @@ export interface FulfilmentRow {
   added_to_supporters: boolean;
   reminder_5_at: Date | null;
   reminder_14_at: Date | null;
+  // When the thank-you INVITE was sent (TASK-214). NULL until an invite has gone out — stamped by the
+  // going-forward webhook auto-invite and by the admin catch-up backfill, both after a successful send.
+  invited_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -77,6 +80,85 @@ export async function getFulfilmentByToken(token: string): Promise<FulfilmentRow
     [token],
   );
   return res.rows[0] ?? null;
+}
+
+// --- Invite tracking + backfill (TASK-214) ------------------------------------------------------
+// invited_at (migration 1783980218955) records that a fulfilment record's thank-you INVITE has been
+// sent, so the one-time admin catch-up backfill never double-emails anyone. markFulfilmentInvited
+// stamps it after a successful send; listUninvitedBusinessSupporters finds the records that still
+// need one. Both use pool.query (no transaction — a plain stamp / a plain read, mirroring the
+// declaration_status stamp and listBusinessFulfilments).
+
+// Stamp invited_at = now() on a fulfilment record, IDEMPOTENTLY: the `AND invited_at IS NULL` guard
+// means a record whose invite already went out matches zero rows and is left untouched (a no-op), so
+// re-running the backfill or a webhook redelivery never overwrites the original invite timestamp.
+// Called best-effort (its callers swallow failures), only AFTER a send succeeds — so a failed send
+// leaves invited_at NULL and the backfill can catch it on a later run. Returns whether it newly
+// stamped a row (rowCount === 1), which callers may ignore.
+export async function markFulfilmentInvited(id: number): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE business_supporter_fulfilment
+        SET invited_at = now()
+      WHERE id = $1 AND invited_at IS NULL`,
+    [id],
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+// A defensive ceiling on the backfill list (the business-supporter population is small; this caps an
+// over-broad read, mirroring the LIMIT on listBusinessFulfilments below).
+const UNINVITED_SUPPORTER_LIST_LIMIT = 500;
+
+// One un-invited business supporter the backfill must email: the fulfilment record id + its secure
+// thank-you-link token + recognition band, plus the recipient email and the greeting name (the
+// business_name, falling back to the donor's full_name — the same fallback the /business/thank-you
+// page and the webhook invite use).
+export interface UninvitedBusinessSupporter {
+  fulfilmentId: number;
+  token: string;
+  band: SupporterBand;
+  email: string;
+  name: string;
+}
+
+// List every business supporter who still needs a thank-you invite, oldest record first (so the
+// longest-waiting supporters are emailed first). The gate is exactly:
+//   invited_at IS NULL      — no invite has been sent yet (the going-forward webhook stamps this),
+//   captured_at IS NULL     — they have not already completed the thank-you page (if captured, they
+//                             plainly already had the link, so there is nothing to catch up),
+//   a non-empty donor email — there is somewhere to send it,
+//   token IS NOT NULL       — there is a usable link to send (a token-less row would build a broken
+//                             link; every webhook-created record has a token, so this is defensive).
+// Read-only (pool.query, bounded by the same defensive LIMIT as listBusinessFulfilments). The
+// greeting name is resolved in JS (business_name, trimmed, falling back to full_name) to match the
+// webhook / thank-you-page fallback exactly.
+export async function listUninvitedBusinessSupporters(): Promise<UninvitedBusinessSupporter[]> {
+  const res = await pool.query<{
+    id: number;
+    token: string;
+    band: SupporterBand;
+    email: string;
+    business_name: string | null;
+    full_name: string;
+  }>(
+    `SELECT f.id, f.token, f.band, dn.email, dn.business_name, dn.full_name
+       FROM business_supporter_fulfilment f
+       JOIN donors dn ON dn.id = f.donor_id
+      WHERE f.invited_at IS NULL
+        AND f.captured_at IS NULL
+        AND f.token IS NOT NULL
+        AND dn.email IS NOT NULL
+        AND dn.email <> ''
+      ORDER BY f.id ASC
+      LIMIT ${UNINVITED_SUPPORTER_LIST_LIMIT}`,
+  );
+  return res.rows.map((r) => ({
+    fulfilmentId: r.id,
+    token: r.token,
+    band: r.band,
+    email: r.email,
+    name: (r.business_name ?? "").trim() || r.full_name,
+  }));
 }
 
 // --- Certificate delivery (TASK-211) ------------------------------------------------------------

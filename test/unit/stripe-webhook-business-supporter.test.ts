@@ -158,6 +158,13 @@ describe("business supporter invite — NEW qualifying business monthly gift (TA
     // The link uses the env-correct PORTAL_BASE_URL and carries the record's own token.
     expect(msg.html).toContain(`href="https://nbcc.test/business/thank-you?token=${token}"`);
     expect(msg.text).toContain(`https://nbcc.test/business/thank-you?token=${token}`);
+
+    // TASK-214: after the successful send, the record is stamped invited (invited_at = now()) by its
+    // id, so the admin catch-up backfill never re-emails it. It is a post-commit stamp on the module
+    // pool, guarded by invited_at IS NULL.
+    const markCall = call(/update business_supporter_fulfilment\s+set\s+invited_at/i);
+    expect(markCall?.[0]).toMatch(/invited_at\s+is\s+null/i);
+    expect(markCall?.[1]).toEqual([FULFILMENT_ID]);
   });
 
   it("bands a company monthly gift and sends the invite to the company contact email", async () => {
@@ -305,5 +312,37 @@ describe("business supporter invite — best-effort (never fails the webhook) (T
     // The transaction still committed (no rollback) — the send failure is swallowed post-commit.
     expect(queryMock.mock.calls.some((c) => /rollback/i.test(String(c[0])))).toBe(false);
     expect(queryMock.mock.calls.some((c) => /^commit/i.test(String(c[0]).trim()))).toBe(true);
+  });
+});
+
+describe("business supporter invite — invited tracking (TASK-214)", () => {
+  it("does NOT stamp invited_at when the invite send fails (so the backfill can catch it later)", async () => {
+    sendBusinessSupporterInvite.mockRejectedValueOnce(new Error("relay 500"));
+    const result = await processWebhookEvent(checkoutEvent(businessSession()));
+    expect(result).toEqual({ processed: true, action: "donation.created" });
+    // The send threw before the stamp, so invited_at stays NULL (no UPDATE ... SET invited_at).
+    expect(call(/update business_supporter_fulfilment\s+set\s+invited_at/i)).toBeUndefined();
+  });
+
+  it("still returns processed when the invited_at stamp itself fails (marking never affects the webhook)", async () => {
+    // The send succeeds but the post-commit stamp UPDATE throws — its best-effort try/catch swallows it.
+    queryMock.mockImplementation(async (sql: string) => {
+      if (/update business_supporter_fulfilment\s+set\s+invited_at/i.test(sql)) throw new Error("db down");
+      if (/^\s*(begin|commit|rollback)/i.test(sql)) return {};
+      if (/insert into stripe_webhook_events/i.test(sql)) return { rowCount: 1, rows: [] };
+      if (/insert into donors/i.test(sql)) return { rows: [{ id: DONOR_ID }], rowCount: 1 };
+      if (/insert into donations/i.test(sql)) return { rows: [{ id: DONATION_ID }], rowCount: 1 };
+      if (/insert into business_supporter_fulfilment/i.test(sql)) return { rows: [{ id: FULFILMENT_ID }], rowCount: 1 };
+      if (/select id from business_supporter_fulfilment/i.test(sql)) return { rows: [{ id: FULFILMENT_ID }], rowCount: 1 };
+      if (/insert into audit_log/i.test(sql)) return { rowCount: 1, rows: [] };
+      return { rows: [], rowCount: 0 };
+    });
+
+    const result = await processWebhookEvent(checkoutEvent(businessSession()));
+    expect(result).toEqual({ processed: true, action: "donation.created" });
+    expect(sendBusinessSupporterInvite).toHaveBeenCalledOnce();
+    // The stamp was attempted (and threw) but the webhook still committed cleanly.
+    expect(call(/update business_supporter_fulfilment\s+set\s+invited_at/i)).toBeDefined();
+    expect(queryMock.mock.calls.some((c) => /rollback/i.test(String(c[0])))).toBe(false);
   });
 });

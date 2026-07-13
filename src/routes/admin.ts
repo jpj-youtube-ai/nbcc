@@ -24,6 +24,12 @@ import {
   listDunning,
 } from "../db/admin";
 import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError } from "../db/donations";
+import {
+  listBusinessFulfilments,
+  markFulfilmentFlag,
+  FULFILMENT_FLAGS,
+  FulfilmentFlagError,
+} from "../db/fulfilment";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
@@ -1592,3 +1598,68 @@ export async function postAdminNewsletterImage(req: Request, res: Response): Pro
 }
 
 adminRouter.post("/api/admin/newsletter-images", postAdminNewsletterImage);
+
+// --- Business-supporter fulfilment (TASK-207) ---------------------------------------------------
+// The admin API behind the business-supporter fulfilment workflow: list every business supporter's
+// fulfilment record, and mark one fulfilment status flag done. Both are Editor+ (donations:edit) —
+// the read is gated at the same Editor-and-up level the newsletter tab uses (an operational staff
+// tool that exposes business PII + fulfilment state, not a Viewer read), and the mark is a write.
+// The mark is audited + transactional (markFulfilmentFlag → writeWithAudit) and only ever writes one
+// of the five allow-listed flags. Reads/writes go to the charity DB's business_supporter_fulfilment
+// table (src/db/fulfilment.ts). Building the admin UI on top of this is a later task.
+
+// Parse and validate the fulfilment-record id in the path; sends a 400 and returns null when it is
+// not a positive integer (mirrors donorId / claimBatchId).
+function fulfilmentId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid fulfilment id" });
+    return null;
+  }
+  return id;
+}
+
+// GET /api/admin/fulfilments — list every business-supporter fulfilment record (joined to its donor),
+// most recent first. Editor+ (donations:edit).
+export async function getAdminFulfilments(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "donations", "edit"))) return;
+  try {
+    return res.status(200).json({ results: await listBusinessFulfilments() });
+  } catch (err) {
+    console.error("admin fulfilments list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// The mark body: exactly one of the five allow-listed flags (z.enum rejects anything else with a
+// clean 400; markFulfilmentFlag re-checks the same allowlist as defence in depth).
+const fulfilmentMarkSchema = z.object({ flag: z.enum(FULFILMENT_FLAGS) });
+
+// POST /api/admin/fulfilments/:id/mark — set one fulfilment status flag true. Editor+ (donations:edit).
+// Audited + transactional. An unknown flag → 400; an unknown record id → 404. Returns the updated record.
+export async function postAdminMarkFulfilment(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "donations", "edit");
+  if (!claims) return;
+  const id = fulfilmentId(req, res);
+  if (id == null) return;
+  const parsed = fulfilmentMarkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid fulfilment flag", details: parsed.error.flatten() });
+  }
+  try {
+    const result = await markFulfilmentFlag(id, parsed.data.flag, actorOf(claims));
+    return res.status(200).json({ id: result.id, flag: result.flag, value: result.value, record: result.record });
+  } catch (err) {
+    if (err instanceof FulfilmentFlagError) {
+      // invalid_flag is already screened by the schema above; not_found → 404, any other → 400.
+      return err.reason === "not_found"
+        ? res.status(404).json({ error: "Fulfilment record not found" })
+        : res.status(400).json({ error: "Invalid fulfilment flag" });
+    }
+    console.error("admin fulfilment mark failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/fulfilments", getAdminFulfilments);
+adminRouter.post("/api/admin/fulfilments/:id/mark", postAdminMarkFulfilment);

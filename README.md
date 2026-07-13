@@ -54,6 +54,7 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/supporters` | `supporters.html` |
 | `/donate/thank-you` | `thank-you.html` |
 | `/donor-portal` | `portal.html` |
+| `/business/thank-you` | `business-thank-you.html` |
 | `/privacy` | `privacy.html` |
 | `/my-story` | `my-story.html` |
 
@@ -62,7 +63,10 @@ donor to on a successful checkout (`STRIPE_SUCCESS_URL`, REQ-028/REQ-029); it is
 landing page, not a primary nav destination. `/donor-portal` is the self-serve
 donor portal page (REQ-061), reached via the magic-link token in the URL query
 string (`?token=…`); it is a private landing page (`noindex`), not a nav
-destination. `/privacy` is the data-protection privacy notice (REQ-064), linked
+destination. `/business/thank-you` is the private business-supporter thank-you
+page (TASK-212), reached via the per-business token in the URL query string
+(`?token=…`) from the thank-you email; it is a token-gated, submit-once landing
+page (`noindex`), not a nav destination. `/privacy` is the data-protection privacy notice (REQ-064), linked
 from the footer and from the consent controls on the contact and donate pages,
 not a primary nav destination. `/my-story` is the public story submission page:
 a guided 3 step form linked from the footer Explore list on every page, not a
@@ -82,6 +86,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /supporters       /supporters.html  200
 /donate/thank-you /thank-you.html   200
 /donor-portal     /portal.html      200
+/business/thank-you /business-thank-you.html 200
 /privacy          /privacy.html     200
 /my-story         /my-story.html    200
 /index.html       /                 301!   # canonicalise raw .html onto the clean URL
@@ -91,6 +96,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /supporters.html  /supporters       301!
 /thank-you.html   /donate/thank-you 301!
 /portal.html      /donor-portal     301!
+/business-thank-you.html /business/thank-you 301!
 /privacy.html     /privacy          301!
 /my-story.html    /my-story         301!
 ```
@@ -1004,6 +1010,49 @@ marked active. Dash-free copy,
 and the `@db`-free `features/site.feature` clean-URL rows; `seo-metadata` /
 `copy-rules` / `accessibility` register the page and stay green.
 
+### Business thank-you page (TASK-212)
+
+`business-thank-you.html` is the private, token-gated, **submit-once** page a business supporter uses
+to choose how NBCC thanks them, served at the clean URL `/business/thank-you` and reached via the
+per-business `token` in the URL query string (`?token=…`, minted on the `business_supporter_fulfilment`
+record). It shares the same nav / footer / `assets/css/styles.css` shell as the rest of the site, with
+its own SEO metadata and a `noindex` robots tag (private page). Page-specific styling and behaviour live
+in **`assets/css/business-thankyou.css`** and **`assets/js/business-thankyou.js`** (the page also loads
+`styles.css` for the tokens and `main.js` for the nav); `styles.css` / `main.js` / `donate.html` are not
+touched. `initBusinessThankYou` (exported + unit-tested like the portal script) reads the token, calls
+**`GET /api/business/fulfilment/:token`**, and then:
+
+- **not yet submitted** → reveals the capture form. Each recognition question is a segmented toggle of
+  real radios with **nothing pre-selected**, and the detail a Yes needs stays hidden until that answer
+  is chosen. The band decides which sections show (from `perksForBand`): **Platinum** sees all four
+  (Supporters page, social thank you, digital badge, certificate, with a Download it myself / Post it to
+  me choice that splits into a UK address); **Bronze / Silver / Gold** see only the Supporters-page
+  question plus a newsletter confirmation. Submit is blocked until every shown question is answered; it
+  then **POSTs once** to **`POST /api/business/fulfilment/:token`** and replaces the form with a warm
+  confirmation listing the choices and the download links the supporter is entitled to (the certificate
+  `/business/certificate/:token` and the badge `/assets/img/nbcc-supporter-badge.svg`), noting these were
+  emailed too.
+- **already submitted** (`captured_at` set) → renders that read-only confirmation straight away (no edit
+  form), because the capture is single-submit.
+- **missing / invalid token** → the same friendly "ask us for a new link" fallback the portal uses
+  (a contact link + `giving@nbcc.scot`; there is no self-request form, since the private link is the
+  only way in).
+
+**Submit-once is enforced in the DB and mirrored in the UI.** `updateFulfilmentPreferences`
+(`src/db/fulfilment.ts`) writes the preference columns and stamps `captured_at = now()` in one audited
+transaction (`writeWithAudit`, appending a `fulfilment.captured` audit row) with an `AND captured_at IS
+NULL` guard, so a record that was already submitted matches zero rows and is never overwritten (even
+under two concurrent submits). The API is the certificate route's security model: the **token is the
+auth**, an unknown token returns the **same generic 404** as a known one (no enumeration), and both
+routes are **rate limited** per token and per client IP (the `createRateLimiter` used by the donor
+portal). A POST to an already-captured record returns **409** (the page then shows the confirmation).
+`consent_featured` records that the business agreed to be publicly celebrated (true when they chose the
+Supporters listing or the social thank you). All copy is dash-free and impact-neutral. Proven by
+`test/unit/business-fulfilment-api.test.ts` (GET state + generic 404, POST saves once + flips
+`captured_at`, 409 on a second submit, band-aware validation, rate limiting) and
+`test/unit/business-thank-you.test.ts` (static markup + jsdom against the real `initBusinessThankYou`,
+plus the no-dashes copy guard); the Dockerfile bakes the new page into the image.
+
 ### Privacy notice page (REQ-064 · TASK-111)
 
 `privacy.html` is the data-protection **privacy notice**, served at the clean URL `/privacy` and
@@ -1076,6 +1125,8 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
 | `POST /api/portal/request` | **implemented** | REQ-061 (donor self-request portal magic link) |
+| `GET /api/business/fulfilment/:token` | **implemented** | TASK-212 (business thank-you page state: band + eligible perks + already-captured + saved prefs; token is auth, generic 404 + rate limited) |
+| `POST /api/business/fulfilment/:token` | **implemented** | TASK-212 (capture the thank-you choices ONCE — DB-enforced submit-once, `fulfilment.captured` audit; 409 if already captured) |
 | `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login; step 1 of mandatory email 2FA — admin-management Phase 3/TASK-188 — issues a session directly only for a valid 30-day trusted-device token, else `{step:"2fa"}`) |
 | `POST /api/admin/login/2fa` | **implemented** | admin-management Phase 3 (TASK-188; step 2 — verifies the emailed one-time code, 10-min expiry/5-attempt cap, issues the session and optionally a device token when `remember` is set) |
 | `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read; incl. postal address — declaration for an individual, billing for a company) |

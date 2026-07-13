@@ -2187,9 +2187,20 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `fulfilmentBandFor` gate (banded **only** for a business monthly gift ≥ £10/mo — `donor_type`
   `company` **OR** a partnership/sole trader with a non-empty `business_name`), and the DB layer
   `src/db/fulfilment.ts` (`ensureFulfilmentRecord` — idempotent `ON CONFLICT (donor_id) DO NOTHING`,
-  returns the row id; `getFulfilmentByToken`). The Stripe webhook now **creates** this record (band +
-  a `randomUUID()` token) on a business monthly gift, inside the donation's transaction with a
-  `fulfilment.created` audit row — ready for the later thank-you page / admin / backfill.
+  returns `{ id, created }` so the caller knows whether it actually inserted vs hit the conflict;
+  `getFulfilmentByToken`). The Stripe webhook **creates** this record (band + a `randomUUID()` token)
+  on a business monthly gift, inside the donation's transaction, and audits `fulfilment.created`
+  **only on the newly created row** (a redelivered/reprocessed conflict never re-audits).
+  **TASK-213** closes the loop: right after commit the webhook **best-effort emails the new business
+  supporter their thank-you invite** — the branded, app-built email (`src/business/invite-email.ts`,
+  mirroring the `src/thank-you/letter.ts` shell) carrying the private link to
+  `/business/thank-you?token=…` (without it that token-gated page is unreachable). Sent **once**, only
+  on the newly created record and only when the business has an email, on the env-correct
+  `PORTAL_BASE_URL` base, From/Reply-To `GIVING_FROM_EMAIL`, via the relay's existing `thankYou: true`
+  passthrough (`sendBusinessSupporterInvite` — **no relay change / redeploy**). A failed/late send
+  never fails the webhook (the record + token are already committed); copy is dash-free and
+  impact-neutral ("could help"). Covered by `test/unit/business-invite-email.test.ts`,
+  `test/unit/fulfilment-ensure-record.test.ts` and `test/unit/stripe-webhook-business-supporter.test.ts`.
   **TASK-207** adds the **admin API** (backend only — no UI yet): **Editor+** staff (`donations:edit`)
   can **list** every business supporter and their fulfilment state (`GET /api/admin/fulfilments` →
   `listBusinessFulfilments`, each fulfilment row joined to its donor, most recent first, bounded) and
@@ -3249,7 +3260,10 @@ discriminator; the relay Worker's dedicated thank-you branch honours the per-mes
 && wrangler deploy`) so the thank-you branch takes effect (one Worker serves both envs); (2)
 `giving@nbcc.scot` must be a real **receiving mailbox** (Resend is send-only) for replies to land, and
 `nbcc.scot` must stay verified in Resend. A `DMARC` record on `nbcc.scot` (with SPF/DKIM) is
-recommended for inbox placement.
+recommended for inbox placement. The **business-supporter thank-you invite** (TASK-213,
+`sendBusinessSupporterInvite`) reuses this **same** `thankYou: true` passthrough with the same
+`GIVING_FROM_EMAIL` From/Reply-To, so it needs **no** relay `kind` and **no** extra Worker redeploy —
+the relay already forwards its app-built `subject`/`html`/`text` verbatim.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

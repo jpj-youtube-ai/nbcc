@@ -701,6 +701,18 @@ describe("POST /api/checkout-session — mandatory email (REQ-039)", () => {
   });
 });
 
+describe("POST /api/checkout-session — email pre-fill (TASK-203)", () => {
+  it("pre-fills the Stripe email field with the captured email so the donor never retypes it", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
+    expect(lastParams().customer_email).toBe("donor@example.com");
+  });
+
+  it("pre-fills for a monthly gift too", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "ada@example.com" });
+    expect(lastParams().customer_email).toBe("ada@example.com");
+  });
+});
+
 describe("POST /api/checkout-session — upstream failure", () => {
   it("returns 502 when the Stripe call throws", async () => {
     const errSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);

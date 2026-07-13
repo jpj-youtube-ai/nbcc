@@ -244,6 +244,11 @@ export interface DonationConfirmationEmail {
   // Aid was opted in, and the gift's frequency (a monthly gift gets manage/cancel instructions).
   giftAid: boolean;
   mode: "once" | "monthly";
+  // Receipt details (TASK-203): the per-gift reference (NBCC-000123) and payment date, set by the
+  // webhook call sites once the donation row (hence its id) is committed. Optional so the pure
+  // mapper stays usable without them and existing callers are unaffected.
+  reference?: string;
+  donationDate?: Date | string;
 }
 
 // Decide whether — and with what payload — to send a donation-confirmation email.
@@ -254,6 +259,7 @@ export interface DonationConfirmationEmail {
 export function confirmationEmailFor(
   donor: { email?: string | null; emailConsent?: boolean; fullName: string },
   gift: { amountPence: number; currency: string; giftAid: boolean; mode: "once" | "monthly" },
+  extra?: { reference?: string; donationDate?: Date | string },
 ): DonationConfirmationEmail | null {
   if (!donor.email) return null;
   return {
@@ -263,6 +269,8 @@ export function confirmationEmailFor(
     currency: gift.currency,
     giftAid: gift.giftAid,
     mode: gift.mode,
+    ...(extra?.reference ? { reference: extra.reference } : {}),
+    ...(extra?.donationDate ? { donationDate: extra.donationDate } : {}),
   };
 }
 

@@ -259,3 +259,180 @@ export async function markFulfilmentFlag(
     }),
   );
 }
+
+// --- Thank-you page capture (TASK-212) ----------------------------------------------------------
+// The business thank-you page (GET /business/thank-you, served at that clean URL) is a private,
+// token-gated, SUBMIT-ONCE page. The token in the private link IS the auth. Two reads/writes back it:
+// getFulfilmentPageContextByToken (what the page renders) and updateFulfilmentPreferences (the one,
+// once, DB-enforced write). Read-only lookups use pool.query (mirroring getCertificateContextByToken);
+// the capture is an audited transaction (writeWithAudit — the truth model in ./donations.ts).
+
+// Everything the thank-you page needs in ONE read addressed by the token: the recognition band (the
+// page derives which sections to show from perksForBand(band)), the business_name to greet them by
+// (falling back to full_name, like the certificate), whether they have already submitted (captured),
+// and the saved preferences (so an already-captured record renders its read-only confirmation).
+export interface FulfilmentPageContext {
+  band: SupporterBand;
+  businessName: string; // business_name, falling back to full_name — always a non-empty greeting name
+  captured: boolean; // captured_at IS NOT NULL — the submit-once record has been filled in
+  creditName: string | null;
+  website: string | null;
+  socials: string | null;
+  listOnSupporters: boolean;
+  wantSocial: boolean;
+  wantBadge: boolean;
+  wantCertificate: boolean;
+  certificateDelivery: string | null;
+  certificateAddress: string | null;
+  consentFeatured: boolean;
+}
+
+export async function getFulfilmentPageContextByToken(
+  token: string,
+): Promise<FulfilmentPageContext | null> {
+  const res = await pool.query<{
+    band: SupporterBand;
+    business_name: string | null;
+    full_name: string;
+    captured_at: Date | null;
+    credit_name: string | null;
+    website: string | null;
+    socials: string | null;
+    list_on_supporters: boolean;
+    want_social: boolean;
+    want_badge: boolean;
+    want_certificate: boolean;
+    certificate_delivery: string | null;
+    certificate_address: string | null;
+    consent_featured: boolean;
+  }>(
+    `SELECT f.band,
+            dn.business_name,
+            dn.full_name,
+            f.captured_at,
+            f.credit_name, f.website, f.socials, f.list_on_supporters,
+            f.want_social, f.want_badge, f.want_certificate,
+            f.certificate_delivery, f.certificate_address, f.consent_featured
+       FROM business_supporter_fulfilment f
+       JOIN donors dn ON dn.id = f.donor_id
+      WHERE f.token = $1`,
+    [token],
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+  const businessName = (r.business_name ?? "").trim() || r.full_name;
+  return {
+    band: r.band,
+    businessName,
+    captured: r.captured_at != null,
+    creditName: r.credit_name,
+    website: r.website,
+    socials: r.socials,
+    listOnSupporters: r.list_on_supporters,
+    wantSocial: r.want_social,
+    wantBadge: r.want_badge,
+    wantCertificate: r.want_certificate,
+    certificateDelivery: r.certificate_delivery,
+    certificateAddress: r.certificate_address,
+    consentFeatured: r.consent_featured,
+  };
+}
+
+// The captured choices the page submits. The route (src/routes/business.ts) validates the raw body
+// (zod) and resolves these server-side against the band read from the DB (a non-platinum band can
+// never set the platinum extras true), so this write layer stores already-decided values.
+export interface FulfilmentPreferences {
+  creditName: string | null;
+  website: string | null;
+  socials: string | null;
+  listOnSupporters: boolean;
+  wantSocial: boolean;
+  wantBadge: boolean;
+  wantCertificate: boolean;
+  certificateDelivery: "download" | "post" | null;
+  certificateAddress: string | null;
+  consentFeatured: boolean;
+}
+
+// Why a capture cannot proceed: no fulfilment row carries the token (not_found — surfaced as the same
+// generic 404 as any unknown token, so a valid token is indistinguishable from an invalid one), or the
+// record was ALREADY submitted (already_captured — the DB-enforced submit-once tripped). A typed error
+// (like FulfilmentFlagError) so the route can map it to a status code rather than a bare 500.
+export class FulfilmentCaptureError extends Error {
+  constructor(public readonly reason: "not_found" | "already_captured") {
+    super(`fulfilment capture failed: ${reason}`);
+    this.name = "FulfilmentCaptureError";
+  }
+}
+
+// Save the business's thank-you choices ONCE, in one audited transaction (writeWithAudit): set every
+// preference column, stamp captured_at = now(), and append exactly one `fulfilment.captured` audit row
+// — all committing or rolling back together.
+//
+// SUBMIT-ONCE is DB-enforced: the UPDATE carries `AND captured_at IS NULL`, so a record that was
+// already submitted matches zero rows and is never overwritten (even under two concurrent submits —
+// only the first UPDATE sees captured_at NULL). A zero-row UPDATE then distinguishes the two causes
+// with a follow-up existence check: no row for the token → not_found; a row (already captured) →
+// already_captured. Either throw rolls the transaction back, so nothing is half-written.
+export async function updateFulfilmentPreferences(
+  token: string,
+  prefs: FulfilmentPreferences,
+  actor: string,
+): Promise<FulfilmentRow> {
+  return writeWithAudit(
+    async (client) => {
+      const updated = await client.query<FulfilmentRow>(
+        `UPDATE business_supporter_fulfilment
+            SET credit_name = $2,
+                website = $3,
+                socials = $4,
+                list_on_supporters = $5,
+                want_social = $6,
+                want_badge = $7,
+                want_certificate = $8,
+                certificate_delivery = $9,
+                certificate_address = $10,
+                consent_featured = $11,
+                captured_at = now(),
+                updated_at = now()
+          WHERE token = $1 AND captured_at IS NULL
+        RETURNING *`,
+        [
+          token,
+          prefs.creditName,
+          prefs.website,
+          prefs.socials,
+          prefs.listOnSupporters,
+          prefs.wantSocial,
+          prefs.wantBadge,
+          prefs.wantCertificate,
+          prefs.certificateDelivery,
+          prefs.certificateAddress,
+          prefs.consentFeatured,
+        ],
+      );
+      const row = updated.rows[0];
+      if (row) return row;
+      // Zero rows updated: either the token matches nothing, or the record was already captured.
+      const existing = await client.query<{ id: number }>(
+        `SELECT id FROM business_supporter_fulfilment WHERE token = $1`,
+        [token],
+      );
+      throw new FulfilmentCaptureError(existing.rows[0] ? "already_captured" : "not_found");
+    },
+    (row) => ({
+      actor,
+      action: "fulfilment.captured",
+      entity: "business_supporter_fulfilment",
+      entityId: row.id,
+      data: {
+        band: row.band,
+        listOnSupporters: row.list_on_supporters,
+        wantSocial: row.want_social,
+        wantBadge: row.want_badge,
+        wantCertificate: row.want_certificate,
+        certificateDelivery: row.certificate_delivery,
+      },
+    }),
+  );
+}

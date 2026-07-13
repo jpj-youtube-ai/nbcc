@@ -20,6 +20,9 @@
 /admin         /admin.html       200
 /my-story      /my-story.html    200
 /hub           /hub.html         200
+# Private business-supporter thank-you page (TASK-212): token-gated, noindex, reached from the
+# business's thank-you email. Served at the clean URL, like /donor-portal.
+/business/thank-you  /business-thank-you.html  200
 
 # Admin invite/reset accept links (admin-management Phase 1, Task 7). Both are entry
 # URLs onto the SAME file: the token's purpose (invite vs reset) differs, the accept
@@ -42,3 +45,4 @@
 /admin.html       /admin             301!
 /my-story.html    /my-story          301!
 /hub.html         /hub               301!
+/business-thank-you.html  /business/thank-you  301!

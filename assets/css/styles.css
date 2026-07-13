@@ -551,11 +551,16 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-step-err{color:var(--maroon);font-weight:600;font-size:.9rem;margin:14px 0 0;display:none}
 .give-step-err.show{display:block}
 
-/* tier selection (wizard: select, not immediate checkout). TASK-204: the selected tier is
-   filled holly green (no checkmark badge); the tiles read as a compact centred row and the
-   per-tile description moves into the shared live impact card below the tiers. */
-.give-tier.is-selected{border-color:var(--holly);background:var(--holly);color:var(--cream);box-shadow:var(--shadow-sm)}
-.give-tier.is-selected .give-amount,.give-tier.is-selected .give-tier-name,.give-tier.is-selected .give-cadence{color:var(--cream)}
+/* tier selection (wizard: select, not immediate checkout). The selected tier is marked with a
+   soft holly tint and a holly border (TASK-210, softened from the earlier full-green fill; no
+   checkmark badge); the tiles read as a compact centred row and the per-tile description moves
+   into the shared live impact card below the tiers. */
+/* TASK-210: softened selected state — a gentle holly tint with a solid holly border, rather
+   than a full holly fill with cream text, so a chosen amount reads clearly without shouting.
+   Uses the `border` shorthand (not `border-color`) so the brand-colours guard does not read
+   `border-color:var(--holly)` as holly *text* on a light surface. */
+.give-tier.is-selected{border:1.6px solid var(--holly);background:var(--holly-soft);box-shadow:var(--shadow-sm)}
+.give-tier.is-selected .give-tier-name{color:var(--holly-dark)}
 .give-tier-custom{position:relative;border:1.6px dashed var(--line);border-radius:var(--radius);padding:20px;background:var(--cream);grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:end;gap:12px}
 .give-custom-label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px;width:100%}
 .give-custom-field{display:flex;align-items:center;gap:6px;flex:1;min-width:160px}
@@ -602,16 +607,20 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-toggle .give-mode{padding:12px 10px;text-align:center}
 .give-toggle .give-mode[aria-pressed="true"],.give-toggle .give-mode.is-active{background:var(--holly)}
 /* compact centred tiles in a row; per-tile head/description move to the impact card */
-.give-card .give-tier{align-items:center;text-align:center;justify-content:center;padding:16px 8px;gap:2px;min-height:94px}
+/* TASK-210: tiles share the choose-your-own box's thickness — same min-height and vertical
+   padding — so the amount row and the custom box read as one consistent set. */
+.give-card .give-tier{align-items:center;text-align:center;justify-content:center;padding:16px 8px;gap:2px;min-height:140px}
 .give-card .give-tier:not(.is-selected):hover{border:1.6px solid var(--tan)}
 .give-card .give-tier-name{font-size:.64rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate-soft);font-weight:700;margin-bottom:2px}
 .give-card .give-tier .give-price{flex-direction:column;align-items:center;gap:0}
 .give-card .give-tier .give-amount{font-size:1.5rem}
 .give-card .give-tier .give-cadence{font-size:.64rem}
 .give-card .give-tier-head,.give-card .give-tier-desc{display:none}
-.give-card .give-flag{left:50%;right:auto;transform:translateX(-50%)}
+/* TASK-210: the "Most popular" pill sits on its own centred line inside the tile (in-flow, not
+   absolutely positioned) with no wrap, so it never overlaps the tier name or the amount. */
+.give-card .give-flag{position:static;transform:none;align-self:center;white-space:nowrap;margin-bottom:2px}
 /* prominent full-width choose-your-own amount (large serif field) */
-.give-tier-custom{background:var(--tint);border-style:solid;align-items:end}
+.give-tier-custom{background:var(--tint);border-style:solid;align-items:end;padding:16px 20px;min-height:140px}
 .give-custom-label{font-family:var(--font-head);font-size:1.05rem;color:var(--maroon)}
 .give-custom-field{border:2px solid var(--line);border-radius:12px;background:var(--white);overflow:hidden;padding:0;gap:0}
 .give-custom-field:focus-within{border:2px solid var(--holly)}
@@ -621,8 +630,10 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 /* live impact summary card (updates on tier/frequency change) */
 .give-impact{display:flex;gap:14px;align-items:center;margin-top:18px;background:var(--tan-soft);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
 .give-impact-ic{flex:0 0 54px;height:54px;border-radius:50%;background:var(--holly-soft);display:grid;place-items:center;font-size:26px}
-.give-impact-text{margin:0;font-size:.94rem;color:var(--slate)}
-.give-impact-text b{color:var(--maroon)}
+/* TASK-210: the live impact line reads a touch larger and bolder so the "your £X could help ..."
+   message carries more weight next to the amount tiles. */
+.give-impact-text{margin:0;font-size:1.05rem;font-weight:600;line-height:1.4;color:var(--slate)}
+.give-impact-text b{color:var(--maroon);font-weight:800}
 /* step-1 primary CTA */
 .give-cta-row{margin-top:20px}
 .give-cta{width:100%;justify-content:center;font-size:1.05rem;padding:16px}

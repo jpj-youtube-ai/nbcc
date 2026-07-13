@@ -12,7 +12,8 @@ import {
 } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation, insertClaimAdjustment } from "./donations";
 import { ensureFulfilmentRecord } from "./fulfilment";
-import { fulfilmentBandFor } from "../donors/fulfilment";
+import { fulfilmentBandFor, type SupporterBand } from "../donors/fulfilment";
+import { buildBusinessSupporterInviteEmail } from "../business/invite-email";
 import {
   donationFromCheckoutSession,
   declarationFromCheckoutSession,
@@ -36,6 +37,7 @@ import {
   sendRefundConfirmation,
   sendSubscriptionLapsedDonor,
   sendSubscriptionLapsedAdmin,
+  sendBusinessSupporterInvite,
 } from "../clients/email";
 import { applyDeclarationEvent } from "../declarations/status";
 import {
@@ -77,7 +79,7 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation } =
+    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite } =
       await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
@@ -100,6 +102,11 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     await sendRefundNotice(refundNotice ?? null);
     // Individual-donor refund confirmation (TASK-099): post-commit, best-effort.
     await sendRefundConfirmationEmail(refundConfirmation ?? null);
+    // Business-supporter thank-you invite (TASK-213): post-commit, best-effort. Present ONLY when a
+    // NEW fulfilment record was just created for a qualifying business monthly gift AND the business
+    // gave us an email — so it sends once per new supporter. A failed/late send must never fail the
+    // webhook (the record + its token are already durably committed).
+    await sendBusinessInvite(businessInvite ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -129,6 +136,9 @@ interface DispatchResult {
   // The individual-donor refund confirmation email to send post-commit (TASK-099), or null (a
   // company refund, or no consented donor email).
   refundConfirmation?: RefundConfirmationSend | null;
+  // The business-supporter thank-you invite to send post-commit (TASK-213), or null when this gift
+  // did not create a NEW fulfilment record or the business gave us no email.
+  businessInvite?: BusinessInviteSend | null;
 }
 
 // A committed individual-donor refund whose confirmation email must be sent AFTER commit (TASK-099).
@@ -245,6 +255,51 @@ export async function sendLapseNotifications(lapse: LapseNotify | null): Promise
     } catch {
       // best-effort: the donor notice is a courtesy; a failed send must not fail the webhook.
     }
+  }
+}
+
+// A newly-created business supporter whose thank-you invite must be sent AFTER commit (TASK-213).
+// Present ONLY when handleCheckoutCompleted actually CREATED the fulfilment record (not on a conflict)
+// AND the business gave us an email. Carries the recipient + the greeting names (businessName falls
+// back to fullName) + the record's band and the token that was just written (the invite links to
+// /business/thank-you?token=<token>).
+interface BusinessInviteSend {
+  email: string;
+  businessName: string | null;
+  fullName: string;
+  band: SupporterBand;
+  token: string;
+}
+
+// Post-commit, best-effort business-supporter thank-you invite (TASK-213). Builds the branded invite
+// (src/business/invite-email.ts) on the env-correct public base (config.PORTAL_BASE_URL — the same base
+// the donor portal magic link uses, so a staging email links to staging and a prod email to prod) and
+// sends it From/Reply-To config.GIVING_FROM_EMAIL via the relay's thank-you passthrough. A null send
+// (no new record, or no email) or a provider failure is a no-op, so a failed/late send never rolls
+// back the committed fulfilment record. Mirrors sendLapseNotifications exactly (structure, placement,
+// error swallowing). Exported so the trigger is unit-testable with a mocked email client.
+export async function sendBusinessInvite(send: BusinessInviteSend | null): Promise<void> {
+  if (!send) return;
+  try {
+    // Greeting name: the business_name, falling back to the donor's full_name (the same fallback the
+    // /business/thank-you page uses) — always a non-empty name to greet them by.
+    const businessName = (send.businessName ?? "").trim() || send.fullName;
+    const invite = buildBusinessSupporterInviteEmail({
+      businessName,
+      baseUrl: config.PORTAL_BASE_URL,
+      token: send.token,
+    });
+    await sendBusinessSupporterInvite({
+      email: send.email,
+      from: config.GIVING_FROM_EMAIL,
+      replyTo: config.GIVING_FROM_EMAIL,
+      subject: invite.subject,
+      html: invite.html,
+      text: invite.text,
+    });
+  } catch {
+    // best-effort: the fulfilment record + token are durably committed; a failed invite must not fail
+    // the webhook (which would make Stripe redeliver and re-run the whole handler).
   }
 }
 
@@ -463,19 +518,41 @@ async function handleCheckoutCompleted(
     businessName: donor.businessName,
     amountPence: donation.amountPence,
   });
+  let businessInvite: BusinessInviteSend | null = null;
   if (fulfilmentBand) {
-    const fulfilmentId = await ensureFulfilmentRecord(client, {
+    // Mint the secure-thank-you-link token here. It becomes the record's token IFF this call CREATES
+    // the row; on a conflict ensureFulfilmentRecord ignores it and keeps the existing token. We only
+    // audit/send on `created`, so the token we audit-with and thread out is always the one written.
+    const token = randomUUID();
+    const { id: fulfilmentId, created } = await ensureFulfilmentRecord(client, {
       donorId,
       band: fulfilmentBand,
-      token: randomUUID(),
+      token,
     });
-    await insertAudit(client, {
-      actor: "stripe",
-      action: "fulfilment.created",
-      entity: "business_supporter_fulfilment",
-      entityId: fulfilmentId,
-      data: { eventId: event.id, donorId, band: fulfilmentBand },
-    });
+    // Audit `fulfilment.created` and send the invite ONLY on the newly created record — not on a
+    // redelivered/reprocessed conflict — so each happens exactly ONCE per business supporter.
+    if (created) {
+      await insertAudit(client, {
+        actor: "stripe",
+        action: "fulfilment.created",
+        entity: "business_supporter_fulfilment",
+        entityId: fulfilmentId,
+        data: { eventId: event.id, donorId, band: fulfilmentBand },
+      });
+      // Thread the thank-you invite OUT of the transaction to send post-commit (TASK-213), but only
+      // when the business gave us an email. The invite is a transactional service message (it is how
+      // they reach their thank-you page), so it follows the same email-present gate as the donation
+      // confirmation / company receipt — not the marketing-consent gate.
+      if (donor.email) {
+        businessInvite = {
+          email: donor.email,
+          businessName: donor.businessName ?? null,
+          fullName: donor.fullName,
+          band: fulfilmentBand,
+          token,
+        };
+      }
+    }
   }
 
   // Company donation (REQ-053, TASK-088): decide receipt vs trustee-flag from whether NBCC gave
@@ -518,6 +595,7 @@ async function handleCheckoutCompleted(
       ? null
       : confirmationEmailFor(donor, donation, { reference: donationReference(donationId), donationDate }),
     receipt,
+    businessInvite,
   };
 }
 

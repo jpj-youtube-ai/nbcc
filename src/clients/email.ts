@@ -352,3 +352,37 @@ export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> 
     throw new Error(`Thank-you email send responded ${res.status}`);
   }
 }
+
+// The business-supporter thank-you INVITE email (TASK-213). When a NEW business monthly supporter's
+// fulfilment record is created, we email them the private link to the /business/thank-you page so they
+// can choose how NBCC thanks them (without this email the token-gated page is unreachable). The fully
+// rendered, branded content (subject + html + text) is built by the pure src/business/invite-email.ts
+// and passed in; From + Reply-To are config.GIVING_FROM_EMAIL (giving@nbcc.scot) so a reply reaches a
+// real NBCC inbox and the send authenticates on the verified domain (same as the admin thank-you
+// letter). The body carries `thankYou: true`, so this rides the relay's EXISTING "app fully owns this
+// branded email" passthrough — the relay honours our subject/html/text/from/replyTo verbatim, so NO
+// relay `kind` and NO Worker redeploy are needed (the same path sendThankYou uses). Same stub-seam +
+// best-effort contract as the other sends: a placeholder EMAIL_SEND_URL means no network outside
+// production.
+export interface BusinessSupporterInviteEmail {
+  email: string; // recipient — the business's contact email (the relay's recipient field)
+  from: string; // config.GIVING_FROM_EMAIL
+  replyTo: string; // same as from
+  subject: string;
+  html: string;
+  text: string; // plain-text alternative (improves deliverability; the relay forwards it)
+}
+
+export async function sendBusinessSupporterInvite(message: BusinessSupporterInviteEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ ...message, thankYou: true }),
+  });
+  if (!res.ok) {
+    throw new Error(`Business supporter invite email send responded ${res.status}`);
+  }
+}

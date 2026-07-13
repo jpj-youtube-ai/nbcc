@@ -42,13 +42,16 @@ export interface FulfilmentRow {
 // Ensure exactly one fulfilment record exists for a business supporter (idempotent). INSERTs the
 // (donor_id, band, token) row — every other column carries a DB default — and ON CONFLICT (donor_id)
 // DO NOTHING, so a record that ALREADY exists is left untouched (a redelivered/reprocessed gift never
-// overwrites captured preferences or admin fulfilment flags). Returns the row id, whether newly
-// inserted or pre-existing. Takes the caller's client so it JOINS their transaction (the webhook
-// processor's BEGIN…COMMIT) — the record and its audit row then commit or roll back together.
+// overwrites captured preferences or admin fulfilment flags). Returns the row id AND whether it was
+// actually CREATED on this call (`created: true` when the INSERT wrote a row; `false` when it hit the
+// conflict and the id was re-read). The webhook uses `created` to audit `fulfilment.created` and send
+// the thank-you invite ONCE, only on the newly created record, using the token it just wrote. Takes
+// the caller's client so it JOINS their transaction (the webhook processor's BEGIN…COMMIT) — the
+// record and its audit row then commit or roll back together.
 export async function ensureFulfilmentRecord(
   client: PoolClient,
   input: { donorId: number; band: SupporterBand; token: string },
-): Promise<number> {
+): Promise<{ id: number; created: boolean }> {
   const inserted = await client.query<{ id: number }>(
     `INSERT INTO business_supporter_fulfilment (donor_id, band, token)
      VALUES ($1, $2, $3)
@@ -56,13 +59,13 @@ export async function ensureFulfilmentRecord(
      RETURNING id`,
     [input.donorId, input.band, input.token],
   );
-  if (inserted.rows[0]) return inserted.rows[0].id;
+  if (inserted.rows[0]) return { id: inserted.rows[0].id, created: true };
   // Conflict: a fulfilment record already exists for this donor — read back its id (idempotent no-op).
   const existing = await client.query<{ id: number }>(
     `SELECT id FROM business_supporter_fulfilment WHERE donor_id = $1`,
     [input.donorId],
   );
-  return existing.rows[0].id;
+  return { id: existing.rows[0].id, created: false };
 }
 
 // Read the fulfilment record addressed by a secure-thank-you-link token, or null when the token

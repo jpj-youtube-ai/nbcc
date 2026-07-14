@@ -219,6 +219,28 @@ npx lighthouse http://localhost:3000/ --only-categories=accessibility --view
 # repeat for /about-us, /donate, /contact
 ```
 
+### Form validation (highlight all missing fields)
+
+Every user-facing form validates through one shared, accessible helper in
+`assets/js/main.js`, exported as `validateForm(scope, opts?)` / `clearValidation(scope)`
+(and mirrored on `window.NBCCFormValidation` so the separate
+`assets/js/business-thankyou.js` uses the same code). On submit it flags **every**
+invalid control at once — `aria-invalid="true"`, an `is-invalid` class on the field
+(or its `.give-field`/`.field` wrapper), and an inline plain-language message linked
+via `aria-describedby` — refreshes one `role="alert"` summary at the top of the form,
+moves focus to the first invalid field, and live-clears each control as it is fixed
+(hiding the summary once all are valid). It skips disabled controls and controls
+inside a `hidden` ancestor, bounded at the scope so a visible form still validates when
+a container above it is hidden (the portal error card). The `required`/`type`/`pattern`
+attributes stay the rule source; forms carry `novalidate` so the helper drives the UX.
+`opts.summary` reuses an existing summary node (the wizard steps' `[data-err]`), and
+`opts.extraChecks` adds cross-field rules (e.g. the business supporter credit-name and
+certificate-address rules). Wired into: the donate wizard (per step), contact, Gift Aid,
+My Story, the business thank-you page, and the donor portal. The red field treatment,
+inline message, and summary styles live in the `FORM VALIDATION` block of
+`assets/css/styles.css`. Both the helper and its styles count toward the donate first-paint
+budget (see the performance section).
+
 ### SEO & social metadata
 
 Every page's `<head>` carries a unique set of SEO + social-share tags following

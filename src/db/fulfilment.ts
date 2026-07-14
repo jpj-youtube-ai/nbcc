@@ -35,6 +35,9 @@ export interface FulfilmentRow {
   added_to_supporters: boolean;
   reminder_5_at: Date | null;
   reminder_14_at: Date | null;
+  // How many of the two thank-you reminders have been sent (TASK-222): 0 = none, 1 = the 5-day
+  // reminder sent, 2 = the 14-day reminder sent. NOT NULL DEFAULT 0, so every row carries a number.
+  reminder_count: number;
   // When the thank-you INVITE was sent (TASK-214). NULL until an invite has gone out — stamped by the
   // going-forward webhook auto-invite and by the admin catch-up backfill, both after a successful send.
   invited_at: Date | null;
@@ -607,4 +610,93 @@ export async function updateFulfilmentPreferences(
       },
     }),
   );
+}
+
+// --- Reminder scheduling (TASK-222) -------------------------------------------------------------
+// The daily runner (npm run reminders) nudges business supporters who have not yet chosen how they
+// would like to be thanked: a warm 5-day reminder, then a gentle 14-day last note. reminder_count
+// (migration 1784050000000) tracks how many have been sent (0/1/2). listSupportersDueForReminder
+// finds who is due the next stage; markReminderSent advances the count after a successful send. Both
+// use pool.query (a plain read / a plain idempotent stamp — mirroring listUninvitedBusinessSupporters
+// and markFulfilmentInvited).
+
+// A defensive ceiling on the due-reminder list (the business-supporter population is small; this caps
+// an over-broad read, mirroring the LIMITs on the other business-supporter reads).
+const REMINDER_DUE_LIST_LIMIT = 500;
+
+// One business supporter due a thank-you reminder: the fulfilment record id + its secure
+// thank-you-link token + recognition band, the recipient email and the greeting name (business_name
+// falling back to full_name — the same fallback the invite / thank-you page use), and which stage is
+// due (1 = the 5-day reminder, 2 = the 14-day reminder).
+export interface SupporterDueForReminder {
+  fulfilmentId: number;
+  token: string;
+  band: SupporterBand;
+  email: string;
+  name: string;
+  stage: 1 | 2;
+}
+
+// List every business supporter due a reminder AT `now`, oldest record first. A record is due when it
+// has NOT been captured (they have not chosen yet), HAS been invited (there is a link to remind them
+// about), has a non-empty email and a token, AND either:
+//   - reminder_count = 0 AND it was invited at least 5 days ago  → the 5-day reminder (stage 1), or
+//   - reminder_count = 1 AND it was invited at least 14 days ago → the 14-day reminder (stage 2).
+// A record already at reminder_count = 2 (fully reminded), or captured, or too recently invited, is
+// excluded — so the WHERE clause guarantees reminder_count is 0 or 1 and the stage CASE is exact. The
+// clock is passed in (not now()), so the pass is deterministic and unit-testable. Read-only
+// (pool.query, bounded by a defensive LIMIT). The greeting name is resolved in JS (business_name,
+// trimmed, falling back to full_name) to match the invite / thank-you-page fallback exactly.
+export async function listSupportersDueForReminder(now: Date): Promise<SupporterDueForReminder[]> {
+  const res = await pool.query<{
+    id: number;
+    token: string;
+    band: SupporterBand;
+    email: string;
+    business_name: string | null;
+    full_name: string;
+    stage: number;
+  }>(
+    `SELECT f.id, f.token, f.band, dn.email, dn.business_name, dn.full_name,
+            CASE WHEN f.reminder_count = 0 THEN 1 ELSE 2 END AS stage
+       FROM business_supporter_fulfilment f
+       JOIN donors dn ON dn.id = f.donor_id
+      WHERE f.captured_at IS NULL
+        AND f.invited_at IS NOT NULL
+        AND f.token IS NOT NULL
+        AND dn.email IS NOT NULL
+        AND dn.email <> ''
+        AND (
+              (f.reminder_count = 0 AND f.invited_at <= $1::timestamptz - interval '5 days')
+           OR (f.reminder_count = 1 AND f.invited_at <= $1::timestamptz - interval '14 days')
+        )
+      ORDER BY f.id ASC
+      LIMIT ${REMINDER_DUE_LIST_LIMIT}`,
+    [now],
+  );
+  return res.rows.map((r) => ({
+    fulfilmentId: r.id,
+    token: r.token,
+    band: r.band,
+    email: r.email,
+    name: (r.business_name ?? "").trim() || r.full_name,
+    stage: r.stage === 1 ? 1 : 2,
+  }));
+}
+
+// Advance a fulfilment record's reminder_count to `stage` (1 or 2) after that stage's reminder was
+// sent, IDEMPOTENTLY: the `AND reminder_count = stage - 1` guard means the update only fires when the
+// record is at exactly the previous stage, so re-running the same stage (or a racing double-run) sets
+// the count once and never double-sends. Called best-effort (its caller swallows failures), only AFTER
+// a send succeeds — so a failed send leaves the count unchanged and the record is retried next run.
+// Returns whether it newly stamped a row (rowCount === 1), which callers may ignore. Mirrors
+// markFulfilmentInvited (a plain idempotent stamp on pool.query).
+export async function markReminderSent(id: number, stage: number): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE business_supporter_fulfilment
+        SET reminder_count = $2
+      WHERE id = $1 AND reminder_count = $2 - 1`,
+    [id, stage],
+  );
+  return (res.rowCount ?? 0) > 0;
 }

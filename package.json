@@ -15,6 +15,7 @@
     "bootstrap:stories": "node scripts/bootstrap-stories-db.mjs",
     "migrate:contact": "node-pg-migrate -m migrations-contact -d CONTACT_DATABASE_URL up",
     "bootstrap:contact": "node scripts/bootstrap-contact-db.mjs",
+    "reminders": "node dist/scripts/send-reminders.js",
     "lint": "eslint . --ext .ts",
     "test:unit": "vitest run",
     "test:bdd": "cucumber-js",

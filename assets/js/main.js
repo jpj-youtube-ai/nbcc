@@ -19,7 +19,7 @@
   // where extraChecks() -> [{ control, message }] adds caller cross-field rules.
   var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // TASK-224: tiny whole-word client pre-check for the supporters display name (server filter is load-bearing).
+  // TASK-224: tiny whole-word client pre-check for the display name (server filter is load-bearing).
   var SUPPORTER_BLOCKED = /\b(arse|ass|bastard|bitch|bollocks|bugger|cock|crap|cunt|dick|fuck|piss|prick|shit|slut|twat|wank|whore|chink|coon|fag|faggot|kike|paki|retard|spastic|spic|tranny|wetback)\b|nigg/i;
   function creditNameBlocked(name) { return SUPPORTER_BLOCKED.test(String(name || "")); }
 
@@ -848,7 +848,7 @@
         var ageEl = doc.getElementById("ageConfirmed");
         payload.ageConfirmed = !!(ageEl && ageEl.checked);
       }
-      // Supporters wall opt-in (TASK-224): fold in ONLY for the eligible monthly gift where the block shows.
+      // TASK-224: fold the opt-in in ONLY for the eligible monthly gift where the block is shown.
       var optinBlock = doc.getElementById("supporterOptin");
       if (optinBlock && !optinBlock.hidden && payload.mode === "monthly" && payload.amount >= 1000) {
         var listYes = doc.querySelector('input[name="listOnSupporters"]:checked');
@@ -1597,7 +1597,7 @@
       m.addEventListener("click", function () { resetSelection(); });
     });
     Array.prototype.forEach.call(root.querySelectorAll('input[name="listOnSupporters"]'), function (r) {
-      r.addEventListener("change", updateSupporterOptin); // TASK-224: reveal/hide the display-name field
+      r.addEventListener("change", updateSupporterOptin); // TASK-224
     });
 
     // ---- validation (TASK-225): route every step through the shared highlight-all helper,
@@ -1607,7 +1607,7 @@
     function validate(el) {
       return validateForm(el, {
         summary: el.querySelector("[data-err]"),
-        // TASK-224: flag an obvious profane supporters display name through the same UI while it is visible.
+        // TASK-224: flag an obvious profane display name through the same UI while it is visible.
         extraChecks: function () {
           var c = doc.getElementById("supporterCreditName");
           if (!c || !el.contains(c) || skipControl(c, el) || !creditNameBlocked((c.value || "").trim())) return [];

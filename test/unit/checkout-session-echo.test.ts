@@ -75,6 +75,16 @@ describe("POST /api/checkout-session — stub-mode session echo (TASK-116)", () 
     expect(body.session!.mode).toBe("subscription");
   });
 
+  it("echoes the supporters opt-in metadata so the BDD can replay it into the webhook (TASK-224)", async () => {
+    const res = await run({
+      mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true,
+      email: "donor@example.com", listOnSupporters: true, creditName: "The Campbell Family",
+    });
+    const md = (res.body as { session?: { metadata: Record<string, string> } }).session!.metadata;
+    expect(md.listOnSupporters).toBe("true");
+    expect(md.creditName).toBe("The Campbell Family");
+  });
+
   it("does NOT echo the session in production even when stubbed", async () => {
     mockConfig.NODE_ENV = "production";
     const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false });

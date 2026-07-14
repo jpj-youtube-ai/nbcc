@@ -12,6 +12,7 @@ import {
 import { declarationFieldsSchema } from "../declarations/fields";
 import { partnerShareSchema, validatePartnerShares } from "../declarations/partnership";
 import { companyFieldsSchema } from "../donors/company";
+import { containsBlockedWord } from "../donors/display-name-filter";
 import { getGiftAidDeclarationContext, completeDeclaration, GiftAidCompletionError } from "../db/donations";
 import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render";
 import { config } from "../config";
@@ -70,6 +71,13 @@ const checkoutBodySchema = z
     emailConsent: z.boolean().optional(),
     anonymous: z.boolean().optional(),
     ageConfirmed: z.boolean().optional(),
+    // TASK-224: an individual monthly donor can opt into the public supporters wall from the donate
+    // form. listOnSupporters is their choice; creditName is the optional public display name (the wall
+    // falls back to full_name). Both optional at the type level so the no-JS base contract is unchanged;
+    // the webhook maps them onto donors.list_on_supporters / credit_name. The wall only ever shows a
+    // paid monthly gift >= £10 that is not anonymous/hidden, so an over-permissive stamp cannot leak.
+    listOnSupporters: z.boolean().optional(),
+    creditName: z.string().trim().min(1).max(200).optional(),
     // REQ-043: the Gift Aid declaration folded in by the give widget (TASK-062) when
     // Gift Aid is opted in. Validated by the shared declarations module (TASK-061): a
     // present declaration must carry a valid UK postcode + house name/number (a non-UK
@@ -153,6 +161,25 @@ const checkoutBodySchema = z
         });
       }
     }
+  })
+  // TASK-224: the individual supporters-wall opt-in. Require the display name when the donor asks to be
+  // listed, and reject a profane one at source (mirrors the business capture, src/routes/business.ts), so
+  // it never reaches the wall. Plain, dash-free messages. Only ever enforced when the fields are present.
+  .superRefine((b, ctx) => {
+    if (b.listOnSupporters && !b.creditName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["creditName"],
+        message: "Please tell us how your name should appear on our supporters page.",
+      });
+    }
+    if (b.creditName && containsBlockedWord(b.creditName)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["creditName"],
+        message: "Please choose a different name to show on our supporters page.",
+      });
+    }
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
@@ -216,6 +243,11 @@ export function buildSessionParams(
     emailConsent: String(body.emailConsent ?? false),
     anonymous: String(body.anonymous ?? false),
     ageConfirmed: String(body.ageConfirmed ?? false),
+    // TASK-224: carry the individual supporters-wall opt-in to the webhook, which maps it onto
+    // donors.list_on_supporters / credit_name. Defaults false/"" so a donor who did not opt in (or any
+    // non-monthly / sub-£10 gift, where the form never offers it) is never listed.
+    listOnSupporters: String(body.listOnSupporters ?? false),
+    creditName: body.creditName ?? "",
   };
 
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is

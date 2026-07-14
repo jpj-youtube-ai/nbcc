@@ -357,6 +357,62 @@ describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", 
   });
 });
 
+describe("POST /api/checkout-session — individual supporters-wall opt-in (TASK-224)", () => {
+  const monthly = {
+    mode: "monthly" as const,
+    plan: "gold" as const,
+    amount: 5000,
+    giftAid: false,
+    ageConfirmed: true,
+    email: "donor@example.com",
+  };
+
+  it("stamps listOnSupporters='true' and the display name when the donor opts in", async () => {
+    await run({ ...monthly, listOnSupporters: true, creditName: "The Campbell Family" });
+    const md = lastParams().metadata;
+    expect(md.listOnSupporters).toBe("true");
+    expect(md.creditName).toBe("The Campbell Family");
+  });
+
+  it("stamps listOnSupporters='false' and an empty creditName when the donor keeps private", async () => {
+    await run({ ...monthly, listOnSupporters: false });
+    const md = lastParams().metadata;
+    expect(md.listOnSupporters).toBe("false");
+    expect(md.creditName).toBe("");
+  });
+
+  it("defaults to listOnSupporters='false' / creditName='' when omitted (base contract unchanged)", async () => {
+    await run(monthly);
+    const md = lastParams().metadata;
+    expect(md.listOnSupporters).toBe("false");
+    expect(md.creditName).toBe("");
+  });
+
+  it("rejects a payload that opts in without a display name with 400 and never calls Stripe", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a profane display name with 400 and never calls Stripe", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true, creditName: "Fuck Off Ltd" });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a benign name that merely contains a shorter blocked word (Scunthorpe-safe)", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true, creditName: "Scunthorpe Rovers" });
+    expect(res.statusCode).toBe(200);
+    expect(lastParams().metadata.creditName).toBe("Scunthorpe Rovers");
+  });
+
+  it("rejects a display name over 200 characters with 400", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true, creditName: "a".repeat(201) });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
 describe("POST /api/checkout-session — declaration scope + currency (REQ-041 / TASK-060)", () => {
   it("stamps metadata.declarationScope='enduring' for a monthly gift (pairs with an enduring declaration)", async () => {
     await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });

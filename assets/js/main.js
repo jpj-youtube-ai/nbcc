@@ -1577,39 +1577,28 @@
       m.addEventListener("click", function () { resetSelection(); });
     });
 
-    // ---- validation: required, visible, enabled controls in a step ----
-    function visible(el) { return !!(el.offsetParent !== null || el.getClientRects().length); }
+    // ---- validation (TASK-225): route every step through the shared highlight-all helper,
+    // using the step's own [data-err] node as the role=alert summary. The helper flags every
+    // missing/invalid required control at once, skips hidden/disabled ones (so the collapsed
+    // declaration/company/partner fieldsets never block), focuses the first, and live-clears. ----
     function validate(el) {
-      var ctrls = Array.prototype.slice.call(el.querySelectorAll("input, select, textarea"));
-      var ok = true, firstBad = null;
-      ctrls.forEach(function (c) {
-        if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
-        var bad;
-        if (c.type === "radio" || c.type === "checkbox") {
-          // TASK-204: a required radio group (e.g. the donor-type choice, which now ships with
-          // nothing preselected) is satisfied only when one option in its name group is checked;
-          // a lone required checkbox (the 18+ confirmation) must itself be ticked. This blocks
-          // Continue until the donor actively chooses, instead of failing later at Stripe.
-          var group = root.querySelectorAll('input[name="' + c.name + '"]');
-          bad = !Array.prototype.some.call(group, function (g) { return g.checked; });
-        } else {
-          var val = (c.value || "").trim();
-          bad = !val;
-          if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
-        }
-        var field =
-          (c.closest &&
-            (c.closest(".give-field") ||
-              c.closest(".field") ||
-              c.closest(".give-donor-options") ||
-              c.closest(".give-check"))) ||
-          null;
-        if (field) field.classList.toggle("invalid", bad);
-        c.setAttribute("aria-invalid", String(bad));
-        if (bad) { ok = false; if (!firstBad) firstBad = c; }
-      });
-      if (firstBad && firstBad.focus) firstBad.focus();
-      return ok;
+      return validateForm(el, { summary: el.querySelector("[data-err]") }).valid;
+    }
+
+    // Step 1 has no required inputs (an amount is a tier tap or a typed custom value), so its
+    // "choose an amount" rule is a cross-field check: flag the visible custom-amount box and
+    // show the step summary until a tier is selected or a positive custom amount is typed.
+    function validateStep1() {
+      var amountMissing =
+        !selected || (selected.classList.contains("give-tier-custom") && !customPence());
+      return validateForm(stepEl(1), {
+        summary: stepEl(1).querySelector("[data-err]"),
+        extraChecks: function () {
+          if (!amountMissing) return [];
+          var input = customInput() || root.querySelector(".give-tier") || stepEl(1);
+          return [{ control: input, message: "Choose an amount to continue" }];
+        },
+      }).valid;
     }
 
     // ---- review summary (step 3) ----
@@ -1660,16 +1649,13 @@
     }
 
     function next() {
-      if (current === 1 && (!selected || (selected.classList.contains("give-tier-custom") && !customPence()))) {
-        showErr(1); return;
-      }
-      if (current === 2 && !validate(stepEl(2))) { showErr(2); return; }
+      if (current === 1 ? !validateStep1() : !validate(stepEl(current))) return;
       hideErr(current);
       go(current + 1, 1);
     }
     function prev() { if (current > 1) go(current - 1, -1); }
     function pay() {
-      if (!validate(stepEl(3))) { showErr(3); return; }
+      if (!validate(stepEl(3))) return;
       if (!selected) { go(1, -1); showErr(1); return; }
       startCheckout(selected, win);
     }

@@ -80,16 +80,16 @@ export function buildThankYouEmailText(v: ThankYouLetterView): string {
     lines.push(`With heartfelt thanks for your donation of ${v.giftInKind ?? "your kind donation"}.`);
   } else {
     const amount = formatGiftAmount(v.giftAmountPence ?? 0);
-    lines.push(`With heartfelt thanks for your gift of ${amount}.`);
+    lines.push(`With heartfelt thanks for your donation of ${amount}.`);
     if (v.giftAided) {
       const worth = formatGiftAmount((v.giftAmountPence ?? 0) + giftAidUpliftPence(v.giftAmountPence ?? 0));
-      lines.push(`Because you Gift Aided it, HMRC adds 25%, making your gift worth ${worth} to our work, at no extra cost to you.`);
+      lines.push(`Because you Gift Aided it, HMRC adds 25%, making your donation worth ${worth} to our work, at no extra cost to you.`);
     }
   }
   lines.push("");
   if (v.personalMessage) lines.push(v.personalMessage, "");
   lines.push(
-    "Gifts like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.",
+    "Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.",
     "",
     "We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.",
     "",
@@ -120,9 +120,9 @@ function giftCallout(v: ThankYouLetterView): string {
   let note = "";
   if (v.giftAided) {
     const worth = formatGiftAmount((v.giftAmountPence ?? 0) + giftAidUpliftPence(v.giftAmountPence ?? 0));
-    note = `<span style="display:block;margin-top:6px;font-size:13px;color:${HOLLY_DARK}">Because you Gift Aided it, HMRC adds 25%, making your gift worth <b style="color:${HOLLY_DARK}">${worth}</b> to our work, at no extra cost to you.</span>`;
+    note = `<span style="display:block;margin-top:6px;font-size:13px;color:${HOLLY_DARK}">Because you Gift Aided it, HMRC adds 25%, making your donation worth <b style="color:${HOLLY_DARK}">${worth}</b> to our work, at no extra cost to you.</span>`;
   }
-  return wrap(`With heartfelt thanks for your gift of <b style="color:${MAROON}">${amount}</b>.${note}`);
+  return wrap(`With heartfelt thanks for your donation of <b style="color:${MAROON}">${amount}</b>.${note}`);
 }
 
 // Assemble the full, self-contained HTML email for one thank-you letter. Mirrors the design of
@@ -169,7 +169,7 @@ export function buildThankYouEmailHtml(v: ThankYouLetterView): string {
       ${bodyP("On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.")}
       ${giftCallout(v)}
       ${personal}
-      ${bodyP("Gifts like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.")}
+      ${bodyP("Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.")}
       ${bodyP("We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.")}
       <div style="margin-top:18px">
         <p style="color:${SLATE};font-family:${BODY};font-size:14px;margin:0">With warmest thanks,</p>

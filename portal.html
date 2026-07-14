@@ -8,7 +8,7 @@
     <title>Donor portal | Night Before Christmas Campaign</title>
     <meta
       name="description"
-      content="Manage your support for the Night Before Christmas Campaign. View your details, change or stop a monthly gift, and manage your Gift Aid, all from your secure donor portal."
+      content="Manage your support for the Night Before Christmas Campaign. View your details, change or stop a monthly donation, and manage your Gift Aid, all from your secure donor portal."
     />
     <!-- A private, token gated page: keep it out of search indexes. -->
     <meta name="robots" content="noindex, nofollow" />
@@ -22,7 +22,7 @@
     <meta property="og:title" content="Donor portal | Night Before Christmas Campaign" />
     <meta
       property="og:description"
-      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly gift and your Gift Aid."
+      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly donation and your Gift Aid."
     />
     <meta property="og:url" content="https://nbcc.scot/donor-portal" />
     <!-- Share image (REQ-034): assets/img/og-image.png, a branded placeholder. -->
@@ -33,7 +33,7 @@
     <meta name="twitter:title" content="Donor portal | Night Before Christmas Campaign" />
     <meta
       name="twitter:description"
-      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly gift and your Gift Aid."
+      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly donation and your Gift Aid."
     />
     <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
@@ -75,7 +75,7 @@
         <div class="rule"></div>
         <p class="lede">
           Welcome to your secure NBCC donor portal. Here you can see your details,
-          change or stop a monthly gift, and manage your Gift Aid, without contacting
+          change or stop a monthly donation, and manage your Gift Aid, without contacting
           the team.
         </p>
       </section>
@@ -160,17 +160,17 @@
 
           <!-- Your monthly gift + reduce-instead-then-cancel (REQ-055). -->
           <div class="portal-card card reveal" aria-labelledby="portal-sub-heading">
-            <h2 id="portal-sub-heading">Your monthly gift</h2>
+            <h2 id="portal-sub-heading">Your monthly donation</h2>
             <p class="portal-plan">
               Current plan: <strong id="portalPlan"></strong>
             </p>
             <p class="portal-note" id="portalNoSub" hidden>
-              You do not have a monthly gift set up. Thank you for every single gift you make.
+              You do not have a monthly donation set up. Thank you for every donation you make.
             </p>
             <div class="portal-actions" id="portalSubActions">
-              <a class="btn btn-ghost" href="/donate">Change your gift amount</a>
+              <a class="btn btn-ghost" href="/donate">Change your donation amount</a>
               <button class="btn btn-ghost" type="button" id="cancelSubStart">
-                Cancel my monthly gift
+                Cancel my monthly donation
               </button>
             </div>
 
@@ -179,15 +179,15 @@
                  reducing first. Ships hidden; initPortal reveals it on cancelSubStart. -->
             <div class="portal-reduce" id="reduceChoice" hidden>
               <p>
-                Before you stop your gift, would a smaller monthly amount work better?
+                Before you stop your donation, would a smaller monthly amount work better?
                 Reducing keeps your support going all year round.
               </p>
               <div class="portal-actions">
                 <a class="btn btn-primary" href="/donate" id="reduceInstead">
-                  Reduce my gift instead
+                  Reduce my donation instead
                 </a>
                 <button class="btn btn-ghost" type="button" id="confirmCancelSub">
-                  No, cancel my monthly gift
+                  No, cancel my monthly donation
                 </button>
               </div>
             </div>

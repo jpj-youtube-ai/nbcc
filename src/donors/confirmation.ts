@@ -20,13 +20,13 @@ export const GIFT_AID_CONFIRMATION_LINE =
 // The enduring clause appended for a MONTHLY gift-aided gift (a monthly declaration is enduring, so
 // it covers ongoing gifts) — still an acknowledgement, not new legal wording.
 export const GIFT_AID_MONTHLY_CLAUSE =
-  " This covers your ongoing monthly gifts while your declaration stands.";
+  " This covers your ongoing monthly donations while your declaration stands.";
 
 // Manage/cancel instructions for a MONTHLY gift — reusing the verbatim REQ-026 reassurance copy from
 // donate.html (there is no self-serve portal yet, REQ-061, to deep-link to, so this is the contact
 // route). Only included for a monthly gift.
 export const MANAGE_CANCEL_LINE =
-  "Managing your monthly gift: monthly donations can be changed or cancelled whenever you like, and " +
+  "Managing your monthly donation: monthly donations can be changed or cancelled whenever you like, and " +
   "Direct Debits are protected by the Direct Debit Guarantee. Any problems, contact Jaimie Wakefield " +
   "at giving@nbcc.scot or call 01292 811 015.";
 
@@ -80,7 +80,7 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
 
   const thanks = monthly
     ? `Thank you ${fullName}, your monthly donation of ${amount} to ${CHARITY_SHORT_NAME} is set up. ` +
-      `We will email you when each monthly gift is taken.`
+      `We will email you when each monthly donation is taken.`
     : `Thank you ${fullName}, your donation of ${amount} to ${CHARITY_SHORT_NAME} has been received.`;
 
   const paragraphs: string[] = [thanks];
@@ -136,7 +136,7 @@ export function buildRefundConfirmation(input: RefundConfirmationInput): Donatio
   const line = full
     ? `Thank you ${fullName}. Your donation to ${CHARITY_SHORT_NAME} has been refunded in full: ${amount} on ${date}.`
     : `Thank you ${fullName}. A refund of ${amount} was made to your donation to ${CHARITY_SHORT_NAME} on ${date}; ` +
-      `the rest of your gift still stands.`;
+      `the rest of your donation still stands.`;
   const text = line + "\n\n" + REGISTRATION_TEXT + "\n";
   const html = `<section class="refund-confirmation"><p>${escapeHtml(line)}</p>${REGISTRATION_HTML}</section>`;
   return { text, html };

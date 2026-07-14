@@ -58,9 +58,9 @@ function giftCallout(d: ThankYouLetterPageData): string {
   let note = "";
   if (d.giftAided) {
     const worth = letterMoney((d.giftAmountPence ?? 0) + giftAidUpliftPence(d.giftAmountPence ?? 0));
-    note = `<span class="ga-note">Because you Gift Aided it, HMRC adds 25%, making your gift worth <b>${worth}</b> to our work, at no extra cost to you.</span>`;
+    note = `<span class="ga-note">Because you Gift Aided it, HMRC adds 25%, making your donation worth <b>${worth}</b> to our work, at no extra cost to you.</span>`;
   }
-  return `<div class="gift-callout">With heartfelt thanks for your gift of <b>${amount}</b>.${note}</div>`;
+  return `<div class="gift-callout">With heartfelt thanks for your donation of <b>${amount}</b>.${note}</div>`;
 }
 
 // Render the full, self-contained printable letter page for one sent thank-you.
@@ -151,7 +151,7 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
           <p>On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.</p>
           ${giftCallout(d)}
           ${personal}
-          <p>Gifts like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
+          <p>Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
           <p>We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
         </div>
         <div class="signoff">

@@ -493,7 +493,7 @@ explicitly a later enhancement, out of scope here. Verified by
 
 `donate.html`'s `<main>` opens with a centred intro (`DONATE INTRO` CSS block,
 mirroring `ABOUT INTRO`) that reuses the home systems: a crimson `.eyebrow`
-("Donate"), the base `<h1>` ("Your gift becomes someone's Christmas"), the
+("Donate"), the base `<h1>` ("Your donation becomes someone's Christmas"), the
 `.rule` divider under it (centred by the `.donate-intro` auto-margin, as on
 `.about-intro`), and a `.lede` noting that everyone at **NBCC** is a volunteer and
 that **around £50 is the value of one Red Bag Full of Joy**, with a give-once or
@@ -815,7 +815,7 @@ returns `flag_for_trustees` for it instead of issuing a Corporation Tax receipt.
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE
-PANEL` CSS block, next to `GIVE WIDGET`): a "Where your gift goes" eyebrow and
+PANEL` CSS block, next to `GIVE WIDGET`): a "Where your donation goes" eyebrow and
 short lede, a semantic `.side-list` of **three** points (thoughtful gifts and
 essential support not salaries; the everyday costs of keeping NBCC running;
 reaching **children, young people and vulnerable adults** in hardship), then a

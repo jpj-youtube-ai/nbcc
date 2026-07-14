@@ -996,8 +996,8 @@
         post(
           base + "/subscription/cancel",
           { subscriptionId: subscriptionId, accepted: "cancel" },
-          "Your monthly gift has been cancelled. Thank you for all your support.",
-          "We could not cancel your monthly gift just now. Please try again later.",
+          "Your monthly donation has been cancelled. Thank you for all your support.",
+          "We could not cancel your monthly donation just now. Please try again later.",
         );
       });
     }
@@ -1194,7 +1194,7 @@
         if (planEl) planEl.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
         if (noSub) noSub.hidden = true;
       } else {
-        if (planEl) planEl.textContent = "No monthly gift";
+        if (planEl) planEl.textContent = "No monthly donation";
         if (noSub) noSub.hidden = false;
         if (subActions) subActions.hidden = true;
         if (reduceChoice) reduceChoice.hidden = true;
@@ -1449,7 +1449,7 @@
       var amountStr = "£" + (pounds % 1 === 0 ? pounds.toFixed(0) : pounds.toFixed(2));
       var giftAidEl = doc.getElementById("giftAid");
       var rows = [
-        ["Your gift", amountStr + (mode === "monthly" ? " a month" : ", one off") +
+        ["Your donation", amountStr + (mode === "monthly" ? " a month" : ", one off") +
           (plan ? ", " + plan.charAt(0).toUpperCase() + plan.slice(1) : "")],
         ["Gift Aid", giftAidEl && giftAidEl.checked ? "Yes, add 25%" : "Not added"],
       ];

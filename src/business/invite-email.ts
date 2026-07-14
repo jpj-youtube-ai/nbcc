@@ -80,7 +80,7 @@ export function buildBusinessSupporterInviteEmail(input: {
   const p2 =
     "We would love to thank you properly, and we would like you to choose how. From a place on our supporters page to a mention in our newsletter, there are a few lovely ways to celebrate your business, and the choice is yours.";
   const p3 =
-    "Your monthly gift could help provide Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy at Christmas.";
+    "Your monthly donation could help provide Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy at Christmas.";
   const p4 =
     "Just follow your private link below to choose how we say thank you. It is unique to your business, so please keep it safe.";
 

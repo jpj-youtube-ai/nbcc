@@ -2404,7 +2404,7 @@
   var NL_TEMPLATE = { blocks: [
     { type: "masthead", variant: 0, data: { issueTitle: "The Night Before Christmas — Winter Update" } },
     { type: "greeting", variant: 1, data: { lead: "Thank you for being part of the Night Before Christmas Campaign. Here is what your kindness has made possible across South West Scotland this year." } },
-    { type: "heading", variant: 1, data: { kicker: "Our impact", title: "What your gift made possible" } },
+    { type: "heading", variant: 1, data: { kicker: "Our impact", title: "What your donation made possible" } },
     { type: "stats", variant: 1, data: { items: [
       { number: "7,657", label: "Red Bags delivered" },
       { number: "£128k", label: "Raised together" },
@@ -2422,7 +2422,7 @@
       name: "A volunteer", role: "Red Bag packer",
       quote: "Seeing the bags come together, knowing each one reaches someone who needs it — that is what Christmas is about.",
     } },
-    { type: "text", variant: 3, data: { text: "Every gift matters. £10 fills a Red Bag; £25 brightens a whole family's Christmas morning." } },
+    { type: "text", variant: 3, data: { text: "Every donation matters. £10 fills a Red Bag; £25 brightens a whole family's Christmas morning." } },
     { type: "heading", variant: 2, data: { title: "Ways you can help" } },
     { type: "waysToHelp", variant: 0, data: { items: [
       { icon: "🎁", title: "Donate", body: "Fund a Red Bag Full of Joy.", label: "Donate", href: "https://nbcc.scot/donate" },
@@ -2904,10 +2904,10 @@
       callout.innerHTML = "With heartfelt thanks for your donation of <b>" + H.escapeHtml(items) + "</b>.";
     } else {
       var n = parseFloat(String(el("tyAmount").value).replace(/[^0-9.]/g, "")) || 0;
-      var html = "With heartfelt thanks for your gift of <b>" + tyMoney(n) + "</b>.";
+      var html = "With heartfelt thanks for your donation of <b>" + tyMoney(n) + "</b>.";
       if (el("tyGiftAid").checked) {
         html +=
-          '<span class="ty-ganote">Because you Gift Aided it, HMRC adds 25%, making your gift worth <b>' +
+          '<span class="ty-ganote">Because you Gift Aided it, HMRC adds 25%, making your donation worth <b>' +
           tyMoney(n * 1.25) +
           "</b> to our work, at no extra cost to you.</span>";
       }

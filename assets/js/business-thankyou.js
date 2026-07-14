@@ -201,7 +201,7 @@
       var lede = doc.getElementById("btyLede");
       if (lede && band) {
         lede.textContent =
-          "Your monthly gift makes you a " + band +
+          "Your monthly donation makes you a " + band +
           " supporter of the Night Before Christmas Campaign. Here is how we would like to say thank you.";
       }
     }

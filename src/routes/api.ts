@@ -557,7 +557,7 @@ export async function postGiftAid(req: Request, res: Response): Promise<Response
     return res.status(200).type("html").send(
       renderGiftAidMessage(template, {
         heading: "Gift Aid added, thank you",
-        body: "Your Gift Aid declaration is complete. NBCC can now reclaim the tax on your gift at no extra cost to you.",
+        body: "Your Gift Aid declaration is complete. NBCC can now reclaim the tax on your donation at no extra cost to you.",
       }),
     );
   } catch (err) {

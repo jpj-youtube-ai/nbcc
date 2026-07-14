@@ -70,6 +70,10 @@ export interface DonorInput {
   // Company billing details (REQ-038, donor_type='company' only); null for individuals.
   billingAddress?: string | null;
   billingPostcode?: string | null;
+  // TASK-224: the individual supporters-wall opt-in + optional public display name (donors
+  // .list_on_supporters / credit_name). Default false/null; the wall falls back to full_name.
+  listOnSupporters?: boolean;
+  creditName?: string | null;
 }
 
 // A row ready to INSERT into donations (snake_case columns). created_at is left to

@@ -19,6 +19,10 @@
   // where extraChecks() -> [{ control, message }] adds caller cross-field rules.
   var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  // TASK-224: tiny whole-word client pre-check for the display name (server filter is load-bearing).
+  var SUPPORTER_BLOCKED = /\b(arse|ass|bastard|bitch|bollocks|bugger|cock|crap|cunt|dick|fuck|piss|prick|shit|slut|twat|wank|whore|chink|coon|fag|faggot|kike|paki|retard|spastic|spic|tranny|wetback)\b|nigg/i;
+  function creditNameBlocked(name) { return SUPPORTER_BLOCKED.test(String(name || "")); }
+
   function ctrlType(c) {
     return (c.tagName === "SELECT" ? "select" : c.getAttribute("type") || "text").toLowerCase();
   }
@@ -844,6 +848,15 @@
         var ageEl = doc.getElementById("ageConfirmed");
         payload.ageConfirmed = !!(ageEl && ageEl.checked);
       }
+      // TASK-224: fold the opt-in in ONLY for the eligible monthly gift where the block is shown.
+      var optinBlock = doc.getElementById("supporterOptin");
+      if (optinBlock && !optinBlock.hidden && payload.mode === "monthly" && payload.amount >= 1000) {
+        var listYes = doc.querySelector('input[name="listOnSupporters"]:checked');
+        payload.listOnSupporters = !!(listYes && listYes.value === "yes");
+        var creditEl = doc.getElementById("supporterCreditName");
+        var credit = creditEl ? (creditEl.value || "").trim() : "";
+        if (payload.listOnSupporters && credit) payload.creditName = credit;
+      }
     }
 
     // Gift Aid declaration (REQ-043): once initDeclarationCapture has wired the fieldset
@@ -1531,6 +1544,17 @@
         setText("giftAidTo", fmtGBP(pence * 1.25));
         setText("giftAidPlus", "+" + fmtGBP(pence * 0.25));
       }
+      updateSupporterOptin();
+    }
+    // TASK-224: shown only for a monthly gift of at least £10 (display-name field only when opted in).
+    var supporterBlock = doc.getElementById("supporterOptin");
+    function updateSupporterOptin() {
+      if (!supporterBlock) return;
+      var eligible = selectedMode() === "monthly" && selectedPence() >= 1000;
+      supporterBlock.hidden = !eligible;
+      var wrap = doc.getElementById("supporterCreditNameField");
+      var yes = doc.querySelector('input[name="listOnSupporters"][value="yes"]');
+      if (wrap) wrap.hidden = !(eligible && yes && yes.checked);
     }
     function select(btn) { clearSelection(); btn.classList.add("is-selected"); selected = btn; hideErr(1); updateSummary(); }
     // TASK-210: no amount is pre-selected. The donor must actively choose a tier (or type a custom
@@ -1572,13 +1596,24 @@
     Array.prototype.forEach.call(root.querySelectorAll(".give-mode"), function (m) {
       m.addEventListener("click", function () { resetSelection(); });
     });
+    Array.prototype.forEach.call(root.querySelectorAll('input[name="listOnSupporters"]'), function (r) {
+      r.addEventListener("change", updateSupporterOptin); // TASK-224
+    });
 
     // ---- validation (TASK-225): route every step through the shared highlight-all helper,
     // using the step's own [data-err] node as the role=alert summary. The helper flags every
     // missing/invalid required control at once, skips hidden/disabled ones (so the collapsed
     // declaration/company/partner fieldsets never block), focuses the first, and live-clears. ----
     function validate(el) {
-      return validateForm(el, { summary: el.querySelector("[data-err]") }).valid;
+      return validateForm(el, {
+        summary: el.querySelector("[data-err]"),
+        // TASK-224: flag an obvious profane display name through the same UI while it is visible.
+        extraChecks: function () {
+          var c = doc.getElementById("supporterCreditName");
+          if (!c || !el.contains(c) || skipControl(c, el) || !creditNameBlocked((c.value || "").trim())) return [];
+          return [{ control: c, message: "Please choose a different name for our supporters page." }];
+        },
+      }).valid;
     }
 
     // Step 1 has no required inputs (an amount is a tier tap or a typed custom value), so its

@@ -165,6 +165,33 @@ describe("donationFromCheckoutSession — contact capture (REQ-039)", () => {
   });
 });
 
+describe("donationFromCheckoutSession — supporters-wall opt-in (TASK-224)", () => {
+  it("reads listOnSupporters + creditName from metadata onto the individual donor", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({
+        metadata: {
+          mode: "monthly",
+          plan: "gold",
+          giftAid: "false",
+          fullName: "Ada",
+          listOnSupporters: "true",
+          creditName: "The Campbell Family",
+        },
+      }),
+    );
+    expect(donor.listOnSupporters).toBe(true);
+    expect(donor.creditName).toBe("The Campbell Family");
+  });
+
+  it("defaults listOnSupporters=false and creditName=null when metadata omits them", () => {
+    const { donor } = donationFromCheckoutSession(
+      session({ metadata: { mode: "once", plan: "", giftAid: "false", fullName: "Ada" } }),
+    );
+    expect(donor.listOnSupporters).toBe(false);
+    expect(donor.creditName).toBeNull();
+  });
+});
+
 describe("donationFromCheckoutSession — donor-type routing (REQ-038)", () => {
   it("maps metadata.donorType='company' and metadata.businessName onto the donation + donor", () => {
     const { donor, donation } = donationFromCheckoutSession(

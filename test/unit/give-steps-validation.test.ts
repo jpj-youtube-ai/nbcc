@@ -82,6 +82,9 @@ describe("donate wizard per-step validation (TASK-225)", () => {
     set("donorSurname", "Lovelace");
     set("donorEmail", "ada@example.com");
     (document.getElementById("ageConfirmed") as HTMLInputElement).checked = true;
+    // TASK-224: a monthly £10 gift reveals the required supporters opt-in in step 2, so it must be
+    // answered too. "Keep my giving private" needs no display name.
+    (document.getElementById("supporterListNo") as HTMLInputElement).click();
     clickNextIn("2");
     expect(visibleStep()).toBe("3");
   });

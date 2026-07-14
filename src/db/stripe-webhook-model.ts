@@ -104,6 +104,11 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
       email: md.email ? md.email : null,
       emailConsent: consented,
       anonymous: md.anonymous === "true",
+      // TASK-224: the individual supporters-wall opt-in + optional display name, stamped on metadata by
+      // the checkout endpoint. Default off / null; the wall only ever shows a paid monthly gift >= £10
+      // that is not anonymous/hidden, so an over-permissive stamp cannot leak someone onto the wall.
+      listOnSupporters: md.listOnSupporters === "true",
+      creditName: md.creditName ? md.creditName : null,
     },
     donation,
   };

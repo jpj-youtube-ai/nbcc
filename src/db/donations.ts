@@ -205,8 +205,8 @@ export async function insertDonorAndDonation(
   const donorRes = await client.query<{ id: number }>(
     `INSERT INTO donors
        (donor_type, full_name, business_name, company_number, email, email_consent, anonymous,
-        billing_address, billing_postcode)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        billing_address, billing_postcode, list_on_supporters, credit_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
     [
       donation.donorType,
@@ -218,6 +218,10 @@ export async function insertDonorAndDonation(
       donor.anonymous ?? false,
       donor.billingAddress ?? null,
       donor.billingPostcode ?? null,
+      // TASK-224: individual supporters-wall opt-in + display name. Columns default safely, so the other
+      // callers (in-person walk-in, recordDonation) that omit them insert false/null unchanged.
+      donor.listOnSupporters ?? false,
+      donor.creditName ?? null,
     ],
   );
   const donorId = donorRes.rows[0].id;

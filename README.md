@@ -730,6 +730,29 @@ Token-only colours (slate body, maroon legend, crimson accents; the `brand-colou
 guard forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-contact-capture.test.ts`.
 
+**Supporters wall opt-in (TASK-224).** Inside the contact fieldset, below the anonymous
+row, a `#supporterOptin` block lets an **individual** choose to appear on the public
+supporters page (`/supporters`, the opt-in wall from TASK-223). It is **revealed only for
+a monthly gift of at least £10** — `initGiveSteps`'s `updateSummary` shows it when
+`selectedMode()==="monthly" && selectedPence() >= 1000` (the wall's floor,
+`bandForMonthlyAmount`), mirroring the monthly-only 18+ row, and it ships `hidden`. The
+choice is a **required** radio with **nothing preselected** (`listOnSupporters` yes/no);
+choosing "show" reveals a custom display-name input (`#supporterCreditName`,
+`name="creditName"`, `maxlength=200`, "For example, The Campbell Family"). Because the
+required controls sit under a `[hidden]` ancestor when not eligible, the shared TASK-225
+validator **requires an answer only while the block is visible** and skips it otherwise.
+`startCheckout` folds `listOnSupporters` (boolean) and `creditName` into the payload
+**only for that eligible monthly gift**; a one-off, sub-£10 or opted-out gift omits them.
+A **tiny client-side profanity pre-check** (`SUPPORTER_BLOCKED`, whole-word so
+Scunthorpe-safe) flags an obvious display name through the same highlight-all UI before
+submit; the **server** filter (`containsBlockedWord`, `POST /api/checkout-session`) is
+load-bearing and rejects a profane or opted-in-without-a-name `creditName` with 400. The
+checkout endpoint stamps `metadata.listOnSupporters` / `metadata.creditName`, and the
+webhook (`donationFromCheckoutSession` → `insertDonorAndDonation`) writes
+`donors.list_on_supporters` / `credit_name`. Verified by
+`test/unit/give-supporter-optin.test.ts`, `checkout-session.test.ts` and
+`stripe-webhook-model.test.ts`.
+
 **Server-side (REQ-039, revised):** `POST /api/checkout-session` now requires a
 valid `email` for the individual/partnership donor paths — a missing or
 malformed email is rejected with 400. A company donation is exempt, since it
@@ -960,9 +983,11 @@ a **business** (donor is a company OR carries a `business_name`) via its
 and they are **not** `anonymous` and **not** `hidden_from_supporters`. A business is
 listed as an **Organisation** by its `credit_name` (falling back to `business_name`),
 an individual as an **Individual** by `donors.credit_name` (falling back to
-`full_name`). _(The individual opt-in / display-name write path is a later task, so
-no individual appears until that lands — the columns exist and the wall consults them
-now.)_
+`full_name`). The individual opt-in + display-name **write path** is the donate form
+(TASK-224, see **Supporters wall opt-in** under the give widget above): an individual
+monthly donor of £10/month or more chooses on the donate form whether to appear and under
+what name, and the choice flows through checkout metadata onto
+`donors.list_on_supporters` / `credit_name`.
 
 **Rendering (TASK-071 / TASK-223):** the `/supporters` clean URL is **rendered
 server-side**, not served as the static file. `GET /supporters` (`src/routes/site.ts`)

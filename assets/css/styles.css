@@ -602,6 +602,9 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-req{color:var(--crimson)}.give-optional{color:var(--slate-soft);font-weight:400;font-size:.86em}
 .give-check{display:flex;gap:11px;align-items:flex-start;margin:12px 0;font-size:.93rem;color:var(--slate);cursor:pointer;line-height:1.5}
 .give-check-box{width:20px;height:20px;flex:0 0 auto;margin:2px 0 0;accent-color:var(--crimson)}
+.give-supporter{margin:14px 0 0;padding:14px 0 0;border-top:1px solid var(--line)}
+.give-supporter-lead{font-size:.93rem;color:var(--slate);margin:0 0 10px;line-height:1.5}
+.give-supporter #supporterCreditNameField{margin-top:12px}
 .give-help,.give-field-help,.give-donor-help,.give-business-help,.give-declaration-help,.give-company-help,.give-partners-help,.give-privacy{font-size:.84rem;color:var(--slate-soft);margin:6px 0 0}
 .give-scope{background:var(--tan-soft);border-radius:12px;padding:14px 16px}
 .give-partner{border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px}

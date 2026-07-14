@@ -272,6 +272,24 @@
 <input class="give-check-box" id="anonymousDonor" name="anonymous" type="checkbox"/>
 <span class="give-check-text">Keep my donation anonymous and off the public Donors Page.</span>
 </label>
+<!-- Supporters wall opt-in (TASK-224): shown by initGiveSteps only for a monthly gift of at least £10. -->
+<div class="give-supporter" id="supporterOptin" hidden>
+<p class="give-supporter-lead">Would you like your name shown on our supporters page, our thank you to monthly givers?</p>
+<div class="give-donor-options">
+<span class="give-donor-option">
+<input aria-required="true" id="supporterListYes" name="listOnSupporters" required="" type="radio" value="yes"/>
+<label for="supporterListYes">Show my name on our supporters page</label>
+</span>
+<span class="give-donor-option">
+<input aria-required="true" id="supporterListNo" name="listOnSupporters" required="" type="radio" value="no"/>
+<label for="supporterListNo">Keep my giving private</label>
+</span>
+</div>
+<div class="give-field" id="supporterCreditNameField" hidden>
+<label for="supporterCreditName">How should your name appear? For example, The Campbell Family</label>
+<input aria-required="true" class="give-field-input" id="supporterCreditName" maxlength="200" name="creditName" required="" type="text"/>
+</div>
+</div>
 <p class="give-field-help give-privacy">
                   We handle your details as set out in our <a href="/privacy">Privacy notice</a>.
                 </p>

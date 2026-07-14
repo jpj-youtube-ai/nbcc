@@ -951,23 +951,56 @@ does). This **supersedes** the earlier "list lives in hand-edited HTML" decision
 donation-sourced entries; the rationale and rejected alternatives are recorded in
 `docs/superpowers/specs/2026-07-01-supporters-list-design.md`.
 
-### Confirmation page (REQ-035)
+### Confirmation page (REQ-035; type-aware TASK-221)
 
-`thank-you.html` is the post-payment confirmation page Stripe redirects the donor
-to on a successful checkout — it is the target of `STRIPE_SUCCESS_URL` at the clean
-URL `/donate/thank-you`. It is the fifth clean-URL page and shares the same nav /
-footer / `assets/css/styles.css` / `assets/js/main.js` as the rest of the site,
-with its own unique SEO + social metadata (`test/unit/seo-metadata.test.ts`). A
-centred intro (the `CONFIRMATION` CSS block, mirroring the About/Donate/Contact/
-Supporters intros) sits above a single reassurance `.card` in the `.page-sections`
-slot. The copy thanks the donor, **notes that a confirmation email follows when an
-email address was provided** (the email-send task owns actually sending it),
-explains how a monthly gift continues, and links back into the site. Being a
-landing page rather than a nav destination, no nav link is marked active. Dash-free
-copy, "NBCC" in full (REQ-031); skip-link + landmarks (REQ-032). Online declarations
-need **no 30-day confirmation letter**, so this page and its email are the whole of
-the post-gift confirmation. `clean-urls` / `site` / `seo-metadata` / `copy-rules` /
-`accessibility` auto-cover the page and stay green.
+`thank-you.html` is the post-payment confirmation page Stripe redirects the donor to on a successful
+checkout — the target of `STRIPE_SUCCESS_URL` at the clean URL `/donate/thank-you`. It shares the same
+nav / footer / `assets/css/styles.css` / `assets/js/main.js` shell as the rest of the site, with its own
+unique SEO + social metadata (`test/unit/seo-metadata.test.ts`).
+
+**TASK-221 makes it TYPE-AWARE.** `buildSessionParams` (`src/routes/api.ts`, via `thankYouReturnUrl`)
+appends `mode` (once|monthly) and `donor` (donorType) to BOTH the hosted `success_url` and the embedded
+`return_url`, and adds Stripe's `session_id={CHECKOUT_SESSION_ID}` template to the hosted URL too (the
+embedded one already carried it) — e.g. `/donate/thank-you?mode=monthly&donor=company&session_id=…`.
+`assets/js/thank-you.js` reads those params and reveals exactly ONE of four variants, **defaulting to a
+generic thanks when the params are absent so an OLD/paramless link still works**:
+
+1. **individual one-off** (`mode=once`, `donor!=company`) — warm thanks + a receipt on its way, nothing to do;
+2. **individual monthly** (`mode=monthly`, by-session `none`) — thanks + one reassurance line (you are in control, change or cancel anytime, and we always tell you the amount and date before each payment);
+3. **business one-off** (`mode=once`, `donor=company`) — thanks to the business + a receipt on its way;
+4. **business monthly** (`mode=monthly`, by-session `ready`/`captured`/`pending`) — the business recognition FORM inline.
+
+Every variant keeps a shared, always-visible contact card (the TASK-219 phone + `giving@nbcc.scot` line)
+and the Back to home / Supporters / Share your story actions.
+
+**Business-monthly, inline (Part 2).** For a company/partnership monthly gift the page calls the NEW,
+strictly **READ-ONLY** endpoint **`GET /api/business/fulfilment/by-session/:sessionId`**
+(`src/routes/business.ts`): it retrieves the Stripe Checkout Session, links it session → donor →
+`business_supporter_fulfilment` (via `donations.stripe_session_id`, read-only in
+`getFulfilmentPageContextBySession`) and returns `ready` (record exists, not captured → render the
+form), `captured` (already submitted → the read-only confirmation), `pending` (a qualifying
+business-monthly session whose webhook record has not landed yet → show "setting up" and poll by-session
+about every 3s for about 20s) or `none` (no recognition applies → show variant 2). The endpoint **never
+creates a donor, donation or fulfilment record** — that stays the webhook's job alone; the session id is
+the auth (a bad / unknown / foreign id → a generic 404, no enumeration) and it is rate limited like the
+sibling token routes. The inline form **reuses** the token page's form: `assets/js/business-thankyou.js`
+exposes a shared `mountBusinessForm` core (validate / submit-once / render) that both `/business/thank-you`
+and this page drive against the same `bty-*` markup — no fork. Submit still hits `POST
+/api/business/fulfilment/:token` (submit-once, unchanged). If the record never lands in time, the page
+shows a fallback pointing at the TASK-213 emailed link.
+
+**Capture confirmation email (Part 3).** After a SUCCESSFUL capture, `postFulfilment` sends a warm "here
+is what you chose" confirmation (`src/business/capture-confirmation-email.ts`) that lists the chosen
+recognition options and the download links they are entitled to (certificate + badge, gated as on the
+page), reusing the branded NBCC email shell. It is **best-effort and post-response** — a send failure can
+never fail the capture or change the 200/409 — sent via the relay `thankYou` passthrough
+(`sendBusinessCaptureConfirmation`, no relay change), and it fires whether the supporter submitted from
+the new inline form OR the emailed token link. Non-definitive impact copy, dash-free.
+
+Online declarations need **no 30-day confirmation letter**, so this page and its emails are the whole of
+the post-gift confirmation. Dash-free copy, "NBCC" in full (REQ-031); skip-link + landmarks + labelled
+and `aria-required` form controls (REQ-032). `clean-urls` / `site` / `seo-metadata` / `copy-rules` /
+`accessibility` / `thank-you-page` cover the page and stay green.
 
 ### Donor portal page (REQ-061 · TASK-104)
 
@@ -1165,7 +1198,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
 | `POST /api/portal/request` | **implemented** | REQ-061 (donor self-request portal magic link) |
 | `GET /api/business/fulfilment/:token` | **implemented** | TASK-212 (business thank-you page state: band + eligible perks + already-captured + saved prefs; token is auth, generic 404 + rate limited) |
-| `POST /api/business/fulfilment/:token` | **implemented** | TASK-212 (capture the thank-you choices ONCE — DB-enforced submit-once, `fulfilment.captured` audit; 409 if already captured) |
+| `GET /api/business/fulfilment/by-session/:sessionId` | **implemented** | TASK-221 (**READ-ONLY** type-aware thank-you lookup: retrieves the Stripe session, links session → donor → fulfilment, returns `ready`/`captured`/`pending`/`none`; creates nothing; session id is auth → generic 404 + rate limited) |
+| `POST /api/business/fulfilment/:token` | **implemented** | TASK-212 (capture the thank-you choices ONCE — DB-enforced submit-once, `fulfilment.captured` audit; 409 if already captured; TASK-221 also sends a best-effort "here is what you chose" confirmation email) |
 | `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login; step 1 of mandatory email 2FA — admin-management Phase 3/TASK-188 — issues a session directly only for a valid 30-day trusted-device token, else `{step:"2fa"}`) |
 | `POST /api/admin/login/2fa` | **implemented** | admin-management Phase 3 (TASK-188; step 2 — verifies the emailed one-time code, 10-min expiry/5-attempt cap, issues the session and optionally a device token when `remember` is set) |
 | `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read; incl. postal address — declaration for an individual, billing for a company) |

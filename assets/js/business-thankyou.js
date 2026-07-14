@@ -1,14 +1,18 @@
-// Business thank you page behaviour (TASK-212). Progressive enhancement, like main.js: a classic
-// <script defer> that runs in the browser, and also exported under a CommonJS guard so it can be unit
-// tested in jsdom (see test/unit/business-thank-you.test.ts).
+// Business thank you page behaviour (TASK-212; shared form extracted TASK-221). Progressive
+// enhancement, like main.js: a classic <script defer> that runs in the browser, and also exported under
+// a CommonJS guard so it can be unit tested in jsdom (see test/unit/business-thank-you.test.ts).
 //
-// The page is private, token gated and SUBMIT ONCE. initBusinessThankYou reads the token from the URL
-// (?token=…), GETs /api/business/fulfilment/:token and then either:
-//   - shows the friendly error card (no token, or the link is not valid);
-//   - renders the read only confirmation (the record was ALREADY submitted, so there is no edit form);
-//   - reveals the capture form, hiding whichever recognition sections the supporter's band does not
-//     earn, wiring the toggles that reveal each detail, and blocking submit until every shown question
-//     is answered. On submit it POSTs ONCE and replaces the form with the confirmation.
+// TWO entry points share ONE form implementation (no fork):
+//   - initBusinessThankYou(doc, win) — the token page (/business/thank-you). Reads the token from the
+//     URL (?token=…), GETs /api/business/fulfilment/:token, shows the friendly error card on failure,
+//     then hands the loaded state to mountBusinessForm. Behaviour is unchanged from TASK-212.
+//   - mountBusinessForm(doc, win, { token, data }) — the reusable core. Given a token and the loaded
+//     page state (band/perks/businessName/captured/preferences), it renders the greeting + either the
+//     capture form (wired, submit-once POST to /api/business/fulfilment/:token) or the read only
+//     confirmation. The type-aware post-checkout thank-you page (assets/js/thank-you.js) calls this
+//     with a token it obtained from the READ-ONLY by-session lookup, so both pages drive the SAME
+//     markup + logic. It operates on the shared bty* element IDs (one set per page), so it needs no
+//     btyContent / btyStatus / btyError chrome — that stays the token page's concern.
 (function () {
   "use strict";
 
@@ -31,33 +35,18 @@
   // The reveal value for each top level question (the answer that opens its detail).
   var REVEAL = { listOnSupporters: "yes", wantSocial: "yes", wantBadge: "yes", wantCertificate: "yes" };
 
-  function initBusinessThankYou(doc, win) {
-    var content = doc.getElementById("btyContent");
-    if (!content) return; // not the business thank you page
+  // The reusable form core. Renders the greeting + (capture form | read only confirmation) into the
+  // shared bty* markup, bound to `token` (its submit-once POST + the certificate link). Shared by the
+  // token page and the type-aware thank-you page, so the two never fork the validate/submit/render
+  // logic. `data` is the loaded page state: { businessName, band, perks, captured, preferences }.
+  function mountBusinessForm(doc, win, opts) {
     win = win || (doc && doc.defaultView) || window;
-
-    var statusEl = doc.getElementById("btyStatus");
-    var errorEl = doc.getElementById("btyError");
+    opts = opts || {};
+    var token = opts.token;
+    var data = opts.data || {};
     var form = doc.getElementById("btyForm");
     var confirmEl = doc.getElementById("btyConfirm");
-
-    function setStatus(msg) {
-      if (statusEl) statusEl.textContent = msg || "";
-    }
-    function showError() {
-      if (statusEl) statusEl.hidden = true;
-      content.hidden = true;
-      if (errorEl) errorEl.hidden = false;
-    }
-
-    // The token from the query string; no token means the link is unusable.
-    var search = (win.location && win.location.search) || "";
-    var m = search.match(/[?&]token=([^&]+)/);
-    var token = m ? decodeURIComponent(m[1]) : "";
-    if (!token) {
-      showError();
-      return;
-    }
+    if (!form) return; // no form markup on this page
 
     var apiBase = "/api/business/fulfilment/" + encodeURIComponent(token);
     var state = { token: token, perks: null };
@@ -188,10 +177,10 @@
 
     // --- rendering ---------------------------------------------------------------------------------
     // Fill the greeting header from the record.
-    function renderHead(data) {
+    function renderHead(d) {
       var nameEl = doc.getElementById("btyName");
-      if (nameEl) nameEl.textContent = data.businessName || "friend";
-      var band = titleCase(data.band);
+      if (nameEl) nameEl.textContent = d.businessName || "friend";
+      var band = titleCase(d.band);
       var bandWrap = doc.getElementById("btyBand");
       var bandLabel = doc.getElementById("btyBandLabel");
       if (band && bandWrap && bandLabel) {
@@ -207,8 +196,8 @@
     }
 
     // Prepare the form for the band: hide the sections it does not earn, wire the toggles, reveal it.
-    function renderForm(data) {
-      state.perks = data.perks || {};
+    function renderForm(d) {
+      state.perks = d.perks || {};
       if (!state.perks.socialThankYou) hideSection("btyRecSocial");
       if (!state.perks.digitalBadge) hideSection("btyRecBadge");
       if (!state.perks.certificate) hideSection("btyRecCertificate");
@@ -275,9 +264,9 @@
 
     // Build the read only confirmation from the saved preferences + perks, including the download
     // links the supporter is entitled to.
-    function renderConfirmation(data) {
-      var perks = data.perks || {};
-      var prefs = data.preferences || {};
+    function renderConfirmation(d) {
+      var perks = d.perks || {};
+      var prefs = d.preferences || {};
       var items = [];
 
       if (prefs.listOnSupporters) {
@@ -329,7 +318,7 @@
       }
 
       var html =
-        '<h2 class="bty-confirm-title">You are all set. Thank you, ' + escapeHtml(data.businessName || "friend") + ".</h2>" +
+        '<h2 class="bty-confirm-title">You are all set. Thank you, ' + escapeHtml(d.businessName || "friend") + ".</h2>" +
         '<p class="bty-confirm-lede">Here is what you chose. We get straight to work now.</p>' +
         '<ul class="bty-confirm-list">' +
         items.map(function (t) { return "<li>" + t + "</li>"; }).join("") +
@@ -352,13 +341,52 @@
       }
     }
 
+    // Render the greeting, then either the read only confirmation (already captured) or the form.
+    renderHead(data);
+    if (data.captured) {
+      state.perks = data.perks || {};
+      renderConfirmation(data);
+    } else {
+      renderForm(data);
+    }
+  }
+
+  // The token page (/business/thank-you): chrome around the shared form. Reads ?token= from the URL,
+  // GETs the by-token state, shows the error card on any failure, then reveals the content and hands
+  // the loaded state to mountBusinessForm. Unchanged behaviour from TASK-212.
+  function initBusinessThankYou(doc, win) {
+    var content = doc.getElementById("btyContent");
+    if (!content) return; // not the token thank you page
+    win = win || (doc && doc.defaultView) || window;
+
+    var statusEl = doc.getElementById("btyStatus");
+    var errorEl = doc.getElementById("btyError");
+
+    function setStatus(msg) {
+      if (statusEl) statusEl.textContent = msg || "";
+    }
+    function showError() {
+      if (statusEl) statusEl.hidden = true;
+      content.hidden = true;
+      if (errorEl) errorEl.hidden = false;
+    }
     function reveal() {
       if (statusEl) statusEl.hidden = true;
       if (errorEl) errorEl.hidden = true;
       content.hidden = false;
     }
 
-    // --- load --------------------------------------------------------------------------------------
+    // The token from the query string; no token means the link is unusable.
+    var search = (win.location && win.location.search) || "";
+    var m = search.match(/[?&]token=([^&]+)/);
+    var token = m ? decodeURIComponent(m[1]) : "";
+    if (!token) {
+      showError();
+      return;
+    }
+
+    var apiBase = "/api/business/fulfilment/" + encodeURIComponent(token);
+
     setStatus("Loading your thank you page…");
     if (typeof win.fetch !== "function") {
       showError();
@@ -375,24 +403,22 @@
       })
       .then(function (data) {
         if (!data) return;
-        renderHead(data);
-        if (data.captured) {
-          state.perks = data.perks || {};
-          reveal();
-          renderConfirmation(data);
-        } else {
-          reveal();
-          renderForm(data);
-        }
+        reveal();
+        mountBusinessForm(doc, win, { token: token, data: data });
       })
       .catch(function () {
         showError();
       });
   }
 
+  var api = { initBusinessThankYou: initBusinessThankYou, mountBusinessForm: mountBusinessForm };
+
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initBusinessThankYou: initBusinessThankYou };
+    module.exports = api;
   } else {
+    // Expose the shared core so the type-aware thank-you page (thank-you.js) can render the inline
+    // business form with a token it obtained from the read-only by-session lookup.
+    if (typeof window !== "undefined") window.NBCCBusinessThankYou = api;
     initBusinessThankYou(document, window);
   }
 })();

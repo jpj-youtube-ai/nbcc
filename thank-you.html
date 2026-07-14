@@ -37,7 +37,15 @@
     <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- business-thankyou.css styles the inline business-supporter recognition form used by the
+         business-monthly variant (TASK-221); it reuses the same .bty-* styles as /business/thank-you. -->
+    <link rel="stylesheet" href="/assets/css/business-thankyou.css" />
     <script defer src="/assets/js/main.js"></script>
+    <!-- business-thankyou.js exposes the SHARED recognition-form core (mountBusinessForm); it no-ops its
+         own token-page bootstrap here (no #btyContent). thank-you.js reads the mode/donor/session_id
+         params, reveals the right variant, and drives the read-only by-session lookup + inline form. -->
+    <script defer src="/assets/js/business-thankyou.js"></script>
+    <script defer src="/assets/js/thank-you.js"></script>
   </head>
   <body>
     <!-- Skip link (REQ-032): first focusable element; jumps to <main id="main">. -->
@@ -81,28 +89,213 @@
         </p>
       </section>
 
-      <!-- What happens next (REQ-035): a single reassurance card on the shared
-           .card surface. Notes that a confirmation email follows when the donor
-           shared an email address (ties to the email-send task) and how a monthly
-           gift continues, then links back into the site. Buttons reuse .btn /
-           .btn-primary / .btn-ghost; no image tags, token-only colours. -->
+      <!-- TASK-221: the page is TYPE AWARE. Stripe returns the donor here with mode+donor+session_id on
+           the query string; assets/js/thank-you.js reveals exactly ONE of the variant blocks below
+           (defaulting to the generic block when the params are absent, so an old link still works).
+           Every variant keeps the shared contact + actions card at the foot (the TASK-219 contact line).
+           Buttons reuse .btn / .btn-primary / .btn-ghost; token only colours, no new look. -->
       <section class="page-sections" data-region="sections">
-        <div class="thankyou-next card reveal">
-          <h2 id="thankyou-next-heading">What happens next</h2>
+        <!-- Generic default (no params / old link): the original "what happens next" reassurance. -->
+        <div class="thankyou-next card" id="tyGeneric" hidden>
+          <h2>What happens next</h2>
           <p>
-            A confirmation email is on its way to your inbox with the details of
-            your donation. If it does not arrive, please check your spam folder or get
-            in touch and the NBCC elves will help.
+            A confirmation email is on its way to your inbox with the details of your donation. If it
+            does not arrive, please check your spam folder or get in touch and the NBCC elves will help.
           </p>
           <p>
-            A monthly donation continues each month until you choose to stop it, and
-            you can change or cancel it at any time. A single donation is complete,
-            with nothing more for you to do.
+            A monthly donation continues each month until you choose to stop it, and you can change or
+            cancel it at any time. A single donation is complete, with nothing more for you to do.
           </p>
-          <!-- TASK-219: a short, visible contact line (phone + email) mirroring donate.html's
-               "Need a hand?" line, so a donor with a question can reach a real person. -->
+        </div>
+
+        <!-- Variant 1: individual, single donation. -->
+        <div class="thankyou-next card" id="tyIndividualOnce" hidden>
+          <h2>Your donation is on its way</h2>
+          <p>
+            Thank you so much. A receipt is on its way to your inbox with the details of your donation.
+          </p>
+          <p>There is nothing more for you to do. Your kindness helps bring comfort, dignity and joy this Christmas.</p>
+        </div>
+
+        <!-- Variant 2: individual, monthly. One brief reassurance line (you are always in control). -->
+        <div class="thankyou-next card" id="tyIndividualMonthly" hidden>
+          <h2>Your monthly donation is set up. Thank you</h2>
+          <p>
+            Thank you for becoming a monthly supporter. Your monthly donation is set up, and a
+            confirmation is on its way to your inbox.
+          </p>
+          <p>
+            You are always in control. You can change or cancel your monthly donation at any time, and
+            we will always tell you the amount and the date before each payment.
+          </p>
+        </div>
+
+        <!-- Variant 3: business, single donation. -->
+        <div class="thankyou-next card" id="tyBusinessOnce" hidden>
+          <h2>Thank you from all of us at NBCC</h2>
+          <p>
+            Thank you for your business's generous donation. A receipt is on its way to your inbox with
+            the details of your donation.
+          </p>
+          <p>There is nothing more for you to do. Your support helps bring comfort, dignity and joy this Christmas.</p>
+        </div>
+
+        <!-- Variant 4: business, monthly. The inline recognition form, driven by the READ-ONLY
+             by-session lookup (assets/js/thank-you.js) and rendered by the SHARED form core
+             (assets/js/business-thankyou.js mountBusinessForm). The markup mirrors /business/thank-you
+             (same bty-* ids the shared core drives) so the two pages never fork the logic; the radios
+             here also carry explicit ids + label[for] + aria-required so this donor-facing page meets
+             the strict accessibility floor. #tyBizStatus shows the "setting up" message while the
+             record is created; #tyBizFallback is the emailed-link fallback if it never lands. -->
+        <div id="tyBusinessMonthly" hidden>
+          <p class="bty-status" id="tyBizStatus" role="status" aria-live="polite">
+            Setting up your recognition options, one moment…
+          </p>
+
+          <div class="card card-lg bty-card" id="tyBizCard" hidden>
+            <div class="bty-head">
+              <img class="bty-logo" src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="64" height="64" loading="lazy" />
+              <p class="bty-band" id="btyBand" hidden><span id="btyBandLabel"></span></p>
+              <h2 class="bty-title">Thank you, <span id="btyName">friend</span></h2>
+              <p class="bty-lede" id="btyLede">
+                Your monthly donation makes you a valued supporter of the Night Before Christmas
+                Campaign. Here is how we would like to say thank you.
+              </p>
+            </div>
+
+            <form class="bty-form" id="btyForm" novalidate>
+              <p class="bty-intro">Each choice is yours. Please answer each one, and only fill in what a Yes needs.</p>
+              <p class="bty-req-all">All questions below need an answer. Nothing is ticked for you.</p>
+
+              <!-- Supporters page (every band) -->
+              <fieldset class="bty-rec" id="btyRecSupporters" data-perk="supporters">
+                <legend class="bty-rec-legend">
+                  <span class="bty-rec-title">Your business on our Supporters page</span>
+                  <span class="bty-req">required</span>
+                </legend>
+                <p class="bty-rec-desc">We list the businesses that support us on our website. Shown, or kept private?</p>
+                <div class="bty-toggle" role="radiogroup" aria-label="Your business on our Supporters page">
+                  <label class="bty-opt" for="tyListYes"><input type="radio" id="tyListYes" name="listOnSupporters" value="yes" required aria-required="true" /><span>Show my business</span></label>
+                  <label class="bty-opt" for="tyListNo"><input type="radio" id="tyListNo" name="listOnSupporters" value="no" required aria-required="true" /><span>Keep us private</span></label>
+                </div>
+                <div class="bty-detail" data-detail="supporters" hidden>
+                  <div class="give-field">
+                    <label for="btyCreditName">How should your name appear?</label>
+                    <input type="text" id="btyCreditName" name="creditName" class="give-field-input" autocomplete="organization" maxlength="200" />
+                  </div>
+                  <div class="give-field">
+                    <label for="btyWebsite">Your website <span class="give-optional">(optional)</span></label>
+                    <input type="text" id="btyWebsite" name="website" class="give-field-input" placeholder="yourbusiness.co.uk" maxlength="300" />
+                    <p class="bty-why">So we can link to you from the Supporters page.</p>
+                  </div>
+                </div>
+              </fieldset>
+
+              <!-- Social media thank you (Platinum) -->
+              <fieldset class="bty-rec" id="btyRecSocial" data-perk="social">
+                <legend class="bty-rec-legend">
+                  <span class="bty-rec-title">A social media thank you</span>
+                  <span class="bty-req">required</span>
+                </legend>
+                <p class="bty-rec-desc">We will post a public thank you to your business on our Facebook and Instagram.</p>
+                <div class="bty-toggle" role="radiogroup" aria-label="A social media thank you">
+                  <label class="bty-opt" for="tySocialYes"><input type="radio" id="tySocialYes" name="wantSocial" value="yes" required aria-required="true" /><span>Yes please</span></label>
+                  <label class="bty-opt" for="tySocialNo"><input type="radio" id="tySocialNo" name="wantSocial" value="no" required aria-required="true" /><span>No thanks</span></label>
+                </div>
+                <div class="bty-detail" data-detail="social" hidden>
+                  <div class="give-field">
+                    <label for="btySocials">Your social handles <span class="give-optional">(optional)</span></label>
+                    <input type="text" id="btySocials" name="socials" class="give-field-input" placeholder="@yourbusiness" maxlength="200" />
+                    <p class="bty-why">So we can tag you when we post.</p>
+                  </div>
+                </div>
+              </fieldset>
+
+              <!-- Digital badge (Platinum) -->
+              <fieldset class="bty-rec" id="btyRecBadge" data-perk="badge">
+                <legend class="bty-rec-legend">
+                  <span class="bty-rec-title">A digital badge for your website</span>
+                  <span class="bty-req">required</span>
+                </legend>
+                <p class="bty-rec-desc">A "We proudly support NBCC" badge you can display on your own site.</p>
+                <div class="bty-toggle" role="radiogroup" aria-label="A digital badge for your website">
+                  <label class="bty-opt" for="tyBadgeYes"><input type="radio" id="tyBadgeYes" name="wantBadge" value="yes" required aria-required="true" /><span>Yes please</span></label>
+                  <label class="bty-opt" for="tyBadgeNo"><input type="radio" id="tyBadgeNo" name="wantBadge" value="no" required aria-required="true" /><span>No thanks</span></label>
+                </div>
+                <div class="bty-detail" data-detail="badge" hidden>
+                  <p class="bty-note">Lovely. Once you submit, your badge is ready to download and we will email it to you too.</p>
+                </div>
+              </fieldset>
+
+              <!-- Certificate (Platinum) -->
+              <fieldset class="bty-rec" id="btyRecCertificate" data-perk="certificate">
+                <legend class="bty-rec-legend">
+                  <span class="bty-rec-title">A personalised certificate</span>
+                  <span class="bty-req">required</span>
+                </legend>
+                <p class="bty-rec-desc">A certificate for your business, to print and display.</p>
+                <div class="bty-toggle" role="radiogroup" aria-label="A personalised certificate">
+                  <label class="bty-opt" for="tyCertYes"><input type="radio" id="tyCertYes" name="wantCertificate" value="yes" required aria-required="true" /><span>Yes please</span></label>
+                  <label class="bty-opt" for="tyCertNo"><input type="radio" id="tyCertNo" name="wantCertificate" value="no" required aria-required="true" /><span>No thanks</span></label>
+                </div>
+                <div class="bty-detail" data-detail="certificate" hidden>
+                  <p class="bty-sub-label">How would you like it?</p>
+                  <div class="bty-toggle" role="radiogroup" aria-label="How would you like your certificate">
+                    <label class="bty-opt" for="tyCertDownload"><input type="radio" id="tyCertDownload" name="certificateDelivery" value="download" /><span>Download it myself</span></label>
+                    <label class="bty-opt" for="tyCertPost"><input type="radio" id="tyCertPost" name="certificateDelivery" value="post" /><span>Post it to me</span></label>
+                  </div>
+                  <div class="bty-detail" data-detail="certificateAddress" hidden>
+                    <div class="bty-addr-grid">
+                      <div class="give-field bty-field-full">
+                        <label for="btyAddr1">Address line 1</label>
+                        <input type="text" id="btyAddr1" name="addressLine1" class="give-field-input" placeholder="Building and street" autocomplete="address-line1" maxlength="200" />
+                      </div>
+                      <div class="give-field bty-field-full">
+                        <label for="btyAddr2">Address line 2 <span class="give-optional">(optional)</span></label>
+                        <input type="text" id="btyAddr2" name="addressLine2" class="give-field-input" autocomplete="address-line2" maxlength="200" />
+                      </div>
+                      <div class="give-field">
+                        <label for="btyTown">Town or city</label>
+                        <input type="text" id="btyTown" name="town" class="give-field-input" autocomplete="address-level2" maxlength="120" />
+                      </div>
+                      <div class="give-field">
+                        <label for="btyPostcode">Postcode</label>
+                        <input type="text" id="btyPostcode" name="postcode" class="give-field-input" placeholder="KA1 1AA" autocomplete="postal-code" maxlength="20" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </fieldset>
+
+              <!-- Newsletter confirmation (every band keeps the newsletter). A statement, not a question. -->
+              <p class="bty-newsletter" id="btyNewsletter">
+                You will also receive our supporter newsletter, so you can see the difference your donation makes.
+              </p>
+
+              <div class="bty-email-note"><strong>Good to know:</strong> we will also email you your download links, so you can always come back to your badge and certificate later.</div>
+
+              <p class="bty-form-status" id="btyFormStatus" role="alert" aria-live="assertive"></p>
+              <button class="btn btn-primary bty-submit" type="submit" id="btySubmit">Submit my choices</button>
+              <p class="bty-saved-note">This is a single submit, so please choose carefully. Once you submit we get straight to work. If anything changes later, just email giving@nbcc.scot.</p>
+            </form>
+
+            <div class="bty-confirm" id="btyConfirm" hidden aria-live="polite"></div>
+          </div>
+
+          <!-- Fallback: the record has not landed in time. The TASK-213 email covers them. -->
+          <div class="thankyou-next card" id="tyBizFallback" hidden>
+            <h2>We have emailed you a link</h2>
+            <p>
+              Thank you for becoming a monthly business supporter. We have emailed you a private link so
+              you can choose how we say thank you. Please look out for it in your inbox, and check your
+              spam folder if it does not arrive.
+            </p>
+          </div>
+        </div>
+
+        <!-- Shared contact + actions, visible for EVERY variant (TASK-219 contact line: phone + email). -->
+        <div class="thankyou-next card" id="tyContact">
           <p>Questions about your donation? Call <a href="tel:+441292811015">01292 811 015</a> or email <a href="mailto:giving@nbcc.scot">giving@nbcc.scot</a>.</p>
-          <p>Been part of the NBCC story this year? We would love to hear yours.</p>
           <div class="thankyou-actions">
             <a class="btn btn-primary" href="/">Back to home</a>
             <a class="btn btn-ghost" href="/supporters">See our supporters</a>

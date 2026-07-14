@@ -359,6 +359,10 @@ export async function markFulfilmentFlag(
 export interface FulfilmentPageContext {
   band: SupporterBand;
   businessName: string; // business_name, falling back to full_name — always a non-empty greeting name
+  // The donor's contact email (TASK-221): the recipient for the post-capture "here is what you chose"
+  // confirmation email (sent best-effort from postFulfilment). NULL when the business gave no email, in
+  // which case no confirmation is sent. NEVER echoed to the browser by the GET/by-session routes.
+  email: string | null;
   captured: boolean; // captured_at IS NOT NULL — the submit-once record has been filled in
   creditName: string | null;
   website: string | null;
@@ -379,6 +383,7 @@ export async function getFulfilmentPageContextByToken(
     band: SupporterBand;
     business_name: string | null;
     full_name: string;
+    email: string | null;
     captured_at: Date | null;
     credit_name: string | null;
     website: string | null;
@@ -394,6 +399,7 @@ export async function getFulfilmentPageContextByToken(
     `SELECT f.band,
             dn.business_name,
             dn.full_name,
+            dn.email,
             f.captured_at,
             f.credit_name, f.website, f.socials, f.list_on_supporters,
             f.want_social, f.want_badge, f.want_certificate,
@@ -409,6 +415,87 @@ export async function getFulfilmentPageContextByToken(
   return {
     band: r.band,
     businessName,
+    email: r.email,
+    captured: r.captured_at != null,
+    creditName: r.credit_name,
+    website: r.website,
+    socials: r.socials,
+    listOnSupporters: r.list_on_supporters,
+    wantSocial: r.want_social,
+    wantBadge: r.want_badge,
+    wantCertificate: r.want_certificate,
+    certificateDelivery: r.certificate_delivery,
+    certificateAddress: r.certificate_address,
+    consentFeatured: r.consent_featured,
+  };
+}
+
+// --- Thank-you page state addressed by the Stripe Checkout SESSION (TASK-221) -------------------
+// The type-aware post-checkout thank-you page (/donate/thank-you) has only the completed session id
+// (Stripe substitutes {CHECKOUT_SESSION_ID} into the return URL), NOT the per-business token. This
+// read links that session → its donor → the business_supporter_fulfilment for that donor, returning
+// the SAME page state as getFulfilmentPageContextByToken PLUS the record's token (the page needs it to
+// bind the form's submit-once POST and the certificate link). The link mirrors how the webhook stamps
+// the donation: handleCheckoutCompleted writes donations.stripe_session_id = session.id, so the donor
+// for a session is the donor of the donation carrying that session id, and the fulfilment is that
+// donor's row.
+//
+// STRICTLY READ-ONLY (pool.query, no transaction/audit/write — mirrors getFulfilmentPageContextByToken).
+// It NEVER creates a donor, donation or fulfilment record — that is the webhook's job alone. It returns
+// null when no donation-with-fulfilment yet exists for the session (the webhook has not caught up, or
+// this gift earns no recognition), and the route decides pending vs none from the session itself. A
+// token-less fulfilment row (defensive — every webhook-created record has one) is treated as not-ready
+// (null), so the page keeps polling rather than binding a broken link.
+export interface FulfilmentSessionContext extends FulfilmentPageContext {
+  token: string;
+}
+
+export async function getFulfilmentPageContextBySession(
+  sessionId: string,
+): Promise<FulfilmentSessionContext | null> {
+  const res = await pool.query<{
+    token: string | null;
+    band: SupporterBand;
+    business_name: string | null;
+    full_name: string;
+    email: string | null;
+    captured_at: Date | null;
+    credit_name: string | null;
+    website: string | null;
+    socials: string | null;
+    list_on_supporters: boolean;
+    want_social: boolean;
+    want_badge: boolean;
+    want_certificate: boolean;
+    certificate_delivery: string | null;
+    certificate_address: string | null;
+    consent_featured: boolean;
+  }>(
+    `SELECT f.token,
+            f.band,
+            dn.business_name,
+            dn.full_name,
+            dn.email,
+            f.captured_at,
+            f.credit_name, f.website, f.socials, f.list_on_supporters,
+            f.want_social, f.want_badge, f.want_certificate,
+            f.certificate_delivery, f.certificate_address, f.consent_featured
+       FROM donations d
+       JOIN business_supporter_fulfilment f ON f.donor_id = d.donor_id
+       JOIN donors dn ON dn.id = d.donor_id
+      WHERE d.stripe_session_id = $1
+      ORDER BY d.id ASC
+      LIMIT 1`,
+    [sessionId],
+  );
+  const r = res.rows[0];
+  if (!r || !r.token) return null;
+  const businessName = (r.business_name ?? "").trim() || r.full_name;
+  return {
+    token: r.token,
+    band: r.band,
+    businessName,
+    email: r.email,
     captured: r.captured_at != null,
     creditName: r.credit_name,
     website: r.website,

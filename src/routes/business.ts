@@ -3,13 +3,18 @@ import { z } from "zod";
 import {
   getCertificateContextByToken,
   getFulfilmentPageContextByToken,
+  getFulfilmentPageContextBySession,
   updateFulfilmentPreferences,
   FulfilmentCaptureError,
   type FulfilmentPreferences,
 } from "../db/fulfilment";
-import { bandHasPlatinumPerks, perksForBand, type BandPerks } from "../donors/fulfilment";
+import { bandHasPlatinumPerks, perksForBand, fulfilmentBandFor, type BandPerks } from "../donors/fulfilment";
 import { buildCertificateHtml, certificateHeroName, formatMonthYear } from "../business/certificate";
+import { buildCaptureConfirmationEmail } from "../business/capture-confirmation-email";
 import { createRateLimiter } from "../portal/request-limiter";
+import { stripe } from "../clients/stripe";
+import { sendBusinessCaptureConfirmation } from "../clients/email";
+import { config } from "../config";
 
 // Public business-supporter certificate delivery (TASK-211). A Platinum business supporter's
 // secure-thank-you link carries a token; GET /business/certificate/<token> renders their personalised,
@@ -248,6 +253,139 @@ export async function getFulfilment(req: Request, res: Response): Promise<Respon
   }
 }
 
+// GET /api/business/fulfilment/by-session/:sessionId (TASK-221) — the type-aware post-checkout
+// thank-you page (/donate/thank-you) has only the COMPLETED Stripe Checkout session id (Stripe
+// substitutes {CHECKOUT_SESSION_ID} into the return URL), NOT the per-business token. This resolves a
+// business supporter's recognition record FROM that session and returns one of four states the page
+// acts on:
+//   ready    — the record exists, not yet captured → the page renders the inline recognition form;
+//   captured — already submitted → the page renders the read-only confirmation;
+//   pending  — it IS a qualifying business monthly session but the webhook has not written the record
+//              yet → the page shows a brief "setting up" and polls;
+//   none     — no recognition applies (individual monthly, or a business gift below the £10/mo band) →
+//              the page shows the individual-monthly variant.
+//
+// SAFETY (critical): this endpoint is STRICTLY READ-ONLY. It retrieves the Stripe session and READS the
+// fulfilment the webhook has (or has not yet) written — it NEVER creates a donor, donation or
+// fulfilment record (that is the webhook's job alone; no duplication of the donor/payment writes). The
+// session id is the auth: a bad / unknown / foreign session id throws on retrieve and returns the SAME
+// generic 404 as any not-found (no enumeration), and the route is rate limited exactly like the sibling
+// token routes. It does not touch the money path or TASK-215 checkout logic.
+export async function getFulfilmentBySession(req: Request, res: Response): Promise<Response> {
+  const sessionId = req.params.sessionId;
+  if (fulfilmentOverLimit(sessionId, req.ip ?? "unknown")) {
+    return res.status(429).json({ error: "Too many requests. Please try again shortly." });
+  }
+
+  // Retrieve the Checkout Session from Stripe (READ-ONLY). An unknown / foreign / invalid id throws (or,
+  // in offline stub mode, has no retrieve) → the same generic 404 as any not-found, so a valid session
+  // is indistinguishable from an invalid one and there is no enumeration.
+  let session: import("stripe").Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.retrieve(sessionId);
+  } catch {
+    return res.status(404).json({ error: FULFILMENT_NOT_FOUND });
+  }
+
+  try {
+    // READ (never write) the fulfilment for the donor of THIS session. The webhook stamps the donation
+    // with donations.stripe_session_id = session.id, so this resolves session → donor → fulfilment.
+    const ctx = await getFulfilmentPageContextBySession(sessionId);
+    if (ctx) {
+      const perks = perksForBand(ctx.band);
+      // Mirror the by-token GET shape (businessName/band/perks/captured/preferences) so the shared page
+      // form can consume it directly, plus the token it needs to bind the submit-once POST + cert link.
+      // The donor email is deliberately NOT echoed (it stays server-side).
+      if (ctx.captured) {
+        return res.status(200).json({
+          status: "captured",
+          token: ctx.token,
+          businessName: ctx.businessName,
+          band: ctx.band,
+          perks,
+          captured: true,
+          preferences: {
+            listOnSupporters: ctx.listOnSupporters,
+            creditName: ctx.creditName,
+            website: ctx.website,
+            wantSocial: ctx.wantSocial,
+            socials: ctx.socials,
+            wantBadge: ctx.wantBadge,
+            wantCertificate: ctx.wantCertificate,
+            certificateDelivery: ctx.certificateDelivery,
+            certificateAddress: ctx.certificateAddress,
+            consentFeatured: ctx.consentFeatured,
+          },
+        });
+      }
+      return res.status(200).json({
+        status: "ready",
+        token: ctx.token,
+        businessName: ctx.businessName,
+        band: ctx.band,
+        perks,
+        captured: false,
+        preferences: null,
+      });
+    }
+
+    // No fulfilment row yet. Decide pending vs none from the SESSION itself, using the SAME pure banding
+    // the webhook uses (fulfilmentBandFor over the session metadata + amount_total). A COMPLETED monthly
+    // (subscription) session that bands is a qualifying business supporter whose webhook record has not
+    // landed yet → pending; anything else earns no recognition → none.
+    const md = session.metadata ?? {};
+    const band = fulfilmentBandFor({
+      mode: md.mode === "monthly" ? "monthly" : "once",
+      donorType: md.donorType === "company" ? "company" : "individual",
+      businessName: md.businessName ?? null,
+      amountPence: session.amount_total ?? 0,
+    });
+    const qualifying = band !== null && session.status === "complete" && session.mode === "subscription";
+    return res.status(200).json({ status: qualifying ? "pending" : "none" });
+  } catch (err) {
+    console.error("business fulfilment by-session read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: FULFILMENT_UNAVAILABLE });
+  }
+}
+
+// Post-capture confirmation email (TASK-221), best-effort. After a SUCCESSFUL capture, we email the
+// business a warm "here is what you chose" confirmation listing their choices + their download links,
+// built by the pure src/business/capture-confirmation-email.ts on the env-correct public base
+// (config.PORTAL_BASE_URL — the same base the invite uses) and sent From/Reply-To config.GIVING_FROM_EMAIL
+// via the relay `thankYou` passthrough (no relay change). It fires whether they submitted from the new
+// inline thank-you form OR the emailed token link — both reach postFulfilment. A null email (the business
+// gave none) or ANY build/provider failure is a no-op: the capture is already durably committed, so a
+// failed/late send must NEVER fail the capture or change its 200/409 response. This mirrors the webhook's
+// post-commit best-effort sends. Exported so the trigger is unit-testable with a mocked email client.
+export async function sendCaptureConfirmation(
+  email: string | null,
+  businessName: string,
+  perks: BandPerks,
+  preferences: FulfilmentPreferences,
+  token: string,
+): Promise<void> {
+  if (!email) return;
+  try {
+    const content = buildCaptureConfirmationEmail({
+      businessName,
+      perks,
+      preferences,
+      token,
+      baseUrl: config.PORTAL_BASE_URL,
+    });
+    await sendBusinessCaptureConfirmation({
+      email,
+      from: config.GIVING_FROM_EMAIL,
+      replyTo: config.GIVING_FROM_EMAIL,
+      subject: content.subject,
+      html: content.html,
+      text: content.text,
+    });
+  } catch {
+    // best-effort: the capture is durably recorded; a failed confirmation must not fail the capture.
+  }
+}
+
 // POST /api/business/fulfilment/:token — capture the choices ONCE. Order: rate limit, then resolve the
 // record (unknown → generic 404; already captured → 409, so the page shows the read-only
 // confirmation), then band-aware validation, then the audited submit-once write. The write is itself
@@ -279,7 +417,12 @@ export async function postFulfilment(req: Request, res: Response): Promise<Respo
 
   try {
     await updateFulfilmentPreferences(token, preferences, "business");
-    return res.status(200).json({ captured: true, businessName: ctx.businessName, perks, preferences });
+    // Respond FIRST, then fire the confirmation email post-response and best-effort (TASK-221). Because
+    // sendCaptureConfirmation swallows every failure, awaiting it here can never throw and never changes
+    // the 200 the client already received. The recipient is the donor email carried on the page context.
+    const response = res.status(200).json({ captured: true, businessName: ctx.businessName, perks, preferences });
+    await sendCaptureConfirmation(ctx.email, ctx.businessName, perks, preferences, token);
+    return response;
   } catch (err) {
     if (err instanceof FulfilmentCaptureError) {
       // already_captured (a concurrent submit won the race) → 409; not_found → the generic 404.
@@ -292,5 +435,8 @@ export async function postFulfilment(req: Request, res: Response): Promise<Respo
   }
 }
 
+// The by-session route is a distinct TWO-segment path (…/fulfilment/by-session/:sessionId), so it can
+// never be shadowed by the single-segment …/fulfilment/:token route regardless of registration order.
+businessRouter.get("/api/business/fulfilment/by-session/:sessionId", getFulfilmentBySession);
 businessRouter.get("/api/business/fulfilment/:token", getFulfilment);
 businessRouter.post("/api/business/fulfilment/:token", postFulfilment);

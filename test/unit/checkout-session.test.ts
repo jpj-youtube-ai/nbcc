@@ -100,7 +100,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
     expect(p.line_items[0].quantity).toBe(1);
     expect(p.line_items[0].price_data.currency).toBe("gbp");
     expect(p.line_items[0].price_data.unit_amount).toBe(5000);
-    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you");
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
     expect(p.cancel_url).toBe("https://nbcc.test/donate");
   });
 
@@ -746,9 +746,10 @@ describe("POST /api/checkout-session — embedded ui mode (TASK-215)", () => {
     const p = lastParams();
     // Stripe SDK enum: the inline UI is "embedded_page"; the hosted redirect is the unset default.
     expect(p.ui_mode).toBe("embedded_page");
-    // The return_url reuses the SAME on-site base as the hosted success URL and carries the session
-    // id template Stripe substitutes on redirect (the braces must NOT be URL-encoded).
-    expect(p.return_url).toBe("https://nbcc.test/donate/thank-you?session_id={CHECKOUT_SESSION_ID}");
+    // The return_url reuses the SAME on-site base as the hosted success URL and carries the type-aware
+    // mode+donor params (TASK-221) plus the session id template Stripe substitutes on redirect (the
+    // braces must NOT be URL-encoded).
+    expect(p.return_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
     expect(p.success_url).toBeUndefined();
     expect(p.cancel_url).toBeUndefined();
   });
@@ -760,7 +761,7 @@ describe("POST /api/checkout-session — embedded ui mode (TASK-215)", () => {
     expect(body.clientSecret).toBeUndefined();
     const p = lastParams();
     expect(p.ui_mode).toBeUndefined();
-    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you");
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
     expect(p.cancel_url).toBe("https://nbcc.test/donate");
   });
 
@@ -784,7 +785,7 @@ describe("POST /api/checkout-session — embedded ui mode (TASK-215)", () => {
     expect(body.publishableKey).toBeUndefined();
     const p = lastParams();
     expect(p.ui_mode).toBeUndefined();
-    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you");
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
     expect(p.cancel_url).toBe("https://nbcc.test/donate");
   });
 
@@ -830,6 +831,85 @@ describe("POST /api/checkout-session — embedded ui mode (TASK-215)", () => {
     const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "popup" });
     expect(res.statusCode).toBe(400);
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/checkout-session — type-aware thank-you redirect (TASK-221)", () => {
+  const company = {
+    legalName: "Acme Ltd",
+    contactName: "Ada Lovelace",
+    contactEmail: "finance@acme.test",
+    billingAddress: "1 Office Park, London",
+    billingPostcode: "SW1A 1AA",
+    considerationGiven: false,
+  };
+
+  it("carries mode+donor+session_id on the hosted success_url for a monthly company gift", async () => {
+    await run({
+      mode: "monthly",
+      plan: "platinum",
+      amount: 10000,
+      giftAid: false,
+      ageConfirmed: true,
+      donorType: "company",
+      businessName: "Acme Ltd",
+      company,
+    });
+    const p = lastParams();
+    expect(p.success_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=monthly&donor=company&session_id={CHECKOUT_SESSION_ID}",
+    );
+    // The braces of the Stripe session-id template must NOT be URL-encoded (Stripe substitutes them).
+    expect(p.success_url).toContain("{CHECKOUT_SESSION_ID}");
+  });
+
+  it("carries mode+donor+session_id on the embedded return_url for a monthly company gift", async () => {
+    await run({
+      mode: "monthly",
+      plan: "platinum",
+      amount: 10000,
+      giftAid: false,
+      ageConfirmed: true,
+      donorType: "company",
+      businessName: "Acme Ltd",
+      company,
+      uiMode: "embedded",
+    });
+    const p = lastParams();
+    expect(p.return_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=monthly&donor=company&session_id={CHECKOUT_SESSION_ID}",
+    );
+    expect(p.success_url).toBeUndefined();
+  });
+
+  it("stamps donor=individual for an individual monthly gift", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "ada@example.com" });
+    expect(lastParams().success_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=monthly&donor=individual&session_id={CHECKOUT_SESSION_ID}",
+    );
+  });
+
+  it("stamps donor=partnership for a partnership gift", async () => {
+    await run({
+      mode: "once",
+      plan: null,
+      amount: 10000,
+      giftAid: false,
+      donorType: "partnership",
+      email: "donor@example.com",
+    });
+    expect(lastParams().success_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=once&donor=partnership&session_id={CHECKOUT_SESSION_ID}",
+    );
+  });
+
+  it("keeps the hosted and embedded landing URLs identical (only the redirect surface differs)", async () => {
+    const body = { mode: "monthly" as const, plan: "gold" as const, amount: 5000, giftAid: false, ageConfirmed: true, email: "ada@example.com" };
+    await run(body);
+    const hostedSuccess = lastParams().success_url;
+    await run({ ...body, uiMode: "embedded" });
+    const embeddedReturn = lastParams().return_url;
+    expect(embeddedReturn).toBe(hostedSuccess);
   });
 });
 

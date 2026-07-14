@@ -8,6 +8,15 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const { getCtxMock } = vi.hoisted(() => ({ getCtxMock: vi.fn() }));
 vi.mock("../../src/db/fulfilment", () => ({ getCertificateContextByToken: getCtxMock }));
 
+// TASK-221: routes/business now imports the Stripe + email clients and config; mock them so this
+// certificate-route test loads (config would otherwise process.exit on missing env). The certificate
+// route touches none of them, so bare stubs suffice.
+vi.mock("../../src/clients/stripe", () => ({ stripe: { checkout: { sessions: { retrieve: vi.fn() } } } }));
+vi.mock("../../src/clients/email", () => ({ sendBusinessCaptureConfirmation: vi.fn() }));
+vi.mock("../../src/config", () => ({
+  config: { PORTAL_BASE_URL: "https://nbcc.test", GIVING_FROM_EMAIL: "giving@nbcc.scot" },
+}));
+
 import { getCertificate } from "../../src/routes/business";
 import { formatMonthYear, certificateHeroName, renderCertificate } from "../../src/business/certificate";
 

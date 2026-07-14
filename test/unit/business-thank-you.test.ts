@@ -251,6 +251,31 @@ describe("initBusinessThankYou behaviour (jsdom)", () => {
     expect(norm(document.getElementById("btyFormStatus")?.textContent).length).toBeGreaterThan(0);
   });
 
+  it("highlights the required question inline and enforces the credit name via the shared helper (TASK-225)", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({
+      businessName: "Small Bakery Ltd", band: "bronze", perks: BRONZE_PERKS, captured: false, preferences: null,
+    }) }) as unknown as Response);
+    initBusinessThankYou(document, makeWin(fetchMock));
+    await flush();
+    fetchMock.mockClear();
+
+    // Empty submit: the required Supporters question is flagged at once, summary shown, no POST.
+    document.getElementById("btyForm")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    const yes = document.querySelector('input[name="listOnSupporters"][value="yes"]') as HTMLInputElement;
+    expect(yes.getAttribute("aria-invalid")).toBe("true");
+    expect(norm(document.querySelector('#btyFormStatus[role="alert"]')?.textContent).length).toBeGreaterThan(0);
+
+    // Choosing "Show my business" with no credit name flags that field (a cross-field rule).
+    yes.checked = true;
+    yes.dispatchEvent(new Event("change", { bubbles: true }));
+    document.getElementById("btyForm")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await flush();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.getElementById("btyCreditName")?.getAttribute("aria-invalid")).toBe("true");
+  });
+
   it("shows the error card and never fetches when the URL carries no token", async () => {
     const fetchMock = vi.fn();
     initBusinessThankYou(document, makeWin(fetchMock, ""));

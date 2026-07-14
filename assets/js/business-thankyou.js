@@ -16,6 +16,23 @@
 (function () {
   "use strict";
 
+  // Route this page's form through the shared accessible validation helper (TASK-225): require it
+  // from main.js in Node/tests, or read the window global the deferred main.js sets in the browser
+  // (main.js is loaded before this script). Cached after first resolution.
+  var _validation = null;
+  function validation() {
+    if (_validation) return _validation;
+    if (typeof require === "function") {
+      try {
+        _validation = require("./main.js");
+      } catch (e) {
+        /* the browser has no CommonJS require; fall through to the window global */
+      }
+    }
+    if (!_validation) _validation = (typeof window !== "undefined" && window.NBCCFormValidation) || {};
+    return _validation;
+  }
+
   // Escape user sourced values (business name, credit name, handles) before they go into innerHTML.
   function escapeHtml(s) {
     return String(s == null ? "" : s)
@@ -118,31 +135,33 @@
       fs.disabled = true;
     }
 
-    // --- validation (explicit, not reliant on native constraint validation) ----------------------
-    // Returns the first unanswered/blocked field's message, or "" when every shown question is done.
-    function firstError() {
-      if (!radioValue("listOnSupporters")) return "Please answer the Supporters page question.";
-      if (radioValue("listOnSupporters") === "yes" && !inputValue("btyCreditName")) {
-        return "Please tell us how your business name should appear.";
+    // --- validation ------------------------------------------------------------------------------
+    // The four top-level questions carry `required` and are validated natively by the shared helper
+    // (which skips the recognition sections a band does not earn, since those are hidden + disabled).
+    // These CONDITIONAL rules cannot be inferred from attributes, so they come via extraChecks:
+    // a shown-supporters credit name, and the certificate delivery choice + postal address.
+    // Returned as [{ control, message }] for validateForm; messages are plain and dash-free.
+    function crossFieldChecks() {
+      var out = [];
+      function need(id, message) {
+        if (!inputValue(id)) out.push({ control: doc.getElementById(id), message: message });
       }
-      if (state.perks && state.perks.socialThankYou && !radioValue("wantSocial")) {
-        return "Please answer the social media thank you question.";
+      if (radioValue("listOnSupporters") === "yes") {
+        need("btyCreditName", "Tell us how your business name should appear");
       }
-      if (state.perks && state.perks.digitalBadge && !radioValue("wantBadge")) {
-        return "Please answer the digital badge question.";
-      }
-      if (state.perks && state.perks.certificate) {
-        if (!radioValue("wantCertificate")) return "Please answer the certificate question.";
-        if (radioValue("wantCertificate") === "yes") {
-          if (!radioValue("certificateDelivery")) return "Please choose how to receive your certificate.";
-          if (radioValue("certificateDelivery") === "post") {
-            if (!inputValue("btyAddr1")) return "Please add the first line of your address.";
-            if (!inputValue("btyTown")) return "Please add your town or city.";
-            if (!inputValue("btyPostcode")) return "Please add your postcode.";
-          }
+      if (state.perks && state.perks.certificate && radioValue("wantCertificate") === "yes") {
+        if (!radioValue("certificateDelivery")) {
+          out.push({
+            control: form.querySelector('input[name="certificateDelivery"]'),
+            message: "Choose how to receive your certificate",
+          });
+        } else if (radioValue("certificateDelivery") === "post") {
+          need("btyAddr1", "Add the first line of your address");
+          need("btyTown", "Add your town or city");
+          need("btyPostcode", "Add your postcode");
         }
       }
-      return "";
+      return out;
     }
 
     // Assemble the POST body from the answered questions, sending only what each Yes needs.
@@ -215,12 +234,16 @@
       form.addEventListener("submit", function (ev) {
         if (ev && ev.preventDefault) ev.preventDefault();
         if (submitting) return;
-        var err = firstError();
-        if (err) {
-          if (statusMsg) statusMsg.textContent = err;
+        // Highlight EVERY unanswered/blocked question at once via the shared helper, with the
+        // btyFormStatus line as the role=alert summary. Blocks the single submit until valid.
+        if (
+          !validation().validateForm(form, {
+            summary: statusMsg,
+            extraChecks: crossFieldChecks,
+          }).valid
+        ) {
           return;
         }
-        if (statusMsg) statusMsg.textContent = "";
         if (typeof win.fetch !== "function") return;
         submitting = true;
         var submitBtn = doc.getElementById("btySubmit");

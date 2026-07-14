@@ -698,6 +698,19 @@
     });
   }
 
+  // Gift Aid declaration form (gift-aid.html, TASK-225): the token-scoped completion form
+  // posts natively to /api/gift-aid/:token (novalidate, no fetch). This only GATES that native
+  // submit: an invalid form highlights every missing field at once via the shared helper and is
+  // blocked; a valid form submits unchanged. initDeclarationCapture already wires the overseas
+  // postcode toggle on the same .give-declaration fieldset, so a non-UK donor is not blocked.
+  function initGiftAidForm(doc) {
+    var form = doc.querySelector("form.giftaid-form");
+    if (!form) return;
+    form.addEventListener("submit", function (e) {
+      if (!validateForm(form).valid && e.preventDefault) e.preventDefault();
+    });
+  }
+
   // Donate checkout contract (REQ-028): each tier/amount control carries
   // data-mode (once/monthly), data-plan (bronze/silver/gold/platinum, empty for
   // one-off) and data-amount (pence, empty for choose-your-own). startCheckout
@@ -2059,6 +2072,7 @@
       initDeclarationCapture,
       initPartnershipCapture,
       initContactForm,
+      initGiftAidForm,
       startCheckout,
       initCheckout,
       initEmbeddedCheckout,
@@ -2078,6 +2092,7 @@
     initDonorType(document);
     initContactCapture(document);
     initContactForm(document, window);
+    initGiftAidForm(document);
     initCheckout(document, window);
     initEmbeddedCheckout(document, window);
     initGiveSteps(document, window);

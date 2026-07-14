@@ -25,6 +25,13 @@ describe("renderGiftAidForm", () => {
     expect(html).not.toContain("__GIFT_AID_TOKEN__");
   });
 
+  it("renders on the shared boxed page layout with its own intro class (TASK-220)", () => {
+    // The boxed container gives the page the same width-constrained, nav-cleared layout as the
+    // other pages; the dedicated .gift-aid-intro class avoids donate's small-text .giftaid-intro.
+    expect(doc.querySelector("main")?.classList.contains("site-main--boxed")).toBe(true);
+    expect(doc.querySelector("section.gift-aid-intro")).not.toBeNull();
+  });
+
   it("renders the verbatim wording, HTML-escaped", () => {
     const statement = doc.querySelector("#giftAidStatement");
     expect(norm(statement?.textContent)).toBe(

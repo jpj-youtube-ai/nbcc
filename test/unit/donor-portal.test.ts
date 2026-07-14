@@ -21,6 +21,9 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 
 describe("donor portal page markup (REQ-061)", () => {
   it("renders a centred intro mirroring the other pages", () => {
+    // TASK-220: the page uses the shared boxed container (like thank-you/supporters) so the
+    // intro centres and the content is width-constrained and cleared of the fixed nav.
+    expect(doc0.querySelector("main")?.classList.contains("site-main--boxed")).toBe(true);
     const intro = doc0.querySelector("section.portal-intro");
     expect(intro).not.toBeNull();
     expect(norm(intro?.querySelector(".eyebrow")?.textContent).length).toBeGreaterThan(0);

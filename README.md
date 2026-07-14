@@ -2367,6 +2367,44 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   unknown / non-platinum / certificate-not-wanted; the Month-Year formatter; name fallback; HTML
   escaping; and a no-dashes-in-copy guard). No dashes appear in any certificate or badge copy.
 
+  **TASK-222** nudges business supporters who have **not yet chosen** how they would like to be
+  thanked, with two warm, low-pressure reminders: a **5-day** reminder, then a **14-day** last note.
+  The safety mechanism is a new **`reminder_count integer NOT NULL DEFAULT 0`** column (additive
+  migration `1784050000000_add-fulfilment-reminder-count.js` — expand-contract, existing rows backfill
+  to 0; distinct from the unused TASK-205 `reminder_5_at`/`reminder_14_at` scaffolding): `0` = none
+  sent, `1` = the 5-day reminder sent, `2` = the 14-day reminder sent. The DB layer
+  (`src/db/fulfilment.ts`) adds **`listSupportersDueForReminder(now)`** — the records due the next
+  nudge: `captured_at IS NULL` **and** `invited_at IS NOT NULL` **and** a non-empty email **and** a
+  `token`, **and** either (`reminder_count = 0` **and** invited ≥ 5 days ago) → **stage 1** or
+  (`reminder_count = 1` **and** invited ≥ 14 days ago) → **stage 2** (the clock is passed in, so it is
+  deterministic + unit-testable) — and **`markReminderSent(id, stage)`**, an idempotent advance
+  (`UPDATE … SET reminder_count = $2 WHERE id = $1 AND reminder_count = $2 - 1`) so a re-run never
+  double-sends a stage. The reminder email is the pure, branded `src/business/reminder-email.ts`
+  (`buildBusinessSupporterReminderEmail`, mirroring the `src/thank-you/letter.ts` shell so it carries
+  the phone + `giving@` footer): warm + grateful for **all bands** (not just platinum), one crimson CTA
+  to the tokenised `/business/thank-you?token=…` page, non-definitive impact ("could help"), **no
+  dashes**; the 14-day note is a touch more "last, no pressure" than the 5-day one. It sends via the
+  relay's existing `thankYou: true` passthrough (`sendBusinessSupporterReminder` — **no relay change /
+  redeploy**). The orchestration `runReminderPass` (`src/business/reminders.ts`) is **pure over injected
+  seams** (list/send/mark + the env-correct base + from) like `runBusinessInviteBackfill`: it walks the
+  due-list **sequentially** and **best-effort** builds + sends each supporter's stage-appropriate
+  reminder and **only on a successful send** advances `reminder_count` — one failure is counted and
+  never aborts the rest, and a failed send leaves the count un-advanced so the next run retries it. The
+  runner is **`npm run reminders`** (`node dist/scripts/send-reminders.js` — compiled into `dist/`, so
+  it runs in the runtime image with no `tsx`/devDeps; `src/scripts/send-reminders.ts` wires the real
+  pool + config + senders). A **daily EventBridge schedule** (`infra/modules/app/scheduler.tf`) runs it
+  as a one-off Fargate task (`["sh","-c","npm run reminders"]` command override, reusing the app
+  cluster / task-def / subnets / task SG / execution role — the same one-off-task shape as the deploy's
+  migrations, referencing the task-def by **family** so it runs the latest CI-deployed image). **The
+  schedule needs an Infra apply to take effect** (plan on PR, then a manual `apply` via the Infra
+  workflow — it does not self-activate on merge). No new dependency, no new config key (reuses
+  `PORTAL_BASE_URL` + `GIVING_FROM_EMAIL`), and the email relay + money path are untouched. Covered by
+  `test/unit/business-reminder-email.test.ts` (both stages: warm subject, tokenised CTA, single button,
+  `could help`, branded shell + footer, name escaping, and no-dashes guards), `test/unit/business-reminders-pass.test.ts`
+  (stage-appropriate send, advance-on-success, one failure never aborts, empty-list no-op) and
+  `test/unit/fulfilment-reminders-query.test.ts` (the due-gate SQL + clock, row mapping, and the
+  idempotent `markReminderSent` guard).
+
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,
 `batchAssignmentBlock`, `isPubliclyListable`) — no pool/config/clock, so it is unit-tested DB-free

@@ -418,3 +418,35 @@ export async function sendBusinessCaptureConfirmation(message: BusinessCaptureCo
     throw new Error(`Business supporter capture confirmation email send responded ${res.status}`);
   }
 }
+
+// The business-supporter thank-you REMINDER email (TASK-222). When a business supporter has not yet
+// chosen how they would like to be thanked, the daily runner nudges them twice: a warm 5-day reminder
+// and a gentle 14-day last note. The fully rendered, branded content (subject + html + text) is built
+// by the pure src/business/reminder-email.ts and passed in; From + Reply-To are config.GIVING_FROM_EMAIL
+// (giving@nbcc.scot), exactly like the invite. The body carries `thankYou: true`, so this rides the
+// relay's EXISTING "app fully owns this branded email" passthrough — the relay honours our
+// subject/html/text/from/replyTo verbatim, so NO relay `kind` and NO Worker redeploy are needed (the
+// same path sendThankYou / sendBusinessSupporterInvite use). Same stub-seam + best-effort contract as
+// the other sends: a placeholder EMAIL_SEND_URL means no network outside production.
+export interface BusinessSupporterReminderEmail {
+  email: string; // recipient — the business's contact email (the relay's recipient field)
+  from: string; // config.GIVING_FROM_EMAIL
+  replyTo: string; // same as from
+  subject: string;
+  html: string;
+  text: string; // plain-text alternative (improves deliverability; the relay forwards it)
+}
+
+export async function sendBusinessSupporterReminder(message: BusinessSupporterReminderEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ ...message, thankYou: true }),
+  });
+  if (!res.ok) {
+    throw new Error(`Business supporter reminder email send responded ${res.status}`);
+  }
+}

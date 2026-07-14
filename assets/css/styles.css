@@ -291,6 +291,11 @@ h2.h-lg{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
 .giftaid-panel,.portal-card,.portal-error{padding:clamp(24px,4vw,40px)}
 .portal-content{display:flex;flex-direction:column;gap:clamp(20px,3vw,28px)}
 .portal-content[hidden]{display:none}
+/* TASK-221: the type-aware thank-you page stacks the revealed variant card above the shared
+   contact card. Scoped to this page (only there does .thankyou-intro precede .page-sections) so the
+   other pages' .page-sections are untouched; hidden variants (display:none) drop out of the flow, so
+   the gap only shows between the visible cards. Same spacing rhythm as the section stack. */
+.thankyou-intro + .page-sections{display:flex;flex-direction:column;gap:clamp(28px,4vw,44px)}
 
 /* trust pillars (the four booklet cards) */
 .pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}

@@ -167,15 +167,19 @@ const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_typ
   "bacs_debit",
 ];
 
-// The return_url for Embedded Checkout (TASK-215). Stripe redirects the whole page here on
-// completion, so it points back to the SAME on-site landing the hosted success URL uses (built on
-// config.STRIPE_SUCCESS_URL, the shared config base), carrying the session id via Stripe's
-// {CHECKOUT_SESSION_ID} template — which Stripe substitutes, so the braces must NOT be URL-encoded.
-// Appended with `?`/`&` so it composes with a success URL that already has a query string.
-export function embeddedReturnUrl(): string {
+// The on-site landing Stripe returns the donor to after checkout, built on config.STRIPE_SUCCESS_URL
+// (the shared config base). TASK-221 makes it TYPE-AWARE: it carries the gift's `mode` (once|monthly)
+// and `donor` (donorType) as query params so the thank-you page can pick which of its four variants to
+// show, PLUS the session id via Stripe's {CHECKOUT_SESSION_ID} template — which Stripe substitutes, so
+// the braces must NOT be URL-encoded. The page reads session_id to look up a business supporter's
+// recognition record (read-only, by-session). Used for BOTH UI modes (TASK-215) so the hosted
+// success_url and the embedded return_url land the SAME page with the SAME params — only the redirect
+// surface differs. mode/donor are validated enum values (URL-safe), so no encoding is needed; the
+// `?`/`&` separator is chosen so it composes with a base that already carries a query string.
+export function thankYouReturnUrl(mode: CheckoutBody["mode"], donorType: CheckoutBody["donorType"]): string {
   const base = config.STRIPE_SUCCESS_URL;
   const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}session_id={CHECKOUT_SESSION_ID}`;
+  return `${base}${sep}mode=${mode}&donor=${donorType}&session_id={CHECKOUT_SESSION_ID}`;
 }
 
 // Embedded Checkout only ENGAGES when a publishable key is actually configured (TASK-215). With no
@@ -290,14 +294,15 @@ export function buildSessionParams(
     // - embedded (inline), ONLY when a publishable key is configured (embeddedRequested): Stripe's
     //   SDK enum is "embedded_page"; it needs a return_url (Stripe redirects the whole page there on
     //   completion, defaulting to redirect_on_completion:always) and must NOT carry
-    //   success_url/cancel_url. The return_url reuses the SAME on-site base as the hosted success URL,
-    //   carrying {CHECKOUT_SESSION_ID} (a Stripe template it substitutes).
+    //   success_url/cancel_url.
     // - hosted (redirect, the default — and where embedded is requested but no key is set): no
-    //   ui_mode (Stripe defaults to hosted_page) + the existing success_url/cancel_url — byte-for-byte
-    //   the pre-TASK-215 behaviour.
+    //   ui_mode (Stripe defaults to hosted_page) + the existing success_url/cancel_url.
+    // BOTH land the SAME type-aware thank-you page (TASK-221) via thankYouReturnUrl — carrying the
+    // gift's mode+donor (which of the four variants to show) and {CHECKOUT_SESSION_ID} (the business
+    // supporter recognition lookup). cancel_url is unchanged (a cancel is not a thank-you).
     ...(embeddedRequested(body)
-      ? { ui_mode: "embedded_page", return_url: embeddedReturnUrl() }
-      : { success_url: config.STRIPE_SUCCESS_URL, cancel_url: config.STRIPE_CANCEL_URL }),
+      ? { ui_mode: "embedded_page", return_url: thankYouReturnUrl(body.mode, body.donorType) }
+      : { success_url: thankYouReturnUrl(body.mode, body.donorType), cancel_url: config.STRIPE_CANCEL_URL }),
   };
 
   if (body.mode === "monthly") {

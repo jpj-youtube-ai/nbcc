@@ -386,3 +386,35 @@ export async function sendBusinessSupporterInvite(message: BusinessSupporterInvi
     throw new Error(`Business supporter invite email send responded ${res.status}`);
   }
 }
+
+// The business-supporter CAPTURE-CONFIRMATION email (TASK-221). After a business supporter submits
+// their recognition choices (through the inline thank-you form OR the emailed token link — both capture
+// via postFulfilment), we email them a warm "here is what you chose" confirmation listing their choices
+// and their download links. The fully rendered, branded content (subject + html + text) is built by the
+// pure src/business/capture-confirmation-email.ts and passed in; From + Reply-To are
+// config.GIVING_FROM_EMAIL (giving@nbcc.scot). The body carries `thankYou: true`, so — exactly like
+// sendBusinessSupporterInvite — this rides the relay's EXISTING "app fully owns this branded email"
+// passthrough (the relay honours our subject/html/text/from/replyTo verbatim), so NO relay `kind` and
+// NO Worker redeploy are needed. Same stub-seam + best-effort contract as the other sends.
+export interface BusinessCaptureConfirmationEmail {
+  email: string; // recipient — the business's contact email (the relay's recipient field)
+  from: string; // config.GIVING_FROM_EMAIL
+  replyTo: string; // same as from
+  subject: string;
+  html: string;
+  text: string; // plain-text alternative (improves deliverability; the relay forwards it)
+}
+
+export async function sendBusinessCaptureConfirmation(message: BusinessCaptureConfirmationEmail): Promise<void> {
+  // Preview/stub: pretend the email sent (no network call).
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ ...message, thankYou: true }),
+  });
+  if (!res.ok) {
+    throw new Error(`Business supporter capture confirmation email send responded ${res.status}`);
+  }
+}

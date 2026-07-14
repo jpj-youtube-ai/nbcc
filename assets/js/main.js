@@ -627,44 +627,6 @@
     if (!form) return;
     var status = doc.getElementById("formStatus");
 
-    // The required fields and how each is validated. Last name is optional.
-    var fields = [
-      { id: "firstName", required: true },
-      { id: "email", required: true, email: true },
-      { id: "message", required: true },
-    ];
-
-    function emailValid(value) {
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-    }
-
-    function validateField(f) {
-      var el = doc.getElementById(f.id);
-      if (!el) return true;
-      var value = (el.value || "").trim();
-      var ok = true;
-      if (f.required && !value) ok = false;
-      else if (f.email && !emailValid(value)) ok = false;
-      el.setAttribute("aria-invalid", String(!ok));
-      var err = doc.getElementById(f.id + "-error");
-      if (err) err.hidden = ok;
-      var wrap = el.closest ? el.closest(".field") : null;
-      if (wrap) wrap.classList.toggle("invalid", !ok);
-      return ok;
-    }
-
-    function clearErrors() {
-      fields.forEach(function (f) {
-        var el = doc.getElementById(f.id);
-        if (!el) return;
-        el.setAttribute("aria-invalid", "false");
-        var err = doc.getElementById(f.id + "-error");
-        if (err) err.hidden = true;
-        var wrap = el.closest ? el.closest(".field") : null;
-        if (wrap) wrap.classList.remove("invalid");
-      });
-    }
-
     function value(id) {
       var el = doc.getElementById(id);
       return el ? (el.value || "").trim() : "";
@@ -673,22 +635,12 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
 
-      var firstBad = null;
-      var allOk = true;
-      fields.forEach(function (f) {
-        var ok = validateField(f);
-        if (!ok) {
-          allOk = false;
-          if (!firstBad) firstBad = doc.getElementById(f.id);
-        }
-      });
-
-      if (!allOk) {
+      // Highlight every missing/invalid field at once via the shared helper (TASK-225).
+      if (!validateForm(form).valid) {
         if (status) {
           status.textContent = "";
           status.className = "form-status";
         }
-        if (firstBad && firstBad.focus) firstBad.focus();
         return;
       }
 
@@ -724,7 +676,7 @@
               status.className = "form-status is-success";
             }
             form.reset();
-            clearErrors();
+            clearValidation(form);
           } else {
             if (status) {
               status.textContent =

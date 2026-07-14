@@ -40,6 +40,15 @@ describe("gift aid completion form validation (TASK-225)", () => {
     expect(document.querySelector("form.giftaid-form")).not.toBeNull();
   });
 
+  // TASK-226: the first name + last name pair sits side by side at half width in the shared
+  // .give-name-row wrapper (matching the donate donor name), each keeping its own .give-field.
+  it("lays first name and last name side by side in one shared .give-name-row wrapper", () => {
+    const row = doc0.querySelector("form.giftaid-form .give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("#declFirstName")?.closest(".give-field")).not.toBeNull();
+    expect(row?.querySelector("#declLastName")?.closest(".give-field")).not.toBeNull();
+  });
+
   it("blocks the native submit and flags every missing field at once, with a role=alert summary", () => {
     const ev = fireSubmit();
     expect(ev.defaultPrevented).toBe(true);

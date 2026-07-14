@@ -126,16 +126,11 @@ resource "aws_ecs_task_definition" "app" {
       # Stripe redirect URLs (REQ-028/REQ-029) — non-secret, so plain env values.
       { name = "STRIPE_SUCCESS_URL", value = var.stripe_success_url },
       { name = "STRIPE_CANCEL_URL", value = var.stripe_cancel_url },
-      # Optional Stripe donation product id for one-off gifts — non-secret, empty by default.
-      { name = "STRIPE_DONATION_PRODUCT", value = var.stripe_donation_product },
       # Stripe PUBLISHABLE key (TASK-215) for Embedded Checkout — PUBLIC (ships to the browser), so a
       # plain env value like the redirect URLs, NOT an SSM secret and NOT in the exec_secrets policy.
-      # NOTE: this entry is ordered last among the plain Stripe env vars deliberately. Reordering it
-      # here forces Terraform to register a fresh task-definition revision on the next apply, which the
-      # deploy then rolls out — the one-time recovery for a staging deploy that raced the infra apply
-      # and carried forward a revision without this key (TASK-216). Env var order is not significant to
-      # the app; it reads process.env by name.
       { name = "STRIPE_PUBLISHABLE_KEY", value = var.stripe_publishable_key },
+      # Optional Stripe donation product id for one-off gifts — non-secret, empty by default.
+      { name = "STRIPE_DONATION_PRODUCT", value = var.stripe_donation_product },
     ]
 
     # ECS resolves these from SSM at task start and injects them as env vars, so

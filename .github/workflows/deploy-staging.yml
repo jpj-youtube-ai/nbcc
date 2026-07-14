@@ -82,6 +82,7 @@ jobs:
             echo "CLUSTER=$(terraform output -raw ecs_cluster)"
             echo "SERVICE=$(terraform output -raw ecs_service)"
             echo "FAMILY=$(terraform output -raw task_family)"
+            echo "TASK_DEF_ARN=$(terraform output -raw task_definition_arn)"
             echo "SUBNETS=$(terraform output -raw task_subnet_ids_csv)"
             echo "SG=$(terraform output -raw task_security_group_id)"
             echo "ALB_URL=$(terraform output -raw public_url)"
@@ -89,7 +90,10 @@ jobs:
 
       - name: Register new task definition (swap image only)
         run: |
-          CURRENT=$(aws ecs describe-task-definition --task-definition "$FAMILY" --query 'taskDefinition')
+          # Read TERRAFORM's managed task-def revision (env-bearing), NOT the family's "latest": a deploy
+          # that raced an infra apply must never strand a Terraform-set env var like the publishable key
+          # (TASK-215/216 embedded-key race). $FAMILY stays exported above for reference/back-compat.
+          CURRENT=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition')
           NEW=$(echo "$CURRENT" | jq --arg IMG "$IMAGE" '
             .containerDefinitions[0].image = $IMG
             | {family, networkMode, requiresCompatibilities, cpu, memory,

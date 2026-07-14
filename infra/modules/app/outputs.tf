@@ -2,6 +2,10 @@ output "alb_dns_name" { value = aws_lb.app.dns_name }
 output "ecs_cluster" { value = aws_ecs_cluster.app.name }
 output "ecs_service" { value = aws_ecs_service.app.name }
 output "task_family" { value = aws_ecs_task_definition.app.family }
+# The FULL task-definition ARN (family:revision) of the Terraform-managed revision. Deploys read THIS
+# (not the family's "latest") so they always layer the image onto Terraform's env-bearing revision,
+# never a revision another deploy raced in — the fix for the TASK-215/216 embedded-key race (TASK-217).
+output "task_definition_arn" { value = aws_ecs_task_definition.app.arn }
 output "task_security_group_id" { value = aws_security_group.task.id }
 output "task_subnet_ids_csv" { value = join(",", module.vpc.public_subnets) }
 

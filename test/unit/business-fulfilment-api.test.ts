@@ -285,6 +285,13 @@ describe("POST /api/business/fulfilment/:token (TASK-212)", () => {
     expect(updateMock).not.toHaveBeenCalled();
   });
 
+  it("400s and never writes when the credit name trips the bad-word filter (TASK-223)", async () => {
+    getCtxMock.mockResolvedValue(bronzeCtx);
+    const res = await runPost("tok_bronze", { listOnSupporters: true, creditName: "Fuck Co" }, "ip_post_bad");
+    expect(res.statusCode).toBe(400);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   it("409s on an already-captured record and never calls the write (submit-once)", async () => {
     getCtxMock.mockResolvedValue({ ...bronzeCtx, captured: true });
     const res = await runPost("tok_bronze", { listOnSupporters: false }, "ip_post_6");

@@ -908,48 +908,78 @@ text); inline SVG icons, no image tags. Dash-free copy, "NBCC" in full (REQ-031)
 Verified by `test/unit/contact.test.ts` (static markup + jsdom validation
 behaviour).
 
-### Supporters page (REQ-035)
+### Supporters page (REQ-035; opt-in monthly 4-band wall TASK-223)
 
 `supporters.html` opens with a centred intro (the `SUPPORTERS PAGE` CSS block,
 mirroring the About/Donate/Contact intros) and then fills its `.page-sections`
-slot with the tiered supporters list (`SUPPORTERS TIERS` block). Three
-`.supporter-tier` tinted bands — **Bronze → Silver → Gold**, in that order,
-alternating tan/holly tint — each hold a `.supporter-grid` of `.card` entries
-listed **alphabetically within the tier**. Every entry carries a
-`data-type="person"`/`"organisation"` marker, a decorative `aria-hidden` inline
-SVG icon (person vs building, no image tags), and a visible **Individual** /
-**Organisation** label so the person-vs-brand distinction is clear to sighted and
-assistive-tech users. Reuses `.card` / `.reveal` / the pillars-and-why
-tinted-band pattern / tokens; icons are crimson (the `brand-colours` guard forbids
-holly/tan text on light bands). Dash-free copy, "NBCC" (REQ-031). The entries are
-**placeholder** (`CONTENT VERIFICATION`) pending the charity's real, consented
-list; it also serves as the **Donors Page** referenced by REQ-024/REQ-025.
+slot with the tiered supporters list (`SUPPORTERS TIERS` block). **Four**
+`.supporter-tier` tinted bands — **Bronze → Silver → Gold → Platinum**, in that
+order — each hold a `.supporter-grid` of `.card` entries listed **alphabetically
+within the tier**. Every entry carries a `data-type="person"`/`"organisation"`
+marker, a decorative `aria-hidden` inline SVG icon (person vs building, no image
+tags), and a visible **Individual** / **Organisation** label so the person-vs-brand
+distinction is clear to sighted and assistive-tech users. Reuses `.card` / `.reveal`
+/ the tinted-band pattern / tokens; the Platinum band adds one **additive**, scoped
+CSS rule (a platinum-grey heading underline via `var(--slate)`, matching the donate
+page's platinum ink) and leaves Bronze/Silver/Gold untouched. Dash-free copy, "NBCC"
+(REQ-031). The static entries are **placeholder** fallbacks; it also serves as the
+**Donors Page** referenced by REQ-024/REQ-025.
 
-**Rendering (TASK-071):** the `/supporters` clean URL is **rendered server-side**
-from the real donor records, not served as the static file. `GET /supporters`
-(`src/routes/site.ts`) calls `listPublicSupporters` (`src/db/donations.ts`), which
-selects each donor with a donation and their **largest gift**, then the pure
-`groupPublicSupporters` (`src/db/donations-model.ts`) drops anonymous donors (via
-`isPubliclyListable`), derives each donor's tier from the amount using the
-give-monthly thresholds (bronze £10 / silver £25 / gold £50 / platinum £100 — a
-platinum-level gift folds into the top **Gold** tier), and sorts each tier
-alphabetically. A **company** (or any donor carrying a `business_name`) is listed by
-its business name, an **individual** by full name; the `person`/`organisation` marker
-comes from `donor_type`. The rendered HTML is injected into the **same**
-`supporters.html` markup, which stays the **template and the fallback** (served as-is
-if the DB read fails).
+**Who appears (opt-in, monthly, TASK-223):** the wall is now **opt-in and
+monthly-only**. A supporter appears ONLY if **all** hold: they have at least one
+**paid monthly** donation (`donations.mode='monthly'` filtered to
+`payment_status='paid'`, the same way settled gifts are detected elsewhere); the
+**greatest** such gift bands via the four-band `bandForMonthlyAmount`
+(`src/donors/fulfilment.ts` — bronze £10 / silver £25 / gold £50 / platinum £100 per
+month, so **under £10/mo is excluded**); they **opted in** on the right channel —
+a **business** (donor is a company OR carries a `business_name`) via its
+`business_supporter_fulfilment` record (`list_on_supporters = true` **and**
+`captured_at IS NOT NULL`), an **individual** via `donors.list_on_supporters = true`;
+and they are **not** `anonymous` and **not** `hidden_from_supporters`. A business is
+listed as an **Organisation** by its `credit_name` (falling back to `business_name`),
+an individual as an **Individual** by `donors.credit_name` (falling back to
+`full_name`). _(The individual opt-in / display-name write path is a later task, so
+no individual appears until that lands — the columns exist and the wall consults them
+now.)_
 
-`supporters.html`'s own static entries remain **placeholder** (`CONTENT
-VERIFICATION`) and are what the structure guards read: `test/unit/supporters.test.ts`
-(three tiers in order, alphabetical within each, person + organisation both render)
-plus `copy-rules`/`accessibility`/`brand-colours` auto-cover the file and stay green.
-The server-render is covered DB-free by `test/unit/supporters-render.test.ts` +
-`test/unit/supporters-read.test.ts` (pure grouping + HTML injection, mocked pool), and
-DB-backed end to end by `features/supporters.feature` (seed via the signed webhook,
-then assert a non-anonymous individual and company appear and an anonymous donor never
-does). This **supersedes** the earlier "list lives in hand-edited HTML" decision for
-donation-sourced entries; the rationale and rejected alternatives are recorded in
-`docs/superpowers/specs/2026-07-01-supporters-list-design.md`.
+**Rendering (TASK-071 / TASK-223):** the `/supporters` clean URL is **rendered
+server-side**, not served as the static file. `GET /supporters` (`src/routes/site.ts`)
+calls `listPublicSupporters` (`src/db/donations.ts`), which gathers each donor's
+greatest paid-monthly gift + their opt-in state (individual columns, and a `LEFT JOIN`
+to the business fulfilment record for business consent), then the pure
+`groupPublicSupporters` / `resolvePublicSupporter` (`src/db/donations-model.ts`) applies
+the opt-in + banding + anonymity/hide rules, picks the display name, and sorts each of
+the four bands alphabetically. The rendered HTML is injected into the **same**
+`supporters.html` markup, which stays the **template and the fallback** (served as-is if
+the DB read fails).
+
+**Admin "hide from wall".** An Editor+ admin can remove any donor from the wall via
+`PATCH /api/admin/donors/:id` (`hiddenFromSupporters` on `adminPatchSchema`, persisted
+through `updateDonorPortal` as `donors.hidden_from_supporters` in one audited
+transaction). The admin donor view (`assets/js/admin/app.js`) shows it read-only and
+offers a **"Hide from supporters wall"** checkbox in the edit form. The wall query
+excludes hidden donors. This admin-only field is **not** exposed on the self-serve
+portal schema.
+
+**Bad-word filter.** `src/donors/display-name-filter.ts` exports
+`containsBlockedWord(name)` — an intentionally conservative, whole-word blocklist (with
+a tiny substring list for no-benign-use slurs; it avoids the "Scunthorpe problem"). It
+is applied where a **business** custom `creditName` is captured
+(`src/routes/business.ts` rejects a profane name with a plain, dash-free 400) and again
+as a **render-time safety net** in `groupPublicSupporters` (any entry whose final
+display name trips the filter is omitted).
+
+**Tests.** `test/unit/supporters.test.ts` guards the static fallback (four tiers in
+order, alphabetical within each, person + organisation both render);
+`copy-rules`/`accessibility`/`brand-colours` auto-cover the file. The server-render +
+opt-in rules are covered DB-free by `test/unit/supporters-render.test.ts` +
+`test/unit/supporters-read.test.ts` (pure grouping + HTML injection, mocked pool),
+the filter by `test/unit/display-name-filter.test.ts`, the business-capture rejection by
+`test/unit/business-fulfilment-api.test.ts`, and the flow end to end (DB-backed) by
+`features/supporters.feature` (seed monthly gifts via the signed webhook, opt in the way
+the app does, then assert opted-in monthly supporters appear while a one-off and an
+anonymous donor never do). The rationale for server-rendering donation-sourced entries
+is recorded in `docs/superpowers/specs/2026-07-01-supporters-list-design.md`.
 
 ### Confirmation page (REQ-035; type-aware TASK-221)
 

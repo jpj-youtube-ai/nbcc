@@ -79,16 +79,16 @@
         </p>
       </section>
 
-      <!-- Supporters tiers (REQ-035): the Bronze, Silver and Gold groups fill the
-           shared page-sections slot. CONTENT VERIFICATION — these are placeholder
-           supporters pending the charity's real, consented list. The list lives in
-           the HTML (SEO + perf budget + no build); to update, add or remove a
-           supporter card in the right tier, keeping each tier alphabetical. Person
-           vs organisation is carried on data-type plus the visible kind label;
-           icons are decorative inline SVG (aria-hidden), no image tags. Design and
-           update-mechanism tradeoff:
-           docs/superpowers/specs/2026-07-01-supporters-list-design.md. Ties to the
-           Donors Page references in REQ-024/REQ-025. -->
+      <!-- Supporters tiers (REQ-035): the Bronze, Silver, Gold and Platinum groups fill
+           the shared page-sections slot. At runtime GET /supporters REPLACES this block
+           with the real, opted-in MONTHLY supporters (TASK-223, grouped into the four
+           metal bands); these static entries are placeholders and the FALLBACK shown only
+           if that DB read fails. To keep the file reading sensibly, each tier keeps a
+           couple of illustrative cards, alphabetical within the tier. Person vs
+           organisation is carried on data-type plus the visible kind label; icons are
+           decorative inline SVG (aria-hidden), no image tags. Design and update-mechanism
+           tradeoff: docs/superpowers/specs/2026-07-01-supporters-list-design.md. Ties to
+           the Donors Page references in REQ-024/REQ-025. -->
       <section class="page-sections list-block" data-region="sections" aria-labelledby="donors-heading">
         <h2 class="list-heading" id="donors-heading">Donors</h2>
         <div class="supporter-tiers">
@@ -152,6 +152,19 @@
               <li class="card supporter" data-type="person">
                 <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
                 <span class="supporter-meta"><span class="supporter-name">Robert Thomson</span><span class="supporter-kind">Individual</span></span>
+              </li>
+            </ul>
+          </section>
+          <section class="supporter-tier reveal" aria-labelledby="tier-platinum-heading">
+            <h2 class="supporter-tier-name" id="tier-platinum-heading">Platinum</h2>
+            <ul class="supporter-grid">
+              <li class="card supporter" data-type="organisation">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16"/><path d="M15 9h4a1 1 0 0 1 1 1v11"/><path d="M2 21h20"/><path d="M8 8h3M8 12h3M8 16h3"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Highland Provisions Group</span><span class="supporter-kind">Organisation</span></span>
+              </li>
+              <li class="card supporter" data-type="person">
+                <svg class="supporter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                <span class="supporter-meta"><span class="supporter-name">Margaret Sinclair</span><span class="supporter-kind">Individual</span></span>
               </li>
             </ul>
           </section>

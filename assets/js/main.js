@@ -1070,12 +1070,10 @@
     form.addEventListener("submit", function (ev) {
       if (ev && ev.preventDefault) ev.preventDefault();
       var email = input && input.value ? input.value.trim() : "";
-      // Let the native required/type=email validation surface an empty/invalid address rather
-      // than posting it; the endpoint would 400 anyway.
-      if (form.checkValidity && !form.checkValidity()) {
-        if (form.reportValidity) form.reportValidity();
-        return;
-      }
+      // Highlight the email inline (not a native popup) when it is missing or malformed, and block
+      // the post. This form lives inside the hidden error card, but validateForm is bounded at the
+      // form scope, so it still validates the visible field when the card is shown (TASK-225).
+      if (!validateForm(form).valid) return;
       if (typeof win.fetch !== "function") return;
       return win
         .fetch("/api/portal/request", {
@@ -1234,6 +1232,7 @@
     if (declForm) {
       declForm.addEventListener("submit", function (ev) {
         ev.preventDefault();
+        if (!validateForm(declForm).valid) return;
         if (typeof win.fetch !== "function") return;
         var nonUk = !!(pdNonUk && pdNonUk.checked);
         var val = function (id) {
@@ -1301,10 +1300,7 @@
     if (detailsForm) {
       detailsForm.addEventListener("submit", function (ev) {
         if (ev && ev.preventDefault) ev.preventDefault();
-        if (detailsForm.checkValidity && !detailsForm.checkValidity()) {
-          if (detailsForm.reportValidity) detailsForm.reportValidity();
-          return;
-        }
+        if (!validateForm(detailsForm).valid) return;
         if (typeof win.fetch !== "function") return;
         // Send name + the two flags always; email only when non-empty (the schema rejects an
         // empty string, and clearing an email is not an edit we expose here).

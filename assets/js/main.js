@@ -7,6 +7,215 @@
 (function () {
   "use strict";
 
+  // ---- Shared accessible form validation (TASK-225) --------------------------------
+  // validateForm(scope, opts?) -> { valid }. Flags EVERY invalid control at once
+  // (aria-invalid + an is-invalid class on the control or its .give-field/.field wrapper +
+  // an inline message linked via aria-describedby), refreshes ONE role=alert summary at the
+  // top of the scope, moves focus to the FIRST invalid control, and wires live-clear so
+  // editing a flagged control clears it (hiding the summary once all are valid). Skips
+  // disabled controls and controls under a hidden ancestor, BOUNDED at `scope` so a visible
+  // form still validates when a container above it is hidden (the portal error card case).
+  // The required/type/pattern attributes are the rule source. opts: { summary?, extraChecks? }
+  // where extraChecks() -> [{ control, message }] adds caller cross-field rules.
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function ctrlType(c) {
+    return (c.tagName === "SELECT" ? "select" : c.getAttribute("type") || "text").toLowerCase();
+  }
+  function isFormField(c) {
+    var t = ctrlType(c);
+    return t !== "submit" && t !== "button" && t !== "reset" && t !== "image" && t !== "hidden";
+  }
+  function fieldKey(c) {
+    return (ctrlType(c) === "radio" ? c.name || c.id : c.id || c.name) || "field";
+  }
+  function fieldWrap(c) {
+    return (
+      (c.closest &&
+        (c.closest(".give-field") ||
+          c.closest(".field") ||
+          c.closest(".give-check") ||
+          c.closest(".give-donor-options") ||
+          c.closest("fieldset"))) ||
+      c
+    );
+  }
+  // Skip a control that is disabled, not a real field, hidden itself, or under a hidden
+  // ancestor between it and `scope`. The walk stops AT `scope` (exclusive), so the scope's
+  // own container being hidden never wrongly passes a form we were asked to validate.
+  function skipControl(c, scope) {
+    if (c.disabled || !isFormField(c) || c.hidden) return true;
+    var node = c.parentElement;
+    while (node && node !== scope) {
+      if (node.hidden) return true;
+      node = node.parentElement;
+    }
+    return false;
+  }
+  function messageFor(c, kind) {
+    var custom = c.getAttribute && c.getAttribute("data-invalid-message");
+    if (custom) return custom;
+    if (kind === "email") return "Enter a valid email address like name@example.com";
+    var t = ctrlType(c);
+    if (t === "email") return "Enter your email address";
+    if (t === "radio" || t === "checkbox" || t === "select") return "Select an option";
+    return "This field is required";
+  }
+  // The invalidity of one non-radio control: "required" (empty required), "email"/"pattern"
+  // (a value that fails its format), or null when it is fine (including optional + empty).
+  function invalidKind(c) {
+    var t = ctrlType(c);
+    var required = c.hasAttribute("required");
+    if (t === "checkbox") return required && !c.checked ? "required" : null;
+    var val = (c.value || "").trim();
+    if (required && !val) return "required";
+    if (!val) return null;
+    if (t === "email" && !EMAIL_RE.test(val)) return "email";
+    var pat = c.getAttribute("pattern");
+    if (pat) {
+      try {
+        if (!new RegExp("^(?:" + pat + ")$").test(val)) return "pattern";
+      } catch (e) {
+        /* an invalid author pattern never blocks the person filling the form */
+      }
+    }
+    return null;
+  }
+  // Find (or create) the control's inline message node, keyed `<field>-error`, and link it
+  // via aria-describedby. Reuses an existing node of that id (e.g. contact's error spans).
+  function messageNode(c, scope) {
+    var doc = c.ownerDocument;
+    var id = fieldKey(c) + "-error";
+    var node = doc.getElementById(id);
+    if (!node) {
+      node = doc.createElement("p");
+      node.id = id;
+      node.className = "validation-msg";
+      var host = fieldWrap(c);
+      if (host && host !== c && host.appendChild) host.appendChild(node);
+      else if (c.parentNode) c.parentNode.insertBefore(node, c.nextSibling);
+    }
+    if (node.className.indexOf("validation-msg") === -1) {
+      node.className = (node.className + " validation-msg").trim();
+    }
+    var db = c.getAttribute("aria-describedby") || "";
+    if (db.split(/\s+/).indexOf(id) === -1) c.setAttribute("aria-describedby", (db + " " + id).trim());
+    return node;
+  }
+  function resolveSummary(scope, opts) {
+    if (opts && opts.summary) {
+      if (!opts.summary.getAttribute("role")) opts.summary.setAttribute("role", "alert");
+      return opts.summary;
+    }
+    if (scope.__vSummary) return scope.__vSummary;
+    var node = scope.ownerDocument.createElement("p");
+    node.className = "form-error-summary";
+    node.setAttribute("role", "alert");
+    node.hidden = true;
+    scope.insertBefore(node, scope.firstChild);
+    scope.__vSummary = node;
+    return node;
+  }
+  function showSummary(node) {
+    if (!node) return;
+    if (!(node.textContent || "").trim()) {
+      node.textContent = "Please check the highlighted fields below and try again.";
+    }
+    node.hidden = false;
+    node.classList.add("show");
+  }
+  function hideSummary(node) {
+    if (!node) return;
+    node.hidden = true;
+    node.classList.remove("show");
+  }
+  function clearControl(c) {
+    c.setAttribute("aria-invalid", "false");
+    fieldWrap(c).classList.remove("is-invalid");
+    var node = c.ownerDocument.getElementById(fieldKey(c) + "-error");
+    if (node) node.hidden = true;
+  }
+  function liveClear(c, scope, summary) {
+    if (c.__vClear) return;
+    c.__vClear = true;
+    var handler = function () {
+      clearControl(c);
+      if (!scope.querySelector('.is-invalid, [aria-invalid="true"]')) hideSummary(summary);
+    };
+    c.addEventListener("input", handler);
+    c.addEventListener("change", handler);
+  }
+  function flagControl(c, message, scope, summary, group) {
+    c.setAttribute("aria-invalid", "true");
+    fieldWrap(c).classList.add("is-invalid");
+    var node = messageNode(c, scope);
+    node.textContent = message;
+    node.hidden = false;
+    if (group && group.length) {
+      Array.prototype.forEach.call(group, function (r) { liveClear(r, scope, summary); });
+    } else {
+      liveClear(c, scope, summary);
+    }
+  }
+  function clearValidation(scope) {
+    if (!scope) return;
+    Array.prototype.forEach.call(scope.querySelectorAll("input, select, textarea"), function (c) {
+      if (isFormField(c)) c.setAttribute("aria-invalid", "false");
+    });
+    Array.prototype.forEach.call(scope.querySelectorAll(".is-invalid"), function (w) {
+      w.classList.remove("is-invalid");
+    });
+    Array.prototype.forEach.call(scope.querySelectorAll(".validation-msg"), function (m) {
+      m.hidden = true;
+    });
+    hideSummary(scope.__vSummary);
+  }
+  function validateForm(scope, opts) {
+    opts = opts || {};
+    var summary = resolveSummary(scope, opts);
+    clearValidation(scope);
+    var invalids = [];
+    var seen = {};
+    Array.prototype.forEach.call(scope.querySelectorAll("input, select, textarea"), function (c) {
+      if (skipControl(c, scope)) return;
+      if (ctrlType(c) === "radio") {
+        var name = c.name;
+        if (!name || seen[name]) return;
+        seen[name] = true;
+        var group = Array.prototype.filter.call(
+          scope.querySelectorAll('input[type="radio"]'),
+          function (r) { return r.name === name && !skipControl(r, scope); },
+        );
+        if (!group.length) return;
+        var required = group.some(function (r) { return r.hasAttribute("required"); });
+        if (required && !group.some(function (r) { return r.checked; })) {
+          invalids.push({ control: group[0], message: messageFor(group[0], "required"), group: group });
+        }
+        return;
+      }
+      var kind = invalidKind(c);
+      if (kind) invalids.push({ control: c, message: messageFor(c, kind) });
+    });
+    if (typeof opts.extraChecks === "function") {
+      (opts.extraChecks() || []).forEach(function (x) {
+        if (x && x.control) invalids.push({ control: x.control, message: x.message || messageFor(x.control, "required") });
+      });
+    }
+    if (!invalids.length) {
+      hideSummary(summary);
+      return { valid: true };
+    }
+    invalids.forEach(function (item) {
+      flagControl(item.control, item.message, scope, summary, item.group);
+    });
+    showSummary(summary);
+    var first = invalids[0].control;
+    if (first && first.focus) {
+      try { first.focus(); } catch (e) { /* focus unavailable in some environments */ }
+    }
+    return { valid: false };
+  }
+
   function initNav(doc, win) {
     doc.documentElement.dataset.js = "ready";
 
@@ -418,44 +627,6 @@
     if (!form) return;
     var status = doc.getElementById("formStatus");
 
-    // The required fields and how each is validated. Last name is optional.
-    var fields = [
-      { id: "firstName", required: true },
-      { id: "email", required: true, email: true },
-      { id: "message", required: true },
-    ];
-
-    function emailValid(value) {
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-    }
-
-    function validateField(f) {
-      var el = doc.getElementById(f.id);
-      if (!el) return true;
-      var value = (el.value || "").trim();
-      var ok = true;
-      if (f.required && !value) ok = false;
-      else if (f.email && !emailValid(value)) ok = false;
-      el.setAttribute("aria-invalid", String(!ok));
-      var err = doc.getElementById(f.id + "-error");
-      if (err) err.hidden = ok;
-      var wrap = el.closest ? el.closest(".field") : null;
-      if (wrap) wrap.classList.toggle("invalid", !ok);
-      return ok;
-    }
-
-    function clearErrors() {
-      fields.forEach(function (f) {
-        var el = doc.getElementById(f.id);
-        if (!el) return;
-        el.setAttribute("aria-invalid", "false");
-        var err = doc.getElementById(f.id + "-error");
-        if (err) err.hidden = true;
-        var wrap = el.closest ? el.closest(".field") : null;
-        if (wrap) wrap.classList.remove("invalid");
-      });
-    }
-
     function value(id) {
       var el = doc.getElementById(id);
       return el ? (el.value || "").trim() : "";
@@ -464,22 +635,12 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
 
-      var firstBad = null;
-      var allOk = true;
-      fields.forEach(function (f) {
-        var ok = validateField(f);
-        if (!ok) {
-          allOk = false;
-          if (!firstBad) firstBad = doc.getElementById(f.id);
-        }
-      });
-
-      if (!allOk) {
+      // Highlight every missing/invalid field at once via the shared helper (TASK-225).
+      if (!validateForm(form).valid) {
         if (status) {
           status.textContent = "";
           status.className = "form-status";
         }
-        if (firstBad && firstBad.focus) firstBad.focus();
         return;
       }
 
@@ -515,7 +676,7 @@
               status.className = "form-status is-success";
             }
             form.reset();
-            clearErrors();
+            clearValidation(form);
           } else {
             if (status) {
               status.textContent =
@@ -534,6 +695,19 @@
         .then(function () {
           if (submitBtn) submitBtn.disabled = false;
         });
+    });
+  }
+
+  // Gift Aid declaration form (gift-aid.html, TASK-225): the token-scoped completion form
+  // posts natively to /api/gift-aid/:token (novalidate, no fetch). This only GATES that native
+  // submit: an invalid form highlights every missing field at once via the shared helper and is
+  // blocked; a valid form submits unchanged. initDeclarationCapture already wires the overseas
+  // postcode toggle on the same .give-declaration fieldset, so a non-UK donor is not blocked.
+  function initGiftAidForm(doc) {
+    var form = doc.querySelector("form.giftaid-form");
+    if (!form) return;
+    form.addEventListener("submit", function (e) {
+      if (!validateForm(form).valid && e.preventDefault) e.preventDefault();
     });
   }
 
@@ -896,12 +1070,10 @@
     form.addEventListener("submit", function (ev) {
       if (ev && ev.preventDefault) ev.preventDefault();
       var email = input && input.value ? input.value.trim() : "";
-      // Let the native required/type=email validation surface an empty/invalid address rather
-      // than posting it; the endpoint would 400 anyway.
-      if (form.checkValidity && !form.checkValidity()) {
-        if (form.reportValidity) form.reportValidity();
-        return;
-      }
+      // Highlight the email inline (not a native popup) when it is missing or malformed, and block
+      // the post. This form lives inside the hidden error card, but validateForm is bounded at the
+      // form scope, so it still validates the visible field when the card is shown (TASK-225).
+      if (!validateForm(form).valid) return;
       if (typeof win.fetch !== "function") return;
       return win
         .fetch("/api/portal/request", {
@@ -1060,6 +1232,7 @@
     if (declForm) {
       declForm.addEventListener("submit", function (ev) {
         ev.preventDefault();
+        if (!validateForm(declForm).valid) return;
         if (typeof win.fetch !== "function") return;
         var nonUk = !!(pdNonUk && pdNonUk.checked);
         var val = function (id) {
@@ -1127,10 +1300,7 @@
     if (detailsForm) {
       detailsForm.addEventListener("submit", function (ev) {
         if (ev && ev.preventDefault) ev.preventDefault();
-        if (detailsForm.checkValidity && !detailsForm.checkValidity()) {
-          if (detailsForm.reportValidity) detailsForm.reportValidity();
-          return;
-        }
+        if (!validateForm(detailsForm).valid) return;
         if (typeof win.fetch !== "function") return;
         // Send name + the two flags always; email only when non-empty (the schema rejects an
         // empty string, and clearing an email is not an edit we expose here).
@@ -1403,39 +1573,28 @@
       m.addEventListener("click", function () { resetSelection(); });
     });
 
-    // ---- validation: required, visible, enabled controls in a step ----
-    function visible(el) { return !!(el.offsetParent !== null || el.getClientRects().length); }
+    // ---- validation (TASK-225): route every step through the shared highlight-all helper,
+    // using the step's own [data-err] node as the role=alert summary. The helper flags every
+    // missing/invalid required control at once, skips hidden/disabled ones (so the collapsed
+    // declaration/company/partner fieldsets never block), focuses the first, and live-clears. ----
     function validate(el) {
-      var ctrls = Array.prototype.slice.call(el.querySelectorAll("input, select, textarea"));
-      var ok = true, firstBad = null;
-      ctrls.forEach(function (c) {
-        if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
-        var bad;
-        if (c.type === "radio" || c.type === "checkbox") {
-          // TASK-204: a required radio group (e.g. the donor-type choice, which now ships with
-          // nothing preselected) is satisfied only when one option in its name group is checked;
-          // a lone required checkbox (the 18+ confirmation) must itself be ticked. This blocks
-          // Continue until the donor actively chooses, instead of failing later at Stripe.
-          var group = root.querySelectorAll('input[name="' + c.name + '"]');
-          bad = !Array.prototype.some.call(group, function (g) { return g.checked; });
-        } else {
-          var val = (c.value || "").trim();
-          bad = !val;
-          if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
-        }
-        var field =
-          (c.closest &&
-            (c.closest(".give-field") ||
-              c.closest(".field") ||
-              c.closest(".give-donor-options") ||
-              c.closest(".give-check"))) ||
-          null;
-        if (field) field.classList.toggle("invalid", bad);
-        c.setAttribute("aria-invalid", String(bad));
-        if (bad) { ok = false; if (!firstBad) firstBad = c; }
-      });
-      if (firstBad && firstBad.focus) firstBad.focus();
-      return ok;
+      return validateForm(el, { summary: el.querySelector("[data-err]") }).valid;
+    }
+
+    // Step 1 has no required inputs (an amount is a tier tap or a typed custom value), so its
+    // "choose an amount" rule is a cross-field check: flag the visible custom-amount box and
+    // show the step summary until a tier is selected or a positive custom amount is typed.
+    function validateStep1() {
+      var amountMissing =
+        !selected || (selected.classList.contains("give-tier-custom") && !customPence());
+      return validateForm(stepEl(1), {
+        summary: stepEl(1).querySelector("[data-err]"),
+        extraChecks: function () {
+          if (!amountMissing) return [];
+          var input = customInput() || root.querySelector(".give-tier") || stepEl(1);
+          return [{ control: input, message: "Choose an amount to continue" }];
+        },
+      }).valid;
     }
 
     // ---- review summary (step 3) ----
@@ -1486,16 +1645,13 @@
     }
 
     function next() {
-      if (current === 1 && (!selected || (selected.classList.contains("give-tier-custom") && !customPence()))) {
-        showErr(1); return;
-      }
-      if (current === 2 && !validate(stepEl(2))) { showErr(2); return; }
+      if (current === 1 ? !validateStep1() : !validate(stepEl(current))) return;
       hideErr(current);
       go(current + 1, 1);
     }
     function prev() { if (current > 1) go(current - 1, -1); }
     function pay() {
-      if (!validate(stepEl(3))) { showErr(3); return; }
+      if (!validate(stepEl(3))) return;
       if (!selected) { go(1, -1); showErr(1); return; }
       startCheckout(selected, win);
     }
@@ -1554,45 +1710,31 @@
       }
       return true;
     }
+    // TASK-225: route the generic required fields through the shared highlight-all helper,
+    // using this step's [data-err] node as the role=alert summary, then apply the
+    // professional-partner consent gate explicitly. thirdPartyConsent has NO native `required`
+    // (it sits in a conditionally hidden reveal, so a `required` there would block the no-JS
+    // path), so it is checked here; its dedicated #thirdPartyConsentErr message is toggled by
+    // the submit handler. Reads the CHECKED submitterRole radio directly.
     function validate(el) {
-      var ctrls = Array.prototype.slice.call(el.querySelectorAll("input, select, textarea"));
-      var ok = true, firstBad = null;
-      ctrls.forEach(function (c) {
-        if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
-        var bad;
-        if (c.type === "checkbox" || c.type === "radio") {
-          var group = form.querySelectorAll('[name="' + c.name + '"]');
-          bad = !Array.prototype.some.call(group, function (g) { return g.checked; });
-        } else {
-          var val = (c.value || "").trim();
-          bad = !val;
-          if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
-        }
-        var field = (c.closest && (c.closest(".give-field") || c.closest("fieldset"))) || null;
-        if (field) field.classList.toggle("invalid", bad);
-        c.setAttribute("aria-invalid", String(bad));
-        if (bad) { ok = false; if (!firstBad) firstBad = c; }
-      });
+      var n = el.getAttribute("data-step");
+      var ok = validateForm(el, { summary: root.querySelector('[data-err="' + n + '"]') }).valid;
 
-      // G2 item 10: a professional partner must confirm third party permission before
-      // this step can pass, mirroring the schema's authoritative refine
-      // (src/stories/schema.ts). thirdPartyConsent has NO native `required` — it sits in a
-      // conditionally hidden reveal ([data-reveal="professional"]), and a required field
-      // inside a hidden ancestor blocks native form submission even off-step, which would
-      // break the no-JS path — so this business rule is checked explicitly here instead.
-      // Reads the CHECKED submitterRole radio directly (fieldValue() would only ever
-      // return the first radio in the group, checked or not).
       var checkedRole = form.querySelector('[name="submitterRole"]:checked');
-      var professionalConsent = form.querySelector('[name="thirdPartyConsent"]');
-      if (el.contains(professionalConsent) && visible(professionalConsent) && checkedRole && checkedRole.value === "professional_partner" && !professionalConsent.checked) {
-        var consentField = professionalConsent.closest(".give-field");
-        if (consentField) consentField.classList.add("invalid");
-        professionalConsent.setAttribute("aria-invalid", "true");
+      var consent = form.querySelector('[name="thirdPartyConsent"]');
+      if (
+        el.contains(consent) &&
+        visible(consent) &&
+        checkedRole &&
+        checkedRole.value === "professional_partner" &&
+        !consent.checked
+      ) {
+        var field = consent.closest(".give-field") || consent.closest(".give-check") || consent;
+        field.classList.add("is-invalid");
+        consent.setAttribute("aria-invalid", "true");
+        if (ok && consent.focus) { try { consent.focus(); } catch (e) { /* focus unavailable */ } }
         ok = false;
-        if (!firstBad) firstBad = professionalConsent;
       }
-
-      if (firstBad && firstBad.focus) firstBad.focus();
       return ok;
     }
 
@@ -1888,6 +2030,8 @@
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
+      validateForm,
+      clearValidation,
       initNav,
       initReveal,
       initGiveToggle,
@@ -1896,6 +2040,7 @@
       initDeclarationCapture,
       initPartnershipCapture,
       initContactForm,
+      initGiftAidForm,
       startCheckout,
       initCheckout,
       initEmbeddedCheckout,
@@ -1915,6 +2060,7 @@
     initDonorType(document);
     initContactCapture(document);
     initContactForm(document, window);
+    initGiftAidForm(document);
     initCheckout(document, window);
     initEmbeddedCheckout(document, window);
     initGiveSteps(document, window);
@@ -1926,5 +2072,8 @@
     window.startCheckout = function (btn) {
       return startCheckout(btn, window);
     };
+    // Expose the shared validation helper so separate page scripts (e.g.
+    // business-thankyou.js) route their forms through the same highlight-all UX.
+    window.NBCCFormValidation = { validateForm: validateForm, clearValidation: clearValidation };
   }
 })();

@@ -253,4 +253,17 @@ describe("contact form behaviour (jsdom)", () => {
     await flushPromises();
     expect(submitBtn.disabled).toBe(false);
   });
+
+  it("shows a role=alert summary and an inline message on every missing field at once (TASK-225)", () => {
+    submit();
+    const form = document.getElementById("contactForm")!;
+    const summary = form.querySelector('[role="alert"]') as HTMLElement | null;
+    expect(summary).not.toBeNull();
+    expect(summary?.hidden).toBe(false);
+    expect(norm(summary?.textContent).length).toBeGreaterThan(0);
+    for (const id of ["firstName", "email", "message"]) {
+      expect(invalid(id)).toBe("true");
+      expect(norm(document.getElementById(`${id}-error`)?.textContent).length).toBeGreaterThan(0);
+    }
+  });
 });

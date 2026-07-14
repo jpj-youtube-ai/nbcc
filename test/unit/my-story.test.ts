@@ -298,6 +298,15 @@ describe("my story stepping + validation (jsdom)", () => {
     const err = document.querySelector('[data-err="1"]');
     expect(err?.classList.contains("show")).toBe(true);
   });
+
+  it("flags every missing step-1 field at once with a role=alert summary (TASK-225)", () => {
+    clickNext();
+    expect(document.querySelector('[name="submitterRole"]')?.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById("storyText")?.getAttribute("aria-invalid")).toBe("true");
+    const err = document.querySelector('[data-err="1"]') as HTMLElement;
+    expect(err.getAttribute("role")).toBe("alert");
+    expect(err.classList.contains("show")).toBe(true);
+  });
   it("advances to step 2 (about you) once role and story are provided", () => {
     check("submitterRole"); // first radio
     setVal("storyText", "The Red Bag brought my daughter such comfort.");

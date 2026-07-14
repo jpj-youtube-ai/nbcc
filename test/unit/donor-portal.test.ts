@@ -262,7 +262,7 @@ describe("initPortalRequest behaviour (jsdom)", () => {
     );
   });
 
-  it("does not post an empty/invalid email (native validation blocks it)", async () => {
+  it("does not post an invalid email and highlights it inline, even inside the hidden error card (TASK-225)", async () => {
     const fetchMock = vi.fn(
       async () => ({ ok: true, json: async () => ({}) }) as unknown as Response,
     );
@@ -277,5 +277,11 @@ describe("initPortalRequest behaviour (jsdom)", () => {
     await flush();
 
     expect(fetchMock).not.toHaveBeenCalled();
+    // Flagged inline (not a native popup), and validated even though the form sits inside the
+    // shipped-hidden portal error card, because validateForm is bounded at the form scope.
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(
+      document.getElementById("portalRequestForm")!.querySelector('[role="alert"]'),
+    ).not.toBeNull();
   });
 });

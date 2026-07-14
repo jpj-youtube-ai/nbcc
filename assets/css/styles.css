@@ -468,6 +468,15 @@ textarea{resize:vertical;min-height:130px}
 .form-status.ok,.form-status.is-success{display:block;background:var(--holly);color:var(--cream);border:1px solid var(--holly)}
 .form-status.is-error{display:block;background:var(--tan-soft);color:var(--maroon);border:1px solid var(--maroon)}
 .form-status.is-pending{display:block;background:var(--tint);color:var(--slate);border:1px solid var(--line)}
+/* FORM VALIDATION (TASK-225): shared highlight-all treatment used by every form. .is-invalid
+   reddens a control or its wrapper, .validation-msg is the inline per-field message, and the
+   role=alert .form-error-summary sits at the top of the form. Token-only, from the palette. */
+.give-field.is-invalid input,.give-field.is-invalid textarea,.give-field.is-invalid select,.field.is-invalid input,.field.is-invalid textarea,.field.is-invalid select,input.is-invalid,textarea.is-invalid,select.is-invalid{border-color:var(--crimson);box-shadow:0 0 0 3px color-mix(in srgb,var(--crimson) 20%,transparent)}
+.give-check.is-invalid,.give-donor-options.is-invalid,fieldset.is-invalid>legend{color:var(--maroon)}
+.validation-msg{display:block;color:var(--maroon);font-size:.82rem;font-weight:600;margin-top:6px}
+.validation-msg[hidden]{display:none}
+.form-error-summary{color:var(--maroon);background:var(--tan-soft);border:1px solid var(--maroon);border-radius:12px;padding:12px 16px;font-weight:600;margin:0 0 16px}
+.form-error-summary[hidden]{display:none}
 
 /* CTA strip */
 .cta-strip{background:var(--crimson);color:var(--cream);text-align:center;border-radius:var(--radius-lg);padding:clamp(38px,5vw,64px) clamp(24px,4vw,48px);box-shadow:var(--shadow)}

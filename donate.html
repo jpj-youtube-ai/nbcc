@@ -239,6 +239,12 @@
 </fieldset>
 <fieldset class="give-contact" id="contactCapture">
 <legend class="give-contact-legend">Your details</legend>
+<!-- TASK-219: first name + surname sit side by side in one row wrapper, reading as one
+                   name split in two. Each keeps its existing .give-field label/input markup unchanged
+                   (ids, names, autocomplete, required); only the two-column .give-name-row wrapper and
+                   its CSS are new. startCheckout still reads #donorFirstName/#donorSurname by id and
+                   folds them into the single payload.fullName, so behaviour is unchanged. -->
+<div class="give-name-row">
 <div class="give-field">
 <label for="donorFirstName">First name <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="given-name" class="give-field-input" id="donorFirstName" name="donorFirstName" placeholder="Your first name" required="" type="text"/>
@@ -246,6 +252,7 @@
 <div class="give-field">
 <label for="donorSurname">Surname <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="family-name" class="give-field-input" id="donorSurname" name="donorSurname" placeholder="Your surname" required="" type="text"/>
+</div>
 </div>
 <div class="give-field">
 <label for="donorEmail">Email <span aria-hidden="true" class="give-req">*</span></label>

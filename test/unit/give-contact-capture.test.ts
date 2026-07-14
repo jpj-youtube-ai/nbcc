@@ -81,6 +81,30 @@ describe("contact capture markup (REQ-039)", () => {
     expect(contact?.querySelector("#donorName")).toBeNull();
   });
 
+  // TASK-219: the first-name and surname fields sit side by side in one shared row wrapper
+  // (.give-name-row), so the donor name reads as one field split in two. Each input keeps its
+  // own .give-field wrapper (markup reused, not restyled); only the row wrapper is new.
+  it("lays first name and surname side by side in one shared .give-name-row wrapper", () => {
+    const row = contact?.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    // both name inputs live inside the one row wrapper...
+    const first = row?.querySelector("#donorFirstName");
+    const surname = row?.querySelector("#donorSurname");
+    expect(first).not.toBeNull();
+    expect(surname).not.toBeNull();
+    // ...each still inside its own reused .give-field wrapper...
+    expect(first?.closest(".give-field")).not.toBeNull();
+    expect(surname?.closest(".give-field")).not.toBeNull();
+    // ...and the row itself sits in the contact fieldset.
+    expect(row?.closest(".give-contact")).not.toBeNull();
+    // The email field is NOT pulled into the name row (it stays full width below).
+    expect(row?.querySelector("#donorEmail")).toBeNull();
+  });
+
+  it("styles the name row as two equal half-width columns in CSS (TASK-219)", () => {
+    expect(css).toMatch(/\.give-name-row\s*\{[^}]*grid-template-columns:\s*1fr 1fr/);
+  });
+
   it("has a REQUIRED email input with a real <label for> and aria-required (REQ-039)", () => {
     const input = contact?.querySelector("#donorEmail") as HTMLInputElement | null;
     expect(input).not.toBeNull();

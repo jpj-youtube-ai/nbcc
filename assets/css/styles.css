@@ -662,6 +662,14 @@ body.give-embedded-open{overflow:hidden}
 .give-donor-option--business{border:1.6px solid var(--tan);background:var(--tan-soft)}
 .give-donor-cards .give-donor-option:has(input:checked){border:1.6px solid var(--holly);background:var(--holly-soft)}
 @media(max-width:520px){.give-donor-cards{grid-template-columns:1fr}}
+/* TASK-219: first name + surname share one row so the donor name reads as one field split
+   in two. Two equal half-width columns at the form's 16px field gap; each column keeps its
+   .give-field wrapper but drops the per-question divider (border/padding) the step adds, so the
+   pair aligns as a unit. Mirrors the donor-cards two-column pattern and its 520px collapse, so
+   the two stack to full width on the narrowest phones where half-width would get cramped. */
+.give-name-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.give-step .give-name-row .give-field{margin-bottom:0;padding-top:0;border-top:0}
+@media(max-width:520px){.give-name-row{grid-template-columns:1fr}}
 /* clear, separate newsletter opt-in (still the emailConsent field) */
 .give-newsletter{border:1.6px solid var(--line);background:var(--tint);border-radius:12px;padding:2px 14px;margin:14px 0}
 .give-newsletter-check .give-check-text strong{display:block;color:var(--maroon)}

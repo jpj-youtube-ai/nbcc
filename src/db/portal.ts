@@ -120,6 +120,9 @@ export interface DonorPortalSnapshot {
   email: string | null;
   emailConsent: boolean;
   anonymous: boolean;
+  // Admin-only "hide from supporters wall" override (TASK-223): true removes the donor from the public
+  // wall regardless of any opt-in. Surfaced so the admin donor view can render + toggle it.
+  hiddenFromSupporters: boolean;
   subscriptionPlan: string | null;
   // The Stripe subscription id of that most-recent monthly-gift donation, so the portal page can
   // drive the reduce-instead-then-cancel flow (REQ-055 · TASK-102); null when there is no monthly gift.
@@ -134,11 +137,12 @@ export async function getDonorPortalSnapshot(donorId: number): Promise<DonorPort
       email: string | null;
       email_consent: boolean;
       anonymous: boolean;
+      hidden_from_supporters: boolean;
       subscription_plan: string | null;
       subscription_id: string | null;
       gift_aid: boolean;
     }>(
-      `SELECT dn.full_name, dn.email, dn.email_consent, dn.anonymous,
+      `SELECT dn.full_name, dn.email, dn.email_consent, dn.anonymous, dn.hidden_from_supporters,
               (SELECT d.plan FROM donations d
                  WHERE d.donor_id = dn.id AND d.stripe_subscription_id IS NOT NULL
                  ORDER BY d.id DESC LIMIT 1) AS subscription_plan,
@@ -158,18 +162,23 @@ export async function getDonorPortalSnapshot(donorId: number): Promise<DonorPort
     email: row.email,
     emailConsent: row.email_consent,
     anonymous: row.anonymous,
+    hiddenFromSupporters: row.hidden_from_supporters,
     subscriptionPlan: row.subscription_plan,
     subscriptionId: row.subscription_id,
     giftAid: row.gift_aid,
   };
 }
 
-// The editable portal fields (PATCH). All optional — a caller sends only what changed.
+// The editable portal fields (PATCH). All optional — a caller sends only what changed. The
+// donor-facing portal exposes fullName/email/emailConsent/anonymous; hiddenFromSupporters is an
+// ADMIN-only field (only the admin PATCH schema accepts it — TASK-223), wired through here so the one
+// updateDonorPortal writer can persist it in the same audited transaction.
 export interface DonorPortalUpdate {
   fullName?: string;
   email?: string | null;
   emailConsent?: boolean;
   anonymous?: boolean;
+  hiddenFromSupporters?: boolean;
 }
 
 // Update the donor's editable details + append a `donor.updated` audit_log row in the SAME
@@ -185,6 +194,7 @@ export async function updateDonorPortal(
     email: "email",
     emailConsent: "email_consent",
     anonymous: "anonymous",
+    hiddenFromSupporters: "hidden_from_supporters",
   };
   return writeWithAudit(
     async (client) => {

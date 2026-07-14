@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { bandForMonthlyAmount } from "../donors/fulfilment";
+import { containsBlockedWord } from "../donors/display-name-filter";
 
 // Pure field-mapping / claim-eligibility logic for the unified donation model
 // (REQ-036/REQ-037). NO pool, NO config, NO clock — importing this file touches
@@ -169,25 +171,19 @@ export function isPubliclyListable(donor: { anonymous?: boolean }): boolean {
   return donor.anonymous !== true;
 }
 
-// The public supporters wall (TASK-071/REQ-035) groups donation-sourced donors into
-// three display tiers. Ascending order — the order the page renders and the tier
-// headings the supporters markup uses.
-export const SUPPORTER_TIERS = ["bronze", "silver", "gold"] as const;
+// The public supporters wall (TASK-071/REQ-035; opt-in monthly 4-band rework TASK-223) groups
+// donation-sourced supporters into four metal display bands. Ascending order — the order the page
+// renders and the tier headings the supporters markup uses. The band set + thresholds are the
+// business-supporter bands in src/donors/fulfilment.ts (bronze £10, silver £25, gold £50, platinum
+// £100 per month); the wall reuses them so a monthly supporter's wall band matches their recognition
+// band exactly.
+export const SUPPORTER_TIERS = ["bronze", "silver", "gold", "platinum"] as const;
 export type SupporterTier = (typeof SUPPORTER_TIERS)[number];
 
-// Derive a supporter's tier from their donation amount, reusing the give-monthly tier
-// thresholds (donate.html: bronze £10, silver £25, gold £50, platinum £100 — in pence).
-// The public wall has three display tiers, so a platinum-level gift (≥ £50) sits in the
-// top Gold band alongside gold. Pure.
-export function supporterTierForAmount(amountPence: number): SupporterTier {
-  if (amountPence >= 5000) return "gold";
-  if (amountPence >= 2500) return "silver";
-  return "bronze";
-}
-
-// The public display name: a company (or any donor carrying a business name) is listed
-// by its business name; an individual by their full name. Mirrors the acceptance rule
-// "business_name when donor_type is company (or businessName is set), otherwise full_name".
+// The public display name for the pre-opt-in raw fallback: a company (or any donor carrying a business
+// name) is listed by its business name; an individual by their full name. The opt-in custom name
+// (credit_name) is layered on top of this in resolvePublicSupporter. Mirrors the original acceptance
+// rule "business_name when donor_type is company (or businessName is set), otherwise full_name".
 export function supporterDisplayName(donor: {
   donorType: DonorType;
   fullName: string;
@@ -198,14 +194,37 @@ export function supporterDisplayName(donor: {
     : donor.fullName;
 }
 
-// A raw donor row (one per non-anonymous donor, carrying their largest gift) the DB read
-// hands to the grouper.
+// A supporter is a BUSINESS on the wall when they are an incorporated company OR carry a non-empty
+// business_name (a partnership / sole-trader-with-a-name donates under donor_type 'individual' WITH a
+// business_name — see donationFromCheckoutSession). A business lists as an Organisation and consents
+// through its business_supporter_fulfilment record; everyone else lists as an Individual and consents
+// through the donors.list_on_supporters flag. One predicate so both call sites agree. Mirrors the
+// isBusiness rule in fulfilmentBandFor.
+function isBusinessSupporter(row: { donorType: DonorType; businessName?: string | null }): boolean {
+  return row.donorType === "company" || (row.businessName ?? "").trim().length > 0;
+}
+
+// One raw supporter row the DB read hands to the grouper. It carries everything the pure opt-in +
+// banding rules need, so the "who is shown, under what name, in which band" decision is DB-free
+// testable (the SQL read in donations.ts only gathers these fields + the greatest PAID MONTHLY gift).
 export interface SupporterSourceRow {
   donorType: DonorType;
   fullName: string;
   businessName?: string | null;
+  // Display-suppression flags (never shown when either is set): the donor's own anonymity preference
+  // and the admin "hide from wall" override.
   anonymous?: boolean;
-  amountPence: number;
+  hiddenFromSupporters?: boolean;
+  // The greatest PAID MONTHLY gift in pence, or null when the donor has no paid monthly donation. A
+  // one-off-only donor is null → excluded; a monthly gift under £10/mo bands to null → excluded.
+  monthlyAmountPence: number | null;
+  // Individual consent (donors table): opted in + the individual's chosen public display name.
+  individualListOptIn?: boolean;
+  individualCreditName?: string | null;
+  // Business consent (business_supporter_fulfilment): opted in (list_on_supporters AND the thank-you
+  // form was submitted, i.e. captured_at IS NOT NULL) + the business's chosen public display name.
+  businessListOptIn?: boolean;
+  businessCreditName?: string | null;
 }
 
 // A rendered supporter entry.
@@ -214,21 +233,59 @@ export interface PublicSupporter {
   kind: "person" | "organisation";
 }
 
-// Group raw donor rows into the three display tiers (TASK-071). Drops anonymous donors
-// via isPubliclyListable (they are NEVER shown), derives each tier from the donor's
-// amount and the person/organisation kind from donor_type, and sorts each tier
-// alphabetically by display name. Pure — DB-free-testable; the SQL read lives in
-// donations.ts and the HTML render in src/routes/site.ts.
+// A resolved wall entry: the display name, the person/organisation kind, and the band it belongs in.
+interface ResolvedSupporter extends PublicSupporter {
+  band: SupporterTier;
+}
+
+// Decide whether ONE raw row appears on the wall, and if so its final display name, kind and band.
+// Returns null (excluded) unless ALL hold:
+//   - not anonymous and not admin-hidden;
+//   - has a paid monthly gift whose amount bands (>= £10/mo — bandForMonthlyAmount non-null);
+//   - opted in on the right channel: a business via its fulfilment record (list_on_supporters +
+//     captured), an individual via donors.list_on_supporters;
+//   - the FINAL display name does not trip the bad-word filter (render-time safety net).
+// Pure — the single source of truth both groupPublicSupporters and its tests use.
+export function resolvePublicSupporter(row: SupporterSourceRow): ResolvedSupporter | null {
+  if (!isPubliclyListable(row)) return null; // anonymous → never shown (REQ-039)
+  if (row.hiddenFromSupporters) return null; // admin hide → never shown
+  if (row.monthlyAmountPence == null) return null; // no paid monthly gift → not a monthly supporter
+  const band = bandForMonthlyAmount(row.monthlyAmountPence);
+  if (!band) return null; // under £10/mo → not an eligible band
+
+  let name: string;
+  let kind: "person" | "organisation";
+  if (isBusinessSupporter(row)) {
+    if (!row.businessListOptIn) return null; // business must opt in via its fulfilment record
+    name = (row.businessCreditName ?? "").trim() || supporterDisplayName(row);
+    kind = "organisation";
+  } else {
+    if (!row.individualListOptIn) return null; // individual must opt in via donors.list_on_supporters
+    name = (row.individualCreditName ?? "").trim() || row.fullName;
+    kind = "person";
+  }
+
+  if (containsBlockedWord(name)) return null; // render-time bad-word safety net
+  return { name, kind, band };
+}
+
+// Group raw supporter rows into the four metal bands (TASK-223). Each row is resolved through
+// resolvePublicSupporter (opt-in + banding + suppression + bad-word net); survivors are placed in
+// their band and each band is sorted alphabetically by display name. Pure — DB-free-testable; the SQL
+// read lives in donations.ts and the HTML render in src/routes/site.ts.
 export function groupPublicSupporters(
   rows: SupporterSourceRow[],
 ): Record<SupporterTier, PublicSupporter[]> {
-  const tiers: Record<SupporterTier, PublicSupporter[]> = { bronze: [], silver: [], gold: [] };
+  const tiers: Record<SupporterTier, PublicSupporter[]> = {
+    bronze: [],
+    silver: [],
+    gold: [],
+    platinum: [],
+  };
   for (const row of rows) {
-    if (!isPubliclyListable(row)) continue;
-    tiers[supporterTierForAmount(row.amountPence)].push({
-      name: supporterDisplayName(row),
-      kind: row.donorType === "company" ? "organisation" : "person",
-    });
+    const resolved = resolvePublicSupporter(row);
+    if (!resolved) continue;
+    tiers[resolved.band].push({ name: resolved.name, kind: resolved.kind });
   }
   for (const tier of SUPPORTER_TIERS) {
     tiers[tier].sort((a, b) => a.name.localeCompare(b.name));

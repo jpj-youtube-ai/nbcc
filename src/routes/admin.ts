@@ -662,6 +662,9 @@ const adminPatchSchema = z
     email: z.string().trim().email().optional(),
     emailConsent: z.boolean().optional(),
     anonymous: z.boolean().optional(),
+    // Admin-only "hide from supporters wall" override (TASK-223): removes the donor from the public
+    // wall regardless of any opt-in. Not exposed on the self-serve portal schema.
+    hiddenFromSupporters: z.boolean().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });

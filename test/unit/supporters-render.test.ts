@@ -5,32 +5,21 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   groupPublicSupporters,
-  supporterTierForAmount,
   supporterDisplayName,
   type SupporterSourceRow,
 } from "../../src/db/donations-model";
 import { renderSupportersPage, renderSupporterTiers } from "../../src/routes/site";
 
-// TASK-071 (REQ-035): the /supporters page now renders the real, donation-sourced donor
-// list. The tiering / name / anonymous-exclusion logic is pure (donations-model) and the
-// HTML assembly is pure (renderSupportersPage over the supporters.html template) — both
-// DB-free-testable here. The DB read wiring (listPublicSupporters) is covered by
-// test/unit/supporters-read.test.ts; the true DB-backed path by features/supporters.feature.
-// supporters.test.ts (the static file's structure) continues to pass unchanged.
+// TASK-071 (REQ-035); opt-in monthly 4-band rework TASK-223: the /supporters page renders ONLY
+// supporters who OPTED IN and give MONTHLY, grouped into four metal bands (Bronze/Silver/Gold/
+// Platinum). The opt-in + banding + suppression + bad-word rules are pure (donations-model) and the
+// HTML assembly is pure (renderSupportersPage over the supporters.html template) — both DB-free here.
+// The DB read wiring (listPublicSupporters) is covered by test/unit/supporters-read.test.ts;
+// supporters.test.ts (the static file's structure) covers the 4-tier fallback markup.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const template = readFileSync(resolve(ROOT, "supporters.html"), "utf8");
 const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
-
-describe("supporterTierForAmount — give-monthly thresholds", () => {
-  it("bands by amount: gold ≥ £50, silver ≥ £25, else bronze (platinum folds into gold)", () => {
-    expect(supporterTierForAmount(999)).toBe("bronze");
-    expect(supporterTierForAmount(2500)).toBe("silver");
-    expect(supporterTierForAmount(4999)).toBe("silver");
-    expect(supporterTierForAmount(5000)).toBe("gold");
-    expect(supporterTierForAmount(10000)).toBe("gold"); // platinum-level gift → Gold
-  });
-});
 
 describe("supporterDisplayName", () => {
   it("uses business name for a company, full name for an individual", () => {
@@ -47,59 +36,153 @@ describe("supporterDisplayName", () => {
   });
 });
 
+// A row factory: everything defaults to "not a supporter" (no paid monthly gift, no opt-in) so each
+// case turns on exactly the fields it sets.
+function row(overrides: Partial<SupporterSourceRow> & { fullName: string }): SupporterSourceRow {
+  return { donorType: "individual", monthlyAmountPence: null, ...overrides };
+}
+
 const rows: SupporterSourceRow[] = [
-  { donorType: "individual", fullName: "Zara Individual", amountPence: 5000 }, // gold, person
-  { donorType: "company", fullName: "Casey", businessName: "Beacon Trading", amountPence: 2500 }, // silver, org
-  { donorType: "individual", fullName: "Anon Ghost", amountPence: 5000, anonymous: true }, // excluded
-  { donorType: "individual", fullName: "Adam Bronze", amountPence: 1000 }, // bronze, person
-  { donorType: "individual", fullName: "Beth Gold", amountPence: 9000 }, // gold, person
+  // Opted-in monthly BUSINESS (company) at platinum, with a custom credit name → shows as an org.
+  row({
+    donorType: "company",
+    fullName: "Casey",
+    businessName: "Acme Trading",
+    monthlyAmountPence: 10000,
+    businessListOptIn: true,
+    businessCreditName: "Acme",
+  }),
+  // Opted-in monthly INDIVIDUAL at gold, with a custom credit name → shows as a person by credit name.
+  row({
+    fullName: "Ada Lovelace",
+    monthlyAmountPence: 5000,
+    individualListOptIn: true,
+    individualCreditName: "Ada L.",
+  }),
+  // Opted-in monthly INDIVIDUAL at silver, no credit name → shows by full name.
+  row({ fullName: "Beth Silver", monthlyAmountPence: 2500, individualListOptIn: true }),
+  // Opted-in monthly BUSINESS by business_name (donor_type individual) at bronze, no credit name → org
+  // by business name.
+  row({ fullName: "Sam", businessName: "Bramble Cafe", monthlyAmountPence: 1000, businessListOptIn: true }),
+  // A one-off donor (no paid monthly gift) who opted in → NOT shown.
+  row({ fullName: "One Off Ollie", monthlyAmountPence: null, individualListOptIn: true }),
+  // A monthly donor who did NOT opt in → NOT shown.
+  row({ fullName: "Silent Sid", monthlyAmountPence: 5000, individualListOptIn: false }),
+  // Anonymous, even though opted-in monthly gold → NOT shown.
+  row({ fullName: "Anon Ghost", monthlyAmountPence: 5000, individualListOptIn: true, anonymous: true }),
+  // Admin-hidden, even though opted-in monthly gold → NOT shown.
+  row({
+    fullName: "Hidden Harry",
+    monthlyAmountPence: 5000,
+    individualListOptIn: true,
+    hiddenFromSupporters: true,
+  }),
+  // Under £10/mo, opted-in monthly → NOT shown (below the lowest band).
+  row({ fullName: "Tiny Tim", monthlyAmountPence: 900, individualListOptIn: true }),
+  // A business that captured but did NOT tick list-on-supporters (businessListOptIn false) → NOT shown.
+  row({
+    donorType: "company",
+    fullName: "Quiet Co contact",
+    businessName: "Quiet Company",
+    monthlyAmountPence: 10000,
+    businessListOptIn: false,
+  }),
 ];
 
-describe("groupPublicSupporters", () => {
+describe("groupPublicSupporters — opt-in monthly 4-band rules (TASK-223)", () => {
   const tiers = groupPublicSupporters(rows);
+  const allNames = () =>
+    [...tiers.bronze, ...tiers.silver, ...tiers.gold, ...tiers.platinum].map((s) => s.name);
 
-  it("never lists an anonymous donor in any tier", () => {
-    const allNames = [...tiers.bronze, ...tiers.silver, ...tiers.gold].map((s) => s.name);
-    expect(allNames).not.toContain("Anon Ghost");
+  it("shows an opted-in monthly business by its credit name, as an organisation, in its band", () => {
+    expect(tiers.platinum).toContainEqual({ name: "Acme", kind: "organisation" });
   });
 
-  it("places donors in the tier their amount earns", () => {
-    expect(tiers.gold.map((s) => s.name)).toEqual(["Beth Gold", "Zara Individual"]);
-    expect(tiers.silver.map((s) => s.name)).toEqual(["Beacon Trading"]);
-    expect(tiers.bronze.map((s) => s.name)).toEqual(["Adam Bronze"]);
+  it("shows an opted-in monthly individual by credit name, and by full name when none is set", () => {
+    expect(tiers.gold).toContainEqual({ name: "Ada L.", kind: "person" });
+    expect(tiers.silver).toContainEqual({ name: "Beth Silver", kind: "person" });
   });
 
-  it("labels a company as an organisation and an individual as a person", () => {
-    expect(tiers.silver[0]).toEqual({ name: "Beacon Trading", kind: "organisation" });
-    expect(tiers.gold[0].kind).toBe("person");
+  it("treats a donor with a business_name as an organisation (business opt-in channel)", () => {
+    expect(tiers.bronze).toContainEqual({ name: "Bramble Cafe", kind: "organisation" });
   });
 
-  it("sorts each tier alphabetically by display name", () => {
-    for (const tier of [tiers.bronze, tiers.silver, tiers.gold]) {
+  it("excludes a one-off donor, a non-opted-in monthly donor, and an under-£10/mo gift", () => {
+    expect(allNames()).not.toContain("One Off Ollie");
+    expect(allNames()).not.toContain("Silent Sid");
+    expect(allNames()).not.toContain("Tiny Tim");
+  });
+
+  it("excludes an anonymous donor and an admin-hidden donor even when opted-in monthly", () => {
+    expect(allNames()).not.toContain("Anon Ghost");
+    expect(allNames()).not.toContain("Hidden Harry");
+  });
+
+  it("excludes a business that did not tick list-on-supporters", () => {
+    expect(allNames()).not.toContain("Quiet Company");
+  });
+
+  it("groups into four bands and sorts each alphabetically by display name", () => {
+    for (const tier of [tiers.bronze, tiers.silver, tiers.gold, tiers.platinum]) {
       const names = tier.map((s) => s.name);
       expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
     }
+    // Every shown entry landed in the band its monthly amount earns.
+    expect(tiers.platinum.map((s) => s.name)).toContain("Acme"); // £100/mo
+    expect(tiers.gold.map((s) => s.name)).toContain("Ada L."); // £50/mo
+    expect(tiers.silver.map((s) => s.name)).toContain("Beth Silver"); // £25/mo
+    expect(tiers.bronze.map((s) => s.name)).toContain("Bramble Cafe"); // £10/mo
+  });
+
+  it("is a render-time safety net: omits any entry whose FINAL display name trips the bad-word filter", () => {
+    const filtered = groupPublicSupporters([
+      row({
+        donorType: "company",
+        fullName: "Clean Contact",
+        businessName: "Cleanco",
+        monthlyAmountPence: 10000,
+        businessListOptIn: true,
+        businessCreditName: "Fuck Co",
+      }),
+    ]);
+    const names = [...filtered.bronze, ...filtered.silver, ...filtered.gold, ...filtered.platinum].map(
+      (s) => s.name,
+    );
+    expect(names).not.toContain("Fuck Co");
+    expect(names).toHaveLength(0);
   });
 });
 
-describe("renderSupportersPage — injects real donors into the supporters.html markup", () => {
+describe("renderSupportersPage — injects the opted-in monthly donors into the supporters.html markup", () => {
   const html = renderSupportersPage(template, groupPublicSupporters(rows));
   const doc = new DOMParser().parseFromString(html, "text/html");
 
-  it("keeps the three Bronze/Silver/Gold tier sections in order", () => {
+  it("keeps the four Bronze/Silver/Gold/Platinum tier sections in order", () => {
     const tiers = [...doc.querySelectorAll("main .supporter-tier")];
     expect(tiers.map((t) => norm(t.querySelector(".supporter-tier-name")?.textContent))).toEqual([
       "Bronze",
       "Silver",
       "Gold",
+      "Platinum",
     ]);
   });
 
-  it("renders the real donors and their kind label, excluding anonymous", () => {
+  it("renders the opted-in donors (incl. a Platinum entry) and excludes the rest", () => {
     const names = [...doc.querySelectorAll("main .supporter .supporter-name")].map((n) => norm(n.textContent));
-    expect(names).toContain("Zara Individual");
-    expect(names).toContain("Beacon Trading");
+    expect(names).toContain("Acme"); // platinum business
+    expect(names).toContain("Ada L."); // gold individual
+    expect(names).toContain("Bramble Cafe"); // bronze business
+    expect(names).not.toContain("One Off Ollie");
     expect(names).not.toContain("Anon Ghost");
+    expect(names).not.toContain("Hidden Harry");
+  });
+
+  it("puts the Platinum entry inside the Platinum section", () => {
+    const platinum = [...doc.querySelectorAll("main .supporter-tier")].find(
+      (t) => norm(t.querySelector(".supporter-tier-name")?.textContent) === "Platinum",
+    );
+    const names = [...(platinum?.querySelectorAll(".supporter-name") ?? [])].map((n) => norm(n.textContent));
+    expect(names).toContain("Acme");
   });
 
   it("marks each entry person/organisation with a decorative aria-hidden SVG, no <img>", () => {
@@ -125,6 +208,7 @@ describe("renderSupporterTiers — escapes a single quote in a donor name (G1 it
       bronze: [{ name: "Sam's Bakes", kind: "organisation" }],
       silver: [],
       gold: [],
+      platinum: [],
     });
     expect(html).toContain("Sam&#39;s Bakes");
     expect(html).not.toContain("Sam's Bakes");

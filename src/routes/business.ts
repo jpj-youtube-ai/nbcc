@@ -9,6 +9,7 @@ import {
   type FulfilmentPreferences,
 } from "../db/fulfilment";
 import { bandHasPlatinumPerks, perksForBand, fulfilmentBandFor, type BandPerks } from "../donors/fulfilment";
+import { containsBlockedWord } from "../donors/display-name-filter";
 import { buildCertificateHtml, certificateHeroName, formatMonthYear } from "../business/certificate";
 import { buildCaptureConfirmationEmail } from "../business/capture-confirmation-email";
 import { createRateLimiter } from "../portal/request-limiter";
@@ -120,6 +121,15 @@ function fulfilmentBodySchema(perks: BandPerks) {
         code: z.ZodIssueCode.custom,
         path: ["creditName"],
         message: "Tell us how your business name should appear",
+      });
+    }
+    // Bad-word filter (TASK-223): reject a profane public display name at source, whatever the toggle
+    // state, so it never reaches the wall. Plain, dash-free message.
+    if (b.creditName && containsBlockedWord(b.creditName)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["creditName"],
+        message: "Please choose a different public display name for your business.",
       });
     }
     if (perks.socialThankYou && typeof b.wantSocial !== "boolean") {

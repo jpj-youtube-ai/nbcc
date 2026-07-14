@@ -1,8 +1,9 @@
 // TASK-205 (business-supporter thank-you & fulfilment — DATA-MODEL FOUNDATION): the pure banding +
 // perk model. NO pool, NO config, NO clock — importing this file touches nothing external, so it is
 // unit-tested DB-free per CLAUDE.md golden rule 5. Mirrors the pure-model style of
-// src/donors/confirmation.ts and the existing tier logic in src/db/donations-model.ts
-// (supporterTierForAmount). The persisted shape it underpins is the business_supporter_fulfilment
+// src/donors/confirmation.ts and the supporter-banding logic in src/db/donations-model.ts (whose
+// public supporters wall reuses bandForMonthlyAmount below). The persisted shape it underpins is the
+// business_supporter_fulfilment
 // table (migration 1783961442118); the thank-you page, reminders and admin fulfilment UI that
 // consume it are later tasks and out of scope here.
 //

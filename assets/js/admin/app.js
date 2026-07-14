@@ -2690,6 +2690,7 @@
       dl("Email", d.email || "None on file") +
       dl("Email consent", d.emailConsent ? "Yes" : "No") +
       dl("Anonymous", d.anonymous ? "Yes" : "No") +
+      dl("Hidden from supporters wall", d.hiddenFromSupporters ? "Yes" : "No") +
       dl("Address", donorAddress(d)) +
       dl("Postcode", d.postcode || "None on file") +
       dl("Monthly plan", d.subscriptionPlan ? cap(d.subscriptionPlan) : "None") +
@@ -2703,6 +2704,7 @@
         editField("email", "Email", "email", d.email || "") +
         editCheck("emailConsent", "Email consent", d.emailConsent) +
         editCheck("anonymous", "Anonymous on the public page", d.anonymous) +
+        editCheck("hiddenFromSupporters", "Hide from supporters wall", d.hiddenFromSupporters) +
         '<button class="btn btn-primary" type="submit">Save changes</button></form>';
       // Gift Aid declaration details (TASK-130): correct identity/address on the active declaration.
       if (d.declaration) {
@@ -2736,6 +2738,7 @@
           email: (el("edit-email").value || "").trim(),
           emailConsent: el("edit-emailConsent").checked,
           anonymous: el("edit-anonymous").checked,
+          hiddenFromSupporters: el("edit-hiddenFromSupporters").checked,
         };
         if (!body.email) delete body.email; // email optional; PATCH rejects an empty string
         authFetch("/api/admin/donors/" + currentDonorId, {

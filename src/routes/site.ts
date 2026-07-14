@@ -41,6 +41,7 @@ const TIER_LABELS: Record<SupporterTier, string> = {
   bronze: "Bronze",
   silver: "Silver",
   gold: "Gold",
+  platinum: "Platinum",
 };
 
 // The decorative aria-hidden inline-SVG icons, matching supporters.html exactly (person

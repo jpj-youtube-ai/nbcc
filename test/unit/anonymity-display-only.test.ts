@@ -43,14 +43,18 @@ describe("anonymity is display-only — public donors page (REQ-047)", () => {
         donorType: ANON.donorType,
         fullName: ANON.fullName,
         anonymous: ANON.anonymous,
-        amountPence: ANON.amountPence,
+        // Opted-in monthly gold — this donor WOULD show if not anonymous (TASK-223 rules), which
+        // sharpens the invariant: anonymity alone must still suppress them.
+        monthlyAmountPence: ANON.amountPence,
+        individualListOptIn: true,
       },
     ]);
     expect(tiers.bronze).toHaveLength(0);
     expect(tiers.silver).toHaveLength(0);
     expect(tiers.gold).toHaveLength(0);
+    expect(tiers.platinum).toHaveLength(0);
     // Their name never appears anywhere in the public output.
-    const everyName = [...tiers.bronze, ...tiers.silver, ...tiers.gold].map((s) => s.name);
+    const everyName = [...tiers.bronze, ...tiers.silver, ...tiers.gold, ...tiers.platinum].map((s) => s.name);
     expect(everyName).not.toContain("Ada Lovelace");
   });
 });

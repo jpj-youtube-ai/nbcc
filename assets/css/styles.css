@@ -733,6 +733,11 @@ body.give-embedded-open{overflow:hidden}
 .supporter-meta{display:flex;flex-direction:column;min-width:0}
 .supporter-name{font-family:var(--font-head);font-weight:700;color:var(--maroon);font-size:1.05rem;line-height:1.2}
 .supporter-kind{font-size:.8rem;color:var(--slate-soft)}
+/* Platinum, the top supporters band (TASK-223), reuses the shared .supporter-tier styling above; the
+   only addition is a subtle platinum-grey accent on its heading underline, mirroring the donate page's
+   platinum ink (var(--slate)). Scoped to the platinum section so Bronze/Silver/Gold are unchanged —
+   additive, no restyle of the existing three tiers. */
+.supporter-tier[aria-labelledby="tier-platinum-heading"] .supporter-tier-name::after{background:var(--slate)}
 
 @media (max-width:980px){
   .hero .wrap,.split,.split.narrow-img,.contact-grid,.give-inner,.duo{grid-template-columns:1fr}

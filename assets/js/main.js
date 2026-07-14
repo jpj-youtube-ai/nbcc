@@ -1714,45 +1714,31 @@
       }
       return true;
     }
+    // TASK-225: route the generic required fields through the shared highlight-all helper,
+    // using this step's [data-err] node as the role=alert summary, then apply the
+    // professional-partner consent gate explicitly. thirdPartyConsent has NO native `required`
+    // (it sits in a conditionally hidden reveal, so a `required` there would block the no-JS
+    // path), so it is checked here; its dedicated #thirdPartyConsentErr message is toggled by
+    // the submit handler. Reads the CHECKED submitterRole radio directly.
     function validate(el) {
-      var ctrls = Array.prototype.slice.call(el.querySelectorAll("input, select, textarea"));
-      var ok = true, firstBad = null;
-      ctrls.forEach(function (c) {
-        if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
-        var bad;
-        if (c.type === "checkbox" || c.type === "radio") {
-          var group = form.querySelectorAll('[name="' + c.name + '"]');
-          bad = !Array.prototype.some.call(group, function (g) { return g.checked; });
-        } else {
-          var val = (c.value || "").trim();
-          bad = !val;
-          if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
-        }
-        var field = (c.closest && (c.closest(".give-field") || c.closest("fieldset"))) || null;
-        if (field) field.classList.toggle("invalid", bad);
-        c.setAttribute("aria-invalid", String(bad));
-        if (bad) { ok = false; if (!firstBad) firstBad = c; }
-      });
+      var n = el.getAttribute("data-step");
+      var ok = validateForm(el, { summary: root.querySelector('[data-err="' + n + '"]') }).valid;
 
-      // G2 item 10: a professional partner must confirm third party permission before
-      // this step can pass, mirroring the schema's authoritative refine
-      // (src/stories/schema.ts). thirdPartyConsent has NO native `required` — it sits in a
-      // conditionally hidden reveal ([data-reveal="professional"]), and a required field
-      // inside a hidden ancestor blocks native form submission even off-step, which would
-      // break the no-JS path — so this business rule is checked explicitly here instead.
-      // Reads the CHECKED submitterRole radio directly (fieldValue() would only ever
-      // return the first radio in the group, checked or not).
       var checkedRole = form.querySelector('[name="submitterRole"]:checked');
-      var professionalConsent = form.querySelector('[name="thirdPartyConsent"]');
-      if (el.contains(professionalConsent) && visible(professionalConsent) && checkedRole && checkedRole.value === "professional_partner" && !professionalConsent.checked) {
-        var consentField = professionalConsent.closest(".give-field");
-        if (consentField) consentField.classList.add("invalid");
-        professionalConsent.setAttribute("aria-invalid", "true");
+      var consent = form.querySelector('[name="thirdPartyConsent"]');
+      if (
+        el.contains(consent) &&
+        visible(consent) &&
+        checkedRole &&
+        checkedRole.value === "professional_partner" &&
+        !consent.checked
+      ) {
+        var field = consent.closest(".give-field") || consent.closest(".give-check") || consent;
+        field.classList.add("is-invalid");
+        consent.setAttribute("aria-invalid", "true");
+        if (ok && consent.focus) { try { consent.focus(); } catch (e) { /* focus unavailable */ } }
         ok = false;
-        if (!firstBad) firstBad = professionalConsent;
       }
-
-      if (firstBad && firstBad.focus) firstBad.focus();
       return ok;
     }
 

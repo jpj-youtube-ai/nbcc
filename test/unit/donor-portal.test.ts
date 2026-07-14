@@ -51,10 +51,28 @@ describe("donor portal page markup (REQ-061)", () => {
   it("offers a self-edit details form (name, email, consent, anonymity) (REQ-061)", () => {
     const form = doc0.getElementById("portalDetailsForm");
     expect(form, "#portalDetailsForm missing").not.toBeNull();
-    for (const id of ["pdName", "pdEmail", "pdEmailConsent", "pdAnonymous"]) {
+    for (const id of ["pdNameFirst", "pdNameSurname", "pdEmail", "pdEmailConsent", "pdAnonymous"]) {
       expect(doc0.getElementById(id), `#${id} missing`).not.toBeNull();
     }
-    expect(doc0.getElementById("pdName")?.hasAttribute("required")).toBe(true);
+    // TASK-226: the name is captured as a required first name + surname pair, side by side at half
+    // width in the shared .give-name-row, never as one combined field.
+    expect(doc0.getElementById("pdNameFirst")?.hasAttribute("required")).toBe(true);
+    expect(doc0.getElementById("pdNameSurname")?.hasAttribute("required")).toBe(true);
+    const row = form?.querySelector(".give-name-row");
+    expect(row?.querySelector("#pdNameFirst")).not.toBeNull();
+    expect(row?.querySelector("#pdNameSurname")).not.toBeNull();
+    expect(doc0.getElementById("pdName"), "old single #pdName field removed").toBeNull();
+    expect(form?.querySelector('input[name="fullName"]'), "no single fullName input").toBeNull();
+  });
+
+  // TASK-226: the Gift Aid declaration form's first name + last name also sit side by side in the
+  // shared .give-name-row wrapper, each keeping its own .give-field.
+  it("lays the declaration first name and last name side by side in a .give-name-row", () => {
+    const declForm = doc0.getElementById("portalDeclForm");
+    const row = declForm?.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("#pdFirstName")?.closest(".give-field")).not.toBeNull();
+    expect(row?.querySelector("#pdLastName")?.closest(".give-field")).not.toBeNull();
   });
 
   it("offers a self-serve magic-link request form inside the error card (REQ-061)", () => {
@@ -151,7 +169,9 @@ describe("initPortal behaviour (jsdom)", () => {
     initPortal(document, win);
     await flush();
 
-    expect((document.getElementById("pdName") as HTMLInputElement).value).toBe("Ada Portal");
+    // TASK-226: the stored fullName is split across the first name + surname pair on prefill.
+    expect((document.getElementById("pdNameFirst") as HTMLInputElement).value).toBe("Ada");
+    expect((document.getElementById("pdNameSurname") as HTMLInputElement).value).toBe("Portal");
     expect((document.getElementById("pdEmail") as HTMLInputElement).value).toBe(
       "ada.portal@example.com",
     );
@@ -166,7 +186,8 @@ describe("initPortal behaviour (jsdom)", () => {
     await flush();
     fetchMock.mockClear();
 
-    (document.getElementById("pdName") as HTMLInputElement).value = "Ada Renamed";
+    (document.getElementById("pdNameFirst") as HTMLInputElement).value = "Ada";
+    (document.getElementById("pdNameSurname") as HTMLInputElement).value = "Renamed";
     (document.getElementById("pdEmailConsent") as HTMLInputElement).checked = false;
     (document.getElementById("pdAnonymous") as HTMLInputElement).checked = true;
     document

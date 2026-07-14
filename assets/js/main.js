@@ -1297,14 +1297,21 @@
     // anonymity flag. Prefilled by render() from the snapshot; submit PATCHes the fields to the
     // bare /api/portal/:token and reflects the returned snapshot back into "Your details".
     var detailsForm = doc.getElementById("portalDetailsForm");
-    var pdName = doc.getElementById("pdName");
+    // TASK-226: the display name is captured as a first name + surname pair; prefill splits the
+    // stored fullName across the two and submit folds them back into the single fullName the PATCH
+    // contract expects (the wire body is unchanged).
+    var pdNameFirst = doc.getElementById("pdNameFirst");
+    var pdNameSurname = doc.getElementById("pdNameSurname");
     var pdEmail = doc.getElementById("pdEmail");
     var pdEmailConsent = doc.getElementById("pdEmailConsent");
     var pdAnonymous = doc.getElementById("pdAnonymous");
     var detailsStatus = doc.getElementById("portalDetailsStatus");
 
     function prefillDetails(data) {
-      if (pdName) pdName.value = data.fullName || "";
+      var nm = (data.fullName || "").trim();
+      var sp = nm.indexOf(" ");
+      if (pdNameFirst) pdNameFirst.value = sp === -1 ? nm : nm.slice(0, sp);
+      if (pdNameSurname) pdNameSurname.value = sp === -1 ? "" : nm.slice(sp + 1).trim();
       if (pdEmail) pdEmail.value = data.email || "";
       if (pdEmailConsent) pdEmailConsent.checked = !!data.emailConsent;
       if (pdAnonymous) pdAnonymous.checked = !!data.anonymous;
@@ -1318,7 +1325,11 @@
         // Send name + the two flags always; email only when non-empty (the schema rejects an
         // empty string, and clearing an email is not an edit we expose here).
         var payload = {
-          fullName: pdName ? pdName.value.trim() : "",
+          fullName: (
+            (pdNameFirst ? pdNameFirst.value : "") +
+            " " +
+            (pdNameSurname ? pdNameSurname.value : "")
+          ).trim(),
           emailConsent: !!(pdEmailConsent && pdEmailConsent.checked),
           anonymous: !!(pdAnonymous && pdAnonymous.checked),
         };

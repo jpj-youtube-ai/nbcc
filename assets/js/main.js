@@ -546,6 +546,69 @@
   // { url }; with no working backend it degrades to showing the payload (the
   // preview), mirroring initContactForm's best-effort approach. Amount is in
   // pence; the choose-your-own control builds it from the #customAmount input.
+  // ---- Stripe Embedded Checkout (TASK-215) ----------------------------------
+  // Progressive enhancement over the hosted redirect: when JS + Stripe.js load, the donor pays
+  // INLINE in an on-page modal and never leaves nbcc.scot. Stripe.js is loaded from js.stripe.com
+  // (its only supported origin) by DYNAMIC INJECTION — not a static <script> tag — so donate.html
+  // keeps its single shared script. Any failure (Stripe.js blocked, no container, init/mount throw)
+  // falls back to the hosted redirect, so the donor is never left with a dead button.
+  var embeddedCheckoutInstance = null;
+
+  function ensureStripeJs(doc) {
+    var w = (doc && doc.defaultView) || window;
+    if (typeof w.Stripe === "function") return; // already available
+    if (doc.getElementById("stripe-js-sdk")) return; // already injected/injecting
+    var s = doc.createElement("script");
+    s.id = "stripe-js-sdk";
+    s.src = "https://js.stripe.com/v3/";
+    s.async = true;
+    (doc.head || doc.documentElement).appendChild(s);
+  }
+
+  function openEmbeddedCheckout(doc) {
+    var modal = doc.getElementById("embeddedCheckoutModal");
+    if (modal) {
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+    }
+    if (doc.body) doc.body.classList.add("give-embedded-open");
+    var closeBtn = doc.getElementById("embeddedCheckoutClose");
+    if (closeBtn && closeBtn.focus) {
+      try { closeBtn.focus(); } catch (e) { /* focus unavailable */ }
+    }
+  }
+
+  function closeEmbeddedCheckout(doc) {
+    var modal = doc.getElementById("embeddedCheckoutModal");
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+    }
+    if (doc.body) doc.body.classList.remove("give-embedded-open");
+    if (embeddedCheckoutInstance) {
+      try { embeddedCheckoutInstance.destroy(); } catch (e) { /* already gone */ }
+      embeddedCheckoutInstance = null;
+    }
+    var mount = doc.getElementById("embeddedCheckout");
+    if (mount) mount.innerHTML = "";
+  }
+
+  // Donate-page only: preload Stripe.js and wire the modal's close controls. No-ops on any page
+  // without the #embeddedCheckout mount (so it never runs on the other pages or in isolated tests).
+  function initEmbeddedCheckout(doc, win) {
+    win = win || (doc && doc.defaultView) || window;
+    if (!doc.getElementById("embeddedCheckout")) return;
+    ensureStripeJs(doc);
+    var closeBtn = doc.getElementById("embeddedCheckoutClose");
+    if (closeBtn) closeBtn.addEventListener("click", function () { closeEmbeddedCheckout(doc); });
+    var modal = doc.getElementById("embeddedCheckoutModal");
+    if (modal) {
+      doc.addEventListener("keydown", function (e) {
+        if ((e.key === "Escape" || e.keyCode === 27) && !modal.hidden) closeEmbeddedCheckout(doc);
+      });
+    }
+  }
+
   function startCheckout(button, win) {
     if (!button) return null;
     var doc = button.ownerDocument;
@@ -711,26 +774,81 @@
       }
     }
 
-    // Production: POST to the checkout endpoint (REQ-029) and redirect to the
-    // returned Stripe URL; degrade to the preview if it is absent/unavailable.
-    if (typeof win.fetch === "function") {
-      win
-        .fetch("/api/checkout-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        .then(function (res) {
-          return res && res.ok ? res.json() : null;
-        })
+    // POST the checkout body, optionally requesting a specific Stripe UI mode. uiMode is added to a
+    // COPY so the returned/previewed `payload` stays the exact { mode, plan, amount, giftAid, ... }
+    // contract (REQ-028) that callers and tests rely on — the wire body is the only thing that grows.
+    function postCheckout(uiMode) {
+      var out = { method: "POST", headers: { "Content-Type": "application/json" } };
+      if (uiMode) {
+        var withMode = {};
+        for (var k in payload) {
+          if (Object.prototype.hasOwnProperty.call(payload, k)) withMode[k] = payload[k];
+        }
+        withMode.uiMode = uiMode;
+        out.body = JSON.stringify(withMode);
+      } else {
+        out.body = JSON.stringify(payload);
+      }
+      return win.fetch("/api/checkout-session", out).then(function (res) {
+        return res && res.ok ? res.json() : null;
+      });
+    }
+
+    // Hosted redirect (REQ-029): the EXISTING flow and the universal fallback/safety net. POST with
+    // no uiMode (the server defaults to hosted) and navigate to the returned Stripe { url }. Degrades
+    // to the preview ONLY when there is no working backend (dev/preview with fetch unavailable).
+    function hostedRedirect() {
+      if (typeof win.fetch !== "function") {
+        preview();
+        return;
+      }
+      postCheckout()
         .then(function (data) {
           if (data && data.url) win.location.href = data.url;
           else preview();
         })
         .catch(preview);
-    } else {
-      preview();
     }
+
+    // Embedded (TASK-215): try the inline, on-site checkout FIRST, but only when fetch, Stripe.js and
+    // the on-page mount are all present. On ANY failure at ANY step (endpoint error, missing
+    // clientSecret/publishableKey, Stripe.js construction, embedded init, or mount) fall back to the
+    // hosted redirect — so JS-disabled, Stripe.js-blocked and init-failure paths all still pay.
+    function tryEmbedded() {
+      var mount = doc.getElementById("embeddedCheckout");
+      if (typeof win.fetch !== "function" || typeof win.Stripe !== "function" || !mount) {
+        hostedRedirect();
+        return;
+      }
+      postCheckout("embedded")
+        .then(function (data) {
+          if (!data || !data.clientSecret || !data.publishableKey) {
+            hostedRedirect();
+            return;
+          }
+          var stripe;
+          try {
+            stripe = win.Stripe(data.publishableKey);
+          } catch (e) {
+            hostedRedirect();
+            return;
+          }
+          stripe
+            .initEmbeddedCheckout({ clientSecret: data.clientSecret })
+            .then(function (checkout) {
+              embeddedCheckoutInstance = checkout;
+              openEmbeddedCheckout(doc);
+              checkout.mount(mount);
+            })
+            .catch(function () {
+              closeEmbeddedCheckout(doc);
+              hostedRedirect();
+            });
+        })
+        .catch(hostedRedirect);
+    }
+
+    tryEmbedded();
 
     return payload;
   }
@@ -1780,6 +1898,7 @@
       initContactForm,
       startCheckout,
       initCheckout,
+      initEmbeddedCheckout,
       initGiveSteps,
       initStorySteps,
       initPortal,
@@ -1797,6 +1916,7 @@
     initContactCapture(document);
     initContactForm(document, window);
     initCheckout(document, window);
+    initEmbeddedCheckout(document, window);
     initGiveSteps(document, window);
     initStorySteps(document, window);
     initPortal(document, window);

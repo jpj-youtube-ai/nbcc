@@ -638,6 +638,18 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-cta-row{margin-top:20px}
 .give-cta{width:100%;justify-content:center;font-size:1.05rem;padding:16px}
 .give-pay-note{text-align:center;font-size:.8rem;color:var(--slate-soft);margin:12px 0 0}
+/* Stripe Embedded Checkout overlay (TASK-215): the inline, on-site payment modal. Hidden via the
+   [hidden] attribute until main.js mounts Stripe Embedded Checkout into #embeddedCheckout; when JS
+   or Stripe.js is unavailable the hosted redirect is used instead, so this never blocks the fallback.
+   :not([hidden]) drives the flex layout so the hidden attribute always wins by default. */
+.give-embedded-modal{position:fixed;inset:0;z-index:1100;display:none;align-items:flex-start;justify-content:center;padding:clamp(16px,4vw,48px);background:color-mix(in srgb,var(--slate) 62%,transparent);overflow-y:auto}
+.give-embedded-modal:not([hidden]){display:flex}
+.give-embedded-panel{width:100%;max-width:560px;margin:auto;background:var(--cream);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:clamp(16px,3vw,24px)}
+.give-embedded-bar{display:flex;justify-content:flex-end;margin-bottom:10px}
+.give-embedded-close{background:var(--white);border:1.6px solid var(--holly);color:var(--holly-dark);font-family:var(--font-body);font-weight:700;font-size:.9rem;border-radius:var(--radius-pill);padding:9px 18px;cursor:pointer;transition:background .15s,color .15s}
+.give-embedded-close:hover{background:var(--holly);color:var(--cream)}
+.give-embedded-mount{min-height:320px}
+body.give-embedded-open{overflow:hidden}
 /* page-2 summary band with a Change control back to step 1 */
 .give-summary{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--holly-soft);border:1px solid var(--holly);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px}
 .give-summary-label{display:block;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--holly-dark);font-weight:700}

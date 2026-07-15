@@ -124,15 +124,6 @@ describe("contact capture markup (REQ-039)", () => {
     expect(contact?.querySelector('label[for="emailConsent"]')).not.toBeNull();
   });
 
-  it("offers an anonymous-donor checkbox with a real <label for>, not pre-ticked", () => {
-    const box = contact?.querySelector("#anonymousDonor") as HTMLInputElement | null;
-    expect(box).not.toBeNull();
-    expect(box?.getAttribute("type")).toBe("checkbox");
-    expect(box?.getAttribute("name")).toBe("anonymous");
-    expect(box?.hasAttribute("checked")).toBe(false);
-    expect(contact?.querySelector('label[for="anonymousDonor"]')).not.toBeNull();
-  });
-
   it("offers a monthly-only 18-or-over confirmation checkbox with a real <label for>", () => {
     const box = contact?.querySelector("#ageConfirmed") as HTMLInputElement | null;
     expect(box).not.toBeNull();
@@ -200,13 +191,12 @@ describe("contact capture behaviour (jsdom)", () => {
     expect(ageField().hidden).toBe(false);
   });
 
-  it("folds fullName, email, emailConsent, anonymous and ageConfirmed for a monthly gift", () => {
+  it("folds fullName, email, emailConsent and ageConfirmed for a monthly gift", () => {
     // TASK-210: fullName is the two name fields combined (first + " " + surname).
     (document.getElementById("donorFirstName") as HTMLInputElement).value = "Ada";
     (document.getElementById("donorSurname") as HTMLInputElement).value = "Lovelace";
     (document.getElementById("donorEmail") as HTMLInputElement).value = "ada@example.com";
     (document.getElementById("emailConsent") as HTMLInputElement).checked = true;
-    (document.getElementById("anonymousDonor") as HTMLInputElement).checked = true;
     (document.getElementById("ageConfirmed") as HTMLInputElement).checked = true;
     startCheckout(monthlyTier(2), window); // gold £50
     expect(lastPayload()).toEqual({
@@ -217,7 +207,6 @@ describe("contact capture behaviour (jsdom)", () => {
       fullName: "Ada Lovelace",
       email: "ada@example.com",
       emailConsent: true,
-      anonymous: true,
       ageConfirmed: true,
     });
   });
@@ -231,17 +220,16 @@ describe("contact capture behaviour (jsdom)", () => {
     expect(p.mode).toBe("once");
     expect(p.fullName).toBe("Grace Hopper");
     expect(p.emailConsent).toBe(false);
-    expect(p.anonymous).toBe(false);
     expect("ageConfirmed" in p).toBe(false);
   });
 
-  it("carries emailConsent=false and anonymous=false when neither is ticked", () => {
+  it("carries emailConsent=false and no anonymous field when consent is not ticked", () => {
     (document.getElementById("donorFirstName") as HTMLInputElement).value = "Anon";
     (document.getElementById("donorSurname") as HTMLInputElement).value = "Donor";
     startCheckout(monthlyTier(0), window);
     const p = lastPayload();
     expect(p.emailConsent).toBe(false);
-    expect(p.anonymous).toBe(false);
+    expect("anonymous" in p).toBe(false);
   });
 
   it("combines the two name fields into a single fullName equal to first + ' ' + surname (TASK-210)", () => {

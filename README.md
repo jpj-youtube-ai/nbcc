@@ -715,30 +715,34 @@ donor name captured as two fields, **First name** (`#donorFirstName`) and **Surn
 (`#donorSurname`), each `required` + `aria-required` (TASK-210; `startCheckout` combines
 them into the single `fullName` the checkout contract still POSTs), an email
 (`#donorEmail`) paired with an email-consent checkbox (`#emailConsent`) that is
-**never ticked in advance** (NBCC only emails with clear permission), an anonymous
-option (`#anonymousDonor`) that keeps the gift off the public Donors Page, and a
+**never ticked in advance** (NBCC only emails with clear permission), and a
 monthly-only **18 or over** confirmation (`#ageConfirmed`). Every control has a real
-`<label for>` (REQ-032). The 18+ row (`#ageConfirmField`) shows **only in give-monthly
-mode**: `initGiveToggle` toggles it alongside the tier swap and the Gift Aid statement,
-and a `.give-age[hidden]` rule collapses the flex row (mirroring `.giftaid[hidden]`); it
-ships visible because monthly is the default. `initContactCapture` marks the fieldset
-`data-ready`, so `startCheckout` folds **`fullName`**, **`email`**, **`emailConsent`**,
-**`anonymous`** and (monthly) **`ageConfirmed`** into the REQ-028 payload only once the
+`<label for>` (REQ-032). The old "keep my donation anonymous" checkbox was removed in
+TASK-235: the supporters wall is now opt-in (you appear only if you actively choose to),
+so a separate "off the page" control is redundant. The 18+ row (`#ageConfirmField`) shows
+**only in give-monthly mode**: `initGiveToggle` toggles it alongside the tier swap and the
+Gift Aid statement, and a `.give-age[hidden]` rule collapses the flex row (mirroring
+`.giftaid[hidden]`); it ships visible because monthly is the default. `initContactCapture`
+marks the fieldset `data-ready`, so `startCheckout` folds **`fullName`**, **`email`**,
+**`emailConsent`** and (monthly) **`ageConfirmed`** into the REQ-028 payload only once the
 enhancement is active — the base `{ mode, plan, amount, giftAid }` contract is unchanged
 without JS (durable persistence is the REQ-039 webhook/back-end, out of scope here).
 Token-only colours (slate body, maroon legend, crimson accents; the `brand-colours`
 guard forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-contact-capture.test.ts`.
 
-**Supporters wall opt-in (TASK-224).** Inside the contact fieldset, below the anonymous
-row, a `#supporterOptin` block lets an **individual** choose to appear on the public
-supporters page (`/supporters`, the opt-in wall from TASK-223). It is **revealed only for
-a monthly gift of at least £10** — `initGiveSteps`'s `updateSummary` shows it when
-`selectedMode()==="monthly" && selectedPence() >= 1000` (the wall's floor,
-`bandForMonthlyAmount`), mirroring the monthly-only 18+ row, and it ships `hidden`. The
-choice is a **required** radio with **nothing preselected** (`listOnSupporters` yes/no);
-choosing "show" reveals a custom display-name input (`#supporterCreditName`,
-`name="creditName"`, `maxlength=200`, "For example, The Campbell Family"). Because the
+**Supporters wall opt-in (TASK-224, restructured TASK-235).** A `#supporterOptin` block is
+its **own numbered question** in the details step (no longer nested in the contact
+fieldset) and lets an **individual** choose to appear on the public supporters page
+(`/supporters`, the opt-in wall from TASK-223). It is **revealed only once an individual
+has chosen a monthly gift of at least £10** — `updateSupporterOptin` shows it when the
+donor type is individual and `selectedMode()==="monthly" && selectedPence() >= 1000` (the
+wall's floor, `bandForMonthlyAmount`), and it ships `hidden`. A **business never sees it**:
+its listing is set later in the business thank-you flow, so a business types its name once
+(the business-name field, which also serves as its supporters-page name). The choice is a
+**required** radio with **nothing preselected** (`listOnSupporters` yes/no); choosing
+"show" reveals a custom display-name input (`#supporterCreditName`, `name="creditName"`,
+`maxlength=200`, "For example, Smith Family"). Because the
 required controls sit under a `[hidden]` ancestor when not eligible, the shared TASK-225
 validator **requires an answer only while the block is visible** and skips it otherwise.
 `startCheckout` folds `listOnSupporters` (boolean) and `creditName` into the payload
@@ -752,6 +756,14 @@ webhook (`donationFromCheckoutSession` → `insertDonorAndDonation`) writes
 `donors.list_on_supporters` / `credit_name`. Verified by
 `test/unit/give-supporter-optin.test.ts`, `checkout-session.test.ts` and
 `stripe-webhook-model.test.ts`.
+
+**Step-2 flow + validation (TASK-235).** Step 2's questions are a numbered sequence: each
+`.give-question` carries a big left-gutter number (a CSS counter over only VISIBLE
+questions, so a hidden business-only or supporters question leaves no gap) above a
+full-width divider. For a business, the **company vs partnership** question now sits
+**above** the business-name field (it drives the Gift Aid path). The shared TASK-225
+validator now shows a **bold red border + ring** on an empty/invalid field, and a red ring
+around an unanswered option group.
 
 **Server-side (REQ-039, revised):** `POST /api/checkout-session` now requires a
 valid `email` for the individual/partnership donor paths — a missing or
@@ -885,9 +897,8 @@ semantic `<section class="donor-benefits">` named by its own `<h2>`
 a centred `.rule`, and a `.reveal` intro. Two `.card` `.benefit-group` columns make
 the split **structurally clear**:
 
-- **All monthly donors** — your name (or business name) added to the **Donors
-  Page** unless you choose to stay anonymous (cross-linked to the **Supporters
-  page** `/supporters`, REQ-035), plus our donor newsletter.
+- **All monthly donors** — your name (or business name) on the **Supporters
+  page** (`/supporters`, REQ-035) if you choose to be listed, plus our donor newsletter.
 - **Platinum donors also receive** — a social media thank you, an optional
   **digital supporter badge**, and a personalised **supporter certificate**.
 

@@ -471,8 +471,9 @@ textarea{resize:vertical;min-height:130px}
 /* FORM VALIDATION (TASK-225): shared highlight-all treatment used by every form. .is-invalid
    reddens a control or its wrapper, .validation-msg is the inline per-field message, and the
    role=alert .form-error-summary sits at the top of the form. Token-only, from the palette. */
-.give-field.is-invalid input,.give-field.is-invalid textarea,.give-field.is-invalid select,.field.is-invalid input,.field.is-invalid textarea,.field.is-invalid select,input.is-invalid,textarea.is-invalid,select.is-invalid{border-color:var(--crimson);box-shadow:0 0 0 3px color-mix(in srgb,var(--crimson) 20%,transparent)}
-.give-check.is-invalid,.give-donor-options.is-invalid,fieldset.is-invalid>legend{color:var(--maroon)}
+.give-field.is-invalid input,.give-field.is-invalid textarea,.give-field.is-invalid select,.field.is-invalid input,.field.is-invalid textarea,.field.is-invalid select,input.is-invalid,textarea.is-invalid,select.is-invalid{border-color:var(--crimson);border-width:2px;box-shadow:0 0 0 4px color-mix(in srgb,var(--crimson) 38%,transparent);background:color-mix(in srgb,var(--crimson) 6%,transparent)}
+.give-donor-options.is-invalid{border-radius:14px;padding:10px;box-shadow:0 0 0 4px color-mix(in srgb,var(--crimson) 30%,transparent);outline:2px solid var(--crimson)}
+.give-check.is-invalid,fieldset.is-invalid>legend,.give-supporter.is-invalid .give-supporter-lead{color:var(--crimson);font-weight:700}
 .validation-msg{display:block;color:var(--maroon);font-size:.82rem;font-weight:600;margin-top:6px}
 .validation-msg[hidden]{display:none}
 .form-error-summary{color:var(--maroon);background:var(--tan-soft);border:1px solid var(--maroon);border-radius:12px;padding:12px 16px;font-weight:600;margin:0 0 16px}
@@ -560,6 +561,11 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-step[hidden]{display:none}
 .give-step-title{font-family:var(--font-head);font-weight:700;font-size:1.5rem;color:var(--maroon);margin:0 0 4px}
 .give-step-sub{color:var(--slate-soft);font-size:.95rem;margin:0 0 20px}
+.give-step{counter-reset:gq}
+.give-question{position:relative;padding:30px 0 6px clamp(2.9rem,12%,4.6rem);border-top:1px solid var(--line)}
+.give-question:not([hidden]){counter-increment:gq}
+.give-question:not([hidden])::before{content:counter(gq);position:absolute;left:0;top:26px;font-family:var(--font-head);font-weight:800;font-size:clamp(2rem,6.5vw,3rem);line-height:1;color:var(--crimson);font-variant-numeric:tabular-nums}
+@media(max-width:520px){.give-question{padding-left:2.3rem}.give-question:not([hidden])::before{font-size:1.6rem;top:28px}}
 @media(prefers-reduced-motion:no-preference){
   .give-step.slide-in{animation:giveIn .32s cubic-bezier(.22,1,.36,1)}
   .give-step.slide-back{animation:giveBack .32s cubic-bezier(.22,1,.36,1)}
@@ -602,7 +608,7 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-req{color:var(--crimson)}.give-optional{color:var(--slate-soft);font-weight:400;font-size:.86em}
 .give-check{display:flex;gap:11px;align-items:flex-start;margin:12px 0;font-size:.93rem;color:var(--slate);cursor:pointer;line-height:1.5}
 .give-check-box{width:20px;height:20px;flex:0 0 auto;margin:2px 0 0;accent-color:var(--crimson)}
-.give-supporter{margin:14px 0 0;padding:14px 0 0;border-top:1px solid var(--line)}
+.give-supporter{margin:0}
 .give-supporter-lead{font-size:.93rem;color:var(--slate);margin:0 0 10px;line-height:1.5}
 .give-help,.give-field-help,.give-donor-help,.give-business-help,.give-declaration-help,.give-company-help,.give-partners-help,.give-privacy{font-size:.84rem;color:var(--slate-soft);margin:6px 0 0}
 .give-scope{background:var(--tan-soft);border-radius:12px;padding:14px 16px}

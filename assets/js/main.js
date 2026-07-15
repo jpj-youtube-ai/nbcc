@@ -841,8 +841,6 @@
       payload.email = emailEl ? (emailEl.value || "").trim() : "";
       var consentEl = doc.getElementById("emailConsent");
       payload.emailConsent = !!(consentEl && consentEl.checked);
-      var anonEl = doc.getElementById("anonymousDonor");
-      payload.anonymous = !!(anonEl && anonEl.checked);
       // The 18 or over confirmation applies to monthly giving only.
       if (payload.mode === "monthly") {
         var ageEl = doc.getElementById("ageConfirmed");
@@ -1556,7 +1554,10 @@
     var supporterBlock = doc.getElementById("supporterOptin");
     function updateSupporterOptin() {
       if (!supporterBlock) return;
-      var eligible = selectedMode() === "monthly" && selectedPence() >= 1000;
+      // TASK-235: individuals-only opt-in (a business's listing is set in the business thank-you flow).
+      var indiv = doc.querySelector('input[name="donorType"][value="individual"]');
+      var eligible =
+        !!(indiv && indiv.checked) && selectedMode() === "monthly" && selectedPence() >= 1000;
       supporterBlock.hidden = !eligible;
       var wrap = doc.getElementById("supporterCreditNameField");
       var yes = doc.querySelector('input[name="listOnSupporters"][value="yes"]');
@@ -1604,6 +1605,10 @@
     });
     Array.prototype.forEach.call(root.querySelectorAll('input[name="listOnSupporters"]'), function (r) {
       r.addEventListener("change", updateSupporterOptin); // TASK-224
+    });
+    // TASK-235: re-check on donor-type change.
+    Array.prototype.forEach.call(root.querySelectorAll('input[name="donorType"]'), function (r) {
+      r.addEventListener("change", updateSupporterOptin);
     });
 
     // ---- validation (TASK-225): route every step through the shared highlight-all helper,

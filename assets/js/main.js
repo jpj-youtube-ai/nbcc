@@ -430,18 +430,12 @@
           el.disabled = !isCompany;
         });
       }
-      // REQ-039: the individual email is required on the individual/partnership paths, but a
-      // company donates via its own contact email — un-require the individual field there so a
-      // hidden/irrelevant required input never blocks submission (mirrors the company inputs above).
+      // TASK-236: the donor email is the single contact on every path, including a company (which
+      // no longer captures its own contact email), so it stays required throughout.
       var donorEmail = doc.getElementById("donorEmail");
       if (donorEmail) {
-        if (path === "company") {
-          donorEmail.removeAttribute("required");
-          donorEmail.removeAttribute("aria-required");
-        } else {
-          donorEmail.setAttribute("required", "");
-          donorEmail.setAttribute("aria-required", "true");
-        }
+        donorEmail.setAttribute("required", "");
+        donorEmail.setAttribute("aria-required", "true");
       }
     }
 
@@ -937,9 +931,9 @@
       payload.company = {
         legalName: businessName,
         registrationNumber: compVal("companyRegNumber"),
-        // TASK-226: contact name captured as first name + surname; folded into the single contactName.
-        contactName: (compVal("companyContactFirstName") + " " + compVal("companyContactSurname")).trim(),
-        contactEmail: compVal("companyContactEmail"),
+        // TASK-236: the contact is the step-2 donor (First name + Surname + email), captured once.
+        contactName: (compVal("donorFirstName") + " " + compVal("donorSurname")).trim(),
+        contactEmail: compVal("donorEmail"),
         billingAddress: compVal("companyBillingAddress"),
         billingPostcode: compVal("companyBillingPostcode"),
         considerationGiven: !!(considerationEl && considerationEl.value === "yes"),

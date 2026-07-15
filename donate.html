@@ -441,20 +441,8 @@
 <label for="companyRegNumber">Company registration number <span class="give-optional">(optional)</span></label>
 <input autocomplete="off" class="give-field-input" id="companyRegNumber" name="companyRegNumber" placeholder="e.g. SC123456" type="text"/>
 </div>
-<div class="give-name-row">
-<div class="give-field">
-<label for="companyContactFirstName">First name <span aria-hidden="true" class="give-req">*</span></label>
-<input aria-required="true" autocomplete="given-name" class="give-field-input" id="companyContactFirstName" name="companyContactFirstName" required="" type="text"/>
-</div>
-<div class="give-field">
-<label for="companyContactSurname">Surname <span aria-hidden="true" class="give-req">*</span></label>
-<input aria-required="true" autocomplete="family-name" class="give-field-input" id="companyContactSurname" name="companyContactSurname" required="" type="text"/>
-</div>
-</div>
-<div class="give-field">
-<label for="companyContactEmail">Contact email <span aria-hidden="true" class="give-req">*</span></label>
-<input aria-required="true" autocomplete="email" class="give-field-input" id="companyContactEmail" name="companyContactEmail" placeholder="finance@yourcompany.co.uk" required="" type="email"/>
-</div>
+<!-- TASK-236: the contact is the person from step 2 "Your details" (name + email), captured once
+                     and folded into company.contactName / company.contactEmail; no separate company contact. -->
 <div class="give-field">
 <label for="companyBillingAddress">Billing address <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="street-address" class="give-field-input" id="companyBillingAddress" name="companyBillingAddress" placeholder="Street and town" required="" type="text"/>

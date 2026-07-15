@@ -69,27 +69,27 @@ interface StageCopy {
 // Shared, stage-independent copy. GRATITUDE explains WHY they are being thanked (a monthly business
 // supporter); IMPACT is deliberately non-definitive ("could help provide").
 const GRATITUDE =
-  "Thank you once again for being a monthly business supporter of the Night Before Christmas Campaign. Your ongoing support means a great deal to us, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
+  "Thank you once again for being a monthly business supporter of the Night Before Christmas Campaign. Your steady support means so much to a small, volunteer run charity, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
 const IMPACT =
-  "Your monthly support could help provide Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy at Christmas.";
+  "Your monthly support could help provide Red Bags Full of Joy, thoughtful presents that carry comfort, dignity and a moment of real joy at Christmas.";
 const CTA_LABEL = "Choose how we thank you";
 
 const STAGE_COPY: Record<ReminderStage, StageCopy> = {
   1: {
-    subject: (name) => `Just checking in, ${name}`,
-    subhead: "We would still love to thank you properly.",
+    subject: (name) => `We would still love to thank you, ${name}`,
+    subhead: "There is still a lovely thank you waiting for you.",
     intro:
-      "We wrote to you recently with a private link to choose how you would like us to say thank you, and we wanted to gently check it reached you. Whenever you have a spare moment, we would love to know how we can celebrate your business.",
+      "A wee while ago we sent you a private link to choose how you would like us to say thank you, and we just wanted to make sure it reached you safely. Whenever you have a spare moment, we would love to know how we can celebrate your business.",
     closing:
-      "There is no rush at all. Whenever you are ready, just follow your private link below. It is unique to your business, so please keep it safe.",
+      "There is no rush at all. Whenever the moment feels right, just follow your private link below. It is unique to your business, so please keep it somewhere safe.",
   },
   2: {
-    subject: (name) => `One last little note, ${name}`,
-    subhead: "Whenever the time is right, we are here.",
+    subject: (name) => `One last gentle note, ${name}`,
+    subhead: "Whenever the time is right, we will be here.",
     intro:
-      "This is just a gentle last note about choosing how you would like us to thank you. There is truly no pressure, and your private link will always be here for whenever the moment feels right for you.",
+      "This is just a gentle last note about choosing how you would like us to say thank you. There is truly no pressure at all, and your private link will always be here for whenever the moment feels right for you.",
     closing:
-      "If you would like to, simply follow your private link below. It is unique to your business, so please keep it safe.",
+      "If you would like to, simply follow your private link below. It is unique to your business, so please keep it somewhere safe.",
   },
 };
 

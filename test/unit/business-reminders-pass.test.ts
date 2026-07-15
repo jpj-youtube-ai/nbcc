@@ -50,16 +50,16 @@ describe("runReminderPass sends the stage-appropriate reminder and advances on s
     const result = await runReminderPass(deps);
     expect(result).toEqual({ due: 2, sent: 2, failed: 0 });
 
-    // Stage 1 (5-day) → the "just checking in" subject + the env-correct tokenised link for tok-1.
-    expect(sent[0].subject).toContain("Just checking in");
+    // Stage 1 (5-day) → the warm "still love to thank you" subject + the env-correct tokenised link for tok-1.
+    expect(sent[0].subject).toContain("still love to thank you");
     expect(sent[0].subject).toContain("Bean There");
     expect(sent[0].html).toContain("https://nbcc.test/business/thank-you?token=tok-1");
     expect(sent[0].email).toBe("a@biz.test");
     expect(sent[0].from).toBe(FROM);
     expect(sent[0].replyTo).toBe(FROM);
 
-    // Stage 2 (14-day) → the "one last little note" subject + the tokenised link for tok-2.
-    expect(sent[1].subject).toContain("One last little note");
+    // Stage 2 (14-day) → the gentle "one last gentle note" subject + the tokenised link for tok-2.
+    expect(sent[1].subject).toContain("One last gentle note");
     expect(sent[1].html).toContain("https://nbcc.test/business/thank-you?token=tok-2");
   });
 

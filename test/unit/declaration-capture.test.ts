@@ -60,6 +60,15 @@ describe("Gift Aid declaration capture markup (REQ-043)", () => {
     }
   });
 
+  // TASK-226: first name + last name sit side by side at half width in the shared .give-name-row
+  // wrapper (matching the donate donor name), each keeping its own .give-field.
+  it("lays first name and last name side by side in one shared .give-name-row wrapper", () => {
+    const row = decl?.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("#declFirstName")?.closest(".give-field")).not.toBeNull();
+    expect(row?.querySelector("#declLastName")?.closest(".give-field")).not.toBeNull();
+  });
+
   it("captures a single home address field with a real <label for>", () => {
     const input = decl?.querySelector("#declAddress") as HTMLInputElement | null;
     expect(input).not.toBeNull();

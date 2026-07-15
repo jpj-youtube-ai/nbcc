@@ -135,9 +135,15 @@
                  changed fields to /api/portal/:token; anonymity is a public-display setting only,
                  the HMRC claim still uses the real name (REQ-064). -->
             <form class="give-declaration" id="portalDetailsForm" novalidate>
-              <div class="give-field">
-                <label for="pdName">Name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="pdName" name="fullName" class="give-field-input" autocomplete="name" required aria-required="true" />
+              <div class="give-name-row">
+                <div class="give-field">
+                  <label for="pdNameFirst">First name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdNameFirst" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="pdNameSurname">Surname <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdNameSurname" name="surname" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+                </div>
               </div>
               <div class="give-field">
                 <label for="pdEmail">Email</label>
@@ -219,13 +225,15 @@
                 <label for="pdTitle">Title <span class="give-optional">(optional)</span></label>
                 <input type="text" id="pdTitle" name="title" class="give-field-input" autocomplete="honorific-prefix" placeholder="Mr, Ms, Dr" />
               </div>
-              <div class="give-field">
-                <label for="pdFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="pdFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
-              </div>
-              <div class="give-field">
-                <label for="pdLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="pdLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+              <div class="give-name-row">
+                <div class="give-field">
+                  <label for="pdFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="pdLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+                </div>
               </div>
               <div class="give-field">
                 <label for="pdHouse">House name or number <span class="give-req" aria-hidden="true">*</span></label>

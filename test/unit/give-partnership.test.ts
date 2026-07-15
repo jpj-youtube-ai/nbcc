@@ -79,6 +79,16 @@ describe("partnership markup (REQ-051)", () => {
     expect(content.querySelector('[data-field="share"]')?.hasAttribute("required")).toBe(true);
   });
 
+  // TASK-226: each partner's first name + last name sit side by side at half width in the shared
+  // .give-name-row wrapper, each keeping its own .give-field, matching the donate donor name.
+  it("lays each partner's first name and last name side by side in a .give-name-row", () => {
+    const tpl = doc.getElementById("partnerRowTemplate") as HTMLTemplateElement | null;
+    const row = tpl!.content.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector('[data-field="firstName"]')?.closest(".give-field")).not.toBeNull();
+    expect(row?.querySelector('[data-field="lastName"]')?.closest(".give-field")).not.toBeNull();
+  });
+
   it("writes the partnership copy without dashes (REQ-031)", () => {
     expect(norm(partners?.textContent)).not.toMatch(/[–—-]/);
   });

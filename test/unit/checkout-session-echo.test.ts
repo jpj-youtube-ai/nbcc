@@ -8,12 +8,8 @@ const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 
 vi.mock("../../src/clients/stripe", () => ({
   stripe: { checkout: { sessions: { create } } },
-  stripePriceByPlan: {
-    bronze: "price_bronze_id",
-    silver: "price_silver_id",
-    gold: "price_gold_id",
-    platinum: "price_platinum_id",
-  },
+  // Monthly checkout builds its recurring price inline from the amount now (TASK-231), so no
+  // plan→STRIPE_PRICE_* mapping is needed here.
   // Not configured → the stub is active → the echo should appear.
   stripeConfigured: false,
 }));

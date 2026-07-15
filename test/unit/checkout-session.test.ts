@@ -3,22 +3,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // TASK-038 (REQ-029): POST /api/checkout-session builds a Stripe Checkout session
 // from the REQ-028 payload { mode, plan, amount, giftAid } and returns { url }.
 // A one-off (mode=once) is a `payment` session with inline GBP price_data built
-// from the amount (pence); a monthly (mode=monthly) is a `subscription` using the
-// recurring STRIPE_PRICE_* id keyed by plan. Invalid bodies are rejected with 400.
-// DB-free: the Stripe client and config are mocked, so no SDK/network/env is
-// touched. Mirrors the schema-style validation in src/config/schema.ts.
+// from the amount (pence); a monthly (mode=monthly) is a `subscription` whose
+// recurring price is likewise built INLINE from the amount (pence, interval month) —
+// preset tiers and custom amounts alike (TASK-231), so no fixed STRIPE_PRICE_* is
+// needed. Invalid bodies are rejected with 400. DB-free: the Stripe client and config
+// are mocked, so no SDK/network/env is touched. Mirrors the schema-style validation
+// in src/config/schema.ts.
 
 // Hoisted so the (hoisted) vi.mock factory below can reference it.
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 
+// Monthly checkout no longer maps a plan to a fixed STRIPE_PRICE_* id (TASK-231): every monthly
+// gift builds its recurring price inline from the amount, so the mock needs only the Stripe client
+// seam and the configured flag.
 vi.mock("../../src/clients/stripe", () => ({
   stripe: { checkout: { sessions: { create } } },
-  stripePriceByPlan: {
-    bronze: "price_bronze_id",
-    silver: "price_silver_id",
-    gold: "price_gold_id",
-    platinum: "price_platinum_id",
-  },
   stripeConfigured: true,
 }));
 
@@ -123,26 +122,38 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
 });
 
 describe("POST /api/checkout-session — monthly (REQ-029)", () => {
-  it("creates a subscription session using the plan's recurring price id", async () => {
+  it("builds an inline monthly recurring price_data from the amount for a preset tier (TASK-231)", async () => {
+    // Every monthly gift — preset tier OR custom — now builds its recurring price INLINE from the
+    // entered amount (pence), the same way custom-monthly already did, so NO fixed Stripe Price
+    // (STRIPE_PRICE_*) is needed in any environment (fixes staging's REPLACE_ME 502s).
     const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
 
     expect(res.statusCode).toBe(200);
     const p = lastParams();
     expect(p.mode).toBe("subscription");
-    expect(p.line_items[0].price).toBe("price_gold_id");
+    // No fixed price id — the recurring price is built inline from the amount.
+    expect(p.line_items[0].price).toBeUndefined();
     expect(p.line_items[0].quantity).toBe(1);
-    expect(p.line_items[0].price_data).toBeUndefined();
+    expect(p.line_items[0].price_data.currency).toBe("gbp");
+    expect(p.line_items[0].price_data.unit_amount).toBe(5000);
+    expect(p.line_items[0].price_data.recurring.interval).toBe("month");
   });
 
-  it("maps each plan to its configured price id", async () => {
-    for (const [plan, price] of [
-      ["bronze", "price_bronze_id"],
-      ["silver", "price_silver_id"],
-      ["platinum", "price_platinum_id"],
+  it("builds the inline recurring price from each preset tier's own amount (TASK-231)", async () => {
+    // The preset tiers post their amount in pence (bronze £10, silver £25, platinum £100); each
+    // now checks out via an inline recurring price built from that amount, not a fixed price id.
+    for (const [plan, amount] of [
+      ["bronze", 1000],
+      ["silver", 2500],
+      ["platinum", 10000],
     ] as const) {
       create.mockClear();
-      await run({ mode: "monthly", plan, amount: 1000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
-      expect(lastParams().line_items[0].price).toBe(price);
+      await run({ mode: "monthly", plan, amount, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
+      const item = lastParams().line_items[0];
+      expect(item.price).toBeUndefined();
+      expect(item.price_data.unit_amount).toBe(amount);
+      expect(item.price_data.currency).toBe("gbp");
+      expect(item.price_data.recurring.interval).toBe("month");
     }
   });
 

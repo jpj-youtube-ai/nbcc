@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type StripeNS from "stripe";
 import { z } from "zod";
-import { stripe, stripeConfigured, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
+import { stripe, stripeConfigured, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import {
   selectDeclarationWording,
   declarationScopeForMode,
@@ -97,11 +97,13 @@ const checkoutBodySchema = z
     // partnership and no-JS base contracts are unchanged.
     company: companyFieldsSchema.optional(),
   })
-  // A monthly gift needs EITHER a preset plan (its pre-configured recurring price) OR a custom
-  // amount (an inline monthly recurring price, REQ-041) — but not neither.
-  .refine((b) => b.mode !== "monthly" || b.plan !== null || b.amount !== null, {
-    message: "monthly giving requires a plan or a custom amount",
-    path: ["plan"],
+  // Every monthly gift builds its recurring price INLINE from the amount (pence, TASK-231) — preset
+  // tiers and custom amounts alike — so a monthly gift always requires an amount. (A preset tier's
+  // amount rides in on its data-amount; the custom box builds it from the typed value.) The plan is
+  // still carried for metadata/reporting but no longer selects a fixed Stripe Price.
+  .refine((b) => b.mode !== "monthly" || b.amount !== null, {
+    message: "monthly giving requires an amount",
+    path: ["amount"],
   })
   .refine((b) => b.mode !== "once" || b.amount !== null, {
     message: "a one-off gift requires an amount",
@@ -338,25 +340,26 @@ export function buildSessionParams(
   };
 
   if (body.mode === "monthly") {
-    // A preset tier uses its pre-configured recurring Price (one Price per plan, REQ-022/REQ-055).
-    // A custom monthly amount (no plan, REQ-041) builds an INLINE monthly recurring price from the
-    // entered amount — Stripe creates the ad-hoc price on the fly, so NO per-amount Product is
-    // needed: it rolls up under the configured donation product, or names an inline one, exactly
-    // like the one-off path below. The schema guarantees a plan OR an amount for a monthly gift.
+    // EVERY monthly gift — preset tier OR custom amount — builds an INLINE monthly recurring price
+    // from the entered amount (pence, GBP, interval month), the way the custom amount always did
+    // (REQ-041). Stripe creates the ad-hoc recurring price on the fly, so NO fixed Stripe Prices
+    // (STRIPE_PRICE_*) are needed in any environment — this is what fixes staging's REPLACE_ME 502s
+    // and removes the manual per-env price setup for prod. It rolls up under the configured donation
+    // product, or names an inline one, exactly like the one-off path below. The schema guarantees a
+    // monthly gift carries an amount. The plan is unchanged on metadata above, so the Stripe webhook
+    // and everything downstream see exactly what they saw before.
     const donationProduct = config.STRIPE_DONATION_PRODUCT;
-    const monthlyItem: StripeNS.Checkout.SessionCreateParams.LineItem = body.plan
-      ? { price: stripePriceByPlan[body.plan], quantity: 1 }
-      : {
-          quantity: 1,
-          price_data: {
-            currency: "gbp",
-            unit_amount: body.amount as number,
-            recurring: { interval: "month" },
-            ...(donationProduct
-              ? { product: donationProduct }
-              : { product_data: { name: "Monthly donation to NBCC" } }),
-          },
-        };
+    const monthlyItem: StripeNS.Checkout.SessionCreateParams.LineItem = {
+      quantity: 1,
+      price_data: {
+        currency: "gbp",
+        unit_amount: body.amount as number,
+        recurring: { interval: "month" },
+        ...(donationProduct
+          ? { product: donationProduct }
+          : { product_data: { name: "Monthly donation to NBCC" } }),
+      },
+    };
     return { ...base, mode: "subscription", line_items: [monthlyItem] };
   }
 

@@ -122,8 +122,8 @@ const appBody = (to, subject, html, text) => ({
 // route. Kept intentionally plain (the branded shell above is for kind-routed mail).
 const page = (subject, bodyHtml, bodyText) => ({
   subject,
-  html: `<!doctype html><html><body style="font-family:system-ui,Segoe UI,Arial,sans-serif;color:#1a1a1a;line-height:1.5">${bodyHtml}<hr style="border:none;border-top:1px solid #eee;margin:24px 0"><p style="font-size:12px;color:#888">Night Before Christmas Charity · nbcc.scot</p></body></html>`,
-  text: `${bodyText}\n\nNight Before Christmas Charity · nbcc.scot`,
+  html: `<!doctype html><html><body style="font-family:system-ui,Segoe UI,Arial,sans-serif;color:#1a1a1a;line-height:1.5">${bodyHtml}<hr style="border:none;border-top:1px solid #eee;margin:24px 0"><p style="font-size:12px;color:#888">Night Before Christmas Campaign · nbcc.scot</p></body></html>`,
+  text: `${bodyText}\n\nNight Before Christmas Campaign · nbcc.scot`,
 });
 
 // Map an app payload to a Resend send. Returns {subject, html, text, to, ...}.

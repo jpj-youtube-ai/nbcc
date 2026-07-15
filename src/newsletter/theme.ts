@@ -103,7 +103,7 @@ export function renderFrame(innerHtml: string, unsubscribeUrl?: string): string 
   const footRow =
     `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto"><tr>` +
     contactCell(`${iconChip(ICON_PHONE)}${contactLink("tel:+441292811015", "01292 811 015")}`, false) +
-    contactCell(`${iconChip(ICON_MAIL)}${contactLink("mailto:info@nbcc.scot", "info@nbcc.scot")}`, true) +
+    contactCell(`${iconChip(ICON_MAIL)}${contactLink("mailto:newsletter@nbcc.scot", "newsletter@nbcc.scot")}`, true) +
     contactCell(`${socialChips}${contactLink("https://nbcc.scot", "nbcc.scot")}`, true) +
     `</tr></table>`;
   return `<!doctype html>

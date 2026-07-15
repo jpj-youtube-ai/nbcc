@@ -148,7 +148,7 @@ function downloadLinks(
 export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): CaptureConfirmation {
   const name = input.businessName;
   const safeName = escapeHtml(name);
-  const subject = `Here is what you chose, ${name}`;
+  const subject = `You are all set, ${name}`;
 
   const choices = choiceLines(input.perks, input.preferences);
   const links = downloadLinks(input.perks, input.preferences, input.token, input.baseUrl);
@@ -158,10 +158,10 @@ export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): 
 
   // Shared, dash-free copy carried verbatim into both parts.
   const p1 =
-    "Thank you for choosing how we say thank you. Your support means a great deal to us, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
+    "Thank you for telling us how you would like to be thanked. Your support means so much to a small, volunteer run charity, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
   const p2 = "Here is what you chose:";
   const impact =
-    "Your monthly support could help provide Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy at Christmas.";
+    "Your monthly support could help provide Red Bags Full of Joy, thoughtful presents that carry comfort, dignity and a moment of real joy at Christmas.";
 
   // Each choice as an escaped list item (the sentences may carry the escaped credit name / handles).
   const listItems = choices.map((c) => `<li style="margin:0 0 6px">${escapeHtml(c)}</li>`).join("");
@@ -197,7 +197,7 @@ export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): 
         </td>
       </tr></table>
       <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:22px 0 6px;letter-spacing:-.01em">You are all set. Thank you, ${safeName}.</h1>
-      <p style="color:${MAROON};font-family:${HEAD};font-weight:700;font-size:18px;margin:0 0 14px">We get straight to work now.</p>
+      <p style="color:${MAROON};font-family:${HEAD};font-weight:700;font-size:18px;margin:0 0 14px">We are on it now, and we could not be more grateful.</p>
       ${bodyP(p1)}
       ${bodyP(`<strong>${escapeHtml(p2)}</strong>`)}
       <ul style="color:${SLATE};font-family:${BODY};font-size:14px;line-height:1.6;margin:0 0 14px;padding-left:20px">${listItems}</ul>

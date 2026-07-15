@@ -68,7 +68,7 @@ export function buildBusinessSupporterInviteEmail(input: {
   const link = businessThankYouLink(input.baseUrl, input.token);
   const safeName = escapeHtml(name);
   const safeLink = escapeHtml(link);
-  const subject = `Thank you, ${name}`;
+  const subject = `Thank you for standing with us, ${name}`;
 
   const bodyP = (html: string) =>
     `<p style="color:${SLATE};font-family:${BODY};font-size:14px;line-height:1.6;margin:0 0 11px">${html}</p>`;
@@ -76,13 +76,13 @@ export function buildBusinessSupporterInviteEmail(input: {
   // The four body paragraphs, shared verbatim between the HTML and text parts so the two never drift
   // (and the plain-text copy carries the same dash-free wording).
   const p1 =
-    "Thank you for becoming a monthly business supporter of the Night Before Christmas Campaign. Your support means a great deal to us, and to the children, young people and vulnerable adults we are here for across South West Scotland.";
+    "Thank you for becoming a monthly business supporter of the Night Before Christmas Campaign. Businesses like yours help a small, volunteer run charity do big things for children, young people and vulnerable adults right across South West Scotland.";
   const p2 =
-    "We would love to thank you properly, and we would like you to choose how. From a place on our supporters page to a mention in our newsletter, there are a few lovely ways to celebrate your business, and the choice is yours.";
+    "We really want to thank you properly, and we would love you to choose how. From a place on our supporters page to a mention in our newsletter, there are some lovely ways to celebrate your business, and it is entirely your call.";
   const p3 =
-    "Your monthly donation could help provide Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy at Christmas.";
+    "Your monthly donation could help provide Red Bags Full of Joy, thoughtful presents that carry comfort, dignity and a moment of real joy at Christmas.";
   const p4 =
-    "Just follow your private link below to choose how we say thank you. It is unique to your business, so please keep it safe.";
+    "Just follow your private link below to choose how we say thank you. It is unique to your business, so please keep it somewhere safe.";
 
   const html = `<!doctype html>
 <html lang="en-GB">
@@ -105,7 +105,7 @@ export function buildBusinessSupporterInviteEmail(input: {
         </td>
       </tr></table>
       <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:22px 0 6px;letter-spacing:-.01em">Thank you, ${safeName}.</h1>
-      <p style="color:${MAROON};font-family:${HEAD};font-weight:700;font-size:18px;margin:0 0 14px">You are now one of our valued business supporters.</p>
+      <p style="color:${MAROON};font-family:${HEAD};font-weight:700;font-size:18px;margin:0 0 14px">You have just become one of our business supporters, and we are so glad you are here.</p>
       ${bodyP(p1)}
       ${bodyP(p2)}
       ${bodyP(p3)}
@@ -129,7 +129,7 @@ export function buildBusinessSupporterInviteEmail(input: {
   const text = [
     `Thank you, ${name}.`,
     "",
-    "You are now one of our valued business supporters.",
+    "You have just become one of our business supporters, and we are so glad you are here.",
     "",
     p1,
     "",
@@ -139,7 +139,7 @@ export function buildBusinessSupporterInviteEmail(input: {
     "",
     "Choose how we say thank you here:",
     link,
-    "This link is unique to your business, so please keep it safe.",
+    "This link is unique to your business, so please keep it somewhere safe.",
     "",
     "With warmest thanks,",
     "The Night Before Christmas Campaign team",

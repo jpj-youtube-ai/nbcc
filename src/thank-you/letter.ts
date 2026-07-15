@@ -73,7 +73,7 @@ export function buildThankYouEmailText(v: ThankYouLetterView): string {
   const lines: string[] = [];
   lines.push(v.letterDate, "", `Thank you, ${v.thankYouName}.`, "", `Dear ${v.addressedTo},`, "");
   lines.push(
-    "On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.",
+    "On behalf of every volunteer at the Night Before Christmas Campaign, thank you. Your kindness means that children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas, and that someone out there believes they matter.",
     "",
   );
   if (v.giftType === "in_kind") {
@@ -89,9 +89,9 @@ export function buildThankYouEmailText(v: ThankYouLetterView): string {
   lines.push("");
   if (v.personalMessage) lines.push(v.personalMessage, "");
   lines.push(
-    "Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.",
+    "Donations like yours help provide Red Bags Full of Joy, thoughtful presents that carry warmth, dignity and a moment of real joy on Christmas morning. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and every year more people are counting on us.",
     "",
-    "We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.",
+    "We are run entirely by volunteers, and we are here all year round, not only at Christmas. If you would ever like to fundraise, volunteer, or simply say hello, reply to this letter or call the number below. We would love to hear from you.",
     "",
     "With warmest thanks,",
     v.signedByName,
@@ -166,11 +166,11 @@ export function buildThankYouEmailHtml(v: ThankYouLetterView): string {
       <div style="color:${SLATE};font-family:${BODY};font-weight:700;font-size:13px;margin:22px 0 14px">${escapeHtml(v.letterDate)}</div>
       <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 6px;letter-spacing:-.01em">${title}</h1>
       <p style="color:${MAROON};font-family:${HEAD};font-weight:700;font-size:18px;margin:0 0 14px">${salutation}</p>
-      ${bodyP("On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.")}
+      ${bodyP("On behalf of every volunteer at the Night Before Christmas Campaign, thank you. Your kindness means that children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas, and that someone out there believes they matter.")}
       ${giftCallout(v)}
       ${personal}
-      ${bodyP("Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.")}
-      ${bodyP("We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.")}
+      ${bodyP("Donations like yours help provide Red Bags Full of Joy, thoughtful presents that carry warmth, dignity and a moment of real joy on Christmas morning. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and every year more people are counting on us.")}
+      ${bodyP("We are run entirely by volunteers, and we are here all year round, not only at Christmas. If you would ever like to fundraise, volunteer, or simply say hello, reply to this letter or call the number below. We would love to hear from you.")}
       <div style="margin-top:18px">
         <p style="color:${SLATE};font-family:${BODY};font-size:14px;margin:0">With warmest thanks,</p>
         <div style="font-family:${SCRIPT};color:${CRIMSON};font-size:30px;line-height:1.15;margin-top:2px">${escapeHtml(v.signedByName)}</div>

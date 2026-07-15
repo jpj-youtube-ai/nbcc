@@ -184,6 +184,7 @@
 </div>
 <button class="give-summary-change" data-give-prev="" type="button">Change</button>
 </div>
+<div class="give-question">
 <fieldset class="give-donor">
 <legend class="give-donor-legend">Who is this donation from, an individual or a business?</legend>
 <!-- TASK-204: nothing is preselected. The donor must choose; initGiveSteps' step-2
@@ -204,17 +205,6 @@
                   law and stay on the Gift Aid path. Only an incorporated company,
                   such as a Ltd, PLC or LLP, uses the path with no Gift Aid.
                 </p>
-<!-- Optional display label for the Donors Page, revealed by
-                     initDonorType only for business donors. It never switches the
-                     Gift Aid path. -->
-<div class="give-business" hidden="" id="businessNameField">
-<label for="businessName">Business name</label>
-<input autocomplete="organization" class="give-business-input" id="businessName" name="businessName" placeholder="Your business name" type="text"/>
-<p class="give-business-help">Optional. We show this on our Donors Page. It never changes your Gift Aid path.</p>
-</div>
-<!-- BUSINESS SUB-TYPE (REQ-051): company (no Gift Aid) vs partnership
-                     (individuals in law, keeps Gift Aid). initDonorType reveals this for a
-                     business donor and drives the path; company is the default. -->
 <div class="give-business give-business-type" hidden="" id="businessTypeField">
 <span class="give-business-type-legend">Is your business an incorporated company or a business partnership?</span>
 <div class="give-donor-options">
@@ -229,7 +219,14 @@
 </div>
 <p class="give-business-help">A partnership keeps Gift Aid, because each partner is an individual in law. An incorporated company, such as a Ltd, PLC or LLP, uses the path with no Gift Aid.</p>
 </div>
+<div class="give-business" hidden="" id="businessNameField">
+<label for="businessName">Business name</label>
+<input autocomplete="organization" class="give-business-input" id="businessName" name="businessName" placeholder="Your business name" type="text"/>
+<p class="give-business-help">How your business appears if you choose to be shown on our supporters page.</p>
+</div>
 </fieldset>
+</div>
+<div class="give-question">
 <fieldset class="give-contact" id="contactCapture">
 <legend class="give-contact-legend">Your details</legend>
 <!-- TASK-219/226: first name + surname side by side in the shared .give-name-row wrapper (used on
@@ -258,12 +255,18 @@
 <span class="give-check-text"><strong>Add me to our donor newsletter.</strong> A warm little update from NBCC on the difference your support helps make. Unsubscribe anytime.</span>
 </label>
 </div>
-<label class="give-check" for="anonymousDonor">
-<input class="give-check-box" id="anonymousDonor" name="anonymous" type="checkbox"/>
-<span class="give-check-text">Keep my donation anonymous and off the public Donors Page.</span>
+<p class="give-field-help give-privacy">
+                  We handle your details as set out in our <a href="/privacy">Privacy notice</a>.
+                </p>
+<!-- Monthly only: revealed for give monthly, collapsed for give once by
+                     initGiveToggle. Ships visible because monthly is the default mode. -->
+<label class="give-check give-age" for="ageConfirmed" id="ageConfirmField">
+<input class="give-check-box" id="ageConfirmed" name="ageConfirmed" type="checkbox" required aria-required="true"/>
+<span class="give-check-text">I confirm I am aged 18 or over. Monthly giving is set up by adults.</span>
 </label>
-<!-- Supporters opt-in (TASK-224): shown by initGiveSteps only for a monthly gift of £10 or more. -->
-<div class="give-supporter" id="supporterOptin" hidden>
+</fieldset>
+</div>
+<div class="give-question give-supporter" id="supporterOptin" hidden>
 <p class="give-supporter-lead">Would you like your name shown on our public supporters page?</p>
 <div class="give-donor-options">
 <span class="give-donor-option">
@@ -276,20 +279,10 @@
 </span>
 </div>
 <div class="give-field" id="supporterCreditNameField" hidden>
-<label for="supporterCreditName">How should your name appear? For example, The Campbell Family</label>
+<label for="supporterCreditName">How should your name appear? For example, Smith Family</label>
 <input aria-required="true" class="give-field-input" id="supporterCreditName" maxlength="200" name="creditName" required="" type="text"/>
 </div>
 </div>
-<p class="give-field-help give-privacy">
-                  We handle your details as set out in our <a href="/privacy">Privacy notice</a>.
-                </p>
-<!-- Monthly only: revealed for give monthly, collapsed for give once by
-                     initGiveToggle. Ships visible because monthly is the default mode. -->
-<label class="give-check give-age" for="ageConfirmed" id="ageConfirmField">
-<input class="give-check-box" id="ageConfirmed" name="ageConfirmed" type="checkbox" required aria-required="true"/>
-<span class="give-check-text">I confirm I am aged 18 or over. Monthly giving is set up by adults.</span>
-</label>
-</fieldset>
 <!-- GIFT AID CALLOUT START. Gating switch (REQ-023): NBCC's Gift Aid
                    registration is pending, so this whole callout can be removed
                    cleanly (delete everything between GIFT AID CALLOUT START and
@@ -544,7 +537,7 @@
 <ul class="benefit-list">
 <li>
 <svg aria-hidden="true" class="benefit-check" fill="none" height="20" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="20"><path d="M20 6 9 17l-5-5"></path></svg>
-<span>Your name, or your business name, added to our <a href="/supporters">Donors Page</a>, unless you choose to remain anonymous.</span>
+<span>Your name, or your business name, on our <a href="/supporters">supporters page</a> if you choose to be listed.</span>
 </li>
 <li>
 <svg aria-hidden="true" class="benefit-check" fill="none" height="20" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="20"><path d="M20 6 9 17l-5-5"></path></svg>

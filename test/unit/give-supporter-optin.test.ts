@@ -25,9 +25,8 @@ describe("supporters opt-in markup (TASK-224)", () => {
   const contact = doc.querySelector(".give-contact");
   const block = doc.querySelector("#supporterOptin");
 
-  it("renders the opt-in block inside the contact fieldset (step 2), shipped hidden", () => {
+  it("renders the opt-in block as its own question in the details step (step 2), shipped hidden", () => {
     expect(block).not.toBeNull();
-    expect(block?.closest(".give-contact")).not.toBeNull();
     expect(block?.closest('.give-step[data-step="2"]')).not.toBeNull();
     expect((block as HTMLElement)?.hasAttribute("hidden")).toBe(true);
   });
@@ -89,9 +88,11 @@ describe("supporters opt-in behaviour (jsdom)", () => {
     initContactCapture(document);
     initDonorType(document);
     initGiveSteps(document, window);
+    // TASK-235: the opt-in is individuals-only, so pick individual before the amount-driven checks.
+    (document.getElementById("donorIndividual") as HTMLInputElement).click();
   });
 
-  it("ships hidden on load (nothing selected yet)", () => {
+  it("ships hidden on load (no eligible amount chosen yet)", () => {
     expect(block().hidden).toBe(true);
   });
 

@@ -43,9 +43,8 @@ describe("privacy notice links next to consent controls (REQ-064)", () => {
     const doc = docOf(read("donate.html"));
     const fieldset = doc.querySelector("fieldset.give-contact");
     expect(fieldset).not.toBeNull();
-    // The consent checkboxes live in this fieldset...
+    // The consent checkbox lives in this fieldset...
     expect(fieldset?.querySelector("#emailConsent")).not.toBeNull();
-    expect(fieldset?.querySelector("#anonymousDonor")).not.toBeNull();
     // ...and the privacy link sits alongside them.
     const link = fieldset?.querySelector('a[href="/privacy"]');
     expect(link, "no visible /privacy link inside .give-contact").not.toBeNull();

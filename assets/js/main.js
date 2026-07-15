@@ -384,12 +384,17 @@
   function initDonorType(doc) {
     var control = doc.querySelector(".give-donor");
     if (!control) return;
-    var radios = Array.prototype.slice.call(
-      control.querySelectorAll('input[name="donorType"], input[name="businessType"]'),
-    );
+    // TASK-237: the business-type radios are now their own numbered question OUTSIDE the
+    // .give-donor fieldset, so gather donorType from the control and businessType doc-wide.
+    var radios = Array.prototype.slice
+      .call(control.querySelectorAll('input[name="donorType"]'))
+      .concat(Array.prototype.slice.call(doc.querySelectorAll('input[name="businessType"]')));
     if (!radios.length) return;
 
     var giftAidRegion = doc.querySelector(".giftaid");
+    // The Gift Aid callout is wrapped in a .give-question (TASK-237); hide that wrapper too so
+    // the company path (no Gift Aid) drops the whole numbered step, not just the inner callout.
+    var giftAidQuestion = giftAidRegion && giftAidRegion.closest(".give-question");
     var giftAidBox = doc.getElementById("giftAid");
     var businessField = doc.getElementById("businessNameField");
     var businessTypeField = doc.getElementById("businessTypeField");
@@ -410,6 +415,7 @@
       // so hide and clear the callout there.
       var noGiftAid = path === "company";
       if (giftAidRegion) giftAidRegion.hidden = noGiftAid;
+      if (giftAidQuestion) giftAidQuestion.hidden = noGiftAid; // drop the numbered wrapper too (TASK-237)
       if (noGiftAid && giftAidBox) giftAidBox.checked = false;
       // The single declaration is the individual path; the partnership captures one
       // declaration per partner in .give-partners instead. Both are GIFT AID declarations,

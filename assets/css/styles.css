@@ -566,6 +566,11 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-question:not([hidden]){counter-increment:gq}
 .give-question:not([hidden])::before{content:counter(gq);position:absolute;left:0;top:26px;font-family:var(--font-head);font-weight:800;font-size:clamp(2rem,6.5vw,3rem);line-height:1;color:var(--crimson);font-variant-numeric:tabular-nums}
 @media(max-width:520px){.give-question{padding-left:2.3rem}.give-question:not([hidden])::before{font-size:1.6rem;top:28px}}
+/* TASK-237: a bordered card wrapped in a .give-question (newsletter, Gift Aid callout) drops its
+   own top margin so the question's top padding sets the gap; the sub-type option examples read as a
+   muted sub-label under the choice name. */
+.give-question>.give-newsletter,.give-question>.giftaid{margin-top:0}
+.give-donor-eg{display:block;font-weight:400;font-size:.8rem;color:var(--slate-soft);margin-top:2px}
 @media(prefers-reduced-motion:no-preference){
   .give-step.slide-in{animation:giveIn .32s cubic-bezier(.22,1,.36,1)}
   .give-step.slide-back{animation:giveBack .32s cubic-bezier(.22,1,.36,1)}

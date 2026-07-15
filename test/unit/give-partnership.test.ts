@@ -25,26 +25,27 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 
 describe("partnership markup (REQ-051)", () => {
   const widget = doc.querySelector("section.give-widget");
-  const donor = widget?.querySelector(".give-donor");
   const partners = widget?.querySelector(".give-partners");
 
   it("adds a business sub-type control (company vs partnership) with real labels (REQ-032), shipped hidden", () => {
+    // TASK-237: the sub-type question is its own top-level numbered question
+    // (#businessTypeField), promoted OUT of the .give-donor fieldset so its number
+    // aligns left, so the radios live there now (not inside .give-donor).
+    const field = doc.getElementById("businessTypeField");
+    expect(field).not.toBeNull();
+    expect(field?.hasAttribute("hidden")).toBe(true); // only relevant once "A business" is chosen
     const radios = [
-      ...(donor?.querySelectorAll('input[type="radio"][name="businessType"]') ?? []),
+      ...(field?.querySelectorAll('input[type="radio"][name="businessType"]') ?? []),
     ] as HTMLInputElement[];
     expect(radios).toHaveLength(2);
     expect(radios.map((r) => r.getAttribute("value")).sort()).toEqual(["company", "partnership"]);
     for (const r of radios) {
       const id = r.getAttribute("id");
       expect(id, "sub-type radio has an id").toBeTruthy();
-      const label = donor?.querySelector(`label[for="${id}"]`);
+      const label = field?.querySelector(`label[for="${id}"]`);
       expect(label, `label for #${id}`).not.toBeNull();
       expect(norm(label?.textContent).length).toBeGreaterThan(0);
     }
-    // Only relevant once "A business" is chosen, so its wrapper ships hidden.
-    const field = doc.getElementById("businessTypeField");
-    expect(field).not.toBeNull();
-    expect(field?.hasAttribute("hidden")).toBe(true);
   });
 
   it("renders a .give-partners fieldset with a legend in the give-card main column, shipped hidden", () => {

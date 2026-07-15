@@ -153,6 +153,26 @@ describe("groupPublicSupporters — opt-in monthly 4-band rules (TASK-223)", () 
   });
 });
 
+describe("supporters empty-state (TASK-227): a warm invitation when no one has opted in", () => {
+  const empty = { bronze: [], silver: [], gold: [], platinum: [] };
+
+  it("renderSupporterTiers returns the empty-state, not four bare band headings", () => {
+    const html = renderSupporterTiers(empty);
+    expect(html).not.toContain("supporter-tier");
+    expect(html).toContain("supporters-empty");
+    expect(norm(html)).toContain("will be celebrated here");
+    expect(html).toContain('href="/donate"');
+    expect(norm(html)).not.toMatch(/[–—]/);
+  });
+
+  it("renderSupportersPage injects the empty-state into the page when there are no supporters", () => {
+    const doc = new DOMParser().parseFromString(renderSupportersPage(template, empty), "text/html");
+    expect(doc.querySelectorAll("main .supporter-tier")).toHaveLength(0);
+    expect(doc.querySelector("main .supporters-empty")).not.toBeNull();
+    expect(norm(doc.querySelector(".supporters-empty-lead")?.textContent)).toContain("monthly");
+  });
+});
+
 describe("renderSupportersPage — injects the opted-in monthly donors into the supporters.html markup", () => {
   const html = renderSupportersPage(template, groupPublicSupporters(rows));
   const doc = new DOMParser().parseFromString(html, "text/html");

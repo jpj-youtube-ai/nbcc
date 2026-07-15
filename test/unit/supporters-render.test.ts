@@ -153,6 +153,108 @@ describe("groupPublicSupporters — opt-in monthly 4-band rules (TASK-223)", () 
   });
 });
 
+describe("groupPublicSupporters — grandfathered pre-223 supporters (TASK-228)", () => {
+  // A grandfathered donor is kept on the wall WITHOUT the TASK-223 opt-in, banded by their MAX PAID
+  // amount across ANY frequency (four metal bands, no £10 floor). The opt-in monthly path still takes
+  // precedence for a donor who is BOTH grandfathered and a qualifying opt-in monthly supporter.
+  const gf = (overrides: Partial<SupporterSourceRow> & { fullName: string }): SupporterSourceRow =>
+    row({ grandfathered: true, ...overrides });
+
+  const names = (t: Record<"bronze" | "silver" | "gold" | "platinum", { name: string }[]>) =>
+    [...t.bronze, ...t.silver, ...t.gold, ...t.platinum].map((s) => s.name);
+
+  it("shows a grandfathered ONE-OFF donor, banded by their max paid amount (any frequency)", () => {
+    // No monthly gift at all (one-off only), but £50 paid → grandfathered into Gold as a person.
+    const t = groupPublicSupporters([
+      gf({ fullName: "Olive One-off", monthlyAmountPence: null, maxPaidAmountPence: 5000 }),
+    ]);
+    expect(t.gold).toContainEqual({ name: "Olive One-off", kind: "person" });
+  });
+
+  it("shows a grandfathered SUB-£10 donor in Bronze (no £10 floor drops them)", () => {
+    const t = groupPublicSupporters([
+      gf({ fullName: "Penny Small", monthlyAmountPence: null, maxPaidAmountPence: 500 }),
+    ]);
+    expect(t.bronze).toContainEqual({ name: "Penny Small", kind: "person" });
+  });
+
+  it("shows a grandfathered BUSINESS one-off as an organisation, by business name, banded by amount", () => {
+    const t = groupPublicSupporters([
+      gf({
+        donorType: "company",
+        fullName: "Contact",
+        businessName: "Old Faithful Ltd",
+        monthlyAmountPence: null,
+        maxPaidAmountPence: 3000, // £30 → silver
+      }),
+    ]);
+    expect(t.silver).toContainEqual({ name: "Old Faithful Ltd", kind: "organisation" });
+  });
+
+  it("does NOT show a grandfathered donor who is anonymous", () => {
+    const t = groupPublicSupporters([
+      gf({ fullName: "Anon Grand", maxPaidAmountPence: 5000, anonymous: true }),
+    ]);
+    expect(names(t)).not.toContain("Anon Grand");
+  });
+
+  it("does NOT show a grandfathered donor who is admin-hidden", () => {
+    const t = groupPublicSupporters([
+      gf({ fullName: "Hidden Grand", maxPaidAmountPence: 5000, hiddenFromSupporters: true }),
+    ]);
+    expect(names(t)).not.toContain("Hidden Grand");
+  });
+
+  it("does NOT show a non-grandfathered, non-opted-in donor (even with a paid one-off gift)", () => {
+    const t = groupPublicSupporters([
+      row({ fullName: "Nobody Special", monthlyAmountPence: null, maxPaidAmountPence: 5000 }),
+    ]);
+    expect(names(t)).not.toContain("Nobody Special");
+  });
+
+  it("still shows a NEW opt-in monthly supporter (not grandfathered) by their monthly band + credit name", () => {
+    const t = groupPublicSupporters([
+      row({
+        fullName: "Nadia New",
+        monthlyAmountPence: 5000,
+        individualListOptIn: true,
+        individualCreditName: "Nadia N.",
+      }),
+    ]);
+    expect(t.gold).toContainEqual({ name: "Nadia N.", kind: "person" });
+  });
+
+  it("uses the MONTHLY band for a donor who is BOTH grandfathered and an opted-in monthly supporter", () => {
+    // Grandfather amount would be Platinum (£200 one-off), but the £50/mo opt-in monthly gift wins →
+    // Gold, by credit name. Precedence: opt-in monthly over grandfathering.
+    const t = groupPublicSupporters([
+      gf({
+        fullName: "Dora Double",
+        maxPaidAmountPence: 20000, // £200 → grandfather Platinum
+        monthlyAmountPence: 5000, // £50/mo → monthly Gold
+        individualListOptIn: true,
+        individualCreditName: "Dora D.",
+      }),
+    ]);
+    expect(t.gold).toContainEqual({ name: "Dora D.", kind: "person" });
+    expect(t.platinum.map((s) => s.name)).not.toContain("Dora D.");
+  });
+
+  it("grandfathers a donor with a paid monthly gift who did NOT opt in (banded by max paid amount)", () => {
+    // Not an opt-in monthly supporter (opt-in false), but grandfathered → still shown, banded by their
+    // MAX PAID amount (here the £50/mo gift, £50 → Gold), by full name (no credit name applied).
+    const t = groupPublicSupporters([
+      gf({
+        fullName: "Gina Grand",
+        monthlyAmountPence: 5000,
+        maxPaidAmountPence: 5000,
+        individualListOptIn: false,
+      }),
+    ]);
+    expect(t.gold).toContainEqual({ name: "Gina Grand", kind: "person" });
+  });
+});
+
 describe("supporters empty-state (TASK-227): a warm invitation when no one has opted in", () => {
   const empty = { bronze: [], silver: [], gold: [], platinum: [] };
 

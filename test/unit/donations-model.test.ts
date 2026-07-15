@@ -5,6 +5,7 @@ import {
   deriveClaimStatus,
   batchAssignmentBlock,
   isPubliclyListable,
+  bandForGrandfatheredAmount,
 } from "../../src/db/donations-model";
 
 // TASK-045 (REQ-036/REQ-037): the pure field-mapping / claim-eligibility logic of
@@ -208,6 +209,28 @@ describe("isPubliclyListable (REQ-039 — anonymous donors are never shown publi
 
   it("defaults to listable when anonymity is unset", () => {
     expect(isPubliclyListable({})).toBe(true);
+  });
+});
+
+describe("bandForGrandfatheredAmount (TASK-228 — the grandfather path's four metal bands, NO £10 floor)", () => {
+  // The grandfather path bands a pre-223 donor by their MAX PAID amount across ANY frequency, using the
+  // four metal thresholds but WITHOUT the £10/mo floor — so every previously-shown donor (incl. small
+  // and one-off gifts) keeps a place. Mirrors bandForMonthlyAmount's thresholds, then floors to bronze.
+  it("bands by the four metal thresholds: >= £100 platinum, >= £50 gold, >= £25 silver", () => {
+    expect(bandForGrandfatheredAmount(10000)).toBe("platinum");
+    expect(bandForGrandfatheredAmount(20000)).toBe("platinum");
+    expect(bandForGrandfatheredAmount(5000)).toBe("gold");
+    expect(bandForGrandfatheredAmount(9999)).toBe("gold");
+    expect(bandForGrandfatheredAmount(2500)).toBe("silver");
+    expect(bandForGrandfatheredAmount(4999)).toBe("silver");
+  });
+
+  it("has NO £10 floor: a sub-£10 or one-off small gift still bands to bronze, never null", () => {
+    expect(bandForGrandfatheredAmount(2499)).toBe("bronze");
+    expect(bandForGrandfatheredAmount(1000)).toBe("bronze");
+    expect(bandForGrandfatheredAmount(500)).toBe("bronze"); // £5 one-off — still recognised
+    expect(bandForGrandfatheredAmount(1)).toBe("bronze");
+    expect(bandForGrandfatheredAmount(0)).toBe("bronze");
   });
 });
 

@@ -767,8 +767,9 @@ around an unanswered option group.
 
 **Server-side (REQ-039, revised):** `POST /api/checkout-session` now requires a
 valid `email` for the individual/partnership donor paths — a missing or
-malformed email is rejected with 400. A company donation is exempt, since it
-already carries its own required `company.contactEmail`. Email is always
+malformed email is rejected with 400. A company is exempt at that check, but since
+TASK-236 the company's contact IS the step-2 donor, so a company now carries the same donor
+`email` (which also becomes `company.contactEmail`) anyway. Email is always
 stored (not gated on `emailConsent`, which now governs marketing consent only)
 so every donor can be sent a thank-you and a donor-portal link; see
 `test/unit/checkout-session.test.ts` and the `features/checkout.feature`
@@ -847,10 +848,12 @@ is unchanged. Token-only colours; dash-free copy, "NBCC" (REQ-031). Verified by
 
 On the **incorporated-company** path a `.give-company` `<fieldset>` (`#companyCapture`)
 captures the company-specific fields: an **optional** registration number
-(`#companyRegNumber`) plus a **required** contact name (`#companyContactName`), contact email
-(`#companyContactEmail`, a real email input), billing address (`#companyBillingAddress`) and
+(`#companyRegNumber`) plus a **required** billing address (`#companyBillingAddress`) and
 billing postcode (`#companyBillingPostcode`) — each `required` + `aria-required` with a real
 `<label for>` (REQ-032); the company's legal name is the existing `#businessName` field.
+**TASK-236:** the company no longer captures its own contact name/email — the contact is the
+step-2 donor (`#donorFirstName`/`#donorSurname`/`#donorEmail`, now required on the company path
+too), folded into `company.contactName` / `company.contactEmail`.
 `initDonorType` reveals `.give-company` **only** on the company path (the `.give-company[hidden]`
 rule collapses the flex/grid box) and **disables** its inputs otherwise, so a hidden required
 field never blocks submission or leaks a value. `startCheckout` folds a **`company`** object

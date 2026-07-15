@@ -7,8 +7,9 @@ import { createRequire } from "node:module";
 
 // TASK-084 (REQ-038): the company-specific field capture in the give widget. On the
 // incorporated-company path (donorType business + businessType company) a .give-company
-// fieldset captures an optional registration number plus a required contact name/email and
-// billing address/postcode. Behaviour (initDonorType in main.js): the fieldset shows ONLY on
+// fieldset captures an optional registration number plus a required billing address/postcode.
+// TASK-236: the contact is the step-2 donor (name + email), captured once, not a separate
+// company contact. Behaviour (initDonorType in main.js): the fieldset shows ONLY on
 // the company path (its inputs disabled otherwise), the Gift Aid callout stays hidden, and
 // startCheckout folds a `company` object into the REQ-028 payload with giftAid:false. Static
 // markup is parsed with jsdom; behaviour runs against the real main.js, mirroring
@@ -33,51 +34,28 @@ describe("company capture markup (REQ-038)", () => {
   });
 
   it("captures the company fields, each with a real <label for> (REQ-032)", () => {
-    // TASK-226: the contact name is captured as a first name + surname pair, not one combined field.
-    for (const id of [
-      "companyRegNumber",
-      "companyContactFirstName",
-      "companyContactSurname",
-      "companyContactEmail",
-      "companyBillingAddress",
-      "companyBillingPostcode",
-    ]) {
+    for (const id of ["companyRegNumber", "companyBillingAddress", "companyBillingPostcode"]) {
       const input = company?.querySelector(`#${id}`) as HTMLInputElement | null;
       expect(input, `#${id} present`).not.toBeNull();
       const label = company?.querySelector(`label[for="${id}"]`);
       expect(label, `label for #${id}`).not.toBeNull();
       expect(norm(label?.textContent).length).toBeGreaterThan(0);
     }
-    // No single combined contact-name field remains.
-    expect(company?.querySelector("#companyContactName")).toBeNull();
+    // TASK-236: the company no longer captures its own contact; the step-2 donor is the contact.
+    expect(company?.querySelector("#companyContactFirstName")).toBeNull();
+    expect(company?.querySelector("#companyContactSurname")).toBeNull();
+    expect(company?.querySelector("#companyContactEmail")).toBeNull();
   });
 
-  // TASK-226: the contact first name + surname sit side by side at half width in the shared
-  // .give-name-row wrapper, each keeping its own .give-field.
-  it("lays the contact first name and surname side by side in a .give-name-row", () => {
-    const row = company?.querySelector(".give-name-row");
-    expect(row).not.toBeNull();
-    expect(row?.querySelector("#companyContactFirstName")?.closest(".give-field")).not.toBeNull();
-    expect(row?.querySelector("#companyContactSurname")?.closest(".give-field")).not.toBeNull();
-  });
-
-  it("marks the registration number OPTIONAL and the other required fields REQUIRED (required + aria-required)", () => {
+  it("marks the registration number OPTIONAL and the billing fields REQUIRED (required + aria-required)", () => {
     const reg = company?.querySelector("#companyRegNumber") as HTMLInputElement | null;
     expect(reg?.hasAttribute("required")).toBe(false);
 
-    for (const id of [
-      "companyContactFirstName",
-      "companyContactSurname",
-      "companyContactEmail",
-      "companyBillingAddress",
-      "companyBillingPostcode",
-    ]) {
+    for (const id of ["companyBillingAddress", "companyBillingPostcode"]) {
       const input = company?.querySelector(`#${id}`) as HTMLInputElement | null;
       expect(input?.hasAttribute("required"), `#${id} required`).toBe(true);
       expect(input?.getAttribute("aria-required"), `#${id} aria-required`).toBe("true");
     }
-    // The contact email is a real email input.
-    expect((company?.querySelector("#companyContactEmail") as HTMLInputElement)?.getAttribute("type")).toBe("email");
   });
 
   it("asks whether NBCC gave anything of value in return, a #companyConsideration control with real labels, defaulting to NO (REQ-053)", () => {
@@ -139,24 +117,25 @@ describe("company capture behaviour (jsdom)", () => {
   const fillCompany = () => {
     byId("businessName").value = "Acme Ltd";
     byId("companyRegNumber").value = "SC123456";
-    byId("companyContactFirstName").value = "Ada";
-    byId("companyContactSurname").value = "Lovelace";
-    byId("companyContactEmail").value = "finance@acme.test";
+    // TASK-236: the contact is the step-2 donor, so fill those name + email fields.
+    byId("donorFirstName").value = "Ada";
+    byId("donorSurname").value = "Lovelace";
+    byId("donorEmail").value = "ada@acme.test";
     byId("companyBillingAddress").value = "1 Office Park, London";
     byId("companyBillingPostcode").value = "SW1A 1AA";
   };
 
   it("keeps .give-company hidden and its inputs disabled for an individual", () => {
     expect(company().hidden).toBe(true);
-    expect(byId("companyContactFirstName").disabled).toBe(true);
+    expect(byId("companyBillingAddress").disabled).toBe(true);
   });
 
   it("reveals .give-company (inputs enabled) and hides Gift Aid on the company path", () => {
     selectDonor("business");
     selectBusinessType("company");
     expect(company().hidden).toBe(false);
-    expect(byId("companyContactFirstName").disabled).toBe(false);
-    expect(byId("companyContactSurname").disabled).toBe(false);
+    expect(byId("companyBillingAddress").disabled).toBe(false);
+    expect(byId("companyBillingPostcode").disabled).toBe(false);
     expect(giftAidRegion().hidden).toBe(true);
   });
 
@@ -164,7 +143,7 @@ describe("company capture behaviour (jsdom)", () => {
     selectDonor("business");
     selectBusinessType("partnership");
     expect(company().hidden).toBe(true);
-    expect(byId("companyContactFirstName").disabled).toBe(true);
+    expect(byId("companyBillingAddress").disabled).toBe(true);
   });
 
   it("folds a company object with the captured values and giftAid:false into the payload", () => {
@@ -178,8 +157,8 @@ describe("company capture behaviour (jsdom)", () => {
     expect(payload.company).toEqual({
       legalName: "Acme Ltd",
       registrationNumber: "SC123456",
-      contactName: "Ada Lovelace",
-      contactEmail: "finance@acme.test",
+      contactName: "Ada Lovelace", // TASK-236: from the step-2 donor
+      contactEmail: "ada@acme.test", // TASK-236: from the step-2 donor
       billingAddress: "1 Office Park, London",
       billingPostcode: "SW1A 1AA",
       considerationGiven: false, // defaults to no consideration given (REQ-053)

@@ -25,6 +25,8 @@ const {
   setUserPermissionsMock,
   isLastEnabledAdminMock,
   getUserAuthRowMock,
+  setOwnNameMock,
+  setOwnPasswordMock,
 } = vi.hoisted(() => ({
   listUsersMock: vi.fn(),
   getManagedUserMock: vi.fn(),
@@ -38,6 +40,8 @@ const {
   setUserPermissionsMock: vi.fn(), // Admin Phase 2 (TASK-186): PATCH .../permissions
   isLastEnabledAdminMock: vi.fn(),
   getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
+  setOwnNameMock: vi.fn(), // Admin Phase 4 (TASK-197): PATCH /api/admin/me
+  setOwnPasswordMock: vi.fn(), // Admin Phase 4 (TASK-197): POST /api/admin/me/password
 }));
 
 const { MockDuplicateEmailError, MockLastAdminError } = vi.hoisted(() => ({
@@ -70,6 +74,8 @@ vi.mock("../../src/db/admin-users", () => ({
   setUserPermissions: setUserPermissionsMock,
   isLastEnabledAdmin: isLastEnabledAdminMock,
   getUserAuthRow: getUserAuthRowMock,
+  setOwnName: setOwnNameMock,
+  setOwnPassword: setOwnPasswordMock,
   DuplicateEmailError: MockDuplicateEmailError,
   LastAdminError: MockLastAdminError,
 }));
@@ -107,9 +113,12 @@ import {
   postAdminSetPassword,
   patchUserPermissions,
   getAdminMe,
+  patchAdminMe,
+  postAdminMePassword,
 } from "../../src/routes/admin-users";
 import { signAdminSession } from "../../src/admin/session";
 import { issueAdminActionToken } from "../../src/admin/tokens";
+import { hashPassword } from "../../src/admin/password";
 import { SECTIONS, roleToPermissions, type Section, type Level } from "../../src/admin/permissions";
 
 const SECRET = "test-admin-secret";
@@ -206,6 +215,16 @@ const runMe = async (o: any) => {
   await getAdminMe(req(o) as any, res as any);
   return res;
 };
+const runMePatch = async (o: any) => {
+  const res = mockRes();
+  await patchAdminMe(req(o) as any, res as any);
+  return res;
+};
+const runMePassword = async (o: any) => {
+  const res = mockRes();
+  await postAdminMePassword(req(o) as any, res as any);
+  return res;
+};
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 // A full 13-section matrix (Record<Section, Level>) — the shape permissionsSchema requires.
@@ -244,6 +263,8 @@ beforeEach(() => {
   setUserPermissionsMock.mockReset();
   isLastEnabledAdminMock.mockReset();
   getUserAuthRowMock.mockReset();
+  setOwnNameMock.mockReset();
+  setOwnPasswordMock.mockReset();
   sendAdminInviteMock.mockReset();
   sendAdminResetMock.mockReset();
 });
@@ -814,21 +835,32 @@ describe("PATCH /api/admin/users/:id/permissions", () => {
 
 // Admin Phase 2, Task 5: GET /api/admin/me — any valid, non-disabled session (no section/level
 // check) gets back its own effective permissions, for the front-end nav filter + write gating.
+// Admin Phase 4 (TASK-197): also returns fullName (via getManagedUser), for the My account UI.
 describe("GET /api/admin/me", () => {
-  it("returns the caller's email and effective permissions for a valid session", async () => {
+  it("returns the caller's email, fullName, and effective permissions for a valid session", async () => {
     const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "admin", now: new Date(), secret: SECRET }).token;
     getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "admin", permissions: {} });
+    getManagedUserMock.mockResolvedValueOnce({ ...ADMIN_USER, id: 1, email: "kenny@nbcc.test", full_name: "Kenny Kenny" });
     const res = await runMe({ token });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({ email: "kenny@nbcc.test", permissions: expect.objectContaining({ team: "edit" }) });
+    expect(res.body).toMatchObject({
+      email: "kenny@nbcc.test",
+      fullName: "Kenny Kenny",
+      permissions: expect.objectContaining({ team: "edit" }),
+    });
   });
 
   it("a valid non-team-access user can still call /me and gets their own (limited) permissions", async () => {
     const token = signAdminSession({ sub: 1, email: "vera@nbcc.test", role: "viewer", now: new Date(), secret: SECRET }).token;
     getUserAuthRowMock.mockResolvedValue({ id: 1, email: "vera@nbcc.test", status: "active", role: "viewer", permissions: {} });
+    getManagedUserMock.mockResolvedValueOnce({ ...ADMIN_USER, id: 1, email: "vera@nbcc.test", role: "viewer", full_name: "Vera Viewer" });
     const res = await runMe({ token });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toMatchObject({ email: "vera@nbcc.test", permissions: expect.objectContaining({ team: "none" }) });
+    expect(res.body).toMatchObject({
+      email: "vera@nbcc.test",
+      fullName: "Vera Viewer",
+      permissions: expect.objectContaining({ team: "none" }),
+    });
   });
 
   it("401s (generic) with no token", async () => {
@@ -841,5 +873,113 @@ describe("GET /api/admin/me", () => {
     getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "disabled", role: "admin", permissions: {} });
     const res = await runMe({ token });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// Admin Phase 4 (TASK-197): PATCH /api/admin/me — self-only display-name change. Gated by
+// authorizeAny (any valid, non-disabled session; no section/level check), and ALWAYS acts on
+// claims.sub, never an id from the request body.
+describe("PATCH /api/admin/me", () => {
+  it("changes the caller's own name and returns it, ignoring any id in the body", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "viewer", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: {} });
+    setOwnNameMock.mockResolvedValueOnce(undefined);
+    const res = await runMePatch({ token, body: { id: 999, fullName: "New Name" } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true, fullName: "New Name" });
+    expect(setOwnNameMock).toHaveBeenCalledWith(1, "New Name", "admin:kenny@nbcc.test");
+  });
+
+  it("400s an empty fullName and never calls setOwnName", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "viewer", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: {} });
+    const res = await runMePatch({ token, body: { fullName: "" } });
+    expect(res.statusCode).toBe(400);
+    expect(setOwnNameMock).not.toHaveBeenCalled();
+  });
+
+  it("401s (generic) with no token", async () => {
+    const res = await runMePatch({ token: "", body: { fullName: "New Name" } });
+    expect(res.statusCode).toBe(401);
+    expect(setOwnNameMock).not.toHaveBeenCalled();
+  });
+
+  it("401s (generic) a disabled user's otherwise-valid token", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "admin", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "disabled", role: "admin", permissions: {} });
+    const res = await runMePatch({ token, body: { fullName: "New Name" } });
+    expect(res.statusCode).toBe(401);
+    expect(setOwnNameMock).not.toHaveBeenCalled();
+  });
+});
+
+// Admin Phase 4 (TASK-197): POST /api/admin/me/password — self-only password change, requires the
+// CURRENT password. Always acts on claims.sub. Real hashPassword/verifyPassword (src/admin/password)
+// are exercised end-to-end here (not mocked), matching how POST /api/admin/set-password's tests
+// already treat that module as real/deterministic.
+describe("POST /api/admin/me/password", () => {
+  it("200s and rotates the password when the current password is correct", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "viewer", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: {} });
+    const currentHash = await hashPassword("the-current-password");
+    getPasswordHashMock.mockResolvedValueOnce(currentHash);
+    setOwnPasswordMock.mockResolvedValueOnce(undefined);
+    const res = await runMePassword({
+      token,
+      body: { currentPassword: "the-current-password", newPassword: "a-new-long-enough-password" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ ok: true });
+    expect(setOwnPasswordMock).toHaveBeenCalledWith(1, expect.any(String), "admin:kenny@nbcc.test");
+    // Never echoes or logs the plaintext password anywhere in the response.
+    expect(JSON.stringify(res.body)).not.toContain("the-current-password");
+    expect(JSON.stringify(res.body)).not.toContain("a-new-long-enough-password");
+  });
+
+  it("400s { error: 'wrong_password' } on an incorrect current password, and never rotates", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "viewer", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: {} });
+    const currentHash = await hashPassword("the-current-password");
+    getPasswordHashMock.mockResolvedValueOnce(currentHash);
+    const res = await runMePassword({
+      token,
+      body: { currentPassword: "totally-wrong-password", newPassword: "a-new-long-enough-password" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "wrong_password" });
+    expect(setOwnPasswordMock).not.toHaveBeenCalled();
+  });
+
+  it("400s a too-short new password and never calls getPasswordHash", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "viewer", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "viewer", permissions: {} });
+    const res = await runMePassword({
+      token,
+      body: { currentPassword: "the-current-password", newPassword: "short" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(getPasswordHashMock).not.toHaveBeenCalled();
+    expect(setOwnPasswordMock).not.toHaveBeenCalled();
+  });
+
+  it("401s (generic) with no token, and never touches the password", async () => {
+    const res = await runMePassword({
+      token: "",
+      body: { currentPassword: "the-current-password", newPassword: "a-new-long-enough-password" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(getPasswordHashMock).not.toHaveBeenCalled();
+    expect(setOwnPasswordMock).not.toHaveBeenCalled();
+  });
+
+  it("401s (generic) a disabled user's otherwise-valid token", async () => {
+    const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "admin", now: new Date(), secret: SECRET }).token;
+    getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "disabled", role: "admin", permissions: {} });
+    const res = await runMePassword({
+      token,
+      body: { currentPassword: "the-current-password", newPassword: "a-new-long-enough-password" },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(setOwnPasswordMock).not.toHaveBeenCalled();
   });
 });

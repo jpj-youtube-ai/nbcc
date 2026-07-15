@@ -64,6 +64,10 @@
           <div class="admin-user">
             <span class="admin-user-email" id="userEmail"></span>
             <span class="admin-role-badge" id="userRole"></span>
+            <!-- My account (Admin Phase 4, TASK-197): every signed-in user can manage their own
+                 name/password from here, regardless of section permissions - so it lives in the
+                 topbar, not the permission-filtered left nav. -->
+            <button class="admin-logout" id="accountBtn" type="button">My account</button>
             <button class="admin-logout" id="logoutBtn" type="button">Sign out</button>
           </div>
         </header>
@@ -532,6 +536,44 @@
               <h2 id="team-permissions-heading">Manage access</h2>
               <div id="teamPermDetail" aria-live="polite"></div>
               <p class="admin-action-status" id="teamPermStatus" role="status" aria-live="polite"></p>
+            </section>
+
+            <!-- My account (Admin Phase 4, TASK-197): self-service name + password change. Reached
+                 only via the topbar accountBtn - every signed-in user manages their own account
+                 here, so this view is intentionally NOT in the permission-filtered section nav
+                 above (it has no data-view nav link and isn't part of SECTIONS in app.js). -->
+            <section class="admin-view" id="view-account" aria-labelledby="account-heading" hidden>
+              <h2 id="account-heading">My account</h2>
+              <p class="admin-view-intro">Manage your own display name and password. To change your email address, ask an Admin to update it in Team.</p>
+
+              <div class="admin-field">
+                <label for="accountEmail">Email</label>
+                <input id="accountEmail" type="email" readonly style="max-width:320px" />
+              </div>
+
+              <h3 class="admin-subhead">Display name</h3>
+              <form id="accountNameForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Full name
+                  <input id="accountName" type="text" required maxlength="120" style="width:220px" />
+                </label>
+                <button class="btn btn-primary" type="submit">Save name</button>
+              </form>
+              <p class="ty-status" id="accountNameStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="admin-subhead">Change password</h3>
+              <form id="accountPasswordForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Current password
+                  <input id="accountCurrentPassword" type="password" required autocomplete="current-password" style="width:220px" />
+                </label>
+                <label class="ty-inline">New password
+                  <input id="accountNewPassword" type="password" required autocomplete="new-password" minlength="10" style="width:220px" />
+                </label>
+                <label class="ty-inline">Confirm new password
+                  <input id="accountConfirmPassword" type="password" required autocomplete="new-password" minlength="10" style="width:220px" />
+                </label>
+                <button class="btn btn-primary" type="submit">Change password</button>
+              </form>
+              <p class="ty-status" id="accountPasswordStatus" role="status" aria-live="polite"></p>
             </section>
 
             <!-- Donor detail (reached from a donor/donation row); role-gated actions. -->

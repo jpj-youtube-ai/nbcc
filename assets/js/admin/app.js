@@ -295,6 +295,12 @@
     });
   }
 
+  // My account (Admin Phase 4, TASK-197): topbar entry point, reachable by every signed-in user
+  // regardless of section permissions - not a nav-link, so it isn't part of applyNavFiltering.
+  bindClick("accountBtn", function () {
+    selectView("account");
+  });
+
   // ---- view switching ----
   function showOnly(viewId) {
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-view"), function (v) {
@@ -323,6 +329,7 @@
     else if (name === "ticker") loadTicker();
     else if (name === "audit") loadAudit();
     else if (name === "team") loadTeam();
+    else if (name === "account") loadAccount();
   }
   Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
     b.addEventListener("click", function () {
@@ -3257,6 +3264,117 @@
           .catch(function () {});
       }
     });
+  }
+
+  // ---- My account (Admin Phase 4, TASK-197): self-service name + password change. Reached only
+  // from the topbar accountBtn (see bindClick("accountBtn", ...) above) - every signed-in user may
+  // manage their OWN account here, so there is no permission gate (mirrors authorizeAny server-side:
+  // the write endpoints always act on claims.sub, never an id from the form). ----
+  var accountWired = false;
+  function accountStatus(id, msg, cls) {
+    var s = el(id);
+    if (!s) return;
+    s.className = "ty-status" + (cls ? " " + cls : "");
+    s.textContent = msg || "";
+  }
+  function loadAccount() {
+    accountWire();
+    accountStatus("accountNameStatus", "");
+    accountStatus("accountPasswordStatus", "");
+    authFetch("/api/admin/me")
+      .then(j)
+      .then(function (d) {
+        el("accountEmail").value = d.email || "";
+        el("accountName").value = d.fullName || "";
+      })
+      .catch(function () {
+        accountStatus("accountNameStatus", "Could not load your account.", "is-error");
+      });
+  }
+  function accountWire() {
+    if (accountWired) return;
+    accountWired = true;
+
+    var nameForm = el("accountNameForm");
+    if (nameForm) {
+      nameForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var fullName = (el("accountName").value || "").trim();
+        if (!fullName) return;
+        accountStatus("accountNameStatus", "Saving…");
+        authFetch("/api/admin/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fullName: fullName }),
+        })
+          .then(function (res) {
+            // Honest-save: only ever report success on a 200.
+            return res.ok
+              ? res.json()
+              : res.json().then(function (b) {
+                  throw new Error((b && b.error) || "Could not save your name.");
+                });
+          })
+          .then(function (d) {
+            el("accountName").value = d.fullName || fullName;
+            accountStatus("accountNameStatus", "Saved.", "is-ok");
+          })
+          .catch(function (e2) {
+            accountStatus("accountNameStatus", e2.message || "Could not save your name.", "is-error");
+          });
+      });
+    }
+
+    var passwordForm = el("accountPasswordForm");
+    if (passwordForm) {
+      passwordForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var current = el("accountCurrentPassword").value;
+        var next = el("accountNewPassword").value;
+        var confirm = el("accountConfirmPassword").value;
+        // Client-side checks first - matches the invite/reset rule (10-char minimum); the server
+        // re-validates via mePasswordSchema regardless.
+        if (next.length < 10) {
+          accountStatus("accountPasswordStatus", "New password must be at least 10 characters.", "is-error");
+          return;
+        }
+        if (next !== confirm) {
+          accountStatus("accountPasswordStatus", "New password and confirmation do not match.", "is-error");
+          return;
+        }
+        accountStatus("accountPasswordStatus", "Saving…");
+        authFetch("/api/admin/me/password", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currentPassword: current, newPassword: next }),
+        })
+          .then(function (res) {
+            if (res.status === 400) {
+              return res.json().then(function (b) {
+                accountStatus(
+                  "accountPasswordStatus",
+                  b && b.error === "wrong_password" ? "That current password is not right." : "Could not change your password.",
+                  "is-error"
+                );
+              });
+            }
+            // Honest-save: fields only clear and "Password changed" only shows on a real 200.
+            if (!res.ok) {
+              accountStatus("accountPasswordStatus", "Could not change your password.", "is-error");
+              return null;
+            }
+            return res.json().then(function () {
+              el("accountCurrentPassword").value = "";
+              el("accountNewPassword").value = "";
+              el("accountConfirmPassword").value = "";
+              accountStatus("accountPasswordStatus", "Password changed.", "is-ok");
+            });
+          })
+          .catch(function () {
+            accountStatus("accountPasswordStatus", "Could not change your password.", "is-error");
+          });
+      });
+    }
   }
 
   // ---- boot: restore an in-tab session ----

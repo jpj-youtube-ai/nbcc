@@ -358,6 +358,47 @@ export async function setUserPassword(
   );
 }
 
+// Change the CALLER'S OWN display name (Admin Phase 4, TASK-197's PATCH /api/admin/me). Unlike
+// setUserRole/setUserStatus/setUserPermissions above, this never touches role/status/permissions
+// and never runs the anti-lockout guard (a name change cannot orphan the admin team), so it is a
+// plain single-column audited write. Audited admin_user.name_changed.
+export async function setOwnName(userId: number, fullName: string, actor: string): Promise<void> {
+  await writeWithAudit(
+    async (client) => {
+      await client.query(`UPDATE users SET full_name = $1 WHERE id = $2`, [fullName, userId]);
+      return { id: userId };
+    },
+    (r) => ({
+      actor,
+      action: "admin_user.name_changed",
+      entity: "user",
+      entityId: r.id,
+      data: { fullName },
+    }),
+  );
+}
+
+// Change the CALLER'S OWN password (Admin Phase 4, TASK-197's POST /api/admin/me/password). The
+// route layer verifies the current password BEFORE calling this; this function only performs the
+// write, and — unlike setUserPassword (invite/reset) — never touches `status` (a self-service
+// password change is not an activation event; the caller is already active by definition, having
+// authenticated via authorizeAny). Audited admin_user.password_changed. Never logs/echoes the hash.
+export async function setOwnPassword(userId: number, passwordHash: string, actor: string): Promise<void> {
+  await writeWithAudit(
+    async (client) => {
+      await client.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [passwordHash, userId]);
+      return { id: userId };
+    },
+    (r) => ({
+      actor,
+      action: "admin_user.password_changed",
+      entity: "user",
+      entityId: r.id,
+      data: {},
+    }),
+  );
+}
+
 // Stamp last_login_at on a successful login (Task 6's postLogin). Not audited — a login is not a
 // user-management write, it's routine access; the audit trail here is scoped to admin_user.* changes.
 export async function touchLastLogin(id: number): Promise<void> {

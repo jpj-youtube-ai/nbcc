@@ -78,13 +78,14 @@ describe("donationInputSchema", () => {
     expect(parsed.plan).toBeNull();
   });
 
-  it("requires a plan for a monthly gift", () => {
-    expect(donationInputSchema.safeParse({ ...base, mode: "monthly", plan: null }).success).toBe(
-      false,
-    );
-    expect(
-      donationInputSchema.safeParse({ ...base, mode: "monthly", plan: "gold" }).success,
-    ).toBe(true);
+  it("accepts a monthly gift with no plan (a custom amount) — monthly requires an amount, not a plan", () => {
+    // TASK-243: a monthly "choose your own amount" gift carries plan:null (inline pricing from the
+    // amount, TASK-231). The webhook mapper parses every completed gift through THIS schema, so it must
+    // accept plan:null for monthly to match the checkout-session contract — otherwise a charged monthly
+    // custom gift throws in the webhook and is never recorded (no row, no email, no supporter listing).
+    // amountPence is already .positive(), so the amount invariant still holds.
+    expect(donationInputSchema.safeParse({ ...base, mode: "monthly", plan: null }).success).toBe(true);
+    expect(donationInputSchema.safeParse({ ...base, mode: "monthly", plan: "gold" }).success).toBe(true);
   });
 
   it("rejects a non-positive amount", () => {

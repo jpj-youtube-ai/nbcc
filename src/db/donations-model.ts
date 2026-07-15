@@ -48,13 +48,15 @@ export const donationInputSchema = z
     stripePaymentIntentId: z.string().nullable().default(null),
     stripeSubscriptionId: z.string().nullable().default(null),
     stripeChargeId: z.string().nullable().default(null),
-  })
-  // A monthly gift is a subscription keyed by plan (REQ-041); a one-off carries
-  // its own amount. Mirrors the checkout-session refinement in src/routes/api.ts.
-  .refine((d) => d.mode !== "monthly" || d.plan !== null, {
-    message: "monthly giving requires a plan",
-    path: ["plan"],
   });
+// TASK-243 (donor-flow audit): a monthly gift no longer requires a `plan`. Monthly pricing is built
+// INLINE from the amount (TASK-231 dropped the plan requirement in the checkout-session schema), so a
+// "choose your own amount" monthly gift legitimately carries plan:null. The webhook mapper
+// (donationFromCheckoutSession / recurringDonationInput) parses EVERY completed gift through this
+// schema, so a stale "monthly requires a plan" refine here rejected those gifts — the donor was
+// charged but the donation threw in the webhook and was never recorded (and every later invoice for
+// that subscription was lost too). The `amountPence: z.number().int().positive()` field rule still
+// guarantees a monthly gift carries an amount, mirroring the checkout-session "monthly requires amount".
 
 export type DonationInput = z.infer<typeof donationInputSchema>;
 

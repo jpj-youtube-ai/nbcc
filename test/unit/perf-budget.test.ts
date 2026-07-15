@@ -20,8 +20,10 @@ const BUDGET = {
   // numbered .give-question wrapper (per-field wrappers + the promoted business-type/name questions), so
   // the shared markup grew ~1KB. These are UNCOMPRESSED bytes (see note above); real gzip/brotli transfer
   // is far smaller (the repeated class names + comments compress well), so this rise is negligible on the
-  // wire while keeping donate.html on a tight, enforced budget.
-  maxTransferKB: 252,
+  // wire while keeping donate.html on a tight, enforced budget. Raised 252 -> 253 (TASK-243, donor-flow
+  // audit fixes): the donorType server-value mapping + the business-name required toggle in the shared
+  // main.js (both money-path bug fixes).
+  maxTransferKB: 253,
   maxRequests: 15,
   maxFontFiles: 2,
 };

@@ -228,6 +228,18 @@ describe("donor type behaviour (jsdom)", () => {
     expect("businessName" in p).toBe(false);
   });
 
+  it("requires the business name on the business path and un-requires it for an individual (TASK-243)", () => {
+    // TASK-243: the business name IS the company's legal name (companyFieldsSchema.legalName, min 1),
+    // so a blank one was rejected server-side with a raw JSON alert. Requiring it on the business path
+    // makes the wizard's validate() flag it inline instead. Un-required for an individual (not shown).
+    const bn = () => document.getElementById("businessName") as HTMLInputElement;
+    selectDonor("business");
+    expect(bn().hasAttribute("required")).toBe(true);
+    expect(bn().getAttribute("aria-required")).toBe("true");
+    selectDonor("individual");
+    expect(bn().hasAttribute("required")).toBe(false);
+  });
+
   it("startCheckout returns the assembled payload including the chosen donorType", () => {
     selectDonor("individual"); // nothing is preselected now, so the donor picks first
     const payload = startCheckout(monthlyTier(0), window); // bronze £10

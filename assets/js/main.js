@@ -816,7 +816,11 @@
     var donorControl = doc.querySelector(".give-donor[data-ready]");
     if (donorControl) {
       var donorRadio = donorControl.querySelector('input[name="donorType"]:checked');
-      if (donorRadio) payload.donorType = donorRadio.value;
+      // TASK-242 FIX: the form radio is individual/business, but the API + donor record use
+      // individual/company/partnership. Send the SERVER's value via currentDonorPath, which maps the
+      // chosen business sub-type (company/partnership). Posting the raw "business" was rejected by the
+      // checkout-session donorType enum (400), so every business donation failed before this.
+      if (donorRadio) payload.donorType = currentDonorPath(doc);
     }
     var businessNameEl = doc.getElementById("businessName");
     var businessName = businessNameEl ? (businessNameEl.value || "").trim() : "";

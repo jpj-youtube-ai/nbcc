@@ -79,6 +79,17 @@ Feature: Checkout session endpoint (REQ-029)
     Then the response status should be 200
     And the response field "url" should start with "https://"
 
+  # TASK-242: a MONTHLY company donation — the £100/month business case. The donate form maps its
+  # individual/business radio to the server's donorType (company here) via currentDonorPath; posting
+  # the raw "business" was rejected by the enum, so every business donation failed before the fix.
+  Scenario: a monthly company donation is accepted (£100/month business, TASK-242)
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "monthly", "plan": "platinum", "amount": 10000, "giftAid": false, "ageConfirmed": true, "donorType": "company", "businessName": "Beacon Trading Ltd", "email": "finance@beacon.test", "company": { "legalName": "Beacon Trading Ltd", "contactName": "Casey Finance", "contactEmail": "finance@beacon.test", "billingAddress": "1 Office Park, Glasgow", "billingPostcode": "G1 1AA", "considerationGiven": false } }
+      """
+    Then the response status should be 200
+    And the response field "url" should start with "https://"
+
   Scenario: a company donation without company details is rejected (REQ-038 / TASK-085)
     When I POST "/api/checkout-session" with JSON:
       """

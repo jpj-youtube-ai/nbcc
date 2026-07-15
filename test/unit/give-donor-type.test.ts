@@ -202,19 +202,20 @@ describe("donor type behaviour (jsdom)", () => {
     });
   });
 
-  it("carries donorType=business and the businessName when a business donor fills it", () => {
+  it("carries the mapped donorType (company) and the businessName when a business donor fills it", () => {
     selectDonor("business");
     businessInput().value = "Acme Ltd";
     startCheckout(onceTier(0), window); // £10 one-off
-    // The default business sub-type is company, so the payload also folds the REQ-038
-    // company object with giftAid:false (covered precisely in give-company-capture.test.ts);
-    // here we assert the donor-type routing carries donorType + businessName.
+    // TASK-242: the form's individual/business radio maps to the SERVER's donor-type value
+    // (individual/company/partnership). The default business sub-type is company, so a business donor
+    // sends donorType:"company" — the enum the API accepts — plus the folded REQ-038 company object
+    // (covered precisely in give-company-capture.test.ts). Sending the raw "business" was rejected 400.
     expect(lastPayload()).toMatchObject({
       mode: "once",
       plan: null,
       amount: 1000,
       giftAid: false,
-      donorType: "business",
+      donorType: "company",
       businessName: "Acme Ltd",
     });
   });
@@ -223,7 +224,7 @@ describe("donor type behaviour (jsdom)", () => {
     selectDonor("business");
     startCheckout(onceTier(0), window);
     const p = lastPayload();
-    expect(p.donorType).toBe("business");
+    expect(p.donorType).toBe("company"); // mapped from the business sub-type (TASK-242)
     expect("businessName" in p).toBe(false);
   });
 

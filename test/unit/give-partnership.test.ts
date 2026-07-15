@@ -220,6 +220,8 @@ describe("partnership behaviour (jsdom)", () => {
 
     const payload = lastPayload();
     expect(payload.amount).toBe(1000);
+    // TASK-242: the business+partnership choice maps to the server's donorType "partnership".
+    expect(payload.donorType).toBe("partnership");
     expect(Array.isArray(payload.partners)).toBe(true);
     expect(payload.partners).toHaveLength(2);
     const sum = payload.partners.reduce((a: number, p: { sharePence: number }) => a + p.sharePence, 0);

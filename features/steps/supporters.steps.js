@@ -23,6 +23,9 @@ Before({ tags: "@supporters" }, async function () {
     await pool.query("DELETE FROM business_supporter_fulfilment WHERE donor_id = ANY($1)", [donorIds]);
     await pool.query("DELETE FROM donations WHERE donor_id = ANY($1)", [donorIds]);
     await pool.query("DELETE FROM declarations WHERE donor_id = ANY($1)", [donorIds]);
+    // subscription_dunning FK-references donors with onDelete RESTRICT (TASK-240 adds a cancelled_at
+    // row here), so it must be cleared before the donors it points at.
+    await pool.query("DELETE FROM subscription_dunning WHERE donor_id = ANY($1)", [donorIds]);
     await pool.query("DELETE FROM donors WHERE id = ANY($1)", [donorIds]);
   }
   // Belt-and-braces: clear any donations left by the pi/sub markers (defensive), and the event ledger
@@ -69,6 +72,24 @@ When(
   "the donor with email {string} is grandfathered onto the supporters wall",
   async function (email) {
     await pool.query("UPDATE donors SET grandfathered_on_supporters = true WHERE email = $1", [email]);
+  },
+);
+
+// TASK-240: record a VOLUNTARY cancellation the way the webhook does (subscription_dunning.cancelled_at),
+// backdated by the given number of days so the grace-window arithmetic in listPublicSupporters is
+// exercised end to end. Joins the donor's monthly donation to reuse its subscription id.
+When(
+  "the donor with email {string} cancelled their subscription {int} days ago",
+  async function (email, days) {
+    await pool.query(
+      `INSERT INTO subscription_dunning (donor_id, stripe_subscription_id, status, failed_attempts, cancelled_at)
+       SELECT dn.id, d.stripe_subscription_id, 'active', 0, now() - make_interval(days => $2::int)
+         FROM donors dn JOIN donations d ON d.donor_id = dn.id
+        WHERE dn.email = $1 AND d.mode = 'monthly' AND d.stripe_subscription_id IS NOT NULL
+        ORDER BY d.id ASC LIMIT 1
+       ON CONFLICT (stripe_subscription_id) DO UPDATE SET cancelled_at = EXCLUDED.cancelled_at`,
+      [email, days],
+    );
   },
 );
 

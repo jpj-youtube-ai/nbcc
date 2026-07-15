@@ -4,6 +4,7 @@ import {
   buildDonationRow,
   batchAssignmentBlock,
   groupPublicSupporters,
+  SUPPORTER_GRACE_DAYS,
   type DonationInput,
   type DonationRow,
   type DonorInput,
@@ -298,7 +299,12 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
     biz_credit_name: string | null;
     monthly_amount: string | number | null;
     max_paid_amount: string | number | null;
+    monthly_support_ended: boolean;
   }>(
+    // TASK-240: $1 is the grace window in days (SUPPORTER_GRACE_DAYS). monthly_support_ended is true when
+    // the donor has NO still-active monthly subscription (every monthly sub carries a cancelled_at or
+    // lapsed_at) AND their most-recent subscription end is older than the grace window — the opt-in wall
+    // then drops them (resolvePublicSupporter). Grandfathered donors are kept by that pure resolver.
     `SELECT dn.donor_type, dn.full_name, dn.business_name, dn.anonymous, dn.hidden_from_supporters,
             dn.grandfathered_on_supporters,
             dn.list_on_supporters AS indiv_list_opt_in,
@@ -306,7 +312,28 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
             (f.list_on_supporters AND f.captured_at IS NOT NULL) AS biz_list_opt_in,
             f.credit_name         AS biz_credit_name,
             MAX(d.amount_pence) FILTER (WHERE d.mode = 'monthly') AS monthly_amount,
-            MAX(d.amount_pence)                                   AS max_paid_amount
+            MAX(d.amount_pence)                                   AS max_paid_amount,
+            (
+              NOT EXISTS (
+                SELECT 1 FROM donations dm
+                 WHERE dm.donor_id = dn.id AND dm.mode = 'monthly' AND dm.payment_status = 'paid'
+                   AND dm.stripe_subscription_id IS NOT NULL
+                   AND NOT EXISTS (
+                     SELECT 1 FROM subscription_dunning sa
+                      WHERE sa.stripe_subscription_id = dm.stripe_subscription_id
+                        AND (sa.lapsed_at IS NOT NULL OR sa.cancelled_at IS NOT NULL)
+                   )
+              )
+              AND EXISTS (
+                SELECT 1 FROM subscription_dunning se
+                 WHERE se.donor_id = dn.id AND (se.lapsed_at IS NOT NULL OR se.cancelled_at IS NOT NULL)
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM subscription_dunning sr
+                 WHERE sr.donor_id = dn.id
+                   AND GREATEST(sr.lapsed_at, sr.cancelled_at) >= now() - make_interval(days => $1::int)
+              )
+            ) AS monthly_support_ended
        FROM donors dn
        LEFT JOIN donations d
          ON d.donor_id = dn.id AND d.payment_status = 'paid'
@@ -318,6 +345,7 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
                dn.hidden_from_supporters, dn.grandfathered_on_supporters,
                dn.list_on_supporters, dn.credit_name,
                f.list_on_supporters, f.captured_at, f.credit_name`,
+    [String(SUPPORTER_GRACE_DAYS)],
   );
   const rows: SupporterSourceRow[] = res.rows.map((r) => ({
     donorType: r.donor_type,
@@ -335,6 +363,8 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
     // A donor with no fulfilment row (LEFT JOIN → NULL) is simply not a business opt-in.
     businessListOptIn: r.biz_list_opt_in ?? false,
     businessCreditName: r.biz_credit_name,
+    // TASK-240: their monthly support has ended beyond the grace window (SQL above) → drop from the opt-in wall.
+    monthlySupportEnded: r.monthly_support_ended,
   }));
   return groupPublicSupporters(rows);
 }

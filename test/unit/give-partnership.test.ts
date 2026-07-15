@@ -79,6 +79,16 @@ describe("partnership markup (REQ-051)", () => {
     expect(content.querySelector('[data-field="share"]')?.hasAttribute("required")).toBe(true);
   });
 
+  // TASK-226: each partner's first name + last name sit side by side at half width in the shared
+  // .give-name-row wrapper, each keeping its own .give-field, matching the donate donor name.
+  it("lays each partner's first name and last name side by side in a .give-name-row", () => {
+    const tpl = doc.getElementById("partnerRowTemplate") as HTMLTemplateElement | null;
+    const row = tpl!.content.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector('[data-field="firstName"]')?.closest(".give-field")).not.toBeNull();
+    expect(row?.querySelector('[data-field="lastName"]')?.closest(".give-field")).not.toBeNull();
+  });
+
   it("writes the partnership copy without dashes (REQ-031)", () => {
     expect(norm(partners?.textContent)).not.toMatch(/[–—-]/);
   });
@@ -132,10 +142,18 @@ describe("partnership behaviour (jsdom)", () => {
     expect(businessTypeField().hidden).toBe(false);
   });
 
-  it("the partnership path reveals the partners fieldset, hides the single declaration, and keeps Gift Aid", () => {
+  it("the partnership path reveals the partners fieldset once Gift Aid is opted in, hides the single declaration, and keeps Gift Aid", () => {
     selectDonor("business");
     selectBusinessType("partnership");
+    // The partners fieldset is a per-partner GIFT AID declaration, so it only applies once
+    // Gift Aid is opted in (TASK-198) — until then it stays hidden, like the single declaration,
+    // so a partnership that is not Gift-Aiding is never asked for (or blocked by) partner details.
+    expect(partners().hidden).toBe(true);
+    const giftAidBox = document.getElementById("giftAid") as HTMLInputElement;
+    giftAidBox.checked = true;
+    giftAidBox.dispatchEvent(new Event("change", { bubbles: true }));
     expect(partners().hidden).toBe(false);
+    // The single (individual) declaration never applies on the partnership path.
     expect(declaration().hidden).toBe(true);
     // Partners are individuals in law, so Gift Aid stays available.
     expect(giftAidRegion().hidden).toBe(false);

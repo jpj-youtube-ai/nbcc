@@ -23,7 +23,16 @@ import {
   listAuditLog,
   listDunning,
 } from "../db/admin";
-import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError } from "../db/donations";
+import { listClaimableDonationsForExport, assignDonationToBatch, BatchAssignmentError, recordAudit } from "../db/donations";
+import {
+  listBusinessFulfilments,
+  markFulfilmentFlag,
+  FULFILMENT_FLAGS,
+  FulfilmentFlagError,
+  listUninvitedBusinessSupporters,
+  markFulfilmentInvited,
+} from "../db/fulfilment";
+import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
@@ -74,7 +83,7 @@ import {
 } from "../db/newsletter-attachments";
 import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 import { buildNewsletterHtml } from "../donors/newsletter";
-import { sendNewsletter, sendThankYou, sendAdminLoginCode } from "../clients/email";
+import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
 import { createRateLimiter } from "../portal/request-limiter";
 import { clampPage } from "../db/admin";
 import { config } from "../config";
@@ -110,6 +119,19 @@ const loginIpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
 const twoFactorEmailLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60 * 1000 });
 const twoFactorIpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000 });
 
+// Same-host (loopback) requests are trusted and exempt from the login rate limiters above. Behind
+// the ALB in staging/production the app runs with `trust proxy = 1`, so req.ip is ALWAYS the real
+// forwarded client IP for external traffic — an attacker cannot forge it to loopback (the ALB
+// appends the true client IP, which trust-proxy-1 selects). A request only presents as loopback when
+// it originates on the box itself: local `npm run dev`, or the pr.yml BDD suite driving the app over
+// http://localhost. Exempting loopback keeps the per-email/per-IP caps fully in force for every real
+// external client, while letting the local test suite — which necessarily hammers one IP with reused
+// emails across many logins — exercise the login flow. Approved explicitly (TASK-200).
+function isLoopbackRequest(req: Request): boolean {
+  const ip = req.ip ?? "";
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+}
+
 const LOGIN_CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_LOGIN_CODE_ATTEMPTS = 5;
 const TOO_MANY_ATTEMPTS_MESSAGE = "Too many attempts. Please try again shortly.";
@@ -122,10 +144,12 @@ export async function postAdminLogin(req: Request, res: Response): Promise<Respo
   }
 
   const now = Date.now();
-  const emailOk = loginEmailLimiter.allow(parsed.data.email, now);
-  const ipOk = loginIpLimiter.allow(req.ip ?? "unknown", now);
-  if (!emailOk || !ipOk) {
-    return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+  if (!isLoopbackRequest(req)) {
+    const emailOk = loginEmailLimiter.allow(parsed.data.email, now);
+    const ipOk = loginIpLimiter.allow(req.ip ?? "unknown", now);
+    if (!emailOk || !ipOk) {
+      return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+    }
   }
 
   try {
@@ -205,10 +229,12 @@ export async function postAdminLoginTwoFactor(req: Request, res: Response): Prom
   }
 
   const now = Date.now();
-  const emailOk = twoFactorEmailLimiter.allow(parsed.data.email, now);
-  const ipOk = twoFactorIpLimiter.allow(req.ip ?? "unknown", now);
-  if (!emailOk || !ipOk) {
-    return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+  if (!isLoopbackRequest(req)) {
+    const emailOk = twoFactorEmailLimiter.allow(parsed.data.email, now);
+    const ipOk = twoFactorIpLimiter.allow(req.ip ?? "unknown", now);
+    if (!emailOk || !ipOk) {
+      return res.status(429).json({ error: TOO_MANY_ATTEMPTS_MESSAGE });
+    }
   }
 
   try {
@@ -636,6 +662,9 @@ const adminPatchSchema = z
     email: z.string().trim().email().optional(),
     emailConsent: z.boolean().optional(),
     anonymous: z.boolean().optional(),
+    // Admin-only "hide from supporters wall" override (TASK-223): removes the donor from the public
+    // wall regardless of any opt-in. Not exposed on the self-serve portal schema.
+    hiddenFromSupporters: z.boolean().optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });
@@ -1575,3 +1604,98 @@ export async function postAdminNewsletterImage(req: Request, res: Response): Pro
 }
 
 adminRouter.post("/api/admin/newsletter-images", postAdminNewsletterImage);
+
+// --- Business-supporter fulfilment (TASK-207) ---------------------------------------------------
+// The admin API behind the business-supporter fulfilment workflow: list every business supporter's
+// fulfilment record, and mark one fulfilment status flag done. Both are Editor+ (donations:edit) —
+// the read is gated at the same Editor-and-up level the newsletter tab uses (an operational staff
+// tool that exposes business PII + fulfilment state, not a Viewer read), and the mark is a write.
+// The mark is audited + transactional (markFulfilmentFlag → writeWithAudit) and only ever writes one
+// of the five allow-listed flags. Reads/writes go to the charity DB's business_supporter_fulfilment
+// table (src/db/fulfilment.ts). Building the admin UI on top of this is a later task.
+
+// Parse and validate the fulfilment-record id in the path; sends a 400 and returns null when it is
+// not a positive integer (mirrors donorId / claimBatchId).
+function fulfilmentId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid fulfilment id" });
+    return null;
+  }
+  return id;
+}
+
+// GET /api/admin/fulfilments — list every business-supporter fulfilment record (joined to its donor),
+// most recent first. Editor+ (donations:edit).
+export async function getAdminFulfilments(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "donations", "edit"))) return;
+  try {
+    return res.status(200).json({ results: await listBusinessFulfilments() });
+  } catch (err) {
+    console.error("admin fulfilments list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// The mark body: exactly one of the five allow-listed flags (z.enum rejects anything else with a
+// clean 400; markFulfilmentFlag re-checks the same allowlist as defence in depth).
+const fulfilmentMarkSchema = z.object({ flag: z.enum(FULFILMENT_FLAGS) });
+
+// POST /api/admin/fulfilments/:id/mark — set one fulfilment status flag true. Editor+ (donations:edit).
+// Audited + transactional. An unknown flag → 400; an unknown record id → 404. Returns the updated record.
+export async function postAdminMarkFulfilment(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "donations", "edit");
+  if (!claims) return;
+  const id = fulfilmentId(req, res);
+  if (id == null) return;
+  const parsed = fulfilmentMarkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid fulfilment flag", details: parsed.error.flatten() });
+  }
+  try {
+    const result = await markFulfilmentFlag(id, parsed.data.flag, actorOf(claims));
+    return res.status(200).json({ id: result.id, flag: result.flag, value: result.value, record: result.record });
+  } catch (err) {
+    if (err instanceof FulfilmentFlagError) {
+      // invalid_flag is already screened by the schema above; not_found → 404, any other → 400.
+      return err.reason === "not_found"
+        ? res.status(404).json({ error: "Fulfilment record not found" })
+        : res.status(400).json({ error: "Invalid fulfilment flag" });
+    }
+    console.error("admin fulfilment mark failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/fulfilments", getAdminFulfilments);
+adminRouter.post("/api/admin/fulfilments/:id/mark", postAdminMarkFulfilment);
+
+// POST /api/admin/business-supporters/backfill-invites (TASK-214) — the one-time, idempotent catch-up
+// that emails the thank-you INVITE to business supporters who became supporters BEFORE the going-
+// forward webhook auto-invite (TASK-213) shipped and so never received it. Editor+ (donations:edit),
+// same gate as the rest of the business-supporter tab. Safe to click more than once: it emails only
+// records with invited_at IS NULL AND captured_at IS NULL, and stamps invited_at after each successful
+// send, so a second run (or a double-click) sends 0. Every send is best-effort — one failure is
+// counted and never aborts the rest — and the run appends one `fulfilment.backfill_invites` audit row.
+// Returns the counts { pending, sent, failed }.
+export async function postAdminBackfillBusinessInvites(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "donations", "edit");
+  if (!claims) return;
+  try {
+    const result = await runBusinessInviteBackfill({
+      listUninvited: listUninvitedBusinessSupporters,
+      sendInvite: sendBusinessSupporterInvite,
+      markInvited: markFulfilmentInvited,
+      recordAudit,
+      baseUrl: config.PORTAL_BASE_URL,
+      from: config.GIVING_FROM_EMAIL,
+      actor: actorOf(claims),
+    });
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error("admin business-supporter invite backfill failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/business-supporters/backfill-invites", postAdminBackfillBusinessInvites);

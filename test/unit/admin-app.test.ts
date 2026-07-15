@@ -45,6 +45,36 @@ const storyDetail = {
   heard_about: "Facebook", confirmed_over_16: true, admin_tags: ["funding"], admin_notes: "note",
 };
 
+// TASK-208: business-supporter fulfilment rows (fulfilment joined to its donor), as
+// GET /api/admin/fulfilments returns them. One with submitted preferences (all five flags still to do)
+// and one still awaiting its preferences. A fresh copy per test — the mocked mark POST mutates it so a
+// subsequent list reflects the flip (the app refetches after a mark).
+type FulfilmentListRow = {
+  id: number; donor_id: number; donor_name: string; business_name: string | null; band: string;
+  credit_name: string | null; website: null; socials: null; list_on_supporters: boolean;
+  want_social: boolean; want_badge: boolean; want_certificate: boolean; certificate_delivery: string | null;
+  certificate_address: string | null; consent_featured: boolean; captured_at: string | null;
+  certificate_sent: boolean; certificate_posted: boolean; badge_sent: boolean; social_done: boolean;
+  added_to_supporters: boolean; created_at: string;
+};
+const makeFulfilments = (): FulfilmentListRow[] => [
+  {
+    id: 1, donor_id: 42, donor_name: "Ada Lovelace", business_name: "Acme Ltd", band: "platinum",
+    credit_name: "Acme Ltd", website: null, socials: null, list_on_supporters: true, want_social: true,
+    want_badge: true, want_certificate: true, certificate_delivery: "post", certificate_address: "1 Office Park",
+    consent_featured: true, captured_at: "2026-07-01T00:00:00Z", certificate_sent: false, certificate_posted: false,
+    badge_sent: false, social_done: false, added_to_supporters: false, created_at: "2026-06-01T00:00:00Z",
+  },
+  {
+    id: 2, donor_id: 43, donor_name: "Bramble Cafe Ltd", business_name: null, band: "bronze",
+    credit_name: null, website: null, socials: null, list_on_supporters: false, want_social: false,
+    want_badge: false, want_certificate: false, certificate_delivery: null, certificate_address: null,
+    consent_featured: false, captured_at: null, certificate_sent: false, certificate_posted: false,
+    badge_sent: false, social_done: false, added_to_supporters: false, created_at: "2026-06-02T00:00:00Z",
+  },
+];
+let fulfilments: FulfilmentListRow[] = makeFulfilments();
+
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
     status,
@@ -74,6 +104,17 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   }
   if (/\/api\/admin\/stories\/\d+/.test(url)) return j(storyDetail);
   if (url.includes("/api/admin/stories")) return j({ results: [storyRow] });
+  // TASK-208: mark one fulfilment flag (checked before the list route, whose prefix it shares). Flips
+  // the flag in the shared store and echoes the API's { id, flag, value, record } shape.
+  const markMatch = url.match(/\/api\/admin\/fulfilments\/(\d+)\/mark/);
+  if (markMatch && init?.method === "POST") {
+    const id = Number(markMatch[1]);
+    const flag = (JSON.parse(init.body || "{}") as { flag?: string }).flag || "";
+    const row = fulfilments.find((f) => f.id === id);
+    if (row) (row as unknown as Record<string, unknown>)[flag] = true;
+    return j({ id, flag, value: true, record: row });
+  }
+  if (url.includes("/api/admin/fulfilments")) return j({ results: fulfilments });
   return j({ results: [] }); // queues / adjustment-due
 }
 
@@ -92,6 +133,7 @@ async function signIn() {
 describe("admin app integration (jsdom, TASK-118)", () => {
   beforeEach(() => {
     loginToken = tokenFor("editor");
+    fulfilments = makeFulfilments();
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -255,5 +297,56 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     await flush();
     await flush();
     expect(el("deleteStoryBtn")).toBeNull();
+  });
+
+  // TASK-208: Business supporters tab — an Editor lists the fulfilment records (business name, band,
+  // submitted preferences) and marks a recognition step done; the row refetches and the button becomes
+  // a Done pill.
+  it("lists business supporters and marks a fulfilment flag done (Editor)", async () => {
+    await signIn();
+
+    (document.querySelector('.admin-nav-link[data-view="fulfilments"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    const table = document.querySelector("#fulfilmentsTable table");
+    expect(table).not.toBeNull();
+    const tableText = el("fulfilmentsTable").textContent || "";
+    expect(tableText).toContain("Acme Ltd"); // business name
+    expect(tableText).toContain("Platinum"); // band, capitalised
+    expect(tableText).toContain("Submitted"); // captured_at present → preferences submitted
+    expect(tableText).toContain("Awaiting preferences"); // the second row has none yet
+    expect(tableText).toContain("Bramble Cafe Ltd"); // business_name null → donor name fallback
+
+    // The "Certificate sent" step for supporter 1 is a not-yet-done action button.
+    const markBtn = document.querySelector(
+      '#fulfilmentsTable [data-fulfil-id="1"][data-fulfil-mark="certificate_sent"]',
+    ) as HTMLButtonElement;
+    expect(markBtn).not.toBeNull();
+
+    markBtn.click();
+    await flush();
+    await flush();
+
+    // The mark POSTed the exact flag, and after the refetch the button is gone (now a Done pill).
+    const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
+    const markCall = fetchMock.mock.calls.find((c) => /\/api\/admin\/fulfilments\/1\/mark$/.test(String(c[0])));
+    expect(markCall).toBeTruthy();
+    const markInit = (markCall as unknown[])[1] as { method?: string; body?: string };
+    expect(markInit.method).toBe("POST");
+    expect(JSON.parse(markInit.body || "{}")).toEqual({ flag: "certificate_sent" });
+    expect(
+      document.querySelector('#fulfilmentsTable [data-fulfil-id="1"][data-fulfil-mark="certificate_sent"]'),
+    ).toBeNull();
+    expect(el("fulfilmentsTable").textContent).toContain("Certificate sent"); // still shown, now as a Done pill
+  });
+
+  // TASK-208: the tab is an Editor+ area — a Viewer (who has donations:view, not edit) never sees it in
+  // the nav (data-edit-gate="donations" hides it below edit level).
+  it("hides the Business supporters tab for a Viewer", async () => {
+    loginToken = tokenFor("viewer");
+    await signIn();
+    const navLink = document.querySelector('.admin-nav-link[data-view="fulfilments"]') as HTMLElement;
+    expect(navLink).not.toBeNull();
+    expect(navLink.hidden).toBe(true);
   });
 });

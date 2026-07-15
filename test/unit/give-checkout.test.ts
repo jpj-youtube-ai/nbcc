@@ -53,15 +53,17 @@ describe("donate checkout contract markup (REQ-028)", () => {
     });
   });
 
-  it("wires the choose-your-own control as a native button: once, empty plan, empty amount", () => {
+  it("wires the choose-your-own control on the .give-tier-custom container: once, empty plan, empty amount (TASK-210)", () => {
     const custom = doc.querySelector("#tiersOnce .give-tier-custom");
-    const go = custom?.querySelector("button[data-amount]");
-    expect(go).not.toBeNull();
-    expect(go?.tagName).toBe("BUTTON");
-    expect(go?.getAttribute("data-mode")).toBe("once");
-    expect(go?.getAttribute("data-plan")).toBe("");
-    expect(go?.getAttribute("data-amount")).toBe("");
+    expect(custom).not.toBeNull();
+    // TASK-210: the redundant per-amount Donate button was removed. The container itself now
+    // carries the checkout contract (data-mode/data-plan/data-amount) and the single step CTA
+    // drives startCheckout with it, so the /api/checkout-session payload shape is unchanged.
+    expect(custom?.getAttribute("data-mode")).toBe("once");
+    expect(custom?.getAttribute("data-plan")).toBe("");
+    expect(custom?.getAttribute("data-amount")).toBe("");
     expect(custom?.querySelector("#customAmount")).not.toBeNull();
+    expect(custom?.querySelector("button")).toBeNull();
   });
 
   it("keeps the once/monthly toggle buttons OUT of the contract (no data-amount)", () => {
@@ -119,15 +121,102 @@ describe("startCheckout behaviour (jsdom)", () => {
 
   it("the custom-amount control builds the amount (pence) from the entered value", () => {
     (document.getElementById("customAmount") as HTMLInputElement).value = "30";
-    const go = document.querySelector(
-      "#tiersOnce .give-tier-custom button[data-amount]",
-    ) as HTMLElement;
-    startCheckout(go, window);
+    // TASK-210: startCheckout reads the custom amount from the .give-tier-custom container now
+    // (the per-amount button was removed); the assembled payload shape is unchanged.
+    const custom = document.querySelector("#tiersOnce .give-tier-custom") as HTMLElement;
+    startCheckout(custom, window);
     expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 3000, giftAid: false });
   });
 
   it("startCheckout returns the assembled payload", () => {
     const payload = startCheckout(monthlyTier(0), window); // bronze £10
     expect(payload).toEqual({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false });
+  });
+});
+
+// TASK-215: Stripe Embedded Checkout progressive enhancement. When JS + Stripe.js + the on-page
+// mount are present, startCheckout requests uiMode:"embedded", gets a { clientSecret, publishableKey }
+// and mounts inline. On ANY failure (Stripe.js absent, embedded init throws) it falls back to the
+// EXISTING hosted redirect (POST with no uiMode → { url } → location.href), so the button is never
+// dead. A fake `win` is passed so location.href assignment never triggers jsdom navigation, and the
+// returned/previewed payload stays the exact REQ-028 contract (uiMode rides only on the wire body).
+describe("startCheckout embedded checkout (jsdom, TASK-215)", () => {
+  const { startCheckout } = require(resolve(ROOT, "assets/js/main.js"));
+  const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  function setupDom(): void {
+    document.body.innerHTML =
+      `<main>${cardHtml}</main>` +
+      `<div id="embeddedCheckoutModal" hidden aria-hidden="true">` +
+      `<button id="embeddedCheckoutClose" type="button">Close</button>` +
+      `<div id="embeddedCheckout"></div></div>`;
+  }
+  const onceTier = (i: number) =>
+    document.querySelectorAll("#tiersOnce .give-tier")[i] as HTMLElement;
+
+  it("requests uiMode:embedded and mounts Stripe Embedded Checkout when Stripe.js + container are present", async () => {
+    setupDom();
+    let mountedInto: unknown = null;
+    let sentBody: Record<string, unknown> | null = null;
+    let pkUsed = "";
+    const fakeCheckout = { mount: (el: unknown) => { mountedInto = el; }, destroy: () => {} };
+    const fakeStripe = { initEmbeddedCheckout: () => Promise.resolve(fakeCheckout) };
+    const win = {
+      Stripe: (pk: string) => { pkUsed = pk; return fakeStripe; },
+      fetch: (_url: string, opts: { body: string }) => {
+        sentBody = JSON.parse(opts.body);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ clientSecret: "cs_test_secret", publishableKey: "pk_test_123" }) });
+      },
+    };
+    const payload = startCheckout(onceTier(2), win as unknown as Window); // £50
+    await flush();
+    // The wire body carries uiMode:"embedded"; the RETURNED payload stays the clean REQ-028 contract.
+    expect(sentBody!.uiMode).toBe("embedded");
+    expect(sentBody!.amount).toBe(5000);
+    expect(payload).toEqual({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    expect(pkUsed).toBe("pk_test_123");
+    expect(mountedInto).toBe(document.getElementById("embeddedCheckout"));
+    expect((document.getElementById("embeddedCheckoutModal") as HTMLElement).hidden).toBe(false);
+  });
+
+  it("falls back to the hosted redirect when Stripe.js is unavailable (no dead button)", async () => {
+    setupDom();
+    let sentBody: Record<string, unknown> | null = null;
+    const win = {
+      // no Stripe on the window → embedded cannot run
+      fetch: (_url: string, opts: { body: string }) => {
+        sentBody = JSON.parse(opts.body);
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ url: "https://checkout.stripe.com/c/pay/redirect_1" }) });
+      },
+      location: { href: "" },
+    };
+    startCheckout(onceTier(0), win as unknown as Window); // £10
+    await flush();
+    expect(sentBody!.uiMode).toBeUndefined(); // hosted request omits uiMode; the server defaults to hosted
+    expect(win.location.href).toBe("https://checkout.stripe.com/c/pay/redirect_1");
+  });
+
+  it("falls back to the hosted redirect when embedded init throws", async () => {
+    setupDom();
+    let hostedRequested = false;
+    const fakeStripe = { initEmbeddedCheckout: () => Promise.reject(new Error("init failed")) };
+    const win = {
+      Stripe: () => fakeStripe,
+      fetch: (_url: string, opts: { body: string }) => {
+        const body = JSON.parse(opts.body);
+        if (body.uiMode === "embedded") {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ clientSecret: "cs", publishableKey: "pk" }) });
+        }
+        hostedRequested = true;
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ url: "https://checkout.stripe.com/c/pay/redirect_2" }) });
+      },
+      location: { href: "" },
+    };
+    startCheckout(onceTier(0), win as unknown as Window);
+    await flush();
+    await flush();
+    expect(hostedRequested).toBe(true);
+    expect(win.location.href).toBe("https://checkout.stripe.com/c/pay/redirect_2");
   });
 });

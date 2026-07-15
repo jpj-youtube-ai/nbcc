@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // TASK-027 (REQ-019): donate.html's intro — crimson eyebrow "Donate", the brand
-// H1 "Your gift becomes someone's Christmas" with the .rule under it, and a lede
+// H1 "Your donation becomes someone's Christmas" with the .rule under it, and a lede
 // noting the volunteer base and that around £50 is the value of one Red Bag Full
 // of Joy. Parsed with jsdom; mirrors about-intro.test.ts.
 
@@ -27,7 +27,7 @@ describe("donate intro (REQ-019)", () => {
 
   it("has the exact H1", () => {
     expect(norm(intro?.querySelector("h1")?.textContent)).toBe(
-      "Your gift becomes someone's Christmas",
+      "Your donation becomes someone's Christmas",
     );
   });
 

@@ -21,6 +21,9 @@ const norm = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").tr
 
 describe("donor portal page markup (REQ-061)", () => {
   it("renders a centred intro mirroring the other pages", () => {
+    // TASK-220: the page uses the shared boxed container (like thank-you/supporters) so the
+    // intro centres and the content is width-constrained and cleared of the fixed nav.
+    expect(doc0.querySelector("main")?.classList.contains("site-main--boxed")).toBe(true);
     const intro = doc0.querySelector("section.portal-intro");
     expect(intro).not.toBeNull();
     expect(norm(intro?.querySelector(".eyebrow")?.textContent).length).toBeGreaterThan(0);
@@ -48,10 +51,28 @@ describe("donor portal page markup (REQ-061)", () => {
   it("offers a self-edit details form (name, email, consent, anonymity) (REQ-061)", () => {
     const form = doc0.getElementById("portalDetailsForm");
     expect(form, "#portalDetailsForm missing").not.toBeNull();
-    for (const id of ["pdName", "pdEmail", "pdEmailConsent", "pdAnonymous"]) {
+    for (const id of ["pdNameFirst", "pdNameSurname", "pdEmail", "pdEmailConsent", "pdAnonymous"]) {
       expect(doc0.getElementById(id), `#${id} missing`).not.toBeNull();
     }
-    expect(doc0.getElementById("pdName")?.hasAttribute("required")).toBe(true);
+    // TASK-226: the name is captured as a required first name + surname pair, side by side at half
+    // width in the shared .give-name-row, never as one combined field.
+    expect(doc0.getElementById("pdNameFirst")?.hasAttribute("required")).toBe(true);
+    expect(doc0.getElementById("pdNameSurname")?.hasAttribute("required")).toBe(true);
+    const row = form?.querySelector(".give-name-row");
+    expect(row?.querySelector("#pdNameFirst")).not.toBeNull();
+    expect(row?.querySelector("#pdNameSurname")).not.toBeNull();
+    expect(doc0.getElementById("pdName"), "old single #pdName field removed").toBeNull();
+    expect(form?.querySelector('input[name="fullName"]'), "no single fullName input").toBeNull();
+  });
+
+  // TASK-226: the Gift Aid declaration form's first name + last name also sit side by side in the
+  // shared .give-name-row wrapper, each keeping its own .give-field.
+  it("lays the declaration first name and last name side by side in a .give-name-row", () => {
+    const declForm = doc0.getElementById("portalDeclForm");
+    const row = declForm?.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("#pdFirstName")?.closest(".give-field")).not.toBeNull();
+    expect(row?.querySelector("#pdLastName")?.closest(".give-field")).not.toBeNull();
   });
 
   it("offers a self-serve magic-link request form inside the error card (REQ-061)", () => {
@@ -148,7 +169,9 @@ describe("initPortal behaviour (jsdom)", () => {
     initPortal(document, win);
     await flush();
 
-    expect((document.getElementById("pdName") as HTMLInputElement).value).toBe("Ada Portal");
+    // TASK-226: the stored fullName is split across the first name + surname pair on prefill.
+    expect((document.getElementById("pdNameFirst") as HTMLInputElement).value).toBe("Ada");
+    expect((document.getElementById("pdNameSurname") as HTMLInputElement).value).toBe("Portal");
     expect((document.getElementById("pdEmail") as HTMLInputElement).value).toBe(
       "ada.portal@example.com",
     );
@@ -163,7 +186,8 @@ describe("initPortal behaviour (jsdom)", () => {
     await flush();
     fetchMock.mockClear();
 
-    (document.getElementById("pdName") as HTMLInputElement).value = "Ada Renamed";
+    (document.getElementById("pdNameFirst") as HTMLInputElement).value = "Ada";
+    (document.getElementById("pdNameSurname") as HTMLInputElement).value = "Renamed";
     (document.getElementById("pdEmailConsent") as HTMLInputElement).checked = false;
     (document.getElementById("pdAnonymous") as HTMLInputElement).checked = true;
     document
@@ -259,7 +283,7 @@ describe("initPortalRequest behaviour (jsdom)", () => {
     );
   });
 
-  it("does not post an empty/invalid email (native validation blocks it)", async () => {
+  it("does not post an invalid email and highlights it inline, even inside the hidden error card (TASK-225)", async () => {
     const fetchMock = vi.fn(
       async () => ({ ok: true, json: async () => ({}) }) as unknown as Response,
     );
@@ -274,5 +298,11 @@ describe("initPortalRequest behaviour (jsdom)", () => {
     await flush();
 
     expect(fetchMock).not.toHaveBeenCalled();
+    // Flagged inline (not a native popup), and validated even though the form sits inside the
+    // shipped-hidden portal error card, because validateForm is bounded at the form scope.
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(
+      document.getElementById("portalRequestForm")!.querySelector('[role="alert"]'),
+    ).not.toBeNull();
   });
 });

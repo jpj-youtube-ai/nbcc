@@ -54,6 +54,7 @@ Each page is served at a clean, canonical URL (no `.html`):
 | `/supporters` | `supporters.html` |
 | `/donate/thank-you` | `thank-you.html` |
 | `/donor-portal` | `portal.html` |
+| `/business/thank-you` | `business-thank-you.html` |
 | `/privacy` | `privacy.html` |
 | `/my-story` | `my-story.html` |
 
@@ -62,7 +63,10 @@ donor to on a successful checkout (`STRIPE_SUCCESS_URL`, REQ-028/REQ-029); it is
 landing page, not a primary nav destination. `/donor-portal` is the self-serve
 donor portal page (REQ-061), reached via the magic-link token in the URL query
 string (`?token=…`); it is a private landing page (`noindex`), not a nav
-destination. `/privacy` is the data-protection privacy notice (REQ-064), linked
+destination. `/business/thank-you` is the private business-supporter thank-you
+page (TASK-212), reached via the per-business token in the URL query string
+(`?token=…`) from the thank-you email; it is a token-gated, submit-once landing
+page (`noindex`), not a nav destination. `/privacy` is the data-protection privacy notice (REQ-064), linked
 from the footer and from the consent controls on the contact and donate pages,
 not a primary nav destination. `/my-story` is the public story submission page:
 a guided 3 step form linked from the footer Explore list on every page, not a
@@ -82,6 +86,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /supporters       /supporters.html  200
 /donate/thank-you /thank-you.html   200
 /donor-portal     /portal.html      200
+/business/thank-you /business-thank-you.html 200
 /privacy          /privacy.html     200
 /my-story         /my-story.html    200
 /index.html       /                 301!   # canonicalise raw .html onto the clean URL
@@ -91,6 +96,7 @@ and applies the same rules at runtime, and the file is also honoured natively by
 /supporters.html  /supporters       301!
 /thank-you.html   /donate/thank-you 301!
 /portal.html      /donor-portal     301!
+/business-thank-you.html /business/thank-you 301!
 /privacy.html     /privacy          301!
 /my-story.html    /my-story         301!
 ```
@@ -212,6 +218,28 @@ npx lighthouse http://localhost:3000/ --only-categories=accessibility --view
 # or: npx @axe-core/cli http://localhost:3000/
 # repeat for /about-us, /donate, /contact
 ```
+
+### Form validation (highlight all missing fields)
+
+Every user-facing form validates through one shared, accessible helper in
+`assets/js/main.js`, exported as `validateForm(scope, opts?)` / `clearValidation(scope)`
+(and mirrored on `window.NBCCFormValidation` so the separate
+`assets/js/business-thankyou.js` uses the same code). On submit it flags **every**
+invalid control at once — `aria-invalid="true"`, an `is-invalid` class on the field
+(or its `.give-field`/`.field` wrapper), and an inline plain-language message linked
+via `aria-describedby` — refreshes one `role="alert"` summary at the top of the form,
+moves focus to the first invalid field, and live-clears each control as it is fixed
+(hiding the summary once all are valid). It skips disabled controls and controls
+inside a `hidden` ancestor, bounded at the scope so a visible form still validates when
+a container above it is hidden (the portal error card). The `required`/`type`/`pattern`
+attributes stay the rule source; forms carry `novalidate` so the helper drives the UX.
+`opts.summary` reuses an existing summary node (the wizard steps' `[data-err]`), and
+`opts.extraChecks` adds cross-field rules (e.g. the business supporter credit-name and
+certificate-address rules). Wired into: the donate wizard (per step), contact, Gift Aid,
+My Story, the business thank-you page, and the donor portal. The red field treatment,
+inline message, and summary styles live in the `FORM VALIDATION` block of
+`assets/css/styles.css`. Both the helper and its styles count toward the donate first-paint
+budget (see the performance section).
 
 ### SEO & social metadata
 
@@ -487,7 +515,7 @@ explicitly a later enhancement, out of scope here. Verified by
 
 `donate.html`'s `<main>` opens with a centred intro (`DONATE INTRO` CSS block,
 mirroring `ABOUT INTRO`) that reuses the home systems: a crimson `.eyebrow`
-("Donate"), the base `<h1>` ("Your gift becomes someone's Christmas"), the
+("Donate"), the base `<h1>` ("Your donation becomes someone's Christmas"), the
 `.rule` divider under it (centred by the `.donate-intro` auto-margin, as on
 `.about-intro`), and a `.lede` noting that everyone at **NBCC** is a volunteer and
 that **around £50 is the value of one Red Bag Full of Joy**, with a give-once or
@@ -519,6 +547,57 @@ Semantic `<section>` named by its `<h2>` (REQ-032); copy uses "give once"/"give
 monthly" and "NBCC", dash-free (REQ-031). Verified by
 `test/unit/give-widget.test.ts` (static markup + the toggle behaviour in jsdom).
 
+### Donate form redesign (TASK-204)
+
+The donate page was restyled to an approved mockup and given a handful of
+behaviour changes. This is the current shape of the give card; the REQ sections
+below describe the underlying contract, which is **unchanged** (every id, name and
+`data-*` the `startCheckout` payload and the unit tests rely on is preserved).
+
+- **Frequency toggle is monthly first.** The segmented pill now reads **"Donate
+  monthly"** (left, the default/active) then **"Donate once"** (right). `initGiveToggle`
+  keys off ids/`aria-pressed`, so DOM order is free; monthly stays the default
+  (`#giveMonthly aria-pressed="true"`, `#tiersMonthly` visible, `#tiersOnce` hidden).
+- **Amount tiers in a row.** `.give-tiers` is a four-column grid (two columns
+  ≤680px); each tile is compact and centred, and the selected tile is **filled
+  Holly Green** (`--holly` background, `--cream` text). The per-tile head/description
+  are hidden in favour of a shared live impact card (below). **"Most popular"** pills
+  sit on **both** `£25` tiles (one off and monthly `Silver`).
+- **Live impact card.** A `.give-impact` card (`#giveImpactText`) below the tiers
+  updates on tier/frequency change from a non-definitive impact map in
+  `initGiveSteps` — always "could help …", never "£X provides Y" (Code of Fundraising
+  Practice). It reads a touch larger and bolder (TASK-210). No amount is pre-selected
+  on load, so the card, summary and Gift Aid uplift start in a neutral "Your donation
+  could help …" state until the donor actively chooses an amount.
+- **Tiers select without advancing; one proceed button.** A tier tap SELECTS (updates
+  the impact card) rather than jumping to step 2; a single prominent **"Donate now"**
+  CTA (`[data-give-next]`) advances. Typing into the choose-your-own box selects that
+  amount. The per-amount "Donate" button was removed (TASK-210): the one step CTA now
+  drives checkout for a preset tier or a custom amount alike, and `validate()` blocks
+  it until a tier is chosen or a custom amount is entered. A selected tile uses a
+  softened holly tint (TASK-210), not a full green fill.
+- **Page 2 opens with a summary.** A `.give-summary` band shows **"You are donating
+  £X"** (`#giveSummaryAmount`) with a **"Change"** control (`[data-give-prev]`) back to
+  step 1; `initGiveSteps` fills the amount from the selected tier or custom amount.
+- **Prominent donor type, nothing preselected.** The "Who is this gift from" cards
+  ship with **neither** radio `checked`; both carry `required`+`aria-required` and
+  `initGiveSteps`' step-2 `validate()` (now handles radio/checkbox groups) blocks
+  **Continue** until one is picked. The business card is colour-accented (`--tan`).
+- **Gift Aid sells the uplift.** The callout leads with **"Make your £X worth £Y"**
+  (`#giftAidHeadline`) and a `£X → £Y` `+£Z` badge (`initGiveSteps` computes the 25%),
+  keeping the `#giftAid` checkbox, the verbatim declaration and the TASK-198 gating
+  intact. Holly *text* uses `--holly-dark` (the `brand-colours` guard forbids `--holly`
+  text on light surfaces); the block stays token-only.
+- **Clear newsletter opt-in.** The `emailConsent` capture is presented as a distinct
+  **"Add me to our donor newsletter … Unsubscribe anytime"** block (still the same
+  `emailConsent` field, still inside `.give-contact`, never pre-ticked).
+- **Wording.** Donor-facing copy prefers "Donate"; step 1 asks **"How much would you
+  like to donate?"**; the primary CTA reads **"Donate now"**.
+
+Verified by the give/gift-aid/donor-type unit tests (updated to the new intent) and
+by driving the wizard in a browser (select/advance, frequency switch, donor-type
+gating, Change, and the live impact/summary/Gift-Aid updates).
+
 ### Give once tiers (REQ-021)
 
 The give-once amounts are mounted into the shell's `#tiersOnce` container
@@ -527,9 +606,10 @@ choose-your-own-amount field, laid out on the shared `.give-tiers` grid (two
 columns, collapsing to one ~360px). Each amount is a `.card.tier.give-tier`
 `<button>` — reusing the `.card`/`.tier` surface (REQ-009) and the hover-lift
 (REQ-008) — showing a Playfair crimson `.give-amount` and a `.give-tier-desc`:
-**£10** (cosy essentials), **£25** (towards a Red Bag, marked **"Most chosen"**
-via a floating `.give-flag` on the crimson-outlined `.is-featured` tile), **£50**
-(one full Red Bag) and **£100** (a whole family). The custom option is a
+**£10** (cosy essentials), **£25** (towards a Red Bag, marked **"Most popular"**
+via a `.give-flag` pill on its own centred line so it never overlaps the label or the
+amount (TASK-210), on the crimson-outlined `.is-featured` tile),
+**£50** (one full Red Bag) and **£100** (a whole family). The custom option is a
 full-width `.give-tier-custom` card with a real `<label for="customAmount">` tied
 to a number `#customAmount` input (REQ-032). Token-only colours, no hex/rgb
 outside `:root`; copy is dash-free and uses "NBCC" (REQ-031). These one-off
@@ -550,9 +630,9 @@ CSS block adds only the monthly-specific pieces: the `.give-tier-name`, the
 `.give-tier-head` headline, and the `.give-other` contact line. The four leaflet
 tiers carry their exact copy and order: **Bronze £10 per month** ("Building
 towards Christmas joy"), **Silver £25 per month** ("Halfway to a Red Bag Full of
-Joy"), **Gold £50 per month** ("One Christmas made brighter", marked **"Around
-one Red Bag"** on the featured tile), and **Platinum £100 per month** ("More joy,
-every month"), each with its leaflet description. A `.give-other` line links to
+Joy", marked **"Most popular"** on the `.is-featured` tile, TASK-204), **Gold £50
+per month** ("One Christmas made brighter"), and **Platinum £100 per month** ("More
+joy, every month"), each with its leaflet description. A `.give-other` line links to
 `mailto:giving@nbcc.scot` for other monthly amounts. Token-only
 colours, no hex/rgb outside `:root`; copy is dash-free and uses "NBCC" / "per
 month" (REQ-031). Each tile now carries the `data-mode`/`data-plan`/`data-amount`
@@ -603,10 +683,11 @@ Verified by `test/unit/gift-aid.test.ts`.
 
 At the top of the give-card's `.give-main` column, above the once/monthly toggle,
 the tiers and the Gift Aid callout, a `.give-donor` `<fieldset>` (`DONOR TYPE` CSS
-block) asks **"Are you donating as an individual or on behalf of a business?"** —
-two native radios (`#donorIndividual` / `#donorBusiness`, each with a real
-`<label for>`, REQ-032) defaulting to **individual**, so the Gift Aid path works
-without JS. Helper text explains a **sole trader** and **business partners** are
+block) asks **"Who is this gift from, an individual or a business?"** — two native
+radios (`#donorIndividual` / `#donorBusiness`, each with a real `<label for>`,
+REQ-032). **TASK-204:** neither is preselected; both carry `required`+`aria-required`
+and the wizard's step-2 `validate()` blocks Continue until the donor picks (the
+business card is colour-accented). Helper text explains a **sole trader** and **business partners** are
 individuals in law and keep Gift Aid, while only an **incorporated company (Ltd,
 PLC, LLP)** takes the path with no Gift Aid. An optional business-name field
 (`#businessName`, a real `<label for>`) is a **Donors Page display label only** and
@@ -630,7 +711,9 @@ forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 
 Below the donor-type fieldset and above the tiers, a `.give-contact` `<fieldset>`
 (`CONTACT CAPTURE` CSS block) captures consent-based contact details: a **required**
-full name (`#donorName`, `required` + `aria-required`), an **optional** email
+donor name captured as two fields, **First name** (`#donorFirstName`) and **Surname**
+(`#donorSurname`), each `required` + `aria-required` (TASK-210; `startCheckout` combines
+them into the single `fullName` the checkout contract still POSTs), an email
 (`#donorEmail`) paired with an email-consent checkbox (`#emailConsent`) that is
 **never ticked in advance** (NBCC only emails with clear permission), an anonymous
 option (`#anonymousDonor`) that keeps the gift off the public Donors Page, and a
@@ -647,6 +730,29 @@ Token-only colours (slate body, maroon legend, crimson accents; the `brand-colou
 guard forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-contact-capture.test.ts`.
 
+**Supporters wall opt-in (TASK-224).** Inside the contact fieldset, below the anonymous
+row, a `#supporterOptin` block lets an **individual** choose to appear on the public
+supporters page (`/supporters`, the opt-in wall from TASK-223). It is **revealed only for
+a monthly gift of at least £10** — `initGiveSteps`'s `updateSummary` shows it when
+`selectedMode()==="monthly" && selectedPence() >= 1000` (the wall's floor,
+`bandForMonthlyAmount`), mirroring the monthly-only 18+ row, and it ships `hidden`. The
+choice is a **required** radio with **nothing preselected** (`listOnSupporters` yes/no);
+choosing "show" reveals a custom display-name input (`#supporterCreditName`,
+`name="creditName"`, `maxlength=200`, "For example, The Campbell Family"). Because the
+required controls sit under a `[hidden]` ancestor when not eligible, the shared TASK-225
+validator **requires an answer only while the block is visible** and skips it otherwise.
+`startCheckout` folds `listOnSupporters` (boolean) and `creditName` into the payload
+**only for that eligible monthly gift**; a one-off, sub-£10 or opted-out gift omits them.
+A **tiny client-side profanity pre-check** (`SUPPORTER_BLOCKED`, whole-word so
+Scunthorpe-safe) flags an obvious display name through the same highlight-all UI before
+submit; the **server** filter (`containsBlockedWord`, `POST /api/checkout-session`) is
+load-bearing and rejects a profane or opted-in-without-a-name `creditName` with 400. The
+checkout endpoint stamps `metadata.listOnSupporters` / `metadata.creditName`, and the
+webhook (`donationFromCheckoutSession` → `insertDonorAndDonation`) writes
+`donors.list_on_supporters` / `credit_name`. Verified by
+`test/unit/give-supporter-optin.test.ts`, `checkout-session.test.ts` and
+`stripe-webhook-model.test.ts`.
+
 **Server-side (REQ-039, revised):** `POST /api/checkout-session` now requires a
 valid `email` for the individual/partnership donor paths — a missing or
 malformed email is rejected with 400. A company donation is exempt, since it
@@ -654,7 +760,16 @@ already carries its own required `company.contactEmail`. Email is always
 stored (not gated on `emailConsent`, which now governs marketing consent only)
 so every donor can be sent a thank-you and a donor-portal link; see
 `test/unit/checkout-session.test.ts` and the `features/checkout.feature`
-"without an email is rejected" scenario.
+"without an email is rejected" scenario. That captured email is also pre-filled
+and locked on the Stripe Checkout page via `customer_email` (TASK-203), so the
+donor never retypes it. The confirmation email itself
+(`src/donors/confirmation.ts`) now carries a receipt reference
+(`NBCC-<zero-padded donation id>`, built by `donationReference`) and the payment
+date, so it stands in for the Stripe receipt now that Stripe's own
+successful-payment receipt email is switched off. Both are threaded from the
+committed donation by the webhook (`src/db/stripe-webhook.ts`) for the one-off
+gift and for each monthly charge, and the reference maps 1:1 to the donation id
+so staff can paste it straight into the admin donation search.
 
 ### Gift Aid declaration capture (REQ-043)
 
@@ -668,7 +783,12 @@ checkbox (`#declNonUk`, no UK postcode — e.g. Channel Islands / Isle of Man) d
 only an HMRC matching detail; Gift Aid **eligibility** is paying UK Income Tax / CGT (the
 verbatim taxpayer declaration the donor agrees to on submit), never a postcode. A short note by
 the declaration says so, so an overseas UK taxpayer knows they can still Gift Aid. Every
-field has a real `<label for>` (REQ-032). `initDeclarationCapture` marks the fieldset
+field has a real `<label for>` (REQ-032). **The whole fieldset applies only when Gift Aid is
+opted in** (TASK-198): `initDonorType` shows `.give-declaration` on the individual path **only
+while `#giftAid` is checked**, re-applying whenever the box toggles, so a donor who does not add
+Gift Aid is never shown — nor blocked at the confirm step by the `required` — declaration fields
+(`validate()` skips inputs inside a `[hidden]` ancestor). That matches the fieldset's own
+"we ask for these only if you add Gift Aid" copy. `initDeclarationCapture` marks the fieldset
 `data-ready`, so `startCheckout` folds a **`declaration`** object (`{ title?, firstName,
 lastName, houseNameNumber, address, postcode?, nonUk, scope }`) into the REQ-028 payload
 **only when `#giftAid` is checked** (mirroring the `donorType` gate) — a declaration is made
@@ -696,7 +816,8 @@ are individuals in law, so Gift Aid stays). `initDonorType` derives the donor pa
 (`currentDonorPath`: `individual` / `company` / `partnership`) from the donor-type +
 sub-type radios and drives visibility: the company path hides + unticks the Gift Aid callout;
 the **partnership** path keeps it and swaps the single `.give-declaration` for the repeatable
-`.give-partners` `<fieldset>` (one Gift Aid declaration per partner). `initPartnershipCapture`
+`.give-partners` `<fieldset>` (one Gift Aid declaration per partner) — which, like the single
+declaration, is shown only once `#giftAid` is opted in (TASK-198). `initPartnershipCapture`
 clones `#partnerRowTemplate` into one partner row on load and wires **add** (`#addPartner`) /
 **remove** (`[data-remove-partner]`, hidden while one partner remains); each row captures the
 same declaration fields as `.give-declaration` (with its own overseas-address postcode toggle) **plus a
@@ -739,7 +860,7 @@ returns `flag_for_trustees` for it instead of issuing a Corporation Tax receipt.
 ### Give side panel content (REQ-024)
 
 The give-card's Holly Green `.give-side` `<aside>` is filled out (`GIVE SIDE
-PANEL` CSS block, next to `GIVE WIDGET`): a "Where your gift goes" eyebrow and
+PANEL` CSS block, next to `GIVE WIDGET`): a "Where your donation goes" eyebrow and
 short lede, a semantic `.side-list` of **three** points (thoughtful gifts and
 essential support not salaries; the everyday costs of keeping NBCC running;
 reaching **children, young people and vulnerable adults** in hardship), then a
@@ -766,7 +887,7 @@ the split **structurally clear**:
 
 - **All monthly donors** — your name (or business name) added to the **Donors
   Page** unless you choose to stay anonymous (cross-linked to the **Supporters
-  page** `/supporters`, REQ-035), plus a post Christmas impact update.
+  page** `/supporters`, REQ-035), plus our donor newsletter.
 - **Platinum donors also receive** — a social media thank you, an optional
   **digital supporter badge**, and a personalised **supporter certificate**.
 
@@ -832,66 +953,146 @@ text); inline SVG icons, no image tags. Dash-free copy, "NBCC" in full (REQ-031)
 Verified by `test/unit/contact.test.ts` (static markup + jsdom validation
 behaviour).
 
-### Supporters page (REQ-035)
+### Supporters page (REQ-035; opt-in monthly 4-band wall TASK-223; grandfathered pre-223 set TASK-228)
 
 `supporters.html` opens with a centred intro (the `SUPPORTERS PAGE` CSS block,
 mirroring the About/Donate/Contact intros) and then fills its `.page-sections`
-slot with the tiered supporters list (`SUPPORTERS TIERS` block). Three
-`.supporter-tier` tinted bands — **Bronze → Silver → Gold**, in that order,
-alternating tan/holly tint — each hold a `.supporter-grid` of `.card` entries
-listed **alphabetically within the tier**. Every entry carries a
-`data-type="person"`/`"organisation"` marker, a decorative `aria-hidden` inline
-SVG icon (person vs building, no image tags), and a visible **Individual** /
-**Organisation** label so the person-vs-brand distinction is clear to sighted and
-assistive-tech users. Reuses `.card` / `.reveal` / the pillars-and-why
-tinted-band pattern / tokens; icons are crimson (the `brand-colours` guard forbids
-holly/tan text on light bands). Dash-free copy, "NBCC" (REQ-031). The entries are
-**placeholder** (`CONTENT VERIFICATION`) pending the charity's real, consented
-list; it also serves as the **Donors Page** referenced by REQ-024/REQ-025.
+slot with the tiered supporters list (`SUPPORTERS TIERS` block). **Four**
+`.supporter-tier` tinted bands — **Bronze → Silver → Gold → Platinum**, in that
+order — each hold a `.supporter-grid` of `.card` entries listed **alphabetically
+within the tier**. Every entry carries a `data-type="person"`/`"organisation"`
+marker, a decorative `aria-hidden` inline SVG icon (person vs building, no image
+tags), and a visible **Individual** / **Organisation** label so the person-vs-brand
+distinction is clear to sighted and assistive-tech users. Reuses `.card` / `.reveal`
+/ the tinted-band pattern / tokens; the Platinum band adds one **additive**, scoped
+CSS rule (a platinum-grey heading underline via `var(--slate)`, matching the donate
+page's platinum ink) and leaves Bronze/Silver/Gold untouched. Dash-free copy, "NBCC"
+(REQ-031). The static entries are **placeholder** fallbacks; it also serves as the
+**Donors Page** referenced by REQ-024/REQ-025.
 
-**Rendering (TASK-071):** the `/supporters` clean URL is **rendered server-side**
-from the real donor records, not served as the static file. `GET /supporters`
-(`src/routes/site.ts`) calls `listPublicSupporters` (`src/db/donations.ts`), which
-selects each donor with a donation and their **largest gift**, then the pure
-`groupPublicSupporters` (`src/db/donations-model.ts`) drops anonymous donors (via
-`isPubliclyListable`), derives each donor's tier from the amount using the
-give-monthly thresholds (bronze £10 / silver £25 / gold £50 / platinum £100 — a
-platinum-level gift folds into the top **Gold** tier), and sorts each tier
-alphabetically. A **company** (or any donor carrying a `business_name`) is listed by
-its business name, an **individual** by full name; the `person`/`organisation` marker
-comes from `donor_type`. The rendered HTML is injected into the **same**
-`supporters.html` markup, which stays the **template and the fallback** (served as-is
-if the DB read fails).
+**Who appears (opt-in monthly TASK-223, OR grandfathered TASK-228):** a supporter
+appears when they are **not** `anonymous` and **not** `hidden_from_supporters` **and**
+they qualify via **either** path below. Banding precedence is **opt-in monthly first,
+then grandfather**, so a donor who qualifies for both is banded by their monthly gift.
 
-`supporters.html`'s own static entries remain **placeholder** (`CONTENT
-VERIFICATION`) and are what the structure guards read: `test/unit/supporters.test.ts`
-(three tiers in order, alphabetical within each, person + organisation both render)
-plus `copy-rules`/`accessibility`/`brand-colours` auto-cover the file and stay green.
-The server-render is covered DB-free by `test/unit/supporters-render.test.ts` +
-`test/unit/supporters-read.test.ts` (pure grouping + HTML injection, mocked pool), and
-DB-backed end to end by `features/supporters.feature` (seed via the signed webhook,
-then assert a non-anonymous individual and company appear and an anonymous donor never
-does). This **supersedes** the earlier "list lives in hand-edited HTML" decision for
-donation-sourced entries; the rationale and rejected alternatives are recorded in
-`docs/superpowers/specs/2026-07-01-supporters-list-design.md`.
+- **Opt-in monthly (TASK-223).** They have at least one **paid monthly** donation
+  (`donations.mode='monthly'` filtered to `payment_status='paid'`, the same way settled
+  gifts are detected elsewhere); the **greatest** such gift bands via the four-band
+  `bandForMonthlyAmount` (`src/donors/fulfilment.ts` — bronze £10 / silver £25 / gold £50
+  / platinum £100 per month, so **under £10/mo is excluded** from this path); and they
+  **opted in** on the right channel — a **business** (donor is a company OR carries a
+  `business_name`) via its `business_supporter_fulfilment` record
+  (`list_on_supporters = true` **and** `captured_at IS NOT NULL`), an **individual** via
+  `donors.list_on_supporters = true`. The individual opt-in + display-name **write path**
+  is the donate form (TASK-224, see **Supporters wall opt-in** under the give widget
+  above): an individual monthly donor of £10/month or more chooses on the donate form
+  whether to appear and under what name, and the choice flows through checkout metadata
+  onto `donors.list_on_supporters` / `credit_name`.
+- **Grandfathered (TASK-228).** `donors.grandfathered_on_supporters = true` keeps a donor
+  on the wall **without** opting in. This is a **one-time snapshot** of the OLD (pre-223)
+  wall's set — taken by the migration backfill (`1784260000000_grandfather-supporters.js`):
+  **not anonymous AND has ≥ 1 `payment_status='paid'` donation**, matching who the pre-223
+  wall showed. A grandfathered donor is banded by their **greatest paid gift across ANY
+  frequency** using the four metal thresholds with **no £10 floor**
+  (`bandForGrandfatheredAmount` — ≥ £100 platinum, ≥ £50 gold, ≥ £25 silver, else bronze),
+  so every previously-shown donor — including **small and one-off** gifts — keeps a place.
+  **New** donors default `false`, so from launch onward everyone uses the opt-in flow.
 
-### Confirmation page (REQ-035)
+A business is listed as an **Organisation** by its `credit_name` (falling back to
+`business_name`), an individual as an **Individual** by `donors.credit_name` (falling
+back to `full_name`).
 
-`thank-you.html` is the post-payment confirmation page Stripe redirects the donor
-to on a successful checkout — it is the target of `STRIPE_SUCCESS_URL` at the clean
-URL `/donate/thank-you`. It is the fifth clean-URL page and shares the same nav /
-footer / `assets/css/styles.css` / `assets/js/main.js` as the rest of the site,
-with its own unique SEO + social metadata (`test/unit/seo-metadata.test.ts`). A
-centred intro (the `CONFIRMATION` CSS block, mirroring the About/Donate/Contact/
-Supporters intros) sits above a single reassurance `.card` in the `.page-sections`
-slot. The copy thanks the donor, **notes that a confirmation email follows when an
-email address was provided** (the email-send task owns actually sending it),
-explains how a monthly gift continues, and links back into the site. Being a
-landing page rather than a nav destination, no nav link is marked active. Dash-free
-copy, "NBCC" in full (REQ-031); skip-link + landmarks (REQ-032). Online declarations
-need **no 30-day confirmation letter**, so this page and its email are the whole of
-the post-gift confirmation. `clean-urls` / `site` / `seo-metadata` / `copy-rules` /
-`accessibility` auto-cover the page and stay green.
+**Rendering (TASK-071 / TASK-223):** the `/supporters` clean URL is **rendered
+server-side**, not served as the static file. `GET /supporters` (`src/routes/site.ts`)
+calls `listPublicSupporters` (`src/db/donations.ts`), which gathers each donor's
+greatest paid **monthly** gift AND greatest paid gift across **any** frequency (a
+`LEFT JOIN` to `donations` filtered to `payment_status='paid'`, so a grandfathered
+**one-off** donor is still selected), the grandfather flag, and their opt-in state
+(individual columns, and a `LEFT JOIN` to the business fulfilment record for business
+consent), then the pure `groupPublicSupporters` / `resolvePublicSupporter`
+(`src/db/donations-model.ts`) applies the opt-in / grandfather + banding + anonymity/hide
+rules, picks the display name, and sorts each of the four bands alphabetically. The rendered HTML is injected into the **same**
+`supporters.html` markup, which stays the **template and the fallback** (served as-is if
+the DB read fails).
+
+**Admin "hide from wall".** An Editor+ admin can remove any donor from the wall via
+`PATCH /api/admin/donors/:id` (`hiddenFromSupporters` on `adminPatchSchema`, persisted
+through `updateDonorPortal` as `donors.hidden_from_supporters` in one audited
+transaction). The admin donor view (`assets/js/admin/app.js`) shows it read-only and
+offers a **"Hide from supporters wall"** checkbox in the edit form. The wall query
+excludes hidden donors. This admin-only field is **not** exposed on the self-serve
+portal schema.
+
+**Bad-word filter.** `src/donors/display-name-filter.ts` exports
+`containsBlockedWord(name)` — an intentionally conservative, whole-word blocklist (with
+a tiny substring list for no-benign-use slurs; it avoids the "Scunthorpe problem"). It
+is applied where a **business** custom `creditName` is captured
+(`src/routes/business.ts` rejects a profane name with a plain, dash-free 400) and again
+as a **render-time safety net** in `groupPublicSupporters` (any entry whose final
+display name trips the filter is omitted).
+
+**Tests.** `test/unit/supporters.test.ts` guards the static fallback (four tiers in
+order, alphabetical within each, person + organisation both render);
+`copy-rules`/`accessibility`/`brand-colours` auto-cover the file. The server-render +
+opt-in rules are covered DB-free by `test/unit/supporters-render.test.ts` +
+`test/unit/supporters-read.test.ts` (pure grouping + HTML injection, mocked pool),
+the filter by `test/unit/display-name-filter.test.ts`, the business-capture rejection by
+`test/unit/business-fulfilment-api.test.ts`, and the flow end to end (DB-backed) by
+`features/supporters.feature` (seed monthly gifts via the signed webhook, opt in the way
+the app does, then assert opted-in monthly supporters appear while a one-off and an
+anonymous donor never do). The rationale for server-rendering donation-sourced entries
+is recorded in `docs/superpowers/specs/2026-07-01-supporters-list-design.md`.
+
+### Confirmation page (REQ-035; type-aware TASK-221)
+
+`thank-you.html` is the post-payment confirmation page Stripe redirects the donor to on a successful
+checkout — the target of `STRIPE_SUCCESS_URL` at the clean URL `/donate/thank-you`. It shares the same
+nav / footer / `assets/css/styles.css` / `assets/js/main.js` shell as the rest of the site, with its own
+unique SEO + social metadata (`test/unit/seo-metadata.test.ts`).
+
+**TASK-221 makes it TYPE-AWARE.** `buildSessionParams` (`src/routes/api.ts`, via `thankYouReturnUrl`)
+appends `mode` (once|monthly) and `donor` (donorType) to BOTH the hosted `success_url` and the embedded
+`return_url`, and adds Stripe's `session_id={CHECKOUT_SESSION_ID}` template to the hosted URL too (the
+embedded one already carried it) — e.g. `/donate/thank-you?mode=monthly&donor=company&session_id=…`.
+`assets/js/thank-you.js` reads those params and reveals exactly ONE of four variants, **defaulting to a
+generic thanks when the params are absent so an OLD/paramless link still works**:
+
+1. **individual one-off** (`mode=once`, `donor!=company`) — warm thanks + a receipt on its way, nothing to do;
+2. **individual monthly** (`mode=monthly`, by-session `none`) — thanks + one reassurance line (you are in control, change or cancel anytime, and we always tell you the amount and date before each payment);
+3. **business one-off** (`mode=once`, `donor=company`) — thanks to the business + a receipt on its way;
+4. **business monthly** (`mode=monthly`, by-session `ready`/`captured`/`pending`) — the business recognition FORM inline.
+
+Every variant keeps a shared, always-visible contact card (the TASK-219 phone + `giving@nbcc.scot` line)
+and the Back to home / Supporters / Share your story actions.
+
+**Business-monthly, inline (Part 2).** For a company/partnership monthly gift the page calls the NEW,
+strictly **READ-ONLY** endpoint **`GET /api/business/fulfilment/by-session/:sessionId`**
+(`src/routes/business.ts`): it retrieves the Stripe Checkout Session, links it session → donor →
+`business_supporter_fulfilment` (via `donations.stripe_session_id`, read-only in
+`getFulfilmentPageContextBySession`) and returns `ready` (record exists, not captured → render the
+form), `captured` (already submitted → the read-only confirmation), `pending` (a qualifying
+business-monthly session whose webhook record has not landed yet → show "setting up" and poll by-session
+about every 3s for about 20s) or `none` (no recognition applies → show variant 2). The endpoint **never
+creates a donor, donation or fulfilment record** — that stays the webhook's job alone; the session id is
+the auth (a bad / unknown / foreign id → a generic 404, no enumeration) and it is rate limited like the
+sibling token routes. The inline form **reuses** the token page's form: `assets/js/business-thankyou.js`
+exposes a shared `mountBusinessForm` core (validate / submit-once / render) that both `/business/thank-you`
+and this page drive against the same `bty-*` markup — no fork. Submit still hits `POST
+/api/business/fulfilment/:token` (submit-once, unchanged). If the record never lands in time, the page
+shows a fallback pointing at the TASK-213 emailed link.
+
+**Capture confirmation email (Part 3).** After a SUCCESSFUL capture, `postFulfilment` sends a warm "here
+is what you chose" confirmation (`src/business/capture-confirmation-email.ts`) that lists the chosen
+recognition options and the download links they are entitled to (certificate + badge, gated as on the
+page), reusing the branded NBCC email shell. It is **best-effort and post-response** — a send failure can
+never fail the capture or change the 200/409 — sent via the relay `thankYou` passthrough
+(`sendBusinessCaptureConfirmation`, no relay change), and it fires whether the supporter submitted from
+the new inline form OR the emailed token link. Non-definitive impact copy, dash-free.
+
+Online declarations need **no 30-day confirmation letter**, so this page and its emails are the whole of
+the post-gift confirmation. Dash-free copy, "NBCC" in full (REQ-031); skip-link + landmarks + labelled
+and `aria-required` form controls (REQ-032). `clean-urls` / `site` / `seo-metadata` / `copy-rules` /
+`accessibility` / `thank-you-page` cover the page and stay green.
 
 ### Donor portal page (REQ-061 · TASK-104)
 
@@ -934,6 +1135,49 @@ marked active. Dash-free copy,
 and the `@db`-free `features/site.feature` clean-URL rows; `seo-metadata` /
 `copy-rules` / `accessibility` register the page and stay green.
 
+### Business thank-you page (TASK-212)
+
+`business-thank-you.html` is the private, token-gated, **submit-once** page a business supporter uses
+to choose how NBCC thanks them, served at the clean URL `/business/thank-you` and reached via the
+per-business `token` in the URL query string (`?token=…`, minted on the `business_supporter_fulfilment`
+record). It shares the same nav / footer / `assets/css/styles.css` shell as the rest of the site, with
+its own SEO metadata and a `noindex` robots tag (private page). Page-specific styling and behaviour live
+in **`assets/css/business-thankyou.css`** and **`assets/js/business-thankyou.js`** (the page also loads
+`styles.css` for the tokens and `main.js` for the nav); `styles.css` / `main.js` / `donate.html` are not
+touched. `initBusinessThankYou` (exported + unit-tested like the portal script) reads the token, calls
+**`GET /api/business/fulfilment/:token`**, and then:
+
+- **not yet submitted** → reveals the capture form. Each recognition question is a segmented toggle of
+  real radios with **nothing pre-selected**, and the detail a Yes needs stays hidden until that answer
+  is chosen. The band decides which sections show (from `perksForBand`): **Platinum** sees all four
+  (Supporters page, social thank you, digital badge, certificate, with a Download it myself / Post it to
+  me choice that splits into a UK address); **Bronze / Silver / Gold** see only the Supporters-page
+  question plus a newsletter confirmation. Submit is blocked until every shown question is answered; it
+  then **POSTs once** to **`POST /api/business/fulfilment/:token`** and replaces the form with a warm
+  confirmation listing the choices and the download links the supporter is entitled to (the certificate
+  `/business/certificate/:token` and the badge `/assets/img/nbcc-supporter-badge.svg`), noting these were
+  emailed too.
+- **already submitted** (`captured_at` set) → renders that read-only confirmation straight away (no edit
+  form), because the capture is single-submit.
+- **missing / invalid token** → the same friendly "ask us for a new link" fallback the portal uses
+  (a contact link + `giving@nbcc.scot`; there is no self-request form, since the private link is the
+  only way in).
+
+**Submit-once is enforced in the DB and mirrored in the UI.** `updateFulfilmentPreferences`
+(`src/db/fulfilment.ts`) writes the preference columns and stamps `captured_at = now()` in one audited
+transaction (`writeWithAudit`, appending a `fulfilment.captured` audit row) with an `AND captured_at IS
+NULL` guard, so a record that was already submitted matches zero rows and is never overwritten (even
+under two concurrent submits). The API is the certificate route's security model: the **token is the
+auth**, an unknown token returns the **same generic 404** as a known one (no enumeration), and both
+routes are **rate limited** per token and per client IP (the `createRateLimiter` used by the donor
+portal). A POST to an already-captured record returns **409** (the page then shows the confirmation).
+`consent_featured` records that the business agreed to be publicly celebrated (true when they chose the
+Supporters listing or the social thank you). All copy is dash-free and impact-neutral. Proven by
+`test/unit/business-fulfilment-api.test.ts` (GET state + generic 404, POST saves once + flips
+`captured_at`, 409 on a second submit, band-aware validation, rate limiting) and
+`test/unit/business-thank-you.test.ts` (static markup + jsdom against the real `initBusinessThankYou`,
+plus the no-dashes copy guard); the Dockerfile bakes the new page into the image.
+
 ### Privacy notice page (REQ-064 · TASK-111)
 
 `privacy.html` is the data-protection **privacy notice**, served at the clean URL `/privacy` and
@@ -966,8 +1210,10 @@ Both lines are guarded by `test/unit/fundraising-governance.test.ts`.
 ### Checkout contract (REQ-028)
 
 Every amount control wires the one front-end → backend integration point. Each
-tier button in `#tiersOnce`/`#tiersMonthly`, and the choose-your-own **Give**
-button, carries:
+tier button in `#tiersOnce`/`#tiersMonthly`, and the choose-your-own
+`.give-tier-custom` container (TASK-210: the per-amount button was removed, so the
+container itself now carries the contract and the single step CTA drives checkout),
+carry:
 
 - `data-mode` — `once` or `monthly`
 - `data-plan` — `bronze`/`silver`/`gold`/`platinum`, **empty** for one-off
@@ -982,14 +1228,53 @@ those attributes plus the `#giftAid` checkbox (REQ-023) into a single
 when empty; the choose-your-own amount is built from the `#customAmount` value ×
 100) — and, once the donor-type control (REQ-038) is wired, folds in
 **`donorType`** and an optional **`businessName`** (see **Donor-type routing**
-above). It then mirrors `initContactForm`'s best-effort pattern: in production it
-POSTs the payload to **`/api/checkout-session`** and redirects to the returned
-Stripe `{ url }`; with no working backend (the current `501` stub) it degrades to
-**showing the payload** (an `alert`, the preview). The buttons are native
-`<button>`s (keyboard-activatable, global `:focus-visible` ring; REQ-032). The
-live endpoint is **REQ-029**, out of scope here. Verified by
-`test/unit/give-checkout.test.ts` (markup + jsdom payload behaviour) and the
-per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
+above). It then POSTs the payload to **`/api/checkout-session`**. Two payment UIs
+are supported, chosen by progressive enhancement (see **Embedded Checkout** below):
+by default the donor pays **inline** via Stripe Embedded Checkout without leaving
+nbcc.scot, and if that cannot run it **falls back to the hosted redirect** (the
+returned Stripe `{ url }`). With no working backend at all (fetch unavailable) it
+degrades to **showing the payload** (an `alert`, the preview). The buttons are native
+`<button>`s (keyboard-activatable, global `:focus-visible` ring; REQ-032). Verified by
+`test/unit/give-checkout.test.ts` (markup + jsdom payload behaviour, embedded +
+fallback paths) and the per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
+
+### Embedded Checkout (inline payment, TASK-215)
+
+The donate page pays **inline** so the donor never leaves nbcc.scot, while the
+hosted-Checkout redirect stays the default fallback and no-JS safety net.
+
+- **Request param.** `POST /api/checkout-session` accepts `uiMode: "embedded" |
+  "hosted"`, **defaulting to `"hosted"`** when absent — so any un-updated caller and
+  the fallback path are byte-for-byte unchanged. `"embedded"` engages **only when
+  `STRIPE_PUBLISHABLE_KEY` is configured** (`embeddedRequested`); it then builds the
+  session with Stripe's `ui_mode: "embedded_page"` + a `return_url` (reusing the
+  `STRIPE_SUCCESS_URL` base, carrying `{CHECKOUT_SESSION_ID}`) and returns
+  `{ clientSecret, publishableKey }`. With **no key set, `"embedded"` is served exactly
+  like hosted** (`{ url }`, no `ui_mode`, no embedded session minted) so the feature stays
+  dormant until the key lands; `"hosted"`/absent returns `{ url }` exactly as before.
+  **Everything else about the session — line items, amount, mode, `customer_email`, and
+  ALL metadata — is identical across both modes**, so the REQ-036 webhook and the
+  confirmation email are unaffected.
+- **Client (`assets/js/main.js`).** `startCheckout` tries embedded first, but only when
+  `fetch`, **Stripe.js** and the on-page `#embeddedCheckout` mount are all present: it
+  requests `uiMode:"embedded"`, constructs `Stripe(publishableKey)`, and mounts
+  `initEmbeddedCheckout({ clientSecret })` into a modal (`#embeddedCheckoutModal` in
+  `donate.html`). **Stripe.js is loaded by dynamic injection** from
+  `https://js.stripe.com/v3/` (its only supported origin) so `donate.html` keeps its
+  single shared static script. The `payload` object `startCheckout` returns stays the
+  exact REQ-028 contract; `uiMode` rides only on the wire body.
+- **Fallback chain (no dead button).** Stripe.js fails to load, or JS is unavailable,
+  or embedded init/mount throws → the **hosted redirect** (`uiMode` omitted → server
+  default hosted → `location = url`). fetch entirely unavailable → the preview `alert`.
+- **CSP.** The app ships **no** Content-Security-Policy (no helmet, no CSP header/meta,
+  and none at the infra/ALB layer), so nothing blocks `js.stripe.com` / `api.stripe.com`
+  and **no CSP change was made** (adding one would risk the fonts/images/inline styles).
+  If a CSP is ever introduced, allow `script-src`/`frame-src`/`connect-src` for
+  `https://js.stripe.com` + `https://api.stripe.com` and `frame-src https://*.stripe.com`.
+- **Publishable key.** `STRIPE_PUBLISHABLE_KEY` (below) is public, **optional**, and reaches
+  the browser in the embedded response, not baked into the static HTML. Embedded Checkout is
+  **dormant until it is set** (and its terraform wiring applied); until then donors use the
+  hosted redirect with no change, so the code ships safely ahead of the gated infra apply.
 
 ### API endpoints
 
@@ -1004,6 +1289,9 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
 | `POST /api/portal/:token/gift-aid/cancel` | **implemented** | REQ-061 (cancel Gift Aid — revoke declaration) |
 | `POST /api/portal/request` | **implemented** | REQ-061 (donor self-request portal magic link) |
+| `GET /api/business/fulfilment/:token` | **implemented** | TASK-212 (business thank-you page state: band + eligible perks + already-captured + saved prefs; token is auth, generic 404 + rate limited) |
+| `GET /api/business/fulfilment/by-session/:sessionId` | **implemented** | TASK-221 (**READ-ONLY** type-aware thank-you lookup: retrieves the Stripe session, links session → donor → fulfilment, returns `ready`/`captured`/`pending`/`none`; creates nothing; session id is auth → generic 404 + rate limited) |
+| `POST /api/business/fulfilment/:token` | **implemented** | TASK-212 (capture the thank-you choices ONCE — DB-enforced submit-once, `fulfilment.captured` audit; 409 if already captured; TASK-221 also sends a best-effort "here is what you chose" confirmation email) |
 | `POST /api/admin/login` | **implemented** | REQ-062 (role-based admin login; step 1 of mandatory email 2FA — admin-management Phase 3/TASK-188 — issues a session directly only for a valid 30-day trusted-device token, else `{step:"2fa"}`) |
 | `POST /api/admin/login/2fa` | **implemented** | admin-management Phase 3 (TASK-188; step 2 — verifies the emailed one-time code, 10-min expiry/5-attempt cap, issues the session and optionally a device token when `remember` is set) |
 | `GET /api/admin/donors/:id` | **implemented** | REQ-062 (admin donor read; incl. postal address — declaration for an individual, billing for a company) |
@@ -1048,6 +1336,9 @@ per-tier checks in `give-once-tiers` / `give-monthly-tiers`.
 | `GET /api/admin/me` | **implemented** | admin-management Phase 2 (TASK-186; any valid, non-disabled session; returns the caller's own effective permissions for nav filtering + write-control gating client-side); extended in Phase 4 (TASK-197) to also return `fullName` |
 | `PATCH /api/admin/me` | **implemented** | admin-management Phase 4 (TASK-197; any valid, non-disabled session; changes the CALLER's own `fullName` only, always via `claims.sub`; audited `admin_user.name_changed`) |
 | `POST /api/admin/me/password` | **implemented** | admin-management Phase 4 (TASK-197; any valid, non-disabled session, rate-limited; changes the CALLER's own password, requires the correct current password, `400 {error:"wrong_password"}` on mismatch; audited `admin_user.password_changed`) |
+| `GET /api/admin/fulfilments` | **implemented** | TASK-207 (Editor+ / `donations:edit`; list every business-supporter fulfilment record joined to its donor, most recent first) |
+| `POST /api/admin/fulfilments/:id/mark` | **implemented** | TASK-207 (Editor+ / `donations:edit`; set one of the five status flags true, audited `fulfilment.<flag>` in one transaction; unknown flag → 400, unknown id → 404) |
+| `POST /api/admin/business-supporters/backfill-invites` | **implemented** | TASK-214 (Editor+ / `donations:edit`; one-time, idempotent catch-up that emails the thank-you invite to un-invited business supporters — `invited_at IS NULL` + `captured_at IS NULL` + has email; stamps `invited_at` on each success so a repeat run sends 0; best-effort sends; `fulfilment.backfill_invites` audit; returns `{ pending, sent, failed }`) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -1322,7 +1613,7 @@ export is fetched with the bearer token and saved via a blob download (a plain l
 
 **Nav grouping (TASK-171, extended by the Team tab below).** The sidebar nav links are clustered
 under presentational group labels — **Monitor** (Overview, Search), **Giving** (Donations, Claims,
-GASDS, Subscriptions), **Content** (Stories, Partners, Contact form, Newsletter, Thank you),
+GASDS, Subscriptions, Business supporters), **Content** (Stories, Partners, Contact form, Newsletter, Thank you),
 **Governance** (Audit) and **Admin** (Team) — so related tools sit together instead of one flat
 list. Purely cosmetic: the labels are `aria-hidden` `<li>`s (`.admin-nav-group`) that leave the
 `.admin-nav-link` buttons, their order and `data-view` targets untouched, so
@@ -1484,7 +1775,11 @@ raises spam scores and needs a PDF/headless subsystem the repo doesn't have), th
 public **printable-letter page**: `GET /thank-you/letter/:token` (`src/routes/thank-you.ts`,
 mounted before the site catch-all) renders the stored letter as a print-ready A4 page
 (`buildThankYouLetterPage`, faithful to `assets/thankyou-letter-print.html`) that the donor prints or
-saves as a PDF from the browser. The token is a stateless HMAC of the sent-letter id
+saves as a PDF from the browser. The page prints on **one A4 sheet on mobile as well as desktop**
+(TASK-197): text auto-inflation is pinned off (`text-size-adjust:100%`) so a phone doesn't enlarge the
+body of the wide fixed-width letter, and the print layout clamps the sheet to exactly one page
+(`height:297mm; overflow:hidden`) so a rounded sub-pixel can't push a blank second page — previously
+phones had to scale to ~78% to avoid the overflow. The token is a stateless HMAC of the sent-letter id
 (`src/thank-you/letter-token.ts`, signed with `ADMIN_SESSION_SECRET`) so letters can't be enumerated;
 a bad token → 400, a missing row → 404. The admin sent-history also exposes each letter's print URL
 ("View letter"). Covered by `test/unit/thank-you-letter-token.test.ts`,
@@ -1727,15 +2022,51 @@ login, not a replacement for it.
   the right code; a device token skips the code step; the 6th wrong attempt locks out) plus the
   updated `features/admin-auth.feature` / `features/admin-users.feature` scenarios that now complete
   the 2FA step to obtain a session.
-- **Known follow-up.** The Cloudflare Worker email relay (`services/email-relay/src/index.js`) maps
-  each of the app's transactional payload shapes to a Resend send by sniffing its fields
-  (`buildEmail`); it has no branch for the login-code payload
-  (`{ email, fullName, subject, text }` from `sendAdminLoginCode`), so today it silently falls through
-  to the generic donation-confirmation default and sends the **wrong subject**. Real email delivery of
-  login codes needs a small relay branch (mirroring the newsletter/thank-you `if (p.newsletter …)` /
-  `if (p.thankYou …)` pattern, discriminated the same way) before this reaches production — tracked as
-  a follow-up, not blocking this PR because staging and local dev never depend on it (`devCode`
-  covers both, per the stub-safety note above).
+- **Login-code subject (fixed in TASK-209).** The Cloudflare Worker email relay
+  (`services/email-relay/src/index.js`) used to map each transactional payload to a Resend send by
+  sniffing its fields (`buildEmail`), with no branch for the login-code payload, so it silently fell
+  through to the generic donation-confirmation default and sent the **wrong subject** ("Thank you for
+  your donation to NBCC" on a 2FA code). TASK-209 fixed the whole email family: every send now carries
+  an explicit `kind`, the relay routes on it, and each kind gets its OWN branded body + correct subject
+  (the login code now reads "Your NBCC admin sign-in code"). The old field heuristics remain only as a
+  deploy-skew fallback for a no-`kind` payload. See **All transactional emails share one branded shell**
+  below.
+
+**All transactional emails share one branded shell (REQ, TASK-209).** Every transactional send from
+`src/clients/email.ts` now tags its JSON with an explicit `kind`, and the Cloudflare Worker email relay
+(`services/email-relay/src/index.js`, `buildEmail`) routes on that `kind` first, wrapping the body in
+ONE branded shell and giving each email its OWN correct subject. The shell mirrors the admin thank-you
+letter email (`src/thank-you/letter.ts`): a maroon page, a cream content panel, the NBCC logo
+letterhead (hosted absolute URL, not base64), and a maroon footer bar carrying `01292 811 015` /
+`giving@nbcc.scot` / `nbcc.scot`. It stays email-safe (layout tables + inline styles + web-safe
+Georgia/Playfair and Arial/Poppins stacks) and carries a `color-scheme: light` meta so dark-mode
+clients don't invert the palette. The `kind` -> subject map:
+
+| `kind` | subject | body |
+|---|---|---|
+| `donation` | Thank you for your donation to NBCC | app |
+| `receipt` | Your NBCC donation receipt | app |
+| `refund` | Your NBCC refund confirmation | app |
+| `loginCode` | Your NBCC admin sign-in code | relay |
+| `adminInvite` | Your NBCC admin account invitation | relay |
+| `adminReset` | Reset your NBCC admin password | relay |
+| `portal` | Your NBCC donor portal link | relay |
+| `declaration` | Add Gift Aid to your NBCC donation | relay |
+| `lapsedDonor` | Your NBCC monthly donation has stopped | relay |
+| `lapsedAdmin` | A monthly NBCC subscription has lapsed | relay |
+
+This fixes a real bug: the 2FA sign-in code, admin invites and password resets used to fall through the
+relay's field-sniffing to the donation default and get the wrong subject, and almost none were branded.
+The `donation` / `receipt` / `refund` bodies are still built by the app (`src/donors/confirmation.ts`,
+`src/donors/receipt.ts`) and already end with the charity-registration line, so the shell wraps them with
+a contacts-only footer (no duplicate registration); the `relay`-built kinds get the registration in the
+footer. `newsletter` and `thankYou` are unchanged (each already ships its own fully branded html +
+subject). Covered by `test/unit/email-relay-build.test.ts` (each kind's subject, the branded shell,
+the footer contacts on every kind, registration exactly once, the old collisions gone, and the no-`kind`
+skew fallback). **Ops:** the relay Worker is deployed on its own (`cd services/email-relay && wrangler
+deploy`), so it needs its own redeploy for the rebrand + fixed subjects to reach live email; the app
+side ships with the normal ECS deploy. The two tolerate deploy skew in either order (the app keeps
+sending, and the relay keeps its field heuristics, as a fallback).
 
 **My account: self-service name + password (admin-management Phase 4, TASK-197).** Any signed-in
 admin, of any role, can change their own display name and password from a **My account** panel —
@@ -1896,7 +2227,13 @@ when set, else an inline product — so no per-amount Stripe Product is needed.
 `['card', 'bacs_debit']` on **both** session shapes (Apple Pay / Google Pay ride on
 the card method; BACS Direct Debit is offered for our GBP-only UK donations, which
 satisfy Stripe's BACS currency/country requirement — REQ-029 · TASK-089).
-`success_url` / `cancel_url` come from config. When
+For the hosted mode `success_url` / `cancel_url` come from config; for `uiMode:
+"embedded"` **when `STRIPE_PUBLISHABLE_KEY` is configured** (TASK-215) they are replaced
+by `ui_mode: "embedded_page"` + a `return_url` (built on the `STRIPE_SUCCESS_URL` base with
+`{CHECKOUT_SESSION_ID}`), and the response is `{ clientSecret, publishableKey }` instead of
+`{ url }` — every other session field, and all metadata below, is identical across the two
+modes. With **no key set, `"embedded"` is served exactly as hosted** (`{ url }`), so the
+feature stays dormant until the key lands. When
 `giftAid` is affirmatively true the consent is bound to the **exact verbatim HMRC
 statement** the donor saw (REQ-042 · TASK-053): alongside `metadata.giftAid='true'`,
 the handler stamps `metadata.giftAidWordingVersion` and `metadata.giftAidWording` (the
@@ -2063,6 +2400,167 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `giftSummary`; unit-tested DB-free in `test/unit/thank-you-model.test.ts`); write/read layer
   `src/db/thank-you.ts` (`recordThankYouSent` via `writeWithAudit`, `hasBeenThanked`,
   `listThankYouSent`).
+- **`business_supporter_fulfilment`** — one thank-you & fulfilment record per business supporter
+  (additive migration `1783961442118_business-supporter-fulfilment.js`, TASK-205 — the **data-model
+  foundation** the later business-supporter PRs build on: thank-you page capture, reminders, admin
+  fulfilment UI, backfill). A **UNIQUE** `donor_id` FK (`onDelete RESTRICT`, so one row per donor and
+  the record is protected like the other donor-referencing financial rows — the UNIQUE constraint
+  supplies the `donor_id` index), the recognition `band` (`bronze`/`silver`/`gold`/`platinum`, CHECK),
+  the **captured preferences** the business submits on the thank-you form (`credit_name`, `website`,
+  `socials`, `list_on_supporters` opt-in, `want_social`/`want_badge`/`want_certificate`,
+  `certificate_delivery` `download`/`post`, `certificate_address`, `consent_featured`, and
+  `captured_at` — NULL until they submit), the **admin fulfilment flags** (booleans only —
+  `certificate_sent`/`certificate_posted`/`badge_sent`/`social_done`/`added_to_supporters`; who/when
+  each was done is recorded separately in the append-only `audit_log`), and the reminder-tracking
+  `reminder_5_at`/`reminder_14_at`. Additive-only: every column is nullable or defaulted, no existing
+  table touched (golden rule 2). The pure banding + perk model is `src/donors/fulfilment.ts`
+  (`bandForMonthlyAmount` maps a monthly gift in pence to a band — below £10/mo is not banded;
+  `bandHasPlatinumPerks`; `perksForBand` — every band gets the supporters listing (subject to opt-in)
+  + our newsletter, platinum additionally the social thank-you, digital badge and certificate). All
+  perks are **£0-value recognition perks**, so nothing here affects the HMRC Gift-Aid benefit cap.
+  No pool/config/clock, so it is unit-tested DB-free (`test/unit/fulfilment-model.test.ts`).
+  **TASK-206** adds the nullable-unique **`token`** column (additive migration
+  `1783964039569_add-fulfilment-token.js`) for the per-business secure thank-you link, the pure
+  `fulfilmentBandFor` gate (banded **only** for a business monthly gift ≥ £10/mo — `donor_type`
+  `company` **OR** a partnership/sole trader with a non-empty `business_name`), and the DB layer
+  `src/db/fulfilment.ts` (`ensureFulfilmentRecord` — idempotent `ON CONFLICT (donor_id) DO NOTHING`,
+  returns `{ id, created }` so the caller knows whether it actually inserted vs hit the conflict;
+  `getFulfilmentByToken`). The Stripe webhook **creates** this record (band + a `randomUUID()` token)
+  on a business monthly gift, inside the donation's transaction, and audits `fulfilment.created`
+  **only on the newly created row** (a redelivered/reprocessed conflict never re-audits).
+  **TASK-213** closes the loop: right after commit the webhook **best-effort emails the new business
+  supporter their thank-you invite** — the branded, app-built email (`src/business/invite-email.ts`,
+  mirroring the `src/thank-you/letter.ts` shell) carrying the private link to
+  `/business/thank-you?token=…` (without it that token-gated page is unreachable). Sent **once**, only
+  on the newly created record and only when the business has an email, on the env-correct
+  `PORTAL_BASE_URL` base, From/Reply-To `GIVING_FROM_EMAIL`, via the relay's existing `thankYou: true`
+  passthrough (`sendBusinessSupporterInvite` — **no relay change / redeploy**). A failed/late send
+  never fails the webhook (the record + token are already committed); copy is dash-free and
+  impact-neutral ("could help"). Covered by `test/unit/business-invite-email.test.ts`,
+  `test/unit/fulfilment-ensure-record.test.ts` and `test/unit/stripe-webhook-business-supporter.test.ts`.
+  **TASK-207** adds the **admin API** (backend only — no UI yet): **Editor+** staff (`donations:edit`)
+  can **list** every business supporter and their fulfilment state (`GET /api/admin/fulfilments` →
+  `listBusinessFulfilments`, each fulfilment row joined to its donor, most recent first, bounded) and
+  **mark a fulfilment status** done (`POST /api/admin/fulfilments/:id/mark` with `{ flag }` →
+  `markFulfilmentFlag`). The mark is one **audited transaction** (`writeWithAudit`): it sets the single
+  boolean true, bumps `updated_at`, and appends exactly one `fulfilment.<flag>` audit row (actor
+  `admin:<email>`, entity `business_supporter_fulfilment`). `flag` **must** be one of the five
+  allow-listed columns (`certificate_sent`/`certificate_posted`/`badge_sent`/`social_done`/
+  `added_to_supporters`) — validated by the pure `isFulfilmentFlag` (and the route's `z.enum`) **before**
+  any SQL is built, so no arbitrary column can ever be written (an unknown flag → **400**, an unknown id
+  → **404**). Covered by `test/unit/admin-fulfilment-api.test.ts` (auth 401/403, list, mark-flips-and-
+  audits, allowlist).
+  **TASK-208** adds the **admin UI** on top of that API: a **Business supporters** nav tab (in the
+  **Giving** group, `admin.html` view `view-fulfilments`, `loadFulfilments` in
+  `assets/js/admin/app.js`) that lists each supporter's fulfilment record — business name (falling back
+  to the donor name), recognition band, whether they have submitted their thank-you preferences and a
+  compact view of those prefs (credit name, wanted listing/social/badge/certificate + delivery), and
+  the five recognition status flags. Each not-yet-done flag is a **mark-done button**
+  (`Certificate sent`/`Posted`/`Badge sent`/`Social done`/`Added to Supporters`) that POSTs the flag and
+  refetches the list (mirroring the GASDS/Claims refetch-after-write actions); a done flag shows as a
+  settled pill and drops its button. The tab is an **Editor+** area: it authenticates with the same
+  bearer session as every other admin call (`authFetch`), and is hidden in the nav below edit level via
+  a new `data-edit-gate="donations"` attribute on the nav link (honoured by `applyNavFiltering`),
+  matching the server's `donations:edit` gate — so a Viewer never sees it. Driven by
+  `test/unit/admin-app.test.ts` (jsdom: renders the rows, a mark button POSTs the right flag and the row
+  updates) and guarded in `test/unit/admin-shell.test.ts` (nav order + the Editor+ gating wiring). No
+  new backend, no new config.
+
+  **TASK-214** backfills the thank-you invite to business supporters who signed up **before** the
+  going-forward webhook auto-invite (TASK-213) shipped and so never got their link. The safety
+  mechanism is an **invite-tracking** column, **`invited_at timestamptz`** (nullable, no default,
+  additive migration `1783980218955_add-fulfilment-invited-at.js` — expand-contract, existing rows stay
+  NULL). `invited_at` is stamped `now()` the moment a record's invite is sent: the **webhook auto-invite
+  now calls `markFulfilmentInvited(fulfilmentId)` after a successful send** (still inside its best-effort
+  try, so a stamp failure never fails the webhook; a *failed* send leaves `invited_at` NULL so the
+  backfill catches it later), and the backfill does the same. `markFulfilmentInvited` is idempotent —
+  `UPDATE … SET invited_at = now() WHERE id = $1 AND invited_at IS NULL` — so re-running or a webhook
+  redelivery never re-stamps. `listUninvitedBusinessSupporters` (`src/db/fulfilment.ts`) returns exactly
+  the records that still need one: `invited_at IS NULL` **and** `captured_at IS NULL` (anyone who already
+  completed the thank-you page plainly already had the link) **and** a non-empty donor email **and** a
+  non-NULL `token`. The orchestrator `runBusinessInviteBackfill` (`src/business/backfill.ts`) is **pure
+  over injected seams** (list/send/mark/audit + the env-correct base + from + actor), so it is fully
+  DB-free and config-free and reuses the **same** `buildBusinessSupporterInviteEmail` builder as the
+  webhook: it walks the un-invited list **sequentially** (dozens of supporters at most; respects the
+  relay's rate limits), and for each **best-effort** builds + sends the invite (on `PORTAL_BASE_URL`,
+  From/Reply-To `GIVING_FROM_EMAIL`) and **only on a successful send** stamps it invited — one failure is
+  counted and never aborts the rest — then appends one `fulfilment.backfill_invites` audit row and
+  returns `{ pending, sent, failed }`. The admin trigger is **`POST /api/admin/business-supporters/backfill-invites`**
+  (Editor+ / `donations:edit`, same gate as the rest of the tab), surfaced in the **Business supporters**
+  tab as a **"Send catch up invites"** button (`backfillInvites` in `assets/js/admin/app.js`) that shows
+  the result (e.g. "Sent 12, failed 0"). **It is idempotent — safe to click more than once:** because
+  every send is gated on `invited_at IS NULL` and stamps on success, a second run (or a double-click)
+  emails no one and reports "Sent 0". No new dependency, no new config key (reuses `PORTAL_BASE_URL` +
+  `GIVING_FROM_EMAIL`), and the email relay + money path are untouched. Covered by
+  `test/unit/fulfilment-backfill.test.ts` (the idempotent stamp, the un-invited gate, and the
+  orchestrator: env-correct tokenised link, mark-on-success, skip/second-run-sends-0, a failed send is
+  counted without aborting), the extended `test/unit/stripe-webhook-business-supporter.test.ts`
+  (mark-on-success, a failed send left un-stamped, and marking never affecting the webhook), and
+  `test/unit/admin-business-invite-backfill.test.ts` (auth 401/403, the counts, and the summary audit).
+
+  **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
+  per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).
+  The **badge is the same for every supporter**, so it ships as one committed static asset,
+  `assets/img/nbcc-supporter-badge.svg`: the approved "Option B" emblem (a framed cream card with a
+  double maroon border, "We proudly support" in Playfair italic maroon, the real NBCC logo mark, and
+  "Night Before Christmas Campaign" in Poppins maroon). It is generated by
+  `scripts/build-supporter-badge.mjs` (`node scripts/build-supporter-badge.mjs`), which base64-inlines
+  the two brand fonts and nests the NBCC logo's vector paths from `assets/img/nbcc-logo-white.svg`, so
+  the result is a fully standalone, razor-sharp SVG a business can drop onto any site. Guarded by
+  `test/unit/supporter-badge.test.ts` (the file exists, parses as well-formed SVG via jsdom, carries
+  the approved copy, and has no dashes in any text). The **certificate is per business**:
+  `GET /business/certificate/:token` (`src/routes/business.ts`, mounted in `src/app.ts` before the site
+  catch-all) reads the fulfilment by token (`getCertificateContextByToken` in `src/db/fulfilment.ts` —
+  the fulfilment row joined to its donor and that donor's **earliest** `donations.created_at`) and
+  renders a self-contained, **print-ready** HTML certificate (the browser prints it to PDF). It gates
+  hard: a **404** — indistinguishable from an unknown token — unless the token resolves, the band is
+  **platinum**, and **`want_certificate`** is true. The page reproduces the approved `cert.html` design
+  (maroon frame, engraved "Platinum Donor" mark, the **business name** — `business_name` falling back to
+  `full_name` — as the hero, "Supporting since &lt;Month Year&gt;" from the earliest donation, the body
+  copy, Jodie McFarlane's signature block, "Scottish Charity No. SC047995"), with the two brand fonts
+  and `assets/img/nbcc-logo.png` base64-inlined so it prints with no network. The render + the pure,
+  DB-free helpers (`formatMonthYear`, `certificateHeroName`) live in `src/business/certificate.ts`;
+  covered by `test/unit/business-certificate.test.ts` (renders for a platinum opt-in token; 404 for
+  unknown / non-platinum / certificate-not-wanted; the Month-Year formatter; name fallback; HTML
+  escaping; and a no-dashes-in-copy guard). No dashes appear in any certificate or badge copy.
+
+  **TASK-222** nudges business supporters who have **not yet chosen** how they would like to be
+  thanked, with two warm, low-pressure reminders: a **5-day** reminder, then a **14-day** last note.
+  The safety mechanism is a new **`reminder_count integer NOT NULL DEFAULT 0`** column (additive
+  migration `1784050000000_add-fulfilment-reminder-count.js` — expand-contract, existing rows backfill
+  to 0; distinct from the unused TASK-205 `reminder_5_at`/`reminder_14_at` scaffolding): `0` = none
+  sent, `1` = the 5-day reminder sent, `2` = the 14-day reminder sent. The DB layer
+  (`src/db/fulfilment.ts`) adds **`listSupportersDueForReminder(now)`** — the records due the next
+  nudge: `captured_at IS NULL` **and** `invited_at IS NOT NULL` **and** a non-empty email **and** a
+  `token`, **and** either (`reminder_count = 0` **and** invited ≥ 5 days ago) → **stage 1** or
+  (`reminder_count = 1` **and** invited ≥ 14 days ago) → **stage 2** (the clock is passed in, so it is
+  deterministic + unit-testable) — and **`markReminderSent(id, stage)`**, an idempotent advance
+  (`UPDATE … SET reminder_count = $2 WHERE id = $1 AND reminder_count = $2 - 1`) so a re-run never
+  double-sends a stage. The reminder email is the pure, branded `src/business/reminder-email.ts`
+  (`buildBusinessSupporterReminderEmail`, mirroring the `src/thank-you/letter.ts` shell so it carries
+  the phone + `giving@` footer): warm + grateful for **all bands** (not just platinum), one crimson CTA
+  to the tokenised `/business/thank-you?token=…` page, non-definitive impact ("could help"), **no
+  dashes**; the 14-day note is a touch more "last, no pressure" than the 5-day one. It sends via the
+  relay's existing `thankYou: true` passthrough (`sendBusinessSupporterReminder` — **no relay change /
+  redeploy**). The orchestration `runReminderPass` (`src/business/reminders.ts`) is **pure over injected
+  seams** (list/send/mark + the env-correct base + from) like `runBusinessInviteBackfill`: it walks the
+  due-list **sequentially** and **best-effort** builds + sends each supporter's stage-appropriate
+  reminder and **only on a successful send** advances `reminder_count` — one failure is counted and
+  never aborts the rest, and a failed send leaves the count un-advanced so the next run retries it. The
+  runner is **`npm run reminders`** (`node dist/scripts/send-reminders.js` — compiled into `dist/`, so
+  it runs in the runtime image with no `tsx`/devDeps; `src/scripts/send-reminders.ts` wires the real
+  pool + config + senders). A **daily EventBridge schedule** (`infra/modules/app/scheduler.tf`) runs it
+  as a one-off Fargate task (`["sh","-c","npm run reminders"]` command override, reusing the app
+  cluster / task-def / subnets / task SG / execution role — the same one-off-task shape as the deploy's
+  migrations, referencing the task-def by **family** so it runs the latest CI-deployed image). **The
+  schedule needs an Infra apply to take effect** (plan on PR, then a manual `apply` via the Infra
+  workflow — it does not self-activate on merge). No new dependency, no new config key (reuses
+  `PORTAL_BASE_URL` + `GIVING_FROM_EMAIL`), and the email relay + money path are untouched. Covered by
+  `test/unit/business-reminder-email.test.ts` (both stages: warm subject, tokenised CTA, single button,
+  `could help`, branded shell + footer, name escaping, and no-dashes guards), `test/unit/business-reminders-pass.test.ts`
+  (stage-appropriate send, advance-on-success, one failure never aborts, empty-list no-op) and
+  `test/unit/fulfilment-reminders-query.test.ts` (the due-gate SQL + clock, row mapping, and the
+  idempotent `markReminderSent` guard).
 
 **Write layer.** `src/db/donations-model.ts` holds the **pure** field mapping and
 claim derivation (`donationInputSchema`, `buildDonationRow`, `deriveClaimStatus`,
@@ -2358,6 +2856,10 @@ ONE transaction, **idempotent by event id** (a `stripe_webhook_events` ledger wi
   verbatim) — and links the donation's `declaration_id` to it,
   in the **same** transaction with its own `declaration.created` audit row, so the
   donation derives `claim_status='eligible'` (REQ-037).
+  A **business monthly gift** (an incorporated company, or a partnership/sole trader donating under a
+  business name) additionally **creates a `business_supporter_fulfilment` record** (recognition band +
+  a fresh secure-thank-you `token`) in the **same** transaction, with a `fulfilment.created` audit row
+  — the pure `fulfilmentBandFor` gates it and `ensureFulfilmentRecord` keeps it idempotent (TASK-206).
   The whole donor journey — `POST /api/checkout-session` → the signed
   `checkout.session.completed` Stripe fires → the resulting donor/donation/declaration
   rows — is exercised end to end for every persona (individual UK / non-UK / anonymous,
@@ -2976,6 +3478,16 @@ Secrets are never in code or in the image.
 
 The **Stripe checkout** keys (TASK-037, REQ-028/REQ-029) follow this pattern:
 `STRIPE_SECRET_KEY` is a secret (SSM `SecureString`, required, never defaulted);
+`STRIPE_PUBLISHABLE_KEY` (TASK-215) is the **public** `pk_…` key the browser needs for
+Embedded Checkout — **not a secret**: a plain task-def `environment` value (backed by the
+`stripe_publishable_key` module variable, set per env in `infra/envs/*/main.tf`), **not** an
+SSM `SecureString` and **not** in the `exec_secrets` IAM policy (it ships to every donor's
+browser). It is **OPTIONAL** (may be absent or empty): the app boots fine without it and
+**Embedded Checkout stays dormant** — `uiMode:"embedded"` is served as the hosted redirect —
+until the key is set (its terraform wiring **applied** and a real `pk_…` value in place),
+at which point inline checkout engages automatically with **no code change**. This lets the
+code ship ahead of the gated infra apply instead of crash-looping boot. When set, it reaches
+the client in the `/api/checkout-session` embedded response, not baked into the static HTML;
 `STRIPE_SUCCESS_URL` / `STRIPE_CANCEL_URL` are plain redirect URLs (task-def
 `environment`, backed by the `stripe_success_url` / `stripe_cancel_url` module
 variables) — `STRIPE_SUCCESS_URL` now resolves to the live `/donate/thank-you`
@@ -3065,7 +3577,10 @@ discriminator; the relay Worker's dedicated thank-you branch honours the per-mes
 && wrangler deploy`) so the thank-you branch takes effect (one Worker serves both envs); (2)
 `giving@nbcc.scot` must be a real **receiving mailbox** (Resend is send-only) for replies to land, and
 `nbcc.scot` must stay verified in Resend. A `DMARC` record on `nbcc.scot` (with SPF/DKIM) is
-recommended for inbox placement.
+recommended for inbox placement. The **business-supporter thank-you invite** (TASK-213,
+`sendBusinessSupporterInvite`) reuses this **same** `thankYou: true` passthrough with the same
+`GIVING_FROM_EMAIL` From/Reply-To, so it needs **no** relay `kind` and **no** extra Worker redeploy —
+the relay already forwards its app-built `subject`/`html`/`text` verbatim.
 
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in

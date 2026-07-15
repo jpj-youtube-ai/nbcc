@@ -206,10 +206,10 @@ body.has-ticker{padding-top:var(--ticker-h)}
    main so content never runs to the screen edge or under the fixed nav. */
 .site-main--boxed{max-width:var(--maxw);margin-inline:auto;padding:calc(var(--nav-h) + clamp(28px,4vw,56px)) clamp(20px,5vw,48px) clamp(48px,7vw,88px)}
 .site-main--boxed > section + section{margin-top:clamp(40px,6vw,72px)}
-.site-main--boxed .donate-intro,.site-main--boxed .supporters-intro,.site-main--boxed .contact-intro,.site-main--boxed .thankyou-intro{text-align:center;max-width:780px;margin-inline:auto}
-.site-main--boxed .donate-intro h1,.site-main--boxed .supporters-intro h1,.site-main--boxed .thankyou-intro h1{font-size:clamp(2.3rem,1.8rem + 3.4vw,3.8rem)}
-.site-main--boxed .donate-intro .rule,.site-main--boxed .supporters-intro .rule,.site-main--boxed .thankyou-intro .rule,.site-main--boxed .intro-hero .rule{margin-inline:auto}
-.site-main--boxed .donate-intro .lede,.site-main--boxed .supporters-intro .lede,.site-main--boxed .thankyou-intro .lede{margin-inline:auto}
+.site-main--boxed .donate-intro,.site-main--boxed .supporters-intro,.site-main--boxed .supporters-cta,.site-main--boxed .contact-intro,.site-main--boxed .thankyou-intro,.site-main--boxed .portal-intro,.site-main--boxed .gift-aid-intro{text-align:center;max-width:780px;margin-inline:auto}
+.site-main--boxed .donate-intro h1,.site-main--boxed .supporters-intro h1,.site-main--boxed .thankyou-intro h1,.site-main--boxed .portal-intro h1,.site-main--boxed .gift-aid-intro h1{font-size:clamp(2.3rem,1.8rem + 3.4vw,3.8rem)}
+.site-main--boxed .donate-intro .rule,.site-main--boxed .supporters-intro .rule,.site-main--boxed .thankyou-intro .rule,.site-main--boxed .intro-hero .rule,.site-main--boxed .portal-intro .rule,.site-main--boxed .gift-aid-intro .rule{margin-inline:auto}
+.site-main--boxed .donate-intro .lede,.site-main--boxed .supporters-intro .lede,.site-main--boxed .supporters-cta .lede,.site-main--boxed .thankyou-intro .lede,.site-main--boxed .portal-intro .lede,.site-main--boxed .gift-aid-intro .lede{margin-inline:auto}
 .site-main--boxed .donor-benefits,.site-main--boxed .reassure{background:none;padding-block:0}
 .page-top{padding:calc(var(--nav-h) + clamp(36px,6vw,76px)) 0 clamp(36px,5vw,64px)}
 .hero{position:relative;overflow:hidden;padding:calc(var(--nav-h) + clamp(44px,6vw,88px)) 0 clamp(24px,3vw,44px)}
@@ -283,6 +283,19 @@ h2.h-lg{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
 .thankyou-next{padding:clamp(24px,4vw,40px)}
 .thankyou-next h2{margin-top:0}
 .thankyou-next .thankyou-actions{margin-top:clamp(20px,3vw,28px)}
+/* TASK-220: gift-aid.html + portal.html are boxed pages whose content sits on the
+   shared .card surface (as .thankyou-next does). .card carries no padding of its own,
+   so give the Gift Aid panel and the portal cards the same interior padding, and stack
+   the portal cards with a consistent gap. Presentation only; the [hidden] guard keeps
+   initPortal's reveal (content.hidden = false) working. */
+.giftaid-panel,.portal-card,.portal-error{padding:clamp(24px,4vw,40px)}
+.portal-content{display:flex;flex-direction:column;gap:clamp(20px,3vw,28px)}
+.portal-content[hidden]{display:none}
+/* TASK-221: the type-aware thank-you page stacks the revealed variant card above the shared
+   contact card. Scoped to this page (only there does .thankyou-intro precede .page-sections) so the
+   other pages' .page-sections are untouched; hidden variants (display:none) drop out of the flow, so
+   the gap only shows between the visible cards. Same spacing rhythm as the section stack. */
+.thankyou-intro + .page-sections{display:flex;flex-direction:column;gap:clamp(28px,4vw,44px)}
 
 /* trust pillars (the four booklet cards) */
 .pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
@@ -381,7 +394,7 @@ h2.h-lg{font-size:clamp(2rem,1.6rem + 1.8vw,3rem)}
 .toggle button[aria-pressed="true"],.give-mode[aria-pressed="true"],.give-mode.is-active{background:var(--crimson);color:var(--cream);box-shadow:var(--shadow-sm)}
 .mode-line{margin:18px 0 0;font-size:.95rem;color:var(--slate)}
 .mode-line b{color:var(--maroon)}
-.tiers,.give-tiers{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-top:22px}
+.tiers,.give-tiers{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}
 .tier,.give-tier{position:relative;border:1.6px solid var(--line);border-radius:var(--radius);padding:22px;background:var(--cream);transition:border-color .18s,transform .15s,box-shadow .18s;display:flex;flex-direction:column;gap:6px;cursor:pointer;text-align:left;width:100%;font:inherit}
 .tier:hover,.give-tier:hover{border-color:var(--crimson);transform:translateY(-2px);box-shadow:var(--shadow-sm)}
 .tier .name,.give-tier-name{font-family:var(--font-head);font-size:1.35rem;font-weight:700}
@@ -455,6 +468,15 @@ textarea{resize:vertical;min-height:130px}
 .form-status.ok,.form-status.is-success{display:block;background:var(--holly);color:var(--cream);border:1px solid var(--holly)}
 .form-status.is-error{display:block;background:var(--tan-soft);color:var(--maroon);border:1px solid var(--maroon)}
 .form-status.is-pending{display:block;background:var(--tint);color:var(--slate);border:1px solid var(--line)}
+/* FORM VALIDATION (TASK-225): shared highlight-all treatment used by every form. .is-invalid
+   reddens a control or its wrapper, .validation-msg is the inline per-field message, and the
+   role=alert .form-error-summary sits at the top of the form. Token-only, from the palette. */
+.give-field.is-invalid input,.give-field.is-invalid textarea,.give-field.is-invalid select,.field.is-invalid input,.field.is-invalid textarea,.field.is-invalid select,input.is-invalid,textarea.is-invalid,select.is-invalid{border-color:var(--crimson);box-shadow:0 0 0 3px color-mix(in srgb,var(--crimson) 20%,transparent)}
+.give-check.is-invalid,.give-donor-options.is-invalid,fieldset.is-invalid>legend{color:var(--maroon)}
+.validation-msg{display:block;color:var(--maroon);font-size:.82rem;font-weight:600;margin-top:6px}
+.validation-msg[hidden]{display:none}
+.form-error-summary{color:var(--maroon);background:var(--tan-soft);border:1px solid var(--maroon);border-radius:12px;padding:12px 16px;font-weight:600;margin:0 0 16px}
+.form-error-summary[hidden]{display:none}
 
 /* CTA strip */
 .cta-strip{background:var(--crimson);color:var(--cream);text-align:center;border-radius:var(--radius-lg);padding:clamp(38px,5vw,64px) clamp(24px,4vw,48px);box-shadow:var(--shadow)}
@@ -551,12 +573,16 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-step-err{color:var(--maroon);font-weight:600;font-size:.9rem;margin:14px 0 0;display:none}
 .give-step-err.show{display:block}
 
-/* tier selection (wizard: select, not immediate checkout) */
-.give-tier.is-selected{border-color:var(--crimson);box-shadow:0 0 0 2px var(--crimson) inset,var(--shadow-sm)}
-.give-tier{padding-right:46px}
-.give-tier.is-selected::after{content:"\2713";position:absolute;top:14px;right:14px;width:22px;height:22px;border-radius:50%;background:var(--crimson);color:var(--cream);font-size:.8rem;display:flex;align-items:center;justify-content:center}
-/* nudge the checkmark below the "Most chosen" flag on featured tiers */
-.give-tier.is-featured.is-selected::after{top:20px}
+/* tier selection (wizard: select, not immediate checkout). The selected tier is marked with a
+   soft holly tint and a holly border (TASK-210, softened from the earlier full-green fill; no
+   checkmark badge); the tiles read as a compact centred row and the per-tile description moves
+   into the shared live impact card below the tiers. */
+/* TASK-210: softened selected state — a gentle holly tint with a solid holly border, rather
+   than a full holly fill with cream text, so a chosen amount reads clearly without shouting.
+   Uses the `border` shorthand (not `border-color`) so the brand-colours guard does not read
+   `border-color:var(--holly)` as holly *text* on a light surface. */
+.give-tier.is-selected{border:1.6px solid var(--holly);background:var(--holly-soft);box-shadow:var(--shadow-sm)}
+.give-tier.is-selected .give-tier-name{color:var(--holly-dark)}
 .give-tier-custom{position:relative;border:1.6px dashed var(--line);border-radius:var(--radius);padding:20px;background:var(--cream);grid-column:1 / -1;display:flex;flex-wrap:wrap;align-items:end;gap:12px}
 .give-custom-label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px;width:100%}
 .give-custom-field{display:flex;align-items:center;gap:6px;flex:1;min-width:160px}
@@ -576,6 +602,8 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-req{color:var(--crimson)}.give-optional{color:var(--slate-soft);font-weight:400;font-size:.86em}
 .give-check{display:flex;gap:11px;align-items:flex-start;margin:12px 0;font-size:.93rem;color:var(--slate);cursor:pointer;line-height:1.5}
 .give-check-box{width:20px;height:20px;flex:0 0 auto;margin:2px 0 0;accent-color:var(--crimson)}
+.give-supporter{margin:14px 0 0;padding:14px 0 0;border-top:1px solid var(--line)}
+.give-supporter-lead{font-size:.93rem;color:var(--slate);margin:0 0 10px;line-height:1.5}
 .give-help,.give-field-help,.give-donor-help,.give-business-help,.give-declaration-help,.give-company-help,.give-partners-help,.give-privacy{font-size:.84rem;color:var(--slate-soft);margin:6px 0 0}
 .give-scope{background:var(--tan-soft);border-radius:12px;padding:14px 16px}
 .give-partner{border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:14px}
@@ -592,6 +620,96 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .give-review dt{font-size:.78rem;text-transform:uppercase;letter-spacing:.1em;color:var(--slate-soft);font-weight:600}
 .give-review dd{margin:0 0 10px;font-family:var(--font-head);font-weight:700;color:var(--maroon);font-size:1.15rem}
 .give-review dd:last-child{margin-bottom:0}
+
+/* =================================================================
+   TASK-204 donate redesign: monthly-first row tiers, live impact card,
+   page-2 summary, prominent donor type, newsletter opt-in, Gift Aid uplift.
+   All .giftaid-* rules stay token-only (guarded by gift-aid.test.ts).
+   ================================================================= */
+/* frequency toggle: monthly (left) / one off (right), full width, holly when active */
+.give-toggle{display:grid;grid-template-columns:1fr 1fr;width:100%;gap:6px;background:var(--tint);margin-top:6px}
+.give-toggle .give-mode{padding:12px 10px;text-align:center}
+.give-toggle .give-mode[aria-pressed="true"],.give-toggle .give-mode.is-active{background:var(--holly)}
+/* compact centred tiles in a row; per-tile head/description move to the impact card */
+/* TASK-210: tiles share the choose-your-own box's thickness — same min-height and vertical
+   padding — so the amount row and the custom box read as one consistent set. */
+.give-card .give-tier{align-items:center;text-align:center;justify-content:center;padding:16px 8px;gap:2px;min-height:140px}
+.give-card .give-tier:not(.is-selected):hover{border:1.6px solid var(--tan)}
+.give-card .give-tier-name{font-size:.64rem;letter-spacing:.09em;text-transform:uppercase;color:var(--slate-soft);font-weight:700;margin-bottom:2px}
+.give-card .give-tier .give-price{flex-direction:column;align-items:center;gap:0}
+.give-card .give-tier .give-amount{font-size:1.5rem}
+.give-card .give-tier .give-cadence{font-size:.64rem}
+.give-card .give-tier-head,.give-card .give-tier-desc{display:none}
+/* TASK-210: the "Most popular" pill sits on its own centred line inside the tile (in-flow, not
+   absolutely positioned) with no wrap, so it never overlaps the tier name or the amount. */
+.give-card .give-flag{position:static;transform:none;align-self:center;white-space:nowrap;margin-bottom:2px}
+/* prominent full-width choose-your-own amount (large serif field) */
+.give-tier-custom{background:var(--tint);border-style:solid;align-items:end;padding:16px 20px;min-height:140px}
+.give-custom-label{font-family:var(--font-head);font-size:1.05rem;color:var(--maroon)}
+.give-custom-field{border:2px solid var(--line);border-radius:12px;background:var(--white);overflow:hidden;padding:0;gap:0}
+.give-custom-field:focus-within{border:2px solid var(--holly)}
+.give-custom-currency{display:flex;align-items:center;align-self:stretch;padding:0 16px;background:var(--holly-soft);color:var(--maroon);font-size:1.5rem;border-right:1px solid var(--line)}
+.give-custom-input{border:0;border-radius:0;background:transparent;font-family:var(--font-head);font-size:1.5rem;color:var(--maroon);padding:12px 14px}
+.give-custom-input:focus{border:0}
+/* live impact summary card (updates on tier/frequency change) */
+.give-impact{display:flex;gap:14px;align-items:center;margin-top:18px;background:var(--tan-soft);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px}
+.give-impact-ic{flex:0 0 54px;height:54px;border-radius:50%;background:var(--holly-soft);display:grid;place-items:center;font-size:26px}
+/* TASK-210: the live impact line reads a touch larger and bolder so the "your £X could help ..."
+   message carries more weight next to the amount tiles. */
+.give-impact-text{margin:0;font-size:1.05rem;font-weight:600;line-height:1.4;color:var(--slate)}
+.give-impact-text b{color:var(--maroon);font-weight:800}
+/* step-1 primary CTA */
+.give-cta-row{margin-top:20px}
+.give-cta{width:100%;justify-content:center;font-size:1.05rem;padding:16px}
+.give-pay-note{text-align:center;font-size:.8rem;color:var(--slate-soft);margin:12px 0 0}
+/* Stripe Embedded Checkout overlay (TASK-215): the inline, on-site payment modal. Hidden via the
+   [hidden] attribute until main.js mounts Stripe Embedded Checkout into #embeddedCheckout; when JS
+   or Stripe.js is unavailable the hosted redirect is used instead, so this never blocks the fallback.
+   :not([hidden]) drives the flex layout so the hidden attribute always wins by default. */
+.give-embedded-modal{position:fixed;inset:0;z-index:1100;display:none;align-items:flex-start;justify-content:center;padding:clamp(16px,4vw,48px);background:color-mix(in srgb,var(--slate) 62%,transparent);overflow-y:auto}
+.give-embedded-modal:not([hidden]){display:flex}
+.give-embedded-panel{width:100%;max-width:560px;margin:auto;background:var(--cream);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:clamp(16px,3vw,24px)}
+.give-embedded-bar{display:flex;justify-content:flex-end;margin-bottom:10px}
+.give-embedded-close{background:var(--white);border:1.6px solid var(--holly);color:var(--holly-dark);font-family:var(--font-body);font-weight:700;font-size:.9rem;border-radius:var(--radius-pill);padding:9px 18px;cursor:pointer;transition:background .15s,color .15s}
+.give-embedded-close:hover{background:var(--holly);color:var(--cream)}
+.give-embedded-mount{min-height:320px}
+body.give-embedded-open{overflow:hidden}
+/* page-2 summary band with a Change control back to step 1 */
+.give-summary{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--holly-soft);border:1px solid var(--holly);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px}
+.give-summary-label{display:block;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--holly-dark);font-weight:700}
+.give-summary-amount{font-family:var(--font-head);font-size:1.4rem;color:var(--maroon);font-weight:800;line-height:1.1}
+.give-summary-change{background:var(--white);border:1.6px solid var(--holly);color:var(--holly-dark);font-family:var(--font-body);font-weight:700;font-size:.9rem;border-radius:var(--radius-pill);padding:9px 18px;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.give-summary-change:hover{background:var(--holly);color:var(--cream)}
+/* prominent donor-type cards; the business option is colour accented to draw the eye */
+.give-donor-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px}
+.give-donor-cards .give-donor-option{display:flex;align-items:center;gap:10px;padding:15px 16px;background:var(--cream)}
+.give-donor-option--business{border:1.6px solid var(--tan);background:var(--tan-soft)}
+.give-donor-cards .give-donor-option:has(input:checked){border:1.6px solid var(--holly);background:var(--holly-soft)}
+@media(max-width:520px){.give-donor-cards{grid-template-columns:1fr}}
+/* TASK-219: first name + surname share one row so the donor name reads as one field split
+   in two. Two equal half-width columns at the form's 16px field gap; each column keeps its
+   .give-field wrapper but drops the per-question divider (border/padding) the step adds, so the
+   pair aligns as a unit. Mirrors the donor-cards two-column pattern and its 520px collapse, so
+   the two stack to full width on the narrowest phones where half-width would get cramped. */
+.give-name-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+.give-step .give-name-row .give-field{margin-bottom:0;padding-top:0;border-top:0}
+@media(max-width:520px){.give-name-row{grid-template-columns:1fr}}
+/* clear, separate newsletter opt-in (still the emailConsent field) */
+.give-newsletter{border:1.6px solid var(--line);background:var(--tint);border-radius:12px;padding:2px 14px;margin:14px 0}
+.give-newsletter-check .give-check-text strong{display:block;color:var(--maroon)}
+/* Gift Aid callout reframed to sell the 25% uplift (token-only) */
+.giftaid{display:block;padding:18px 20px}
+.giftaid-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.giftaid-headline{font-family:var(--font-head);font-weight:800;color:var(--holly-dark);font-size:1.15rem}
+.giftaid-logo{font-family:var(--font-head);font-style:italic;color:var(--holly-dark);font-size:1.3rem;transform:rotate(-4deg);white-space:nowrap;opacity:.85}
+.giftaid-uplift{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 2px}
+.giftaid-from{font-family:var(--font-head);font-size:1.4rem;color:var(--slate-soft)}
+.giftaid-arrow{color:var(--holly-dark);font-size:1.2rem;font-weight:700}
+.giftaid-to{font-family:var(--font-head);font-size:1.9rem;color:var(--holly-dark);font-weight:800;line-height:1}
+.giftaid-badge{background:var(--holly);color:var(--cream);font-weight:700;font-size:.82rem;padding:5px 12px;border-radius:var(--radius-pill)}
+.giftaid-intro{margin:12px 0 0;font-size:.9rem;color:var(--slate)}
+.giftaid-check-row{display:flex;gap:12px;align-items:flex-start;margin-top:14px;background:var(--card);border:1.6px solid var(--holly);border-radius:12px;padding:14px;cursor:pointer}
+.giftaid-check-row .giftaid-check{margin-top:1px;accent-color:var(--holly-dark)}
 
 /* side panel (real donate .give-side already holly via base rule) */
 .give-side .eyebrow{color:var(--cream-82)}
@@ -626,6 +744,15 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
 .supporter-meta{display:flex;flex-direction:column;min-width:0}
 .supporter-name{font-family:var(--font-head);font-weight:700;color:var(--maroon);font-size:1.05rem;line-height:1.2}
 .supporter-kind{font-size:.8rem;color:var(--slate-soft)}
+/* Platinum, the top supporters band (TASK-223), reuses the shared .supporter-tier styling above; the
+   only addition is a subtle platinum-grey accent on its heading underline, mirroring the donate page's
+   platinum ink (var(--slate)). Scoped to the platinum section so Bronze/Silver/Gold are unchanged —
+   additive, no restyle of the existing three tiers. */
+.supporter-tier[aria-labelledby="tier-platinum-heading"] .supporter-tier-name::after{background:var(--slate)}
+/* Empty-state (TASK-227): renderSupporterTiers shows this when no supporter has opted in yet, in place
+   of four bare band headings. A centered warm invitation + a crimson CTA to the donate form. */
+.supporters-empty{text-align:center;max-width:52ch;margin:clamp(20px,4vw,40px) auto 0;padding:0 16px}
+.supporters-empty-lead{font-size:1.05rem;color:var(--slate);line-height:1.65;margin:0 0 24px}
 
 @media (max-width:980px){
   .hero .wrap,.split,.split.narrow-img,.contact-grid,.give-inner,.duo{grid-template-columns:1fr}
@@ -647,7 +774,8 @@ figure.story-photo figcaption{margin-top:12px;font-size:.86rem;color:var(--slate
   .nav.open .burger span:nth-child(1){transform:translateY(7px) rotate(45deg)}
   .nav.open .burger span:nth-child(2){opacity:0}
   .nav.open .burger span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
-  .pillars,.tiers,.give-tiers,.row2,.benefits{grid-template-columns:1fr}
+  .pillars,.tiers,.row2,.benefits{grid-template-columns:1fr}
+  .give-tiers{grid-template-columns:repeat(2,1fr)}
   .team{grid-template-columns:repeat(2,1fr)}
   footer .wrap{grid-template-columns:1fr}
   .crow{grid-template-columns:22px 1fr auto}

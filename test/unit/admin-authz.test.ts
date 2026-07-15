@@ -22,7 +22,12 @@ import { signAdminSession } from "../../src/admin/session";
 import type { PermissionMap } from "../../src/admin/permissions";
 
 const SECRET = "test-admin-secret";
-const NOW = new Date("2026-07-11T12:00:00.000Z");
+// Sign session tokens relative to the CURRENT time, never a fixed date. authorizeSection
+// verifies the bearer token against the real clock (`new Date()` in src/routes/admin-authz.ts)
+// and the session TTL is 8h (ADMIN_SESSION_TTL_MS), so a hardcoded past date makes the token
+// "expired" the moment real time moves past date+8h — which rotted these tests (they were
+// pinned to 2026-07-11 and started failing on 2026-07-12). Relative-to-now keeps them valid.
+const NOW = new Date();
 
 function tokenFor(sub: number, role: string, email = "kenny@nbcc.test"): string {
   return signAdminSession({ sub, email, role, now: NOW, secret: SECRET }).token;

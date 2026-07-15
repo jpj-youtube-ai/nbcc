@@ -1,0 +1,322 @@
+/* Business thank you page (TASK-212). Page specific styling only; the design tokens (colours, radii,
+   shadows, fonts) come from styles.css, which this page also loads. The page mirrors the private,
+   card based layout of the donor portal, with a segmented toggle per recognition question. */
+
+.bty-wrap {
+  max-width: 760px;
+  margin-inline: auto;
+  padding: calc(var(--nav-h) + clamp(28px, 4vw, 56px)) clamp(18px, 5vw, 40px) clamp(48px, 7vw, 88px);
+}
+
+.bty-status {
+  text-align: center;
+  color: var(--slate-soft);
+  font-size: 1.02rem;
+  padding: clamp(20px, 5vw, 48px) 0;
+}
+
+/* Error card (no usable token) */
+.bty-error {
+  padding: clamp(24px, 4vw, 40px);
+  text-align: center;
+}
+.bty-error h1 {
+  font-size: clamp(1.6rem, 1.3rem + 1.6vw, 2.2rem);
+  margin: 0 0 12px;
+}
+.bty-error p {
+  color: var(--slate);
+  max-width: 46ch;
+  margin: 0 auto 20px;
+}
+
+.bty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+/* The main card */
+.bty-card {
+  padding: clamp(24px, 4vw, 48px);
+}
+
+/* Greeting header */
+.bty-head {
+  text-align: center;
+  padding-bottom: clamp(20px, 3vw, 32px);
+  border-bottom: 2px solid var(--line);
+  margin-bottom: clamp(22px, 3vw, 34px);
+}
+.bty-logo {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 12px;
+  display: block;
+}
+.bty-band {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto 14px;
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
+  background: var(--holly-soft);
+  color: var(--holly-dark);
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.86rem;
+  letter-spacing: 0.02em;
+}
+.bty-title {
+  font-size: clamp(1.9rem, 1.5rem + 2.4vw, 3rem);
+  margin: 0 0 12px;
+  line-height: 1.1;
+}
+.bty-lede {
+  color: var(--slate);
+  font-size: clamp(1.02rem, 0.98rem + 0.3vw, 1.18rem);
+  max-width: 54ch;
+  margin: 0 auto;
+}
+
+/* Form intro */
+.bty-intro {
+  color: var(--slate);
+  margin: 0 0 6px;
+}
+.bty-req-all {
+  color: var(--slate-soft);
+  font-size: 0.92rem;
+  margin: 0 0 clamp(20px, 3vw, 30px);
+}
+
+/* Recognition question (fieldset) */
+.bty-rec {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: clamp(18px, 2.6vw, 26px);
+  margin: 0 0 clamp(16px, 2.2vw, 22px);
+  min-width: 0;
+  background: var(--card);
+}
+.bty-rec[hidden] {
+  display: none;
+}
+.bty-rec-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 0;
+  margin: 0 0 6px;
+  width: 100%;
+}
+.bty-rec-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.12rem;
+  color: var(--maroon);
+  line-height: 1.25;
+}
+.bty-req {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--crimson);
+  background: var(--tan-soft);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+}
+.bty-rec-desc {
+  color: var(--slate);
+  font-size: 0.98rem;
+  margin: 0 0 16px;
+}
+
+/* Segmented toggle: real radios, visually a two option control. Nothing is selected until chosen. */
+.bty-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.bty-opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  padding: 13px 14px;
+  border: 1.6px solid var(--line);
+  border-radius: 12px;
+  background: var(--cream);
+  color: var(--slate);
+  font-weight: 600;
+  font-size: 0.96rem;
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s, color 0.16s;
+}
+.bty-opt input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+.bty-opt:hover {
+  border-color: var(--tan);
+}
+.bty-opt:focus-within {
+  outline: 3px solid var(--holly);
+  outline-offset: 2px;
+}
+.bty-opt:has(input:checked) {
+  border-color: var(--crimson);
+  background: var(--crimson);
+  color: var(--cream);
+}
+
+/* Detail revealed under a chosen answer */
+.bty-detail {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--tan);
+  background: var(--tan-soft);
+  border-radius: 0 12px 12px 0;
+}
+.bty-detail[hidden] {
+  display: none;
+}
+.bty-detail .bty-detail {
+  background: var(--cream);
+  border-left-color: var(--holly);
+}
+.bty-why,
+.bty-note {
+  font-size: 0.84rem;
+  color: var(--slate-soft);
+  margin: 6px 0 0;
+}
+.bty-note {
+  margin: 0;
+}
+.bty-sub-label {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.98rem;
+  color: var(--maroon);
+  margin: 0 0 10px;
+}
+
+/* UK address grid */
+.bty-addr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 4px;
+}
+.bty-field-full {
+  grid-column: 1 / -1;
+}
+.bty-addr-grid .give-field {
+  margin-bottom: 0;
+}
+
+/* Newsletter statement + email note */
+.bty-newsletter {
+  color: var(--slate);
+  font-size: 0.98rem;
+  margin: clamp(18px, 2.4vw, 26px) 0 0;
+  padding: 14px 16px;
+  background: var(--holly-soft);
+  border-radius: 12px;
+}
+.bty-email-note {
+  color: var(--slate);
+  font-size: 0.95rem;
+  margin: 16px 0 clamp(18px, 2.4vw, 26px);
+  padding: 14px 16px;
+  border: 1px dashed var(--tan);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+/* Submit */
+.bty-form-status:not(:empty) {
+  color: var(--crimson);
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.bty-submit {
+  width: 100%;
+  justify-content: center;
+  font-size: 1.05rem;
+  padding: 15px 24px;
+}
+.bty-saved-note {
+  color: var(--slate-soft);
+  font-size: 0.86rem;
+  margin: 14px 0 0;
+  text-align: center;
+}
+
+/* Read only confirmation */
+.bty-confirm[hidden] {
+  display: none;
+}
+.bty-confirm-title {
+  font-size: clamp(1.5rem, 1.2rem + 1.6vw, 2.1rem);
+  color: var(--maroon);
+  margin: 0 0 10px;
+}
+.bty-confirm-lede {
+  color: var(--slate);
+  margin: 0 0 20px;
+}
+.bty-confirm-list {
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+.bty-confirm-list li {
+  position: relative;
+  padding: 12px 12px 12px 40px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  color: var(--slate);
+  background: var(--card);
+}
+.bty-confirm-list li::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  background: var(--holly);
+  transform: translateY(-50%) rotate(45deg);
+  border-radius: 2px;
+}
+.bty-confirm-links {
+  justify-content: flex-start;
+  margin-bottom: 18px;
+}
+.bty-confirm-note {
+  color: var(--slate-soft);
+  font-size: 0.92rem;
+  margin: 8px 0 0;
+}
+
+@media (max-width: 560px) {
+  .bty-toggle {
+    grid-template-columns: 1fr;
+  }
+  .bty-addr-grid {
+    grid-template-columns: 1fr;
+  }
+}

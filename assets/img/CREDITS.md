@@ -45,7 +45,7 @@ assets** — **CONTENT VERIFICATION**.
 |---|---|---|---|---|
 | `story-tygan.jpg` | about.html "our story" founding headshot (REQ-015) | 640×800, 4:5, q82 progressive JPEG | placeholder | ❌ pending consented photo |
 | `why-packing.jpg` | (superseded, see below) | 900×600 q82 progressive JPEG | placeholder | ❌ pending consented photo |
-| `home-red-bags-handover.jpg` | index.html "why your donation matters" photo (REQ-012) | 1280×960 JPEG (as supplied) | provided by NBCC | ✅ consented volunteer photo (NBCC team in branded hoodies; no beneficiaries pictured) |
+| `home-red-bags-handover.jpg` | index.html "why your donation matters" photo (REQ-012) | 1400×732 q80 progressive JPEG (source PNG in `assets/img/source/home-red-bags-handover.png`) | provided by NBCC | ✅ consented volunteer photo (NBCC team in maroon branded sweatshirts handing over red bags by the Christmas tree at the Elves Workshop; no beneficiaries pictured) |
 | `og-image.png` | SEO `og:image` / `twitter:image` on all four pages (REQ-034) | 1200×630 PNG branded card | placeholder | n/a (brand card, no people) — pending a designed share image |
 
 **Beneficiary/volunteer/packing/delivery imagery** (the founding headshot, the

@@ -12,7 +12,7 @@
     <meta name="robots" content="noindex" />
     <meta
       name="description"
-      content="Add Gift Aid to your donation to the Night Before Christmas Campaign so NBCC can reclaim the tax on your gift at no extra cost to you."
+      content="Add Gift Aid to your donation to the Night Before Christmas Campaign so NBCC can reclaim the tax on your donation at no extra cost to you."
     />
     <link rel="canonical" href="https://nbcc.scot/gift-aid" />
 
@@ -41,14 +41,14 @@
       </div>
     </header>
 
-    <main class="site-main" id="main" tabindex="-1">
-      <section class="giftaid-intro" aria-labelledby="giftaid-intro-heading">
+    <main class="site-main site-main--boxed" id="main" tabindex="-1">
+      <section class="gift-aid-intro" aria-labelledby="giftaid-intro-heading">
         <span class="eyebrow">Gift Aid</span>
         <h1 id="giftaid-intro-heading">Add Gift Aid to your donation</h1>
         <div class="rule"></div>
         <p class="lede">
           If you are a UK taxpayer, the Night Before Christmas Campaign can reclaim
-          the tax on your gift, adding a quarter to its value at no extra cost to you.
+          the tax you have already paid and add a quarter to your donation, at no extra cost to you.
           Complete the short declaration below and NBCC will do the rest.
         </p>
       </section>
@@ -63,18 +63,20 @@
           <form class="giftaid-form" method="post" action="/api/gift-aid/__GIFT_AID_TOKEN__" novalidate>
             <fieldset class="give-declaration">
               <legend class="give-declaration-legend">Your Gift Aid declaration</legend>
-              <p class="give-declaration-help">We ask for these so HMRC can match your donation to your tax record.</p>
+              <p class="give-declaration-help">We only ask for these so HMRC can match your donation to your tax record.</p>
               <div class="give-field">
                 <label for="declTitle">Title <span class="give-optional">(optional)</span></label>
                 <input type="text" id="declTitle" name="title" class="give-field-input" autocomplete="honorific-prefix" placeholder="Mr, Ms, Dr" />
               </div>
-              <div class="give-field">
-                <label for="declFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="declFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
-              </div>
-              <div class="give-field">
-                <label for="declLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="declLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+              <div class="give-name-row">
+                <div class="give-field">
+                  <label for="declFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="declFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="declLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="declLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+                </div>
               </div>
               <div class="give-field">
                 <label for="declHouse">House name or number <span class="give-req" aria-hidden="true">*</span></label>
@@ -105,6 +107,9 @@
           </form>
         </div>
         <!--GIFTAID_REGION_END-->
+        <!-- TASK-219: a short, visible contact line (phone + email), placed OUTSIDE the
+             server-replaced region markers so it persists in every render state. -->
+        <p>Questions about your donation? Call <a href="tel:+441292811015">01292 811 015</a> or email <a href="mailto:giving@nbcc.scot">giving@nbcc.scot</a>.</p>
       </section>
     </main>
 

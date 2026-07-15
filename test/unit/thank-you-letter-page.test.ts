@@ -80,4 +80,18 @@ describe("thank-you letter page (REQ-069 · TASK-165)", () => {
     expect(html).not.toContain("<script>x</script>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("prints on a single A4 page on mobile as well as desktop (TASK-197)", () => {
+    const html = buildThankYouLetterPage(base);
+    // Mobile browsers auto-inflate body text on a wide, fixed-width (210mm) page viewed in a
+    // narrow viewport, which pushed the letter past one sheet (the user had to scale to ~78%).
+    // Pinning text-size-adjust makes the letter render at the same size as desktop.
+    expect(html).toMatch(/text-size-adjust:\s*100%/);
+    // In print, the sheet is clamped to exactly one A4 page (fixed height + clip) instead of a
+    // zero-tolerance min-height that tips onto a blank second page when a device rounds up.
+    const printBlock = html.match(/@media print\{([\s\S]*?)@page/);
+    expect(printBlock).not.toBeNull();
+    expect(printBlock![1]).toContain("height:297mm");
+    expect(printBlock![1]).toContain("overflow:hidden");
+  });
 });

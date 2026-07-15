@@ -7,6 +7,219 @@
 (function () {
   "use strict";
 
+  // ---- Shared accessible form validation (TASK-225) --------------------------------
+  // validateForm(scope, opts?) -> { valid }. Flags EVERY invalid control at once
+  // (aria-invalid + an is-invalid class on the control or its .give-field/.field wrapper +
+  // an inline message linked via aria-describedby), refreshes ONE role=alert summary at the
+  // top of the scope, moves focus to the FIRST invalid control, and wires live-clear so
+  // editing a flagged control clears it (hiding the summary once all are valid). Skips
+  // disabled controls and controls under a hidden ancestor, BOUNDED at `scope` so a visible
+  // form still validates when a container above it is hidden (the portal error card case).
+  // The required/type/pattern attributes are the rule source. opts: { summary?, extraChecks? }
+  // where extraChecks() -> [{ control, message }] adds caller cross-field rules.
+  var EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  // TASK-224: tiny whole-word client pre-check for the display name (server filter is load-bearing).
+  var SUPPORTER_BLOCKED = /\b(arse|ass|bastard|bitch|bollocks|bugger|cock|crap|cunt|dick|fuck|piss|prick|shit|slut|twat|wank|whore|chink|coon|fag|faggot|kike|paki|retard|spastic|spic|tranny|wetback)\b|nigg/i;
+  function creditNameBlocked(name) { return SUPPORTER_BLOCKED.test(String(name || "")); }
+
+  function ctrlType(c) {
+    return (c.tagName === "SELECT" ? "select" : c.getAttribute("type") || "text").toLowerCase();
+  }
+  function isFormField(c) {
+    var t = ctrlType(c);
+    return t !== "submit" && t !== "button" && t !== "reset" && t !== "image" && t !== "hidden";
+  }
+  function fieldKey(c) {
+    return (ctrlType(c) === "radio" ? c.name || c.id : c.id || c.name) || "field";
+  }
+  function fieldWrap(c) {
+    return (
+      (c.closest &&
+        (c.closest(".give-field") ||
+          c.closest(".field") ||
+          c.closest(".give-check") ||
+          c.closest(".give-donor-options") ||
+          c.closest("fieldset"))) ||
+      c
+    );
+  }
+  // Skip a control that is disabled, not a real field, hidden itself, or under a hidden
+  // ancestor between it and `scope`. The walk stops AT `scope` (exclusive), so the scope's
+  // own container being hidden never wrongly passes a form we were asked to validate.
+  function skipControl(c, scope) {
+    if (c.disabled || !isFormField(c) || c.hidden) return true;
+    var node = c.parentElement;
+    while (node && node !== scope) {
+      if (node.hidden) return true;
+      node = node.parentElement;
+    }
+    return false;
+  }
+  function messageFor(c, kind) {
+    var custom = c.getAttribute && c.getAttribute("data-invalid-message");
+    if (custom) return custom;
+    if (kind === "email") return "Enter a valid email address like name@example.com";
+    var t = ctrlType(c);
+    if (t === "email") return "Enter your email address";
+    if (t === "radio" || t === "checkbox" || t === "select") return "Select an option";
+    return "This field is required";
+  }
+  // The invalidity of one non-radio control: "required" (empty required), "email"/"pattern"
+  // (a value that fails its format), or null when it is fine (including optional + empty).
+  function invalidKind(c) {
+    var t = ctrlType(c);
+    var required = c.hasAttribute("required");
+    if (t === "checkbox") return required && !c.checked ? "required" : null;
+    var val = (c.value || "").trim();
+    if (required && !val) return "required";
+    if (!val) return null;
+    if (t === "email" && !EMAIL_RE.test(val)) return "email";
+    var pat = c.getAttribute("pattern");
+    if (pat) {
+      try {
+        if (!new RegExp("^(?:" + pat + ")$").test(val)) return "pattern";
+      } catch (e) {
+        /* an invalid author pattern never blocks the person filling the form */
+      }
+    }
+    return null;
+  }
+  // Find (or create) the control's inline message node, keyed `<field>-error`, and link it
+  // via aria-describedby. Reuses an existing node of that id (e.g. contact's error spans).
+  function messageNode(c, scope) {
+    var doc = c.ownerDocument;
+    var id = fieldKey(c) + "-error";
+    var node = doc.getElementById(id);
+    if (!node) {
+      node = doc.createElement("p");
+      node.id = id;
+      node.className = "validation-msg";
+      var host = fieldWrap(c);
+      if (host && host !== c && host.appendChild) host.appendChild(node);
+      else if (c.parentNode) c.parentNode.insertBefore(node, c.nextSibling);
+    }
+    if (node.className.indexOf("validation-msg") === -1) {
+      node.className = (node.className + " validation-msg").trim();
+    }
+    var db = c.getAttribute("aria-describedby") || "";
+    if (db.split(/\s+/).indexOf(id) === -1) c.setAttribute("aria-describedby", (db + " " + id).trim());
+    return node;
+  }
+  function resolveSummary(scope, opts) {
+    if (opts && opts.summary) {
+      if (!opts.summary.getAttribute("role")) opts.summary.setAttribute("role", "alert");
+      return opts.summary;
+    }
+    if (scope.__vSummary) return scope.__vSummary;
+    var node = scope.ownerDocument.createElement("p");
+    node.className = "form-error-summary";
+    node.setAttribute("role", "alert");
+    node.hidden = true;
+    scope.insertBefore(node, scope.firstChild);
+    scope.__vSummary = node;
+    return node;
+  }
+  function showSummary(node) {
+    if (!node) return;
+    if (!(node.textContent || "").trim()) {
+      node.textContent = "Please check the highlighted fields below and try again.";
+    }
+    node.hidden = false;
+    node.classList.add("show");
+  }
+  function hideSummary(node) {
+    if (!node) return;
+    node.hidden = true;
+    node.classList.remove("show");
+  }
+  function clearControl(c) {
+    c.setAttribute("aria-invalid", "false");
+    fieldWrap(c).classList.remove("is-invalid");
+    var node = c.ownerDocument.getElementById(fieldKey(c) + "-error");
+    if (node) node.hidden = true;
+  }
+  function liveClear(c, scope, summary) {
+    if (c.__vClear) return;
+    c.__vClear = true;
+    var handler = function () {
+      clearControl(c);
+      if (!scope.querySelector('.is-invalid, [aria-invalid="true"]')) hideSummary(summary);
+    };
+    c.addEventListener("input", handler);
+    c.addEventListener("change", handler);
+  }
+  function flagControl(c, message, scope, summary, group) {
+    c.setAttribute("aria-invalid", "true");
+    fieldWrap(c).classList.add("is-invalid");
+    var node = messageNode(c, scope);
+    node.textContent = message;
+    node.hidden = false;
+    if (group && group.length) {
+      Array.prototype.forEach.call(group, function (r) { liveClear(r, scope, summary); });
+    } else {
+      liveClear(c, scope, summary);
+    }
+  }
+  function clearValidation(scope) {
+    if (!scope) return;
+    Array.prototype.forEach.call(scope.querySelectorAll("input, select, textarea"), function (c) {
+      if (isFormField(c)) c.setAttribute("aria-invalid", "false");
+    });
+    Array.prototype.forEach.call(scope.querySelectorAll(".is-invalid"), function (w) {
+      w.classList.remove("is-invalid");
+    });
+    Array.prototype.forEach.call(scope.querySelectorAll(".validation-msg"), function (m) {
+      m.hidden = true;
+    });
+    hideSummary(scope.__vSummary);
+  }
+  function validateForm(scope, opts) {
+    opts = opts || {};
+    var summary = resolveSummary(scope, opts);
+    clearValidation(scope);
+    var invalids = [];
+    var seen = {};
+    Array.prototype.forEach.call(scope.querySelectorAll("input, select, textarea"), function (c) {
+      if (skipControl(c, scope)) return;
+      if (ctrlType(c) === "radio") {
+        var name = c.name;
+        if (!name || seen[name]) return;
+        seen[name] = true;
+        var group = Array.prototype.filter.call(
+          scope.querySelectorAll('input[type="radio"]'),
+          function (r) { return r.name === name && !skipControl(r, scope); },
+        );
+        if (!group.length) return;
+        var required = group.some(function (r) { return r.hasAttribute("required"); });
+        if (required && !group.some(function (r) { return r.checked; })) {
+          invalids.push({ control: group[0], message: messageFor(group[0], "required"), group: group });
+        }
+        return;
+      }
+      var kind = invalidKind(c);
+      if (kind) invalids.push({ control: c, message: messageFor(c, kind) });
+    });
+    if (typeof opts.extraChecks === "function") {
+      (opts.extraChecks() || []).forEach(function (x) {
+        if (x && x.control) invalids.push({ control: x.control, message: x.message || messageFor(x.control, "required") });
+      });
+    }
+    if (!invalids.length) {
+      hideSummary(summary);
+      return { valid: true };
+    }
+    invalids.forEach(function (item) {
+      flagControl(item.control, item.message, scope, summary, item.group);
+    });
+    showSummary(summary);
+    var first = invalids[0].control;
+    if (first && first.focus) {
+      try { first.focus(); } catch (e) { /* focus unavailable in some environments */ }
+    }
+    return { valid: false };
+  }
+
   function initNav(doc, win) {
     doc.documentElement.dataset.js = "ready";
 
@@ -199,9 +412,15 @@
       if (giftAidRegion) giftAidRegion.hidden = noGiftAid;
       if (noGiftAid && giftAidBox) giftAidBox.checked = false;
       // The single declaration is the individual path; the partnership captures one
-      // declaration per partner in .give-partners instead.
-      if (declaration) declaration.hidden = path !== "individual";
-      if (partners) partners.hidden = path !== "partnership";
+      // declaration per partner in .give-partners instead. Both are GIFT AID declarations,
+      // so they apply only when the donor has opted into Gift Aid — gate them on #giftAid
+      // as well as the donor path, mirroring the on-screen "we ask for these only if you add
+      // Gift Aid" copy. Otherwise a donor who did NOT opt in was still shown these fields and
+      // blocked by their `required` inputs on the confirm step. validate() skips inputs inside
+      // a [hidden] ancestor, so hiding the fieldset also un-requires them (no separate toggle).
+      var giftAidOn = !!(giftAidBox && giftAidBox.checked);
+      if (declaration) declaration.hidden = path !== "individual" || !giftAidOn;
+      if (partners) partners.hidden = path !== "partnership" || !giftAidOn;
       // The company-specific fields show ONLY on the company path; disable their inputs
       // otherwise so a hidden required field never blocks submission or leaks a value.
       if (company) {
@@ -231,6 +450,11 @@
         if (btn.checked) apply();
       });
     });
+
+    // Opting into (or out of) Gift Aid changes whether the declaration/partners fieldsets
+    // apply, so re-run apply() whenever #giftAid toggles. It is only read elsewhere (payload
+    // fold, review summary), never listened to, so this is the single place that reacts to it.
+    if (giftAidBox) giftAidBox.addEventListener("change", apply);
 
     // Sync to the radios marked checked in the markup (individual by default).
     apply();
@@ -407,44 +631,6 @@
     if (!form) return;
     var status = doc.getElementById("formStatus");
 
-    // The required fields and how each is validated. Last name is optional.
-    var fields = [
-      { id: "firstName", required: true },
-      { id: "email", required: true, email: true },
-      { id: "message", required: true },
-    ];
-
-    function emailValid(value) {
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-    }
-
-    function validateField(f) {
-      var el = doc.getElementById(f.id);
-      if (!el) return true;
-      var value = (el.value || "").trim();
-      var ok = true;
-      if (f.required && !value) ok = false;
-      else if (f.email && !emailValid(value)) ok = false;
-      el.setAttribute("aria-invalid", String(!ok));
-      var err = doc.getElementById(f.id + "-error");
-      if (err) err.hidden = ok;
-      var wrap = el.closest ? el.closest(".field") : null;
-      if (wrap) wrap.classList.toggle("invalid", !ok);
-      return ok;
-    }
-
-    function clearErrors() {
-      fields.forEach(function (f) {
-        var el = doc.getElementById(f.id);
-        if (!el) return;
-        el.setAttribute("aria-invalid", "false");
-        var err = doc.getElementById(f.id + "-error");
-        if (err) err.hidden = true;
-        var wrap = el.closest ? el.closest(".field") : null;
-        if (wrap) wrap.classList.remove("invalid");
-      });
-    }
-
     function value(id) {
       var el = doc.getElementById(id);
       return el ? (el.value || "").trim() : "";
@@ -453,22 +639,12 @@
     form.addEventListener("submit", function (e) {
       e.preventDefault();
 
-      var firstBad = null;
-      var allOk = true;
-      fields.forEach(function (f) {
-        var ok = validateField(f);
-        if (!ok) {
-          allOk = false;
-          if (!firstBad) firstBad = doc.getElementById(f.id);
-        }
-      });
-
-      if (!allOk) {
+      // Highlight every missing/invalid field at once via the shared helper (TASK-225).
+      if (!validateForm(form).valid) {
         if (status) {
           status.textContent = "";
           status.className = "form-status";
         }
-        if (firstBad && firstBad.focus) firstBad.focus();
         return;
       }
 
@@ -504,7 +680,7 @@
               status.className = "form-status is-success";
             }
             form.reset();
-            clearErrors();
+            clearValidation(form);
           } else {
             if (status) {
               status.textContent =
@@ -526,6 +702,19 @@
     });
   }
 
+  // Gift Aid declaration form (gift-aid.html, TASK-225): the token-scoped completion form
+  // posts natively to /api/gift-aid/:token (novalidate, no fetch). This only GATES that native
+  // submit: an invalid form highlights every missing field at once via the shared helper and is
+  // blocked; a valid form submits unchanged. initDeclarationCapture already wires the overseas
+  // postcode toggle on the same .give-declaration fieldset, so a non-UK donor is not blocked.
+  function initGiftAidForm(doc) {
+    var form = doc.querySelector("form.giftaid-form");
+    if (!form) return;
+    form.addEventListener("submit", function (e) {
+      if (!validateForm(form).valid && e.preventDefault) e.preventDefault();
+    });
+  }
+
   // Donate checkout contract (REQ-028): each tier/amount control carries
   // data-mode (once/monthly), data-plan (bronze/silver/gold/platinum, empty for
   // one-off) and data-amount (pence, empty for choose-your-own). startCheckout
@@ -535,6 +724,69 @@
   // { url }; with no working backend it degrades to showing the payload (the
   // preview), mirroring initContactForm's best-effort approach. Amount is in
   // pence; the choose-your-own control builds it from the #customAmount input.
+  // ---- Stripe Embedded Checkout (TASK-215) ----------------------------------
+  // Progressive enhancement over the hosted redirect: when JS + Stripe.js load, the donor pays
+  // INLINE in an on-page modal and never leaves nbcc.scot. Stripe.js is loaded from js.stripe.com
+  // (its only supported origin) by DYNAMIC INJECTION — not a static <script> tag — so donate.html
+  // keeps its single shared script. Any failure (Stripe.js blocked, no container, init/mount throw)
+  // falls back to the hosted redirect, so the donor is never left with a dead button.
+  var embeddedCheckoutInstance = null;
+
+  function ensureStripeJs(doc) {
+    var w = (doc && doc.defaultView) || window;
+    if (typeof w.Stripe === "function") return; // already available
+    if (doc.getElementById("stripe-js-sdk")) return; // already injected/injecting
+    var s = doc.createElement("script");
+    s.id = "stripe-js-sdk";
+    s.src = "https://js.stripe.com/v3/";
+    s.async = true;
+    (doc.head || doc.documentElement).appendChild(s);
+  }
+
+  function openEmbeddedCheckout(doc) {
+    var modal = doc.getElementById("embeddedCheckoutModal");
+    if (modal) {
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+    }
+    if (doc.body) doc.body.classList.add("give-embedded-open");
+    var closeBtn = doc.getElementById("embeddedCheckoutClose");
+    if (closeBtn && closeBtn.focus) {
+      try { closeBtn.focus(); } catch (e) { /* focus unavailable */ }
+    }
+  }
+
+  function closeEmbeddedCheckout(doc) {
+    var modal = doc.getElementById("embeddedCheckoutModal");
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+    }
+    if (doc.body) doc.body.classList.remove("give-embedded-open");
+    if (embeddedCheckoutInstance) {
+      try { embeddedCheckoutInstance.destroy(); } catch (e) { /* already gone */ }
+      embeddedCheckoutInstance = null;
+    }
+    var mount = doc.getElementById("embeddedCheckout");
+    if (mount) mount.innerHTML = "";
+  }
+
+  // Donate-page only: preload Stripe.js and wire the modal's close controls. No-ops on any page
+  // without the #embeddedCheckout mount (so it never runs on the other pages or in isolated tests).
+  function initEmbeddedCheckout(doc, win) {
+    win = win || (doc && doc.defaultView) || window;
+    if (!doc.getElementById("embeddedCheckout")) return;
+    ensureStripeJs(doc);
+    var closeBtn = doc.getElementById("embeddedCheckoutClose");
+    if (closeBtn) closeBtn.addEventListener("click", function () { closeEmbeddedCheckout(doc); });
+    var modal = doc.getElementById("embeddedCheckoutModal");
+    if (modal) {
+      doc.addEventListener("keydown", function (e) {
+        if ((e.key === "Escape" || e.keyCode === 27) && !modal.hidden) closeEmbeddedCheckout(doc);
+      });
+    }
+  }
+
   function startCheckout(button, win) {
     if (!button) return null;
     var doc = button.ownerDocument;
@@ -577,8 +829,14 @@
     // { mode, plan, amount, giftAid } contract is unchanged.
     var contactControl = doc.querySelector(".give-contact[data-ready]");
     if (contactControl) {
-      var fullNameEl = doc.getElementById("donorName");
-      payload.fullName = fullNameEl ? (fullNameEl.value || "").trim() : "";
+      // TASK-210: the donor name is captured as two fields (first name + surname); combine
+      // them into the single `fullName` the checkout contract POSTs — the payload and the
+      // /api/checkout-session schema are unchanged.
+      var firstNameEl = doc.getElementById("donorFirstName");
+      var surnameEl = doc.getElementById("donorSurname");
+      var firstName = firstNameEl ? (firstNameEl.value || "").trim() : "";
+      var surname = surnameEl ? (surnameEl.value || "").trim() : "";
+      payload.fullName = (firstName + " " + surname).trim();
       var emailEl = doc.getElementById("donorEmail");
       payload.email = emailEl ? (emailEl.value || "").trim() : "";
       var consentEl = doc.getElementById("emailConsent");
@@ -589,6 +847,15 @@
       if (payload.mode === "monthly") {
         var ageEl = doc.getElementById("ageConfirmed");
         payload.ageConfirmed = !!(ageEl && ageEl.checked);
+      }
+      // TASK-224: fold the opt-in in ONLY for the eligible monthly gift where the block is shown.
+      var optinBlock = doc.getElementById("supporterOptin");
+      if (optinBlock && !optinBlock.hidden && payload.mode === "monthly" && payload.amount >= 1000) {
+        var listYes = doc.querySelector('input[name="listOnSupporters"]:checked');
+        payload.listOnSupporters = !!(listYes && listYes.value === "yes");
+        var creditEl = doc.getElementById("supporterCreditName");
+        var credit = creditEl ? (creditEl.value || "").trim() : "";
+        if (payload.listOnSupporters && credit) payload.creditName = credit;
       }
     }
 
@@ -672,7 +939,8 @@
       payload.company = {
         legalName: businessName,
         registrationNumber: compVal("companyRegNumber"),
-        contactName: compVal("companyContactName"),
+        // TASK-226: contact name captured as first name + surname; folded into the single contactName.
+        contactName: (compVal("companyContactFirstName") + " " + compVal("companyContactSurname")).trim(),
         contactEmail: compVal("companyContactEmail"),
         billingAddress: compVal("companyBillingAddress"),
         billingPostcode: compVal("companyBillingPostcode"),
@@ -694,26 +962,81 @@
       }
     }
 
-    // Production: POST to the checkout endpoint (REQ-029) and redirect to the
-    // returned Stripe URL; degrade to the preview if it is absent/unavailable.
-    if (typeof win.fetch === "function") {
-      win
-        .fetch("/api/checkout-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-        .then(function (res) {
-          return res && res.ok ? res.json() : null;
-        })
+    // POST the checkout body, optionally requesting a specific Stripe UI mode. uiMode is added to a
+    // COPY so the returned/previewed `payload` stays the exact { mode, plan, amount, giftAid, ... }
+    // contract (REQ-028) that callers and tests rely on — the wire body is the only thing that grows.
+    function postCheckout(uiMode) {
+      var out = { method: "POST", headers: { "Content-Type": "application/json" } };
+      if (uiMode) {
+        var withMode = {};
+        for (var k in payload) {
+          if (Object.prototype.hasOwnProperty.call(payload, k)) withMode[k] = payload[k];
+        }
+        withMode.uiMode = uiMode;
+        out.body = JSON.stringify(withMode);
+      } else {
+        out.body = JSON.stringify(payload);
+      }
+      return win.fetch("/api/checkout-session", out).then(function (res) {
+        return res && res.ok ? res.json() : null;
+      });
+    }
+
+    // Hosted redirect (REQ-029): the EXISTING flow and the universal fallback/safety net. POST with
+    // no uiMode (the server defaults to hosted) and navigate to the returned Stripe { url }. Degrades
+    // to the preview ONLY when there is no working backend (dev/preview with fetch unavailable).
+    function hostedRedirect() {
+      if (typeof win.fetch !== "function") {
+        preview();
+        return;
+      }
+      postCheckout()
         .then(function (data) {
           if (data && data.url) win.location.href = data.url;
           else preview();
         })
         .catch(preview);
-    } else {
-      preview();
     }
+
+    // Embedded (TASK-215): try the inline, on-site checkout FIRST, but only when fetch, Stripe.js and
+    // the on-page mount are all present. On ANY failure at ANY step (endpoint error, missing
+    // clientSecret/publishableKey, Stripe.js construction, embedded init, or mount) fall back to the
+    // hosted redirect — so JS-disabled, Stripe.js-blocked and init-failure paths all still pay.
+    function tryEmbedded() {
+      var mount = doc.getElementById("embeddedCheckout");
+      if (typeof win.fetch !== "function" || typeof win.Stripe !== "function" || !mount) {
+        hostedRedirect();
+        return;
+      }
+      postCheckout("embedded")
+        .then(function (data) {
+          if (!data || !data.clientSecret || !data.publishableKey) {
+            hostedRedirect();
+            return;
+          }
+          var stripe;
+          try {
+            stripe = win.Stripe(data.publishableKey);
+          } catch (e) {
+            hostedRedirect();
+            return;
+          }
+          stripe
+            .initEmbeddedCheckout({ clientSecret: data.clientSecret })
+            .then(function (checkout) {
+              embeddedCheckoutInstance = checkout;
+              openEmbeddedCheckout(doc);
+              checkout.mount(mount);
+            })
+            .catch(function () {
+              closeEmbeddedCheckout(doc);
+              hostedRedirect();
+            });
+        })
+        .catch(hostedRedirect);
+    }
+
+    tryEmbedded();
 
     return payload;
   }
@@ -761,12 +1084,10 @@
     form.addEventListener("submit", function (ev) {
       if (ev && ev.preventDefault) ev.preventDefault();
       var email = input && input.value ? input.value.trim() : "";
-      // Let the native required/type=email validation surface an empty/invalid address rather
-      // than posting it; the endpoint would 400 anyway.
-      if (form.checkValidity && !form.checkValidity()) {
-        if (form.reportValidity) form.reportValidity();
-        return;
-      }
+      // Highlight the email inline (not a native popup) when it is missing or malformed, and block
+      // the post. This form lives inside the hidden error card, but validateForm is bounded at the
+      // form scope, so it still validates the visible field when the card is shown (TASK-225).
+      if (!validateForm(form).valid) return;
       if (typeof win.fetch !== "function") return;
       return win
         .fetch("/api/portal/request", {
@@ -861,8 +1182,8 @@
         post(
           base + "/subscription/cancel",
           { subscriptionId: subscriptionId, accepted: "cancel" },
-          "Your monthly gift has been cancelled. Thank you for all your support.",
-          "We could not cancel your monthly gift just now. Please try again later.",
+          "Your monthly donation has been cancelled. Thank you for all your support.",
+          "We could not cancel your monthly donation just now. Please try again later.",
         );
       });
     }
@@ -925,6 +1246,7 @@
     if (declForm) {
       declForm.addEventListener("submit", function (ev) {
         ev.preventDefault();
+        if (!validateForm(declForm).valid) return;
         if (typeof win.fetch !== "function") return;
         var nonUk = !!(pdNonUk && pdNonUk.checked);
         var val = function (id) {
@@ -976,14 +1298,19 @@
     // anonymity flag. Prefilled by render() from the snapshot; submit PATCHes the fields to the
     // bare /api/portal/:token and reflects the returned snapshot back into "Your details".
     var detailsForm = doc.getElementById("portalDetailsForm");
-    var pdName = doc.getElementById("pdName");
+    // TASK-226: name captured as first name + surname; prefill splits the stored fullName, submit folds it back.
+    var pdNameFirst = doc.getElementById("pdNameFirst");
+    var pdNameSurname = doc.getElementById("pdNameSurname");
     var pdEmail = doc.getElementById("pdEmail");
     var pdEmailConsent = doc.getElementById("pdEmailConsent");
     var pdAnonymous = doc.getElementById("pdAnonymous");
     var detailsStatus = doc.getElementById("portalDetailsStatus");
 
     function prefillDetails(data) {
-      if (pdName) pdName.value = data.fullName || "";
+      var nm = (data.fullName || "").trim();
+      var sp = nm.indexOf(" ");
+      if (pdNameFirst) pdNameFirst.value = sp === -1 ? nm : nm.slice(0, sp);
+      if (pdNameSurname) pdNameSurname.value = sp === -1 ? "" : nm.slice(sp + 1).trim();
       if (pdEmail) pdEmail.value = data.email || "";
       if (pdEmailConsent) pdEmailConsent.checked = !!data.emailConsent;
       if (pdAnonymous) pdAnonymous.checked = !!data.anonymous;
@@ -992,15 +1319,12 @@
     if (detailsForm) {
       detailsForm.addEventListener("submit", function (ev) {
         if (ev && ev.preventDefault) ev.preventDefault();
-        if (detailsForm.checkValidity && !detailsForm.checkValidity()) {
-          if (detailsForm.reportValidity) detailsForm.reportValidity();
-          return;
-        }
+        if (!validateForm(detailsForm).valid) return;
         if (typeof win.fetch !== "function") return;
         // Send name + the two flags always; email only when non-empty (the schema rejects an
         // empty string, and clearing an email is not an edit we expose here).
         var payload = {
-          fullName: pdName ? pdName.value.trim() : "",
+          fullName: ((pdNameFirst ? pdNameFirst.value : "") + " " + (pdNameSurname ? pdNameSurname.value : "")).trim(),
           emailConsent: !!(pdEmailConsent && pdEmailConsent.checked),
           anonymous: !!(pdAnonymous && pdAnonymous.checked),
         };
@@ -1059,7 +1383,7 @@
         if (planEl) planEl.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
         if (noSub) noSub.hidden = true;
       } else {
-        if (planEl) planEl.textContent = "No monthly gift";
+        if (planEl) planEl.textContent = "No monthly donation";
         if (noSub) noSub.hidden = false;
         if (subActions) subActions.hidden = true;
         if (reduceChoice) reduceChoice.hidden = true;
@@ -1153,54 +1477,165 @@
     function hideErr(n) { var e = root.querySelector('[data-err="' + n + '"]'); if (e) e.classList.remove("show"); }
 
     // ---- tier selection (step 1): select an amount rather than checking out ----
-    var choosers = Array.prototype.slice.call(root.querySelectorAll(".give-tier, .give-custom-go"));
-    function clearSelection() { choosers.forEach(function (b) { b.classList.remove("is-selected"); }); }
-    function customPence() {
-      // Read the custom-amount input in the currently visible tier set (once XOR monthly),
+    // TASK-210: tiers are the only click-to-select controls now (the per-amount custom Donate
+    // button was removed); a custom amount is selected by typing into its .give-tier-custom box.
+    var choosers = Array.prototype.slice.call(root.querySelectorAll(".give-tier"));
+    function clearSelection() {
+      Array.prototype.forEach.call(root.querySelectorAll(".give-tier, .give-tier-custom"), function (b) {
+        b.classList.remove("is-selected");
+      });
+    }
+    function customInput() {
+      // The custom-amount input in the currently visible tier set (once XOR monthly),
       // falling back to the once input by id for older markup.
-      var el = root.querySelector(".give-tiers:not([hidden]) .give-custom-input") || doc.getElementById("customAmount");
+      return root.querySelector(".give-tiers:not([hidden]) .give-custom-input") || doc.getElementById("customAmount");
+    }
+    function customPence() {
+      var el = customInput();
       var v = el ? parseFloat(el.value) : NaN;
       return isFinite(v) && v > 0 ? Math.round(v * 100) : 0;
     }
-    function select(btn) { clearSelection(); btn.classList.add("is-selected"); selected = btn; hideErr(1); }
+
+    // ---- live impact / summary / Gift Aid uplift (TASK-204) ----
+    // Non-definitive impact copy only (Code of Fundraising Practice): "could help ...",
+    // never "£X provides Y". Keyed by give mode + amount (pence); custom amounts use a
+    // generic line. The visible default in donate.html covers the no-JS case.
+    var IMPACT = {
+      monthly: {
+        1000: "could help build towards the comfort and thoughtful gifts that make someone feel remembered.",
+        2500: "could help bring NBCC closer to a Red Bag Full of Joy each month.",
+        5000: "could help provide support around the value of a Red Bag Full of Joy each month.",
+        10000: "could help reach more people, around the value of two Red Bags Full of Joy each month.",
+      },
+      once: {
+        1000: "could help provide cosy essentials like a hat, gloves, hot chocolate and treats.",
+        2500: "could go towards a Red Bag Full of Joy.",
+        5000: "could help provide around the value of a full Red Bag Full of Joy.",
+        10000: "could help bring Christmas joy to someone who would go without.",
+      },
+    };
+    function fmtGBP(pence) {
+      var pounds = pence / 100;
+      return "£" + (pounds % 1 === 0 ? pounds.toFixed(0) : pounds.toFixed(2));
+    }
+    function selectedMode() {
+      if (selected) return selected.getAttribute("data-mode") || "monthly";
+      var pressed = doc.querySelector('.give-mode[aria-pressed="true"]');
+      return pressed ? pressed.getAttribute("data-mode") : "monthly";
+    }
+    function selectedPence() {
+      if (!selected) return 0;
+      return parseInt(selected.getAttribute("data-amount"), 10) || customPence();
+    }
+    function setText(id, text) { var el = doc.getElementById(id); if (el) el.textContent = text; }
+    function updateSummary() {
+      var pence = selectedPence();
+      var mode = selectedMode();
+      var amountStr = fmtGBP(pence);
+      var suffix = mode === "monthly" ? " a month" : "";
+      // page-2 summary
+      setText("giveSummaryAmount", (pence ? amountStr : "£0") + suffix);
+      // live impact card
+      var impactEl = doc.getElementById("giveImpactText");
+      if (impactEl) {
+        var line =
+          (IMPACT[mode] && IMPACT[mode][pence]) ||
+          "could help bring comfort, dignity and joy to someone this Christmas.";
+        impactEl.innerHTML = "<b>" + (pence ? amountStr + suffix : "Your donation") + "</b> " + line;
+      }
+      // Gift Aid uplift (25% of the donation, straight from HMRC)
+      if (pence) {
+        setText("giftAidHeadline", "Make your " + amountStr + " worth " + fmtGBP(pence * 1.25));
+        setText("giftAidFrom", amountStr);
+        setText("giftAidTo", fmtGBP(pence * 1.25));
+        setText("giftAidPlus", "+" + fmtGBP(pence * 0.25));
+      }
+      updateSupporterOptin();
+    }
+    // TASK-224: shown only for a monthly gift of at least £10 (display-name field only when opted in).
+    var supporterBlock = doc.getElementById("supporterOptin");
+    function updateSupporterOptin() {
+      if (!supporterBlock) return;
+      var eligible = selectedMode() === "monthly" && selectedPence() >= 1000;
+      supporterBlock.hidden = !eligible;
+      var wrap = doc.getElementById("supporterCreditNameField");
+      var yes = doc.querySelector('input[name="listOnSupporters"][value="yes"]');
+      if (wrap) wrap.hidden = !(eligible && yes && yes.checked);
+    }
+    function select(btn) { clearSelection(); btn.classList.add("is-selected"); selected = btn; hideErr(1); updateSummary(); }
+    // TASK-210: no amount is pre-selected. The donor must actively choose a tier (or type a custom
+    // amount) before the step CTA advances (validate blocks step 1 until then), so nothing is
+    // defaulted. resetSelection clears any selection and refreshes the impact/summary to the
+    // neutral "Your donation" state — used on load and whenever the give mode is switched.
+    function resetSelection() {
+      selected = null;
+      clearSelection();
+      updateSummary();
+    }
 
     choosers.forEach(function (btn) {
       btn.addEventListener("click", function () {
-        if (btn.classList.contains("give-custom-go")) {
-          if (!customPence()) {
-            showErr(1);
-            var cb = btn.closest ? btn.closest(".give-tier-custom") : null;
-            var ci = cb ? cb.querySelector(".give-custom-input") : null;
-            if (ci && ci.focus) ci.focus();
-            return;
-          }
-        }
+        // TASK-204: a tier tap SELECTS and updates the live impact/summary, but does NOT
+        // advance — the donor confirms with the single "Donate now" button, so the impact card
+        // updates as they compare amounts. Selecting a tier clears any typed custom amount.
+        var typed = customInput();
+        if (typed) typed.value = "";
         select(btn);
-        go(2, 1); // one tap picks the amount and moves on
       });
     });
-    // switching once/monthly changes the visible tier set: clear any selection
+    // TASK-210: typing a custom amount SELECTS its .give-tier-custom box (clearing any tier
+    // selection); emptying it drops the selection again. The box carries the checkout contract
+    // (data-mode/data-plan/data-amount) so startCheckout reads the typed amount at the final step.
+    Array.prototype.forEach.call(root.querySelectorAll(".give-custom-input"), function (inp) {
+      inp.addEventListener("input", function () {
+        var container = inp.closest ? inp.closest(".give-tier-custom") : null;
+        if (!container) return;
+        if (parseFloat(inp.value) > 0) {
+          select(container);
+        } else if (selected === container) {
+          resetSelection();
+        }
+      });
+    });
+    // switching once/monthly changes the visible tier set: clear the selection so the donor
+    // actively chooses an amount in the newly shown set (no amount is pre-selected, TASK-210).
     Array.prototype.forEach.call(root.querySelectorAll(".give-mode"), function (m) {
-      m.addEventListener("click", function () { selected = null; clearSelection(); });
+      m.addEventListener("click", function () { resetSelection(); });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll('input[name="listOnSupporters"]'), function (r) {
+      r.addEventListener("change", updateSupporterOptin); // TASK-224
     });
 
-    // ---- validation: required, visible, enabled controls in a step ----
-    function visible(el) { return !!(el.offsetParent !== null || el.getClientRects().length); }
+    // ---- validation (TASK-225): route every step through the shared highlight-all helper,
+    // using the step's own [data-err] node as the role=alert summary. The helper flags every
+    // missing/invalid required control at once, skips hidden/disabled ones (so the collapsed
+    // declaration/company/partner fieldsets never block), focuses the first, and live-clears. ----
     function validate(el) {
-      var ctrls = Array.prototype.slice.call(el.querySelectorAll("input, select, textarea"));
-      var ok = true, firstBad = null;
-      ctrls.forEach(function (c) {
-        if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
-        var val = (c.value || "").trim();
-        var bad = !val;
-        if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
-        var field = (c.closest && (c.closest(".give-field") || c.closest(".field"))) || null;
-        if (field) field.classList.toggle("invalid", bad);
-        c.setAttribute("aria-invalid", String(bad));
-        if (bad) { ok = false; if (!firstBad) firstBad = c; }
-      });
-      if (firstBad && firstBad.focus) firstBad.focus();
-      return ok;
+      return validateForm(el, {
+        summary: el.querySelector("[data-err]"),
+        // TASK-224: flag an obvious profane display name through the same UI while it is visible.
+        extraChecks: function () {
+          var c = doc.getElementById("supporterCreditName");
+          if (!c || !el.contains(c) || skipControl(c, el) || !creditNameBlocked((c.value || "").trim())) return [];
+          return [{ control: c, message: "Please choose a different name for our supporters page." }];
+        },
+      }).valid;
+    }
+
+    // Step 1 has no required inputs (an amount is a tier tap or a typed custom value), so its
+    // "choose an amount" rule is a cross-field check: flag the visible custom-amount box and
+    // show the step summary until a tier is selected or a positive custom amount is typed.
+    function validateStep1() {
+      var amountMissing =
+        !selected || (selected.classList.contains("give-tier-custom") && !customPence());
+      return validateForm(stepEl(1), {
+        summary: stepEl(1).querySelector("[data-err]"),
+        extraChecks: function () {
+          if (!amountMissing) return [];
+          var input = customInput() || root.querySelector(".give-tier") || stepEl(1);
+          return [{ control: input, message: "Choose an amount to continue" }];
+        },
+      }).valid;
     }
 
     // ---- review summary (step 3) ----
@@ -1214,7 +1649,7 @@
       var amountStr = "£" + (pounds % 1 === 0 ? pounds.toFixed(0) : pounds.toFixed(2));
       var giftAidEl = doc.getElementById("giftAid");
       var rows = [
-        ["Your gift", amountStr + (mode === "monthly" ? " a month" : ", one off") +
+        ["Your donation", amountStr + (mode === "monthly" ? " a month" : ", one off") +
           (plan ? ", " + plan.charAt(0).toUpperCase() + plan.slice(1) : "")],
         ["Gift Aid", giftAidEl && giftAidEl.checked ? "Yes, add 25%" : "Not added"],
       ];
@@ -1251,16 +1686,13 @@
     }
 
     function next() {
-      if (current === 1 && (!selected || (selected.classList.contains("give-custom-go") && !customPence()))) {
-        showErr(1); return;
-      }
-      if (current === 2 && !validate(stepEl(2))) { showErr(2); return; }
+      if (current === 1 ? !validateStep1() : !validate(stepEl(current))) return;
       hideErr(current);
       go(current + 1, 1);
     }
     function prev() { if (current > 1) go(current - 1, -1); }
     function pay() {
-      if (!validate(stepEl(3))) { showErr(3); return; }
+      if (!validate(stepEl(3))) return;
       if (!selected) { go(1, -1); showErr(1); return; }
       startCheckout(selected, win);
     }
@@ -1270,6 +1702,7 @@
     var payBtn = root.querySelector("[data-give-pay]");
     if (payBtn) payBtn.addEventListener("click", pay);
 
+    resetSelection(); // TASK-210: nothing pre-selected; the impact/summary start in the neutral state
     go(1, 0, true); // initial state, no scroll/focus
   }
 
@@ -1318,45 +1751,31 @@
       }
       return true;
     }
+    // TASK-225: route the generic required fields through the shared highlight-all helper,
+    // using this step's [data-err] node as the role=alert summary, then apply the
+    // professional-partner consent gate explicitly. thirdPartyConsent has NO native `required`
+    // (it sits in a conditionally hidden reveal, so a `required` there would block the no-JS
+    // path), so it is checked here; its dedicated #thirdPartyConsentErr message is toggled by
+    // the submit handler. Reads the CHECKED submitterRole radio directly.
     function validate(el) {
-      var ctrls = Array.prototype.slice.call(el.querySelectorAll("input, select, textarea"));
-      var ok = true, firstBad = null;
-      ctrls.forEach(function (c) {
-        if (c.disabled || c.type === "hidden" || !c.hasAttribute("required") || !visible(c)) return;
-        var bad;
-        if (c.type === "checkbox" || c.type === "radio") {
-          var group = form.querySelectorAll('[name="' + c.name + '"]');
-          bad = !Array.prototype.some.call(group, function (g) { return g.checked; });
-        } else {
-          var val = (c.value || "").trim();
-          bad = !val;
-          if (c.type === "email" && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) bad = true;
-        }
-        var field = (c.closest && (c.closest(".give-field") || c.closest("fieldset"))) || null;
-        if (field) field.classList.toggle("invalid", bad);
-        c.setAttribute("aria-invalid", String(bad));
-        if (bad) { ok = false; if (!firstBad) firstBad = c; }
-      });
+      var n = el.getAttribute("data-step");
+      var ok = validateForm(el, { summary: root.querySelector('[data-err="' + n + '"]') }).valid;
 
-      // G2 item 10: a professional partner must confirm third party permission before
-      // this step can pass, mirroring the schema's authoritative refine
-      // (src/stories/schema.ts). thirdPartyConsent has NO native `required` — it sits in a
-      // conditionally hidden reveal ([data-reveal="professional"]), and a required field
-      // inside a hidden ancestor blocks native form submission even off-step, which would
-      // break the no-JS path — so this business rule is checked explicitly here instead.
-      // Reads the CHECKED submitterRole radio directly (fieldValue() would only ever
-      // return the first radio in the group, checked or not).
       var checkedRole = form.querySelector('[name="submitterRole"]:checked');
-      var professionalConsent = form.querySelector('[name="thirdPartyConsent"]');
-      if (el.contains(professionalConsent) && visible(professionalConsent) && checkedRole && checkedRole.value === "professional_partner" && !professionalConsent.checked) {
-        var consentField = professionalConsent.closest(".give-field");
-        if (consentField) consentField.classList.add("invalid");
-        professionalConsent.setAttribute("aria-invalid", "true");
+      var consent = form.querySelector('[name="thirdPartyConsent"]');
+      if (
+        el.contains(consent) &&
+        visible(consent) &&
+        checkedRole &&
+        checkedRole.value === "professional_partner" &&
+        !consent.checked
+      ) {
+        var field = consent.closest(".give-field") || consent.closest(".give-check") || consent;
+        field.classList.add("is-invalid");
+        consent.setAttribute("aria-invalid", "true");
+        if (ok && consent.focus) { try { consent.focus(); } catch (e) { /* focus unavailable */ } }
         ok = false;
-        if (!firstBad) firstBad = professionalConsent;
       }
-
-      if (firstBad && firstBad.focus) firstBad.focus();
       return ok;
     }
 
@@ -1652,6 +2071,8 @@
 
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
+      validateForm,
+      clearValidation,
       initNav,
       initReveal,
       initGiveToggle,
@@ -1660,8 +2081,10 @@
       initDeclarationCapture,
       initPartnershipCapture,
       initContactForm,
+      initGiftAidForm,
       startCheckout,
       initCheckout,
+      initEmbeddedCheckout,
       initGiveSteps,
       initStorySteps,
       initPortal,
@@ -1678,7 +2101,9 @@
     initDonorType(document);
     initContactCapture(document);
     initContactForm(document, window);
+    initGiftAidForm(document);
     initCheckout(document, window);
+    initEmbeddedCheckout(document, window);
     initGiveSteps(document, window);
     initStorySteps(document, window);
     initPortal(document, window);
@@ -1688,5 +2113,8 @@
     window.startCheckout = function (btn) {
       return startCheckout(btn, window);
     };
+    // Expose the shared validation helper so separate page scripts (e.g.
+    // business-thankyou.js) route their forms through the same highlight-all UX.
+    window.NBCCFormValidation = { validateForm: validateForm, clearValidation: clearValidation };
   }
 })();

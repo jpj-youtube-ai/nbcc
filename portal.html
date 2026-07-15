@@ -8,7 +8,7 @@
     <title>Donor portal | Night Before Christmas Campaign</title>
     <meta
       name="description"
-      content="Manage your support for the Night Before Christmas Campaign. View your details, change or stop a monthly gift, and manage your Gift Aid, all from your secure donor portal."
+      content="Manage your support for the Night Before Christmas Campaign. View your details, change or stop a monthly donation, and manage your Gift Aid, all from your secure donor portal."
     />
     <!-- A private, token gated page: keep it out of search indexes. -->
     <meta name="robots" content="noindex, nofollow" />
@@ -22,7 +22,7 @@
     <meta property="og:title" content="Donor portal | Night Before Christmas Campaign" />
     <meta
       property="og:description"
-      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly gift and your Gift Aid."
+      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly donation and your Gift Aid."
     />
     <meta property="og:url" content="https://nbcc.scot/donor-portal" />
     <!-- Share image (REQ-034): assets/img/og-image.png, a branded placeholder. -->
@@ -33,7 +33,7 @@
     <meta name="twitter:title" content="Donor portal | Night Before Christmas Campaign" />
     <meta
       name="twitter:description"
-      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly gift and your Gift Aid."
+      content="Manage your support for the Night Before Christmas Campaign from your secure donor portal: your details, your monthly donation and your Gift Aid."
     />
     <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
@@ -65,7 +65,7 @@
       </div>
     </header>
 
-    <main class="site-main" id="main" tabindex="-1">
+    <main class="site-main site-main--boxed" id="main" tabindex="-1">
       <!-- Portal intro (REQ-061): a centred page intro mirroring .contact-intro /
            .thankyou-intro. Reuses .eyebrow / base h1 / .rule / .lede and the tokens,
            no new fonts and no image tags. Copy carries "NBCC" in full per REQ-031. -->
@@ -74,9 +74,9 @@
         <h1 id="portal-intro-heading">Manage your support</h1>
         <div class="rule"></div>
         <p class="lede">
-          Welcome to your secure NBCC donor portal. Here you can see your details,
-          change or stop a monthly gift, and manage your Gift Aid, without contacting
-          the team.
+          Welcome to your secure NBCC donor portal. Everything is in your hands here:
+          see your details, change or stop a monthly donation, and manage your Gift Aid,
+          without contacting the team.
         </p>
       </section>
 
@@ -135,9 +135,15 @@
                  changed fields to /api/portal/:token; anonymity is a public-display setting only,
                  the HMRC claim still uses the real name (REQ-064). -->
             <form class="give-declaration" id="portalDetailsForm" novalidate>
-              <div class="give-field">
-                <label for="pdName">Name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="pdName" name="fullName" class="give-field-input" autocomplete="name" required aria-required="true" />
+              <div class="give-name-row">
+                <div class="give-field">
+                  <label for="pdNameFirst">First name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdNameFirst" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="pdNameSurname">Surname <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdNameSurname" name="surname" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+                </div>
               </div>
               <div class="give-field">
                 <label for="pdEmail">Email</label>
@@ -160,17 +166,17 @@
 
           <!-- Your monthly gift + reduce-instead-then-cancel (REQ-055). -->
           <div class="portal-card card reveal" aria-labelledby="portal-sub-heading">
-            <h2 id="portal-sub-heading">Your monthly gift</h2>
+            <h2 id="portal-sub-heading">Your monthly donation</h2>
             <p class="portal-plan">
               Current plan: <strong id="portalPlan"></strong>
             </p>
             <p class="portal-note" id="portalNoSub" hidden>
-              You do not have a monthly gift set up. Thank you for every single gift you make.
+              You do not have a monthly donation set up just now. Thank you for every single donation you make.
             </p>
             <div class="portal-actions" id="portalSubActions">
-              <a class="btn btn-ghost" href="/donate">Change your gift amount</a>
+              <a class="btn btn-ghost" href="/donate">Change your donation amount</a>
               <button class="btn btn-ghost" type="button" id="cancelSubStart">
-                Cancel my monthly gift
+                Cancel my monthly donation
               </button>
             </div>
 
@@ -179,15 +185,15 @@
                  reducing first. Ships hidden; initPortal reveals it on cancelSubStart. -->
             <div class="portal-reduce" id="reduceChoice" hidden>
               <p>
-                Before you stop your gift, would a smaller monthly amount work better?
+                Before you stop your donation, would a smaller monthly amount work better?
                 Reducing keeps your support going all year round.
               </p>
               <div class="portal-actions">
                 <a class="btn btn-primary" href="/donate" id="reduceInstead">
-                  Reduce my gift instead
+                  Reduce my donation instead
                 </a>
                 <button class="btn btn-ghost" type="button" id="confirmCancelSub">
-                  No, cancel my monthly gift
+                  No, cancel my monthly donation
                 </button>
               </div>
             </div>
@@ -219,13 +225,15 @@
                 <label for="pdTitle">Title <span class="give-optional">(optional)</span></label>
                 <input type="text" id="pdTitle" name="title" class="give-field-input" autocomplete="honorific-prefix" placeholder="Mr, Ms, Dr" />
               </div>
-              <div class="give-field">
-                <label for="pdFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="pdFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
-              </div>
-              <div class="give-field">
-                <label for="pdLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
-                <input type="text" id="pdLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+              <div class="give-name-row">
+                <div class="give-field">
+                  <label for="pdFirstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdFirstName" name="firstName" class="give-field-input" autocomplete="given-name" required aria-required="true" />
+                </div>
+                <div class="give-field">
+                  <label for="pdLastName">Last name <span class="give-req" aria-hidden="true">*</span></label>
+                  <input type="text" id="pdLastName" name="lastName" class="give-field-input" autocomplete="family-name" required aria-required="true" />
+                </div>
               </div>
               <div class="give-field">
                 <label for="pdHouse">House name or number <span class="give-req" aria-hidden="true">*</span></label>
@@ -270,6 +278,9 @@
           <!-- Action outcome region: initPortal writes the result of a cancel here. -->
           <p class="portal-status" id="portalActionStatus" role="status" aria-live="polite"></p>
         </div>
+        <!-- TASK-219: a short, visible contact line (phone + email) at the foot of the portal,
+             shown in every state (loading, error, loaded) so a donor with a question can reach us. -->
+        <p>Questions about your donation? Call <a href="tel:+441292811015">01292 811 015</a> or email <a href="mailto:giving@nbcc.scot">giving@nbcc.scot</a>.</p>
       </section>
     </main>
 

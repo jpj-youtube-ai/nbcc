@@ -32,6 +32,14 @@ export const configSchema = z.object({
   // success/cancel URLs are where Stripe redirects after checkout. The four
   // recurring monthly price IDs are keyed by plan (the donate tiers, REQ-022).
   STRIPE_SECRET_KEY: z.string().min(1),
+  // Stripe PUBLISHABLE key (TASK-215) — the `pk_test_…`/`pk_live_…` the browser needs to construct
+  // Stripe.js for Embedded Checkout (inline, on-site payment). It is PUBLIC, not a secret (it ships
+  // to every donor's browser), so it is injected as a plain env value, NOT an SSM SecureString.
+  // OPTIONAL: it may be absent or empty, and the app boots fine either way. Embedded Checkout stays
+  // DORMANT until a key is set — the endpoint serves the hosted redirect for uiMode=embedded too —
+  // so the code ships safely BEFORE the gated infra apply that provisions the real key, rather than
+  // crash-looping boot. Once the key lands, inline checkout engages automatically.
+  STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_SUCCESS_URL: z.string().url(),
   STRIPE_CANCEL_URL: z.string().url(),
   STRIPE_PRICE_BRONZE: z.string().min(1),

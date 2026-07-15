@@ -54,13 +54,13 @@ describe("monthly donor benefits (REQ-025)", () => {
     expect(allGroup).not.toBe(platGroup);
   });
 
-  it("lists the all-donor perks: named on the Donors Page, post Christmas impact update", () => {
+  it("lists the all-donor perks: named on the Donors Page, donor newsletter", () => {
     const items = [...(allGroup?.querySelectorAll(".benefit-list li") ?? [])];
     expect(items.length).toBeGreaterThanOrEqual(2);
     const text = norm(allGroup?.textContent).toLowerCase();
     expect(text).toContain("donors page");
     expect(text).toContain("anonymous");
-    expect(text).toContain("impact update");
+    expect(text).toContain("newsletter");
   });
 
   it("cross-links the named-donors perk to the Supporters page (REQ-035)", () => {

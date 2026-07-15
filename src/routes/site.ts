@@ -41,6 +41,7 @@ const TIER_LABELS: Record<SupporterTier, string> = {
   bronze: "Bronze",
   silver: "Silver",
   gold: "Gold",
+  platinum: "Platinum",
 };
 
 // The decorative aria-hidden inline-SVG icons, matching supporters.html exactly (person
@@ -73,7 +74,19 @@ function renderSupporter(s: PublicSupporter): string {
 // Build the inner HTML of `<div class="supporter-tiers">`: the three Bronze/Silver/Gold
 // tier sections (in that order), each with its heading and a `.supporter-grid` of the
 // real donors. Pure — testable without a DB or the file.
+// Shown when no supporter has opted in yet (every band empty): the wall would otherwise render four
+// bare band headings, which reads as unfinished. A warm invitation instead. No dashes, "NBCC" in full,
+// donation (not gift), and no definitive impact claim (Code of Fundraising Practice).
+const SUPPORTERS_EMPTY_HTML =
+  '<div class="supporters-empty reveal">' +
+  '<p class="supporters-empty-lead">Our monthly supporters will be celebrated here. When you set up a monthly ' +
+  'donation and choose to be shown, your name joins the wall, and you could be among the first.</p>' +
+  '<a class="btn btn-primary" href="/donate">Become a monthly supporter</a>' +
+  "</div>";
+
 export function renderSupporterTiers(tiers: Record<SupporterTier, PublicSupporter[]>): string {
+  const total = SUPPORTER_TIERS.reduce((n, tier) => n + tiers[tier].length, 0);
+  if (total === 0) return SUPPORTERS_EMPTY_HTML;
   return SUPPORTER_TIERS.map((tier) => {
     const items = tiers[tier].map(renderSupporter).join("");
     const headingId = `tier-${tier}-heading`;

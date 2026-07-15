@@ -1,16 +1,25 @@
-// NBCC email relay — a Cloudflare Worker that bridges the app's custom email payloads
-// (src/clients/email.ts) to the Resend API. The app POSTs its OWN JSON shape (no
-// subject/from/type, auth in the URL) to EMAIL_SEND_URL; this maps each shape to a
-// {from, to, subject, html, text} Resend send.
+// NBCC email relay: a Cloudflare Worker that bridges the app's custom email payloads
+// (src/clients/email.ts) to the Resend API. The app POSTs its OWN JSON shape (auth in the
+// URL) to EMAIL_SEND_URL; this maps each shape to a {from, to, subject, html, text} Resend
+// send.
 //
-// Auth: the app carries the shared secret in the URL query (?key=…) — it sends no auth
-// header. We compare that to RELAY_SECRET. The Resend key (RESEND_API_KEY) and the
-// verified sender (MAIL_FROM) live ONLY here as Worker secrets, never in the app.
+// TASK-209: every transactional email now shares ONE branded shell (modelled on the admin
+// thank-you letter email, src/thank-you/letter.ts: maroon page, cream panel, NBCC letterhead
+// and the maroon contact/legal footer bar) and each kind carries its OWN correct subject.
+// The app tags each send with a `kind` string so the relay routes unambiguously. Before this,
+// the field-sniffing heuristics collided: the 2FA login code fell through to the donation
+// default and got "Thank you for your donation to NBCC", and the portal / admin-invite /
+// admin-reset links were indistinguishable. The heuristics are kept below ONLY as a
+// deploy-skew fallback for a payload that arrives WITHOUT a `kind`.
+//
+// Auth: the app carries the shared secret in the URL query (?key=...); it sends no auth
+// header. We compare that to RELAY_SECRET. The Resend key (RESEND_API_KEY) and the verified
+// sender (MAIL_FROM) live ONLY here as Worker secrets, never in the app.
 //
 // Secrets/vars (wrangler secret put / [vars]):
-//   RESEND_API_KEY  — Resend API key (re_…)          [secret]
-//   RELAY_SECRET    — shared token also in EMAIL_SEND_URL ?key=  [secret]
-//   MAIL_FROM       — e.g. "NBCC <noreply@nbcc.scot>"           [var]
+//   RESEND_API_KEY  - Resend API key (re_...)                    [secret]
+//   RELAY_SECRET    - shared token also in EMAIL_SEND_URL ?key=  [secret]
+//   MAIL_FROM       - e.g. "NBCC <noreply@nbcc.scot>"            [var]
 
 const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => (
@@ -26,42 +35,194 @@ const gbp = (pence, currency) => {
   }
 };
 
-// Wrap a rendered HTML fragment in a minimal document; return {subject, html, text}.
-const page = (subject, bodyHtml, bodyText) => ({
+// --- TASK-209 branded shell -------------------------------------------------------------
+// Brand palette + font stacks: hex/stack mirrors of the site tokens, inlined because email
+// has no stylesheet. Kept identical to src/thank-you/letter.ts so the whole NBCC email family
+// (the thank-you letter + every transactional email) reads as one design.
+const MAROON = "#800000";
+const CRIMSON = "#C02238";
+const CREAM = "#F8F5EE";
+const SLATE = "#333333";
+const SLATE_SOFT = "#6F6A66";
+const TAN_SOFT = "#F3E4DD";
+const CREAM_82 = "rgba(248,245,238,.82)";
+const HEAD = "'Playfair Display', Georgia, 'Times New Roman', serif";
+const BODY_FONT = "'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
+const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";
+
+// The charity-registration sentence, mirrored verbatim from the thank-you letter email so the
+// whole email family agrees. Shown in the maroon footer ONLY for relay-built kinds; the
+// app-built kinds (donation / receipt / refund) already carry it in their own body, so their
+// footer omits it (contacts only) to avoid a duplicate.
+const CHARITY_REGISTRATION =
+  "Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.";
+// Plain-text footer contacts (mirrors the maroon bar), appended to every kind's text part so
+// every email carries the phone number and giving@ address.
+const TEXT_CONTACTS = "01292 811 015 · giving@nbcc.scot · nbcc.scot";
+
+// The APPROVED branded shell. A full, self-contained HTML document (mail clients need the
+// color-scheme meta so dark mode does not invert the maroon/cream palette). `bodyHtml` drops
+// into the cream panel; `includeRegistration` adds the legal sentence under the contact line
+// in the maroon footer (true for relay-built kinds, false for app-built ones).
+const shell = (bodyHtml, includeRegistration) => `<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- color-scheme: light keeps the maroon/cream palette in dark-mode mail clients (no auto-invert). -->
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<style>:root { color-scheme: light; supported-color-schemes: light; }</style>
+</head>
+<body style="margin:0;background:${MAROON};padding:24px 0;font-family:${BODY_FONT}">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:660px;margin:0 auto;background:${CREAM}">
+    <tr><td style="padding:30px 40px 16px;text-align:center;border-bottom:1px solid ${TAN_SOFT}">
+      <img src="${LOGO_URL}" alt="Night Before Christmas Campaign" width="150" style="display:inline-block;height:auto;max-width:150px" />
+      <div style="font-family:${BODY_FONT};font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:${MAROON};font-size:13px;margin-top:2px">Here all year</div>
+    </td></tr>
+    <tr><td style="padding:24px 40px 28px;color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6">${bodyHtml}</td></tr>
+    <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY_FONT};font-size:14px;text-align:center">
+      <div style="font-weight:700"><a href="tel:+441292811015" style="color:${CREAM};text-decoration:none">01292 811 015</a> &nbsp;·&nbsp; <a href="mailto:giving@nbcc.scot" style="color:${CREAM};text-decoration:underline">giving@nbcc.scot</a> &nbsp;·&nbsp; <a href="https://nbcc.scot" style="color:${CREAM};text-decoration:underline">nbcc.scot</a></div>${includeRegistration ? `
+      <div style="color:${CREAM_82};font-size:11px;margin-top:8px">${CHARITY_REGISTRATION}</div>` : ""}
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+// Body-fragment helpers for the relay-built kinds (crimson serif heading, slate body copy, a
+// crimson pill CTA button, a maroon code callout). Colours match the thank-you letter email.
+const heading = (t) => `<h1 style="color:${CRIMSON};font-family:${HEAD};font-size:24px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em">${t}</h1>`;
+const bodyP = (html) => `<p style="color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6;margin:0 0 12px">${html}</p>`;
+const note = (html) => `<p style="color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;line-height:1.55;margin:14px 0 0">${html}</p>`;
+const button = (href, label) =>
+  `<div style="text-align:center;margin:22px 0"><a href="${esc(href)}" style="display:inline-block;background:${CRIMSON};color:${CREAM};text-decoration:none;font-family:${BODY_FONT};font-weight:700;font-size:15px;padding:12px 26px;border-radius:999px">${esc(label)}</a></div>`;
+const codeBox = (code) =>
+  `<div style="text-align:center;margin:22px 0"><div style="display:inline-block;background:${TAN_SOFT};border-radius:10px;padding:14px 28px;font-family:${HEAD};font-size:32px;font-weight:800;letter-spacing:8px;color:${MAROON}">${esc(code)}</div></div>`;
+
+// Build a RELAY-built email: wrap the body fragment in the shell (footer WITH registration)
+// and append the contacts + registration to the text part.
+const relayBuilt = (to, subject, bodyHtml, bodyText) => ({
+  to,
   subject,
-  html: `<!doctype html><html><body style="font-family:system-ui,Segoe UI,Arial,sans-serif;color:#1a1a1a;line-height:1.5">${bodyHtml}<hr style="border:none;border-top:1px solid #eee;margin:24px 0"><p style="font-size:12px;color:#888">Night Before Christmas Charity · nbcc.scot</p></body></html>`,
-  text: `${bodyText}\n\n—\nNight Before Christmas Charity · nbcc.scot`,
+  html: shell(bodyHtml, true),
+  text: `${bodyText}\n\n${TEXT_CONTACTS}\n${CHARITY_REGISTRATION}`,
+});
+// Build an APP-body email: wrap the app html in the shell (footer contacts only, no
+// registration, since the app body already carries it) and append only the contacts to the
+// app text (which already ends with the registration line).
+const appBody = (to, subject, html, text) => ({
+  to,
+  subject,
+  html: shell(html || "", false),
+  text: `${text ?? ""}\n${TEXT_CONTACTS}`,
 });
 
-// Map an app payload to a Resend send. Returns {from-independent} {subject, html, text, to}.
+// Wrap a rendered HTML fragment in a minimal document; return {subject, html, text}. Legacy
+// fallback wrapper: only reached by a no-kind payload during a deploy skew, and by the contact
+// route. Kept intentionally plain (the branded shell above is for kind-routed mail).
+const page = (subject, bodyHtml, bodyText) => ({
+  subject,
+  html: `<!doctype html><html><body style="font-family:system-ui,Segoe UI,Arial,sans-serif;color:#1a1a1a;line-height:1.5">${bodyHtml}<hr style="border:none;border-top:1px solid #eee;margin:24px 0"><p style="font-size:12px;color:#888">Night Before Christmas Campaign · nbcc.scot</p></body></html>`,
+  text: `${bodyText}\n\nNight Before Christmas Campaign · nbcc.scot`,
+});
+
+// Map an app payload to a Resend send. Returns {subject, html, text, to, ...}.
+// TASK-209: route by the explicit `kind` first (branded shell + the CORRECT subject per kind),
+// then fall back to the legacy field heuristics for a payload that arrives WITHOUT a `kind`
+// (a deploy-skew net, so an app and Worker deployed at different times still deliver mail).
 export function buildEmail(p) {
   const to = p.email;
 
-  // Newsletter (src/clients/email.ts sendNewsletter): the app ships its OWN subject + rendered html,
-  // plus a per-message from/reply-to (newsletter@nbcc.scot) so the send is repliable, not a noreply.
-  // Discriminated by the explicit `newsletter` flag so it never falls through to the donation default
-  // below (which would hijack the subject). from/replyTo are honoured by sendViaResend.
+  // Newsletter (sendNewsletter): the app ships its OWN subject + fully rendered, branded html,
+  // plus a per-message from/reply-to (newsletter@nbcc.scot) so the send is repliable. Flagged by
+  // `newsletter` and left exactly as-is. from/replyTo are honoured by sendViaResend.
   if (p.newsletter && (p.html || p.text)) {
     return { to, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
   }
 
-  // Thank-you letter (src/clients/email.ts sendThankYou, REQ-069 · TASK-163): like the newsletter,
-  // the app ships its OWN subject + fully rendered, branded html plus a repliable from/reply-to, so
-  // the letter reaches a real NBCC inbox on reply. Discriminated by the explicit `thankYou` flag so
-  // it never falls through to the donation-confirmation default (which would hijack the subject).
+  // Thank-you letter (sendThankYou): like the newsletter, the app ships its OWN subject + fully
+  // rendered, branded html + a repliable from/reply-to (and optional cc). Flagged by `thankYou`
+  // and left exactly as-is (it is the design the transactional shell above now mirrors).
   if (p.thankYou && (p.html || p.text)) {
-    // cc is optional (TASK-168): an admin can copy someone on the thank-you.
     return { to, cc: p.cc, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
   }
 
-  // Types that already ship rendered text + html — just wrap with a subject.
+  // --- Explicit `kind` routing: branded shell + the CORRECT subject per kind ---------------
+
+  // App-built bodies (html + text already rendered by the app, ending with the charity line):
+  // wrap in the shell with a contacts-only footer and keep the app content verbatim.
+  if (p.kind === "donation") return appBody(to, "Thank you for your donation to NBCC", p.html, p.text);
+  if (p.kind === "receipt") return appBody(to, "Your NBCC donation receipt", p.html, p.text);
+  if (p.kind === "refund") return appBody(to, "Your NBCC refund confirmation", p.html, p.text);
+
+  // Relay-built bodies: a short branded body (greeting + the code or a link button + a note),
+  // footer carrying the contacts THEN the charity registration.
+  if (p.kind === "loginCode") {
+    return relayBuilt(
+      to,
+      "Your NBCC admin sign-in code",
+      `${heading("Your sign-in code")}${bodyP(`Hello ${esc(p.fullName)},`)}${bodyP("Use this code to finish signing in to your NBCC admin account:")}${codeBox(p.code)}${note("This code expires in 10 minutes. If you did not request it, you can ignore this email.")}`,
+      `Hello ${p.fullName},\n\nYour NBCC admin sign-in code is ${p.code}. This code expires in 10 minutes.\n\nIf you did not request this, you can ignore this email.`,
+    );
+  }
+  if (p.kind === "adminInvite") {
+    return relayBuilt(
+      to,
+      "Your NBCC admin account invitation",
+      `${heading("You have been invited")}${bodyP(`Hello ${esc(p.fullName)},`)}${bodyP("You have been invited to join the NBCC admin team. Use the button below to set up your account. This link is single use and expires soon.")}${button(p.link, "Accept your invitation")}${note("If you were not expecting this, you can ignore this email.")}`,
+      `Hello ${p.fullName},\n\nYou have been invited to join the NBCC admin team. Set up your account using this single-use link (it expires soon):\n${p.link}\n\nIf you were not expecting this, you can ignore this email.`,
+    );
+  }
+  if (p.kind === "adminReset") {
+    return relayBuilt(
+      to,
+      "Reset your NBCC admin password",
+      `${heading("Reset your password")}${bodyP(`Hello ${esc(p.fullName)},`)}${bodyP("We received a request to reset your NBCC admin password. Use the button below to choose a new one. This link is single use and expires soon.")}${button(p.link, "Reset my password")}${note("If you did not request this, you can ignore this email and your password stays unchanged.")}`,
+      `Hello ${p.fullName},\n\nWe received a request to reset your NBCC admin password. Choose a new one using this single-use link (it expires soon):\n${p.link}\n\nIf you did not request this, ignore this email and your password stays unchanged.`,
+    );
+  }
+  if (p.kind === "portal") {
+    return relayBuilt(
+      to,
+      "Your NBCC donor portal link",
+      `${heading("Your donor portal link")}${bodyP(`Hello ${esc(p.fullName)},`)}${bodyP("Use the button below to open your NBCC donor portal. This is a one-time link that expires soon.")}${button(p.link, "Open my portal")}${note("If you did not request this, you can ignore this email.")}`,
+      `Hello ${p.fullName},\n\nOpen your NBCC donor portal using this one-time link (it expires soon):\n${p.link}\n\nIf you did not request this, you can ignore this email.`,
+    );
+  }
+  if (p.kind === "declaration") {
+    return relayBuilt(
+      to,
+      "Add Gift Aid to your NBCC donation",
+      `${heading("Add Gift Aid to your donation")}${bodyP(`Thank you for your donation of <strong>${esc(gbp(p.amountPence, p.currency))}</strong>.`)}${bodyP("You can add Gift Aid, worth an extra 25% to us at no cost to you, using the secure link below.")}${button(p.declarationLink, "Add Gift Aid to my donation")}${note(`Or use this short link: ${esc(p.shortLink)}`)}`,
+      `Thank you for your donation of ${gbp(p.amountPence, p.currency)}.\n\nAdd Gift Aid (worth 25% more to us at no cost to you): ${p.declarationLink}\nShort link: ${p.shortLink}`,
+    );
+  }
+  if (p.kind === "lapsedDonor") {
+    return relayBuilt(
+      to,
+      "Your NBCC monthly donation has stopped",
+      `${heading("Your monthly donation has stopped")}${bodyP(`Hello ${esc(p.fullName)},`)}${bodyP("We were unable to collect your recent monthly donation, so it has stopped. If you would like to continue supporting us, you can set it up again on our website.")}${button("https://nbcc.scot/donate", "Restart my monthly donation")}`,
+      `Hello ${p.fullName},\n\nWe were unable to collect your recent monthly donation, so it has stopped. To continue supporting us, restart it here: https://nbcc.scot/donate`,
+    );
+  }
+  if (p.kind === "lapsedAdmin") {
+    return relayBuilt(
+      to,
+      "A monthly NBCC subscription has lapsed",
+      `${heading("A monthly subscription has lapsed")}${bodyP("A monthly donation has lapsed (Stripe retries exhausted).")}${bodyP(`Donor: <strong>${esc(p.donorName)}</strong><br>Subscription: <code>${esc(p.subscriptionId)}</code>`)}`,
+      `A monthly donation has lapsed (Stripe retries exhausted).\nDonor: ${p.donorName}\nSubscription: ${p.subscriptionId}`,
+    );
+  }
+
+  // --- Legacy field heuristics: ONLY reached when `p.kind` is absent (deploy-skew net) ------
+  // Mirrors the pre-TASK-209 behaviour so a no-kind payload from an older app still delivers.
   if (p.declarationLink) {
     return {
       to,
       ...page(
         "Add Gift Aid to your NBCC donation",
         `<p>Thank you for your donation of <strong>${esc(gbp(p.amountPence, p.currency))}</strong>.</p>
-         <p>You can add Gift Aid — worth an extra 25% to us at no cost to you — using the secure link below:</p>
+         <p>You can add Gift Aid, worth an extra 25% to us at no cost to you, using the secure link below:</p>
          <p><a href="${esc(p.declarationLink)}">Add Gift Aid to my donation</a></p>
          <p style="font-size:13px;color:#555">Or use this short link: ${esc(p.shortLink)}</p>`,
         `Thank you for your donation of ${gbp(p.amountPence, p.currency)}.\n\nAdd Gift Aid (worth 25% more at no cost to you): ${p.declarationLink}\nShort link: ${p.shortLink}`,
@@ -88,7 +249,6 @@ export function buildEmail(p) {
     };
   }
   if (p.subscriptionId && p.donorName) {
-    // admin notice
     return {
       to,
       ...page(
@@ -100,7 +260,6 @@ export function buildEmail(p) {
     };
   }
   if (p.subscriptionId && p.fullName) {
-    // donor notice
     return {
       to,
       ...page(
@@ -112,14 +271,14 @@ export function buildEmail(p) {
       ),
     };
   }
-  // Default: donation confirmation (has text/html + fullName + amountPence).
+  // Default: donation confirmation (has text/html).
   if (p.text || p.html) {
     return { to, subject: "Thank you for your donation to NBCC", html: p.html, text: p.text };
   }
   return null; // unrecognised
 }
 
-// Contact enquiry (src/clients/contact.ts) → an email to the NBCC inbox (CONTACT_TO),
+// Contact enquiry (src/clients/contact.ts) -> an email to the NBCC inbox (CONTACT_TO),
 // reply-to the enquirer. Distinct payload {firstName,lastName,email,message}, so it has
 // its own route (/contact) rather than sharing the transactional discriminator.
 function buildContact(p, env) {
@@ -163,7 +322,7 @@ export default {
     if (request.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
     const url = new URL(request.url);
-    // Auth: shared secret in the URL query (?key=…), matching EMAIL_SEND_URL / CONTACT_FORWARD_URL.
+    // Auth: shared secret in the URL query (?key=...), matching EMAIL_SEND_URL / CONTACT_FORWARD_URL.
     if (!env.RELAY_SECRET || (url.searchParams.get("key") || "") !== env.RELAY_SECRET) {
       return new Response("Unauthorized", { status: 401 });
     }
@@ -175,7 +334,7 @@ export default {
       return new Response("Bad JSON", { status: 400 });
     }
 
-    // /contact → contact-form enquiry; anything else (/send) → transactional email.
+    // /contact -> contact-form enquiry; anything else (/send) -> transactional email.
     if (url.pathname.endsWith("/contact")) {
       if (!payload || !payload.email || !payload.message) {
         return new Response("Missing enquiry fields", { status: 422 });

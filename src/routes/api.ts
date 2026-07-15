@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type StripeNS from "stripe";
 import { z } from "zod";
-import { stripe, stripeConfigured, stripePriceByPlan, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
+import { stripe, stripeConfigured, changeSubscriptionPlan, SamePlanError } from "../clients/stripe";
 import {
   selectDeclarationWording,
   declarationScopeForMode,
@@ -12,6 +12,7 @@ import {
 import { declarationFieldsSchema } from "../declarations/fields";
 import { partnerShareSchema, validatePartnerShares } from "../declarations/partnership";
 import { companyFieldsSchema } from "../donors/company";
+import { containsBlockedWord } from "../donors/display-name-filter";
 import { getGiftAidDeclarationContext, completeDeclaration, GiftAidCompletionError } from "../db/donations";
 import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render";
 import { config } from "../config";
@@ -43,6 +44,14 @@ const checkoutBodySchema = z
     plan: z.enum(PLANS).nullable(),
     amount: z.number().int().positive().nullable(),
     giftAid: z.boolean(),
+    // TASK-215: which Stripe Checkout UI to open. "hosted" (the DEFAULT when absent) keeps the
+    // existing behaviour byte-for-byte — Stripe returns a redirect { url } and the donor completes
+    // payment on checkout.stripe.com; it is the no-JS fallback and safety net. "embedded" returns a
+    // { clientSecret } the donor-page mounts inline (Stripe Embedded Checkout) so they never leave
+    // nbcc.scot. Defaulting to "hosted" means any un-updated caller and the fallback path are
+    // unchanged; everything else about the session (line items, amount, mode, customer_email,
+    // ALL metadata) is identical across both modes — only the redirect surface differs.
+    uiMode: z.enum(["hosted", "embedded"]).default("hosted"),
     // REQ-038: individuals (incl. sole traders / partners) take the Gift Aid path,
     // incorporated companies the no-Gift-Aid path. Defaulted to "individual" so the
     // no-JS base contract ({ mode, plan, amount, giftAid }) is still accepted — the
@@ -62,6 +71,13 @@ const checkoutBodySchema = z
     emailConsent: z.boolean().optional(),
     anonymous: z.boolean().optional(),
     ageConfirmed: z.boolean().optional(),
+    // TASK-224: an individual monthly donor can opt into the public supporters wall from the donate
+    // form. listOnSupporters is their choice; creditName is the optional public display name (the wall
+    // falls back to full_name). Both optional at the type level so the no-JS base contract is unchanged;
+    // the webhook maps them onto donors.list_on_supporters / credit_name. The wall only ever shows a
+    // paid monthly gift >= £10 that is not anonymous/hidden, so an over-permissive stamp cannot leak.
+    listOnSupporters: z.boolean().optional(),
+    creditName: z.string().trim().min(1).max(200).optional(),
     // REQ-043: the Gift Aid declaration folded in by the give widget (TASK-062) when
     // Gift Aid is opted in. Validated by the shared declarations module (TASK-061): a
     // present declaration must carry a valid UK postcode + house name/number (a non-UK
@@ -81,11 +97,13 @@ const checkoutBodySchema = z
     // partnership and no-JS base contracts are unchanged.
     company: companyFieldsSchema.optional(),
   })
-  // A monthly gift needs EITHER a preset plan (its pre-configured recurring price) OR a custom
-  // amount (an inline monthly recurring price, REQ-041) — but not neither.
-  .refine((b) => b.mode !== "monthly" || b.plan !== null || b.amount !== null, {
-    message: "monthly giving requires a plan or a custom amount",
-    path: ["plan"],
+  // Every monthly gift builds its recurring price INLINE from the amount (pence, TASK-231) — preset
+  // tiers and custom amounts alike — so a monthly gift always requires an amount. (A preset tier's
+  // amount rides in on its data-amount; the custom box builds it from the typed value.) The plan is
+  // still carried for metadata/reporting but no longer selects a fixed Stripe Price.
+  .refine((b) => b.mode !== "monthly" || b.amount !== null, {
+    message: "monthly giving requires an amount",
+    path: ["amount"],
   })
   .refine((b) => b.mode !== "once" || b.amount !== null, {
     message: "a one-off gift requires an amount",
@@ -145,6 +163,25 @@ const checkoutBodySchema = z
         });
       }
     }
+  })
+  // TASK-224: the individual supporters-wall opt-in. Require the display name when the donor asks to be
+  // listed, and reject a profane one at source (mirrors the business capture, src/routes/business.ts), so
+  // it never reaches the wall. Plain, dash-free messages. Only ever enforced when the fields are present.
+  .superRefine((b, ctx) => {
+    if (b.listOnSupporters && !b.creditName) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["creditName"],
+        message: "Please tell us how your name should appear on our supporters page.",
+      });
+    }
+    if (b.creditName && containsBlockedWord(b.creditName)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["creditName"],
+        message: "Please choose a different name to show on our supporters page.",
+      });
+    }
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
@@ -158,6 +195,31 @@ const PAYMENT_METHODS: StripeNS.Checkout.SessionCreateParams["payment_method_typ
   "card",
   "bacs_debit",
 ];
+
+// The on-site landing Stripe returns the donor to after checkout, built on config.STRIPE_SUCCESS_URL
+// (the shared config base). TASK-221 makes it TYPE-AWARE: it carries the gift's `mode` (once|monthly)
+// and `donor` (donorType) as query params so the thank-you page can pick which of its four variants to
+// show, PLUS the session id via Stripe's {CHECKOUT_SESSION_ID} template — which Stripe substitutes, so
+// the braces must NOT be URL-encoded. The page reads session_id to look up a business supporter's
+// recognition record (read-only, by-session). Used for BOTH UI modes (TASK-215) so the hosted
+// success_url and the embedded return_url land the SAME page with the SAME params — only the redirect
+// surface differs. mode/donor are validated enum values (URL-safe), so no encoding is needed; the
+// `?`/`&` separator is chosen so it composes with a base that already carries a query string.
+export function thankYouReturnUrl(mode: CheckoutBody["mode"], donorType: CheckoutBody["donorType"]): string {
+  const base = config.STRIPE_SUCCESS_URL;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}mode=${mode}&donor=${donorType}&session_id={CHECKOUT_SESSION_ID}`;
+}
+
+// Embedded Checkout only ENGAGES when a publishable key is actually configured (TASK-215). With no
+// key set, a uiMode=embedded request is served exactly like hosted — the browser could not construct
+// Stripe.js without the key anyway — so the server never mints an embedded session that cannot work,
+// and the feature stays DORMANT (hosted redirect) until STRIPE_PUBLISHABLE_KEY + its infra are
+// applied. Used by BOTH buildSessionParams (session shape) and postCheckoutSession (response shape)
+// so the two always agree: an embedded session iff an embedded { clientSecret } response.
+export function embeddedRequested(body: CheckoutBody): boolean {
+  return body.uiMode === "embedded" && Boolean(config.STRIPE_PUBLISHABLE_KEY);
+}
 
 // Assemble the Stripe Checkout session parameters from a validated body.
 export function buildSessionParams(
@@ -183,6 +245,11 @@ export function buildSessionParams(
     emailConsent: String(body.emailConsent ?? false),
     anonymous: String(body.anonymous ?? false),
     ageConfirmed: String(body.ageConfirmed ?? false),
+    // TASK-224: carry the individual supporters-wall opt-in to the webhook, which maps it onto
+    // donors.list_on_supporters / credit_name. Defaults false/"" so a donor who did not opt in (or any
+    // non-monthly / sub-£10 gift, where the form never offers it) is never listed.
+    listOnSupporters: String(body.listOnSupporters ?? false),
+    creditName: body.creditName ?? "",
   };
 
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
@@ -251,31 +318,48 @@ export function buildSessionParams(
 
   const base: StripeNS.Checkout.SessionCreateParams = {
     payment_method_types: PAYMENT_METHODS,
-    success_url: config.STRIPE_SUCCESS_URL,
-    cancel_url: config.STRIPE_CANCEL_URL,
     metadata,
+    // Pre-fill and lock the donor's email on the Stripe Checkout page (TASK-203) so they never
+    // retype the address we already captured. Stripe still needs an email for its records, so it is
+    // shown read-only rather than removed. Absent for a company (its contact email is captured
+    // separately in the company object), so no pre-fill there.
+    ...(body.email ? { customer_email: body.email } : {}),
+    // The ONLY difference between the two UI modes is the redirect surface (TASK-215):
+    // - embedded (inline), ONLY when a publishable key is configured (embeddedRequested): Stripe's
+    //   SDK enum is "embedded_page"; it needs a return_url (Stripe redirects the whole page there on
+    //   completion, defaulting to redirect_on_completion:always) and must NOT carry
+    //   success_url/cancel_url.
+    // - hosted (redirect, the default — and where embedded is requested but no key is set): no
+    //   ui_mode (Stripe defaults to hosted_page) + the existing success_url/cancel_url.
+    // BOTH land the SAME type-aware thank-you page (TASK-221) via thankYouReturnUrl — carrying the
+    // gift's mode+donor (which of the four variants to show) and {CHECKOUT_SESSION_ID} (the business
+    // supporter recognition lookup). cancel_url is unchanged (a cancel is not a thank-you).
+    ...(embeddedRequested(body)
+      ? { ui_mode: "embedded_page", return_url: thankYouReturnUrl(body.mode, body.donorType) }
+      : { success_url: thankYouReturnUrl(body.mode, body.donorType), cancel_url: config.STRIPE_CANCEL_URL }),
   };
 
   if (body.mode === "monthly") {
-    // A preset tier uses its pre-configured recurring Price (one Price per plan, REQ-022/REQ-055).
-    // A custom monthly amount (no plan, REQ-041) builds an INLINE monthly recurring price from the
-    // entered amount — Stripe creates the ad-hoc price on the fly, so NO per-amount Product is
-    // needed: it rolls up under the configured donation product, or names an inline one, exactly
-    // like the one-off path below. The schema guarantees a plan OR an amount for a monthly gift.
+    // EVERY monthly gift — preset tier OR custom amount — builds an INLINE monthly recurring price
+    // from the entered amount (pence, GBP, interval month), the way the custom amount always did
+    // (REQ-041). Stripe creates the ad-hoc recurring price on the fly, so NO fixed Stripe Prices
+    // (STRIPE_PRICE_*) are needed in any environment — this is what fixes staging's REPLACE_ME 502s
+    // and removes the manual per-env price setup for prod. It rolls up under the configured donation
+    // product, or names an inline one, exactly like the one-off path below. The schema guarantees a
+    // monthly gift carries an amount. The plan is unchanged on metadata above, so the Stripe webhook
+    // and everything downstream see exactly what they saw before.
     const donationProduct = config.STRIPE_DONATION_PRODUCT;
-    const monthlyItem: StripeNS.Checkout.SessionCreateParams.LineItem = body.plan
-      ? { price: stripePriceByPlan[body.plan], quantity: 1 }
-      : {
-          quantity: 1,
-          price_data: {
-            currency: "gbp",
-            unit_amount: body.amount as number,
-            recurring: { interval: "month" },
-            ...(donationProduct
-              ? { product: donationProduct }
-              : { product_data: { name: "Monthly donation to NBCC" } }),
-          },
-        };
+    const monthlyItem: StripeNS.Checkout.SessionCreateParams.LineItem = {
+      quantity: 1,
+      price_data: {
+        currency: "gbp",
+        unit_amount: body.amount as number,
+        recurring: { interval: "month" },
+        ...(donationProduct
+          ? { product: donationProduct }
+          : { product_data: { name: "Monthly donation to NBCC" } }),
+      },
+    };
     return { ...base, mode: "subscription", line_items: [monthlyItem] };
   }
 
@@ -314,14 +398,27 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
   try {
     const params = buildSessionParams(parsed.data);
     const session = await stripe.checkout.sessions.create(params);
-    const body: { url: string | null; session?: { id: string; metadata: typeof params.metadata; mode: typeof params.mode } } = {
-      url: session.url,
-    };
+    // Embedded (inline) returns a { clientSecret } the browser mounts on nbcc.scot, plus the PUBLIC
+    // publishable key it needs to construct Stripe.js (TASK-215) — but ONLY when a key is configured
+    // (embeddedRequested). Hosted (the default, AND the served shape when embedded is requested with
+    // no key set) is UNCHANGED: it returns { url } exactly as before, so the redirect fallback and any
+    // un-updated caller keep working byte-for-byte. The session metadata/line-items/mode are identical
+    // either way, so the webhook + confirmation email are unaffected.
+    const body: {
+      url?: string | null;
+      clientSecret?: string | null;
+      publishableKey?: string;
+      session?: { id: string; metadata: typeof params.metadata; mode: typeof params.mode };
+    } =
+      embeddedRequested(parsed.data)
+        ? { clientSecret: session.client_secret, publishableKey: config.STRIPE_PUBLISHABLE_KEY }
+        : { url: session.url };
     // Stub-mode echo (TASK-116): when there is no live Stripe (offline stub) and we are
     // not in production, hand the built session back so the BDD donation journey can
     // replay the REAL stamped metadata into the completion webhook — mirroring how Stripe
     // echoes your session object back in checkout.session.completed. Production NEVER stubs
-    // (see src/clients/stripe.ts), so its response stays { url }. The frontend reads only url.
+    // (see src/clients/stripe.ts), so its response stays { url } / { clientSecret }. Applies to
+    // both UI modes, since the echoed metadata/mode are identical.
     if (!stripeConfigured && config.NODE_ENV !== "production") {
       body.session = { id: session.id, metadata: params.metadata, mode: params.mode };
     }
@@ -500,7 +597,7 @@ export async function postGiftAid(req: Request, res: Response): Promise<Response
     return res.status(200).type("html").send(
       renderGiftAidMessage(template, {
         heading: "Gift Aid added, thank you",
-        body: "Your Gift Aid declaration is complete. NBCC can now reclaim the tax on your gift at no extra cost to you.",
+        body: "Your Gift Aid declaration is complete. NBCC can now reclaim the tax on your donation at no extra cost to you.",
       }),
     );
   } catch (err) {

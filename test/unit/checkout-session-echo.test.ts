@@ -8,12 +8,8 @@ const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 
 vi.mock("../../src/clients/stripe", () => ({
   stripe: { checkout: { sessions: { create } } },
-  stripePriceByPlan: {
-    bronze: "price_bronze_id",
-    silver: "price_silver_id",
-    gold: "price_gold_id",
-    platinum: "price_platinum_id",
-  },
+  // Monthly checkout builds its recurring price inline from the amount now (TASK-231), so no
+  // plan→STRIPE_PRICE_* mapping is needed here.
   // Not configured → the stub is active → the echo should appear.
   stripeConfigured: false,
 }));
@@ -73,6 +69,16 @@ describe("POST /api/checkout-session — stub-mode session echo (TASK-116)", () 
     const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
     const body = res.body as { session?: { mode: string } };
     expect(body.session!.mode).toBe("subscription");
+  });
+
+  it("echoes the supporters opt-in metadata so the BDD can replay it into the webhook (TASK-224)", async () => {
+    const res = await run({
+      mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true,
+      email: "donor@example.com", listOnSupporters: true, creditName: "The Campbell Family",
+    });
+    const md = (res.body as { session?: { metadata: Record<string, string> } }).session!.metadata;
+    expect(md.listOnSupporters).toBe("true");
+    expect(md.creditName).toBe("The Campbell Family");
   });
 
   it("does NOT echo the session in production even when stubbed", async () => {

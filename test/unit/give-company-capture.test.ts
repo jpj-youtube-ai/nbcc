@@ -32,10 +32,12 @@ describe("company capture markup (REQ-038)", () => {
     expect(company?.hasAttribute("hidden")).toBe(true);
   });
 
-  it("captures the five company fields, each with a real <label for> (REQ-032)", () => {
+  it("captures the company fields, each with a real <label for> (REQ-032)", () => {
+    // TASK-226: the contact name is captured as a first name + surname pair, not one combined field.
     for (const id of [
       "companyRegNumber",
-      "companyContactName",
+      "companyContactFirstName",
+      "companyContactSurname",
       "companyContactEmail",
       "companyBillingAddress",
       "companyBillingPostcode",
@@ -46,13 +48,30 @@ describe("company capture markup (REQ-038)", () => {
       expect(label, `label for #${id}`).not.toBeNull();
       expect(norm(label?.textContent).length).toBeGreaterThan(0);
     }
+    // No single combined contact-name field remains.
+    expect(company?.querySelector("#companyContactName")).toBeNull();
   });
 
-  it("marks the registration number OPTIONAL and the other four REQUIRED (required + aria-required)", () => {
+  // TASK-226: the contact first name + surname sit side by side at half width in the shared
+  // .give-name-row wrapper, each keeping its own .give-field.
+  it("lays the contact first name and surname side by side in a .give-name-row", () => {
+    const row = company?.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("#companyContactFirstName")?.closest(".give-field")).not.toBeNull();
+    expect(row?.querySelector("#companyContactSurname")?.closest(".give-field")).not.toBeNull();
+  });
+
+  it("marks the registration number OPTIONAL and the other required fields REQUIRED (required + aria-required)", () => {
     const reg = company?.querySelector("#companyRegNumber") as HTMLInputElement | null;
     expect(reg?.hasAttribute("required")).toBe(false);
 
-    for (const id of ["companyContactName", "companyContactEmail", "companyBillingAddress", "companyBillingPostcode"]) {
+    for (const id of [
+      "companyContactFirstName",
+      "companyContactSurname",
+      "companyContactEmail",
+      "companyBillingAddress",
+      "companyBillingPostcode",
+    ]) {
       const input = company?.querySelector(`#${id}`) as HTMLInputElement | null;
       expect(input?.hasAttribute("required"), `#${id} required`).toBe(true);
       expect(input?.getAttribute("aria-required"), `#${id} aria-required`).toBe("true");
@@ -120,7 +139,8 @@ describe("company capture behaviour (jsdom)", () => {
   const fillCompany = () => {
     byId("businessName").value = "Acme Ltd";
     byId("companyRegNumber").value = "SC123456";
-    byId("companyContactName").value = "Ada Lovelace";
+    byId("companyContactFirstName").value = "Ada";
+    byId("companyContactSurname").value = "Lovelace";
     byId("companyContactEmail").value = "finance@acme.test";
     byId("companyBillingAddress").value = "1 Office Park, London";
     byId("companyBillingPostcode").value = "SW1A 1AA";
@@ -128,14 +148,15 @@ describe("company capture behaviour (jsdom)", () => {
 
   it("keeps .give-company hidden and its inputs disabled for an individual", () => {
     expect(company().hidden).toBe(true);
-    expect(byId("companyContactName").disabled).toBe(true);
+    expect(byId("companyContactFirstName").disabled).toBe(true);
   });
 
   it("reveals .give-company (inputs enabled) and hides Gift Aid on the company path", () => {
     selectDonor("business");
     selectBusinessType("company");
     expect(company().hidden).toBe(false);
-    expect(byId("companyContactName").disabled).toBe(false);
+    expect(byId("companyContactFirstName").disabled).toBe(false);
+    expect(byId("companyContactSurname").disabled).toBe(false);
     expect(giftAidRegion().hidden).toBe(true);
   });
 
@@ -143,7 +164,7 @@ describe("company capture behaviour (jsdom)", () => {
     selectDonor("business");
     selectBusinessType("partnership");
     expect(company().hidden).toBe(true);
-    expect(byId("companyContactName").disabled).toBe(true);
+    expect(byId("companyContactFirstName").disabled).toBe(true);
   });
 
   it("folds a company object with the captured values and giftAid:false into the payload", () => {

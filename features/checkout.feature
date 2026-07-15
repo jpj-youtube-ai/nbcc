@@ -11,6 +11,19 @@ Feature: Checkout session endpoint (REQ-029)
     Then the response status should be 200
     And the response field "url" should start with "https://"
 
+  Scenario: an embedded one-off donation returns an inline client secret and publishable key (TASK-215)
+    # uiMode:"embedded" opens Stripe Embedded Checkout INLINE on nbcc.scot: the endpoint returns a
+    # clientSecret (not a redirect url) plus the PUBLIC publishable key the browser needs to construct
+    # Stripe.js. The hosted redirect above stays the default and the no-JS fallback, so this is purely
+    # additive. Works in CI (offline stub returns a cs_ client secret) and against a real Stripe key.
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 5000, "giftAid": false, "email": "donor@example.com", "uiMode": "embedded" }
+      """
+    Then the response status should be 200
+    And the response field "clientSecret" should start with "cs_"
+    And the response field "publishableKey" should start with "pk_"
+
   @stub-only
   Scenario: a valid monthly Gift Aid donation returns a session reflecting the opt-in
     # giftAid=true binds the verbatim HMRC wording onto the session metadata (TASK-053);

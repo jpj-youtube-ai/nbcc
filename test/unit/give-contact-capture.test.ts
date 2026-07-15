@@ -7,10 +7,12 @@ import { createRequire } from "node:module";
 
 // TASK-058 (REQ-039): consent-based contact capture inside the give widget. Below
 // the donor-type fieldset and above the tiers sits a contact fieldset: a REQUIRED
-// full name, an OPTIONAL email paired with an email-consent tick that is NEVER
+// donor name captured as two fields (first name + surname, TASK-210), an email paired
+// with an email-consent tick that is NEVER
 // ticked in advance, an anonymous option, and a monthly-only 18-or-over
 // confirmation. The 18+ row shows only in give-monthly mode (initGiveToggle,
-// mirroring the tier + Gift Aid statement swap). startCheckout folds fullName,
+// mirroring the tier + Gift Aid statement swap). startCheckout combines the two name
+// fields into a single fullName and folds fullName,
 // email, emailConsent, anonymous and (monthly) ageConfirmed into the REQ-028 payload
 // once initContactCapture has wired the fieldset (data-ready) — without JS the base
 // { mode, plan, amount, giftAid } contract is unchanged. Static markup is parsed with
@@ -48,16 +50,59 @@ describe("contact capture markup (REQ-039)", () => {
     expect(main?.querySelector("#tiersOnce")?.closest('.give-step[data-step="1"]')).not.toBeNull();
   });
 
-  it("has a REQUIRED full-name text input with a real <label for> and aria-required (REQ-032)", () => {
-    const input = contact?.querySelector("#donorName") as HTMLInputElement | null;
+  // TASK-210: the donor name is captured as two REQUIRED fields — First name and Surname —
+  // each a real text input with a <label for>, aria-required, and a sensible autocomplete
+  // token. startCheckout combines them into the single fullName the checkout contract POSTs.
+  it("has a REQUIRED first-name text input with a real <label for>, aria-required and given-name autocomplete", () => {
+    const input = contact?.querySelector("#donorFirstName") as HTMLInputElement | null;
     expect(input).not.toBeNull();
     expect(input?.getAttribute("type")).toBe("text");
-    expect(input?.getAttribute("name")).toBe("fullName");
     expect(input?.hasAttribute("required")).toBe(true);
     expect(input?.getAttribute("aria-required")).toBe("true");
-    const label = contact?.querySelector('label[for="donorName"]');
+    expect(input?.getAttribute("autocomplete")).toBe("given-name");
+    const label = contact?.querySelector('label[for="donorFirstName"]');
     expect(label).not.toBeNull();
     expect(norm(label?.textContent).length).toBeGreaterThan(0);
+  });
+
+  it("has a REQUIRED surname text input with a real <label for>, aria-required and family-name autocomplete", () => {
+    const input = contact?.querySelector("#donorSurname") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    expect(input?.getAttribute("type")).toBe("text");
+    expect(input?.hasAttribute("required")).toBe(true);
+    expect(input?.getAttribute("aria-required")).toBe("true");
+    expect(input?.getAttribute("autocomplete")).toBe("family-name");
+    const label = contact?.querySelector('label[for="donorSurname"]');
+    expect(label).not.toBeNull();
+    expect(norm(label?.textContent).length).toBeGreaterThan(0);
+  });
+
+  it("no longer renders the old single full-name field (#donorName)", () => {
+    expect(contact?.querySelector("#donorName")).toBeNull();
+  });
+
+  // TASK-219: the first-name and surname fields sit side by side in one shared row wrapper
+  // (.give-name-row), so the donor name reads as one field split in two. Each input keeps its
+  // own .give-field wrapper (markup reused, not restyled); only the row wrapper is new.
+  it("lays first name and surname side by side in one shared .give-name-row wrapper", () => {
+    const row = contact?.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    // both name inputs live inside the one row wrapper...
+    const first = row?.querySelector("#donorFirstName");
+    const surname = row?.querySelector("#donorSurname");
+    expect(first).not.toBeNull();
+    expect(surname).not.toBeNull();
+    // ...each still inside its own reused .give-field wrapper...
+    expect(first?.closest(".give-field")).not.toBeNull();
+    expect(surname?.closest(".give-field")).not.toBeNull();
+    // ...and the row itself sits in the contact fieldset.
+    expect(row?.closest(".give-contact")).not.toBeNull();
+    // The email field is NOT pulled into the name row (it stays full width below).
+    expect(row?.querySelector("#donorEmail")).toBeNull();
+  });
+
+  it("styles the name row as two equal half-width columns in CSS (TASK-219)", () => {
+    expect(css).toMatch(/\.give-name-row\s*\{[^}]*grid-template-columns:\s*1fr 1fr/);
   });
 
   it("has a REQUIRED email input with a real <label for> and aria-required (REQ-039)", () => {
@@ -156,7 +201,9 @@ describe("contact capture behaviour (jsdom)", () => {
   });
 
   it("folds fullName, email, emailConsent, anonymous and ageConfirmed for a monthly gift", () => {
-    (document.getElementById("donorName") as HTMLInputElement).value = "Ada Lovelace";
+    // TASK-210: fullName is the two name fields combined (first + " " + surname).
+    (document.getElementById("donorFirstName") as HTMLInputElement).value = "Ada";
+    (document.getElementById("donorSurname") as HTMLInputElement).value = "Lovelace";
     (document.getElementById("donorEmail") as HTMLInputElement).value = "ada@example.com";
     (document.getElementById("emailConsent") as HTMLInputElement).checked = true;
     (document.getElementById("anonymousDonor") as HTMLInputElement).checked = true;
@@ -177,7 +224,8 @@ describe("contact capture behaviour (jsdom)", () => {
 
   it("omits ageConfirmed for a one-off gift (18+ applies to monthly only)", () => {
     clickMode("giveOnce");
-    (document.getElementById("donorName") as HTMLInputElement).value = "Grace Hopper";
+    (document.getElementById("donorFirstName") as HTMLInputElement).value = "Grace";
+    (document.getElementById("donorSurname") as HTMLInputElement).value = "Hopper";
     startCheckout(onceTier(0), window); // £10
     const p = lastPayload();
     expect(p.mode).toBe("once");
@@ -188,11 +236,22 @@ describe("contact capture behaviour (jsdom)", () => {
   });
 
   it("carries emailConsent=false and anonymous=false when neither is ticked", () => {
-    (document.getElementById("donorName") as HTMLInputElement).value = "Anon Donor";
+    (document.getElementById("donorFirstName") as HTMLInputElement).value = "Anon";
+    (document.getElementById("donorSurname") as HTMLInputElement).value = "Donor";
     startCheckout(monthlyTier(0), window);
     const p = lastPayload();
     expect(p.emailConsent).toBe(false);
     expect(p.anonymous).toBe(false);
+  });
+
+  it("combines the two name fields into a single fullName equal to first + ' ' + surname (TASK-210)", () => {
+    (document.getElementById("donorFirstName") as HTMLInputElement).value = "Katherine";
+    (document.getElementById("donorSurname") as HTMLInputElement).value = "Johnson";
+    const payload = startCheckout(monthlyTier(1), window);
+    // The checkout contract is unchanged: one combined fullName, no first/surname keys leak in.
+    expect(payload.fullName).toBe("Katherine Johnson");
+    expect("firstName" in payload).toBe(false);
+    expect("surname" in payload).toBe(false);
   });
 
   it("does not fold contact fields until the fieldset is wired (base contract without JS)", () => {

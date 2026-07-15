@@ -13,6 +13,8 @@ const validEnv = (): Record<string, string> => ({
   EXTERNAL_API_TWO_KEY: "k",
   // Stripe checkout (TASK-037, REQ-028/REQ-029).
   STRIPE_SECRET_KEY: "sk_test_123",
+  // Publishable key (TASK-215): public, non-secret; required so app-boot fails fast if unset.
+  STRIPE_PUBLISHABLE_KEY: "pk_test_123",
   STRIPE_SUCCESS_URL: "https://example.org/donate/thank-you",
   STRIPE_CANCEL_URL: "https://example.org/donate",
   STRIPE_PRICE_BRONZE: "price_bronze",
@@ -62,6 +64,19 @@ describe("config schema — Stripe checkout keys (REQ-028/REQ-029)", () => {
 
   it("rejects an empty STRIPE_SECRET_KEY (a secret must be non-empty)", () => {
     expect(configSchema.safeParse({ ...validEnv(), STRIPE_SECRET_KEY: "" }).success).toBe(false);
+  });
+
+  it("treats STRIPE_PUBLISHABLE_KEY as OPTIONAL — absent or empty both boot fine (TASK-215)", () => {
+    // Embedded Checkout stays dormant (hosted redirect) until a key is set, so a missing/empty key
+    // must NOT fail boot — otherwise the app would crash-loop the deploy before the gated infra apply.
+    const absent = validEnv();
+    delete absent.STRIPE_PUBLISHABLE_KEY;
+    expect(configSchema.safeParse(absent).success).toBe(true);
+    expect(configSchema.safeParse({ ...validEnv(), STRIPE_PUBLISHABLE_KEY: "" }).success).toBe(true);
+    // A present key is accepted and parsed through onto the typed config.
+    const parsed = configSchema.safeParse({ ...validEnv(), STRIPE_PUBLISHABLE_KEY: "pk_test_x" });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.STRIPE_PUBLISHABLE_KEY).toBe("pk_test_x");
   });
 
   it.each(["STRIPE_SUCCESS_URL", "STRIPE_CANCEL_URL"])("validates %s as a URL", (key) => {

@@ -99,7 +99,7 @@ export function buildCorporationTaxReceipt(input: ReceiptInput): CorporationTaxR
 
   const html =
     `<section class="ct-receipt">` +
-    `<h1>${escapeHtml(title)}</h1>` +
+    `<h1 style="color:#C02238;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:22px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em">${escapeHtml(title)}</h1>` +
     `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong></p>` +
     `<p>Received with thanks from ${escapeHtml(legalName)}: a donation of ${escapeHtml(amount)} on ${date}.</p>` +
     `<p>${escapeHtml(GENUINE_DONATION_STATEMENT)}</p>` +
@@ -150,7 +150,7 @@ export function buildCompanyRefundNotice(input: {
     `${REGISTRATION_TEXT}`;
   const html =
     `<section class="ct-receipt ct-receipt-refund">` +
-    `<h1>${escapeHtml(title)}</h1>` +
+    `<h1 style="color:#C02238;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:22px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em">${escapeHtml(title)}</h1>` +
     `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong></p>` +
     `<p>${escapeHtml(body)}</p>` +
     REGISTRATION_HTML +

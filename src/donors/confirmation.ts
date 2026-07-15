@@ -16,19 +16,26 @@ export { CHARITY_SHORT_NAME };
 // The Gift Aid confirmation line — a plain acknowledgement that Gift Aid was added, NOT the HMRC
 // declaration statement. Only included when the donation actually opted into Gift Aid.
 export const GIFT_AID_CONFIRMATION_LINE =
-  "You added Gift Aid to your donation, so NBCC can reclaim 25% from HMRC at no extra cost to you.";
+  "You added Gift Aid to your donation, so NBCC can reclaim 25% from HMRC at no extra cost to you. " +
+  "Thank you for that extra kindness.";
 // The enduring clause appended for a MONTHLY gift-aided gift (a monthly declaration is enduring, so
 // it covers ongoing gifts) — still an acknowledgement, not new legal wording.
 export const GIFT_AID_MONTHLY_CLAUSE =
-  " This covers your ongoing monthly gifts while your declaration stands.";
+  " This covers your ongoing monthly donations for as long as your declaration stands.";
 
 // Manage/cancel instructions for a MONTHLY gift — reusing the verbatim REQ-026 reassurance copy from
 // donate.html (there is no self-serve portal yet, REQ-061, to deep-link to, so this is the contact
 // route). Only included for a monthly gift.
 export const MANAGE_CANCEL_LINE =
-  "Managing your monthly gift: monthly donations can be changed or cancelled whenever you like, and " +
-  "Direct Debits are protected by the Direct Debit Guarantee. Any problems, contact Jaimie Wakefield " +
-  "at giving@nbcc.scot or call 01292 811 015.";
+  "Your monthly donation stays entirely in your hands. You can change or cancel it whenever you like, " +
+  "and your Direct Debit is protected by the Direct Debit Guarantee. If anything ever comes up, " +
+  "Jaimie Wakefield will gladly help, at giving@nbcc.scot or on 01292 811 015.";
+
+// A warm, non-definitive closing line (Code of Fundraising Practice: "helps", never "£X provides Y").
+// Woven into every confirmation so the receipt still reads clear but leaves the donor with the mission.
+export const DONATION_IMPACT_LINE =
+  "Kindness like yours helps NBCC bring comfort, dignity and a moment of joy to children, young " +
+  "people and vulnerable adults across South West Scotland, at Christmas and all year round.";
 
 export const confirmationInputSchema = z.object({
   fullName: z.string().trim().min(1),
@@ -36,6 +43,11 @@ export const confirmationInputSchema = z.object({
   currency: z.string().trim().min(1).default("GBP"),
   giftAid: z.boolean(),
   mode: z.enum(["once", "monthly"]),
+  // Receipt details (TASK-203): a per-gift reference (NBCC-000123, from the donation id) and the
+  // payment date, both optional so existing callers are unaffected. When present they render as a
+  // labelled receipt line, so our confirmation email stands in for the Stripe receipt.
+  reference: z.string().trim().min(1).optional(),
+  donationDate: z.union([z.date(), z.string().min(1)]).optional(),
 });
 export type ConfirmationInput = z.input<typeof confirmationInputSchema>;
 
@@ -57,26 +69,43 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// The donor-facing receipt reference (TASK-203): the donation's own id as a tidy, zero-padded code
+// (NBCC-000123) that a donor can quote and staff paste straight into the admin donation search.
+// Pure — no clock/DB. Ids longer than the pad width are kept in full, never truncated.
+export function donationReference(id: number): string {
+  return `NBCC-${String(id).padStart(6, "0")}`;
+}
+
 // Build the confirmation email content. The thank-you always appears; the Gift Aid line only when
 // Gift Aid was opted in (with the enduring clause for a monthly gift); the manage/cancel line only
 // for a monthly gift. A one-off / non-Gift-Aid gift simply omits the parts that don't apply.
 export function buildDonationConfirmation(input: ConfirmationInput): DonationConfirmationContent {
-  const { fullName, amountPence, currency, giftAid, mode } = confirmationInputSchema.parse(input);
+  const { fullName, amountPence, currency, giftAid, mode, reference, donationDate } =
+    confirmationInputSchema.parse(input);
   const amount = formatAmount(amountPence, currency);
   const monthly = mode === "monthly";
 
   const thanks = monthly
-    ? `Thank you ${fullName}, your monthly donation of ${amount} to ${CHARITY_SHORT_NAME} is set up. ` +
-      `We will email you when each monthly gift is taken.`
-    : `Thank you ${fullName}, your donation of ${amount} to ${CHARITY_SHORT_NAME} has been received.`;
+    ? `Thank you, ${fullName}. Your monthly donation of ${amount} to ${CHARITY_SHORT_NAME} is all set up, ` +
+      `and we are so grateful to have you with us. We will email you each time a monthly donation is taken.`
+    : `Thank you, ${fullName}. Your donation of ${amount} to ${CHARITY_SHORT_NAME} has been received, ` +
+      `and it truly matters.`;
 
   const paragraphs: string[] = [thanks];
+  // Receipt details (TASK-203): reference and/or payment date, so our email doubles as the receipt
+  // now that Stripe's own receipt email is off. Only the parts we were given are shown.
+  const details: string[] = [];
+  if (reference) details.push(`Reference: ${reference}`);
+  if (donationDate) details.push(`Payment date: ${formatDate(donationDate)}`);
+  if (details.length > 0) paragraphs.push(details.join(". ") + ".");
   if (giftAid) {
     paragraphs.push(GIFT_AID_CONFIRMATION_LINE + (monthly ? GIFT_AID_MONTHLY_CLAUSE : ""));
   }
   if (monthly) {
     paragraphs.push(MANAGE_CANCEL_LINE);
   }
+  // A warm, non-definitive closing so every receipt still leaves the donor with the mission.
+  paragraphs.push(DONATION_IMPACT_LINE);
 
   const text = paragraphs.join("\n\n") + "\n\n" + REGISTRATION_TEXT + "\n";
   const html =
@@ -115,9 +144,10 @@ export function buildRefundConfirmation(input: RefundConfirmationInput): Donatio
   const amount = formatAmount(refundedPence, currency);
   const date = formatDate(refundDate);
   const line = full
-    ? `Thank you ${fullName}. Your donation to ${CHARITY_SHORT_NAME} has been refunded in full: ${amount} on ${date}.`
-    : `Thank you ${fullName}. A refund of ${amount} was made to your donation to ${CHARITY_SHORT_NAME} on ${date}; ` +
-      `the rest of your gift still stands.`;
+    ? `Thank you, ${fullName}. Your donation to ${CHARITY_SHORT_NAME} has been refunded in full, ${amount} on ${date}. ` +
+      `We are grateful you thought of us, and you would be welcome back any time.`
+    : `Thank you, ${fullName}. We have refunded ${amount} of your donation to ${CHARITY_SHORT_NAME} on ${date}, ` +
+      `and the rest of your donation still stands. Thank you for your kindness.`;
   const text = line + "\n\n" + REGISTRATION_TEXT + "\n";
   const html = `<section class="refund-confirmation"><p>${escapeHtml(line)}</p>${REGISTRATION_HTML}</section>`;
   return { text, html };

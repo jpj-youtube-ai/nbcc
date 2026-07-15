@@ -61,6 +61,14 @@ describe("give monthly tiers (REQ-022)", () => {
     );
   });
 
+  it("marks the £25 (Silver) tier with a visible 'Most popular' marker (TASK-204)", () => {
+    const silver = tiers[1];
+    expect(norm(silver.querySelector(".give-amount")?.textContent)).toBe("£25");
+    const flag = silver.querySelector(".give-flag");
+    expect(flag).not.toBeNull();
+    expect(norm(flag?.textContent).toLowerCase()).toContain("most popular");
+  });
+
   it("carries a leaflet description on each tier (REQ-032)", () => {
     for (const t of tiers) {
       expect(t.tagName).toBe("BUTTON");
@@ -80,10 +88,12 @@ describe("give monthly tiers (REQ-022)", () => {
     expect(custom).not.toBeNull();
     expect(norm(custom?.querySelector(".give-custom-label")?.textContent)).toContain("Choose your own amount");
     expect(custom?.querySelector("input#customAmountMonthly")).not.toBeNull();
-    const go = custom?.querySelector(".give-custom-go");
-    expect(go?.getAttribute("data-mode")).toBe("monthly");
-    expect(go?.getAttribute("data-plan")).toBe("");
-    expect(go?.getAttribute("data-amount")).toBe("");
+    // TASK-210: the checkout contract lives on the .give-tier-custom container now (the redundant
+    // per-amount Donate button was removed; the single step CTA drives checkout with it).
+    expect(custom?.getAttribute("data-mode")).toBe("monthly");
+    expect(custom?.getAttribute("data-plan")).toBe("");
+    expect(custom?.getAttribute("data-amount")).toBe("");
+    expect(custom?.querySelector("button")).toBeNull();
   });
 
   it("wires the checkout contract: data-mode=monthly, data-plan and data-amount in pence (REQ-028)", () => {

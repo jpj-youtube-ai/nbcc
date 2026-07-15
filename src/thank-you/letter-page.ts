@@ -58,9 +58,9 @@ function giftCallout(d: ThankYouLetterPageData): string {
   let note = "";
   if (d.giftAided) {
     const worth = letterMoney((d.giftAmountPence ?? 0) + giftAidUpliftPence(d.giftAmountPence ?? 0));
-    note = `<span class="ga-note">Because you Gift Aided it, HMRC adds 25%, making your gift worth <b>${worth}</b> to our work, at no extra cost to you.</span>`;
+    note = `<span class="ga-note">Because you Gift Aided it, HMRC adds 25%, making your donation worth <b>${worth}</b> to our work, at no extra cost to you.</span>`;
   }
-  return `<div class="gift-callout">With heartfelt thanks for your gift of <b>${amount}</b>.${note}</div>`;
+  return `<div class="gift-callout">With heartfelt thanks for your donation of <b>${amount}</b>.${note}</div>`;
 }
 
 // Render the full, self-contained printable letter page for one sent thank-you.
@@ -82,7 +82,10 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
   <link rel="stylesheet" href="/assets/css/styles.css" />
   <style>
     *{box-sizing:border-box}
-    html,body{margin:0;background:var(--slate-soft)}
+    /* Pin text sizing: mobile browsers auto-inflate body text on a wide (210mm) page seen in a narrow
+       viewport, which grew the letter past one printed sheet (users had to scale to ~78%). Pinning it
+       keeps mobile identical to desktop. */
+    html,body{margin:0;background:var(--slate-soft);-webkit-text-size-adjust:100%;text-size-adjust:100%}
     .toolbar{position:sticky;top:0;z-index:5;display:flex;gap:12px;align-items:center;justify-content:center;padding:12px;background:var(--maroon);color:var(--cream);font-family:var(--font-body);font-size:.95rem}
     .toolbar button{font-family:var(--font-body);font-weight:600;border:0;border-radius:var(--radius-pill);background:var(--cream);color:var(--maroon);padding:9px 22px;cursor:pointer}
     .page{width:210mm;min-height:297mm;margin:18px auto;background:var(--maroon);padding:7mm;box-sizing:border-box;box-shadow:0 10px 40px rgba(0,0,0,.25)}
@@ -123,7 +126,12 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
     @media print{
       html,body{background:#fff}
       .toolbar{display:none}
-      .page{margin:0;box-shadow:none;width:auto;min-height:auto}
+      /* Clamp to exactly ONE A4 sheet: a fixed height + overflow:hidden guarantees no blank second
+         page, even if a device rounds a sub-pixel or ignores the zero-margin page box. The sheet fills
+         the frame (height:100%) rather than forcing its own min-height. Content already fits a page,
+         so nothing is clipped. */
+      .page{margin:0;box-shadow:none;width:auto;height:297mm;min-height:0;overflow:hidden}
+      .sheet{min-height:0;height:100%}
       *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
       @page{size:A4;margin:0}
     }
@@ -151,7 +159,7 @@ export function buildThankYouLetterPage(d: ThankYouLetterPageData): string {
           <p>On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.</p>
           ${giftCallout(d)}
           ${personal}
-          <p>Gifts like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
+          <p>Donations like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.</p>
           <p>We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.</p>
         </div>
         <div class="signoff">

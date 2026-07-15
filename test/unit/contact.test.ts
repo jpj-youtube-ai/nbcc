@@ -116,6 +116,18 @@ describe("enquiry form markup (REQ-027 / REQ-032)", () => {
     expect(field("lastName")?.hasAttribute("required")).toBe(false);
   });
 
+  // TASK-226: the first name + last name pair sits side by side at half width in the shared
+  // .give-name-row wrapper used across every donor-facing form (matching the donate donor name),
+  // so a person's name is captured as two fields, never one combined field.
+  it("lays first name and last name side by side in one shared .give-name-row wrapper", () => {
+    const row = form?.querySelector(".give-name-row");
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("#firstName")).not.toBeNull();
+    expect(row?.querySelector("#lastName")).not.toBeNull();
+    // No single combined full-name field remains on the form.
+    expect(form?.querySelector('input[name="fullName"]')).toBeNull();
+  });
+
   it("has a labelled, required Email field of type email", () => {
     expect(norm(labelFor("email")?.textContent).toLowerCase()).toContain("email");
     expect(field("email")?.getAttribute("type")).toBe("email");
@@ -252,5 +264,18 @@ describe("contact form behaviour (jsdom)", () => {
     resolveFetch({ ok: true });
     await flushPromises();
     expect(submitBtn.disabled).toBe(false);
+  });
+
+  it("shows a role=alert summary and an inline message on every missing field at once (TASK-225)", () => {
+    submit();
+    const form = document.getElementById("contactForm")!;
+    const summary = form.querySelector('[role="alert"]') as HTMLElement | null;
+    expect(summary).not.toBeNull();
+    expect(summary?.hidden).toBe(false);
+    expect(norm(summary?.textContent).length).toBeGreaterThan(0);
+    for (const id of ["firstName", "email", "message"]) {
+      expect(invalid(id)).toBe("true");
+      expect(norm(document.getElementById(`${id}-error`)?.textContent).length).toBeGreaterThan(0);
+    }
   });
 });

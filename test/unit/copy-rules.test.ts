@@ -105,3 +105,22 @@ it("scans at least the four core marketing pages", () => {
     expect(PAGES).toContain(f);
   }
 });
+
+// TASK-218: on donor-facing pages the monetary donation is called a "donation",
+// never a "gift". "Gift Aid" (the HMRC scheme's proper name) is allowed and is
+// stripped before the scan. Pages that legitimately describe PHYSICAL presents (the
+// Red Bag gifts) — index, about, donate — are out of scope for this terminology rule.
+const DONATION_TERM_PAGES = [
+  "thank-you.html",
+  "supporters.html",
+  "portal.html",
+  "privacy.html",
+].filter((f) => existsSync(resolve(ROOT, f)));
+
+describe.each(DONATION_TERM_PAGES)("donation terminology (TASK-218): %s", (page) => {
+  it("calls the donation a 'donation', never a 'gift' (only the 'Gift Aid' scheme name allowed)", () => {
+    const withoutGiftAid = visibleCopy(read(page)).toLowerCase().split("gift aid").join(" ");
+    const strays = withoutGiftAid.match(/gift/g) ?? [];
+    expect(strays, `"gift" (meaning the donation) in visible copy of ${page}`).toEqual([]);
+  });
+});

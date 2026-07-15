@@ -48,12 +48,12 @@ describe("give once tiers (REQ-021)", () => {
     }
   });
 
-  it("marks the £25 tier with a visible 'Most chosen' marker", () => {
+  it("marks the £25 tier with a visible 'Most popular' marker (TASK-204)", () => {
     const featured = tiers[1];
     expect(norm(featured.querySelector(".give-amount")?.textContent)).toBe("£25");
     const flag = featured.querySelector(".give-flag");
     expect(flag).not.toBeNull();
-    expect(norm(flag?.textContent).toLowerCase()).toContain("most chosen");
+    expect(norm(flag?.textContent).toLowerCase()).toContain("most popular");
   });
 
   it("offers a choose-your-own-amount option with a real label (REQ-032)", () => {

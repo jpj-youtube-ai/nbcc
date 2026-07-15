@@ -63,6 +63,20 @@ export async function insertAudit(client: PoolClient, audit: AuditInput): Promis
   );
 }
 
+// Append one audit_log row on its OWN short-lived pool connection, OUTSIDE any transaction. For a
+// caller that needs a standalone audit entry with no accompanying state write in the same tx — e.g.
+// the summary row a best-effort batch appends after it has already done its per-item work (TASK-214's
+// invite backfill). Mirrors insertAudit but manages its own client. Not for audited state changes:
+// those must use writeWithAudit so the row and its audit commit atomically.
+export async function recordAudit(audit: AuditInput): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await insertAudit(client, audit);
+  } finally {
+    client.release();
+  }
+}
+
 // The atomic helper. `write` performs the state change (insert/update on
 // donors/declarations/donations) using the supplied client; `toAudit` maps its
 // result to the audit row. Both the write and the audit INSERT run in one
@@ -191,8 +205,8 @@ export async function insertDonorAndDonation(
   const donorRes = await client.query<{ id: number }>(
     `INSERT INTO donors
        (donor_type, full_name, business_name, company_number, email, email_consent, anonymous,
-        billing_address, billing_postcode)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        billing_address, billing_postcode, list_on_supporters, credit_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
     [
       donation.donorType,
@@ -204,6 +218,10 @@ export async function insertDonorAndDonation(
       donor.anonymous ?? false,
       donor.billingAddress ?? null,
       donor.billingPostcode ?? null,
+      // TASK-224: individual supporters-wall opt-in + display name. Columns default safely, so the other
+      // callers (in-person walk-in, recordDonation) that omit them insert false/null unchanged.
+      donor.listOnSupporters ?? false,
+      donor.creditName ?? null,
     ],
   );
   const donorId = donorRes.rows[0].id;
@@ -252,31 +270,71 @@ export async function insertDonorAndDonation(
   return { donorId, donationId, declarationId, partnerShareIds };
 }
 
-// Read the publicly listable supporters for the donors wall (TASK-071/REQ-035). Selects
-// each donor with at least one donation and their LARGEST gift (MAX amount_pence), then
-// the pure groupPublicSupporters places them into the three display tiers (alphabetical
-// within tier). Anonymous donors are dropped by isPubliclyListable inside the grouper —
-// selected here so the invariant is enforced by the shared helper, never re-implemented
-// in SQL — so they never reach the page. Read-only; no audit row.
+// Read the publicly listable supporters for the wall (TASK-071/REQ-035; opt-in monthly 4-band rework
+// TASK-223; grandfather the pre-223 set TASK-228). The wall shows a donor via EITHER an OPT-IN MONTHLY
+// gift OR the TASK-228 grandfather flag, so this read gathers the fields BOTH paths need and lets the
+// pure groupPublicSupporters/resolvePublicSupporter decide (shown or not, under what name, in which
+// band) — never re-implemented in SQL. The LEFT JOIN to donations (filtered to payment_status='paid')
+// yields, per donor, the greatest PAID MONTHLY gift (MAX … FILTER mode='monthly') for the opt-in band —
+// the mode/payment_status filter matches how the rest of the code detects a settled gift (see
+// listThankYouEligible) — AND the greatest PAID gift across ANY frequency (MAX amount_pence) for the
+// grandfather band. It is a LEFT JOIN (not the old INNER JOIN) so a grandfathered ONE-OFF donor with no
+// monthly gift is still selected. The LEFT JOIN to business_supporter_fulfilment (donor_id is UNIQUE
+// there, so at most one row) resolves BUSINESS consent — list_on_supporters AND captured_at IS NOT NULL
+// — while donors.list_on_supporters carries INDIVIDUAL consent and donors.grandfathered_on_supporters
+// carries the grandfather flag. The WHERE narrows to donors who could show (grandfathered OR either
+// opt-in), so the read stays cheap. Read-only; no audit row.
 export async function listPublicSupporters(): Promise<Record<SupporterTier, PublicSupporter[]>> {
   const res = await pool.query<{
     donor_type: DonorType;
     full_name: string;
     business_name: string | null;
     anonymous: boolean;
-    max_amount: string | number;
+    hidden_from_supporters: boolean;
+    grandfathered_on_supporters: boolean;
+    indiv_list_opt_in: boolean;
+    indiv_credit_name: string | null;
+    biz_list_opt_in: boolean | null;
+    biz_credit_name: string | null;
+    monthly_amount: string | number | null;
+    max_paid_amount: string | number | null;
   }>(
-    `SELECT dn.donor_type, dn.full_name, dn.business_name, dn.anonymous,
-            MAX(d.amount_pence) AS max_amount
-       FROM donors dn JOIN donations d ON d.donor_id = dn.id
-      GROUP BY dn.id, dn.donor_type, dn.full_name, dn.business_name, dn.anonymous`,
+    `SELECT dn.donor_type, dn.full_name, dn.business_name, dn.anonymous, dn.hidden_from_supporters,
+            dn.grandfathered_on_supporters,
+            dn.list_on_supporters AS indiv_list_opt_in,
+            dn.credit_name        AS indiv_credit_name,
+            (f.list_on_supporters AND f.captured_at IS NOT NULL) AS biz_list_opt_in,
+            f.credit_name         AS biz_credit_name,
+            MAX(d.amount_pence) FILTER (WHERE d.mode = 'monthly') AS monthly_amount,
+            MAX(d.amount_pence)                                   AS max_paid_amount
+       FROM donors dn
+       LEFT JOIN donations d
+         ON d.donor_id = dn.id AND d.payment_status = 'paid'
+       LEFT JOIN business_supporter_fulfilment f ON f.donor_id = dn.id
+      WHERE dn.grandfathered_on_supporters = true
+         OR dn.list_on_supporters = true
+         OR (f.list_on_supporters AND f.captured_at IS NOT NULL)
+      GROUP BY dn.id, dn.donor_type, dn.full_name, dn.business_name, dn.anonymous,
+               dn.hidden_from_supporters, dn.grandfathered_on_supporters,
+               dn.list_on_supporters, dn.credit_name,
+               f.list_on_supporters, f.captured_at, f.credit_name`,
   );
   const rows: SupporterSourceRow[] = res.rows.map((r) => ({
     donorType: r.donor_type,
     fullName: r.full_name,
     businessName: r.business_name,
     anonymous: r.anonymous,
-    amountPence: Number(r.max_amount),
+    hiddenFromSupporters: r.hidden_from_supporters,
+    grandfathered: r.grandfathered_on_supporters,
+    // NULL when the donor has no paid monthly gift (a grandfathered one-off donor) → opt-in path skipped.
+    monthlyAmountPence: r.monthly_amount == null ? null : Number(r.monthly_amount),
+    // NULL only if the donor has no paid donation at all; otherwise the grandfather band input.
+    maxPaidAmountPence: r.max_paid_amount == null ? null : Number(r.max_paid_amount),
+    individualListOptIn: r.indiv_list_opt_in,
+    individualCreditName: r.indiv_credit_name,
+    // A donor with no fulfilment row (LEFT JOIN → NULL) is simply not a business opt-in.
+    businessListOptIn: r.biz_list_opt_in ?? false,
+    businessCreditName: r.biz_credit_name,
   }));
   return groupPublicSupporters(rows);
 }

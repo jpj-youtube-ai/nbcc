@@ -3,22 +3,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // TASK-038 (REQ-029): POST /api/checkout-session builds a Stripe Checkout session
 // from the REQ-028 payload { mode, plan, amount, giftAid } and returns { url }.
 // A one-off (mode=once) is a `payment` session with inline GBP price_data built
-// from the amount (pence); a monthly (mode=monthly) is a `subscription` using the
-// recurring STRIPE_PRICE_* id keyed by plan. Invalid bodies are rejected with 400.
-// DB-free: the Stripe client and config are mocked, so no SDK/network/env is
-// touched. Mirrors the schema-style validation in src/config/schema.ts.
+// from the amount (pence); a monthly (mode=monthly) is a `subscription` whose
+// recurring price is likewise built INLINE from the amount (pence, interval month) —
+// preset tiers and custom amounts alike (TASK-231), so no fixed STRIPE_PRICE_* is
+// needed. Invalid bodies are rejected with 400. DB-free: the Stripe client and config
+// are mocked, so no SDK/network/env is touched. Mirrors the schema-style validation
+// in src/config/schema.ts.
 
 // Hoisted so the (hoisted) vi.mock factory below can reference it.
 const { create } = vi.hoisted(() => ({ create: vi.fn() }));
 
+// Monthly checkout no longer maps a plan to a fixed STRIPE_PRICE_* id (TASK-231): every monthly
+// gift builds its recurring price inline from the amount, so the mock needs only the Stripe client
+// seam and the configured flag.
 vi.mock("../../src/clients/stripe", () => ({
   stripe: { checkout: { sessions: { create } } },
-  stripePriceByPlan: {
-    bronze: "price_bronze_id",
-    silver: "price_silver_id",
-    gold: "price_gold_id",
-    platinum: "price_platinum_id",
-  },
   stripeConfigured: true,
 }));
 
@@ -28,6 +27,9 @@ const { mockConfig } = vi.hoisted(() => ({
     STRIPE_SUCCESS_URL: "https://nbcc.test/donate/thank-you",
     STRIPE_CANCEL_URL: "https://nbcc.test/donate",
     STRIPE_DONATION_PRODUCT: undefined as string | undefined,
+    // TASK-215: the public publishable key the embedded response hands to the browser.
+    STRIPE_PUBLISHABLE_KEY: "pk_test_dummy_pk",
+    NODE_ENV: "test",
   },
 }));
 
@@ -71,8 +73,16 @@ const lastParams = (): any => create.mock.calls[create.mock.calls.length - 1][0]
 
 beforeEach(() => {
   create.mockClear();
-  create.mockResolvedValue({ url: "https://checkout.stripe.com/c/pay/test_123" });
+  // A created session carries BOTH a hosted url and an embedded client_secret in the mock so
+  // either mode can be exercised; the endpoint reads only the field for the requested uiMode.
+  create.mockResolvedValue({
+    id: "cs_test_123",
+    url: "https://checkout.stripe.com/c/pay/test_123",
+    client_secret: "cs_test_secret_123",
+  });
   mockConfig.STRIPE_DONATION_PRODUCT = undefined;
+  // Default to a configured publishable key so embedded ENGAGES; the dormant test overrides to "".
+  mockConfig.STRIPE_PUBLISHABLE_KEY = "pk_test_dummy_pk";
 });
 
 describe("POST /api/checkout-session — one-off (REQ-029)", () => {
@@ -89,7 +99,7 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
     expect(p.line_items[0].quantity).toBe(1);
     expect(p.line_items[0].price_data.currency).toBe("gbp");
     expect(p.line_items[0].price_data.unit_amount).toBe(5000);
-    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you");
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
     expect(p.cancel_url).toBe("https://nbcc.test/donate");
   });
 
@@ -112,26 +122,38 @@ describe("POST /api/checkout-session — one-off (REQ-029)", () => {
 });
 
 describe("POST /api/checkout-session — monthly (REQ-029)", () => {
-  it("creates a subscription session using the plan's recurring price id", async () => {
+  it("builds an inline monthly recurring price_data from the amount for a preset tier (TASK-231)", async () => {
+    // Every monthly gift — preset tier OR custom — now builds its recurring price INLINE from the
+    // entered amount (pence), the same way custom-monthly already did, so NO fixed Stripe Price
+    // (STRIPE_PRICE_*) is needed in any environment (fixes staging's REPLACE_ME 502s).
     const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
 
     expect(res.statusCode).toBe(200);
     const p = lastParams();
     expect(p.mode).toBe("subscription");
-    expect(p.line_items[0].price).toBe("price_gold_id");
+    // No fixed price id — the recurring price is built inline from the amount.
+    expect(p.line_items[0].price).toBeUndefined();
     expect(p.line_items[0].quantity).toBe(1);
-    expect(p.line_items[0].price_data).toBeUndefined();
+    expect(p.line_items[0].price_data.currency).toBe("gbp");
+    expect(p.line_items[0].price_data.unit_amount).toBe(5000);
+    expect(p.line_items[0].price_data.recurring.interval).toBe("month");
   });
 
-  it("maps each plan to its configured price id", async () => {
-    for (const [plan, price] of [
-      ["bronze", "price_bronze_id"],
-      ["silver", "price_silver_id"],
-      ["platinum", "price_platinum_id"],
+  it("builds the inline recurring price from each preset tier's own amount (TASK-231)", async () => {
+    // The preset tiers post their amount in pence (bronze £10, silver £25, platinum £100); each
+    // now checks out via an inline recurring price built from that amount, not a fixed price id.
+    for (const [plan, amount] of [
+      ["bronze", 1000],
+      ["silver", 2500],
+      ["platinum", 10000],
     ] as const) {
       create.mockClear();
-      await run({ mode: "monthly", plan, amount: 1000, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
-      expect(lastParams().line_items[0].price).toBe(price);
+      await run({ mode: "monthly", plan, amount, giftAid: false, ageConfirmed: true, email: "donor@example.com" });
+      const item = lastParams().line_items[0];
+      expect(item.price).toBeUndefined();
+      expect(item.price_data.unit_amount).toBe(amount);
+      expect(item.price_data.currency).toBe("gbp");
+      expect(item.price_data.recurring.interval).toBe("month");
     }
   });
 
@@ -343,6 +365,62 @@ describe("POST /api/checkout-session — contact capture (REQ-039 / TASK-059)", 
     expect(md.email).toBe("donor@example.com");
     expect(md.emailConsent).toBe("false");
     expect(md.anonymous).toBe("false");
+  });
+});
+
+describe("POST /api/checkout-session — individual supporters-wall opt-in (TASK-224)", () => {
+  const monthly = {
+    mode: "monthly" as const,
+    plan: "gold" as const,
+    amount: 5000,
+    giftAid: false,
+    ageConfirmed: true,
+    email: "donor@example.com",
+  };
+
+  it("stamps listOnSupporters='true' and the display name when the donor opts in", async () => {
+    await run({ ...monthly, listOnSupporters: true, creditName: "The Campbell Family" });
+    const md = lastParams().metadata;
+    expect(md.listOnSupporters).toBe("true");
+    expect(md.creditName).toBe("The Campbell Family");
+  });
+
+  it("stamps listOnSupporters='false' and an empty creditName when the donor keeps private", async () => {
+    await run({ ...monthly, listOnSupporters: false });
+    const md = lastParams().metadata;
+    expect(md.listOnSupporters).toBe("false");
+    expect(md.creditName).toBe("");
+  });
+
+  it("defaults to listOnSupporters='false' / creditName='' when omitted (base contract unchanged)", async () => {
+    await run(monthly);
+    const md = lastParams().metadata;
+    expect(md.listOnSupporters).toBe("false");
+    expect(md.creditName).toBe("");
+  });
+
+  it("rejects a payload that opts in without a display name with 400 and never calls Stripe", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a profane display name with 400 and never calls Stripe", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true, creditName: "Fuck Off Ltd" });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("accepts a benign name that merely contains a shorter blocked word (Scunthorpe-safe)", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true, creditName: "Scunthorpe Rovers" });
+    expect(res.statusCode).toBe(200);
+    expect(lastParams().metadata.creditName).toBe("Scunthorpe Rovers");
+  });
+
+  it("rejects a display name over 200 characters with 400", async () => {
+    const res = await run({ ...monthly, listOnSupporters: true, creditName: "a".repeat(201) });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
   });
 });
 
@@ -698,6 +776,207 @@ describe("POST /api/checkout-session — mandatory email (REQ-039)", () => {
       email: "donor@example.com",
     });
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe("POST /api/checkout-session — email pre-fill (TASK-203)", () => {
+  it("pre-fills the Stripe email field with the captured email so the donor never retypes it", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
+    expect(lastParams().customer_email).toBe("donor@example.com");
+  });
+
+  it("pre-fills for a monthly gift too", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "ada@example.com" });
+    expect(lastParams().customer_email).toBe("ada@example.com");
+  });
+});
+
+describe("POST /api/checkout-session — embedded ui mode (TASK-215)", () => {
+  it("returns { clientSecret, publishableKey } and no url for uiMode='embedded'", async () => {
+    const res = await run({
+      mode: "once",
+      plan: null,
+      amount: 5000,
+      giftAid: false,
+      email: "donor@example.com",
+      uiMode: "embedded",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { clientSecret?: string; publishableKey?: string; url?: string };
+    expect(body.clientSecret).toBe("cs_test_secret_123");
+    expect(body.publishableKey).toBe("pk_test_dummy_pk");
+    expect(body.url).toBeUndefined();
+  });
+
+  it("sets ui_mode='embedded_page' + a return_url carrying {CHECKOUT_SESSION_ID}, and omits success_url/cancel_url", async () => {
+    await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "embedded" });
+    const p = lastParams();
+    // Stripe SDK enum: the inline UI is "embedded_page"; the hosted redirect is the unset default.
+    expect(p.ui_mode).toBe("embedded_page");
+    // The return_url reuses the SAME on-site base as the hosted success URL and carries the type-aware
+    // mode+donor params (TASK-221) plus the session id template Stripe substitutes on redirect (the
+    // braces must NOT be URL-encoded).
+    expect(p.return_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
+    expect(p.success_url).toBeUndefined();
+    expect(p.cancel_url).toBeUndefined();
+  });
+
+  it("keeps the hosted redirect { url } as the default when uiMode is absent (unchanged)", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com" });
+    const body = res.body as { url?: string; clientSecret?: string };
+    expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_123");
+    expect(body.clientSecret).toBeUndefined();
+    const p = lastParams();
+    expect(p.ui_mode).toBeUndefined();
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
+    expect(p.cancel_url).toBe("https://nbcc.test/donate");
+  });
+
+  it("returns { url } for an explicit uiMode='hosted' (byte-for-byte the existing behaviour)", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "hosted" });
+    const body = res.body as { url?: string; clientSecret?: string };
+    expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_123");
+    expect(body.clientSecret).toBeUndefined();
+    expect(lastParams().ui_mode).toBeUndefined();
+  });
+
+  it("treats uiMode='embedded' as hosted { url } when no publishable key is configured (dormant)", async () => {
+    // With no key set, embedded stays dormant: the server serves the hosted redirect (never mints an
+    // embedded session the browser could not use), so shipping before the gated infra apply is safe.
+    mockConfig.STRIPE_PUBLISHABLE_KEY = "";
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "embedded" });
+    expect(res.statusCode).toBe(200);
+    const body = res.body as { url?: string; clientSecret?: string; publishableKey?: string };
+    expect(body.url).toBe("https://checkout.stripe.com/c/pay/test_123");
+    expect(body.clientSecret).toBeUndefined();
+    expect(body.publishableKey).toBeUndefined();
+    const p = lastParams();
+    expect(p.ui_mode).toBeUndefined();
+    expect(p.success_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
+    expect(p.cancel_url).toBe("https://nbcc.test/donate");
+  });
+
+  it("stamps IDENTICAL metadata, line_items, mode and customer_email across hosted and embedded", async () => {
+    // The webhook + confirmation email depend ONLY on the session metadata/line-items/mode, so the
+    // two UI modes must differ solely in the redirect surface. A gift-aided monthly gift exercises
+    // the richest metadata path (wording snapshot + declaration + scope).
+    const bodyBase = {
+      mode: "monthly" as const,
+      plan: "gold" as const,
+      amount: 5000,
+      giftAid: true,
+      ageConfirmed: true,
+      email: "ada@example.com",
+      fullName: "Ada Lovelace",
+      declaration: {
+        firstName: "Ada",
+        lastName: "Lovelace",
+        houseNameNumber: "12",
+        address: "Analytical Avenue, London",
+        postcode: "SW1A 1AA",
+        nonUk: false,
+      },
+    };
+    await run({ ...bodyBase }); // hosted (default)
+    const hosted = lastParams();
+    await run({ ...bodyBase, uiMode: "embedded" }); // embedded
+    const embedded = lastParams();
+    expect(embedded.metadata).toEqual(hosted.metadata);
+    expect(embedded.line_items).toEqual(hosted.line_items);
+    expect(embedded.mode).toEqual(hosted.mode);
+    expect(embedded.customer_email).toEqual(hosted.customer_email);
+    expect(embedded.payment_method_types).toEqual(hosted.payment_method_types);
+  });
+
+  it("validates the body the same way in embedded mode (monthly not confirming 18+ is 400, never calls Stripe)", async () => {
+    const res = await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "embedded" });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown uiMode with 400 and never calls Stripe", async () => {
+    const res = await run({ mode: "once", plan: null, amount: 5000, giftAid: false, email: "donor@example.com", uiMode: "popup" });
+    expect(res.statusCode).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/checkout-session — type-aware thank-you redirect (TASK-221)", () => {
+  const company = {
+    legalName: "Acme Ltd",
+    contactName: "Ada Lovelace",
+    contactEmail: "finance@acme.test",
+    billingAddress: "1 Office Park, London",
+    billingPostcode: "SW1A 1AA",
+    considerationGiven: false,
+  };
+
+  it("carries mode+donor+session_id on the hosted success_url for a monthly company gift", async () => {
+    await run({
+      mode: "monthly",
+      plan: "platinum",
+      amount: 10000,
+      giftAid: false,
+      ageConfirmed: true,
+      donorType: "company",
+      businessName: "Acme Ltd",
+      company,
+    });
+    const p = lastParams();
+    expect(p.success_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=monthly&donor=company&session_id={CHECKOUT_SESSION_ID}",
+    );
+    // The braces of the Stripe session-id template must NOT be URL-encoded (Stripe substitutes them).
+    expect(p.success_url).toContain("{CHECKOUT_SESSION_ID}");
+  });
+
+  it("carries mode+donor+session_id on the embedded return_url for a monthly company gift", async () => {
+    await run({
+      mode: "monthly",
+      plan: "platinum",
+      amount: 10000,
+      giftAid: false,
+      ageConfirmed: true,
+      donorType: "company",
+      businessName: "Acme Ltd",
+      company,
+      uiMode: "embedded",
+    });
+    const p = lastParams();
+    expect(p.return_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=monthly&donor=company&session_id={CHECKOUT_SESSION_ID}",
+    );
+    expect(p.success_url).toBeUndefined();
+  });
+
+  it("stamps donor=individual for an individual monthly gift", async () => {
+    await run({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, ageConfirmed: true, email: "ada@example.com" });
+    expect(lastParams().success_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=monthly&donor=individual&session_id={CHECKOUT_SESSION_ID}",
+    );
+  });
+
+  it("stamps donor=partnership for a partnership gift", async () => {
+    await run({
+      mode: "once",
+      plan: null,
+      amount: 10000,
+      giftAid: false,
+      donorType: "partnership",
+      email: "donor@example.com",
+    });
+    expect(lastParams().success_url).toBe(
+      "https://nbcc.test/donate/thank-you?mode=once&donor=partnership&session_id={CHECKOUT_SESSION_ID}",
+    );
+  });
+
+  it("keeps the hosted and embedded landing URLs identical (only the redirect surface differs)", async () => {
+    const body = { mode: "monthly" as const, plan: "gold" as const, amount: 5000, giftAid: false, ageConfirmed: true, email: "ada@example.com" };
+    await run(body);
+    const hostedSuccess = lastParams().success_url;
+    await run({ ...body, uiMode: "embedded" });
+    const embeddedReturn = lastParams().return_url;
+    expect(embeddedReturn).toBe(hostedSuccess);
   });
 });
 

@@ -68,6 +68,15 @@ variable "stripe_cancel_url" {
   default = "https://www.example.org/donate"
 }
 
+# Stripe PUBLISHABLE key (TASK-215) for Embedded Checkout — the `pk_test_…`/`pk_live_…` the browser
+# needs to construct Stripe.js. PUBLIC, not a secret (it ships to every donor's browser), so it is a
+# plain task-def environment value (like the redirect URLs), NOT an SSM SecureString and NOT in the
+# exec_secrets IAM policy. Placeholder default; set the real per-env key in infra/envs/*/main.tf.
+variable "stripe_publishable_key" {
+  type    = string
+  default = "pk_test_replace_me"
+}
+
 # Optional Stripe Product id (prod_…) to group one-off donations under. Non-secret;
 # empty by default (the app then names an inline product). Set per env in
 # infra/envs/*/main.tf when a donation product exists.

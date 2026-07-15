@@ -141,7 +141,12 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       var section = b.getAttribute("data-view");
       if (section === "overview") return;
-      b.hidden = !canView(section);
+      // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
+      // data-view - e.g. Business supporters is an Editor+ area gated on donations:edit, matching its
+      // server route (authorizeSection "donations" "edit"). Everything else gates on view of its own
+      // section, as before.
+      var editGate = b.getAttribute("data-edit-gate");
+      b.hidden = editGate ? !canEdit(editGate) : !canView(section);
     });
     var teamNavGroup = el("teamNavGroup");
     if (teamNavGroup) teamNavGroup.hidden = !canView("team");
@@ -316,6 +321,7 @@
     } else if (name === "claims") loadClaims();
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
+    else if (name === "fulfilments") loadFulfilments();
     else if (name === "stories") loadStories();
     else if (name === "contact") loadContact();
     else if (name === "newsletter") loadNewsletters();
@@ -353,7 +359,7 @@
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Gift</th>' +
+      '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Donation</th>' +
       "<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Date</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>"
     );
@@ -467,7 +473,7 @@
   bindClick("assignBtn", assignSelected);
   bindClick("markGasdsBtn", markGasdsSelected);
 
-  // ---- GASDS deadline: small gifts near the 2-year cliff → mark claimed (editor+) ----
+  // ---- GASDS deadline: small donations near the 2-year cliff → mark claimed (editor+) ----
   function loadGasds() {
     var canWrite = canEdit("gasds");
     var actions = el("gasdsActions");
@@ -493,7 +499,7 @@
     }
   }
   function gasdsTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No GASDS gifts are approaching the claim deadline.</p>';
+    if (!rows.length) return '<p class="admin-empty">No GASDS donations are approaching the claim deadline.</p>';
     var body = rows
       .map(function (r) {
         var box = canWrite ? '<td><input type="checkbox" class="gasds-check" value="' + r.id + '" aria-label="Select donation ' + r.id + '"></td>' : "";
@@ -512,7 +518,7 @@
     var ids = Array.prototype.slice
       .call(doc.querySelectorAll(".gasds-check:checked"))
       .map(function (c) { return Number(c.value); });
-    if (!ids.length) { window.alert("Tick at least one gift first."); return; }
+    if (!ids.length) { window.alert("Tick at least one donation first."); return; }
     authFetch("/api/admin/queues/gasds-deadline/mark-claimed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -521,9 +527,9 @@
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (out) {
         if (out) loadGasds();
-        else window.alert("Could not mark those gifts as claimed.");
+        else window.alert("Could not mark those donations as claimed.");
       })
-      .catch(function () { window.alert("Could not mark those gifts as claimed."); });
+      .catch(function () { window.alert("Could not mark those donations as claimed."); });
   }
 
   // ---- claims: eligible → batch → export → submit (writes are editor+) ----
@@ -689,6 +695,156 @@
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
       });
   }
+
+  // ---- business supporters: fulfilment list + mark-done actions (TASK-208, over TASK-207's API) ----
+  // Editor+ area (the whole tab is gated on donations:edit in the nav via data-edit-gate, matching the
+  // server's authorizeSection("donations","edit") on both endpoints). Lists each business supporter's
+  // fulfilment record (GET /api/admin/fulfilments), showing the recognition band, whether they have
+  // submitted their thank-you preferences and a compact view of those prefs, and the five recognition
+  // status flags. Each not-yet-done flag is a button that marks it done
+  // (POST /api/admin/fulfilments/:id/mark) and then refetches the list — mirroring the refetch-after-
+  // write pattern of the GASDS / Claims list actions (the mark is audited server-side).
+  var FULFILMENT_FLAGS = [
+    { key: "certificate_sent", label: "Certificate sent" },
+    { key: "certificate_posted", label: "Posted" },
+    { key: "badge_sent", label: "Badge sent" },
+    { key: "social_done", label: "Social done" },
+    { key: "added_to_supporters", label: "Added to Supporters" },
+  ];
+  function fulfilmentStatus(msg) {
+    var s = el("fulfilmentActionStatus");
+    if (s) s.textContent = msg || "";
+  }
+  function fulfilmentBandPill(band) {
+    // band is always set on a fulfilment record (NOT NULL, set at insert); the empty fallback is
+    // purely defensive.
+    return band ? '<span class="admin-pill">' + H.escapeHtml(cap(band)) + "</span>" : "";
+  }
+  function fulfilmentBusinessCell(r) {
+    var primary = r.business_name || r.donor_name || "Donor " + r.donor_id;
+    var out = '<span class="admin-fulfil-biz">' + H.escapeHtml(primary) + "</span>";
+    if (r.business_name && r.donor_name && r.donor_name !== r.business_name) {
+      out += '<span class="admin-fulfil-sub">' + H.escapeHtml(r.donor_name) + "</span>";
+    }
+    return out;
+  }
+  function fulfilmentPrefsCell(r) {
+    if (!r.captured_at) return '<span class="admin-pill is-internal">Awaiting preferences</span>';
+    var wants = [];
+    if (r.list_on_supporters) wants.push("Listing");
+    if (r.want_social) wants.push("Social");
+    if (r.want_badge) wants.push("Badge");
+    if (r.want_certificate) {
+      wants.push("Certificate" + (r.certificate_delivery ? " (" + cap(r.certificate_delivery) + ")" : ""));
+    }
+    var pills = wants.length
+      ? wants
+          .map(function (w) {
+            return '<span class="admin-pill">' + H.escapeHtml(w) + "</span>";
+          })
+          .join(" ")
+      : '<span class="admin-fulfil-sub">No extras requested</span>';
+    var credit = r.credit_name
+      ? '<span class="admin-fulfil-credit">Credit as: ' + H.escapeHtml(r.credit_name) + "</span>"
+      : "";
+    return (
+      '<div class="admin-fulfil-prefs"><span class="admin-pill is-replied">Submitted ' + H.fmtDate(r.captured_at) +
+      "</span>" + credit + '<span class="admin-fulfil-wants">' + pills + "</span></div>"
+    );
+  }
+  function fulfilmentFlagsCell(r) {
+    var canWrite = canEdit("donations");
+    var items = FULFILMENT_FLAGS.map(function (f) {
+      if (r[f.key]) return '<span class="admin-pill is-replied" title="Done">' + f.label + "</span>";
+      if (!canWrite) return '<span class="admin-pill is-internal" title="Not done">' + f.label + "</span>";
+      return (
+        '<button class="admin-link" type="button" data-fulfil-id="' + r.id + '" data-fulfil-mark="' + f.key +
+        '" title="Mark as done" aria-label="Mark done: ' + f.label + '">' + f.label + "</button>"
+      );
+    }).join(" ");
+    return '<div class="admin-fulfil-flags">' + items + "</div>";
+  }
+  function fulfilmentsTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No business supporters yet.</p>';
+    var body = rows
+      .map(function (r) {
+        return (
+          "<tr><td>" + fulfilmentBusinessCell(r) + "</td><td>" + fulfilmentBandPill(r.band) + "</td><td>" +
+          fulfilmentPrefsCell(r) + "</td><td>" + fulfilmentFlagsCell(r) + "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table"><thead><tr><th>Business</th><th>Band</th><th>Preferences</th>' +
+      "<th>Fulfilment</th></tr></thead><tbody>" + body + "</tbody></table>"
+    );
+  }
+  function loadFulfilments() {
+    var wrap = el("fulfilmentsTable");
+    if (!wrap) return;
+    fulfilmentStatus("");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/fulfilments")
+      .then(j)
+      .then(function (d) {
+        wrap.innerHTML = fulfilmentsTable(d.results || []);
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Business supporters are unavailable.</p>';
+      });
+  }
+  function markFulfilment(id, flag) {
+    fulfilmentStatus("");
+    authFetch("/api/admin/fulfilments/" + id + "/mark", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flag: flag }),
+    })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (out) {
+        if (out) loadFulfilments();
+        else fulfilmentStatus("Could not update that supporter. Please try again.");
+      })
+      .catch(function () {
+        fulfilmentStatus("Could not update that supporter. Please try again.");
+      });
+  }
+  // ---- catch up invites (TASK-214): email the thank-you invite to supporters who never got it ----
+  // One click POSTs the backfill endpoint (server-side Editor+), then shows how many went out. Safe to
+  // click again: the server only emails supporters who have not been invited yet, so a repeat run
+  // reports "Sent 0". Refetches the list afterwards, mirroring the mark-done refetch pattern above.
+  function backfillStatus(msg) {
+    var s = el("backfillInvitesStatus");
+    if (s) s.textContent = msg || "";
+  }
+  function backfillInvites() {
+    var btn = el("backfillInvitesBtn");
+    if (btn) btn.disabled = true;
+    backfillStatus("Sending…");
+    authFetch("/api/admin/business-supporters/backfill-invites", { method: "POST" })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (out) {
+        if (!out) {
+          backfillStatus("Could not send the invites. Please try again.");
+        } else if (!out.pending) {
+          backfillStatus("No supporters were waiting for an invite.");
+        } else {
+          backfillStatus("Sent " + (out.sent || 0) + ", failed " + (out.failed || 0) + ".");
+        }
+        loadFulfilments();
+      })
+      .catch(function () {
+        backfillStatus("Could not send the invites. Please try again.");
+      })
+      .then(function () {
+        if (btn) btn.disabled = false;
+      });
+  }
+  bindClick("backfillInvitesBtn", backfillInvites);
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
   Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (b) {
@@ -2255,7 +2411,7 @@
   var NL_TEMPLATE = { blocks: [
     { type: "masthead", variant: 0, data: { issueTitle: "The Night Before Christmas — Winter Update" } },
     { type: "greeting", variant: 1, data: { lead: "Thank you for being part of the Night Before Christmas Campaign. Here is what your kindness has made possible across South West Scotland this year." } },
-    { type: "heading", variant: 1, data: { kicker: "Our impact", title: "What your gift made possible" } },
+    { type: "heading", variant: 1, data: { kicker: "Our impact", title: "What your donation made possible" } },
     { type: "stats", variant: 1, data: { items: [
       { number: "7,657", label: "Red Bags delivered" },
       { number: "£128k", label: "Raised together" },
@@ -2273,7 +2429,7 @@
       name: "A volunteer", role: "Red Bag packer",
       quote: "Seeing the bags come together, knowing each one reaches someone who needs it — that is what Christmas is about.",
     } },
-    { type: "text", variant: 3, data: { text: "Every gift matters. £10 fills a Red Bag; £25 brightens a whole family's Christmas morning." } },
+    { type: "text", variant: 3, data: { text: "Every donation matters. £10 fills a Red Bag; £25 brightens a whole family's Christmas morning." } },
     { type: "heading", variant: 2, data: { title: "Ways you can help" } },
     { type: "waysToHelp", variant: 0, data: { items: [
       { icon: "🎁", title: "Donate", body: "Fund a Red Bag Full of Joy.", label: "Donate", href: "https://nbcc.scot/donate" },
@@ -2541,6 +2697,7 @@
       dl("Email", d.email || "None on file") +
       dl("Email consent", d.emailConsent ? "Yes" : "No") +
       dl("Anonymous", d.anonymous ? "Yes" : "No") +
+      dl("Hidden from supporters wall", d.hiddenFromSupporters ? "Yes" : "No") +
       dl("Address", donorAddress(d)) +
       dl("Postcode", d.postcode || "None on file") +
       dl("Monthly plan", d.subscriptionPlan ? cap(d.subscriptionPlan) : "None") +
@@ -2554,6 +2711,7 @@
         editField("email", "Email", "email", d.email || "") +
         editCheck("emailConsent", "Email consent", d.emailConsent) +
         editCheck("anonymous", "Anonymous on the public page", d.anonymous) +
+        editCheck("hiddenFromSupporters", "Hide from supporters wall", d.hiddenFromSupporters) +
         '<button class="btn btn-primary" type="submit">Save changes</button></form>';
       // Gift Aid declaration details (TASK-130): correct identity/address on the active declaration.
       if (d.declaration) {
@@ -2570,7 +2728,7 @@
           '<button class="btn btn-primary" type="submit">Save declaration details</button></form>';
       }
       actions += '<div class="admin-donor-actions">';
-      if (d.subscriptionPlan && d.subscriptionId) actions += '<button class="btn btn-ghost" type="button" id="cancelSubBtn">Cancel monthly gift</button>';
+      if (d.subscriptionPlan && d.subscriptionId) actions += '<button class="btn btn-ghost" type="button" id="cancelSubBtn">Cancel monthly donation</button>';
       if (d.giftAid) actions += '<button class="btn btn-ghost" type="button" id="cancelGaBtn">Cancel Gift Aid</button>';
       actions += "</div>";
     }
@@ -2587,6 +2745,7 @@
           email: (el("edit-email").value || "").trim(),
           emailConsent: el("edit-emailConsent").checked,
           anonymous: el("edit-anonymous").checked,
+          hiddenFromSupporters: el("edit-hiddenFromSupporters").checked,
         };
         if (!body.email) delete body.email; // email optional; PATCH rejects an empty string
         authFetch("/api/admin/donors/" + currentDonorId, {
@@ -2642,18 +2801,18 @@
       });
     }
     bindClick("cancelSubBtn", function () {
-      if (!window.confirm("Cancel this donor's monthly gift?")) return;
+      if (!window.confirm("Cancel this donor's monthly donation?")) return;
       authFetch("/api/admin/donors/" + currentDonorId + "/subscription/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId: d.subscriptionId, accepted: "cancel" }),
       })
         .then(function (res) {
-          donorStatus(res.ok ? "Monthly gift cancelled." : "Could not cancel the monthly gift.");
+          donorStatus(res.ok ? "Monthly donation cancelled." : "Could not cancel the monthly donation.");
           if (res.ok) openDonor(currentDonorId);
         })
         .catch(function () {
-          donorStatus("Could not cancel the monthly gift.");
+          donorStatus("Could not cancel the monthly donation.");
         });
     });
     bindClick("cancelGaBtn", function () {
@@ -2688,6 +2847,8 @@
       if (sub) return submitBatch(sub.getAttribute("data-submit-batch"));
       var exp = t.closest("[data-export-batch]");
       if (exp) return exportBatch(exp.getAttribute("data-export-batch"));
+      var fulfil = t.closest("[data-fulfil-mark]");
+      if (fulfil) return markFulfilment(fulfil.getAttribute("data-fulfil-id"), fulfil.getAttribute("data-fulfil-mark"));
     });
   }
 
@@ -2753,10 +2914,10 @@
       callout.innerHTML = "With heartfelt thanks for your donation of <b>" + H.escapeHtml(items) + "</b>.";
     } else {
       var n = parseFloat(String(el("tyAmount").value).replace(/[^0-9.]/g, "")) || 0;
-      var html = "With heartfelt thanks for your gift of <b>" + tyMoney(n) + "</b>.";
+      var html = "With heartfelt thanks for your donation of <b>" + tyMoney(n) + "</b>.";
       if (el("tyGiftAid").checked) {
         html +=
-          '<span class="ty-ganote">Because you Gift Aided it, HMRC adds 25%, making your gift worth <b>' +
+          '<span class="ty-ganote">Because you Gift Aided it, HMRC adds 25%, making your donation worth <b>' +
           tyMoney(n * 1.25) +
           "</b> to our work, at no extra cost to you.</span>";
       }
@@ -2794,7 +2955,7 @@
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Donor</th><th>Largest gift</th><th>Gift Aid</th><th>Status</th><th></th></tr></thead><tbody>' +
+      '<table class="admin-table"><thead><tr><th>Donor</th><th>Largest donation</th><th>Gift Aid</th><th>Status</th><th></th></tr></thead><tbody>' +
       body +
       "</tbody></table>"
     );

@@ -50,45 +50,38 @@
 </div>
 </header>
 <main class="site-main" id="main" tabindex="-1">
-<!-- Donate intro (REQ-019): centred page intro mirroring .about-intro.
-           Reuses .eyebrow / base h1 / .rule / .lede and the tokens (the .rule
-           is centred by the .donate-intro auto-margin, as on .about-intro); no
-           new fonts and no image tags. The give widget lands in page-sections
-           (REQ-020+). Copy carries the £50-per-Red-Bag framing; "NBCC" in full
-           per REQ-031, no dashes. -->
+<!-- Donate intro (REQ-019): centred page intro mirroring .about-intro; the give widget lands in
+           page-sections (REQ-020+). "NBCC" in full per REQ-031, no dashes. -->
 <section aria-labelledby="donate-intro-heading" class="page-top donate-intro"><div class="wrap"><div class="intro-hero">
 <span class="eyebrow">Donate</span>
-<h1 id="donate-intro-heading">Your gift becomes someone's Christmas</h1>
+<h1 id="donate-intro-heading">Your donation becomes someone's Christmas</h1>
 <div class="rule"><i></i></div>
 <p class="lede">
-          Everyone involved in NBCC is a volunteer, so your kindness goes straight
-          to thoughtful gifts and moments of joy. Around £50 is the value of
-          one Red Bag Full of Joy. Give once, or give monthly and support the work
-          all year round.
+          Every one of us at NBCC is a volunteer, so your whole donation goes
+          where it belongs, into thoughtful gifts and real moments of joy. Around
+          £50 is the value of one Red Bag Full of Joy. Give once, or give monthly
+          and be there all year round.
         </p>
 </div></div></section>
-<!-- Donate page sections (REQ-020+): the programmatic page-sections slot (an
-           exempt landmark, data-region) holds the give widget, the monthly donor
-           benefits band and the reassurance band. Each .section band is a <div>, so
-           the named inner <section>s (give-widget / donor-benefits / reassure) are
-           the only landmarks. -->
+<!-- Donate page sections (REQ-020+): the page-sections slot (exempt landmark) holds the give widget,
+           the monthly donor benefits band and the reassurance band; the named inner <section>s are the landmarks. -->
 <section class="page-sections" data-region="sections">
 <div class="section flush-top"><div class="wrap"><section aria-labelledby="give-widget-heading" class="give-widget">
-<h2 id="give-widget-heading">Make your gift</h2>
+<h2 id="give-widget-heading">Make your donation</h2>
 <div class="give-box"><div class="card card-lg give-card"><div class="give-inner">
 <div class="give-main" data-give-steps="">
 <ol aria-hidden="true" class="give-progress">
-<li class="is-active" data-pstep="1"><span class="p-n">Step 1</span> Your gift</li>
+<li class="is-active" data-pstep="1"><span class="p-n">Step 1</span> Your donation</li>
 <li data-pstep="2"><span class="p-n">Step 2</span> Your details</li>
 <li data-pstep="3"><span class="p-n">Step 3</span> Confirm</li>
 </ol>
 <div class="give-steps">
 <section aria-labelledby="giveStep1Title" class="give-step" data-step="1" tabindex="-1">
-<h3 class="give-step-title" id="giveStep1Title">Choose your gift</h3>
-<p class="give-step-sub">Give once, or give monthly and support the work all year round.</p>
-<div aria-label="Choose how often to give" class="give-toggle" role="group">
-<button aria-controls="tiersOnce" aria-pressed="false" class="give-mode" data-mode="once" id="giveOnce" type="button">Give once</button>
-<button aria-controls="tiersMonthly" aria-pressed="true" class="give-mode is-active" data-mode="monthly" id="giveMonthly" type="button">Give monthly</button>
+<h3 class="give-step-title" id="giveStep1Title">How much would you like to donate?</h3>
+<p class="give-step-sub">Donate once, or donate monthly and support the work all year round.</p>
+<div aria-label="Choose how often to donate" class="give-toggle" role="group">
+<button aria-controls="tiersMonthly" aria-pressed="true" class="give-mode is-active" data-mode="monthly" id="giveMonthly" type="button">Donate monthly</button>
+<button aria-controls="tiersOnce" aria-pressed="false" class="give-mode" data-mode="once" id="giveOnce" type="button">Donate once</button>
 </div>
 <div aria-label="Give once amounts" class="give-tiers" hidden="" id="tiersOnce" role="region">
 <!-- CONTENT VERIFICATION (REQ-021): these one-off amounts are
@@ -102,7 +95,7 @@
 <span class="give-tier-desc">Cosy essentials: a hat, gloves, hot chocolate and treats.</span>
 </button>
 <button class="card tier give-tier is-featured" data-amount="2500" data-mode="once" data-plan="" type="button">
-<span class="give-flag">Most chosen</span>
+<span class="give-flag">Most popular</span>
 <span class="give-amount">£25</span>
 <span class="give-tier-desc">A thoughtful bundle towards a Red Bag Full of Joy.</span>
 </button>
@@ -112,16 +105,17 @@
 </button>
 <button class="card tier give-tier" data-amount="10000" data-mode="once" data-plan="" type="button">
 <span class="give-amount">£100</span>
-<span class="give-tier-desc">Christmas joy for a whole family who would go without.</span>
+<span class="give-tier-desc">Christmas joy for a whole family who would otherwise go without.</span>
 </button>
-<div class="card give-tier-custom">
+<div class="card give-tier-custom" data-amount="" data-mode="once" data-plan="">
 <label class="give-custom-label" for="customAmount">Choose your own amount</label>
 <div class="give-custom-field">
 <span aria-hidden="true" class="give-custom-currency">£</span>
 <input class="give-custom-input" id="customAmount" inputmode="numeric" min="1" name="customAmount" placeholder="Other amount" step="1" type="number"/>
 </div>
-<!-- Empty data-amount: startCheckout builds the pence from #customAmount (REQ-028). -->
-<button class="btn btn-primary give-custom-go" data-amount="" data-mode="once" data-plan="" type="button">Give</button>
+<!-- TASK-210: the redundant per-amount Donate button was removed. The custom box now carries
+                       the checkout contract (empty data-amount: startCheckout builds the pence from
+                       #customAmount, REQ-028); the single step CTA below starts checkout with it. -->
 </div>
 </div>
 <div aria-label="Give monthly amounts" class="give-tiers" id="tiersMonthly" role="region">
@@ -134,14 +128,14 @@
 <span class="give-tier-head">Building towards Christmas joy</span>
 <span class="give-tier-desc">Every month helps build towards the comfort, care and thoughtful gifts that make someone feel remembered.</span>
 </button>
-<button class="card tier give-tier" data-amount="2500" data-mode="monthly" data-plan="silver" type="button">
+<button class="card tier give-tier is-featured" data-amount="2500" data-mode="monthly" data-plan="silver" type="button">
+<span class="give-flag">Most popular</span>
 <span class="give-tier-name">Silver</span>
 <span class="give-price"><span class="give-amount">£25</span> <span class="give-cadence">per month</span></span>
 <span class="give-tier-head">Halfway to a Red Bag Full of Joy</span>
 <span class="give-tier-desc">Each month brings NBCC closer to the kind of Christmas support that gives one person comfort, dignity and joy.</span>
 </button>
-<button class="card tier give-tier is-featured" data-amount="5000" data-mode="monthly" data-plan="gold" type="button">
-<span class="give-flag">Around one Red Bag</span>
+<button class="card tier give-tier" data-amount="5000" data-mode="monthly" data-plan="gold" type="button">
 <span class="give-tier-name">Gold</span>
 <span class="give-price"><span class="give-amount">£50</span> <span class="give-cadence">per month</span></span>
 <span class="give-tier-head">One Christmas made brighter</span>
@@ -153,31 +147,55 @@
 <span class="give-tier-head">More joy, every month</span>
 <span class="give-tier-desc">Each month gives support around the value of two Red Bags Full of Joy, helping NBCC reach more people across South West Scotland.</span>
 </button>
-<div class="card give-tier-custom">
+<div class="card give-tier-custom" data-amount="" data-mode="monthly" data-plan="">
 <label class="give-custom-label" for="customAmountMonthly">Choose your own amount</label>
 <div class="give-custom-field">
 <span aria-hidden="true" class="give-custom-currency">£</span>
 <input class="give-custom-input" id="customAmountMonthly" inputmode="numeric" min="1" name="customAmountMonthly" placeholder="Other amount" step="1" type="number"/>
 <span class="give-cadence">per month</span>
 </div>
-<!-- Empty data-amount: startCheckout builds the pence from the custom input (REQ-028). -->
-<button class="btn btn-primary give-custom-go" data-amount="" data-mode="monthly" data-plan="" type="button">Give monthly</button>
+<!-- TASK-210: the redundant per-amount Donate button was removed. The custom box now carries
+                       the checkout contract (empty data-amount: startCheckout builds the pence from
+                       the custom input, REQ-028); the single step CTA below starts checkout with it. -->
 </div>
+</div>
+<!-- Live impact summary (TASK-204): initGiveSteps updates this from the selected tier or
+                     custom amount and the give mode. Non-definitive impact copy only (Code of
+                     Fundraising Practice): "could help provide ...", never "£X provides Y". -->
+<div class="give-impact" id="giveImpact">
+<span class="give-impact-ic" aria-hidden="true">🎁</span>
+<p class="give-impact-text" id="giveImpactText"><b>£50 a month</b> could help provide support around the value of one Red Bag Full of Joy each month.</p>
+</div>
+<div class="give-cta-row">
+<button class="btn btn-primary give-cta" data-give-next="" type="button">Donate now <span aria-hidden="true" class="arrow">→</span></button>
+<p class="give-pay-note">Secure payment by Stripe. Card, Apple Pay and Direct Debit.</p>
 </div>
 <p class="give-step-err" data-err="1">Please choose an amount to continue.</p>
 </section>
 <section aria-labelledby="giveStep2Title" class="give-step" data-step="2" hidden="" tabindex="-1">
 <h3 class="give-step-title" id="giveStep2Title">Your details</h3>
 <p class="give-step-sub">So we can send your receipt and, if you choose, add Gift Aid.</p>
+<!-- Page-2 summary (TASK-204): reflects the amount chosen on step 1 (tier or custom),
+                 with a Change control that returns to step 1. initGiveSteps fills the amount. -->
+<div class="give-summary">
+<div class="give-summary-main">
+<span class="give-summary-label">You are donating</span>
+<span class="give-summary-amount" id="giveSummaryAmount">£50 a month</span>
+</div>
+<button class="give-summary-change" data-give-prev="" type="button">Change</button>
+</div>
 <fieldset class="give-donor">
-<legend class="give-donor-legend">Are you donating as an individual or on behalf of a business?</legend>
-<div class="give-donor-options">
-<span class="give-donor-option">
-<input checked="" id="donorIndividual" name="donorType" type="radio" value="individual"/>
-<label for="donorIndividual">Individual</label>
+<legend class="give-donor-legend">Who is this donation from, an individual or a business?</legend>
+<!-- TASK-204: nothing is preselected. The donor must choose; initGiveSteps' step-2
+                     validate() blocks Continue until one is picked. Both radios carry
+                     required + aria-required. The business option is colour-accented to draw the eye. -->
+<div class="give-donor-options give-donor-cards">
+<span class="give-donor-option give-donor-option--individual">
+<input aria-required="true" id="donorIndividual" name="donorType" required="" type="radio" value="individual"/>
+<label for="donorIndividual">An individual</label>
 </span>
-<span class="give-donor-option">
-<input id="donorBusiness" name="donorType" type="radio" value="business"/>
+<span class="give-donor-option give-donor-option--business">
+<input aria-required="true" id="donorBusiness" name="donorType" required="" type="radio" value="business"/>
 <label for="donorBusiness">A business</label>
 </span>
 </div>
@@ -214,30 +232,61 @@
 </fieldset>
 <fieldset class="give-contact" id="contactCapture">
 <legend class="give-contact-legend">Your details</legend>
+<!-- TASK-219/226: first name + surname side by side in the shared .give-name-row wrapper (used on
+                   every donor-facing form); startCheckout folds #donorFirstName/#donorSurname into payload.fullName. -->
+<div class="give-name-row">
 <div class="give-field">
-<label for="donorName">Full name <span aria-hidden="true" class="give-req">*</span></label>
-<input aria-required="true" autocomplete="name" class="give-field-input" id="donorName" name="fullName" placeholder="Your full name" required="" type="text"/>
+<label for="donorFirstName">First name <span aria-hidden="true" class="give-req">*</span></label>
+<input aria-required="true" autocomplete="given-name" class="give-field-input" id="donorFirstName" name="donorFirstName" placeholder="Your first name" required="" type="text"/>
+</div>
+<div class="give-field">
+<label for="donorSurname">Surname <span aria-hidden="true" class="give-req">*</span></label>
+<input aria-required="true" autocomplete="family-name" class="give-field-input" id="donorSurname" name="donorSurname" placeholder="Your surname" required="" type="text"/>
+</div>
 </div>
 <div class="give-field">
 <label for="donorEmail">Email <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="email" class="give-field-input" id="donorEmail" name="email" placeholder="you@example.com" required="" type="email"/>
 <p class="give-field-help">We only use this to send your receipt and a thank you. We never share it.</p>
 </div>
-<label class="give-check" for="emailConsent">
+<!-- Newsletter opt-in (TASK-204): a clear, separate opt-in. Never pre ticked. This is the
+                   SAME emailConsent capture startCheckout folds into the checkout body; the field
+                   name (emailConsent) is unchanged. -->
+<div class="give-newsletter">
+<label class="give-check give-newsletter-check" for="emailConsent">
 <input class="give-check-box" id="emailConsent" name="emailConsent" type="checkbox"/>
-<span class="give-check-text">Yes, NBCC can email me about my gift and the difference it makes.</span>
+<span class="give-check-text"><strong>Add me to our donor newsletter.</strong> A warm little update from NBCC on the difference your support helps make. Unsubscribe anytime.</span>
 </label>
+</div>
 <label class="give-check" for="anonymousDonor">
 <input class="give-check-box" id="anonymousDonor" name="anonymous" type="checkbox"/>
-<span class="give-check-text">Keep my gift anonymous and off the public Donors Page.</span>
+<span class="give-check-text">Keep my donation anonymous and off the public Donors Page.</span>
 </label>
+<!-- Supporters opt-in (TASK-224): shown by initGiveSteps only for a monthly gift of £10 or more. -->
+<div class="give-supporter" id="supporterOptin" hidden>
+<p class="give-supporter-lead">Would you like your name shown on our public supporters page?</p>
+<div class="give-donor-options">
+<span class="give-donor-option">
+<input aria-required="true" id="supporterListYes" name="listOnSupporters" required="" type="radio" value="yes"/>
+<label for="supporterListYes">Show my name on our supporters page</label>
+</span>
+<span class="give-donor-option">
+<input aria-required="true" id="supporterListNo" name="listOnSupporters" required="" type="radio" value="no"/>
+<label for="supporterListNo">Keep my giving private</label>
+</span>
+</div>
+<div class="give-field" id="supporterCreditNameField" hidden>
+<label for="supporterCreditName">How should your name appear? For example, The Campbell Family</label>
+<input aria-required="true" class="give-field-input" id="supporterCreditName" maxlength="200" name="creditName" required="" type="text"/>
+</div>
+</div>
 <p class="give-field-help give-privacy">
                   We handle your details as set out in our <a href="/privacy">Privacy notice</a>.
                 </p>
 <!-- Monthly only: revealed for give monthly, collapsed for give once by
                      initGiveToggle. Ships visible because monthly is the default mode. -->
 <label class="give-check give-age" for="ageConfirmed" id="ageConfirmField">
-<input class="give-check-box" id="ageConfirmed" name="ageConfirmed" type="checkbox"/>
+<input class="give-check-box" id="ageConfirmed" name="ageConfirmed" type="checkbox" required aria-required="true"/>
 <span class="give-check-text">I confirm I am aged 18 or over. Monthly giving is set up by adults.</span>
 </label>
 </fieldset>
@@ -249,11 +298,25 @@
                    verbatim HMRC declarations below with NBCC before launch. The
                    #giftAid id is the REQ-028 checkout hook and must stay. -->
 <div class="giftaid">
+<!-- TASK-204: Gift Aid reframed to SELL the uplift. initGiveSteps updates the headline
+                     and the from/to/plus amounts from the chosen donation. The #giftAid id and the
+                     verbatim declaration below are unchanged (REQ-042). The 25% / eligible / NBCC
+                     framing is retained for REQ-023. -->
+<div class="giftaid-head">
+<strong class="giftaid-headline" id="giftAidHeadline">Make your £50 worth £62.50</strong>
+<span class="giftaid-logo" aria-hidden="true">gift aid it</span>
+</div>
+<div class="giftaid-uplift" aria-hidden="true">
+<span class="giftaid-from" id="giftAidFrom">£50</span>
+<span class="giftaid-arrow">→</span>
+<span class="giftaid-to" id="giftAidTo">£62.50</span>
+<span class="giftaid-badge" id="giftAidPlus">+£12.50</span>
+</div>
+<p class="giftaid-intro">If you are a UK taxpayer, NBCC can turn every £1 you give into £1.25 on eligible donations, at no cost to you. That is 25% more for the people NBCC helps.</p>
+<div class="giftaid-check-row">
 <input class="giftaid-check" id="giftAid" name="giftAid" type="checkbox"/>
 <label class="giftaid-label" for="giftAid">
-<strong>Add Gift Aid and your gift grows by 25%.</strong>
-<span class="giftaid-intro">If you are a UK taxpayer, NBCC can claim an extra
-                    25p for every £1 you give on eligible gifts, at no cost to you.</span>
+<strong>Yes, add Gift Aid. I am a UK taxpayer.</strong>
 <!-- The tick agrees to the VERBATIM HMRC declaration below (REQ-042),
                        not the framing copy. Two statements, one per give mode, kept byte
                        for byte in sync with src/declarations/wording.ts: the
@@ -265,13 +328,14 @@
 <span class="giftaid-statement" data-mode="monthly">I want to Gift Aid my donation and any donations I make in the future or have made in the past 4 years to the Night Before Christmas Campaign. I am a UK taxpayer and understand that if I pay less Income Tax and/or Capital Gains Tax than the amount of Gift Aid claimed on all my donations in that tax year it is my responsibility to pay any difference.</span>
 </label>
 </div>
+</div>
 <!-- GIFT AID CALLOUT END -->
 <p class="give-step-err" data-err="2">Please complete the required fields above.</p>
 <div class="give-nav"><button class="give-back" data-give-prev="" type="button"><span aria-hidden="true">←</span> Back</button><button class="btn primary" data-give-next="" type="button">Continue <span aria-hidden="true" class="arrow">→</span></button></div>
 </section>
 <section aria-labelledby="giveStep3Title" class="give-step" data-step="3" hidden="" tabindex="-1">
-<h3 class="give-step-title" id="giveStep3Title">Confirm your gift</h3>
-<p class="give-step-sub">Check your gift, then continue to our secure payment page.</p>
+<h3 class="give-step-title" id="giveStep3Title">Confirm your donation</h3>
+<p class="give-step-sub">Check your donation, then continue to our secure payment page.</p>
 <dl class="give-review" id="giveReview"></dl>
 <fieldset class="give-declaration" id="declarationCapture">
 <legend class="give-declaration-legend">Your Gift Aid declaration</legend>
@@ -286,7 +350,7 @@
 <span class="give-scope-legend">Which donations does this declaration cover?</span>
 <label class="give-check" for="declScopeAll">
 <input checked="" class="give-check-box" id="declScopeAll" name="declScope" type="radio" value="all_donations"/>
-<span class="give-check-text">All my donations, this one plus the past 4 years and future gifts</span>
+<span class="give-check-text">All my donations, this one plus the past 4 years and future donations</span>
 </label>
 <label class="give-check" for="declScopeThis">
 <input class="give-check-box" id="declScopeThis" name="declScope" type="radio" value="this_donation"/>
@@ -297,6 +361,7 @@
 <label for="declTitle">Title <span class="give-optional">(optional)</span></label>
 <input autocomplete="honorific-prefix" class="give-field-input" id="declTitle" name="title" placeholder="Mr, Ms, Dr" type="text"/>
 </div>
+<div class="give-name-row">
 <div class="give-field">
 <label for="declFirstName">First name <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="given-name" class="give-field-input" id="declFirstName" name="firstName" required="" type="text"/>
@@ -304,6 +369,7 @@
 <div class="give-field">
 <label for="declLastName">Last name <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="family-name" class="give-field-input" id="declLastName" name="lastName" required="" type="text"/>
+</div>
 </div>
 <div class="give-field">
 <label for="declHouse">House name or number <span aria-hidden="true" class="give-req">*</span></label>
@@ -325,7 +391,7 @@
 </fieldset>
 <fieldset class="give-partners" hidden="" id="partnershipCapture">
 <legend class="give-partners-legend">Each partner's Gift Aid declaration</legend>
-<p class="give-partners-help">A business partnership makes one Gift Aid declaration per partner. Give each partner's details and the share of this gift that is theirs. The shares must add up to your total.</p>
+<p class="give-partners-help">A business partnership makes one Gift Aid declaration per partner. Give each partner's details and the share of this donation that is theirs. The shares must add up to your total.</p>
 <div class="give-partners-list" id="partnersList"></div>
 <button class="btn btn-secondary give-partner-add" id="addPartner" type="button">Add another partner</button>
 <!-- One partner row. initPartnershipCapture clones this per partner, replacing the
@@ -338,6 +404,7 @@
 <label for="__ID__-title">Title <span class="give-optional">(optional)</span></label>
 <input autocomplete="honorific-prefix" class="give-field-input" data-field="title" id="__ID__-title" placeholder="Mr, Ms, Dr" type="text"/>
 </div>
+<div class="give-name-row">
 <div class="give-field">
 <label for="__ID__-firstName">First name <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="given-name" class="give-field-input" data-field="firstName" id="__ID__-firstName" required="" type="text"/>
@@ -345,6 +412,7 @@
 <div class="give-field">
 <label for="__ID__-lastName">Last name <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="family-name" class="give-field-input" data-field="lastName" id="__ID__-lastName" required="" type="text"/>
+</div>
 </div>
 <div class="give-field">
 <label for="__ID__-house">House name or number <span aria-hidden="true" class="give-req">*</span></label>
@@ -363,7 +431,7 @@
 <span class="give-check-text">This partner has no UK postcode, for example a home address in the Channel Islands or Isle of Man.</span>
 </label>
 <div class="give-field give-partner-share">
-<label for="__ID__-share">This partner's share of the gift <span aria-hidden="true" class="give-req">*</span></label>
+<label for="__ID__-share">This partner's share of the donation <span aria-hidden="true" class="give-req">*</span></label>
 <div class="give-custom-field">
 <span aria-hidden="true" class="give-custom-currency">£</span>
 <input aria-required="true" class="give-custom-input" data-field="share" id="__ID__-share" inputmode="numeric" min="1" placeholder="Amount" required="" step="1" type="number"/>
@@ -375,14 +443,20 @@
 </fieldset>
 <fieldset class="give-company" hidden="" id="companyCapture">
 <legend class="give-company-legend">Your company details</legend>
-<p class="give-company-help">A company gift is not Gift Aided. We use these details for your receipt and our records.</p>
+<p class="give-company-help">A company donation is not Gift Aided. We use these details for your receipt and our records.</p>
 <div class="give-field">
 <label for="companyRegNumber">Company registration number <span class="give-optional">(optional)</span></label>
 <input autocomplete="off" class="give-field-input" id="companyRegNumber" name="companyRegNumber" placeholder="e.g. SC123456" type="text"/>
 </div>
+<div class="give-name-row">
 <div class="give-field">
-<label for="companyContactName">Contact name <span aria-hidden="true" class="give-req">*</span></label>
-<input aria-required="true" autocomplete="name" class="give-field-input" id="companyContactName" name="companyContactName" required="" type="text"/>
+<label for="companyContactFirstName">First name <span aria-hidden="true" class="give-req">*</span></label>
+<input aria-required="true" autocomplete="given-name" class="give-field-input" id="companyContactFirstName" name="companyContactFirstName" required="" type="text"/>
+</div>
+<div class="give-field">
+<label for="companyContactSurname">Surname <span aria-hidden="true" class="give-req">*</span></label>
+<input aria-required="true" autocomplete="family-name" class="give-field-input" id="companyContactSurname" name="companyContactSurname" required="" type="text"/>
+</div>
 </div>
 <div class="give-field">
 <label for="companyContactEmail">Contact email <span aria-hidden="true" class="give-req">*</span></label>
@@ -403,7 +477,7 @@
                      (classifyCompanyGift, TASK-086) flags a "Yes" for the trustees instead of
                      issuing a receipt. Real labels per REQ-032; dash-free copy (REQ-031). -->
 <fieldset class="give-field give-consideration" id="companyConsideration">
-<legend class="give-scope-legend">Did NBCC give anything of value in return for this gift, such as advertising or logo placement? <span aria-hidden="true" class="give-req">*</span></legend>
+<legend class="give-scope-legend">Did NBCC give anything of value in return for this donation, such as advertising or logo placement? <span aria-hidden="true" class="give-req">*</span></legend>
 <label class="give-check" for="companyConsiderationNo">
 <input aria-required="true" checked="" class="give-check-box" id="companyConsiderationNo" name="companyConsideration" required="" type="radio" value="no"/>
 <span class="give-check-text">No, nothing of value was given in return</span>
@@ -421,10 +495,10 @@
 </div>
 </div>
 <aside class="give-side">
-<span class="eyebrow">Where your gift goes</span>
+<span class="eyebrow">Where your donation goes</span>
 <p class="give-side-note">
-                Everyone at NBCC is a volunteer, so more of your gift reaches the
-                people who need it.
+                NBCC is run entirely by volunteers, so more of your donation
+                reaches the people who need it most.
               </p>
 <ul class="side-list">
 <li>
@@ -460,7 +534,7 @@
 <h2 id="benefits-heading">What monthly donors receive</h2>
 <div class="rule center"><i></i></div>
 <p class="donor-benefits-intro">
-            Give monthly and you help NBCC bring comfort, dignity and joy to
+            Give monthly and you keep NBCC bringing comfort, dignity and joy to
             children, young people and vulnerable adults across South West
             Scotland all year round. Here is how we say thank you.
           </p>
@@ -474,7 +548,7 @@
 </li>
 <li>
 <svg aria-hidden="true" class="benefit-check" fill="none" height="20" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="20"><path d="M20 6 9 17l-5-5"></path></svg>
-<span>A post Christmas end of year impact update, keeping you in the loop on the difference your support has helped make.</span>
+<span>Our donor newsletter, keeping you in the loop on the difference your support helps make.</span>
 </li>
 </ul>
 </div>
@@ -501,8 +575,9 @@
 <h2 id="reassure-heading">Giving with confidence</h2>
 <div class="rule center"><i></i></div>
 <p class="reassure-intro">
-            Setting up a gift to NBCC is simple, secure and entirely in your
-            control. If you ever need a hand, a real person is here to help.
+            Setting up a donation to NBCC is simple, secure and entirely in your
+            control. And if you ever need a hand, you will reach a real person,
+            never a call centre.
           </p>
 <div class="reassure-grid reveal">
 <div class="reassure-item card">
@@ -564,5 +639,15 @@
         </div>
       </div>
     </footer>
+<!-- Stripe Embedded Checkout mount (TASK-215): main.js reveals this overlay and mounts Stripe inside
+     #embeddedCheckout for inline pay; if JS/Stripe/init fails it stays hidden and the hosted redirect is used. -->
+<div class="give-embedded-modal" id="embeddedCheckoutModal" role="dialog" aria-modal="true" aria-label="Complete your donation" hidden aria-hidden="true">
+<div class="give-embedded-panel">
+<div class="give-embedded-bar">
+<button class="give-embedded-close" id="embeddedCheckoutClose" type="button" aria-label="Close and return to your details">Close</button>
+</div>
+<div class="give-embedded-mount" id="embeddedCheckout"></div>
+</div>
+</div>
 </body>
 </html>

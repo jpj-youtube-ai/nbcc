@@ -73,25 +73,25 @@ export function buildThankYouEmailText(v: ThankYouLetterView): string {
   const lines: string[] = [];
   lines.push(v.letterDate, "", `Thank you, ${v.thankYouName}.`, "", `Dear ${v.addressedTo},`, "");
   lines.push(
-    "On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.",
+    "On behalf of every volunteer at the Night Before Christmas Campaign, thank you. Your kindness means that children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas, and that someone out there believes they matter.",
     "",
   );
   if (v.giftType === "in_kind") {
     lines.push(`With heartfelt thanks for your donation of ${v.giftInKind ?? "your kind donation"}.`);
   } else {
     const amount = formatGiftAmount(v.giftAmountPence ?? 0);
-    lines.push(`With heartfelt thanks for your gift of ${amount}.`);
+    lines.push(`With heartfelt thanks for your donation of ${amount}.`);
     if (v.giftAided) {
       const worth = formatGiftAmount((v.giftAmountPence ?? 0) + giftAidUpliftPence(v.giftAmountPence ?? 0));
-      lines.push(`Because you Gift Aided it, HMRC adds 25%, making your gift worth ${worth} to our work, at no extra cost to you.`);
+      lines.push(`Because you Gift Aided it, HMRC adds 25%, making your donation worth ${worth} to our work, at no extra cost to you.`);
     }
   }
   lines.push("");
   if (v.personalMessage) lines.push(v.personalMessage, "");
   lines.push(
-    "Gifts like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.",
+    "Donations like yours help provide Red Bags Full of Joy, thoughtful presents that carry warmth, dignity and a moment of real joy on Christmas morning. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and every year more people are counting on us.",
     "",
-    "We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.",
+    "We are run entirely by volunteers, and we are here all year round, not only at Christmas. If you would ever like to fundraise, volunteer, or simply say hello, reply to this letter or call the number below. We would love to hear from you.",
     "",
     "With warmest thanks,",
     v.signedByName,
@@ -120,9 +120,9 @@ function giftCallout(v: ThankYouLetterView): string {
   let note = "";
   if (v.giftAided) {
     const worth = formatGiftAmount((v.giftAmountPence ?? 0) + giftAidUpliftPence(v.giftAmountPence ?? 0));
-    note = `<span style="display:block;margin-top:6px;font-size:13px;color:${HOLLY_DARK}">Because you Gift Aided it, HMRC adds 25%, making your gift worth <b style="color:${HOLLY_DARK}">${worth}</b> to our work, at no extra cost to you.</span>`;
+    note = `<span style="display:block;margin-top:6px;font-size:13px;color:${HOLLY_DARK}">Because you Gift Aided it, HMRC adds 25%, making your donation worth <b style="color:${HOLLY_DARK}">${worth}</b> to our work, at no extra cost to you.</span>`;
   }
-  return wrap(`With heartfelt thanks for your gift of <b style="color:${MAROON}">${amount}</b>.${note}`);
+  return wrap(`With heartfelt thanks for your donation of <b style="color:${MAROON}">${amount}</b>.${note}`);
 }
 
 // Assemble the full, self-contained HTML email for one thank-you letter. Mirrors the design of
@@ -166,11 +166,11 @@ export function buildThankYouEmailHtml(v: ThankYouLetterView): string {
       <div style="color:${SLATE};font-family:${BODY};font-weight:700;font-size:13px;margin:22px 0 14px">${escapeHtml(v.letterDate)}</div>
       <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 6px;letter-spacing:-.01em">${title}</h1>
       <p style="color:${MAROON};font-family:${HEAD};font-weight:700;font-size:18px;margin:0 0 14px">${salutation}</p>
-      ${bodyP("On behalf of everyone at the Night Before Christmas Campaign, thank you. Your generosity means children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas.")}
+      ${bodyP("On behalf of every volunteer at the Night Before Christmas Campaign, thank you. Your kindness means that children, young people and vulnerable adults across South West Scotland will know they have not been forgotten this Christmas, and that someone out there believes they matter.")}
       ${giftCallout(v)}
       ${personal}
-      ${bodyP("Gifts like yours become Red Bags Full of Joy: thoughtful presents that bring dignity, comfort and a moment of joy. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and the need grows every year.")}
-      ${bodyP("We are volunteer-run and here all year round, not just at Christmas. If you would like to fundraise, volunteer, or ask a question, reply to this letter or call the number below.")}
+      ${bodyP("Donations like yours help provide Red Bags Full of Joy, thoughtful presents that carry warmth, dignity and a moment of real joy on Christmas morning. In 2025 our volunteers delivered 7,657 of them across South West Scotland, and every year more people are counting on us.")}
+      ${bodyP("We are run entirely by volunteers, and we are here all year round, not only at Christmas. If you would ever like to fundraise, volunteer, or simply say hello, reply to this letter or call the number below. We would love to hear from you.")}
       <div style="margin-top:18px">
         <p style="color:${SLATE};font-family:${BODY};font-size:14px;margin:0">With warmest thanks,</p>
         <div style="font-family:${SCRIPT};color:${CRIMSON};font-size:30px;line-height:1.15;margin-top:2px">${escapeHtml(v.signedByName)}</div>

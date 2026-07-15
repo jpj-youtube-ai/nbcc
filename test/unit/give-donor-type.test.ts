@@ -58,7 +58,7 @@ describe("donor type control markup (REQ-038)", () => {
     expect(text).toContain("business");
   });
 
-  it("offers two native radios, defaulting to individual, each with a real <label for> (REQ-032)", () => {
+  it("offers two native radios, NONE preselected, both required, each with a real <label for> (REQ-032, TASK-204)", () => {
     const radios = [...(donor?.querySelectorAll('input[type="radio"][name="donorType"]') ?? [])];
     expect(radios).toHaveLength(2);
     expect(radios.map((r) => r.getAttribute("value")).sort()).toEqual(["business", "individual"]);
@@ -69,9 +69,15 @@ describe("donor type control markup (REQ-038)", () => {
       expect(label).not.toBeNull();
       expect(norm(label?.textContent).length).toBeGreaterThan(0);
     }
-    // Individual is the default (Gift Aid eligible path) so the page works without JS.
-    expect(donor?.querySelector('input[value="individual"]')?.hasAttribute("checked")).toBe(true);
+    // TASK-204: nothing is preselected — the donor must actively choose who the gift is
+    // from, and the wizard's step-2 validate() blocks Continue until they pick. Both radios
+    // therefore carry required + aria-required (accessibility floor) and neither ships checked.
+    expect(donor?.querySelector('input[value="individual"]')?.hasAttribute("checked")).toBe(false);
     expect(donor?.querySelector('input[value="business"]')?.hasAttribute("checked")).toBe(false);
+    for (const r of radios) {
+      expect(r.hasAttribute("required")).toBe(true);
+      expect(r.getAttribute("aria-required")).toBe("true");
+    }
   });
 
   it("explains a sole trader and partners stay on the Gift Aid path, only companies do not", () => {
@@ -179,7 +185,8 @@ describe("donor type behaviour (jsdom)", () => {
     expect(giftAidBox().checked).toBe(true);
   });
 
-  it("folds donorType into the checkout payload, individual by default", () => {
+  it("folds the chosen donorType into the checkout payload (TASK-204: chosen, not defaulted)", () => {
+    selectDonor("individual"); // nothing is preselected now, so the donor picks first
     startCheckout(monthlyTier(2), window); // gold £50
     expect(lastPayload()).toEqual({
       mode: "monthly",
@@ -215,7 +222,8 @@ describe("donor type behaviour (jsdom)", () => {
     expect("businessName" in p).toBe(false);
   });
 
-  it("startCheckout returns the assembled payload including donorType", () => {
+  it("startCheckout returns the assembled payload including the chosen donorType", () => {
+    selectDonor("individual"); // nothing is preselected now, so the donor picks first
     const payload = startCheckout(monthlyTier(0), window); // bronze £10
     expect(payload).toEqual({
       mode: "monthly",
@@ -224,5 +232,62 @@ describe("donor type behaviour (jsdom)", () => {
       giftAid: false,
       donorType: "individual",
     });
+  });
+});
+
+// TASK-198 (REQ-043 fix): the Gift Aid declaration is a Gift Aid declaration, so its
+// fields must only be shown — and only required — when the donor has opted into Gift
+// Aid. On the individual/partnership paths the on-screen copy promises "we ask for
+// these only if you add Gift Aid", but the fieldset was shown (and its first name,
+// last name, house and address inputs left `required`) purely because the donor path
+// was individual/partnership, regardless of the #giftAid checkbox — so validate() on
+// the confirm step blocked a donor who had NOT opted into Gift Aid. initDonorType now
+// gates the declaration/partners fieldsets on #giftAid as well as the donor path, and
+// re-applies when the box is toggled. validate() already skips fields inside a [hidden]
+// ancestor, so hiding the fieldset un-requires them.
+describe("Gift Aid declaration shows only when Gift Aid is opted in (TASK-198)", () => {
+  const { initDonorType } = require(resolve(ROOT, "assets/js/main.js"));
+  const cardHtml = doc.querySelector(".give-card")?.outerHTML ?? "";
+
+  const declaration = () => document.querySelector(".give-declaration") as HTMLElement;
+  const giftAidBox = () => document.getElementById("giftAid") as HTMLInputElement;
+  const setGiftAid = (on: boolean) => {
+    giftAidBox().checked = on;
+    giftAidBox().dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = `<main>${cardHtml}</main>`;
+    initDonorType(document);
+  });
+
+  it("hides the individual declaration until Gift Aid is ticked, and re-hides it when unticked", () => {
+    // Individual is the default donor path and #giftAid ships unchecked, so a donor who
+    // does not add Gift Aid must never be asked for the HMRC declaration details.
+    expect(giftAidBox().checked).toBe(false);
+    expect(declaration().hidden).toBe(true);
+
+    setGiftAid(true);
+    expect(declaration().hidden).toBe(false);
+
+    setGiftAid(false);
+    expect(declaration().hidden).toBe(true);
+  });
+
+  it("hides the partner declarations until Gift Aid is opted in on the partnership path", () => {
+    // A business partnership keeps Gift Aid (partners are individuals in law), so the same
+    // gating applies to its per-partner declarations (.give-partners).
+    const partners = () => document.querySelector(".give-partners") as HTMLElement;
+    (document.querySelector('input[name="donorType"][value="business"]') as HTMLElement).click();
+    (document.querySelector('input[name="businessType"][value="partnership"]') as HTMLElement).click();
+
+    expect(giftAidBox().checked).toBe(false);
+    expect(partners().hidden).toBe(true);
+
+    setGiftAid(true);
+    expect(partners().hidden).toBe(false);
+
+    setGiftAid(false);
+    expect(partners().hidden).toBe(true);
   });
 });

@@ -271,16 +271,19 @@ export async function insertDonorAndDonation(
 }
 
 // Read the publicly listable supporters for the wall (TASK-071/REQ-035; opt-in monthly 4-band rework
-// TASK-223). The wall is now OPT-IN and MONTHLY-only: the INNER JOIN keeps only donors with at least
-// one PAID MONTHLY donation and takes their GREATEST such gift (MAX amount_pence), which the pure
-// bandForMonthlyAmount then bands (a gift under £10/mo bands to null and is dropped). The LEFT JOIN
-// pulls each donor's business_supporter_fulfilment record (donor_id is UNIQUE there, so at most one
-// row) to resolve BUSINESS consent — list_on_supporters AND captured_at IS NOT NULL — while
-// donors.list_on_supporters carries INDIVIDUAL consent. The actual "shown or not, under what name, in
-// which band" decision (opt-in per channel, anonymity, admin hide, custom name, bad-word net) lives in
-// the pure groupPublicSupporters/resolvePublicSupporter, never re-implemented in SQL — so this read
-// only gathers the fields. The mode/payment_status filter matches how the rest of the code detects a
-// settled gift (see listThankYouEligible). Read-only; no audit row.
+// TASK-223; grandfather the pre-223 set TASK-228). The wall shows a donor via EITHER an OPT-IN MONTHLY
+// gift OR the TASK-228 grandfather flag, so this read gathers the fields BOTH paths need and lets the
+// pure groupPublicSupporters/resolvePublicSupporter decide (shown or not, under what name, in which
+// band) — never re-implemented in SQL. The LEFT JOIN to donations (filtered to payment_status='paid')
+// yields, per donor, the greatest PAID MONTHLY gift (MAX … FILTER mode='monthly') for the opt-in band —
+// the mode/payment_status filter matches how the rest of the code detects a settled gift (see
+// listThankYouEligible) — AND the greatest PAID gift across ANY frequency (MAX amount_pence) for the
+// grandfather band. It is a LEFT JOIN (not the old INNER JOIN) so a grandfathered ONE-OFF donor with no
+// monthly gift is still selected. The LEFT JOIN to business_supporter_fulfilment (donor_id is UNIQUE
+// there, so at most one row) resolves BUSINESS consent — list_on_supporters AND captured_at IS NOT NULL
+// — while donors.list_on_supporters carries INDIVIDUAL consent and donors.grandfathered_on_supporters
+// carries the grandfather flag. The WHERE narrows to donors who could show (grandfathered OR either
+// opt-in), so the read stays cheap. Read-only; no audit row.
 export async function listPublicSupporters(): Promise<Record<SupporterTier, PublicSupporter[]>> {
   const res = await pool.query<{
     donor_type: DonorType;
@@ -288,24 +291,32 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
     business_name: string | null;
     anonymous: boolean;
     hidden_from_supporters: boolean;
+    grandfathered_on_supporters: boolean;
     indiv_list_opt_in: boolean;
     indiv_credit_name: string | null;
     biz_list_opt_in: boolean | null;
     biz_credit_name: string | null;
-    monthly_amount: string | number;
+    monthly_amount: string | number | null;
+    max_paid_amount: string | number | null;
   }>(
     `SELECT dn.donor_type, dn.full_name, dn.business_name, dn.anonymous, dn.hidden_from_supporters,
+            dn.grandfathered_on_supporters,
             dn.list_on_supporters AS indiv_list_opt_in,
             dn.credit_name        AS indiv_credit_name,
             (f.list_on_supporters AND f.captured_at IS NOT NULL) AS biz_list_opt_in,
             f.credit_name         AS biz_credit_name,
-            MAX(d.amount_pence)   AS monthly_amount
+            MAX(d.amount_pence) FILTER (WHERE d.mode = 'monthly') AS monthly_amount,
+            MAX(d.amount_pence)                                   AS max_paid_amount
        FROM donors dn
-       JOIN donations d
-         ON d.donor_id = dn.id AND d.mode = 'monthly' AND d.payment_status = 'paid'
+       LEFT JOIN donations d
+         ON d.donor_id = dn.id AND d.payment_status = 'paid'
        LEFT JOIN business_supporter_fulfilment f ON f.donor_id = dn.id
+      WHERE dn.grandfathered_on_supporters = true
+         OR dn.list_on_supporters = true
+         OR (f.list_on_supporters AND f.captured_at IS NOT NULL)
       GROUP BY dn.id, dn.donor_type, dn.full_name, dn.business_name, dn.anonymous,
-               dn.hidden_from_supporters, dn.list_on_supporters, dn.credit_name,
+               dn.hidden_from_supporters, dn.grandfathered_on_supporters,
+               dn.list_on_supporters, dn.credit_name,
                f.list_on_supporters, f.captured_at, f.credit_name`,
   );
   const rows: SupporterSourceRow[] = res.rows.map((r) => ({
@@ -314,7 +325,11 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
     businessName: r.business_name,
     anonymous: r.anonymous,
     hiddenFromSupporters: r.hidden_from_supporters,
-    monthlyAmountPence: Number(r.monthly_amount),
+    grandfathered: r.grandfathered_on_supporters,
+    // NULL when the donor has no paid monthly gift (a grandfathered one-off donor) → opt-in path skipped.
+    monthlyAmountPence: r.monthly_amount == null ? null : Number(r.monthly_amount),
+    // NULL only if the donor has no paid donation at all; otherwise the grandfather band input.
+    maxPaidAmountPence: r.max_paid_amount == null ? null : Number(r.max_paid_amount),
     individualListOptIn: r.indiv_list_opt_in,
     individualCreditName: r.indiv_credit_name,
     // A donor with no fulfilment row (LEFT JOIN → NULL) is simply not a business opt-in.

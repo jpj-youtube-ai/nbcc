@@ -61,6 +61,17 @@ When(
   },
 );
 
+// Grandfathered (TASK-228): the pre-223 wall's set is snapshotted by the migration backfill
+// (donors.grandfathered_on_supporters) at deploy time — there is no app action for it, so here we set
+// the flag directly, the same way the opt-in steps set consent directly. A grandfathered donor appears
+// on the wall WITHOUT opting in, banded by their max paid amount (any frequency).
+When(
+  "the donor with email {string} is grandfathered onto the supporters wall",
+  async function (email) {
+    await pool.query("UPDATE donors SET grandfathered_on_supporters = true WHERE email = $1", [email]);
+  },
+);
+
 Then("the response body should not contain {string}", function (unexpected) {
   assert.ok(!this.text.includes(unexpected), `expected response body NOT to contain "${unexpected}"`);
 });

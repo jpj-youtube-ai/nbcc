@@ -171,6 +171,23 @@
         </div>
       </section>
 
+      <!-- Become a supporter (TASK-233): a warm invitation to join the supporters above. Its OWN
+           section OUTSIDE .supporter-tiers, because GET /supporters REPLACES that div at runtime
+           (renderSupportersPage), so anything placed inside it would be discarded. Reuses the intro's
+           centred treatment (.eyebrow / h2 / .lede) and the shared .btn.btn-primary; no new visual
+           language. Copy: warm and short, "NBCC" in full, no dashes, donation (not gift), and
+           non-definitive impact ("could help") per the Code of Fundraising Practice. -->
+      <section class="supporters-cta" aria-labelledby="supporters-cta-heading">
+        <span class="eyebrow">Become a supporter</span>
+        <h2 id="supporters-cta-heading">Would you like to join them?</h2>
+        <p class="lede">
+          We would love to welcome you. Your donation could help NBCC be there for children,
+          young people and vulnerable adults across South West Scotland. To become a supporter,
+          email <a href="mailto:giving@nbcc.scot">giving@nbcc.scot</a>, or donate today.
+        </p>
+        <a class="btn btn-primary" href="/donate">Donate</a>
+      </section>
+
       <!-- Partners (REQ-003 · TASK-180): the admin-curated list, alphabetical, in the SAME card grid
            as the donors above. Hidden until main.js (initPartners) fills it from the ticker feed. -->
       <section class="page-sections list-block partners" id="partners" aria-labelledby="partners-heading" hidden>

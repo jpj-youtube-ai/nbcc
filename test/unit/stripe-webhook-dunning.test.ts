@@ -252,6 +252,59 @@ describe("dunning renewal-failure lifecycle end-to-end (REQ-057/REQ-065)", () =>
   });
 });
 
+// TASK-240 (supporters-wall accuracy): a VOLUNTARY cancel — customer.subscription.deleted on a
+// still-ACTIVE subscription (no open dunning) — was previously ignored (retries_exhausted is illegal
+// from active). It is now recorded as a cancellation (cancelled_at) so listPublicSupporters can drop
+// the donor after the grace period. It is NOT a payment lapse, so no lapse emails fire and no dunning
+// row flips to 'lapsed'.
+describe("voluntary cancellation recording (TASK-240)", () => {
+  it("records cancelled_at + a subscription.cancelled audit for a deleted-while-active subscription (no dunning row)", async () => {
+    target = {
+      dunning_id: null, status: null, failed_attempts: null,
+      donor_id: DONOR_ID, full_name: "Ada Lovelace", email: "ada@example.com", email_consent: true,
+    };
+    const result = await processWebhookEvent(lapseEvent("evt_cancel"));
+    expect(result).toEqual({ processed: true, action: "subscription.cancelled" });
+
+    // Upserts the dunning row with cancelled_at set — NOT a lapse (lapsed_at is not stamped).
+    const insert = call(/insert into subscription_dunning/i);
+    expect(insert).toBeDefined();
+    expect(insert?.[0]).toMatch(/cancelled_at/i);
+    expect(insert?.[0]).not.toMatch(/lapsed_at = now\(\)/i);
+
+    // Exactly one subscription.cancelled audit; a voluntary cancel sends no lapse emails.
+    const audits = queryMock.mock.calls.filter((c) => /insert into audit_log/i.test(String(c[0])));
+    expect(audits.filter((c) => c[1][1] === "subscription.cancelled")).toHaveLength(1);
+    expect(sendSubscriptionLapsedAdmin).not.toHaveBeenCalled();
+    expect(sendSubscriptionLapsedDonor).not.toHaveBeenCalled();
+    expect(sqls().some((s) => /rollback/i.test(s))).toBe(false);
+  });
+
+  it("stamps cancelled_at on an EXISTING active dunning row (recovered-then-cancelled), not a lapse", async () => {
+    target = {
+      dunning_id: DUNNING_ID, status: "active", failed_attempts: 0,
+      donor_id: DONOR_ID, full_name: "Ada", email: "ada@example.com", email_consent: true,
+    };
+    const result = await processWebhookEvent(lapseEvent("evt_cancel_existing"));
+    expect(result).toEqual({ processed: true, action: "subscription.cancelled" });
+    const update = call(/update subscription_dunning/i);
+    expect(update?.[0]).toMatch(/cancelled_at = /i);
+    expect(update?.[0]).not.toMatch(/lapsed_at = now\(\)/i);
+    expect(sendSubscriptionLapsedAdmin).not.toHaveBeenCalled();
+  });
+
+  it("does NOT record a cancellation for an already-lapsed subscription (its end is already stamped)", async () => {
+    target = {
+      dunning_id: DUNNING_ID, status: "lapsed", failed_attempts: 3,
+      donor_id: DONOR_ID, full_name: "Ada", email: "ada@example.com", email_consent: true,
+    };
+    const result = await processWebhookEvent(lapseEvent("evt_cancel_lapsed"));
+    expect(result).toEqual({ processed: true, action: "ignored.dunning_noop" });
+    expect(call(/insert into subscription_dunning/i)).toBeUndefined();
+    expect(call(/update subscription_dunning/i)).toBeUndefined();
+  });
+});
+
 describe("dunningFromStripeEvent mapper — Stripe event → dunning event (REQ-057/REQ-065)", () => {
   const ev = (type: string, object: Record<string, unknown>) =>
     ({ id: "e", type, data: { object } }) as unknown as import("stripe").Event;

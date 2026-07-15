@@ -124,3 +124,49 @@ Feature: Public supporters wall (REQ-035; opt-in monthly 4-band rework TASK-223)
     # The grandfathered one-off donor appears by their name, even though they never opted in and give
     # one-off (not monthly).
     And the response body should contain "Grandfather Gwen Bdd"
+
+  Scenario: an opted-in supporter drops off once their cancelled subscription passes the grace window (TASK-240)
+    # Two monthly individuals (£25/mo) opt in and would both appear. One cancels 40 days ago (beyond the
+    # 30-day grace) and drops off; the other cancelled just 5 days ago (within grace) and is kept.
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_sup_gone",
+        "object": "checkout.session",
+        "amount_total": 2500,
+        "currency": "gbp",
+        "mode": "subscription",
+        "payment_intent": null,
+        "subscription": "sub_bdd_sup_gone",
+        "metadata": { "mode": "monthly", "plan": "silver", "giftAid": "false", "fullName": "Faded Supporter Bdd", "email": "faded.sup.bdd@example.com", "emailConsent": "true", "anonymous": "false" },
+        "customer_details": { "name": "Faded Supporter Bdd", "email": "faded.sup.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_sup_recent",
+        "object": "checkout.session",
+        "amount_total": 2500,
+        "currency": "gbp",
+        "mode": "subscription",
+        "payment_intent": null,
+        "subscription": "sub_bdd_sup_recent",
+        "metadata": { "mode": "monthly", "plan": "silver", "giftAid": "false", "fullName": "Recent Supporter Bdd", "email": "recent.sup.bdd@example.com", "emailConsent": "true", "anonymous": "false" },
+        "customer_details": { "name": "Recent Supporter Bdd", "email": "recent.sup.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+
+    When the donor with email "faded.sup.bdd@example.com" opts into the supporters wall as "Faded Supporter Bdd"
+    When the donor with email "recent.sup.bdd@example.com" opts into the supporters wall as "Recent Supporter Bdd"
+    When the donor with email "faded.sup.bdd@example.com" cancelled their subscription 40 days ago
+    When the donor with email "recent.sup.bdd@example.com" cancelled their subscription 5 days ago
+
+    When I GET "/supporters"
+    Then the response status should be 200
+    # Cancelled beyond the grace window → dropped; cancelled within grace → still shown.
+    But the response body should not contain "Faded Supporter Bdd"
+    And the response body should contain "Recent Supporter Bdd"

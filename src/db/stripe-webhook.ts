@@ -968,6 +968,36 @@ async function handleDunning(client: PoolClient, event: Stripe.Event): Promise<D
     return { action: "ignored.dunning_noop", email: null };
   }
   if (!canApplyDunningEvent(current, dunningEvent)) {
+    // TASK-240: the one illegal transition we now ACT on — customer.subscription.deleted on a still-
+    // active subscription is a VOLUNTARY cancel (Stripe maps it to retries_exhausted, but there was no
+    // open dunning, so the state machine rejects it). Record cancelled_at + a subscription.cancelled
+    // audit so listPublicSupporters can drop the donor after the grace window. It is NOT a payment lapse,
+    // so no lapse emails fire. An already-lapsed sub keeps its existing end; any other illegal event
+    // stays a no-op.
+    if (event.type === "customer.subscription.deleted" && current !== "lapsed") {
+      if (target.dunning_id === null) {
+        await client.query(
+          `INSERT INTO subscription_dunning
+             (donor_id, stripe_subscription_id, status, failed_attempts, cancelled_at, updated_at)
+           VALUES ($1, $2, $3, $4, now(), now())`,
+          [target.donor_id, subscriptionId, current, attempts],
+        );
+      } else {
+        await client.query(
+          `UPDATE subscription_dunning SET cancelled_at = COALESCE(cancelled_at, now()), updated_at = now()
+            WHERE id = $1`,
+          [target.dunning_id],
+        );
+      }
+      await insertAudit(client, {
+        actor: "stripe",
+        action: "subscription.cancelled",
+        entity: "subscription",
+        entityId: target.donor_id,
+        data: { eventId: event.id, subscriptionId, status: current },
+      });
+      return { action: "subscription.cancelled", email: null };
+    }
     return { action: "ignored.dunning_noop", email: null };
   }
 

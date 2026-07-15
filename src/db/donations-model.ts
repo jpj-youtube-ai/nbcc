@@ -184,6 +184,13 @@ export function isPubliclyListable(donor: { anonymous?: boolean }): boolean {
 export const SUPPORTER_TIERS = ["bronze", "silver", "gold", "platinum"] as const;
 export type SupporterTier = (typeof SUPPORTER_TIERS)[number];
 
+// TASK-240 (supporters-wall accuracy): grace window before an opt-in supporter whose monthly support
+// has ENDED (every monthly subscription cancelled/lapsed) drops off the public wall. 30 days ~ one
+// monthly billing cycle plus a buffer, and it clears Stripe's ~2-week dunning retry window, so a
+// mid-cycle cancel does not vanish instantly. Applied in the listPublicSupporters SQL; grandfathered
+// donors (TASK-228) are exempt. Tune here if a longer/shorter window is wanted.
+export const SUPPORTER_GRACE_DAYS = 30;
+
 // The GRANDFATHER path's banding (TASK-228). TASK-223 made the wall opt-in + monthly-only; to keep
 // everyone the OLD (pre-223) wall recognised, a grandfathered donor is banded by their MAX PAID amount
 // across ANY frequency using the four metal thresholds but with NO £10/mo floor — so every donor the
@@ -247,6 +254,12 @@ export interface SupporterSourceRow {
   // form was submitted, i.e. captured_at IS NOT NULL) + the business's chosen public display name.
   businessListOptIn?: boolean;
   businessCreditName?: string | null;
+  // TASK-240 (supporters-wall accuracy): true when the donor's monthly support has ENDED — every one of
+  // their monthly subscriptions is cancelled/lapsed AND the most recent end is beyond the grace window
+  // (SUPPORTER_GRACE_DAYS, applied in the listPublicSupporters SQL). It gates the OPT-IN monthly path
+  // only: an ended opt-in supporter drops off, while a grandfathered donor (TASK-228) is kept regardless.
+  // Defaults false (still current) when absent.
+  monthlySupportEnded?: boolean;
 }
 
 // A rendered supporter entry.
@@ -287,8 +300,10 @@ export function resolvePublicSupporter(row: SupporterSourceRow): ResolvedSupport
 
   // Path 1 — opt-in monthly (takes precedence). Only a paid monthly gift that bands AND an opt-in on the
   // matching channel qualifies; a monthly gift without the opt-in falls through to the grandfather check.
+  // TASK-240: an opt-in supporter whose monthly support has ENDED beyond the grace window
+  // (monthlySupportEnded) no longer qualifies here — they drop off unless the grandfather path keeps them.
   let band: SupporterTier | null = null;
-  if (row.monthlyAmountPence != null) {
+  if (row.monthlyAmountPence != null && !row.monthlySupportEnded) {
     const monthlyBand = bandForMonthlyAmount(row.monthlyAmountPence);
     const optedIn = business ? !!row.businessListOptIn : !!row.individualListOptIn;
     if (monthlyBand && optedIn) band = monthlyBand;

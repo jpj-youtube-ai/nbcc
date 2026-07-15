@@ -2752,6 +2752,22 @@ lifecycle is exercised end-to-end through `processWebhookEvent` in `test/unit/st
 recovery of a `past_due` row on `invoice.paid`, and the `dunningFromStripeEvent` mapper across both the
 flat and nested (`parent.subscription_details`) invoice shapes.
 
+**Supporters-wall accuracy: cancellations + a grace window (TASK-240).** The opt-in wall (see
+**Supporters wall opt-in** under the give widget) kept showing a supporter as long as
+`donors.list_on_supporters` was set — even after they had cancelled their monthly gift, because a
+voluntary cancel wrote nothing queryable (`customer.subscription.deleted` on a still-**active**
+subscription maps to `retries_exhausted`, which is illegal from `active`, so the dunning handler
+ignored it). TASK-240 adds a nullable `subscription_dunning.cancelled_at` (migration
+`1784300000000_supporter-subscription-cancelled-at.js`, additive/expand-contract); `handleDunning` now
+records it — plus a `subscription.cancelled` audit row — in exactly that previously-ignored case, leaving
+the lapse path and its emails untouched. `listPublicSupporters` then computes `monthly_support_ended` per
+donor (no still-active monthly subscription **and** the most-recent end — cancel or lapse — older than
+`SUPPORTER_GRACE_DAYS`, **30 days**), and the pure `resolvePublicSupporter` drops such a donor from the
+opt-in path. **Grandfathered donors (TASK-228) are exempt** — the grace gate is on the opt-in path only,
+so everyone the old wall preserved stays. Unit-tested DB-free (`test/unit/supporters-wall-grace.test.ts`
+for the drop decision, `test/unit/stripe-webhook-dunning.test.ts` for the cancellation recording), with
+the end-to-end grace behaviour in the `features/supporters.feature` grace-window scenario.
+
 **Declaration wording (REQ-040).** `src/declarations/wording.ts` is the versioned,
 verbatim source of truth for HMRC's Gift Aid liability statements — a
 single-donation template (`hmrc-single-…`) and a multiple/all-donations template

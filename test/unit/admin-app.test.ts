@@ -27,6 +27,7 @@ let loginToken = tokenFor("editor"); // the token the mocked /login hands back (
 const donation = {
   id: 11, donor_id: 5, donor_name: "Ada Test", mode: "monthly", plan: "silver",
   amount_pence: 2500, currency: "gbp", gift_aid: true, claim_status: "eligible",
+  payment_status: "paid", refunded_amount_pence: 0,
   payment_channel: "online", created_at: "2026-01-02T00:00:00Z",
 };
 const snapshot = {
@@ -164,6 +165,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     await flush();
     await flush();
     expect(document.querySelector("#donationsTable table")).not.toBeNull();
+    // TASK-241: the donations table has a Payment column rendering a state pill (paid here).
+    expect(document.querySelector("#donationsTable table")?.textContent).toContain("Payment");
+    expect(document.querySelector("#donationsTable .admin-pill--paid")?.textContent).toBe("Paid");
     const view = document.querySelector("#donationsTable [data-donor]") as HTMLElement;
     expect(view).not.toBeNull();
 

@@ -1587,8 +1587,15 @@ resetting the clock. It surfaces as a **"Declaration review due"** overview stat
 
 **Dashboard read lists (REQ-066 · TASK-114).** The reads that back the admin cockpit UI, all `viewer`
 and up (missing/invalid token → **401**) except the CSV export. `GET /api/admin/donations` browses
-every donation newest-first with optional `?status`/`?channel` filters and a bounded `?limit`/`?offset`
-page (the pure `clampPage` clamps to ≤ 100), returning `{ results, total }`. `GET /api/admin/claim-batches`
+every donation newest-first with optional `?status` (claim status), `?channel` and — TASK-241 —
+`?paymentStatus` filters and a bounded `?limit`/`?offset` page (the pure `clampPage` clamps to ≤ 100),
+returning `{ results, total }`. **TASK-241** adds a **Payment** column to the donations list: the pure
+`helpers.paymentLabel` collapses `payment_status` (`pending`/`paid`/`failed`) and the separately-tracked
+`refunded_amount_pence` into one pill — Pending / Paid / Failed, or (on a settled gift) **Refunded**
+(refund ≥ amount) / **Partly refunded** — so refunds are visible at a glance; the `?paymentStatus` filter
+(`paid`/`pending`/`failed`/`refunded`, where `refunded` = any `refunded_amount_pence > 0`) narrows the
+list. Verified by `test/unit/admin-payment-label.test.ts` and the donations-browse flow in
+`test/unit/admin-app.test.ts`. `GET /api/admin/claim-batches`
 lists the batches with their donation count and summed pence. `GET /api/admin/audit` reads the
 append-only trail newest-first, optionally scoped by `?entity`/`?entityId` and paged the same way.
 `GET /api/admin/subscriptions/dunning` lists at-risk / lapsed monthly gifts (optional `?status`). The

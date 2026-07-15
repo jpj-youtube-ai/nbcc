@@ -129,6 +129,15 @@
             <!-- Browse all donations (paginated). -->
             <section class="admin-view" id="view-donations" aria-labelledby="donations-heading" hidden>
               <h2 id="donations-heading">Donations</h2>
+              <label class="admin-inline-filter" for="donationsPaymentFilter">Payment status
+                <select id="donationsPaymentFilter">
+                  <option value="">All</option>
+                  <option value="paid">Paid</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                  <option value="refunded">Refunded</option>
+                </select>
+              </label>
               <div class="admin-table-wrap" id="donationsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <div class="admin-pager" id="donationsPager" hidden>
                 <button class="admin-page-btn" id="donationsPrev" type="button">Previous</button>

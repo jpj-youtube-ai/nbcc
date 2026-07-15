@@ -728,6 +728,7 @@ export interface AdminDonationRow {
   currency: string;
   gift_aid: boolean;
   claim_status: string;
+  payment_status: string;
   payment_channel: string;
   refunded_amount_pence: number;
   declaration_status: string | null;
@@ -741,6 +742,7 @@ export async function listDonations(opts: {
   offset?: number;
   status?: string;
   channel?: string;
+  paymentStatus?: string;
 }): Promise<{ results: AdminDonationRow[]; total: number }> {
   const { limit, offset } = clampPage(opts.limit, opts.offset);
   const where: string[] = [];
@@ -753,6 +755,14 @@ export async function listDonations(opts: {
     params.push(opts.channel);
     where.push(`d.payment_channel = $${params.length}`);
   }
+  // TASK-241: filter by payment state. 'refunded' is a derived state (refunds are tracked in
+  // refunded_amount_pence, not payment_status), so it filters on any refund rather than the enum.
+  if (opts.paymentStatus === "refunded") {
+    where.push(`d.refunded_amount_pence > 0`);
+  } else if (opts.paymentStatus) {
+    params.push(opts.paymentStatus);
+    where.push(`d.payment_status = $${params.length}`);
+  }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const totalRes = await pool.query<{ count: number }>(
     `SELECT count(*)::int AS count FROM donations d ${whereSql}`,
@@ -761,7 +771,7 @@ export async function listDonations(opts: {
   const res = await pool.query<AdminDonationRow>(
     `SELECT d.id, d.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
             d.mode, d.plan, d.amount_pence, d.currency, d.gift_aid, d.claim_status,
-            d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at
+            d.payment_status, d.payment_channel, d.refunded_amount_pence, d.declaration_status, d.created_at
        FROM donations d
        JOIN donors dn ON dn.id = d.donor_id
        ${whereSql}

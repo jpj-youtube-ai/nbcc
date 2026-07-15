@@ -349,18 +349,21 @@
     var body = rows
       .map(function (d) {
         var gift = d.plan ? H.escapeHtml(d.mode) + " · " + H.escapeHtml(d.plan) : H.escapeHtml(d.mode);
+        // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
+        var pay = H.paymentLabel(d);
         return (
           "<tr><td>" + d.id + "</td><td>" + H.escapeHtml(d.donor_name) + "</td><td>" + gift +
           '</td><td class="admin-num">' + H.formatPence(d.amount_pence) + "</td><td>" +
           (d.gift_aid ? '<span class="admin-pill">Gift Aid</span>' : "") + "</td><td>" +
-          H.escapeHtml(d.claim_status) + "</td><td>" + H.fmtDate(d.created_at) +
+          H.escapeHtml(d.claim_status) + '</td><td><span class="admin-pill admin-pill--' + pay.state +
+          '">' + H.escapeHtml(pay.label) + "</span></td><td>" + H.fmtDate(d.created_at) +
           '</td><td><button class="admin-link" type="button" data-donor="' + d.donor_id + '">View</button></td></tr>'
         );
       })
       .join("");
     return (
       '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Donation</th>' +
-      "<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Date</th><th></th></tr></thead><tbody>" +
+      "<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Payment</th><th>Date</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>"
     );
   }
@@ -446,7 +449,10 @@
   function loadDonations() {
     var wrap = el("donationsTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    authFetch("/api/admin/donations?limit=25&offset=" + donationsOffset)
+    // TASK-241: optional payment-status filter (paid/pending/failed/refunded); empty = all.
+    var payFilter = el("donationsPaymentFilter");
+    var pay = payFilter ? payFilter.value : "";
+    authFetch("/api/admin/donations?limit=25&offset=" + donationsOffset + (pay ? "&paymentStatus=" + encodeURIComponent(pay) : ""))
       .then(j)
       .then(function (d) {
         wrap.innerHTML = donationsTable(d.results || []);
@@ -462,6 +468,12 @@
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
       });
   }
+  var donationsPayFilter = el("donationsPaymentFilter");
+  if (donationsPayFilter)
+    donationsPayFilter.addEventListener("change", function () {
+      donationsOffset = 0; // a new filter resets to the first page
+      loadDonations();
+    });
   bindClick("donationsPrev", function () {
     donationsOffset = Math.max(0, donationsOffset - 25);
     loadDonations();

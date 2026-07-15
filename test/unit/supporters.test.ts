@@ -79,3 +79,35 @@ describe("supporters tiers (REQ-035)", () => {
     expect(norm(intro?.querySelector(".lede")?.textContent).length).toBeGreaterThan(0);
   });
 });
+
+// TASK-233: a warm "become a supporter" CTA (appreciative line + giving@nbcc.scot mailto + a Donate
+// button to /donate). It lives in its OWN <section> OUTSIDE .supporter-tiers, because GET /supporters
+// replaces that div at runtime (renderSupportersPage) — anything inside it would be discarded. These
+// assertions guard both its presence and that it sits outside the runtime-replaced block.
+describe("become-a-supporter CTA (TASK-233)", () => {
+  const tiersBlock = doc.querySelector("main .supporter-tiers");
+  const cta = doc.querySelector("main .supporters-cta");
+
+  it("is its own labelled section, outside the runtime-replaced .supporter-tiers", () => {
+    expect(cta, "no .supporters-cta section on the page").not.toBeNull();
+    expect(cta?.tagName.toLowerCase()).toBe("section");
+    expect(cta?.closest(".supporter-tiers"), "CTA must sit OUTSIDE the tiers block").toBeNull();
+    expect(norm(cta?.querySelector(".eyebrow")?.textContent).length).toBeGreaterThan(0);
+    expect(norm(cta?.querySelector("h2")?.textContent).length).toBeGreaterThan(0);
+  });
+
+  it("offers the giving@nbcc.scot contact as a mailto link, outside the tiers", () => {
+    const mail = cta?.querySelector('a[href="mailto:giving@nbcc.scot"]') ?? null;
+    expect(mail, "no giving@nbcc.scot mailto link in the CTA").not.toBeNull();
+    expect(mail?.closest(".supporter-tiers")).toBeNull();
+    // and it is not accidentally living inside the runtime-replaced tiers block
+    expect(tiersBlock?.querySelector('a[href="mailto:giving@nbcc.scot"]') ?? null).toBeNull();
+  });
+
+  it("has a clear Donate button to /donate, outside the tiers", () => {
+    const donate = [...(cta?.querySelectorAll('a.btn.btn-primary[href="/donate"]') ?? [])];
+    expect(donate, "expected exactly one Donate button in the CTA").toHaveLength(1);
+    expect(donate[0].closest(".supporter-tiers")).toBeNull();
+    expect(norm(donate[0].textContent)).toMatch(/donate/i);
+  });
+});

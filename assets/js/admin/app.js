@@ -352,7 +352,7 @@
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Gift</th>' +
+      '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Donation</th>' +
       "<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Date</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>"
     );
@@ -466,7 +466,7 @@
   bindClick("assignBtn", assignSelected);
   bindClick("markGasdsBtn", markGasdsSelected);
 
-  // ---- GASDS deadline: small gifts near the 2-year cliff → mark claimed (editor+) ----
+  // ---- GASDS deadline: small donations near the 2-year cliff → mark claimed (editor+) ----
   function loadGasds() {
     var canWrite = canEdit("gasds");
     var actions = el("gasdsActions");
@@ -492,7 +492,7 @@
     }
   }
   function gasdsTable(rows, canWrite) {
-    if (!rows.length) return '<p class="admin-empty">No GASDS gifts are approaching the claim deadline.</p>';
+    if (!rows.length) return '<p class="admin-empty">No GASDS donations are approaching the claim deadline.</p>';
     var body = rows
       .map(function (r) {
         var box = canWrite ? '<td><input type="checkbox" class="gasds-check" value="' + r.id + '" aria-label="Select donation ' + r.id + '"></td>' : "";
@@ -511,7 +511,7 @@
     var ids = Array.prototype.slice
       .call(doc.querySelectorAll(".gasds-check:checked"))
       .map(function (c) { return Number(c.value); });
-    if (!ids.length) { window.alert("Tick at least one gift first."); return; }
+    if (!ids.length) { window.alert("Tick at least one donation first."); return; }
     authFetch("/api/admin/queues/gasds-deadline/mark-claimed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -520,9 +520,9 @@
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (out) {
         if (out) loadGasds();
-        else window.alert("Could not mark those gifts as claimed.");
+        else window.alert("Could not mark those donations as claimed.");
       })
-      .catch(function () { window.alert("Could not mark those gifts as claimed."); });
+      .catch(function () { window.alert("Could not mark those donations as claimed."); });
   }
 
   // ---- claims: eligible → batch → export → submit (writes are editor+) ----
@@ -2721,7 +2721,7 @@
           '<button class="btn btn-primary" type="submit">Save declaration details</button></form>';
       }
       actions += '<div class="admin-donor-actions">';
-      if (d.subscriptionPlan && d.subscriptionId) actions += '<button class="btn btn-ghost" type="button" id="cancelSubBtn">Cancel monthly gift</button>';
+      if (d.subscriptionPlan && d.subscriptionId) actions += '<button class="btn btn-ghost" type="button" id="cancelSubBtn">Cancel monthly donation</button>';
       if (d.giftAid) actions += '<button class="btn btn-ghost" type="button" id="cancelGaBtn">Cancel Gift Aid</button>';
       actions += "</div>";
     }
@@ -2794,18 +2794,18 @@
       });
     }
     bindClick("cancelSubBtn", function () {
-      if (!window.confirm("Cancel this donor's monthly gift?")) return;
+      if (!window.confirm("Cancel this donor's monthly donation?")) return;
       authFetch("/api/admin/donors/" + currentDonorId + "/subscription/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ subscriptionId: d.subscriptionId, accepted: "cancel" }),
       })
         .then(function (res) {
-          donorStatus(res.ok ? "Monthly gift cancelled." : "Could not cancel the monthly gift.");
+          donorStatus(res.ok ? "Monthly donation cancelled." : "Could not cancel the monthly donation.");
           if (res.ok) openDonor(currentDonorId);
         })
         .catch(function () {
-          donorStatus("Could not cancel the monthly gift.");
+          donorStatus("Could not cancel the monthly donation.");
         });
     });
     bindClick("cancelGaBtn", function () {
@@ -2948,7 +2948,7 @@
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Donor</th><th>Largest gift</th><th>Gift Aid</th><th>Status</th><th></th></tr></thead><tbody>' +
+      '<table class="admin-table"><thead><tr><th>Donor</th><th>Largest donation</th><th>Gift Aid</th><th>Status</th><th></th></tr></thead><tbody>' +
       body +
       "</tbody></table>"
     );

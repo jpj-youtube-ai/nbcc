@@ -67,6 +67,15 @@
 .admin-pill.is-replied{background:var(--holly-soft);color:var(--holly-dark)}
 .admin-pill.is-public{background:var(--holly-soft);color:var(--holly-dark)}
 .admin-pill.is-internal{background:color-mix(in srgb,var(--slate-soft) 16%,var(--cream));color:var(--slate-soft)}
+/* TASK-241: payment-state pills on the donations list (paymentLabel state). */
+.admin-pill--paid{background:var(--holly-soft);color:var(--holly-dark)}
+.admin-pill--pending{background:color-mix(in srgb,var(--tan) 45%,var(--cream));color:var(--maroon)}
+.admin-pill--failed{background:color-mix(in srgb,var(--crimson) 16%,var(--cream));color:var(--crimson)}
+.admin-pill--refunded{background:color-mix(in srgb,var(--slate-soft) 20%,var(--cream));color:var(--slate)}
+.admin-pill--partial{background:color-mix(in srgb,var(--crimson) 10%,var(--cream));color:var(--maroon)}
+/* TASK-241: inline payment-status filter above the donations table. */
+.admin-inline-filter{display:inline-flex;align-items:center;gap:8px;font-size:.85rem;font-weight:600;color:var(--slate);margin:0 0 14px}
+.admin-inline-filter select{font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--cream);color:var(--slate)}
 .admin-empty{padding:22px;color:var(--slate-soft);font-size:.92rem}
 
 /* ---- search ---- */

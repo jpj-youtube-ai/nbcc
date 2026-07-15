@@ -99,6 +99,21 @@
     return (map && map[value]) || String(value);
   }
 
+  // TASK-241 (admin donations list): one display label + state for a donation's payment, combining
+  // payment_status ('pending'/'paid'/'failed') with the separately-tracked refunded_amount_pence. A
+  // pending/failed gift shows that state; a settled gift shows Refunded (refund >= amount), Partly
+  // refunded (partial) or Paid. `state` drives the pill styling (.admin-pill--<state>). Pure/DOM-free.
+  function paymentLabel(d) {
+    var status = d && d.payment_status;
+    if (status === "pending") return { label: "Pending", state: "pending" };
+    if (status === "failed") return { label: "Failed", state: "failed" };
+    var amount = d && typeof d.amount_pence === "number" ? d.amount_pence : 0;
+    var refunded = d && typeof d.refunded_amount_pence === "number" ? d.refunded_amount_pence : 0;
+    if (refunded > 0 && refunded >= amount) return { label: "Refunded", state: "refunded" };
+    if (refunded > 0) return { label: "Partly refunded", state: "partial" };
+    return { label: "Paid", state: "paid" };
+  }
+
   var api = {
     formatPence: formatPence,
     escapeHtml: escapeHtml,
@@ -107,6 +122,7 @@
     fmtDate: fmtDate,
     consentAge: consentAge,
     storyLabel: storyLabel,
+    paymentLabel: paymentLabel,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

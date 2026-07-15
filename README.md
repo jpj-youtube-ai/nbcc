@@ -1773,7 +1773,11 @@ raises spam scores and needs a PDF/headless subsystem the repo doesn't have), th
 public **printable-letter page**: `GET /thank-you/letter/:token` (`src/routes/thank-you.ts`,
 mounted before the site catch-all) renders the stored letter as a print-ready A4 page
 (`buildThankYouLetterPage`, faithful to `assets/thankyou-letter-print.html`) that the donor prints or
-saves as a PDF from the browser. The token is a stateless HMAC of the sent-letter id
+saves as a PDF from the browser. The page prints on **one A4 sheet on mobile as well as desktop**
+(TASK-197): text auto-inflation is pinned off (`text-size-adjust:100%`) so a phone doesn't enlarge the
+body of the wide fixed-width letter, and the print layout clamps the sheet to exactly one page
+(`height:297mm; overflow:hidden`) so a rounded sub-pixel can't push a blank second page — previously
+phones had to scale to ~78% to avoid the overflow. The token is a stateless HMAC of the sent-letter id
 (`src/thank-you/letter-token.ts`, signed with `ADMIN_SESSION_SECRET`) so letters can't be enumerated;
 a bad token → 400, a missing row → 404. The admin sent-history also exposes each letter's print URL
 ("View letter"). Covered by `test/unit/thank-you-letter-token.test.ts`,

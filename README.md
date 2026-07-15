@@ -702,7 +702,12 @@ Because the callout is `display:flex`, the `DONOR TYPE` block adds
 `hidden` attribute actually collapses them. On wiring, the control is marked
 `data-ready`, so `startCheckout` folds **`donorType`** (and **`businessName`** when
 filled) into the REQ-028 payload only once the enhancement is active — the base
-`{ mode, plan, amount, giftAid }` contract is unchanged without JS. Token-only
+`{ mode, plan, amount, giftAid }` contract is unchanged without JS. **TASK-242:**
+the on-screen radio is individual/**business**, but the API + donor record use
+individual/**company**/**partnership**, so `startCheckout` sends the value from
+`currentDonorPath` (mapping the chosen business sub-type), not the raw `business`
+— posting the literal `business` was rejected by the `donorType` enum (400), so
+every business donation failed before this fix. Token-only
 colours (slate body, maroon legend, crimson accents; the `brand-colours` guard
 forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-donor-type.test.ts`.

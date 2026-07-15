@@ -757,13 +757,24 @@ webhook (`donationFromCheckoutSession` → `insertDonorAndDonation`) writes
 `test/unit/give-supporter-optin.test.ts`, `checkout-session.test.ts` and
 `stripe-webhook-model.test.ts`.
 
-**Step-2 flow + validation (TASK-235).** Step 2's questions are a numbered sequence: each
-`.give-question` carries a big left-gutter number (a CSS counter over only VISIBLE
-questions, so a hidden business-only or supporters question leaves no gap) above a
-full-width divider. For a business, the **company vs partnership** question now sits
-**above** the business-name field (it drives the Gift Aid path). The shared TASK-225
-validator now shows a **bold red border + ring** on an empty/invalid field, and a red ring
-around an unanswered option group.
+**Step-2 flow + validation (TASK-235, per-question numbering TASK-237).** Step 2's questions
+are a numbered sequence: each `.give-question` carries a big left-gutter number (a CSS counter
+over only VISIBLE questions, so a hidden business-only or supporters question leaves no gap)
+above a full-width divider. **TASK-237** makes every question its own `.give-question` so the
+number auto-renumbers as earlier choices show or hide later ones: an **individual monthly gift
+of £10+** reads 1 who-from · 2 name · 3 email · 4 newsletter · 5 18+ · 6 Gift Aid · 7 supporters;
+a **one-off** drops the monthly-only 18+ and supporters (Gift Aid becomes 5). A **business** reads
+1 who-from · 2 company/partnership · 3 business name · 4 name · 5 email · 6 newsletter · 7 18+ · 8
+Gift Aid, and **never** shows the supporters question (individuals-only). To keep the numbers
+left-aligned, the **company/partnership** and **business-name** questions are promoted to their own
+top-level `.give-question` siblings **outside** the `.give-donor` fieldset (so `initDonorType` now
+reads the business-type radios document-wide), the company/partnership options list their examples
+inline (Ltd/PLC/LLP; a general partnership) with the old explainer paragraph dropped, the **Gift Aid**
+callout is wrapped in its own numbered question that **an incorporated company hides** (a company
+cannot claim Gift Aid; a partnership keeps it as number 8), and the **supporters opt-in** is ordered
+**after** the Gift Aid callout so it numbers immediately after it. Verified by
+`test/unit/give-question-numbering.test.ts`. The shared TASK-225 validator shows a **bold red border
++ ring** on an empty/invalid field, and a red ring around an unanswered option group.
 
 **Server-side (REQ-039, revised):** `POST /api/checkout-session` now requires a
 valid `email` for the individual/partnership donor paths — a missing or

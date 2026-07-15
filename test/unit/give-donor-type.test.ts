@@ -91,18 +91,23 @@ describe("donor type control markup (REQ-038)", () => {
     expect(help).toContain("llp");
   });
 
-  it("adds an optional business-name field as a real <label for> (REQ-032), starting hidden", () => {
-    const input = donor?.querySelector("#businessName") as HTMLInputElement | null;
+  it("adds the optional business-name field as its own numbered question outside the donor fieldset (REQ-032), starting hidden", () => {
+    // TASK-237: business name is promoted to its own top-level .give-question so its
+    // number aligns left; it is no longer nested inside the .give-donor fieldset.
+    const field = doc.getElementById("businessNameField");
+    expect(field).not.toBeNull();
+    expect(field?.classList.contains("give-question")).toBe(true);
+    expect(field?.closest(".give-donor")).toBeNull();
+    expect(field?.closest('.give-step[data-step="2"]')).not.toBeNull();
+    // Revealed only for business donors (initDonorType), so the question ships hidden.
+    expect(field?.hasAttribute("hidden")).toBe(true);
+    const input = field?.querySelector("#businessName") as HTMLInputElement | null;
     expect(input).not.toBeNull();
     expect(input?.getAttribute("type")).toBe("text");
     expect(input?.hasAttribute("required")).toBe(false); // optional
-    const label = donor?.querySelector('label[for="businessName"]');
+    const label = field?.querySelector('label[for="businessName"]');
     expect(label).not.toBeNull();
     expect(norm(label?.textContent).length).toBeGreaterThan(0);
-    // Revealed only for business donors (initDonorType), so its wrapper ships hidden.
-    const field = doc.getElementById("businessNameField");
-    expect(field).not.toBeNull();
-    expect(field?.hasAttribute("hidden")).toBe(true);
   });
 
   it("writes the donor-type copy without dashes (REQ-031)", () => {

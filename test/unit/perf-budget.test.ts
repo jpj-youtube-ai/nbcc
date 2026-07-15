@@ -16,9 +16,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const BUDGET = {
   // Raised 250 -> 251 (TASK-227): the shared donor-flow CSS + markup grew across the supporters opt-in
   // (TASK-224), the first-name/surname split on every form (TASK-226), and the supporters empty-state
-  // (TASK-227). These are UNCOMPRESSED bytes (see note above); real gzip/brotli transfer is far smaller,
-  // so a 1KB rise here is negligible on the wire while keeping donate.html on a tight, enforced budget.
-  maxTransferKB: 251,
+  // (TASK-227). Raised 251 -> 252 (TASK-237): the donate step-2 redesign gives every question its own
+  // numbered .give-question wrapper (per-field wrappers + the promoted business-type/name questions), so
+  // the shared markup grew ~1KB. These are UNCOMPRESSED bytes (see note above); real gzip/brotli transfer
+  // is far smaller (the repeated class names + comments compress well), so this rise is negligible on the
+  // wire while keeping donate.html on a tight, enforced budget.
+  maxTransferKB: 252,
   maxRequests: 15,
   maxFontFiles: 2,
 };

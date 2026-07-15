@@ -205,33 +205,34 @@
                   law and stay on the Gift Aid path. Only an incorporated company,
                   such as a Ltd, PLC or LLP, uses the path with no Gift Aid.
                 </p>
-<div class="give-business give-business-type" hidden="" id="businessTypeField">
+</fieldset>
+</div>
+<!-- TASK-237: sub-type + business name are their own numbered questions (out of the donor
+                   fieldset so numbers align); shipped hidden, revealed for a business donor. -->
+<div class="give-business give-business-type give-question" hidden="" id="businessTypeField">
 <span class="give-business-type-legend">Is your business an incorporated company or a business partnership?</span>
-<div class="give-donor-options">
+<div class="give-donor-options give-donor-cards">
 <span class="give-donor-option">
 <input checked="" id="businessCompany" name="businessType" type="radio" value="company"/>
-<label for="businessCompany">Incorporated company</label>
+<label for="businessCompany">Incorporated company <span class="give-donor-eg">Ltd, PLC or LLP</span></label>
 </span>
 <span class="give-donor-option">
 <input id="businessPartnership" name="businessType" type="radio" value="partnership"/>
-<label for="businessPartnership">Business partnership</label>
+<label for="businessPartnership">Business partnership <span class="give-donor-eg">A general partnership</span></label>
 </span>
 </div>
-<p class="give-business-help">A partnership keeps Gift Aid, because each partner is an individual in law. An incorporated company, such as a Ltd, PLC or LLP, uses the path with no Gift Aid.</p>
 </div>
-<div class="give-business" hidden="" id="businessNameField">
+<div class="give-business give-question" hidden="" id="businessNameField">
 <label for="businessName">How would you like your business to appear?</label>
 <input autocomplete="organization" class="give-business-input" id="businessName" name="businessName" placeholder="Your business name" type="text"/>
 <p class="give-business-help">We use this on your donation receipt and, if you choose to be listed, on our supporters page.</p>
 </div>
-</fieldset>
-</div>
-<div class="give-question">
 <fieldset class="give-contact" id="contactCapture">
-<legend class="give-contact-legend">Your details</legend>
+<legend class="give-contact-legend">Your contact details</legend>
 <!-- TASK-219/226: first name + surname side by side in the shared .give-name-row wrapper (used on
-                   every donor-facing form); startCheckout folds #donorFirstName/#donorSurname into payload.fullName. -->
-<div class="give-name-row">
+                   every donor-facing form); startCheckout folds #donorFirstName/#donorSurname into payload.fullName.
+                   TASK-237: name, email, newsletter and 18+ are each their own numbered .give-question. -->
+<div class="give-name-row give-question">
 <div class="give-field">
 <label for="donorFirstName">First name <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="given-name" class="give-field-input" id="donorFirstName" name="donorFirstName" placeholder="Your first name" required="" type="text"/>
@@ -241,55 +242,42 @@
 <input aria-required="true" autocomplete="family-name" class="give-field-input" id="donorSurname" name="donorSurname" placeholder="Your surname" required="" type="text"/>
 </div>
 </div>
-<div class="give-field">
+<div class="give-field give-question">
 <label for="donorEmail">Email <span aria-hidden="true" class="give-req">*</span></label>
 <input aria-required="true" autocomplete="email" class="give-field-input" id="donorEmail" name="email" placeholder="you@example.com" required="" type="email"/>
 <p class="give-field-help">We only use this to send your receipt and a thank you. We never share it.</p>
 </div>
-<!-- Newsletter opt-in (TASK-204): a clear, separate opt-in. Never pre ticked. This is the
-                   SAME emailConsent capture startCheckout folds into the checkout body; the field
-                   name (emailConsent) is unchanged. -->
+<!-- Newsletter opt-in (TASK-204): a clear, separate opt-in. Never pre ticked. Same emailConsent
+                   capture startCheckout folds into the checkout body. TASK-237: wrapped to carry a number. -->
+<div class="give-question">
 <div class="give-newsletter">
 <label class="give-check give-newsletter-check" for="emailConsent">
 <input class="give-check-box" id="emailConsent" name="emailConsent" type="checkbox"/>
 <span class="give-check-text"><strong>Add me to our donor newsletter.</strong> A warm little update from NBCC on the difference your support helps make. Unsubscribe anytime.</span>
 </label>
 </div>
+</div>
 <p class="give-field-help give-privacy">
                   We handle your details as set out in our <a href="/privacy">Privacy notice</a>.
                 </p>
-<!-- Monthly only: revealed for give monthly, collapsed for give once by
-                     initGiveToggle. Ships visible because monthly is the default mode. -->
-<label class="give-check give-age" for="ageConfirmed" id="ageConfirmField">
+<!-- Monthly only: initGiveToggle toggles #ageConfirmField (visible by default, hidden for a
+                     one-off). TASK-237: the .give-question wrapper carries the number and the id. -->
+<div class="give-question" id="ageConfirmField">
+<label class="give-check give-age" for="ageConfirmed">
 <input class="give-check-box" id="ageConfirmed" name="ageConfirmed" type="checkbox" required aria-required="true"/>
 <span class="give-check-text">I confirm I am aged 18 or over. Monthly giving is set up by adults.</span>
 </label>
+</div>
 </fieldset>
-</div>
-<div class="give-question give-supporter" id="supporterOptin" hidden>
-<p class="give-supporter-lead">Would you like your name shown on our public supporters page?</p>
-<div class="give-donor-options">
-<span class="give-donor-option">
-<input aria-required="true" id="supporterListYes" name="listOnSupporters" required="" type="radio" value="yes"/>
-<label for="supporterListYes">Show my name on our supporters page</label>
-</span>
-<span class="give-donor-option">
-<input aria-required="true" id="supporterListNo" name="listOnSupporters" required="" type="radio" value="no"/>
-<label for="supporterListNo">Keep my giving private</label>
-</span>
-</div>
-<div class="give-field" id="supporterCreditNameField" hidden>
-<label for="supporterCreditName">How should your name appear? For example, Smith Family</label>
-<input aria-required="true" class="give-field-input" id="supporterCreditName" maxlength="200" name="creditName" required="" type="text"/>
-</div>
-</div>
 <!-- GIFT AID CALLOUT START. Gating switch (REQ-023): NBCC's Gift Aid
                    registration is pending, so this whole callout can be removed
                    cleanly (delete everything between GIFT AID CALLOUT START and
                    GIFT AID CALLOUT END) if NBCC is not registered to claim Gift Aid.
                    CONTENT VERIFICATION (REQ-023): confirm the 25% framing and the
                    verbatim HMRC declarations below with NBCC before launch. The
-                   #giftAid id is the REQ-028 checkout hook and must stay. -->
+                   #giftAid id is the REQ-028 checkout hook and must stay.
+                   TASK-237: wrapped in a .give-question (a number); supporters opt-in follows it. -->
+<div class="give-question">
 <div class="giftaid">
 <!-- TASK-204: Gift Aid reframed to SELL the uplift. initGiveSteps updates the headline
                      and the from/to/plus amounts from the chosen donation. The #giftAid id and the
@@ -322,7 +310,25 @@
 </label>
 </div>
 </div>
+</div>
 <!-- GIFT AID CALLOUT END -->
+<div class="give-question give-supporter" id="supporterOptin" hidden>
+<p class="give-supporter-lead">Would you like your name shown on our public supporters page?</p>
+<div class="give-donor-options">
+<span class="give-donor-option">
+<input aria-required="true" id="supporterListYes" name="listOnSupporters" required="" type="radio" value="yes"/>
+<label for="supporterListYes">Show my name on our supporters page</label>
+</span>
+<span class="give-donor-option">
+<input aria-required="true" id="supporterListNo" name="listOnSupporters" required="" type="radio" value="no"/>
+<label for="supporterListNo">Keep my giving private</label>
+</span>
+</div>
+<div class="give-field" id="supporterCreditNameField" hidden>
+<label for="supporterCreditName">How should your name appear? For example, Smith Family</label>
+<input aria-required="true" class="give-field-input" id="supporterCreditName" maxlength="200" name="creditName" required="" type="text"/>
+</div>
+</div>
 <p class="give-step-err" data-err="2">Please complete the required fields above.</p>
 <div class="give-nav"><button class="give-back" data-give-prev="" type="button"><span aria-hidden="true">←</span> Back</button><button class="btn primary" data-give-next="" type="button">Continue <span aria-hidden="true" class="arrow">→</span></button></div>
 </section>

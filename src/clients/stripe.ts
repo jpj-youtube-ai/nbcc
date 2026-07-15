@@ -104,49 +104,10 @@ export function constructEvent(payload: Buffer | string, signature: string): Str
   return webhookVerifier.webhooks.constructEvent(payload, signature, config.STRIPE_WEBHOOK_SECRET);
 }
 
-// The recurring monthly Stripe price IDs, keyed by donate plan (REQ-022/REQ-028).
-// The checkout-session endpoint maps an incoming `plan` to its price ID here; the
-// change-plan endpoint (REQ-055) reuses the same mapping.
-export const stripePriceByPlan: Record<string, string> = {
-  bronze: config.STRIPE_PRICE_BRONZE,
-  silver: config.STRIPE_PRICE_SILVER,
-  gold: config.STRIPE_PRICE_GOLD,
-  platinum: config.STRIPE_PRICE_PLATINUM,
-};
-
-// A requested plan change to the tier the subscription is already on. The
-// change-plan endpoint (REQ-055) maps this to a 400, distinct from a generic
-// upstream Stripe failure (a 502) — hence a catchable type, not a bare Error.
-export class SamePlanError extends Error {
-  constructor(plan: string) {
-    super(`subscription is already on the ${plan} plan`);
-    this.name = "SamePlanError";
-  }
-}
-
-// Move a monthly subscription up or down a tier (REQ-055): swap its single
-// recurring item to the target plan's STRIPE_PRICE_* id with proration_behavior
-// 'create_prorations' — one Price per tier, so proration is Stripe's job, not ours.
-// Retrieves first for two reasons: the Stripe API ADDS an item when the item id is
-// omitted (it does not swap in place), and a no-op change to the current tier is
-// rejected up front (SamePlanError) rather than sent as a wasteful update. Returns
-// the updated subscription. Mirrors the constructEvent SDK-wrapping seam above; the
-// stub implements subscriptions.retrieve/update so the flow runs offline.
-export async function changeSubscriptionPlan(
-  subscriptionId: string,
-  plan: string,
-): Promise<Stripe.Subscription> {
-  const targetPrice = stripePriceByPlan[plan];
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-  const item = subscription.items.data[0];
-  if (item.price.id === targetPrice) {
-    throw new SamePlanError(plan);
-  }
-  return stripe.subscriptions.update(subscriptionId, {
-    items: [{ id: item.id, price: targetPrice }],
-    proration_behavior: "create_prorations",
-  });
-}
+// (TASK-238) The change-plan feature was removed as dead code: it had no front-end caller and no
+// auth. Its plan->price map (`stripePriceByPlan`), `SamePlanError`, and `changeSubscriptionPlan`
+// wrapper are gone. Monthly checkout builds an inline recurring price (TASK-231), so no fixed
+// STRIPE_PRICE_* map is needed here; those SSM/config values are now unused (infra cleanup follows).
 
 // Cancel a monthly subscription (REQ-055/TASK-102) — the "cancel" end of the reduce-instead-then-
 // cancel flow. A thin wrapper over the SDK, mirroring changeSubscriptionPlan; the offline stub

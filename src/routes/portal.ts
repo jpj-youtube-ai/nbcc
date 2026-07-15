@@ -160,7 +160,7 @@ export async function postCancelSubscription(req: Request, res: Response): Promi
   }
   if (parsed.data.accepted !== "cancel") {
     // The donor chose to reduce instead — reducing is done via change-plan, not here.
-    return res.status(400).json({ error: "reduce-instead was chosen; reduce the plan via change-plan" });
+    return res.status(400).json({ error: "reduce-instead was chosen; reduce your donation from the donate page" });
   }
 
   try {

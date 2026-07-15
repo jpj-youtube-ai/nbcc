@@ -1295,7 +1295,6 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | Method + path | Status | Requirement |
 |---|---|---|
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
-| `POST /api/subscription/change-plan` | **implemented** | REQ-055 (tier up/down) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
@@ -1378,11 +1377,10 @@ end by the `@db` `features/portal.feature`.
 carry an **explicit `accepted: 'reduce'|'cancel'` acknowledgement** that reduce-instead was offered —
 a **missing/invalid** one is **400** (the donor cannot cancel without being shown the reduce option
 first). `accepted: 'cancel'` calls `cancelSubscription` (`src/clients/stripe.ts` — a thin
-`subscriptions.cancel` wrapper alongside the existing `changeSubscriptionPlan`, with the same offline
-stub so it runs without a Stripe account) and returns the cancelled subscription; `accepted:
-'reduce'` is refused with **400** (reducing is done via `change-plan`, not here); an upstream Stripe
-failure is **502**. Reducing itself reuses the existing `POST /api/subscription/change-plan`
-unchanged. Proven by `test/unit/subscription-cancel.test.ts` (mocked SDK + pool) and end to end by
+`subscriptions.cancel` wrapper, with an offline stub so it runs without a Stripe account) and returns
+the cancelled subscription; `accepted: 'reduce'` is refused with **400** (reducing is done by
+re-subscribing from the donate page, not here); an upstream Stripe failure is **502**. Proven by
+`test/unit/subscription-cancel.test.ts` (mocked SDK + pool) and end to end by
 the `@db` `features/subscription-cancel.feature`.
 
 **`POST /api/portal/:token/gift-aid/cancel` (REQ-061 · TASK-103).** Cancel Gift Aid — the donor
@@ -2301,23 +2299,10 @@ front-end degrades to its preview.
 > align the webhook endpoint's API version in the Stripe dashboard so delivered
 > events match the pinned types. Verified by `test/unit/stripe-api-version.test.ts`.
 
-**`POST /api/subscription/change-plan` (REQ-055).** Moves a monthly subscription up
-or down a tier. The body `{ subscriptionId, plan }` is validated zod-first (same
-style as checkout); an unknown `plan`, a missing/empty `subscriptionId`, or a `plan`
-the subscription is already on is rejected with **400**. The client wrapper
-`changeSubscriptionPlan` (`src/clients/stripe.ts`) retrieves the subscription — Stripe
-*adds* an item when the item id is omitted, so the existing item id is needed to swap
-in place — and calls `stripe.subscriptions.update`, swapping its single recurring item
-to the target plan's `STRIPE_PRICE_*` id (the same config-wired mapping the checkout
-endpoint uses) with `proration_behavior: 'create_prorations'`. **One Price per tier, so
-proration is Stripe's job, not ours** (REQ-055: Gift Aid is claimed on each actual
-charge, needing no special handling). It returns the updated subscription; an upstream
-Stripe failure returns **502**, matching the checkout endpoint's error shape. This is
-the **backend capability only** — the donor-facing triggers are out of scope here: the
-self-serve donor portal (REQ-061) and role-based admin-on-behalf (REQ-062). The offline
-stub implements `subscriptions.retrieve`/`update`, so the flow runs end to end without a
-Stripe account. Verified by `test/unit/change-plan.test.ts` (mocked SDK) +
-`features/change-plan.feature`.
+**Reducing a monthly donation (TASK-238).** The former `POST /api/subscription/change-plan`
+endpoint and its `changeSubscriptionPlan` wrapper were removed as dead code (no front-end caller,
+no auth). Reducing a monthly donation is now done by re-subscribing at a lower tier from the donate
+page; the portal's "reduce instead" link points there.
 
 ### Donation data model (REQ-036 / REQ-037)
 

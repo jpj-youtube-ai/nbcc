@@ -754,7 +754,7 @@ export async function postAdminCancelSubscription(req: Request, res: Response): 
     return res.status(400).json({ error: "Invalid cancel request", details: parsed.error.flatten() });
   }
   if (parsed.data.accepted !== "cancel") {
-    return res.status(400).json({ error: "reduce-instead was chosen; reduce the plan via change-plan" });
+    return res.status(400).json({ error: "reduce-instead was chosen; reduce your donation from the donate page" });
   }
   try {
     await cancelSubscription(parsed.data.subscriptionId);

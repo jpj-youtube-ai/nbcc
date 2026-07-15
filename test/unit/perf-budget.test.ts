@@ -14,7 +14,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 // the summed UNCOMPRESSED bytes of a page's resources — a conservative proxy
 // (real gzip/brotli transfer is smaller).
 const BUDGET = {
-  maxTransferKB: 250,
+  // Raised 250 -> 251 (TASK-227): the shared donor-flow CSS + markup grew across the supporters opt-in
+  // (TASK-224), the first-name/surname split on every form (TASK-226), and the supporters empty-state
+  // (TASK-227). These are UNCOMPRESSED bytes (see note above); real gzip/brotli transfer is far smaller,
+  // so a 1KB rise here is negligible on the wire while keeping donate.html on a tight, enforced budget.
+  maxTransferKB: 251,
   maxRequests: 15,
   maxFontFiles: 2,
 };

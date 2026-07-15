@@ -749,6 +749,10 @@ body.give-embedded-open{overflow:hidden}
    platinum ink (var(--slate)). Scoped to the platinum section so Bronze/Silver/Gold are unchanged —
    additive, no restyle of the existing three tiers. */
 .supporter-tier[aria-labelledby="tier-platinum-heading"] .supporter-tier-name::after{background:var(--slate)}
+/* Empty-state (TASK-227): renderSupporterTiers shows this when no supporter has opted in yet, in place
+   of four bare band headings. A centered warm invitation + a crimson CTA to the donate form. */
+.supporters-empty{text-align:center;max-width:52ch;margin:clamp(20px,4vw,40px) auto 0;padding:0 16px}
+.supporters-empty-lead{font-size:1.05rem;color:var(--slate);line-height:1.65;margin:0 0 24px}
 
 @media (max-width:980px){
   .hero .wrap,.split,.split.narrow-img,.contact-grid,.give-inner,.duo{grid-template-columns:1fr}

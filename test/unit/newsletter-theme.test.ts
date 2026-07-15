@@ -15,7 +15,7 @@ describe("newsletter theme", () => {
     expect(html).toContain("<!doctype html>");
     expect(html).toContain("BODYMARK");
     expect(html).toContain("SC047995");
-    expect(html).toContain("info@nbcc.scot");
+    expect(html).toContain("newsletter@nbcc.scot");
     expect(html).toContain("#F8F5EE"); // cream card
   });
   it("footer mirrors the thank-you letter: circular contact icons around the text", () => {
@@ -47,7 +47,7 @@ describe("newsletter theme", () => {
     // Each contact is an explicit <a> with an inline cream colour — pre-empts the phone/email/URL
     // auto-linkification that would otherwise render them as default blue links.
     expect(html).toContain('<a href="tel:+441292811015" style="color:#F8F5EE;text-decoration:none">01292 811 015</a>');
-    expect(html).toContain('<a href="mailto:info@nbcc.scot" style="color:#F8F5EE;text-decoration:none">info@nbcc.scot</a>');
+    expect(html).toContain('<a href="mailto:newsletter@nbcc.scot" style="color:#F8F5EE;text-decoration:none">newsletter@nbcc.scot</a>');
     expect(html).toContain('<a href="https://nbcc.scot" style="color:#F8F5EE;text-decoration:none">nbcc.scot</a>');
   });
   it("brandButton renders an anchor with the label and href", () => {

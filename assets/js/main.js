@@ -939,7 +939,8 @@
       payload.company = {
         legalName: businessName,
         registrationNumber: compVal("companyRegNumber"),
-        contactName: compVal("companyContactName"),
+        // TASK-226: contact name captured as first name + surname; folded into the single contactName.
+        contactName: (compVal("companyContactFirstName") + " " + compVal("companyContactSurname")).trim(),
         contactEmail: compVal("companyContactEmail"),
         billingAddress: compVal("companyBillingAddress"),
         billingPostcode: compVal("companyBillingPostcode"),
@@ -1297,9 +1298,7 @@
     // anonymity flag. Prefilled by render() from the snapshot; submit PATCHes the fields to the
     // bare /api/portal/:token and reflects the returned snapshot back into "Your details".
     var detailsForm = doc.getElementById("portalDetailsForm");
-    // TASK-226: the display name is captured as a first name + surname pair; prefill splits the
-    // stored fullName across the two and submit folds them back into the single fullName the PATCH
-    // contract expects (the wire body is unchanged).
+    // TASK-226: name captured as first name + surname; prefill splits the stored fullName, submit folds it back.
     var pdNameFirst = doc.getElementById("pdNameFirst");
     var pdNameSurname = doc.getElementById("pdNameSurname");
     var pdEmail = doc.getElementById("pdEmail");
@@ -1325,11 +1324,7 @@
         // Send name + the two flags always; email only when non-empty (the schema rejects an
         // empty string, and clearing an email is not an edit we expose here).
         var payload = {
-          fullName: (
-            (pdNameFirst ? pdNameFirst.value : "") +
-            " " +
-            (pdNameSurname ? pdNameSurname.value : "")
-          ).trim(),
+          fullName: ((pdNameFirst ? pdNameFirst.value : "") + " " + (pdNameSurname ? pdNameSurname.value : "")).trim(),
           emailConsent: !!(pdEmailConsent && pdEmailConsent.checked),
           anonymous: !!(pdAnonymous && pdAnonymous.checked),
         };

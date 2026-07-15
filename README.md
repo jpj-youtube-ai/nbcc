@@ -707,7 +707,14 @@ the on-screen radio is individual/**business**, but the API + donor record use
 individual/**company**/**partnership**, so `startCheckout` sends the value from
 `currentDonorPath` (mapping the chosen business sub-type), not the raw `business`
 — posting the literal `business` was rejected by the `donorType` enum (400), so
-every business donation failed before this fix. Token-only
+every business donation failed before this fix. **TASK-243 (donor-flow audit)** fixed two more
+money-path defects: (1) a monthly **"choose your own amount"** gift carries `plan:null`, which the
+checkout schema accepts (TASK-231) but the webhook's `donationInputSchema` still rejected via a stale
+"monthly requires a plan" refine — so the donor was charged yet the donation threw in the webhook and
+was never recorded (that refine is dropped; `amountPence.positive()` still guarantees an amount); and
+(2) the business name (the company's required `legalName`) is now `required` on the business path via
+`initDonorType`, so a blank one is flagged inline instead of bounced 400 into a raw JSON alert.
+Token-only
 colours (slate body, maroon legend, crimson accents; the `brand-colours` guard
 forbids holly/tan text here). Dash-free copy, "NBCC" (REQ-031). Verified by
 `test/unit/give-donor-type.test.ts`.

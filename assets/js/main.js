@@ -410,6 +410,18 @@
       // relevant to a business donor.
       if (businessField) businessField.hidden = !isBusiness;
       if (businessTypeField) businessTypeField.hidden = !isBusiness;
+      // TASK-243: the business name is the company's legal name (required server-side), so require it on
+      // the business path (a blank one was bounced 400 with a JSON alert); un-require for an individual.
+      var businessNameInput = doc.getElementById("businessName");
+      if (businessNameInput) {
+        if (isBusiness) {
+          businessNameInput.setAttribute("required", "");
+          businessNameInput.setAttribute("aria-required", "true");
+        } else {
+          businessNameInput.removeAttribute("required");
+          businessNameInput.removeAttribute("aria-required");
+        }
+      }
       // Gift Aid is available to individuals and to partnerships (partners are
       // individuals in law); only an incorporated company takes the no Gift Aid path,
       // so hide and clear the callout there.
@@ -816,10 +828,9 @@
     var donorControl = doc.querySelector(".give-donor[data-ready]");
     if (donorControl) {
       var donorRadio = donorControl.querySelector('input[name="donorType"]:checked');
-      // TASK-242 FIX: the form radio is individual/business, but the API + donor record use
-      // individual/company/partnership. Send the SERVER's value via currentDonorPath, which maps the
-      // chosen business sub-type (company/partnership). Posting the raw "business" was rejected by the
-      // checkout-session donorType enum (400), so every business donation failed before this.
+      // TASK-242 FIX: send the SERVER's donor-type (currentDonorPath: individual/company/partnership),
+      // not the raw individual/business radio — the API enum 400-rejected "business", so every business
+      // donation failed before this.
       if (donorRadio) payload.donorType = currentDonorPath(doc);
     }
     var businessNameEl = doc.getElementById("businessName");

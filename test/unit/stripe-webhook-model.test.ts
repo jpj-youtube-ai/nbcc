@@ -90,6 +90,23 @@ describe("donationFromCheckoutSession", () => {
     expect(donation.stripeSubscriptionId).toBe("sub_test_1");
     expect(donation.stripePaymentIntentId).toBeNull();
   });
+
+  it("maps a monthly CUSTOM-amount session (no plan) without throwing (TASK-243)", () => {
+    // A "choose your own amount" monthly gift carries plan:"" in metadata → plan:null. Before TASK-243
+    // the donationInputSchema's monthly-requires-plan refine threw here, so the webhook 500'd on the
+    // completed session and the charged gift was NEVER recorded. It must now map cleanly with plan:null.
+    const { donation } = donationFromCheckoutSession(
+      session({
+        mode: "subscription",
+        payment_intent: null,
+        subscription: "sub_custom_1",
+        metadata: { mode: "monthly", plan: "", giftAid: "false" },
+      }),
+    );
+    expect(donation.mode).toBe("monthly");
+    expect(donation.plan).toBeNull();
+    expect(donation.stripeSubscriptionId).toBe("sub_custom_1");
+  });
 });
 
 describe("donationFromCheckoutSession — contact capture (REQ-039)", () => {

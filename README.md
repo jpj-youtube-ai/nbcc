@@ -953,7 +953,7 @@ text); inline SVG icons, no image tags. Dash-free copy, "NBCC" in full (REQ-031)
 Verified by `test/unit/contact.test.ts` (static markup + jsdom validation
 behaviour).
 
-### Supporters page (REQ-035; opt-in monthly 4-band wall TASK-223)
+### Supporters page (REQ-035; opt-in monthly 4-band wall TASK-223; grandfathered pre-223 set TASK-228)
 
 `supporters.html` opens with a centred intro (the `SUPPORTERS PAGE` CSS block,
 mirroring the About/Donate/Contact intros) and then fills its `.page-sections`
@@ -970,33 +970,48 @@ page's platinum ink) and leaves Bronze/Silver/Gold untouched. Dash-free copy, "N
 (REQ-031). The static entries are **placeholder** fallbacks; it also serves as the
 **Donors Page** referenced by REQ-024/REQ-025.
 
-**Who appears (opt-in, monthly, TASK-223):** the wall is now **opt-in and
-monthly-only**. A supporter appears ONLY if **all** hold: they have at least one
-**paid monthly** donation (`donations.mode='monthly'` filtered to
-`payment_status='paid'`, the same way settled gifts are detected elsewhere); the
-**greatest** such gift bands via the four-band `bandForMonthlyAmount`
-(`src/donors/fulfilment.ts` — bronze £10 / silver £25 / gold £50 / platinum £100 per
-month, so **under £10/mo is excluded**); they **opted in** on the right channel —
-a **business** (donor is a company OR carries a `business_name`) via its
-`business_supporter_fulfilment` record (`list_on_supporters = true` **and**
-`captured_at IS NOT NULL`), an **individual** via `donors.list_on_supporters = true`;
-and they are **not** `anonymous` and **not** `hidden_from_supporters`. A business is
-listed as an **Organisation** by its `credit_name` (falling back to `business_name`),
-an individual as an **Individual** by `donors.credit_name` (falling back to
-`full_name`). The individual opt-in + display-name **write path** is the donate form
-(TASK-224, see **Supporters wall opt-in** under the give widget above): an individual
-monthly donor of £10/month or more chooses on the donate form whether to appear and under
-what name, and the choice flows through checkout metadata onto
-`donors.list_on_supporters` / `credit_name`.
+**Who appears (opt-in monthly TASK-223, OR grandfathered TASK-228):** a supporter
+appears when they are **not** `anonymous` and **not** `hidden_from_supporters` **and**
+they qualify via **either** path below. Banding precedence is **opt-in monthly first,
+then grandfather**, so a donor who qualifies for both is banded by their monthly gift.
+
+- **Opt-in monthly (TASK-223).** They have at least one **paid monthly** donation
+  (`donations.mode='monthly'` filtered to `payment_status='paid'`, the same way settled
+  gifts are detected elsewhere); the **greatest** such gift bands via the four-band
+  `bandForMonthlyAmount` (`src/donors/fulfilment.ts` — bronze £10 / silver £25 / gold £50
+  / platinum £100 per month, so **under £10/mo is excluded** from this path); and they
+  **opted in** on the right channel — a **business** (donor is a company OR carries a
+  `business_name`) via its `business_supporter_fulfilment` record
+  (`list_on_supporters = true` **and** `captured_at IS NOT NULL`), an **individual** via
+  `donors.list_on_supporters = true`. The individual opt-in + display-name **write path**
+  is the donate form (TASK-224, see **Supporters wall opt-in** under the give widget
+  above): an individual monthly donor of £10/month or more chooses on the donate form
+  whether to appear and under what name, and the choice flows through checkout metadata
+  onto `donors.list_on_supporters` / `credit_name`.
+- **Grandfathered (TASK-228).** `donors.grandfathered_on_supporters = true` keeps a donor
+  on the wall **without** opting in. This is a **one-time snapshot** of the OLD (pre-223)
+  wall's set — taken by the migration backfill (`1784260000000_grandfather-supporters.js`):
+  **not anonymous AND has ≥ 1 `payment_status='paid'` donation**, matching who the pre-223
+  wall showed. A grandfathered donor is banded by their **greatest paid gift across ANY
+  frequency** using the four metal thresholds with **no £10 floor**
+  (`bandForGrandfatheredAmount` — ≥ £100 platinum, ≥ £50 gold, ≥ £25 silver, else bronze),
+  so every previously-shown donor — including **small and one-off** gifts — keeps a place.
+  **New** donors default `false`, so from launch onward everyone uses the opt-in flow.
+
+A business is listed as an **Organisation** by its `credit_name` (falling back to
+`business_name`), an individual as an **Individual** by `donors.credit_name` (falling
+back to `full_name`).
 
 **Rendering (TASK-071 / TASK-223):** the `/supporters` clean URL is **rendered
 server-side**, not served as the static file. `GET /supporters` (`src/routes/site.ts`)
 calls `listPublicSupporters` (`src/db/donations.ts`), which gathers each donor's
-greatest paid-monthly gift + their opt-in state (individual columns, and a `LEFT JOIN`
-to the business fulfilment record for business consent), then the pure
-`groupPublicSupporters` / `resolvePublicSupporter` (`src/db/donations-model.ts`) applies
-the opt-in + banding + anonymity/hide rules, picks the display name, and sorts each of
-the four bands alphabetically. The rendered HTML is injected into the **same**
+greatest paid **monthly** gift AND greatest paid gift across **any** frequency (a
+`LEFT JOIN` to `donations` filtered to `payment_status='paid'`, so a grandfathered
+**one-off** donor is still selected), the grandfather flag, and their opt-in state
+(individual columns, and a `LEFT JOIN` to the business fulfilment record for business
+consent), then the pure `groupPublicSupporters` / `resolvePublicSupporter`
+(`src/db/donations-model.ts`) applies the opt-in / grandfather + banding + anonymity/hide
+rules, picks the display name, and sorts each of the four bands alphabetically. The rendered HTML is injected into the **same**
 `supporters.html` markup, which stays the **template and the fallback** (served as-is if
 the DB read fails).
 

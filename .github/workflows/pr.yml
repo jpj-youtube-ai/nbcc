@@ -50,6 +50,7 @@ jobs:
       # the app boots; the stripe-webhook BDD signs its events with THIS same value
       # (via generateTestHeaderString) so signature verification passes offline.
       STRIPE_WEBHOOK_SECRET: whsec_ci_dummy_secret
+      RESEND_WEBHOOK_SECRET: whsec_Y2ktdGVzdC1rZXktZm9yLXJlc2VuZC13ZWJob29rcw==
       # Contact forwarding (REQ-030). A `.example` placeholder so the app boots and
       # the forward is stubbed (no live form service) for the BDD step.
       CONTACT_FORWARD_URL: https://forward.example/contact

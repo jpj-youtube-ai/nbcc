@@ -1708,6 +1708,31 @@ the record is gone when it deliberately isn't) and **"Delete"** on a draft; an a
 shows "Content deleted" and offers nothing. Both are `confirm()`-guarded with wording that states what
 survives.
 
+**Email delivery stats, Phase 1 (TASK-255).** Per-newsletter **delivery truth**: Resend (the provider
+behind `services/email-relay`) POSTs a signed event to `POST /api/webhooks/resend` for every email on
+the domain; we verify the **Svix signature** over the raw bytes (`RESEND_WEBHOOK_SECRET`, mounted
+before `express.json` exactly like the Stripe webhook — the signature is the entire trust boundary on
+a public URL) and keep `delivered` / `bounced` / `complained` events **only when they match a
+newsletter send**. Matching runs against `newsletter_sends` (one row per accepted recipient, batch-
+recorded best-effort after the send loop): newest send for that address, ≤ 14 days before the event.
+Anything unmatched — receipts, login codes — is acknowledged and **dropped**, not warehoused. Inserts
+are idempotent on the Svix id (partial unique index), so Resend's retries can never double-count.
+Unsubscribes are attributed via the **v2 unsubscribe token** (`donorId.newsletterId.sig`); legacy
+2-part tokens in already-sent emails **verify forever** (an unsubscribe link that stops working is a
+compliance failure). `GET /api/admin/newsletters/:id/stats` (Editor+) returns **aggregates only** —
+sends/delivered/bounced/complained/unsubscribed + the bounced addresses for list cleaning; there is
+deliberately no "who opened what" view. Redacting a newsletter (TASK-252) also clears its sends/events
+rows — donor addresses, the same class as `failed_emails`. **Silent junk-folder placement is not
+measurable by anyone**; complaints and bounces are the honest proxies, and the dashboard never claims
+a "junk rate". Config: `RESEND_WEBHOOK_SECRET` (schema default `""` → endpoint answers 503 until
+configured, so deploys don't depend on dashboard setup; SSM `REPLACE_ME` + task-def secret +
+`exec_secrets` IAM + `pr.yml` env). **One-time setup:** Resend dashboard → Webhooks → add
+`https://nbcc.scot/api/webhooks/resend` (staging: `https://staging.nbcc.scot/...`), select
+`email.delivered`, `email.bounced`, `email.complained`, then put the `whsec_…` signing secret into the
+env's SSM parameter. Stats accrue from switch-on; Resend does not back-report. Phase 2 (opens/clicks
+via a newsletter-only sending subdomain, so receipts are never tracked) is specced but not built —
+see `docs/superpowers/specs/2026-07-16-newsletter-email-stats-design.md`.
+
 **`{{firstName}}` in the subject line (TASK-254).** The subject merges per recipient, like the body
 always has. Previously the body personalised and the subject went out **raw**, so a newsletter titled
 _"Hey, {{firstName}}!"_ reached every donor with the marker showing — the builder invites the merge

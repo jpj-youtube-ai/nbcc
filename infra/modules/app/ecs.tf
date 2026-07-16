@@ -38,6 +38,7 @@ data "aws_iam_policy_document" "exec_secrets" {
       # all injected via valueFrom, so the exec role must be able to read them.
       aws_ssm_parameter.stripe_secret_key.arn,
       aws_ssm_parameter.stripe_webhook_secret.arn,
+      aws_ssm_parameter.resend_webhook_secret.arn,
       aws_ssm_parameter.stripe_price_bronze.arn,
       aws_ssm_parameter.stripe_price_silver.arn,
       aws_ssm_parameter.stripe_price_gold.arn,
@@ -145,6 +146,7 @@ resource "aws_ecs_task_definition" "app" {
       # the exec_secrets policy below or the task fails to start.
       { name = "STRIPE_SECRET_KEY", valueFrom = aws_ssm_parameter.stripe_secret_key.arn },
       { name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.stripe_webhook_secret.arn },
+      { name = "RESEND_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.resend_webhook_secret.arn },
       { name = "STRIPE_PRICE_BRONZE", valueFrom = aws_ssm_parameter.stripe_price_bronze.arn },
       { name = "STRIPE_PRICE_SILVER", valueFrom = aws_ssm_parameter.stripe_price_silver.arn },
       { name = "STRIPE_PRICE_GOLD", valueFrom = aws_ssm_parameter.stripe_price_gold.arn },

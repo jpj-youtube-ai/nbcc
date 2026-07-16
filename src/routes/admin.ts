@@ -93,7 +93,8 @@ import {
   listNewsletterAttachmentsForSend,
   deleteNewsletterAttachment,
 } from "../db/newsletter-attachments";
-import { signUnsubscribeToken } from "../donors/unsubscribe-token";
+import { signUnsubscribeTokenV2 } from "../donors/unsubscribe-token";
+import { recordNewsletterSends, getNewsletterStats } from "../db/newsletter-events";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
 import { createRateLimiter } from "../portal/request-limiter";
@@ -479,6 +480,19 @@ export async function deleteAdminNewsletter(req: Request, res: Response): Promis
   return res.status(200).json({ status: "deleted", id });
 }
 
+// GET /api/admin/newsletters/:id/stats — the delivery-truth aggregates for one newsletter (TASK-255):
+// sends / delivered / bounced / complained / unsubscribed + the bounced addresses for list cleaning.
+// Editor+ like the rest of the tab. AGGREGATES ONLY — there is deliberately no "who opened what" view
+// (see the Phase 1 spec); the bounced list is operational (dead addresses), not behavioural.
+export async function getAdminNewsletterStats(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const existing = await getNewsletter(id);
+  if (!existing) return res.status(404).json({ error: "Newsletter not found" });
+  return res.json(await getNewsletterStats(id));
+}
+
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
 export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
@@ -593,8 +607,11 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     ? attachmentRows.map((a) => ({ filename: a.filename, content: a.bytes.toString("base64"), contentType: a.mime }))
     : undefined;
   const failedEmails: string[] = [];
+  const accepted: { donorId: number | null; email: string }[] = [];
   for (const r of recipients) {
-    const token = signUnsubscribeToken(r.donorId, config.ADMIN_SESSION_SECRET);
+    // TASK-255: the v2 token also names THIS newsletter, so an unsubscribe from this email can be
+    // attributed on the stats dashboard. Legacy tokens in already-sent emails verify forever.
+    const token = signUnsubscribeTokenV2(r.donorId, id, config.ADMIN_SESSION_SECRET);
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
     // Block-doc newsletters render per recipient (merge the first name) with the unsubscribe button
     // built into the branded frame footer. Legacy raw-HTML rows (no valid bodyJson) are not framed,
@@ -621,7 +638,19 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
       // summary can surface which addresses did not get it.
       console.error(`newsletter send to ${r.email} failed`, err);
       failedEmails.push(r.email);
+      continue;
     }
+    accepted.push({ donorId: r.donorId, email: r.email });
+  }
+
+  // TASK-255: record who this newsletter was ACCEPTED for — the correlation target the delivery
+  // webhook matches against, and the denominator the stats rates divide by. Best-effort by design:
+  // the emails have already gone; failing the request over bookkeeping would tell the admin a send
+  // that happened didn't.
+  try {
+    await recordNewsletterSends(id, accepted);
+  } catch (err) {
+    console.error("newsletter sends recording failed:", err instanceof Error ? err.message : err);
   }
 
   const sentCount = recipients.length - failedEmails.length;
@@ -1716,6 +1745,8 @@ adminRouter.get("/api/admin/newsletters/subscribers.csv", getAdminNewsletterSubs
 adminRouter.get("/api/admin/newsletters/subscribers", getAdminNewsletterSubscribers);
 adminRouter.post("/api/admin/newsletters/subscribers", postAdminNewsletterSubscriber);
 adminRouter.post("/api/admin/newsletters/subscribers/remove", postAdminRemoveNewsletterSubscriber);
+// Literal-suffix route: registered BEFORE the bare /:id (same hazard note as the block above).
+adminRouter.get("/api/admin/newsletters/:id/stats", getAdminNewsletterStats);
 adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);

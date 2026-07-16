@@ -140,6 +140,15 @@ resource "aws_ssm_parameter" "stripe_webhook_secret" {
   lifecycle { ignore_changes = [value] }
 }
 
+# Resend delivery-webhook signing secret (TASK-255, email stats) — verifies inbound Resend/Svix
+# webhook signatures, exactly as the Stripe one does for donations. Real value set out of band.
+resource "aws_ssm_parameter" "resend_webhook_secret" {
+  name  = "/${var.project}/${var.environment}/RESEND_WEBHOOK_SECRET"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
 resource "aws_ssm_parameter" "stripe_price_bronze" {
   name  = "/${var.project}/${var.environment}/STRIPE_PRICE_BRONZE"
   type  = "String"

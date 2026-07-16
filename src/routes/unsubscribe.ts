@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { verifyUnsubscribeToken, UnsubscribeTokenError } from "../donors/unsubscribe-token";
 import { unsubscribeDonor } from "../db/newsletters";
+import { recordUnsubscribeEvent } from "../db/newsletter-events";
 import { config } from "../config";
 
 // Public newsletter unsubscribe (TASK-161/REQ-069). A newsletter email carries
@@ -19,16 +20,28 @@ function page(message: string): string {
 }
 
 unsubscribeRouter.get("/unsubscribe/:token", async (req: Request, res: Response) => {
-  let donorId: number;
+  let claims: { donorId: number; newsletterId: number | null };
   try {
-    donorId = verifyUnsubscribeToken(req.params.token, config.ADMIN_SESSION_SECRET);
+    // TASK-255: a v2 token also names the newsletter the link was printed in (legacy tokens verify
+    // forever and attribute to none) — that id feeds the stats dashboard below.
+    claims = verifyUnsubscribeToken(req.params.token, config.ADMIN_SESSION_SECRET);
   } catch (err) {
     if (err instanceof UnsubscribeTokenError) {
       return res.status(400).type("html").send(page("This unsubscribe link is not valid."));
     }
     throw err;
   }
-  await unsubscribeDonor(donorId);
+  await unsubscribeDonor(claims.donorId);
+  // TASK-255: attribute the unsubscribe to the newsletter the link was printed in (v2 tokens only —
+  // legacy links unsubscribe fine but attribute to none). Best-effort: the donor IS unsubscribed by
+  // the line above; failing their confirmation page over stats bookkeeping would be backwards.
+  if (claims.newsletterId != null) {
+    try {
+      await recordUnsubscribeEvent(claims.newsletterId, claims.donorId);
+    } catch (err) {
+      console.error("unsubscribe event recording failed:", err instanceof Error ? err.message : err);
+    }
+  }
   return res
     .status(200)
     .type("html")

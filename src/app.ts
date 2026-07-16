@@ -6,6 +6,7 @@ import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
+import { resendWebhookRouter } from "./routes/resend-webhook";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { businessRouter } from "./routes/business";
@@ -25,6 +26,9 @@ export function createApp() {
   // it is mounted BEFORE express.json — its route applies express.raw itself; all
   // other routes still get parsed JSON below.
   app.use(stripeWebhookRouter);
+  // The Resend delivery webhook (TASK-255) verifies a Svix signature over the raw bytes, so it is
+  // mounted before express.json for exactly the same reason as Stripe's.
+  app.use(resendWebhookRouter);
   // Reject an oversized JSON submission to the public, unauthenticated /api/my-story
   // endpoint by its Content-Length BEFORE the global express.json() parses it, so the
   // 32kb cap is real (mounted after the parser it would be a no-op, since body-parser

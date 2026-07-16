@@ -1594,6 +1594,17 @@
 
   // ---- newsletter ----
 
+  // Text size step range + the block types that never take one (TASK-248). MUST match NO_SIZE_STEP in
+  // src/newsletter/blocks.ts, which is the authority: the server ignores a step on these, so a drift
+  // here only ever shows a dead button, never a wrong render. rawHtml is the author's own HTML;
+  // masthead is the brand signature (its variants already span 16→26px); divider/image carry no text.
+  var NL_SIZE_MIN = -2;
+  var NL_SIZE_MAX = 2;
+  var NL_NO_SIZE = ["rawHtml", "masthead", "divider", "image"];
+  function nlCanSize(block) {
+    return NL_NO_SIZE.indexOf(block.type) === -1;
+  }
+
   // Block builder model (TASK-168). Each def: label, default data, and how many of the 4 variants
   // are meaningful (all 4 unless noted). The renderer server-side owns the visual variants; the UI
   // just carries type/variant/data.
@@ -1920,6 +1931,40 @@
           seg.appendChild(vb);
         });
         li.appendChild(seg);
+      }
+
+      // Text size step (TASK-248). A- / A+ nudge this block's text one notch along the newsletter's
+      // own size ladder; the SERVER owns the ladder maths (src/newsletter/blocks.ts applySizeStep) and
+      // this only carries the step on the block, exactly like variant above. Disabled at the ends of
+      // the range and in read mode (changing size is an edit), but still shown so a viewer sees state.
+      if (nlCanSize(block)) {
+        var sizeWrap = doc.createElement("div");
+        sizeWrap.className = "nl-size admin-segmented";
+        sizeWrap.setAttribute("role", "group");
+        sizeWrap.setAttribute("aria-label", "Text size");
+        [
+          { d: -1, label: "A−", title: "Smaller text" },
+          { d: 1, label: "A+", title: "Larger text" },
+        ].forEach(function (step) {
+          var sb = doc.createElement("button");
+          sb.type = "button";
+          sb.className = "admin-seg nl-size-btn";
+          sb.textContent = step.label;
+          sb.title = step.title;
+          sb.setAttribute("aria-label", step.title);
+          var current = block.size || 0;
+          var next = current + step.d;
+          sb.disabled = readOnly || next < NL_SIZE_MIN || next > NL_SIZE_MAX;
+          if (!readOnly) {
+            sb.addEventListener("click", function () {
+              block.size = Math.max(NL_SIZE_MIN, Math.min(NL_SIZE_MAX, (block.size || 0) + step.d));
+              nlRenderCanvas();
+              nlSchedulePreview();
+            });
+          }
+          sizeWrap.appendChild(sb);
+        });
+        li.appendChild(sizeWrap);
       }
 
       var fields = doc.createElement("div");

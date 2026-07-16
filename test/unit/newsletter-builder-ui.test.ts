@@ -36,6 +36,11 @@ const legacyNewsletter = {
   bodyJson: null,
 };
 
+// What GET /api/admin/newsletters/:id returns. Defaults to the legacy (bodyHtml-only) fixture above so
+// the hydration tests are unchanged; a test wanting a block document (e.g. to open a SIZEABLE block in
+// read mode) swaps it in. Reset in beforeEach.
+let singleNewsletter: unknown = legacyNewsletter;
+
 let newsletterListRows: unknown[] = []; // what GET /api/admin/newsletters (list) returns; per-test
 const savedRequests: { url: string; method: string; body: Record<string, unknown> }[] = [];
 const previewRequests: { body: Record<string, unknown> }[] = [];
@@ -85,7 +90,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     return j({ email: String(parsedBody.email || "").toLowerCase(), status: "added" }, 201);
   }
   if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "GET") {
-    return j(legacyNewsletter); // the only single-newsletter fixture the tests need
+    return j(singleNewsletter); // legacy bodyHtml by default; a test may swap in a block document
   }
   if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "PUT") {
     savedRequests.push({ url, method, body: parsedBody });
@@ -136,6 +141,7 @@ const blockCount = () => el("nlCanvas").querySelectorAll(".nl-block").length;
 describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
   beforeEach(() => {
     loginToken = tokenFor("editor");
+    singleNewsletter = legacyNewsletter;
     newsletterListRows = [];
     savedRequests.length = 0;
     previewRequests.length = 0;
@@ -437,5 +443,89 @@ describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {
     expect(previewRequests.length).toBe(1);
     const doc = previewRequests[0].body.bodyJson as { blocks: { data: Record<string, unknown> }[] };
     expect(doc.blocks[0].data.text).toBe("debounced edit");
+  });
+});
+
+// TASK-248: the per-block text size control (A- / A+). The pure ladder maths lives server-side and is
+// tested in newsletter-blocks.test.ts; what MUST be proven HERE is the wiring across the boundary —
+// that the button reaches the saved bodyJson. A control that renders but never lands is the exact
+// class of bug this codebase keeps producing (each side of a boundary tested, never the hop between),
+// so that is the assertion that earns its keep. The client's own exclusion list is kept honest by
+// nlCanSize being asserted against a masthead below; the server ignores a step on those types anyway,
+// so the worst case of drift is a dead button, never a wrong render.
+describe("per-block text size control (TASK-248)", () => {
+  const sizeCtrl = () => el("nlCanvas").querySelector(".nl-size");
+  const sizeBtns = () =>
+    Array.prototype.slice.call((sizeCtrl() as HTMLElement).querySelectorAll("button")) as HTMLButtonElement[];
+
+  it("offers A-/A+ on a text block", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Text");
+    expect(sizeCtrl()).toBeTruthy();
+    expect(sizeBtns()).toHaveLength(2);
+  });
+
+  it("carries the chosen step into the saved bodyJson (the control actually lands)", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    (el("newsletterSubject") as HTMLInputElement).value = "Sized";
+    clickPalette("Text");
+
+    sizeBtns()[1].click(); // A+
+    sizeBtns()[1].click(); // A+ again -> +2
+
+    (el("newsletterForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    await flush();
+
+    const sentDoc = savedRequests[0].body.bodyJson as { blocks: { size?: number }[] };
+    expect(sentDoc.blocks[0].size).toBe(2);
+  });
+
+  it("clamps in the UI: A+ disables at +2 and A- disables at -2", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Text");
+
+    sizeBtns()[1].click();
+    sizeBtns()[1].click();
+    expect(sizeBtns()[1].disabled).toBe(true); // at the top of the range
+    expect(sizeBtns()[0].disabled).toBe(false);
+
+    for (let i = 0; i < 4; i++) sizeBtns()[0].click(); // +2 -> -2
+    expect(sizeBtns()[0].disabled).toBe(true); // at the bottom
+    expect(sizeBtns()[1].disabled).toBe(false);
+  });
+
+  it("hides the control for the block types the server will not size", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Masthead"); // in NO_SIZE_STEP: the brand signature, sized by its variants
+    expect(sizeCtrl()).toBeNull();
+  });
+
+  it("is read-only safe: a Viewer sees the step but cannot change it", async () => {
+    // Open a draft that really does carry a sizeable block — the default fixture is a legacy rawHtml
+    // doc, which is excluded from sizing, so this test would prove nothing against it.
+    loginToken = tokenFor("viewer");
+    singleNewsletter = {
+      id: 41,
+      subject: "Sized draft",
+      status: "draft",
+      sentAt: null,
+      recipientCount: null,
+      bodyHtml: null,
+      bodyJson: { blocks: [{ type: "text", variant: 0, data: { text: "Body" }, size: 1 }] },
+    };
+    newsletterListRows = [{ id: 41, subject: "Sized draft", status: "draft", sentAt: null, recipientCount: null }];
+    await openNewsletterTab(); // auto-opens id 41 as a viewer
+    await flush();
+
+    const ctrl = el("nlCanvas").querySelector(".nl-size");
+    expect(ctrl, "a viewer should still SEE the control (read mode shows state)").toBeTruthy();
+    const btns = Array.prototype.slice.call((ctrl as HTMLElement).querySelectorAll("button")) as HTMLButtonElement[];
+    expect(btns).toHaveLength(2);
+    btns.forEach((b) => expect(b.disabled).toBe(true));
   });
 });

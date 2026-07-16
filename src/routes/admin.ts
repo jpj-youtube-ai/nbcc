@@ -72,7 +72,6 @@ import {
   claimNewsletterForSend,
   setNewsletterDeliverySummary,
   deleteDraftNewsletter,
-  redactSentNewsletter,
 } from "../db/newsletters";
 import {
   templateNameSchema,
@@ -445,17 +444,15 @@ export async function deleteAdminNewsletterTemplate(req: Request, res: Response)
   return res.status(204).end();
 }
 
-// DELETE /api/admin/newsletters/:id — remove a newsletter (Admin only: sending is Admin-only, so
-// unsending's paper trail should be too).
+// DELETE /api/admin/newsletters/:id — delete a DRAFT (Admin only: sending is Admin-only, so its
+// cleanup is too).
 //
-// What this does depends on what the newsletter IS, decided HERE from its own status rather than by
-// the caller — a client that got it wrong could otherwise destroy the record of a real send:
-//   draft — never went anywhere → really deleted.
-//   sent  — went to real donors → REDACTED: the content and the bounced donor addresses are cleared,
-//           and a permanent stub stays (subject, sent_at, recipient_count, sent_count, failed_count)
-//           so "what did we send, when, to how many?" is always answerable. Responds 200 with
-//           { status: "redacted" } so the UI can say what actually happened instead of implying the
-//           newsletter is gone.
+// A SENT newsletter is IMMUTABLE (TASK-258, superseding TASK-252's redact option): it is the
+// charity's permanent record of what was said to donors — trustees, complaints and the Fundraising
+// Regulator all ask "what exactly did you send?" — and the stored content carries no donor data
+// (names merge per recipient at send time), so privacy never required deleting it. A sent id here is
+// refused with the same 409 shape as editing one; the function that could redact was REMOVED from the
+// db module, so there is nothing an authorised-but-mistaken caller could reach.
 export async function deleteAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "newsletter", "edit");
   if (!claims) return;
@@ -467,14 +464,11 @@ export async function deleteAdminNewsletter(req: Request, res: Response): Promis
   const existing = await getNewsletter(id);
   if (!existing) return res.status(404).json({ error: "Newsletter not found" });
 
-  // The audit row is written INSIDE each of these, in the same transaction as the change itself
-  // (writeWithAudit), so a redaction can never land without the record of who did it.
   if (existing.status === "sent") {
-    const redacted = await redactSentNewsletter(id, claims.sub, claims.email, existing.subject);
-    if (!redacted) return res.status(404).json({ error: "Newsletter not found" });
-    return res.status(200).json({ status: "redacted", id });
+    return res.status(409).json({ error: "A sent newsletter is a permanent record and cannot be deleted" });
   }
 
+  // The audit row is written INSIDE the delete, in the same transaction (writeWithAudit).
   const removed = await deleteDraftNewsletter(id, claims.email, existing.subject);
   if (!removed) return res.status(404).json({ error: "Newsletter not found" });
   return res.status(200).json({ status: "deleted", id });

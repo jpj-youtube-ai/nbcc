@@ -448,11 +448,6 @@ When("I fetch that newsletter", async function () {
   this.nlBody = r.json;
 });
 
-// The redaction's promise: the content really is gone, not merely hidden.
-Then("the newsletter body should be empty", function () {
-  assert.equal(this.nlBody.bodyHtml, "", "expected the redacted newsletter's body_html to be blank");
-  assert.ok(!this.nlBody.bodyJson, "expected the redacted newsletter's body_json to be cleared");
-});
 
 // TASK-254: the subject that actually went out is echoed back by the test-send, so the merge can be
 // asserted across the real HTTP hop — the raw-subject bug lived at the call site, not in the pure

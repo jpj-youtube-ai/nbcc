@@ -202,15 +202,14 @@ Feature: Admin newsletter (REQ-069)
     When I delete that saved template
     Then the template response status should be 404
 
-  # TASK-252: deleting a newsletter. A draft never went anywhere, so it really goes. A SENT newsletter
-  # went to real donors — deleting the row would destroy the record of what was emailed, so it is
-  # REDACTED instead: the content and the bounced addresses go, the audit stub stays. This scenario
-  # exists to prove the stub SURVIVES, because that is the whole promise.
-  Scenario: an Admin deletes a draft outright, and a sent newsletter keeps its audit stub
+  # TASK-258 (supersedes TASK-252): a DRAFT deletes outright; a SENT newsletter is a PERMANENT
+  # record — the server refuses to delete it and its content stays fetchable forever. The full history
+  # of what was said to donors is the point.
+  Scenario: an Admin deletes a draft, but a sent newsletter is permanent
     Given a newsletter admin "admin2.newsletter.bdd@example.com" with role "admin" and password "pw-admin2"
     And a consenting donor with email "sub3.newsletter.bdd@example.com"
 
-    # A draft never reached anyone → really deleted, and then it is gone.
+    # A draft never reached anyone -> really deleted, and then it is gone.
     When I create a newsletter with subject "Nope" and body "<p>Draft</p>"
     And I delete that newsletter
     Then the newsletter response status should be 200
@@ -218,22 +217,20 @@ Feature: Admin newsletter (REQ-069)
     When I fetch that newsletter
     Then the newsletter response status should be 404
 
-    # A SENT newsletter is redacted, not deleted.
+    # A SENT newsletter cannot be deleted — by anyone.
     When I create a newsletter with subject "Send me" and body "<p>Real content</p>"
     And I send that newsletter
     Then the newsletter response status should be 200
     When I delete that newsletter
-    Then the newsletter response status should be 200
-    And the newsletter response field "status" should be "redacted"
+    Then the newsletter response status should be 409
 
-    # The stub is still there — and still answers what was sent, when, and to how many.
+    # And every part of the record — including the content itself — is still there.
     When I fetch that newsletter
     Then the newsletter response status should be 200
     And the newsletter response field "subject" should be "Send me"
     And the newsletter response field "status" should be "sent"
+    And the newsletter response field "bodyHtml" should be "<p>Real content</p>"
     And the newsletter recipient count should be at least 1
-    # …but the content is gone.
-    And the newsletter body should be empty
 
   # TASK-255: delivery-truth stats (email dashboard Phase 1). Resend reports what happened to each
   # email via a signed webhook; this proves the full loop against the running app: send -> a SIGNED

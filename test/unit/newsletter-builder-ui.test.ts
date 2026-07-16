@@ -42,6 +42,13 @@ const legacyNewsletter = {
 let singleNewsletter: unknown = legacyNewsletter;
 
 let newsletterListRows: unknown[] = []; // what GET /api/admin/newsletters (list) returns; per-test
+
+// TASK-249: the shared saved-template library fixtures; set per-test.
+let templateRows: unknown[] = [];
+let templateSaveStatus = 201; // flip to 409 to exercise the name-already-taken path
+const templateSaves: { body: Record<string, unknown> }[] = [];
+const templateDeletes: string[] = [];
+const templateDoc = { blocks: [{ type: "text", variant: 0, data: { text: "From the template" }, size: 1 }] };
 const savedRequests: { url: string; method: string; body: Record<string, unknown> }[] = [];
 const previewRequests: { body: Record<string, unknown> }[] = [];
 const sendRequests: { url: string }[] = []; // POST /:id/send calls (the actual blast)
@@ -102,6 +109,22 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   }
   if (url === "/api/admin/newsletters" && method === "GET") {
     return j(newsletterListRows);
+  }
+  // TASK-249: the shared saved-template library.
+  if (url === "/api/admin/newsletter-templates" && method === "GET") {
+    return j(templateRows);
+  }
+  if (url === "/api/admin/newsletter-templates" && method === "POST") {
+    templateSaves.push({ body: parsedBody });
+    if (templateSaveStatus !== 201) return j({ error: "A template with that name already exists" }, templateSaveStatus);
+    return j({ id: 5, name: parsedBody.name, createdAt: "2026-07-16T00:00:00.000Z" }, 201);
+  }
+  if (/\/api\/admin\/newsletter-templates\/\d+$/.test(url) && method === "GET") {
+    return j({ id: 5, name: "Christmas Appeal", createdAt: "2026-07-16T00:00:00.000Z", bodyJson: templateDoc });
+  }
+  if (/\/api\/admin\/newsletter-templates\/\d+$/.test(url) && method === "DELETE") {
+    templateDeletes.push(url);
+    return j({}, 204);
   }
   return j({ results: [] });
 }
@@ -527,5 +550,131 @@ describe("per-block text size control (TASK-248)", () => {
     const btns = Array.prototype.slice.call((ctrl as HTMLElement).querySelectorAll("button")) as HTMLButtonElement[];
     expect(btns).toHaveLength(2);
     btns.forEach((b) => expect(b.disabled).toBe(true));
+  });
+});
+
+// TASK-249: the SHARED saved-template library. The name rules, query shapes and 409 live in
+// newsletter-templates.test.ts; the round trip lives in the BDD scenario. What earns its keep HERE is
+// the wiring: that the library actually loads when the tab opens (it is called from a different scope
+// than it is declared in — a ReferenceError there would silently kill the whole tab), that saving
+// posts the LIVE document rather than a stale copy, that starting from one replaces the canvas, and
+// that a name clash reads as a sentence rather than an error dump.
+describe("shared saved-template library (TASK-249)", () => {
+  beforeEach(() => {
+    // Full mount: this is a TOP-LEVEL describe, so it inherits nothing from the block-builder suite
+    // above — it must stand up its own DOM, helpers and fetch stub, like the debounce suite does.
+    loginToken = tokenFor("editor");
+    singleNewsletter = legacyNewsletter;
+    newsletterListRows = [];
+    savedRequests.length = 0;
+    previewRequests.length = 0;
+    sendRequests.length = 0;
+    subscriberRequests.length = 0;
+    testSendRequests.length = 0;
+    templateRows = [];
+    templateSaveStatus = 201;
+    templateSaves.length = 0;
+    templateDeletes.length = 0;
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc); // run the IIFE against this DOM
+  });
+
+  it("loads the library when the tab opens, and hides the picker while it is empty", async () => {
+    // Guards the scope hazard: nlRefreshTemplates is called from the tab-open flow. If it were not
+    // visible there this throws, and the newsletter tab dies on open.
+    templateRows = [];
+    await openNewsletterTab();
+    await flush();
+    expect(el("nlTemplates").hidden).toBe(true); // an empty picker is noise on a fresh install
+  });
+
+  it("shows the picker once the shared library has something in it", async () => {
+    templateRows = [{ id: 5, name: "Christmas Appeal", createdAt: "2026-07-16T00:00:00.000Z" }];
+    await openNewsletterTab();
+    await flush();
+    expect(el("nlTemplates").hidden).toBe(false);
+    expect(el("newsletterTemplatePick").textContent).toContain("Christmas Appeal");
+  });
+
+  it("saves the LIVE document under the given name (not a stale copy)", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    (el("newsletterSubject") as HTMLInputElement).value = "Autumn update";
+    clickPalette("Text");
+
+    (el("newsletterTemplateSave") as HTMLElement).click();
+    // The name defaults to the subject — almost always what you'd type anyway.
+    expect((el("newsletterTemplateName") as HTMLInputElement).value).toBe("Autumn update");
+    (el("newsletterTemplateName") as HTMLInputElement).value = "Autumn shell";
+    (el("newsletterTemplateSaveConfirm") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    expect(templateSaves).toHaveLength(1);
+    expect(templateSaves[0].body.name).toBe("Autumn shell");
+    const sent = templateSaves[0].body.bodyJson as { blocks: unknown[] };
+    expect(sent.blocks).toHaveLength(1); // the block just added, i.e. the live doc
+  });
+
+  it("refuses to save an empty document rather than filling the library with junk", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    (el("newsletterTemplateSave") as HTMLElement).click();
+    expect(templateSaves).toHaveLength(0);
+    expect(el("nlTemplateMsg").textContent).toMatch(/blocks first/i);
+  });
+
+  it("explains a name clash in a sentence instead of dumping the error", async () => {
+    templateSaveStatus = 409;
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Text");
+    (el("newsletterTemplateSave") as HTMLElement).click();
+    (el("newsletterTemplateName") as HTMLInputElement).value = "Taken";
+    (el("newsletterTemplateSaveConfirm") as HTMLElement).click();
+    await flush();
+    await flush();
+    expect(el("nlTemplateMsg").textContent).toMatch(/already taken/i);
+  });
+
+  it("starting from a template loads its blocks as a NEW newsletter, never an edit of the template", async () => {
+    templateRows = [{ id: 5, name: "Christmas Appeal", createdAt: "2026-07-16T00:00:00.000Z" }];
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    await flush();
+
+    (el("newsletterTemplateUse") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    // The canvas now holds the template's block…
+    expect(el("nlCanvas").querySelectorAll(".nl-block").length).toBe(1);
+    // …and it is a NEW newsletter: no id, so Save creates rather than overwriting anything.
+    expect((el("newsletterId") as HTMLInputElement).value).toBe("");
+  });
+
+  it("deleting asks first, because a shared library loses it for everyone", async () => {
+    templateRows = [{ id: 5, name: "Christmas Appeal", createdAt: "2026-07-16T00:00:00.000Z" }];
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    await openNewsletterTab();
+    await flush();
+
+    (el("newsletterTemplateDelete") as HTMLElement).click();
+    await flush();
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(templateDeletes).toHaveLength(0); // declined -> nothing removed
+
+    confirmSpy.mockReturnValue(true);
+    (el("newsletterTemplateDelete") as HTMLElement).click();
+    await flush();
+    await flush();
+    expect(templateDeletes).toHaveLength(1);
+    confirmSpy.mockRestore();
   });
 });

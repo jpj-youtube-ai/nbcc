@@ -24,9 +24,6 @@ const realSql = (): string[] =>
     .map((c) => String(c[0]))
     .filter((s) => !/^\s*(begin|commit|rollback)/i.test(s) && !/insert into audit_log/i.test(s));
 const lastSql = (): string => realSql()[realSql().length - 1];
-const allSql = (): string => realSql().join("\n---\n");
-const auditSql = (): string =>
-  queryMock.mock.calls.map((c) => String(c[0])).filter((s) => /insert into audit_log/i.test(s)).join("\n");
 // The params of the statement that actually did the work — NOT the last call, which is now COMMIT.
 const paramsOf = (re: RegExp): unknown[] =>
   (queryMock.mock.calls.find((c) => re.test(String(c[0]))) || [])[1] as unknown[];

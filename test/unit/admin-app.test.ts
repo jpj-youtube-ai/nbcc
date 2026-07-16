@@ -354,3 +354,45 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(navLink.hidden).toBe(true);
   });
 });
+
+// TASK-251: the thank-you letter's signer picker is now built from AdminHelpers.SIGNERS instead of
+// hardcoded <option> tags, so the newsletter's sign-off block can share ONE list and "the same list of
+// names" survives a signer joining or leaving. That refactor touched a feature with no coverage at
+// all: app.js dereferences el("tySigner").selectedOptions[0] to read the role, so an unpopulated
+// select is a TypeError that takes the letter form down. These tests exist so that can't happen
+// silently.
+describe("thank-you signer picker is built from the shared SIGNERS list (TASK-251)", () => {
+  beforeEach(() => {
+    loginToken = tokenFor("editor");
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+  });
+
+  it("populates the picker at script-eval, before anything reads it", () => {
+    const opts = (el("tySigner") as HTMLSelectElement).options;
+    expect(opts.length).toBe(helpers.SIGNERS.length);
+    expect(opts.length).toBeGreaterThan(0); // an empty select would throw on selectedOptions[0]
+  });
+
+  it("carries each signer's name as the value and their role as data-role", () => {
+    const opts = Array.from((el("tySigner") as HTMLSelectElement).options);
+    helpers.SIGNERS.forEach((s: { name: string; role: string }, i: number) => {
+      expect(opts[i].value).toBe(s.name);
+      expect(opts[i].textContent).toBe(s.name);
+      expect(opts[i].getAttribute("data-role")).toBe(s.role);
+    });
+  });
+
+  it("has a usable selectedOptions[0] — the exact thing app.js dereferences for the role", () => {
+    const sel = el("tySigner") as HTMLSelectElement;
+    expect(sel.selectedOptions[0]).toBeTruthy();
+    expect(sel.selectedOptions[0].getAttribute("data-role")).toBeTruthy();
+    expect(sel.value).toBe(helpers.SIGNERS[0].name);
+  });
+});

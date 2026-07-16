@@ -678,3 +678,90 @@ describe("shared saved-template library (TASK-249)", () => {
     confirmSpy.mockRestore();
   });
 });
+
+// TASK-251: the sign-off block's builder wiring. The rendering is proven server-side in
+// newsletter-blocks.test.ts; what matters HERE is that the picker really is built from the SAME list
+// the thank-you letter uses (that is the requirement — "the same list of names"), and that the choice
+// reaches the saved document.
+describe("sign-off block wiring (TASK-251)", () => {
+  beforeEach(() => {
+    loginToken = tokenFor("editor");
+    singleNewsletter = legacyNewsletter;
+    newsletterListRows = [];
+    savedRequests.length = 0;
+    previewRequests.length = 0;
+    sendRequests.length = 0;
+    subscriberRequests.length = 0;
+    testSendRequests.length = 0;
+    templateRows = [];
+    templateSaveStatus = 201;
+    templateSaves.length = 0;
+    templateDeletes.length = 0;
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+  });
+
+  const signerSelect = () => el("nlCanvas").querySelector("select") as HTMLSelectElement;
+
+  it("is offered in the palette and adds with the sign-off already written", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Sign-off");
+    expect(el("nlCanvas").textContent).toContain("Sign-off");
+    // Prefilled with the wording NBCC actually signs off with — not an empty shell to retype.
+    const inputs = Array.from(el("nlCanvas").querySelectorAll("input")) as HTMLInputElement[];
+    const values = inputs.map((i) => i.value);
+    expect(values).toContain("With love and gratitude,");
+    expect(values).toContain("On behalf of everyone at NBCC");
+    expect(values).toContain("info@nbcc.scot");
+  });
+
+  it("builds the signer picker from the SAME list the thank-you letter uses", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Sign-off");
+    const opts = Array.from(signerSelect().options).map((o) => o.value);
+    // The requirement: one list. Not a copy that drifts when someone joins or leaves.
+    expect(opts).toEqual(helpers.SIGNERS.map((s: { name: string }) => s.name));
+  });
+
+  it("carries the chosen signer into the saved document", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    (el("newsletterSubject") as HTMLInputElement).value = "Signed";
+    clickPalette("Sign-off");
+
+    const sel = signerSelect();
+    sel.value = helpers.SIGNERS[2].name; // pick someone other than the default
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+
+    (el("newsletterForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    await flush();
+
+    const sent = savedRequests[0].body.bodyJson as { blocks: { type: string; data: { name: string } }[] };
+    const block = sent.blocks.find((b) => b.type === "signoff")!;
+    expect(block.data.name).toBe(helpers.SIGNERS[2].name);
+  });
+
+  it("keeps a signer who has since left the list, rather than silently re-signing an old newsletter", async () => {
+    // An old draft signed by someone no longer in SIGNERS must still say who signed it.
+    singleNewsletter = {
+      id: 41, subject: "Old", status: "draft", sentAt: null, recipientCount: null, bodyHtml: null,
+      bodyJson: { blocks: [{ type: "signoff", variant: 0, data: { closing: "Thanks,", name: "Someone Who Left", role: "", email: "" } }] },
+    };
+    newsletterListRows = [{ id: 41, subject: "Old", status: "draft", sentAt: null, recipientCount: null }];
+    await openNewsletterTab();
+    await flush();
+
+    const sel = signerSelect();
+    expect(sel.value).toBe("Someone Who Left");
+    expect(Array.from(sel.options).map((o) => o.value)).toContain("Someone Who Left");
+  });
+});

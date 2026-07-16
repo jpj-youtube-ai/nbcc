@@ -106,3 +106,27 @@ describe("admin helpers (TASK-115)", () => {
     });
   });
 });
+
+// TASK-251: SIGNERS is THE list of people who can sign for NBCC. It exists so the thank-you letter's
+// picker and the newsletter sign-off block are built from one source: "the same list of names" has to
+// survive someone joining or leaving, and two hardcoded copies would not.
+describe("SIGNERS (the one list of who can sign for NBCC)", () => {
+  it("carries every signer with a name to sign and a role for the thank-you letter", () => {
+    expect(H.SIGNERS.length).toBeGreaterThan(0);
+    for (const s of H.SIGNERS) {
+      expect(typeof s.name).toBe("string");
+      expect(s.name.trim()).not.toBe("");
+      expect(typeof s.role).toBe("string");
+      expect(s.role.trim()).not.toBe("");
+    }
+  });
+
+  it("includes the usual signatory", () => {
+    expect(H.SIGNERS.map((s: { name: string }) => s.name)).toContain("Jodie McFarlane");
+  });
+
+  it("has no duplicate names — the picker keys on the name", () => {
+    const names = H.SIGNERS.map((s: { name: string }) => s.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+});

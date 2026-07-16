@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { renderNewsletter, newsletterDocSchema, renderBlock } from "../../src/newsletter/blocks";
 import { HEAD, CRIMSON, MAROON, TAN_SOFT, SLATE_SOFT } from "../../src/newsletter/theme";
+// TASK-251: imported from the THANK-YOU email on purpose. The sign-off block must sign in the same
+// hand, so the test asserts against that module's constant rather than a copy of the string here —
+// change the signature there and this fails, which is exactly what "the same signature" requires.
+import { SCRIPT } from "../../src/thank-you/letter";
 
 const ctx = { firstName: "Jane" };
 
@@ -1096,5 +1100,77 @@ describe("per-block text size step (TASK-248)", () => {
     expect(parsed.blocks[0].size).toBe(0);
     expect(newsletterDocSchema.safeParse({ blocks: [{ type: "text", variant: 0, data: {}, size: 3 }] }).success).toBe(false);
     expect(newsletterDocSchema.safeParse({ blocks: [{ type: "text", variant: 0, data: {}, size: -3 }] }).success).toBe(false);
+  });
+});
+
+// TASK-251: the sign-off block — the letter-style close a newsletter ends on:
+//
+//   With love and gratitude,
+//   Jodie McFarlane            <- in the SAME script hand the thank-you email signs with
+//   On behalf of everyone at NBCC
+//   info@nbcc.scot
+//
+// The signature font is the one thing that must not drift: it is IMPORTED from the thank-you email
+// (src/thank-you/letter.ts SCRIPT), never copied, so the two can never sign differently. It is a
+// stack of SYSTEM script faces with a cursive fallback — no webfont — which is exactly why it
+// survives a mail client at all.
+describe("sign-off block (TASK-251)", () => {
+  const signoff = (data: Record<string, unknown>, variant = 0) =>
+    renderBlock({ type: "signoff", variant, data }, ctx);
+  const full = {
+    closing: "With love and gratitude,",
+    name: "Jodie McFarlane",
+    role: "On behalf of everyone at NBCC",
+    email: "info@nbcc.scot",
+  };
+
+  it("renders the closing, the name, the role line and the email", () => {
+    const html = signoff(full);
+    expect(html).toContain("With love and gratitude,");
+    expect(html).toContain("Jodie McFarlane");
+    expect(html).toContain("On behalf of everyone at NBCC");
+    expect(html).toContain("info@nbcc.scot");
+  });
+
+  it("signs the NAME in the very same hand as the thank-you email — imported, never copied", () => {
+    const html = signoff(full);
+    // The exact stack the thank-you email uses. If someone changes it there, this fails here, which
+    // is the point: "the same signature" has to stay true.
+    expect(html).toContain(SCRIPT);
+    // …and it is the NAME that is signed, not the whole block: the name sits inside the signed
+    // element. (The stack itself is ~140 chars, so the window has to clear it and the rest of the
+    // style attribute before the text begins.)
+    const signed = html.slice(html.indexOf(SCRIPT), html.indexOf(SCRIPT) + 320);
+    expect(signed).toContain("Jodie McFarlane");
+    expect(signed).not.toContain("With love and gratitude"); // the closing line is NOT in script
+  });
+
+  it("makes the email a real mailto link, so a reader can just tap it", () => {
+    expect(signoff(full)).toContain('href="mailto:info@nbcc.scot"');
+  });
+
+  it("drops any line left blank rather than printing an empty gap", () => {
+    // A sign-off with no role/email should not leave dangling whitespace in the email.
+    const html = signoff({ closing: "Thanks,", name: "Jon McFarlane", role: "", email: "" });
+    expect(html).toContain("Jon McFarlane");
+    expect(html).not.toContain("mailto:");
+    expect(html).not.toContain("On behalf of");
+  });
+
+  it("escapes the copy — a name is user input like any other", () => {
+    const html = signoff({ ...full, name: '<script>alert(1)</script>' });
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("takes a size step like any other text block (it is not in NO_SIZE_STEP)", () => {
+    const base = signoff(full);
+    const up = renderBlock({ type: "signoff", variant: 0, data: full, size: 1 }, ctx);
+    expect(up).not.toBe(base);
+  });
+
+  it("is a known block type the schema accepts", () => {
+    const r = newsletterDocSchema.safeParse({ blocks: [{ type: "signoff", variant: 0, data: full }] });
+    expect(r.success).toBe(true);
   });
 });

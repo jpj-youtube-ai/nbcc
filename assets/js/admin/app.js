@@ -1635,6 +1635,36 @@
           fields: [{ k: "issueTitle", label: "Issue title" }] },
       ],
     },
+    // TASK-251: the letter-style close a newsletter ends on. The NAME is signed in NBCC's own hand —
+    // the same script stack the thank-you email signs with (imported server-side, never copied) — and
+    // is picked from AdminHelpers.SIGNERS, the same list the thank-you letter's signer picker uses.
+    // The role line is free text because a newsletter signs off "On behalf of everyone at NBCC"
+    // rather than with a formal job title.
+    signoff: {
+      label: "Sign-off", icon: "signoff",
+      data: {
+        closing: "With love and gratitude,",
+        name: (H.SIGNERS && H.SIGNERS[0] && H.SIGNERS[0].name) || "",
+        role: "On behalf of everyone at NBCC",
+        email: "info@nbcc.scot",
+      },
+      variants: [
+        { name: "Left", hint: "Signed off against the left margin, like a letter.",
+          fields: [
+            { k: "closing", label: "Closing line" },
+            { k: "name", label: "Signed by", kind: "signer", hint: "Signed in NBCC's hand, as on the thank-you emails." },
+            { k: "role", label: "Line under the name" },
+            { k: "email", label: "Contact email", hint: "Left blank, no email line is shown." },
+          ] },
+        { name: "Centred", hint: "The same sign-off, centred under the newsletter.",
+          fields: [
+            { k: "closing", label: "Closing line" },
+            { k: "name", label: "Signed by", kind: "signer", hint: "Signed in NBCC's hand, as on the thank-you emails." },
+            { k: "role", label: "Line under the name" },
+            { k: "email", label: "Contact email", hint: "Left blank, no email line is shown." },
+          ] },
+      ],
+    },
     greeting: {
       label: "Greeting", icon: "greeting",
       data: { heading: "", lead: "" },
@@ -1804,6 +1834,9 @@
     donationCta: '<polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/>',
     button: '<rect x="3" y="8" width="18" height="8" rx="4"/><line x1="8" y1="12" x2="14" y2="12"/>',
     divider: '<line x1="3" y1="12" x2="21" y2="12"/>',
+    // A signed hand over a ruled line (TASK-251). Same stroke-only line-art as its neighbours —
+    // without an entry here nlIcon falls back to "" and the palette button sits there iconless.
+    signoff: '<path d="M3 16c2.5 0 3.5-7 5.5-7s1.5 7 3.5 7 3-9 5-9 1.5 5 4 5"/><line x1="3" y1="20" x2="21" y2="20"/>',
     up: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6 11 12 5 18 11"/>',
     down: '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="6 13 12 19 18 13"/>',
     dup: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>',
@@ -2136,6 +2169,42 @@
   // Editable fields for the block's ACTIVE variant, driven by nlBlockDefs. Only the fields that the
   // chosen style renders are shown (progressive disclosure) — so a value the style ignores is never
   // offered, and every value you enter appears in the preview.
+  // A "signer" field: pick who signs, from AdminHelpers.SIGNERS — the same list the thank-you letter's
+  // picker is built from (TASK-251), so the two can't drift. A name saved before that person left the
+  // list is kept as an extra option rather than silently swapped to someone else: an old newsletter
+  // must keep saying who actually signed it.
+  function nlSignerField(host, block, key, label, hint) {
+    var wrap = doc.createElement("label");
+    wrap.className = "nl-field";
+    var lab = doc.createElement("span");
+    lab.className = "nl-field-label";
+    lab.textContent = label;
+    wrap.appendChild(lab);
+
+    var select = doc.createElement("select");
+    var current = block.data[key] != null ? String(block.data[key]) : "";
+    var names = (H.SIGNERS || []).map(function (s) { return s.name; });
+    if (current && names.indexOf(current) === -1) names = [current].concat(names);
+    names.forEach(function (n) {
+      var o = doc.createElement("option");
+      o.value = n;
+      o.textContent = n;
+      select.appendChild(o);
+    });
+    select.value = current || (names[0] || "");
+    if (nlReadOnly()) select.disabled = true;
+    else select.addEventListener("change", function () { block.data[key] = select.value; nlSchedulePreview(); });
+    wrap.appendChild(select);
+
+    if (hint) {
+      var h = doc.createElement("span");
+      h.className = "nl-field-hint";
+      h.textContent = hint;
+      wrap.appendChild(h);
+    }
+    host.appendChild(wrap);
+  }
+
   function nlRenderFields(host, block) {
     host.innerHTML = "";
     var def = nlBlockDefs[block.type];
@@ -2164,6 +2233,7 @@
     }
     fields.forEach(function (f) {
       if (f.kind === "image") nlImageField(host, block, f.k, f.label);
+      else if (f.kind === "signer") nlSignerField(host, block, f.k, f.label, f.hint);
       else nlText(host, block.data, f.k, f.label, {
         multiline: f.kind === "textarea",
         type: f.kind === "url" ? "url" : undefined,
@@ -2574,6 +2644,13 @@
     { type: "button", variant: 3, data: { label: "Read more stories", href: "https://nbcc.scot" } },
     { type: "divider", variant: 3, data: {} },
     { type: "text", variant: 2, data: { text: "How do we change the world? One random act of kindness at a time." } },
+    // The example is meant to show every block, and a newsletter ends by signing off (TASK-251).
+    { type: "signoff", variant: 0, data: {
+      closing: "With love and gratitude,",
+      name: (H.SIGNERS && H.SIGNERS[0] && H.SIGNERS[0].name) || "",
+      role: "On behalf of everyone at NBCC",
+      email: "info@nbcc.scot",
+    } },
   ] };
 
   var nlForm = el("newsletterForm");
@@ -3141,8 +3218,26 @@
     p.hidden = !v;
     tyFit();
   }
+  // Fill a <select> with AdminHelpers.SIGNERS — the ONE list of who can sign for NBCC (TASK-251).
+  // Both the thank-you letter's picker and the newsletter sign-off block are built from it, so a
+  // signer joining or leaving updates both. Built at script-eval, before anything reads .value, since
+  // tyUpdateSigner below dereferences selectedOptions[0] and an empty select would throw.
+  function fillSignerSelect(select) {
+    if (!select) return;
+    select.innerHTML = "";
+    (H.SIGNERS || []).forEach(function (s) {
+      var o = doc.createElement("option");
+      o.value = s.name;
+      o.textContent = s.name;
+      o.setAttribute("data-role", s.role);
+      select.appendChild(o);
+    });
+  }
+  fillSignerSelect(el("tySigner"));
+
   function tyUpdateSigner() {
     var opt = el("tySigner").selectedOptions[0];
+    if (!opt) return; // defensive: never let a missing signer take the whole letter form down
     el("tyPSigName").textContent = opt.value;
     el("tyPSigRole").textContent = opt.getAttribute("data-role");
   }

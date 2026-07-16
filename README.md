@@ -1686,6 +1686,28 @@ rewritten), **masthead** (the brand signature; its variants already span 16→26
 **divider/image** (no text) take no step — `NO_SIZE_STEP` in `src/newsletter/blocks.ts` is the
 authority, mirrored by `NL_NO_SIZE` in the builder.
 
+**Sign-off block (TASK-251).** The letter-style close a newsletter ends on — a closing line, the
+signer's name, a line under it, and a contact email:
+
+```
+With love and gratitude,
+Jodie McFarlane                 <- signed in NBCC's hand
+On behalf of everyone at NBCC
+info@nbcc.scot
+```
+
+The name is set in **the same script hand the thank-you email signs with** — `SCRIPT` is exported from
+`src/thank-you/letter.ts` and **imported** by the block renderer, never copied, so the two can't drift
+(change it there and the newsletter follows). It is a stack of *system* script faces ending in
+`cursive` (Snell Roundhand → Palace Script MT → …) with **no webfont**, which is precisely why it
+survives a mail client. Two variants (left / centred); every line except the name is optional and is
+simply omitted when blank. It takes a size step like any other text block.
+
+The signer is picked from **`AdminHelpers.SIGNERS`** — the single list of who can sign for NBCC. The
+thank-you letter's `#tySigner` picker is built from the same list (it used to be hardcoded `<option>`
+tags), so adding or removing a signer updates both; a name saved before someone left the list is kept
+as an option rather than silently re-signed, because an old newsletter must keep saying who signed it.
+
 **Saved templates (TASK-249).** A **shared library**: any Editor can save the newsletter they are
 building as a reusable template (`Save as template` → name it), and any Editor can start a new
 newsletter from one (`Saved templates` → _Start from this_). A template is just a stored block

@@ -126,6 +126,21 @@
     return { label: "Active", state: "active" };
   }
 
+  // Who can sign for NBCC (TASK-251). THE list — the thank-you letter's signer picker and the
+  // newsletter's sign-off block are both built from this, so "the same list of names" stays true when
+  // someone joins or leaves. It used to be hardcoded <option> tags in admin.html; a second copy in the
+  // newsletter builder would have drifted the first time the team changed.
+  //   name — as it should be SIGNED.
+  //   role — the formal title the thank-you LETTER prints under the signature.
+  // The newsletter sign-off says "On behalf of everyone at NBCC" instead of a title, so it uses the
+  // name from here and its own role line.
+  var SIGNERS = [
+    { name: "Jodie McFarlane", role: "Head Elf (Trustee), Night Before Christmas Campaign" },
+    { name: "Isabella McFarlane", role: "Procurement (Trustee), Night Before Christmas Campaign" },
+    { name: "Jon McFarlane", role: "Marketing, Night Before Christmas Campaign" },
+    { name: "Jaimie Wakefield", role: "Project Manager, Night Before Christmas Campaign" },
+  ];
+
   var api = {
     formatPence: formatPence,
     escapeHtml: escapeHtml,
@@ -136,6 +151,7 @@
     storyLabel: storyLabel,
     paymentLabel: paymentLabel,
     subscriptionStateLabel: subscriptionStateLabel,
+    SIGNERS: SIGNERS,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

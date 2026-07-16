@@ -367,6 +367,22 @@
   outline: none; border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(192,34,56,.12);
 }
 .nl-field-hint { display: block; font-size: .72rem; color: var(--slate-soft); margin-top: .25rem; line-height: 1.4; }
+/* TASK-253: the B / I pair above a prose field. Each button is SET in the style it applies, so the
+   control describes itself without a tooltip. Sits tight under the label and above the textarea. */
+.nl-emphasis { display: flex; gap: .3rem; margin-bottom: .3rem; }
+.nl-emph {
+  min-width: 28px; height: 26px; padding: 0 7px; cursor: pointer;
+  font-family: var(--font-body); font-size: .82rem; line-height: 1;
+  color: var(--slate); background: var(--cream);
+  border: 1.4px solid var(--line); border-radius: 7px;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+.nl-emph:nth-child(1) { font-weight: 800; }
+.nl-emph:nth-child(2) { font-style: italic; font-family: var(--font-head); }
+.nl-emph:hover:not(:disabled) { border-color: var(--crimson); color: var(--crimson); }
+.nl-emph:active:not(:disabled) { transform: translateY(1px); }
+.nl-emph:focus-visible { outline: none; border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(192,34,56,.12); }
+.nl-emph:disabled { opacity: .45; cursor: default; }
 .nl-note { margin: .5rem 0 .1rem; font-size: .8rem; font-style: italic; color: var(--slate-soft); }
 .nl-img-tools { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .35rem; }
 .nl-img-tools select, .nl-img-tools input[type="file"] {

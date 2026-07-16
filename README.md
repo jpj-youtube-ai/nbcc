@@ -1708,6 +1708,27 @@ the record is gone when it deliberately isn't) and **"Delete"** on a draft; an a
 shows "Content deleted" and offers nothing. Both are `confirm()`-guarded with wording that states what
 survives.
 
+**Bold / italic on selected text (TASK-253).** Every **prose** field (the text block's body, a
+greeting's intro, a story's body, a spotlight's quote — i.e. every `kind: "textarea"` field) carries a
+**B / I** pair. They wrap the current selection in plain-text markers — `**bold**`, `*italic*` — which
+the server renders as `<strong>` / `<em>`, the two most universally supported tags in email (Outlook
+included). Not offered on titles or button labels: emphasis belongs in prose.
+
+The block's `data` stays a **plain string**, so templates, the size step and the `{{firstName}}` merge
+all keep working untouched — no rich-text model, no HTML in the document, nothing to sanitise. The
+pipeline in `src/newsletter/theme.ts` is:
+
+```
+escapeHtml(copy)  →  applyEmphasis  →  substitute {{firstName}}
+```
+
+Emphasis is applied to **already-escaped** copy, which is the entire safety argument: by that point the
+input cannot contain live markup, so the only tags that can reach an inbox are the two we introduce —
+`proseHtml` needs no sanitiser and no allowlist. The merge runs **last**, so a donor called `**Bob**`
+has their name printed, not bolded. Bold is matched before italic so `**x**` is consumed first, and a
+lone `*` (`2 * 3 = 6`) is left alone. The buttons **toggle** rather than stack, and pressing *I* on
+already-bold text nests (`***x***`) instead of stripping half of the `**` and silently demoting it.
+
 **Sign-off block (TASK-251).** The letter-style close a newsletter ends on — a closing line, the
 signer's name, a line under it, and a contact email:
 

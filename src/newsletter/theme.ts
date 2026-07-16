@@ -30,10 +30,32 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// TASK-253: inline emphasis. An author marks a phrase **bold** or *italic* in the plain text; those
+// markers become <strong>/<em> HERE, on ALREADY-ESCAPED copy. That ordering is the whole safety
+// argument: the input can contain no live markup by this point, so the only tags that can reach a
+// donor's inbox are the two we introduce ourselves — no sanitiser, no allowlist, nothing to get wrong.
+// The block's data stays a plain string, so templates, size steps and the merge all keep working.
+// <strong>/<em> are the two most universally supported tags in email (Outlook included), which is why
+// this is safe where arbitrary per-word font sizes were not.
+// Bold runs first so `**x**` is consumed before the italic pass; a lone `*` is left alone.
+function applyEmphasis(escaped: string): string {
+  return escaped
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+}
+
+// Prose an author wrote: escaped, then emphasised. Use for any field where a paragraph is written —
+// NOT for a title or a button label, where emphasis has no business.
+export function proseHtml(text: string): string {
+  return applyEmphasis(escapeHtml(text));
+}
+
 // Escape the whole string, THEN substitute {{firstName}} with the escaped name — so neither the
 // author's copy nor the donor's name can inject markup.
+// The emphasis pass runs BEFORE the substitution, so a donor called "**Bob**" has their name printed
+// rather than bolded: their name is never read for markers.
 export function applyMerge(text: string, ctx: RenderCtx): string {
-  return escapeHtml(text).replace(/\{\{firstName\}\}/g, escapeHtml(ctx.firstName));
+  return proseHtml(text).replace(/\{\{firstName\}\}/g, escapeHtml(ctx.firstName));
 }
 
 export function brandButton(

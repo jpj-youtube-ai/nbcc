@@ -860,3 +860,125 @@ describe("delete a newsletter (TASK-252)", () => {
     confirmSpy.mockRestore();
   });
 });
+
+// TASK-253: the B / I buttons. They wrap the SELECTION in the plain-text markers the server renders
+// (**bold**, *italic*), so the block's data stays a plain string and nothing else in the model has to
+// change. What earns its keep here: the buttons act on the selection, they toggle rather than stack
+// markers, the change reaches the saved document, and — the fiddly one — hitting I on already-bold
+// text must not strip half of the `**` and silently turn it italic.
+describe("bold / italic buttons (TASK-253)", () => {
+  beforeEach(() => {
+    loginToken = tokenFor("editor");
+    singleNewsletter = legacyNewsletter;
+    newsletterListRows = [];
+    savedRequests.length = 0;
+    previewRequests.length = 0;
+    sendRequests.length = 0;
+    subscriberRequests.length = 0;
+    testSendRequests.length = 0;
+    templateRows = [];
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+  });
+
+  const area = () => el("nlCanvas").querySelector("textarea") as HTMLTextAreaElement;
+  const emph = (label: string) =>
+    Array.prototype.find.call(
+      el("nlCanvas").querySelectorAll(".nl-emph"),
+      (b: HTMLButtonElement) => b.textContent === label,
+    ) as HTMLButtonElement;
+  const addText = async (value: string) => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Text");
+    const t = area();
+    t.value = value;
+    t.dispatchEvent(new Event("input", { bubbles: true }));
+    return t;
+  };
+  const select = (t: HTMLTextAreaElement, word: string) => {
+    const i = t.value.indexOf(word);
+    t.setSelectionRange(i, i + word.length);
+  };
+
+  it("offers B and I on a prose field", async () => {
+    await addText("Give generously");
+    expect(emph("B")).toBeTruthy();
+    expect(emph("I")).toBeTruthy();
+  });
+
+  it("wraps the selected word, not the whole paragraph", async () => {
+    const t = await addText("Give generously today");
+    select(t, "generously");
+    emph("B").click();
+    expect(t.value).toBe("Give **generously** today");
+  });
+
+  it("italicises the selection", async () => {
+    const t = await addText("Give generously today");
+    select(t, "generously");
+    emph("I").click();
+    expect(t.value).toBe("Give *generously* today");
+  });
+
+  it("toggles off rather than stacking markers when you click twice", async () => {
+    const t = await addText("Give generously today");
+    select(t, "generously");
+    emph("B").click();
+    expect(t.value).toBe("Give **generously** today");
+    select(t, "generously"); // the word itself is still what's selected
+    emph("B").click();
+    expect(t.value).toBe("Give generously today"); // not ****generously****
+  });
+
+  it("does NOT turn bold into italic when you hit I on already-bold text", async () => {
+    // The fiddly one: `**x**` ends with a `*`, so a naive toggle would strip one and leave `*x*`.
+    const t = await addText("Give generously today");
+    select(t, "generously");
+    emph("B").click();
+    select(t, "generously");
+    emph("I").click();
+    // Bold survives; the italic wraps INSIDE it.
+    expect(t.value).toBe("Give ***generously*** today");
+    expect(t.value).not.toBe("Give *generously* today");
+  });
+
+  it("does nothing when nothing is selected — no stray markers in your copy", async () => {
+    const t = await addText("Give generously today");
+    t.setSelectionRange(4, 4); // a caret, not a selection
+    emph("B").click();
+    expect(t.value).toBe("Give generously today");
+  });
+
+  it("carries the markers into the saved document", async () => {
+    const t = await addText("Give generously today");
+    (el("newsletterSubject") as HTMLInputElement).value = "Emphasised";
+    select(t, "generously");
+    emph("B").click();
+
+    (el("newsletterForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    await flush();
+    const sent = savedRequests[0].body.bodyJson as { blocks: { data: { text: string } }[] };
+    expect(sent.blocks[0].data.text).toBe("Give **generously** today");
+  });
+
+  it("is withheld in read mode — emphasis is an edit", async () => {
+    loginToken = tokenFor("viewer");
+    singleNewsletter = {
+      id: 41, subject: "Sized draft", status: "draft", sentAt: null, recipientCount: null, bodyHtml: null,
+      bodyJson: { blocks: [{ type: "text", variant: 0, data: { text: "Body" } }] },
+    };
+    newsletterListRows = [{ id: 41, subject: "Sized draft", status: "draft", sentAt: null, recipientCount: null }];
+    await openNewsletterTab();
+    await flush();
+    const buttons = el("nlCanvas").querySelectorAll(".nl-emph");
+    Array.prototype.forEach.call(buttons, (b: HTMLButtonElement) => expect(b.disabled).toBe(true));
+  });
+});

@@ -8,6 +8,7 @@ import {
   renderFrame,
   escapeHtml,
   applyMerge,
+  proseHtml,
   brandButton,
   CRIMSON,
   MAROON,
@@ -182,7 +183,7 @@ function greeting(b: Block, ctx: RenderCtx): string {
 
   if (b.variant === 1) {
     const leadEl = lead
-      ? `<p style="font-family:${BODY};color:${SLATE_SOFT};font-size:15px;margin:8px 0 0">${escapeHtml(lead)}</p>`
+      ? `<p style="font-family:${BODY};color:${SLATE_SOFT};font-size:15px;margin:8px 0 0">${proseHtml(lead)}</p>`
       : "";
     return `<div style="padding:12px 40px">${dearLine}${leadEl}</div>`;
   }
@@ -360,7 +361,7 @@ function readMoreLink(label: string, href: string): string {
 
 function storyBody(data: Record<string, unknown>, titleSize: string, bodySize: string): string {
   const title = escapeHtml(str(data, "title"));
-  const body = escapeHtml(str(data, "body"));
+  const body = proseHtml(str(data, "body")); // TASK-253: prose — emphasis allowed
   const label = str(data, "label");
   const href = str(data, "href");
   return `<h3 style="font-family:${HEAD};color:${MAROON};font-size:${titleSize};font-weight:800;margin:0">${title}</h3>
@@ -443,7 +444,7 @@ function spotlightPhoto(photoUrl: string, alt: string, size: number): string {
 function spotlight(b: Block): string {
   const photoUrl = str(b.data, "photoUrl");
   const name = escapeHtml(str(b.data, "name"));
-  const quote = escapeHtml(str(b.data, "quote"));
+  const quote = proseHtml(str(b.data, "quote")); // TASK-253: prose — emphasis allowed
   const role = str(b.data, "role");
 
   if (b.variant === 1) {

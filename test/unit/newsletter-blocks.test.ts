@@ -1174,3 +1174,61 @@ describe("sign-off block (TASK-251)", () => {
     expect(r.success).toBe(true);
   });
 });
+
+// TASK-253: bold / italic on selected text. The block's data stays a PLAIN STRING carrying markers
+// (**bold**, *italic*) rather than becoming a rich-text tree — the whole model, templates and size
+// steps included, keeps working untouched. The markers are turned into <strong>/<em> AFTER the copy
+// is escaped, so the escape-first safety property is intact: the only tags that can ever reach a
+// donor's inbox are the two we introduce ourselves. <strong>/<em> are the two most universally
+// supported tags in email, Outlook included — which is exactly why this is safe where arbitrary
+// per-word FONT SIZES were not.
+describe("inline emphasis in prose (TASK-253)", () => {
+  const text = (body: string) => renderBlock({ type: "text", variant: 0, data: { text: body } }, ctx);
+
+  it("turns **this** into bold and *this* into italic", () => {
+    expect(text("Give **generously** today")).toContain("<strong>generously</strong>");
+    expect(text("Give *generously* today")).toContain("<em>generously</em>");
+  });
+
+  it("handles both in one paragraph, and bold wins over italic on the double marker", () => {
+    const html = text("**Thank you** for being *so* kind");
+    expect(html).toContain("<strong>Thank you</strong>");
+    expect(html).toContain("<em>so</em>");
+  });
+
+  it("STILL escapes the author's copy — emphasis is applied after escaping, never instead of it", () => {
+    // The security property this whole design hangs on: markup an author types is inert, and the only
+    // tags in the output are the ones we put there.
+    const html = text("**<script>alert(1)</script>**");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("<strong>"); // our own tag still applied around the escaped text
+  });
+
+  it("leaves a lone asterisk alone rather than eating it", () => {
+    expect(text("2 * 3 = 6")).toContain("2 * 3 = 6");
+    expect(text("2 * 3 = 6")).not.toContain("<em>");
+  });
+
+  it("does not let a donor's name inject emphasis — the merge happens after the markers are read", () => {
+    // A donor called "**Bob**" gets their name printed, not bolded: the substitution runs last.
+    const html = renderBlock({ type: "text", variant: 0, data: { text: "Dear {{firstName}}" } }, { firstName: "**Bob**" });
+    expect(html).toContain("**Bob**");
+    expect(html).not.toContain("<strong>Bob</strong>");
+  });
+
+  it("works in a greeting's intro, a story's body and a spotlight's quote — everywhere you write prose", () => {
+    const greeting = renderBlock({ type: "greeting", variant: 1, data: { lead: "A **big** thank you" } }, ctx);
+    expect(greeting).toContain("<strong>big</strong>");
+    const story = renderBlock({ type: "story", variant: 2, data: { title: "T", body: "It was *wonderful*" } }, ctx);
+    expect(story).toContain("<em>wonderful</em>");
+    const spotlight = renderBlock({ type: "spotlight", variant: 2, data: { name: "N", quote: "Truly **kind**", role: "R" } }, ctx);
+    expect(spotlight).toContain("<strong>kind</strong>");
+  });
+
+  it("does not touch a title or a button label — emphasis belongs in prose, not on a heading", () => {
+    const heading = renderBlock({ type: "heading", variant: 0, data: { title: "**Not bold**" } }, ctx);
+    expect(heading).not.toContain("<strong>");
+    expect(heading).toContain("**Not bold**");
+  });
+});

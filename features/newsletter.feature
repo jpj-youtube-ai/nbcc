@@ -109,6 +109,18 @@ Feature: Admin newsletter (REQ-069)
     When I test-send the block newsletter with subject "Preview me"
     Then the test-send response status should be 200
 
+  # TASK-254: {{firstName}} in the SUBJECT. The body always merged it; the subject went out raw, so a
+  # newsletter titled "Hey, {{firstName}}!" reached every donor with the marker showing. The subject
+  # that actually went out is echoed back, so this proves the merge across the real HTTP hop — which is
+  # where the bug lived, not in the merge function.
+  Scenario: the donor's name is merged into the subject, not just the body
+    Given a newsletter admin "subj.editor.newsletter.bdd@example.com" with role "editor" and password "pw-s"
+    When I test-send the block newsletter with subject "Hey, {{firstName}}! it's the NBCC"
+    Then the test-send response status should be 200
+    # A test copy shows what a DONOR gets, so it personalises as the sample donor the preview uses.
+    And the test-send subject should be "[TEST] Hey, Jane! it's the NBCC"
+    And the test-send subject should not contain "{{firstName}}"
+
   Scenario: a Viewer cannot test-send
     Given a newsletter admin "test.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-tv"
     When I test-send the block newsletter with subject "Nope"

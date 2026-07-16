@@ -453,3 +453,17 @@ Then("the newsletter body should be empty", function () {
   assert.equal(this.nlBody.bodyHtml, "", "expected the redacted newsletter's body_html to be blank");
   assert.ok(!this.nlBody.bodyJson, "expected the redacted newsletter's body_json to be cleared");
 });
+
+// TASK-254: the subject that actually went out is echoed back by the test-send, so the merge can be
+// asserted across the real HTTP hop — the raw-subject bug lived at the call site, not in the pure
+// merge function, so that hop is the thing worth proving.
+Then("the test-send subject should be {string}", function (expected) {
+  assert.equal(this.testBody.subject, expected);
+});
+
+Then("the test-send subject should not contain {string}", function (unexpected) {
+  assert.ok(
+    !String(this.testBody.subject || "").includes(unexpected),
+    `expected the sent subject NOT to contain "${unexpected}" — got "${this.testBody.subject}"`,
+  );
+});

@@ -22,8 +22,11 @@ const BUDGET = {
   // is far smaller (the repeated class names + comments compress well), so this rise is negligible on the
   // wire while keeping donate.html on a tight, enforced budget. Raised 252 -> 253 (TASK-243, donor-flow
   // audit fixes): the donorType server-value mapping + the business-name required toggle in the shared
-  // main.js (both money-path bug fixes).
-  maxTransferKB: 253,
+  // main.js (both money-path bug fixes). Raised 253 -> 255 (TASK-261): the site-wide footer signup —
+  // the form renderer/submit in the shared main.js plus its band styles in the shared styles.css
+  // (~2KB uncompressed of highly repetitive markup strings and class-token CSS, i.e. the best case
+  // for gzip — negligible on the wire).
+  maxTransferKB: 255,
   maxRequests: 15,
   maxFontFiles: 2,
 };

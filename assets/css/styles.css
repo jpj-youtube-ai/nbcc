@@ -493,6 +493,25 @@ footer .wrap{padding-block:clamp(46px,6vw,68px);display:grid;grid-template-colum
 footer h4{color:var(--cream);font-size:1.05rem;margin-bottom:14px;font-weight:700}
 footer a{color:var(--cream-82);text-decoration:none}
 footer a:hover{color:var(--cream)}
+/* TASK-261: the footer signup band. Sits above the footer columns, on the maroon ground — cream
+   fields, crimson button, and the consent line at reading size (it is the legal bit, not small
+   print). The honeypot (#fsWebsite) is removed from view AND from the tab order. */
+.foot-signup{padding:0 0 26px;margin-bottom:26px;border-bottom:1px solid var(--cream-16)}
+.foot-signup-title{font-family:var(--font-head);color:var(--cream);font-size:1.35rem;margin:0 0 4px}
+.foot-signup-sub{color:var(--cream-82);font-size:.92rem;margin:0 0 14px;max-width:52ch}
+.foot-signup-fields{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.foot-signup-fields input{flex:1 1 200px;font-family:var(--font-body);font-size:.95rem;color:var(--slate);
+  background:var(--cream);border:1.6px solid transparent;border-radius:10px;padding:11px 13px}
+.foot-signup-fields input:focus{outline:none;border-color:var(--crimson)}
+#fsWebsite{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+.foot-signup-consent{display:flex;gap:10px;align-items:flex-start;color:var(--cream-82);font-size:.88rem;
+  line-height:1.45;margin-bottom:12px;max-width:62ch;cursor:pointer}
+.foot-signup-consent input{margin-top:3px;accent-color:var(--crimson);width:17px;height:17px;flex:none}
+.foot-signup-error{color:var(--cream);background:color-mix(in srgb,var(--crimson) 55%,transparent);
+  border-radius:8px;padding:8px 12px;font-size:.88rem;font-weight:600;margin:0 0 12px;max-width:52ch}
+.foot-signup-done{color:var(--cream);font-weight:600;font-size:.98rem;margin:6px 0 0}
+.foot-signup-btn{padding:11px 26px}
+
 .foot-brand img{height:74px;margin-bottom:14px;filter:drop-shadow(0 4px 10px color-mix(in srgb,black 20%,transparent))}
 .foot-brand p{font-size:.92rem;max-width:36ch}
 .socials{display:flex;gap:10px;margin-top:16px}

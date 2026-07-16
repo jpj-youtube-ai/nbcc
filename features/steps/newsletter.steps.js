@@ -53,6 +53,9 @@ Before({ tags: "@newsletter" }, async function () {
   // template belongs to the team, not its author), so they must be cleared by name or a re-run would
   // hit the unique-name rule and 409 where it expects 201.
   await pool.query("DELETE FROM newsletter_templates WHERE name LIKE 'Bdd %'");
+  // TASK-261: footer signups land on the (seeded, permanent) Newsletter list — remove bdd rows by
+  // their marker address before the lists themselves are touched.
+  await pool.query("DELETE FROM list_subscribers WHERE email LIKE '%street.bdd.example.com'");
   // TASK-259: bdd audiences. Newsletters that referenced them were deleted above (their subjects are
   // in the list), so the FK from newsletters.list_id no longer blocks; members cascade with the list.
   await pool.query("DELETE FROM subscriber_lists WHERE slug LIKE 'bdd-%'");
@@ -680,4 +683,55 @@ Then("the import result is {int} added and {int} kept out", function (added, kep
   assert.equal(this.audStatus, 200, JSON.stringify(this.importResult));
   assert.equal(this.importResult.added, added, JSON.stringify(this.importResult));
   assert.equal(this.importResult.previouslyUnsubscribed, keptOut, JSON.stringify(this.importResult));
+});
+
+
+// --- TASK-261: the public footer signup -------------------------------------------------------------
+async function publicSubscribe(body) {
+  const res = await fetch(`${BASE_URL}/api/subscribe`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, json: await res.json().catch(() => ({})) };
+}
+
+When("a visitor subscribes in the footer as {string} with email {string}", async function (name, email) {
+  const r = await publicSubscribe({ name, email, consent: true });
+  this.subPubStatus = r.status;
+});
+
+When(
+  "a visitor subscribes in the footer as {string} with email {string} but without consent",
+  async function (name, email) {
+    const r = await publicSubscribe({ name, email });
+    this.subPubStatus = r.status;
+  },
+);
+
+When("a bot fills the footer honeypot with email {string}", async function (email) {
+  const r = await publicSubscribe({ name: "Bot", email, consent: true, website: "https://spam.example" });
+  this.subPubStatus = r.status;
+});
+
+Then("the subscribe response status should be {int}", function (expected) {
+  assert.equal(this.subPubStatus, expected);
+});
+
+async function newsletterAudienceEmails(token) {
+  const lists = await authFetch("/api/admin/subscriber-lists", "GET", undefined, token);
+  const newsletter = lists.json.find((l) => l.slug === "newsletter");
+  assert.ok(newsletter, "expected the seeded newsletter list");
+  const members = await authFetch(`/api/admin/subscriber-lists/${newsletter.id}/members`, "GET", undefined, token);
+  return members.json.map((m) => m.email);
+}
+
+Then("the Newsletter audience includes {string}", async function (email) {
+  const emails = await newsletterAudienceEmails(this.token);
+  assert.ok(emails.includes(email.toLowerCase()), JSON.stringify(emails));
+});
+
+Then("the Newsletter audience does not include {string}", async function (email) {
+  const emails = await newsletterAudienceEmails(this.token);
+  assert.ok(!emails.includes(email.toLowerCase()), JSON.stringify(emails));
 });

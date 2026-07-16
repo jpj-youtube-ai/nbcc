@@ -326,3 +326,21 @@ Feature: Admin newsletter (REQ-069)
     When I import it with attestation
     Then the import result is 1 added and 1 kept out
     And the audience has 1 members
+
+  # TASK-261: the public footer signup. Consent is the gate (PECR: a positive action), the honeypot
+  # eats bots without telling them, and a real signup lands on the Newsletter audience with
+  # consent_source 'footer'.
+  Scenario: a visitor signs up in the footer, and only with consent
+    Given a newsletter admin "foot.admin.newsletter.bdd@example.com" with role "admin" and password "pw-ft"
+    When a visitor subscribes in the footer as "Footer Fan" with email "fan@street.bdd.example.com"
+    Then the subscribe response status should be 201
+    And the Newsletter audience includes "fan@street.bdd.example.com"
+
+    When a visitor subscribes in the footer as "No Consent" with email "noc@street.bdd.example.com" but without consent
+    Then the subscribe response status should be 400
+    And the Newsletter audience does not include "noc@street.bdd.example.com"
+
+    # A bot fills the field people never see: cheerfully accepted, silently dropped.
+    When a bot fills the footer honeypot with email "bot@street.bdd.example.com"
+    Then the subscribe response status should be 200
+    And the Newsletter audience does not include "bot@street.bdd.example.com"

@@ -211,7 +211,15 @@ conflicts rare and trivial, `git rebase main` often on small, single-task PRs.
 - **An external API client:** add `src/clients/foo.ts`; add its base URL +
   key to the config schema, `.env.example`, and (for AWS) SSM + the task def.
 - **A migration:** `npx node-pg-migrate create my_change` then edit the
-  generated file. Additive only (see rule 2).
+  generated file. Additive only (see rule 2). **Then check it sorts LAST:**
+  `ls migrations | sort | tail`. Some existing migrations carry hand-rounded
+  numbers sitting slightly in the *future*, so a freshly created file (stamped
+  with the wall-clock time) can sort *before* an already-applied one — and
+  node-pg-migrate aborts the whole run with "Not run migration X is preceding
+  already run migration Y". **CI cannot catch this**: its database is empty, so
+  everything runs in order from zero. It fails on staging/production, where
+  history exists. If yours isn't last, renumber it above the highest one
+  (TASK-250 hit exactly this).
 - **A config value:** schema + `.env.example` + SSM param + task def env/secret.
   The `/add-config` skill scaffolds all of these at once.
 

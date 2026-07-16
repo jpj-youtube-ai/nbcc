@@ -170,3 +170,31 @@ Feature: Public supporters wall (REQ-035; opt-in monthly 4-band rework TASK-223)
     # Cancelled beyond the grace window → dropped; cancelled within grace → still shown.
     But the response body should not contain "Faded Supporter Bdd"
     And the response body should contain "Recent Supporter Bdd"
+
+  Scenario: a supporter who cancelled long ago but is paying again stays on the wall (recovery, TASK-246)
+    # A monthly individual (£25/mo) opts in. Their subscription carries a cancel from 60 days ago (well
+    # beyond the 30-day grace), but their latest gift is dated AFTER that end (they are paying again), so
+    # the recovery-aware active-sub check keeps them on the wall rather than dropping a still-paying donor.
+    When I POST a signed Stripe "checkout.session.completed" webhook event:
+      """
+      {
+        "id": "cs_bdd_sup_recovered",
+        "object": "checkout.session",
+        "amount_total": 2500,
+        "currency": "gbp",
+        "mode": "subscription",
+        "payment_intent": null,
+        "subscription": "sub_bdd_sup_recovered",
+        "metadata": { "mode": "monthly", "plan": "silver", "giftAid": "false", "fullName": "Reborn Supporter Bdd", "email": "recovered.sup.bdd@example.com", "emailConsent": "true", "anonymous": "false" },
+        "customer_details": { "name": "Reborn Supporter Bdd", "email": "recovered.sup.bdd@example.com" }
+      }
+      """
+    Then the response status should be 200
+
+    When the donor with email "recovered.sup.bdd@example.com" opts into the supporters wall as "Reborn Supporter Bdd"
+    When the donor with email "recovered.sup.bdd@example.com" cancelled long ago but is paying again
+
+    When I GET "/supporters"
+    Then the response status should be 200
+    # Paying again (gift after the old cancel) → kept, not dropped despite the 60-day-old cancel.
+    And the response body should contain "Reborn Supporter Bdd"

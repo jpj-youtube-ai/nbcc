@@ -2674,7 +2674,11 @@ the inner join drops any eligible row without a declaration. **TASK-244 (donor-f
 claims the **net** amount — `d.amount_pence - d.refunded_amount_pence` — and drops any gift whose net is
 `<= 0` (fully refunded), on both the eligible and the batch path. Gift Aid is claimed on the amount the
 charity RETAINED, so a partially-refunded gift that stays `eligible` was over-reclaiming 25% of the
-refunded portion from HMRC. Its results feed straight into the pure `toCharitiesOnlineCsv` above. The thin CLI **`scripts/export-charities-online.mjs`**
+refunded portion from HMRC. **TASK-246** also excludes **overseas (non-UK) declarations** (`dec.non_uk`)
+from the export: they store a blank postcode + house name/number, which the CSV builder requires and
+THROWS on, so a single overseas donation aborted the ENTIRE batch export — one bad row blocked every UK
+claim. They are left out (a scoped follow-up covers claiming overseas donors via HMRC's dedicated
+handling) rather than breaking the export. Its results feed straight into the pure `toCharitiesOnlineCsv` above. The thin CLI **`scripts/export-charities-online.mjs`**
 (`npm run export:charities-online`, run via `tsx`, going through `src/db/pool.ts`) writes the
 CSV to **stdout** or, with `-- --out claim.csv`, to a file, and accepts `-- --batch <id>` to
 scope to one claim batch:
@@ -2793,8 +2797,13 @@ the lapse path and its emails untouched. **TASK-244** widens this: a subscriptio
 the wall). `listPublicSupporters` then computes `monthly_support_ended` per
 donor (no still-active monthly subscription **and** the most-recent end — cancel or lapse — older than
 `SUPPORTER_GRACE_DAYS`, **30 days**), and the pure `resolvePublicSupporter` drops such a donor from the
-opt-in path. **Grandfathered donors (TASK-228) are exempt** — the grace gate is on the opt-in path only,
-so everyone the old wall preserved stays. Unit-tested DB-free (`test/unit/supporters-wall-grace.test.ts`
+opt-in path. **TASK-246** makes the "still-active" check RECOVERY-AWARE: `lapsed_at` is never cleared when
+a lapsed subscription recovers (the dunning state machine treats `lapsed` as terminal), so a donor who
+lapsed then resumed paying was wrongly dropped. The active-sub sub-query now treats a paid monthly gift
+dated AFTER a subscription's end (`GREATEST(sa.lapsed_at, sa.cancelled_at) >= dm.created_at`) as a
+recovery, keeping the still-paying donor (`features/supporters.feature` recovery scenario). **Grandfathered
+donors (TASK-228) are exempt** — the grace gate is on the opt-in path only, so everyone the old wall
+preserved stays. Unit-tested DB-free (`test/unit/supporters-wall-grace.test.ts`
 for the drop decision, `test/unit/stripe-webhook-dunning.test.ts` for the cancellation recording), with
 the end-to-end grace behaviour in the `features/supporters.feature` grace-window scenario.
 

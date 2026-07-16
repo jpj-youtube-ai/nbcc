@@ -97,6 +97,16 @@ describe("listClaimableDonationsForExport (REQ-052)", () => {
     expect(lastSql()).toMatch(/-\s*d\.refunded_amount_pence\)\s*>\s*0/i);
   });
 
+  it("excludes overseas (non-UK) declarations so one can't break the whole export (TASK-246)", async () => {
+    // A non-UK declaration stores a blank postcode/house, which the CSV builder requires and THROWS on,
+    // aborting the entire batch. Until proper HMRC overseas handling exists, they are left out of the
+    // standard export rather than breaking it. Both export paths exclude them.
+    await listClaimableDonationsForExport();
+    expect(lastSql()).toMatch(/dec\.non_uk\s+IS\s+NOT\s+TRUE/i);
+    await listClaimableDonationsForExport(7);
+    expect(lastSql()).toMatch(/dec\.non_uk\s+IS\s+NOT\s+TRUE/i);
+  });
+
   it("maps each DB row into the { donation, declaration } shape the CSV builder consumes", async () => {
     const rows = await listClaimableDonationsForExport();
     expect(rows).toHaveLength(2);

@@ -319,9 +319,12 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
                  WHERE dm.donor_id = dn.id AND dm.mode = 'monthly' AND dm.payment_status = 'paid'
                    AND dm.stripe_subscription_id IS NOT NULL
                    AND NOT EXISTS (
+                     -- TASK-246: a paid monthly gift dated AFTER the subscription's end means it RECOVERED
+                     -- (lapsed/cancelled then paid again — lapsed_at is never cleared on recovery), so the
+                     -- sub still counts as active. Only an end at/after this gift marks the gift's sub ended.
                      SELECT 1 FROM subscription_dunning sa
                       WHERE sa.stripe_subscription_id = dm.stripe_subscription_id
-                        AND (sa.lapsed_at IS NOT NULL OR sa.cancelled_at IS NOT NULL)
+                        AND GREATEST(sa.lapsed_at, sa.cancelled_at) >= dm.created_at
                    )
               )
               AND EXISTS (
@@ -413,9 +416,15 @@ export async function listClaimableDonationsForExport(
   // drop a gift whose net is <= 0 (fully refunded). Otherwise a partially-refunded gift that stays
   // 'eligible' over-reclaims 25% of the refunded portion from HMRC. Applies to both export paths.
   const netPositive = "(d.amount_pence - d.refunded_amount_pence) > 0";
+  // TASK-246: exclude OVERSEAS (non-UK) declarations from the standard Charities Online export. A non-UK
+  // declaration stores a blank postcode + house name/number (matching keys the CSV requires), which made
+  // buildCharitiesOnlineRow THROW and abort the ENTIRE batch export — one overseas donation blocked every
+  // UK claim. Overseas donors need HMRC's dedicated overseas handling (a scoped follow-up); until then we
+  // keep the export robust by leaving them out rather than breaking it.
+  const claimable = `${netPositive} AND dec.non_uk IS NOT TRUE`;
   const whereSql = filterByBatch
-    ? `WHERE d.claim_batch_id = $1 AND ${netPositive}`
-    : `WHERE d.claim_status = 'eligible' AND ${netPositive}`;
+    ? `WHERE d.claim_batch_id = $1 AND ${claimable}`
+    : `WHERE d.claim_status = 'eligible' AND ${claimable}`;
   const res = await pool.query<ClaimableExportDbRow>(
     `SELECT d.id, dn.full_name,
             dec.title, dec.first_name, dec.last_name, dec.house_name_number, dec.postcode,

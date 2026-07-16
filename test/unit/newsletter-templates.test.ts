@@ -53,28 +53,37 @@ describe("templateNameSchema (pure — the shared library's one bit of hygiene)"
 });
 
 describe("newsletter template queries", () => {
-  it("lists WITHOUT body_json (the picker only needs id/name/date) newest first", () => {
-    listNewsletterTemplates();
+  // The insert RETURNs the saved row, so a create must be given one to return.
+  const savedRow = (name: string) => ({
+    rows: [{ id: 5, name, created_at: "2026-07-16T00:00:00.000Z" }],
+    rowCount: 1,
+  });
+
+  it("lists WITHOUT body_json (the picker only needs id/name/date) newest first", async () => {
+    await listNewsletterTemplates();
     const sql = lastSql();
     expect(sql).toMatch(/from\s+newsletter_templates/i);
     expect(sql).not.toMatch(/body_json/i); // the doc can be large; the picker never needs it
     expect(sql).toMatch(/order\s+by\s+created_at\s+desc/i);
   });
 
-  it("fetches one template WITH its body_json (that is the point of opening it)", () => {
-    getNewsletterTemplate(7);
+  it("fetches one template WITH its body_json (that is the point of opening it)", async () => {
+    await getNewsletterTemplate(7);
     expect(lastSql()).toMatch(/body_json/i);
     expect(lastParams()).toEqual([7]);
   });
 
-  it("saves the name, the document and who saved it", () => {
-    createNewsletterTemplate("Christmas Appeal", doc, 3);
+  it("saves the name, the document and who saved it, and returns the saved row", async () => {
+    queryMock.mockResolvedValueOnce(savedRow("Christmas Appeal"));
+    const created = await createNewsletterTemplate("Christmas Appeal", doc, 3);
     expect(lastSql()).toMatch(/insert\s+into\s+newsletter_templates/i);
     expect(lastParams()).toEqual(["Christmas Appeal", JSON.stringify(doc), 3]);
+    expect(created).toEqual({ id: 5, name: "Christmas Appeal", createdAt: "2026-07-16T00:00:00.000Z" });
   });
 
-  it("keeps a template when the staff account that saved it is gone (created_by is nullable)", () => {
-    createNewsletterTemplate("Orphan", doc, null);
+  it("keeps a template when the staff account that saved it is gone (created_by is nullable)", async () => {
+    queryMock.mockResolvedValueOnce(savedRow("Orphan"));
+    await createNewsletterTemplate("Orphan", doc, null);
     expect(lastParams()).toEqual(["Orphan", JSON.stringify(doc), null]);
   });
 

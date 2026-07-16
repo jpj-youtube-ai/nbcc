@@ -49,6 +49,8 @@ let templateSaveStatus = 201; // flip to 409 to exercise the name-already-taken 
 const templateSaves: { body: Record<string, unknown> }[] = [];
 const templateDeletes: string[] = [];
 const deleteRequests: string[] = []; // TASK-252: DELETE /api/admin/newsletters/:id calls
+// TASK-256: what GET /:id/stats returns; null makes the endpoint 500 (the fetch-failure state).
+let statsFixture: Record<string, unknown> | null = null;
 const templateDoc = { blocks: [{ type: "text", variant: 0, data: { text: "From the template" }, size: 1 }] };
 const savedRequests: { url: string; method: string; body: Record<string, unknown> }[] = [];
 const previewRequests: { body: Record<string, unknown> }[] = [];
@@ -96,6 +98,10 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   if (url.includes("/api/admin/newsletters/subscribers") && method === "POST") {
     subscriberRequests.push({ body: parsedBody });
     return j({ email: String(parsedBody.email || "").toLowerCase(), status: "added" }, 201);
+  }
+  // TASK-256: delivery stats for one newsletter; a null fixture is the endpoint failing.
+  if (/\/api\/admin\/newsletters\/\d+\/stats$/.test(url) && method === "GET") {
+    return statsFixture ? j(statsFixture) : j({ error: "boom" }, 500);
   }
   if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "GET") {
     return j(singleNewsletter); // legacy bodyHtml by default; a test may swap in a block document
@@ -980,5 +986,77 @@ describe("bold / italic buttons (TASK-253)", () => {
     await flush();
     const buttons = el("nlCanvas").querySelectorAll(".nl-emph");
     Array.prototype.forEach.call(buttons, (b: HTMLButtonElement) => expect(b.disabled).toBe(true));
+  });
+});
+
+// TASK-256: the delivery-stats panel. The counting is proven server-side (newsletter-events-db.test)
+// and end-to-end in BDD; what earns its keep HERE is the panel's honesty about states — real numbers
+// for a tracked send, "no data" (never fake zeros) for a send that predates tracking, the stub note on
+// a redacted newsletter, and nothing at all on a draft.
+describe("delivery stats panel (TASK-256)", () => {
+  const sentRow = { id: 41, subject: "Sent one", status: "sent", sentAt: "2026-07-01T10:00:00.000Z", recipientCount: 142, redactedAt: null };
+  const sentNewsletter = {
+    id: 41, subject: "Sent one", status: "sent", sentAt: "2026-07-01T10:00:00.000Z",
+    recipientCount: 142, sentCount: 142, failedCount: 0, failedEmails: null, redactedAt: null,
+    bodyHtml: "<p>x</p>", bodyJson: null,
+  };
+  const mount = async (newsletter: unknown = sentNewsletter) => {
+    loginToken = tokenFor("editor");
+    newsletterListRows = [sentRow];
+    singleNewsletter = newsletter;
+    templateRows = [];
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+    await openNewsletterTab(); // auto-opens id 41
+    await flush();
+    await flush();
+  };
+
+  it("shows real counts AND rates for a tracked sent newsletter, bounced addresses included", async () => {
+    statsFixture = { sends: 142, delivered: 139, bounced: 2, complained: 1, unsubscribed: 3, bouncedEmails: ["dead@example.com", "gone@example.com"] };
+    await mount();
+    expect(el("nlStats").hidden).toBe(false);
+    const text = el("nlStatsGrid").textContent || "";
+    expect(text).toContain("139");
+    expect(text).toContain("98%"); // 139/142
+    expect(text).toContain("Bounced");
+    expect(text).toContain("Spam");
+    expect(text).toContain("Unsubscribed");
+    expect(el("nlStats").textContent).toContain("dead@example.com");
+  });
+
+  it("says 'no data' for a send that predates tracking — never a grid of fake zeros", async () => {
+    statsFixture = { sends: 0, delivered: 0, bounced: 0, complained: 0, unsubscribed: 0, bouncedEmails: [] };
+    await mount();
+    expect(el("nlStats").hidden).toBe(false);
+    expect(el("nlStatsGrid").childElementCount).toBe(0);
+    expect(el("nlStatsNote").textContent).toMatch(/before delivery tracking/i);
+  });
+
+  it("explains a redacted newsletter's missing detail instead of pretending it never had any", async () => {
+    statsFixture = { sends: 0, delivered: 0, bounced: 0, complained: 0, unsubscribed: 0, bouncedEmails: [] };
+    // Passed INTO mount — assigning singleNewsletter before it would just be clobbered by its setup.
+    await mount({ ...sentNewsletter, redactedAt: "2026-07-10T00:00:00.000Z", bodyHtml: "" });
+    expect(el("nlStatsNote").textContent).toMatch(/content was deleted/i);
+  });
+
+  it("shows nothing on a draft — there is no delivery to report", async () => {
+    statsFixture = { sends: 0, delivered: 0, bounced: 0, complained: 0, unsubscribed: 0, bouncedEmails: [] };
+    await mount();
+    (el("newsletterNew") as HTMLElement).click();
+    await flush();
+    expect(el("nlStats").hidden).toBe(true);
+  });
+
+  it("stays hidden quietly if the stats fetch fails — the builder must not care", async () => {
+    statsFixture = null; // respond() will 500 the stats call
+    await mount();
+    expect(el("nlStats").hidden).toBe(true);
   });
 });

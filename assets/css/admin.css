@@ -367,6 +367,21 @@
   outline: none; border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(192,34,56,.12);
 }
 .nl-field-hint { display: block; font-size: .72rem; color: var(--slate-soft); margin-top: .25rem; line-height: 1.4; }
+/* TASK-256: the delivery-stats panel on a sent newsletter. Tiles read number-first (the number IS
+   the content), rates sit beside them, labels underneath; tabular figures so columns of counts align.
+   Bounced addresses render as code chips in the note line below. */
+.nl-stats { margin: .9rem 0 .3rem; }
+.nl-stats-grid { display: flex; flex-wrap: wrap; gap: .5rem; }
+.nl-stat {
+  min-width: 96px; padding: .55rem .8rem .5rem;
+  background: var(--cream); border: 1.4px solid var(--line); border-radius: 10px;
+  display: flex; flex-direction: column; gap: .1rem;
+}
+.nl-stat-n { font-family: var(--font-head); font-weight: 800; font-size: 1.3rem; color: var(--slate); font-variant-numeric: tabular-nums; }
+.nl-stat-rate { font-size: .78rem; font-weight: 600; color: var(--crimson); font-variant-numeric: tabular-nums; }
+.nl-stat-label { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--slate-soft); }
+.nl-stats .nl-sub-msg code { background: var(--cream); border: 1px solid var(--line); border-radius: 5px; padding: 0 .3rem; }
+
 /* TASK-253: the B / I pair above a prose field. Each button is SET in the style it applies, so the
    control describes itself without a tooltip. Sits tight under the label and above the textarea. */
 .nl-emphasis { display: flex; gap: .3rem; margin-bottom: .3rem; }

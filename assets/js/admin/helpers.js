@@ -141,6 +141,18 @@
     { name: "Jaimie Wakefield", role: "Project Manager, Night Before Christmas Campaign" },
   ];
 
+  // Delivery-stats rate (TASK-256): n of d as a whole-number percentage, honest at the edges — a
+  // non-zero count never reads "0%" (1 bounce in 500 is real: "<1%"), a shortfall never reads "100%",
+  // and a missing denominator (a send that predates tracking) is "", never an invented rate.
+  function rateOf(n, d) {
+    if (typeof n !== "number" || typeof d !== "number" || !isFinite(n) || !isFinite(d) || d <= 0) return "";
+    var pct = (n / d) * 100;
+    if (n > 0 && pct < 1) return "<1%";
+    var rounded = Math.round(pct);
+    if (rounded >= 100 && n < d) return "99%";
+    return rounded + "%";
+  }
+
   var api = {
     formatPence: formatPence,
     escapeHtml: escapeHtml,
@@ -152,6 +164,7 @@
     paymentLabel: paymentLabel,
     subscriptionStateLabel: subscriptionStateLabel,
     SIGNERS: SIGNERS,
+    rateOf: rateOf,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

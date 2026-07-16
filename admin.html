@@ -315,6 +315,18 @@
                   </div>
                 </div>
 
+                <!-- Delivery stats (TASK-256, email stats Phase 1): shown only for a SENT newsletter.
+                     Counts come from GET /api/admin/newsletters/:id/stats — real per-address facts
+                     reported back by Resend (delivered / bounced / marked-as-spam) plus attributed
+                     unsubscribes. Aggregates only, by design. app.js renders into the grid; the note
+                     carries the empty/pre-tracking/redacted states so the panel never shows fake
+                     zeros for a send that simply predates tracking. -->
+                <section class="nl-stats" id="nlStats" hidden aria-label="Delivery stats">
+                  <h3 class="admin-subhead">Delivery</h3>
+                  <div class="nl-stats-grid" id="nlStatsGrid"></div>
+                  <p class="nl-sub-msg" id="nlStatsNote" aria-live="polite"></p>
+                </section>
+
                 <!-- File attachments (TASK-193): sent to every recipient. Needs a saved newsletter
                      (an id); app.js shows the hint until then, and hides the whole block in read mode. -->
                 <div class="nl-attach" id="nlAttachments">

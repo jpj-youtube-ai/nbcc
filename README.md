@@ -1708,6 +1708,16 @@ the record is gone when it deliberately isn't) and **"Delete"** on a draft; an a
 shows "Content deleted" and offers nothing. Both are `confirm()`-guarded with wording that states what
 survives.
 
+**Delivery stats panel (TASK-256).** Opening a **sent** newsletter in the admin shows a Delivery
+panel: **Accepted / Delivered / Bounced / Spam / Unsubscribed** tiles with counts and rates
+(`AdminHelpers.rateOf` — honest at the edges: a non-zero count never reads "0%", a shortfall never
+reads "100%", and a missing denominator renders nothing rather than an invented rate), plus the
+bounced addresses as removable-list chips. The panel is honest about absence: a send that predates
+tracking says *"Sent before delivery tracking was switched on"* (never a grid of fake zeros), a
+redacted newsletter explains its per-address detail went with the content, a draft shows nothing, and
+a failed stats fetch just keeps the panel hidden — stats are decoration on the builder, never a
+dependency of it.
+
 **Email delivery stats, Phase 1 (TASK-255).** Per-newsletter **delivery truth**: Resend (the provider
 behind `services/email-relay`) POSTs a signed event to `POST /api/webhooks/resend` for every email on
 the domain; we verify the **Svix signature** over the raw bytes (`RESEND_WEBHOOK_SECRET`, mounted

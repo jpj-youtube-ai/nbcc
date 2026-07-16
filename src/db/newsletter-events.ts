@@ -83,6 +83,17 @@ export async function recordUnsubscribeEvent(newsletterId: number, donorId: numb
   );
 }
 
+// TASK-259: the subscriber-side twin of recordUnsubscribeEvent — a list subscriber has no donor row,
+// but their address is known from the membership the unsubscribe just tombstoned. Same best-effort
+// contract at the caller.
+export async function recordUnsubscribeEventForEmail(newsletterId: number, email: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO newsletter_email_events (svix_event_id, newsletter_id, email, event_type, occurred_at)
+     VALUES (NULL, $1, lower($2), 'unsubscribed', now())`,
+    [newsletterId, email],
+  );
+}
+
 export interface NewsletterLinkStat {
   link: string;
   uniqueClicks: number; // distinct people — the honest headline

@@ -51,6 +51,11 @@ const templateDeletes: string[] = [];
 const deleteRequests: string[] = []; // TASK-252: DELETE /api/admin/newsletters/:id calls
 // TASK-256: what GET /:id/stats returns; null makes the endpoint 500 (the fetch-failure state).
 let statsFixture: Record<string, unknown> | null = null;
+// TASK-259: audiences.
+let audienceRows: unknown[] = [];
+let memberRows: unknown[] = [];
+const memberAdds: { url: string; body: Record<string, unknown> }[] = [];
+const memberDeletes: string[] = [];
 const templateDoc = { blocks: [{ type: "text", variant: 0, data: { text: "From the template" }, size: 1 }] };
 const savedRequests: { url: string; method: string; body: Record<string, unknown> }[] = [];
 const previewRequests: { body: Record<string, unknown> }[] = [];
@@ -88,7 +93,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     return j(recipientsFixture);
   }
   if (/\/api\/admin\/newsletters\/\d+\/send$/.test(url) && method === "POST") {
-    sendRequests.push({ url });
+    sendRequests.push({ url, body: parsedBody });
     return j({ status: "sent", recipientCount: recipientsFixture.count });
   }
   if (url.includes("/api/admin/newsletters/test-send") && method === "POST") {
@@ -123,6 +128,24 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   }
   if (url === "/api/admin/newsletters" && method === "GET") {
     return j(newsletterListRows);
+  }
+  // TASK-259: audiences.
+  if (url === "/api/admin/subscriber-lists" && method === "GET") {
+    return j(audienceRows);
+  }
+  if (url === "/api/admin/subscriber-lists" && method === "POST") {
+    return j({ id: 7, slug: "street-team", name: parsedBody.name }, 201);
+  }
+  if (/\/api\/admin\/subscriber-lists\/\d+\/members$/.test(url) && method === "GET") {
+    return j(memberRows);
+  }
+  if (/\/api\/admin\/subscriber-lists\/\d+\/members$/.test(url) && method === "POST") {
+    memberAdds.push({ url, body: parsedBody });
+    return j({ outcome: "added" }, 201);
+  }
+  if (/\/api\/admin\/subscriber-lists\/\d+\/members\/\d+$/.test(url) && method === "DELETE") {
+    memberDeletes.push(url);
+    return j({}, 204);
   }
   // TASK-249: the shared saved-template library.
   if (url === "/api/admin/newsletter-templates" && method === "GET") {
@@ -969,5 +992,91 @@ describe("engagement stats in the panel (TASK-257)", () => {
     expect(text).not.toContain("Opened");
     expect(text).not.toContain("Clicked");
     expect(el("nlStats").querySelector(".nl-links")).toBeNull();
+  });
+});
+
+
+// TASK-259: audiences in the builder — the pickers fill from one endpoint, members manage against the
+// SELECTED list, and — the hop that matters — the send POST carries the chosen audience so the server
+// mails that list and not the default.
+describe("audiences (TASK-259)", () => {
+  const lists = [
+    { id: 1, slug: "newsletter", name: "Newsletter", memberCount: 3 },
+    { id: 2, slug: "volunteers", name: "Volunteers", memberCount: 1 },
+  ];
+  const draftRow = { id: 41, subject: "A draft", status: "draft", sentAt: null, recipientCount: null, redactedAt: null };
+  const mount = async () => {
+    loginToken = tokenFor("admin");
+    newsletterListRows = [draftRow];
+    singleNewsletter = { ...legacyNewsletter };
+    audienceRows = lists;
+    memberRows = [];
+    memberAdds.length = 0;
+    memberDeletes.length = 0;
+    sendRequests.length = 0;
+    templateRows = [];
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+    await openNewsletterTab();
+    await flush();
+    await flush();
+  };
+
+  it("fills BOTH pickers (manage + send-to) from the audiences endpoint, with member counts", async () => {
+    await mount();
+    const manage = el("audiencePick") as HTMLSelectElement;
+    const send = el("sendListPick") as HTMLSelectElement;
+    expect(Array.from(manage.options).map((o) => o.textContent)).toEqual(["Newsletter (3)", "Volunteers (1)"]);
+    expect(Array.from(send.options).map((o) => o.value)).toEqual(["1", "2"]);
+  });
+
+  it("adds a member to the SELECTED audience with the typed details", async () => {
+    await mount();
+    (el("audiencePick") as HTMLSelectElement).value = "2";
+    (el("amName") as HTMLInputElement).value = "Casey";
+    (el("amEmail") as HTMLInputElement).value = "casey@example.com";
+    (el("amPhone") as HTMLInputElement).value = "07000 000000";
+    (el("audienceMemberForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    await flush();
+    expect(memberAdds).toHaveLength(1);
+    expect(memberAdds[0].url).toBe("/api/admin/subscriber-lists/2/members");
+    expect(memberAdds[0].body).toEqual({ name: "Casey", email: "casey@example.com", phone: "07000 000000" });
+  });
+
+  it("sends to the CHOSEN audience — the listId reaches the send request", async () => {
+    await mount();
+    (el("newsletterId") as HTMLInputElement).value = "41";
+    (el("sendListPick") as HTMLSelectElement).value = "2";
+    // Drive the send confirm dialog end to end, the way the admin does.
+    (el("newsletterSend") as HTMLElement).hidden = false;
+    (el("newsletterSend") as HTMLElement).click();
+    await flush();
+    const confirm = document.querySelector(".nl-modal-confirm") as HTMLButtonElement;
+    expect(confirm).toBeTruthy();
+    confirm.click();
+    await flush();
+    await flush();
+    expect(sendRequests).toHaveLength(1);
+    expect((sendRequests[0] as { body: { listId?: number } }).body.listId).toBe(2);
+  });
+
+  it("removes a member from the selected audience after asking", async () => {
+    await mount();
+    memberRows = [{ id: 9, name: "Casey", email: "casey@example.com", phone: null, consentSource: "admin", consentedAt: "2026-07-16" }];
+    (el("audiencePick") as HTMLSelectElement).value = "2";
+    el("audiencePick").dispatchEvent(new Event("change"));
+    await flush();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    (el("audienceMembers").querySelector("[data-remove-member]") as HTMLButtonElement).click();
+    await flush();
+    expect(memberDeletes).toEqual(["/api/admin/subscriber-lists/2/members/9"]);
+    confirmSpy.mockRestore();
   });
 });

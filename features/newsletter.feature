@@ -275,3 +275,26 @@ Feature: Admin newsletter (REQ-069)
     When I fetch that newsletter's stats
     Then the newsletter stats should count 1 click
     And the per-link stats should show 1 person clicked "https://nbcc.scot/donate"
+
+  # TASK-259: audiences. Volunteers/partners/referrers are their OWN lists: a send to one reaches
+  # exactly its members (not the donors), and a member's unsubscribe link leaves that one list —
+  # attributed on the stats — without touching anyone's newsletter consent.
+  Scenario: an audience is its own list, its own send, and its own unsubscribe
+    Given a newsletter admin "aud.admin.newsletter.bdd@example.com" with role "admin" and password "pw-aud"
+    And a consenting donor with email "bystander.newsletter.bdd@example.com"
+    When I create an audience named "Bdd Street Team"
+    Then the audience response status should be 201
+    When I add "casey@street.bdd.example.com" named "Casey" to that audience
+    Then the audience response status should be 201
+
+    # The send reaches the audience — and ONLY the audience: the consenting donor is not in it.
+    When I create a newsletter with subject "Send me" and body "<p>Team news</p>"
+    And I send that newsletter to that audience
+    Then the newsletter response status should be 200
+    And the newsletter response field "recipientCount" should be "1"
+
+    # Their unsubscribe link (a SUBSCRIBER token) leaves this one list.
+    When that audience member unsubscribes via their link
+    Then the audience has 0 members
+    When I fetch that newsletter's stats
+    Then the newsletter stats should count 1 unsubscribe

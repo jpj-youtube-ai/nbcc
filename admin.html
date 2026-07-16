@@ -283,6 +283,32 @@
                   <input type="text" id="subName" placeholder="Name (optional)" aria-label="Subscriber name" />
                   <button type="submit" class="nl-item-add" id="subAddBtn"><span>Add subscriber</span></button>
                 </form>
+
+                <!-- Audiences (TASK-259): separate mailing lists — Newsletter (donors join it
+                     automatically), Volunteers, Partners, Referrers, plus any the team adds. Members
+                     here are list_subscribers rows; removing one tombstones the membership (consent
+                     history survives). app.js fills the picker, renders members, and wires create/
+                     add/remove. Hidden in read mode with the card above. -->
+                <div class="nl-audiences" id="nlAudiences">
+                  <h3 class="admin-subhead">Audiences</h3>
+                  <p class="admin-help">Who you can send to. Donors with email consent are always part of Newsletter; other audiences are exactly the people you add.</p>
+                  <div class="nl-audience-bar">
+                    <label for="audiencePick">Audience</label>
+                    <select id="audiencePick"></select>
+                    <button type="button" id="audienceNew">New audience</button>
+                    <input type="text" id="audienceName" maxlength="60" placeholder="Audience name" aria-label="New audience name" hidden />
+                    <button type="button" id="audienceCreate" hidden>Create</button>
+                    <button type="button" id="audienceCancel" hidden>Cancel</button>
+                  </div>
+                  <form id="audienceMemberForm" class="nl-subscriber-form" autocomplete="off">
+                    <input type="text" id="amName" placeholder="Name" aria-label="Member name" />
+                    <input type="email" id="amEmail" placeholder="email@example.com" required aria-label="Member email" />
+                    <input type="tel" id="amPhone" placeholder="Phone (optional)" aria-label="Member phone" />
+                    <button type="submit" class="nl-item-add" id="amAddBtn"><span>Add to audience</span></button>
+                  </form>
+                  <div id="audienceMembers" aria-live="polite"></div>
+                  <p id="audienceMsg" class="nl-sub-msg" aria-live="polite"></p>
+                </div>
                 <p id="subMsg" class="nl-sub-msg" aria-live="polite"></p>
 
                 <!-- Manage the full subscriber list: search, remove, export. Loaded on first open. -->
@@ -349,6 +375,10 @@
                   <button type="button" id="newsletterTemplate">Start from example</button>
                   <button type="submit" id="newsletterSave">Save</button>
                   <button type="button" id="newsletterTest">Send test to me</button>
+                  <span class="nl-send-list" id="sendListWrap" hidden>
+                    <label for="sendListPick">Send to</label>
+                    <select id="sendListPick" aria-label="Audience to send to"></select>
+                  </span>
                   <button type="button" id="newsletterSend" hidden>Send to subscribers</button>
                 </div>
 

@@ -1708,6 +1708,21 @@ the record is gone when it deliberately isn't) and **"Delete"** on a draft; an a
 shows "Content deleted" and offers nothing. Both are `confirm()`-guarded with wording that states what
 survives.
 
+**`{{firstName}}` in the subject line (TASK-254).** The subject merges per recipient, like the body
+always has. Previously the body personalised and the subject went out **raw**, so a newsletter titled
+_"Hey, {{firstName}}!"_ reached every donor with the marker showing — the builder invites the merge
+field, and it only ever worked in half the email.
+
+Uses **`mergeSubject`**, deliberately *not* the body's `applyMerge`: a subject line is **plain text**,
+so escaping it would put `Hey, O&#39;Brien` and `Ben &amp; Jerry` in donors' inboxes. Two jobs, two
+functions. A blank name falls back to `"friend"` (matching `firstNameOf`), so `"Hey, !"` can't go out.
+The **test send** now personalises as `PREVIEW_FIRST_NAME` — the same sample donor the live preview
+uses, one constant shared by both — rather than `firstNameOf(claims.email)`, which greeted the tester
+as _"Dear admin@nbcc.scot"_ and would have put an email address in the title too. Preview, test send
+and the real send now agree about what personalisation looks like. The test-send response echoes the
+**subject actually sent**, which is what makes the merge assertable across the HTTP hop — the bug lived
+at the call site, not in the merge function.
+
 **Bold / italic on selected text (TASK-253).** Every **prose** field (the text block's body, a
 greeting's intro, a story's body, a spotlight's quote — i.e. every `kind: "textarea"` field) carries a
 **B / I** pair. They wrap the current selection in plain-text markers — `**bold**`, `*italic*` — which

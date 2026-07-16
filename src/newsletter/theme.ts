@@ -30,6 +30,19 @@ export function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+// TASK-254: {{firstName}} in the SUBJECT line.
+//
+// Deliberately NOT applyMerge. That escapes, because a body is HTML — but a subject line is PLAIN
+// TEXT that a mail client prints literally, so escaping it would put "Hey, O&#39;Brien" and
+// "Ben &amp; Jerry" in donors' inboxes. Two different jobs, two functions.
+//
+// A blank name falls back to "friend" for the same reason the body's firstNameOf does: "Hey, !" must
+// never reach a donor. The send already passes a resolved name; this is the backstop.
+export function mergeSubject(subject: string, firstName: string): string {
+  const name = firstName.trim() || "friend";
+  return subject.replace(/\{\{firstName\}\}/g, name);
+}
+
 // TASK-253: inline emphasis. An author marks a phrase **bold** or *italic* in the plain text; those
 // markers become <strong>/<em> HERE, on ALREADY-ESCAPED copy. That ordering is the whole safety
 // argument: the input can contain no live markup by this point, so the only tags that can reach a

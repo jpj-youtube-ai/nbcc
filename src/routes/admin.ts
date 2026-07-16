@@ -83,6 +83,8 @@ import {
   DuplicateTemplateNameError,
 } from "../db/newsletter-templates";
 import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
+// TASK-254: the subject's own merge. NOT applyMerge — a subject is plain text, not HTML.
+import { mergeSubject } from "../newsletter/theme";
 import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
 import {
   validateAttachment,
@@ -371,6 +373,11 @@ function firstNameOf(fullName: string | null): string {
   return token.length > 0 ? token : "friend";
 }
 
+// The sample donor the live preview and the test send both personalise as (TASK-254). One constant,
+// because those two exist to show the SAME thing — what a donor will actually receive — and a second
+// copy would drift the moment someone changed one of them.
+const PREVIEW_FIRST_NAME = "Jane";
+
 // --- Saved newsletter templates (TASK-249) -------------------------------------------------------
 // A SHARED library: any Editor can save the newsletter they are building as a reusable template, and
 // any Editor can start from one. Mounted on its OWN /api/admin/newsletter-templates path rather than
@@ -510,7 +517,9 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
   }
   // Pass a placeholder unsubscribe URL so the preview shows the (non-functional) Unsubscribe button
   // the recipient will get — real sends substitute a signed per-recipient link.
-  return res.json({ html: renderNewsletter(parsed.data.bodyJson, { firstName: "Jane", unsubscribeUrl: "#" }) });
+  return res.json({
+    html: renderNewsletter(parsed.data.bodyJson, { firstName: PREVIEW_FIRST_NAME, unsubscribeUrl: "#" }),
+  });
 }
 
 // GET /api/admin/newsletters/recipients — Admin only. The deduped list of consenting donor emails a
@@ -590,15 +599,20 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     // Block-doc newsletters render per recipient (merge the first name) with the unsubscribe button
     // built into the branded frame footer. Legacy raw-HTML rows (no valid bodyJson) are not framed,
     // so they still get the standalone unsubscribe footer appended via buildNewsletterHtml.
+    const firstName = firstNameOf(r.fullName);
     const html = parsedDoc.success
-      ? renderNewsletter(parsedDoc.data, { firstName: firstNameOf(r.fullName), unsubscribeUrl })
+      ? renderNewsletter(parsedDoc.data, { firstName, unsubscribeUrl })
       : buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
     try {
       await sendNewsletter({
         email: r.email,
         from: config.NEWSLETTER_FROM_EMAIL,
         replyTo: config.NEWSLETTER_FROM_EMAIL,
-        subject: newsletter.subject,
+        // TASK-254: the SUBJECT merges per recipient too. The builder invites {{firstName}} and the
+        // body has always honoured it, but the subject was passed through raw — so a newsletter titled
+        // "Hey, {{firstName}}!" reached every donor with the marker showing. mergeSubject, not
+        // applyMerge: a subject is plain text, and escaping it would send "Hey, O&#39;Brien".
+        subject: mergeSubject(newsletter.subject, firstName),
         html,
         attachments,
       });
@@ -638,23 +652,33 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid newsletter", details: parsed.error.flatten() });
   }
+  // TASK-254: a test send exists to show what a DONOR will get, so it merges the SAMPLE name the live
+  // preview uses — not firstNameOf(claims.email), which greeted the tester as "Dear admin@nbcc.scot"
+  // and, once the subject merged too, would have put an email address in the title as well. Preview,
+  // test send and the real thing now agree about what personalisation looks like.
   const html = renderNewsletter(parsed.data.bodyJson, {
-    firstName: firstNameOf(claims.email),
+    firstName: PREVIEW_FIRST_NAME,
     unsubscribeUrl: `${config.PORTAL_BASE_URL}/unsubscribe/preview`,
   });
+  // Built once and both sent and echoed back, so what the tester is told to look for is necessarily
+  // what actually went out.
+  const testSubject = `[TEST] ${mergeSubject(parsed.data.subject, PREVIEW_FIRST_NAME)}`;
   try {
     await sendNewsletter({
       email: claims.email,
       from: config.NEWSLETTER_FROM_EMAIL,
       replyTo: config.NEWSLETTER_FROM_EMAIL,
-      subject: `[TEST] ${parsed.data.subject}`,
+      subject: testSubject,
       html,
     });
   } catch (err) {
     console.error("newsletter test-send failed", err);
     return res.status(502).json({ error: "Could not send the test email." });
   }
-  return res.json({ sentTo: claims.email });
+  // Echo the subject actually sent (TASK-254). It makes the merge observable end to end — the
+  // raw-subject bug lived at this call site, not in the merge function — and it is worth showing the
+  // tester: "check your inbox for '[TEST] Hey, Jane!'" beats "sent".
+  return res.json({ sentTo: claims.email, subject: testSubject });
 }
 
 // GET /api/admin/newsletters/subscribers[?q=] — the managed subscriber list (Editor+, donor PII).

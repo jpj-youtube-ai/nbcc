@@ -303,6 +303,22 @@ describe("voluntary cancellation recording (TASK-240)", () => {
     expect(call(/insert into subscription_dunning/i)).toBeUndefined();
     expect(call(/update subscription_dunning/i)).toBeUndefined();
   });
+
+  it("records a cancellation when a subscription ends via customer.subscription.updated on an active row (TASK-244)", async () => {
+    // A cancel can arrive as an `updated` → canceled/unpaid (not only `deleted`). On a still-active row
+    // Stripe maps it to retries_exhausted, which is illegal from active — previously ignored, so the
+    // supporters wall never dropped the donor. It must now stamp cancelled_at like the deleted case.
+    target = {
+      dunning_id: null, status: null, failed_attempts: null,
+      donor_id: DONOR_ID, full_name: "Ada", email: "ada@example.com", email_consent: true,
+    };
+    const result = await processWebhookEvent(subUpdatedEvent("canceled", "evt_upd_cancel"));
+    expect(result).toEqual({ processed: true, action: "subscription.cancelled" });
+    const insert = call(/insert into subscription_dunning/i);
+    expect(insert?.[0]).toMatch(/cancelled_at/i);
+    expect(insert?.[0]).not.toMatch(/lapsed_at = now\(\)/i);
+    expect(sendSubscriptionLapsedAdmin).not.toHaveBeenCalled();
+  });
 });
 
 describe("dunningFromStripeEvent mapper — Stripe event → dunning event (REQ-057/REQ-065)", () => {

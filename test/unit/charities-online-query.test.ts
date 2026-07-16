@@ -84,6 +84,19 @@ describe("listClaimableDonationsForExport (REQ-052)", () => {
     expect(lastSql()).not.toMatch(/claim_status\s*=\s*'eligible'/i);
   });
 
+  it("claims the NET amount (donation minus any refund) and excludes a fully-refunded gift (TASK-244)", async () => {
+    // A partial refund keeps a gift 'eligible', but Gift Aid is claimed on the amount RETAINED — so the
+    // export must net refunded_amount_pence, or NBCC over-reclaims 25% of the refunded portion from HMRC.
+    // A fully-refunded gift nets to 0 and must not appear in the CSV at all.
+    await listClaimableDonationsForExport();
+    const sql = lastSql();
+    expect(sql).toMatch(/amount_pence\s*-\s*d\.refunded_amount_pence/i); // net claimed amount in SELECT
+    expect(sql).toMatch(/-\s*d\.refunded_amount_pence\)\s*>\s*0/i); // net > 0 guard (excludes fully refunded)
+    // The batch export nets too.
+    await listClaimableDonationsForExport(7);
+    expect(lastSql()).toMatch(/-\s*d\.refunded_amount_pence\)\s*>\s*0/i);
+  });
+
   it("maps each DB row into the { donation, declaration } shape the CSV builder consumes", async () => {
     const rows = await listClaimableDonationsForExport();
     expect(rows).toHaveLength(2);

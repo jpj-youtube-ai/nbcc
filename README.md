@@ -2665,8 +2665,11 @@ ordered by donation id. Read-only (`pool.query`, no transaction/audit — mirror
 `listPublicSupporters`), and it does **not** re-derive eligibility: `claim_status` is set at
 write time by `deriveClaimStatus` (individual donor + Gift Aid + an active declaration, not
 refunded — REQ-037), so the filter alone excludes company and otherwise non-claimable gifts and
-the inner join drops any eligible row without a declaration. Its results feed straight into the
-pure `toCharitiesOnlineCsv` above. The thin CLI **`scripts/export-charities-online.mjs`**
+the inner join drops any eligible row without a declaration. **TASK-244 (donor-flow audit):** it now
+claims the **net** amount — `d.amount_pence - d.refunded_amount_pence` — and drops any gift whose net is
+`<= 0` (fully refunded), on both the eligible and the batch path. Gift Aid is claimed on the amount the
+charity RETAINED, so a partially-refunded gift that stays `eligible` was over-reclaiming 25% of the
+refunded portion from HMRC. Its results feed straight into the pure `toCharitiesOnlineCsv` above. The thin CLI **`scripts/export-charities-online.mjs`**
 (`npm run export:charities-online`, run via `tsx`, going through `src/db/pool.ts`) writes the
 CSV to **stdout** or, with `-- --out claim.csv`, to a file, and accepts `-- --batch <id>` to
 scope to one claim batch:
@@ -2779,7 +2782,10 @@ subscription maps to `retries_exhausted`, which is illegal from `active`, so the
 ignored it). TASK-240 adds a nullable `subscription_dunning.cancelled_at` (migration
 `1784300000000_supporter-subscription-cancelled-at.js`, additive/expand-contract); `handleDunning` now
 records it — plus a `subscription.cancelled` audit row — in exactly that previously-ignored case, leaving
-the lapse path and its emails untouched. `listPublicSupporters` then computes `monthly_support_ended` per
+the lapse path and its emails untouched. **TASK-244** widens this: a subscription can END via
+`customer.subscription.updated` → a terminal status (unpaid/canceled/incomplete_expired), not only
+`customer.subscription.deleted`, so both now record the cancellation (else a stopped supporter lingered on
+the wall). `listPublicSupporters` then computes `monthly_support_ended` per
 donor (no still-active monthly subscription **and** the most-recent end — cancel or lapse — older than
 `SUPPORTER_GRACE_DAYS`, **30 days**), and the pure `resolvePublicSupporter` drops such a donor from the
 opt-in path. **Grandfathered donors (TASK-228) are exempt** — the grace gate is on the opt-in path only,

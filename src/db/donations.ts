@@ -409,13 +409,17 @@ export async function listClaimableDonationsForExport(
   // batch export by claim_batch_id alone; the INNER JOIN to declarations still guarantees a
   // declaration is present. With no batch id, list the eligible-unbatched donations (which by
   // definition have claim_batch_id IS NULL) — the "ready to claim" set.
+  // TASK-244: Gift Aid is claimed on the amount RETAINED, so net any refund from the claimed amount and
+  // drop a gift whose net is <= 0 (fully refunded). Otherwise a partially-refunded gift that stays
+  // 'eligible' over-reclaims 25% of the refunded portion from HMRC. Applies to both export paths.
+  const netPositive = "(d.amount_pence - d.refunded_amount_pence) > 0";
   const whereSql = filterByBatch
-    ? "WHERE d.claim_batch_id = $1"
-    : "WHERE d.claim_status = 'eligible'";
+    ? `WHERE d.claim_batch_id = $1 AND ${netPositive}`
+    : `WHERE d.claim_status = 'eligible' AND ${netPositive}`;
   const res = await pool.query<ClaimableExportDbRow>(
     `SELECT d.id, dn.full_name,
             dec.title, dec.first_name, dec.last_name, dec.house_name_number, dec.postcode,
-            d.created_at, d.amount_pence
+            d.created_at, (d.amount_pence - d.refunded_amount_pence) AS amount_pence
        FROM donations d
        JOIN declarations dec ON dec.id = d.declaration_id
        JOIN donors dn ON dn.id = d.donor_id

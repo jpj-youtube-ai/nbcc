@@ -467,3 +467,82 @@ Then("the test-send subject should not contain {string}", function (unexpected) 
     `expected the sent subject NOT to contain "${unexpected}" — got "${this.testBody.subject}"`,
   );
 });
+
+// --- TASK-255: the Resend delivery webhook + stats --------------------------------------------------
+// Events are signed EXACTLY as Svix/Resend signs them (HMAC-SHA256 over `${id}.${ts}.${body}` with the
+// base64 secret key), against the same RESEND_WEBHOOK_SECRET the app reads — the default matches
+// .env.example and pr.yml, so this passes locally and in CI without setup.
+const RESEND_SECRET =
+  process.env.RESEND_WEBHOOK_SECRET || "whsec_Y2ktdGVzdC1rZXktZm9yLXJlc2VuZC13ZWJob29rcw==";
+
+function svixHeadersFor(id, body, secret) {
+  const ts = Math.floor(Date.now() / 1000);
+  const key = Buffer.from(secret.slice("whsec_".length), "base64");
+  const sig = createHmac("sha256", key).update(`${id}.${ts}.${body}`).digest("base64");
+  return { "svix-id": id, "svix-timestamp": String(ts), "svix-signature": `v1,${sig}` };
+}
+
+async function postResendEvent(headers, body) {
+  const res = await fetch(`${BASE_URL}/api/webhooks/resend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body,
+  });
+  const json = await res.json().catch(() => ({}));
+  return { status: res.status, json };
+}
+
+When("Resend reports a signed {string} event for {string}", async function (type, email) {
+  const body = JSON.stringify({ type, created_at: new Date().toISOString(), data: { to: [email] } });
+  // Unique per run so re-runs against a lived-in local DB never collide on the svix id.
+  this.lastSvix = { id: `msg_bdd_${type}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, body };
+  const r = await postResendEvent(svixHeadersFor(this.lastSvix.id, body, RESEND_SECRET), body);
+  this.whStatus = r.status;
+  this.whBody = r.json;
+});
+
+When("Resend retries the last event", async function () {
+  const r = await postResendEvent(svixHeadersFor(this.lastSvix.id, this.lastSvix.body, RESEND_SECRET), this.lastSvix.body);
+  this.whStatus = r.status;
+  this.whBody = r.json;
+});
+
+When("Resend reports an UNSIGNED {string} event for {string}", async function (type, email) {
+  const body = JSON.stringify({ type, created_at: new Date().toISOString(), data: { to: [email] } });
+  const r = await postResendEvent({}, body);
+  this.whStatus = r.status;
+  this.whBody = r.json;
+});
+
+Then("the webhook response status should be {int}", function (expected) {
+  assert.equal(this.whStatus, expected);
+});
+
+Then("the webhook outcome should be {string}", function (expected) {
+  assert.equal(this.whBody.outcome, expected);
+});
+
+When("I fetch that newsletter's stats", async function () {
+  const r = await authFetch(`/api/admin/newsletters/${this.newsletterId}/stats`, "GET", undefined, this.token);
+  this.statsStatus = r.status;
+  this.stats = r.json;
+});
+
+Then(
+  "the newsletter stats should show at least {int} sends, {int} delivered and {int} bounced",
+  function (sends, delivered, bounced) {
+    assert.equal(this.statsStatus, 200);
+    // "At least": the send goes to EVERY consenting donor in the DB, and earlier features may have
+    // left consenting donors behind — the exact-count assertions are on the events, which are ours.
+    assert.ok(this.stats.sends >= sends, `sends: ${JSON.stringify(this.stats)}`);
+    assert.equal(this.stats.delivered, delivered, `delivered: ${JSON.stringify(this.stats)}`);
+    assert.equal(this.stats.bounced, bounced, `bounced: ${JSON.stringify(this.stats)}`);
+  },
+);
+
+Then("the bounced addresses should include {string}", function (email) {
+  assert.ok(
+    (this.stats.bouncedEmails || []).includes(email),
+    `expected ${email} in ${JSON.stringify(this.stats.bouncedEmails)}`,
+  );
+});

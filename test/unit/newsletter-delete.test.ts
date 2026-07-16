@@ -135,6 +135,15 @@ describe("redactSentNewsletter (a sent newsletter keeps its audit stub)", () => 
     expect(allSql()).toMatch(/delete\s+from\s+newsletter_attachments/i);
   });
 
+  it("clears the delivery-tracking rows too — donor addresses, same class as failed_emails (TASK-255)", async () => {
+    // The redaction promise is "the donor addresses go". newsletter_sends and newsletter_email_events
+    // are keyed BY address, so leaving them behind would keep exactly what redaction exists to remove.
+    // Inside the same transaction: a partial redaction is not a redaction.
+    await redactSentNewsletter(41, 3, "admin@nbcc", "July round-up");
+    expect(allSql()).toMatch(/delete\s+from\s+newsletter_email_events/i);
+    expect(allSql()).toMatch(/delete\s+from\s+newsletter_sends/i);
+  });
+
   it("reports whether it redacted anything, so a second attempt 404s rather than lying", async () => {
     updateRows = 1;
     await expect(redactSentNewsletter(41, 3, "admin@nbcc", "July round-up")).resolves.toBe(true);

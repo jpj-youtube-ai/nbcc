@@ -53,6 +53,12 @@ export const configSchema = z.object({
   // in SSM in staging/prod.
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
 
+  // Resend delivery-webhook signing secret (TASK-255, email stats Phase 1). DEFAULTED to empty —
+  // unlike Stripe's (which donations cannot function without), this one is additive: the app must
+  // deploy BEFORE the user configures the webhook in Resend's dashboard, so an unconfigured secret
+  // means the endpoint answers 503, never that the app fails to boot. whsec_… once real.
+  RESEND_WEBHOOK_SECRET: z.string().default(""),
+
   // Optional: a Stripe Product id (prod_…) to group one-off donations under. The
   // one-off amount stays variable; this only sets the product the inline price
   // hangs off (cleaner Stripe reporting/receipts). Left unset, an inline product

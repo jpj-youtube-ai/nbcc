@@ -289,6 +289,11 @@ export async function redactSentNewsletter(
       // Attachments are content too — and they are the actual files that went to donors. Inside the
       // transaction, so a failure part-way cannot leave the files gone but the newsletter intact.
       await client.query(`DELETE FROM newsletter_attachments WHERE newsletter_id = $1`, [id]);
+      // TASK-255: the delivery-tracking rows are keyed BY donor address — the same data class as
+      // failed_emails, so the redaction promise covers them. Same transaction: a partial redaction
+      // is not a redaction. The stub keeps the headline counts; per-address detail goes.
+      await client.query(`DELETE FROM newsletter_email_events WHERE newsletter_id = $1`, [id]);
+      await client.query(`DELETE FROM newsletter_sends WHERE newsletter_id = $1`, [id]);
       const { rowCount } = await client.query(
         `UPDATE newsletters
             SET body_html = '', body_json = NULL, failed_emails = NULL,

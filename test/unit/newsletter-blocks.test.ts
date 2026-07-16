@@ -1020,3 +1020,81 @@ describe("newsletter blocks — all block types integration", () => {
     expect(html).not.toContain("[object Object]");
   });
 });
+
+// TASK-248: per-block text size. A block carries an optional `size` step (-2..+2) that shifts EVERY
+// font-size in that block's rendered HTML by N notches along the newsletter's own size ladder
+// (10/12/13/14/15/16/18/20/22/24/26/28 — the sizes the variants already use). A step, not a pixel
+// value, so it stays on the designed scale, keeps a block's internal hierarchy (a story's heading
+// stays above its body), and still means something when saved as a template and reused on new copy.
+// Applied at the single renderBlock dispatch, so preview / saved html / merge send cannot disagree.
+describe("per-block text size step (TASK-248)", () => {
+  const textBlock = (size?: number) => ({
+    type: "text" as const,
+    variant: 0,
+    data: { body: "BODYCOPY" },
+    ...(size === undefined ? {} : { size }),
+  });
+
+  it("renders identically to today when no size is set (the regression lock)", () => {
+    // Every newsletter written before this feature has no `size`. It must render byte-identical.
+    expect(renderBlock(textBlock(), ctx)).toBe(renderBlock(textBlock(0), ctx));
+    expect(renderBlock(textBlock(), ctx)).toContain("font-size:15px"); // the variant's own size
+  });
+
+  it("steps a block's text UP the ladder (15 → 16 at +1, → 18 at +2)", () => {
+    expect(renderBlock(textBlock(1), ctx)).toContain("font-size:16px");
+    expect(renderBlock(textBlock(2), ctx)).toContain("font-size:18px");
+  });
+
+  it("steps a block's text DOWN the ladder (15 → 14 at -1, → 13 at -2)", () => {
+    expect(renderBlock(textBlock(-1), ctx)).toContain("font-size:14px");
+    expect(renderBlock(textBlock(-2), ctx)).toContain("font-size:13px");
+  });
+
+  it("preserves a multi-element block's internal hierarchy — every element shifts together", () => {
+    // A story block has a heading ABOVE its body. Stepping the block must move both, keeping the gap:
+    // the point is to resize the section, never to flatten its hierarchy.
+    const story = (size: number) => ({
+      type: "story" as const,
+      variant: 0,
+      data: { heading: "H", body: "B", lead: "L" },
+      size,
+    });
+    const base = renderBlock(story(0), ctx);
+    const up = renderBlock(story(1), ctx);
+    const sizesOf = (html: string) => (html.match(/font-size:(\d+)px/g) ?? []).map((s) => Number(s.match(/\d+/)![0]));
+    const b = sizesOf(base);
+    const u = sizesOf(up);
+    expect(b.length).toBeGreaterThan(1); // genuinely multi-element, else this proves nothing
+    expect(u).not.toEqual(b); // it moved
+    // Same count, and every element ended up strictly larger — hierarchy intact, nothing flattened.
+    expect(u.length).toBe(b.length);
+    for (let i = 0; i < b.length; i++) expect(u[i]).toBeGreaterThanOrEqual(b[i]);
+    expect(new Set(u).size).toBe(new Set(b).size); // distinct levels stay distinct
+  });
+
+  it("clamps at both ends of the ladder rather than inventing sizes off it", () => {
+    // A kicker at the bottom of the ladder cannot go below 10; a hero at the top cannot exceed 28.
+    const tiny = renderBlock({ type: "text", variant: 0, data: { body: "B" }, size: -2 }, ctx);
+    expect(tiny).not.toMatch(/font-size:(?:[0-9]|1[01])px/); // never below the ladder's floor
+    const huge = renderBlock({ type: "heading", variant: 0, data: { title: "T" }, size: 2 }, ctx);
+    expect(huge).not.toMatch(/font-size:(?:29|3[0-9]|[4-9][0-9])px/); // never above 28
+  });
+
+  it("never touches rawHtml (we do not rewrite HTML the user authored)", () => {
+    const raw = { type: "rawHtml" as const, variant: 0, data: { html: '<p style="font-size:15px">X</p>' }, size: 2 };
+    expect(renderBlock(raw, ctx)).toContain("font-size:15px"); // verbatim, step ignored
+  });
+
+  it("never touches the masthead (it is the brand signature — variants set its size)", () => {
+    const m = (size: number) => renderBlock({ type: "masthead", variant: 0, data: { issueTitle: "T" }, size }, ctx);
+    expect(m(2)).toBe(m(0));
+  });
+
+  it("schema defaults size to 0 and rejects a step off the allowed range", () => {
+    const parsed = newsletterDocSchema.parse({ blocks: [{ type: "text", variant: 0, data: {} }] });
+    expect(parsed.blocks[0].size).toBe(0);
+    expect(newsletterDocSchema.safeParse({ blocks: [{ type: "text", variant: 0, data: {}, size: 3 }] }).success).toBe(false);
+    expect(newsletterDocSchema.safeParse({ blocks: [{ type: "text", variant: 0, data: {}, size: -3 }] }).success).toBe(false);
+  });
+});

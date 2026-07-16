@@ -1672,7 +1672,19 @@ row per newsletter, `status` `draft`|`sent`). The tab is a two-pane **block buil
 palette to add typed content blocks — masthead, greeting, text, heading, image, story, spotlight,
 impact stats, ways to help, events, donation CTA, button and divider — each block offering **4
 named style variants** (a labelled segmented picker with a one-line description, e.g. masthead
-_Centered · Logo + title · Hero banner · Slim strip_), reordering, duplication and deletion. The
+_Centered · Logo + title · Hero banner · Slim strip_), reordering, duplication and deletion. Each
+text-bearing block also carries a **text size step** (TASK-248) — an `A− / A+` pair that shifts that
+block's text along the newsletter's own size ladder (`10 · 12 · 13 · 14 · 15 · 16 · 18 · 20 · 22 · 24
+· 26 · 28`, the sizes the variants already use), stored as `block.size` (`-2..+2`, default `0`) and
+applied server-side by `applySizeStep` at the single `renderBlock` dispatch — so the preview, the
+saved `body_html` and the per-recipient send can never disagree. It is a **step, not a pixel value**:
+it stays on the designed scale, clamps at both ends rather than inventing sizes off it, moves every
+element in a block together (a story's heading stays above its body), and — being relative — still
+means something when a block is reused via a saved template. `size` is absent/`0` on everything
+written before TASK-248, which renders byte-identical. **rawHtml** (the author's own HTML is never
+rewritten), **masthead** (the brand signature; its variants already span 16→26px) and
+**divider/image** (no text) take no step — `NO_SIZE_STEP` in `src/newsletter/blocks.ts` is the
+authority, mirrored by `NL_NO_SIZE` in the builder. The
 field editor is **variant-aware**: it shows only the fields the chosen style actually renders
 (progressive disclosure), so a value you enter always appears — the per-style field map in
 `assets/js/admin/app.js` (`nlBlockDefs[type].variants[].fields`) is the single source of truth kept

@@ -42,6 +42,7 @@ export interface Block {
   type: BlockType;
   variant: number;
   data: Record<string, unknown>;
+  size?: number; // TASK-248: optional text-size step, -2..+2. Absent/0 = the variant's own sizes.
 }
 export interface NewsletterDoc {
   blocks: Block[];
@@ -53,9 +54,38 @@ export const newsletterDocSchema = z.object({
       type: z.enum(BLOCK_TYPES),
       variant: z.number().int().min(0).max(3),
       data: z.record(z.unknown()).default({}),
+      // Defaulted, so every newsletter written before TASK-248 parses and renders unchanged.
+      size: z.number().int().min(-2).max(2).default(0),
     }),
   ),
 });
+
+// TASK-248: the newsletter's OWN size ladder — every font-size the block variants use, in order. A
+// block's size step moves each of its text elements this many notches along the ladder, so a resized
+// block still lands on a size the design already uses. Steps clamp at the ends rather than inventing
+// sizes off the scale: the clamp is the feature, not a limitation.
+const SIZE_LADDER = [10, 12, 13, 14, 15, 16, 18, 20, 22, 24, 26, 28];
+
+// Blocks a step never touches:
+//   rawHtml  — the user authored that HTML; rewriting it is fragile and they already set the size.
+//   masthead — the brand signature. It should look identical every issue, and its four variants
+//              already span 16→26px, so a step adds drift without adding capability.
+//   divider/image — no text to size.
+const NO_SIZE_STEP: readonly BlockType[] = ["rawHtml", "masthead", "divider", "image"];
+
+// Shift every font-size in one block's OWN rendered html N notches along the ladder. Safe to do on
+// the output because this is html we generated from our own templates, never user input (rawHtml is
+// excluded above). Shifting all of a block's elements by the same step is what preserves its internal
+// hierarchy — a story's heading stays above its body. An off-ladder size is left alone.
+export function applySizeStep(html: string, step: number): string {
+  if (!step) return html;
+  return html.replace(/font-size:(\d+)px/g, (whole, px: string) => {
+    const i = SIZE_LADDER.indexOf(Number(px));
+    if (i === -1) return whole;
+    const j = Math.min(SIZE_LADDER.length - 1, Math.max(0, i + step));
+    return `font-size:${SIZE_LADDER[j]}px`;
+  });
+}
 
 // --- small readers so every renderer treats data as untrusted --------------------------------
 const str = (d: Record<string, unknown>, k: string, fallback = ""): string =>
@@ -789,7 +819,11 @@ export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> 
 };
 
 export function renderBlock(block: Block, ctx: RenderCtx): string {
-  return (RENDERERS[block.type] ?? stub)(block, ctx);
+  const html = (RENDERERS[block.type] ?? stub)(block, ctx);
+  // TASK-248: the size step is applied HERE, at the one dispatch every surface goes through, so the
+  // live preview, the saved body_html and the per-recipient merge send can never disagree about it.
+  if (NO_SIZE_STEP.includes(block.type)) return html;
+  return applySizeStep(html, block.size ?? 0);
 }
 
 export function renderNewsletter(doc: NewsletterDoc, ctx: RenderCtx): string {

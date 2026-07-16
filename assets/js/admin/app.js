@@ -118,6 +118,10 @@
       var tmplBtn0 = el("newsletterTemplate");
       if (tmplBtn0) tmplBtn0.disabled = !canEdit("newsletter");
       nlRefreshAttachments();
+      // TASK-249: load the shared template library here, once permissions are known (the picker's
+      // buttons are gated by canEdit) and regardless of whether any newsletter exists — a brand-new
+      // draft is exactly when you most want to start from a template.
+      nlRefreshTemplates();
       selectView("overview");
       loadOverview();
     }
@@ -1821,6 +1825,7 @@
   }
 
   var nlDoc = { blocks: [] };
+  var nlTemplates = []; // TASK-249: the shared saved-template library (id/name/createdAt only)
   var nlSent = false; // the open newsletter has been sent → its blocks are read-only
 
   // Read mode: no newsletter:edit permission, or an already-sent newsletter. In read mode the builder is
@@ -2271,6 +2276,7 @@
         nlRenderCanvas();
         nlRefreshPreview();
         nlRefreshAttachments();
+        nlRefreshTemplates(); // TASK-249: fill the shared library picker when the tab opens
       })
       .catch(function () {});
   }
@@ -2441,6 +2447,64 @@
       .then(function () { nlRefreshAttachments(); })
       .catch(function () { el("nlAttachMsg").textContent = "Could not remove that attachment."; });
   }
+
+  // --- The SHARED saved-template library: helpers (TASK-249) ---------------------------------------
+  // Declared HERE, at the IIFE's top level beside nlRefreshAttachments, NOT inside the if (nlForm)
+  // block that holds the listeners: the tab-open flow calls nlRefreshTemplates from outside that
+  // block, and a function declared inside it is block-scoped, so the call would throw and take the
+  // whole Newsletter tab down with it.
+  function nlTemplateMsg(text) {
+    var m = el("nlTemplateMsg");
+    if (m) m.textContent = text || "";
+  }
+
+  function nlSelectedTemplate() {
+    var pick = el("newsletterTemplatePick");
+    if (!pick || !pick.value) return null;
+    for (var i = 0; i < nlTemplates.length; i++) {
+      if (String(nlTemplates[i].id) === String(pick.value)) return nlTemplates[i];
+    }
+    return null;
+  }
+
+  function nlRenderTemplates() {
+    var wrap = el("nlTemplates");
+    var pick = el("newsletterTemplatePick");
+    if (!wrap || !pick) return;
+    // An empty picker is noise on a fresh install — show the library only once it has something.
+    wrap.hidden = nlTemplates.length === 0;
+    var keep = pick.value;
+    pick.innerHTML = "";
+    nlTemplates.forEach(function (t) {
+      var o = doc.createElement("option");
+      o.value = String(t.id);
+      o.textContent = t.name;
+      pick.appendChild(o);
+    });
+    if (keep) pick.value = keep;
+    var canWrite = canEdit("newsletter");
+    ["newsletterTemplateUse", "newsletterTemplateDelete", "newsletterTemplateSave"].forEach(function (id) {
+      if (el(id)) el(id).disabled = !canWrite;
+    });
+  }
+
+  function nlRefreshTemplates() {
+    return authFetch("/api/admin/newsletter-templates")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (rows) {
+        nlTemplates = Array.isArray(rows) ? rows : [];
+        nlRenderTemplates();
+      })
+      .catch(function () { /* the library is a convenience — never block the builder on it */ });
+  }
+
+  function nlShowTemplateName(show) {
+    ["newsletterTemplateName", "newsletterTemplateSaveConfirm", "newsletterTemplateSaveCancel"].forEach(
+      function (id) { if (el(id)) el(id).hidden = !show; },
+    );
+    if (el("newsletterTemplateSave")) el("newsletterTemplateSave").hidden = show;
+    if (show && el("newsletterTemplateName")) el("newsletterTemplateName").focus();
+  }
   if (el("nlAttachFile")) {
     el("nlAttachFile").addEventListener("change", function () {
       var f = el("nlAttachFile").files[0];
@@ -2539,11 +2603,125 @@
         nlSent = false;
         el("newsletterSend").hidden = true; // save first to get an id
         el("newsletterSave").disabled = false;
-        el("newsletterMsg").textContent = "Loaded the template — edit the copy, then Save.";
+        el("newsletterMsg").textContent = "Loaded the example — edit the copy, then Save.";
         nlRenderPalette();
         nlRenderCanvas();
         nlRefreshPreview();
         nlRefreshAttachments();
+        nlRefreshTemplates();
+      });
+    }
+
+    // --- The SHARED saved-template library (TASK-249) ---------------------------------------------
+    // Whatever anyone saves here, the whole team can start from — so the destructive bits (replacing
+    // your work, deleting someone else's template) are confirm()-guarded, matching how this admin
+    // already guards irreversible actions. The helpers these listeners use live at the top of the
+    // IIFE beside nlRefreshAttachments, because the tab-open flow calls nlRefreshTemplates from
+    // OUTSIDE this if (nlForm) block — a function declared in here would be block-scoped and invisible
+    // there, and opening the tab would throw.
+    if (el("newsletterTemplateSave")) {
+      el("newsletterTemplateSave").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        if (!nlDoc.blocks.length) {
+          nlTemplateMsg("Add some blocks first — an empty template is no use to anyone.");
+          return;
+        }
+        // Default the name to the subject: it is almost always what you'd type anyway.
+        var name = el("newsletterTemplateName");
+        if (name && !name.value) name.value = (el("newsletterSubject").value || "").trim();
+        nlTemplateMsg("");
+        nlShowTemplateName(true);
+      });
+    }
+
+    if (el("newsletterTemplateSaveCancel")) {
+      el("newsletterTemplateSaveCancel").addEventListener("click", function () {
+        nlShowTemplateName(false);
+        nlTemplateMsg("");
+      });
+    }
+
+    if (el("newsletterTemplateSaveConfirm")) {
+      el("newsletterTemplateSaveConfirm").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        var name = (el("newsletterTemplateName").value || "").trim();
+        if (!name) {
+          nlTemplateMsg("Give the template a name so the team can recognise it.");
+          return;
+        }
+        var btn = el("newsletterTemplateSaveConfirm");
+        btn.disabled = true;
+        nlTemplateMsg("Saving…");
+        authFetch("/api/admin/newsletter-templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name, bodyJson: nlDoc }),
+        })
+          .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, status: res.status, b: b }; }); })
+          .then(function (r) {
+            btn.disabled = false;
+            if (r.ok) {
+              el("newsletterTemplateName").value = "";
+              nlShowTemplateName(false);
+              nlTemplateMsg("Saved to the shared library.");
+              return nlRefreshTemplates();
+            }
+            // A name clash is routine in a shared library — say so plainly, don't dump an error.
+            nlTemplateMsg(r.status === 409 ? "That name is already taken — try another." : (r.b && r.b.error) || "Could not save the template.");
+          })
+          .catch(function () {
+            btn.disabled = false;
+            nlTemplateMsg("Could not save the template.");
+          });
+      });
+    }
+
+    if (el("newsletterTemplateUse")) {
+      el("newsletterTemplateUse").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        var t = nlSelectedTemplate();
+        if (!t) return;
+        // Starting from a template REPLACES what is on the canvas — that is worth asking about.
+        if (nlDoc.blocks.length && !window.confirm('Start from "' + t.name + '"? This replaces what you have here.')) return;
+        nlTemplateMsg("Loading…");
+        authFetch("/api/admin/newsletter-templates/" + encodeURIComponent(t.id))
+          .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+          .then(function (r) {
+            if (!r.ok || !r.b || !r.b.bodyJson) {
+              nlTemplateMsg("Could not open that template.");
+              return;
+            }
+            // A NEW newsletter seeded from the template — never an edit of the template itself.
+            el("newsletterId").value = "";
+            nlDoc = JSON.parse(JSON.stringify(r.b.bodyJson));
+            nlSent = false;
+            el("newsletterSend").hidden = true; // save first to get an id
+            el("newsletterSave").disabled = false;
+            nlTemplateMsg("");
+            el("newsletterMsg").textContent = 'Started from "' + t.name + '" — edit the copy, then Save.';
+            nlRenderPalette();
+            nlRenderCanvas();
+            nlRefreshPreview();
+            nlRefreshAttachments();
+          })
+          .catch(function () { nlTemplateMsg("Could not open that template."); });
+      });
+    }
+
+    if (el("newsletterTemplateDelete")) {
+      el("newsletterTemplateDelete").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        var t = nlSelectedTemplate();
+        if (!t) return;
+        // Shared library: this removes it for everyone, not just you.
+        if (!window.confirm('Delete "' + t.name + '" from the shared template library? Everyone loses it.')) return;
+        nlTemplateMsg("Deleting…");
+        authFetch("/api/admin/newsletter-templates/" + encodeURIComponent(t.id), { method: "DELETE" })
+          .then(function (res) {
+            nlTemplateMsg(res.ok ? "Deleted." : "Could not delete that template.");
+            return nlRefreshTemplates();
+          })
+          .catch(function () { nlTemplateMsg("Could not delete that template."); });
       });
     }
 

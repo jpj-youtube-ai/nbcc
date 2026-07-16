@@ -1684,7 +1684,25 @@ means something when a block is reused via a saved template. `size` is absent/`0
 written before TASK-248, which renders byte-identical. **rawHtml** (the author's own HTML is never
 rewritten), **masthead** (the brand signature; its variants already span 16→26px) and
 **divider/image** (no text) take no step — `NO_SIZE_STEP` in `src/newsletter/blocks.ts` is the
-authority, mirrored by `NL_NO_SIZE` in the builder. The
+authority, mirrored by `NL_NO_SIZE` in the builder.
+
+**Saved templates (TASK-249).** A **shared library**: any Editor can save the newsletter they are
+building as a reusable template (`Save as template` → name it), and any Editor can start a new
+newsletter from one (`Saved templates` → _Start from this_). A template is just a stored block
+document, so it inherits every block feature — including the size step, which is *relative* and so
+still correct on next month's copy. Over `newsletter_templates` (`id`, unique `name`, `body_json`,
+`created_by` → users `ON DELETE SET NULL` so a template outlives its author, `created_at`), one
+brand-new additive table. Editor+ throughout, matching the rest of the tab:
+`GET/POST /api/admin/newsletter-templates`, `GET/DELETE /api/admin/newsletter-templates/:id` — its
+**own** path, not `/newsletters/templates`, which `/newsletters/:id` would capture as an id. Saves are
+parsed with the same `newsletterDocSchema` the newsletter itself uses, so a template can never be a
+document the renderer would reject. The name is **unique** (a shared library needs one "Christmas
+Appeal"); a clash is a **409** the UI explains rather than an error dump. Starting from a template
+seeds a **new** newsletter (no id) and is `confirm()`-guarded because it replaces the canvas; deleting
+is guarded too, because it removes it for the whole team. The picker stays hidden until the library
+has something in it. Note the neighbouring **`Start from example`** button is a different thing: it
+loads the built-in showcase covering every block type (it was called _Start from template_ until
+TASK-249, when one word started meaning two things). The
 field editor is **variant-aware**: it shows only the fields the chosen style actually renders
 (progressive disclosure), so a value you enter always appears — the per-style field map in
 `assets/js/admin/app.js` (`nlBlockDefs[type].variants[].fields`) is the single source of truth kept

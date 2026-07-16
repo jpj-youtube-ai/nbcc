@@ -160,3 +160,32 @@ Feature: Admin newsletter (REQ-069)
     Given a newsletter admin "att.viewer.newsletter.bdd@example.com" with role "viewer" and password "pw-attv"
     When I attach a "application/pdf" file named "x.pdf" to that newsletter
     Then the attachment response status should be 403
+
+  # TASK-249: the SHARED saved-template library. What matters end to end is the round trip — a saved
+  # template comes back as a usable block document, so next month's newsletter really can start from
+  # it — plus the two things a shared library makes routine rather than exceptional: a name already
+  # taken (409, explained, never a 500), and a template someone else already deleted (404).
+  Scenario: an Editor saves a newsletter as a template, starts from it, and the name is protected
+    Given a newsletter admin "editor5.newsletter.bdd@example.com" with role "editor" and password "pw-e5"
+    When I save the current block document as a template named "Bdd Christmas Appeal"
+    Then the template response status should be 201
+
+    # It appears in the shared library for the whole team.
+    When I fetch the newsletter templates
+    Then the template response status should be 200
+    And the template list should contain "Bdd Christmas Appeal"
+
+    # Starting from it returns a real block document, not just a name.
+    When I fetch that saved template
+    Then the template response status should be 200
+    And the saved template should carry its block document
+
+    # A shared library means clashes happen; they are explained, not a 500.
+    When I save the current block document as a template named "Bdd Christmas Appeal"
+    Then the template response status should be 409
+
+    When I delete that saved template
+    Then the template response status should be 204
+    # Deleting it again is a 404, not a pretend success — someone else may have removed it first.
+    When I delete that saved template
+    Then the template response status should be 404

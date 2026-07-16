@@ -72,6 +72,14 @@ import {
   claimNewsletterForSend,
   setNewsletterDeliverySummary,
 } from "../db/newsletters";
+import {
+  templateNameSchema,
+  listNewsletterTemplates,
+  getNewsletterTemplate,
+  createNewsletterTemplate,
+  deleteNewsletterTemplate,
+  DuplicateTemplateNameError,
+} from "../db/newsletter-templates";
 import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
 import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
 import {
@@ -359,6 +367,72 @@ function compileNewsletterBody(data: z.infer<typeof newsletterBodySchema>): {
 function firstNameOf(fullName: string | null): string {
   const token = (fullName ?? "").trim().split(/\s+/)[0];
   return token.length > 0 ? token : "friend";
+}
+
+// --- Saved newsletter templates (TASK-249) -------------------------------------------------------
+// A SHARED library: any Editor can save the newsletter they are building as a reusable template, and
+// any Editor can start from one. Mounted on its OWN /api/admin/newsletter-templates path rather than
+// under /newsletters/… on purpose — /api/admin/newsletters/:id would capture a literal "templates"
+// segment as an id (the hazard the route table already warns about).
+function templateId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid template id" });
+    return null;
+  }
+  return id;
+}
+
+// GET /api/admin/newsletter-templates — the library (Editor+, matching the rest of the tab).
+export async function getAdminNewsletterTemplates(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  return res.json(await listNewsletterTemplates());
+}
+
+// GET /api/admin/newsletter-templates/:id — one template, including its block document (Editor+).
+export async function getAdminNewsletterTemplate(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const id = templateId(req, res);
+  if (id === null) return;
+  const row = await getNewsletterTemplate(id);
+  if (!row) return res.status(404).json({ error: "Template not found" });
+  return res.json(row);
+}
+
+// POST /api/admin/newsletter-templates — save a block document as a reusable template (Editor+).
+// The document is parsed with newsletterDocSchema, the SAME schema the newsletter itself is saved
+// through: a template that cannot render is worse than no template, because the team only finds out
+// when they start next month's newsletter from it. Parsing also normalises it (defaults applied), so
+// what is stored is a document the renderer already accepts.
+export async function postAdminNewsletterTemplate(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const parsed = z
+    .object({ name: templateNameSchema, bodyJson: newsletterDocSchema })
+    .safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid template", details: parsed.error.flatten() });
+  }
+  try {
+    const created = await createNewsletterTemplate(parsed.data.name, parsed.data.bodyJson, claims.sub);
+    return res.status(201).json(created);
+  } catch (err) {
+    // A shared library makes a name clash routine, not exceptional — explain it, never 500.
+    if (err instanceof DuplicateTemplateNameError) {
+      return res.status(409).json({ error: "A template with that name already exists" });
+    }
+    throw err;
+  }
+}
+
+// DELETE /api/admin/newsletter-templates/:id — remove one from the shared library (Editor+).
+export async function deleteAdminNewsletterTemplate(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const id = templateId(req, res);
+  if (id === null) return;
+  const removed = await deleteNewsletterTemplate(id);
+  if (!removed) return res.status(404).json({ error: "Template not found" });
+  return res.status(204).end();
 }
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
@@ -1562,6 +1636,14 @@ adminRouter.get("/api/admin/contact", getAdminContact);
 adminRouter.get("/api/admin/contact/:id", getAdminContactItem);
 adminRouter.patch("/api/admin/contact/:id", patchAdminContact);
 adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
+
+// --- Saved newsletter templates (TASK-249) -------------------------------------------------------
+// Its own path, NOT /api/admin/newsletters/templates — that would be captured by the /newsletters/:id
+// route below and 400 as an invalid id.
+adminRouter.get("/api/admin/newsletter-templates", getAdminNewsletterTemplates);
+adminRouter.post("/api/admin/newsletter-templates", postAdminNewsletterTemplate);
+adminRouter.get("/api/admin/newsletter-templates/:id", getAdminNewsletterTemplate);
+adminRouter.delete("/api/admin/newsletter-templates/:id", deleteAdminNewsletterTemplate);
 
 // --- Admin newsletter (REQ-069 · TASK-161) -------------------------------------------------------
 adminRouter.get("/api/admin/newsletters", getAdminNewsletters);

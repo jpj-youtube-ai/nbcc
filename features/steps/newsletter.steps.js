@@ -49,6 +49,10 @@ Before({ tags: "@newsletter" }, async function () {
   await pool.query(
     "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update')",
   );
+  // TASK-249: templates OUTLIVE the users deleted above (created_by is ON DELETE SET NULL — a
+  // template belongs to the team, not its author), so they must be cleared by name or a re-run would
+  // hit the unique-name rule and 409 where it expects 201.
+  await pool.query("DELETE FROM newsletter_templates WHERE name LIKE 'Bdd %'");
 });
 
 After({ tags: "@newsletter" }, async function () {
@@ -378,4 +382,52 @@ Then("the image fetch status should be {int}", function (expected) {
 
 Then("the image content type should be {string}", function (expected) {
   assert.equal(this.imgContentType, expected);
+});
+
+// --- TASK-249: the shared saved-template library ---------------------------------------------------
+// Reuses SAMPLE_DOC as "the current block document" (the same doc the preview scenario builds), so the
+// scenario proves the round trip rather than re-describing a document.
+
+When("I save the current block document as a template named {string}", async function (name) {
+  const r = await authFetch("/api/admin/newsletter-templates", "POST", { name, bodyJson: SAMPLE_DOC }, this.token);
+  this.tplStatus = r.status;
+  this.tplBody = r.json;
+  // Only a successful save carries an id — a 409 must NOT clobber the id we already hold, or the
+  // delete steps below would target nothing and pass for the wrong reason.
+  if (r.json && r.json.id) this.templateId = r.json.id;
+});
+
+When("I fetch the newsletter templates", async function () {
+  const r = await authFetch("/api/admin/newsletter-templates", "GET", undefined, this.token);
+  this.tplStatus = r.status;
+  this.tplList = r.json;
+});
+
+When("I fetch that saved template", async function () {
+  const r = await authFetch(`/api/admin/newsletter-templates/${this.templateId}`, "GET", undefined, this.token);
+  this.tplStatus = r.status;
+  this.tplBody = r.json;
+});
+
+When("I delete that saved template", async function () {
+  const r = await authFetch(`/api/admin/newsletter-templates/${this.templateId}`, "DELETE", undefined, this.token);
+  this.tplStatus = r.status;
+});
+
+Then("the template response status should be {int}", function (expected) {
+  assert.equal(this.tplStatus, expected);
+});
+
+Then("the template list should contain {string}", function (name) {
+  assert.ok(Array.isArray(this.tplList), "expected the template list to be an array");
+  assert.ok(
+    this.tplList.some((t) => t.name === name),
+    `expected the shared library to contain a template named "${name}"`,
+  );
+});
+
+Then("the saved template should carry its block document", function () {
+  const doc = this.tplBody && this.tplBody.bodyJson;
+  assert.ok(doc && Array.isArray(doc.blocks), "expected the template to return a block document");
+  assert.ok(doc.blocks.length > 0, "expected the template's document to carry blocks — an empty one is useless");
 });

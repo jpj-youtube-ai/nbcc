@@ -331,11 +331,34 @@
 
                 <div class="nl-actions">
                   <button type="button" id="newsletterNew">New newsletter</button>
-                  <button type="button" id="newsletterTemplate">Start from template</button>
+                  <!-- Loads the built-in showcase covering every block type. Renamed from "Start from
+                       template" in TASK-249: once real templates can be saved, one word meant two
+                       things. This one is an EXAMPLE; the saved library below holds templates. -->
+                  <button type="button" id="newsletterTemplate">Start from example</button>
                   <button type="submit" id="newsletterSave">Save</button>
                   <button type="button" id="newsletterTest">Send test to me</button>
                   <button type="button" id="newsletterSend" hidden>Send to subscribers</button>
                 </div>
+
+                <!-- The SHARED saved-template library (TASK-249). Whatever anyone saves here, the whole
+                     team can start from. Hidden entirely until the library has something in it, so a
+                     brand-new install doesn't show an empty picker. -->
+                <div class="nl-templates" id="nlTemplates" hidden>
+                  <label for="newsletterTemplatePick">Saved templates</label>
+                  <select id="newsletterTemplatePick" aria-describedby="nlTemplateMsg"></select>
+                  <button type="button" id="newsletterTemplateUse">Start from this</button>
+                  <button type="button" id="newsletterTemplateDelete">Delete</button>
+                </div>
+                <div class="nl-template-save">
+                  <button type="button" id="newsletterTemplateSave">Save as template</button>
+                  <!-- Revealed by the button above rather than a browser prompt(), which this admin
+                       never uses (window.confirm is only used to guard destructive actions). -->
+                  <input type="text" id="newsletterTemplateName" maxlength="80" placeholder="Template name"
+                    aria-label="Template name" hidden />
+                  <button type="button" id="newsletterTemplateSaveConfirm" hidden>Save to library</button>
+                  <button type="button" id="newsletterTemplateSaveCancel" hidden>Cancel</button>
+                </div>
+                <p id="nlTemplateMsg" class="nl-sub-msg" aria-live="polite"></p>
                 <p id="newsletterMsg" aria-live="polite"></p>
               </form>
             </section>

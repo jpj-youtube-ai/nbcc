@@ -418,12 +418,10 @@
                   <div class="ty-row">
                     <div class="ty-field">
                       <label for="tySigner">Signed by</label>
-                      <select id="tySigner">
-                        <option data-role="Head Elf (Trustee), Night Before Christmas Campaign">Jodie McFarlane</option>
-                        <option data-role="Procurement (Trustee), Night Before Christmas Campaign">Isabella McFarlane</option>
-                        <option data-role="Marketing, Night Before Christmas Campaign">Jon McFarlane</option>
-                        <option data-role="Project Manager, Night Before Christmas Campaign">Jaimie Wakefield</option>
-                      </select>
+                      <!-- Populated from AdminHelpers.SIGNERS (TASK-251) — the ONE list of who can
+                           sign for NBCC, shared with the newsletter's sign-off block so adding or
+                           removing a signer updates both. Do not hardcode <option>s here again. -->
+                      <select id="tySigner"></select>
                     </div>
                     <div class="ty-field">
                       <label for="tyDate">Letter date</label>

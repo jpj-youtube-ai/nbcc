@@ -39,7 +39,12 @@ const CREAM_82 = "rgba(248,245,238,.82)";
 const HEAD = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const BODY = "'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
 // The script signature stack, matching assets/thankyou-letter-print.html (system cursive fallback).
-const SCRIPT = "'Snell Roundhand','Palace Script MT','Edwardian Script ITC','Apple Chancery','Lucida Calligraphy','Lucida Handwriting',cursive";
+// The hand NBCC signs in. A stack of SYSTEM script faces ending in `cursive` — deliberately no
+// webfont, because a mail client would drop one and we would lose the signature entirely.
+// EXPORTED (TASK-251) so the newsletter's sign-off block signs identically by importing this rather
+// than copying the string: "the same signature as the thank-you email" then stays true by
+// construction, instead of until someone edits one of the two.
+export const SCRIPT = "'Snell Roundhand','Palace Script MT','Edwardian Script ITC','Apple Chancery','Lucida Calligraphy','Lucida Handwriting',cursive";
 // The real logo needs an ABSOLUTE URL in email (relative paths don't resolve in a mail client).
 const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";
 // The fixed NBCC letterhead sender (as in the mockup).

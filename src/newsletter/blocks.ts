@@ -19,6 +19,10 @@ import {
   BODY,
   LOGO_URL,
 } from "./theme";
+// TASK-251: the sign-off block signs in the SAME hand as the thank-you email. Imported from that
+// module rather than copied here, so the two can never drift apart — if the signature changes there,
+// the newsletter follows automatically, which is what "the same signature" has to mean.
+import { SCRIPT } from "../thank-you/letter";
 
 export const BLOCK_TYPES = [
   "masthead",
@@ -34,6 +38,7 @@ export const BLOCK_TYPES = [
   "donationCta",
   "button",
   "divider",
+  "signoff",
   "rawHtml",
 ] as const;
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -799,9 +804,46 @@ function donationCta(b: Block): string {
 </div>`;
 }
 
+// TASK-251: the sign-off — the letter-style close a newsletter ends on:
+//
+//   With love and gratitude,
+//   Jodie McFarlane                 <- signed in NBCC's hand
+//   On behalf of everyone at NBCC
+//   info@nbcc.scot
+//
+// The name is set in SCRIPT, IMPORTED from the thank-you email (src/thank-you/letter.ts) rather than
+// copied, so the two always sign identically — that is the whole point of the block. It is a stack of
+// system script faces ending in `cursive`: no webfont, because a mail client would drop one and the
+// signature with it. Every line except the name is optional and simply omitted when blank, so a
+// half-filled sign-off never renders as a dangling gap.
+function signoffBlock(b: Block): string {
+  const closing = escapeHtml(str(b.data, "closing"));
+  const name = escapeHtml(str(b.data, "name"));
+  const role = escapeHtml(str(b.data, "role"));
+  const email = str(b.data, "email").trim();
+  const centred = b.variant === 1;
+  const align = centred ? "center" : "left";
+
+  const closingEl = closing
+    ? `<p style="font-family:${BODY};color:${SLATE};font-size:16px;margin:0">${closing}</p>`
+    : "";
+  const nameEl = name
+    ? `<div style="font-family:${SCRIPT};color:${CRIMSON};font-size:30px;line-height:1.15;margin-top:2px">${name}</div>`
+    : "";
+  const roleEl = role
+    ? `<div style="font-family:${BODY};color:${SLATE_SOFT};font-size:14px;margin-top:2px">${role}</div>`
+    : "";
+  const emailEl = email
+    ? `<div style="font-family:${BODY};font-size:14px;margin-top:2px"><a href="mailto:${escapeHtml(email)}" style="color:${CRIMSON};text-decoration:none">${escapeHtml(email)}</a></div>`
+    : "";
+
+  return `<div style="padding:16px 40px 12px;text-align:${align}">${closingEl}${nameEl}${roleEl}${emailEl}</div>`;
+}
+
 const stub = (): string => "";
 
 export const RENDERERS: Record<BlockType, (b: Block, ctx: RenderCtx) => string> = {
+  signoff: signoffBlock,
   masthead,
   rawHtml,
   greeting,

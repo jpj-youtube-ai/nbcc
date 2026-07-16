@@ -74,6 +74,44 @@ describe("thank-you.html markup carries the five variant blocks + the shared con
   });
 });
 
+// TASK-247: every test above proves the right BLOCK is revealed — none of them read what it SAYS. The
+// four blocks are hand-written copy that gets reworked (TASK-229/230 rewrote the donor wording), so an
+// edit could put monthly language in the one-off block, or call an individual a business: the right
+// block carrying the wrong message. Routing tests all still pass, because the block id never moved.
+// So pin the COPY contract itself — each variant's wording must match the gift it is thanking.
+describe("each variant's copy matches the gift it thanks (TASK-247)", () => {
+  const copy = (id: string) => norm(doc0.getElementById(id)?.textContent).toLowerCase();
+
+  it("a one-off block never promises an ongoing gift, and says the gift is complete", () => {
+    // A one-off donor is done. Any monthly/cancel wording here would tell them they have a commitment
+    // they never made.
+    for (const id of ["tyIndividualOnce", "tyBusinessOnce"]) {
+      expect(copy(id), `#${id} must not imply an ongoing gift`).not.toMatch(/monthly|each month|cancel/);
+      expect(copy(id), `#${id} must say the gift is complete`).toMatch(/nothing more for you to do/);
+    }
+  });
+
+  it("a monthly block says it is monthly, and never closes the gift off as complete", () => {
+    // The mirror image: a monthly donor must not be told there is "nothing more" — there is, every month.
+    for (const id of ["tyIndividualMonthly", "tyBusinessMonthly"]) {
+      expect(copy(id), `#${id} must say it is monthly`).toMatch(/monthly/);
+      expect(copy(id), `#${id} must not close the gift off`).not.toMatch(/nothing more for you to do/);
+    }
+    // The individual-monthly variant is the only one with no follow-up step, so it carries the promise
+    // that the donor stays in control (the business-monthly variant has the recognition form instead).
+    expect(copy("tyIndividualMonthly"), "must tell a monthly donor they can cancel").toMatch(/cancel/);
+  });
+
+  it("only the business blocks call the donor a business", () => {
+    for (const id of ["tyBusinessOnce", "tyBusinessMonthly"]) {
+      expect(copy(id), `#${id} must thank the business`).toMatch(/business/);
+    }
+    for (const id of ["tyIndividualOnce", "tyIndividualMonthly"]) {
+      expect(copy(id), `#${id} must not call an individual donor a business`).not.toMatch(/business/);
+    }
+  });
+});
+
 describe("thankYouVariant (pure selection)", () => {
   it("returns generic when the mode param is absent (old / paramless link)", () => {
     expect(thankYouVariant({})).toBe("generic");

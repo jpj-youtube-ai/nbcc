@@ -2394,16 +2394,15 @@
     return html + "</tbody></table>";
   }
 
-  // TASK-252: delete. Admin only (sending is admin-only, so unsending's paper trail is too), and the
-  // LABEL tells the truth about which of the two things will happen — a draft is really deleted, a
-  // sent newsletter is only redacted, and calling that "Delete" would imply the record is gone when it
-  // deliberately is not. An already-redacted newsletter offers nothing: its content is already gone.
+  // TASK-258 (superseding TASK-252): a SENT newsletter is a permanent record — no delete of any kind
+  // is offered on it, and the server refuses one anyway. Only a draft (never went anywhere) can go.
+  // Rows redacted before the reversal keep their label so history reads honestly.
   function nlDeleteCell(n) {
     if (!isAdmin()) return "";
     if (n.redactedAt) return ' <span class="admin-muted">Content deleted</span>';
-    var label = n.status === "sent" ? "Delete content" : "Delete";
+    if (n.status === "sent") return "";
     return ' <button class="admin-link admin-link-danger" type="button" data-delete-newsletter="' + n.id +
-      '" data-newsletter-status="' + n.status + '">' + label + "</button>";
+      '" data-newsletter-status="' + n.status + '">Delete</button>';
   }
 
   // TASK-252: delete a newsletter. The confirm says exactly what will happen, because the two cases
@@ -2427,8 +2426,7 @@
           el("newsletterMsg").textContent = (r.b && r.b.error) || "Could not delete that newsletter.";
           return;
         }
-        el("newsletterMsg").textContent =
-          r.b.status === "redacted" ? "Content deleted. The record of the send is kept." : "Draft deleted.";
+        el("newsletterMsg").textContent = "Draft deleted.";
         // The open editor may be showing what we just removed — reset it rather than leave a ghost.
         if (String(el("newsletterId").value) === String(id)) {
           el("newsletterId").value = "";

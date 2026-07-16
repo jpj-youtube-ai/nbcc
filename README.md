@@ -1686,111 +1686,15 @@ rewritten), **masthead** (the brand signature; its variants already span 16→26
 **divider/image** (no text) take no step — `NO_SIZE_STEP` in `src/newsletter/blocks.ts` is the
 authority, mirrored by `NL_NO_SIZE` in the builder.
 
-**Deleting a newsletter (TASK-252).** `DELETE /api/admin/newsletters/:id`, **Admin only** (sending is
-admin-only, so unsending's paper trail is too). What it does is decided **server-side from the
-newsletter's own status**, never by the caller:
-
-- **draft** → really deleted. It never went anywhere.
-- **sent** → **redacted**, not deleted. It went to real donors, so deleting the row would destroy the
-  record of what was emailed — but keeping it forever means holding donor addresses indefinitely. So
-  the **content goes** (`body_html` blanked, `body_json`, `failed_emails` and the attachments cleared)
-  and a permanent **stub stays** — subject, `sent_at`, `recipient_count`, `sent_count`, `failed_count`
-  — so *"what did we send, when, to how many?"* is always answerable. Responds `200 {status:
-  "redacted"}` so the UI can say what actually happened.
-
-`body_html` is **blanked to `''`, never nulled**: the column is `NOT NULL`, and relaxing that would
-break older code expecting a string on a rollback. Both paths go through **`writeWithAudit`**, so the
-change and its `audit_log` row (`newsletter.deleted` / `newsletter.redacted`) commit in one
-transaction — a redaction can't land without the record of who did it. Each statement carries a
-`status = 'draft'` / `status = 'sent'` guard, so neither path can ever touch the other's newsletters.
-In the list the button reads **"Delete content"** on a sent newsletter (calling it "Delete" would imply
-the record is gone when it deliberately isn't) and **"Delete"** on a draft; an already-redacted one
-shows "Content deleted" and offers nothing. Both are `confirm()`-guarded with wording that states what
-survives.
-
-**Opens + clicks, per link (TASK-257 — email stats Phase 2, dormant until the subdomain exists).**
-`email.opened` / `email.clicked` join the consumed webhook set; a click stores its **destination
-link** (`link_url`; additive migration widens the event-type CHECK). Stats add `opened`, `clicked`
-(distinct people) and a **per-link table** — unique clickers first, totals alongside, capped at 50 —
-with **unsubscribe links excluded** (tokenised per person, they'd drown the table in
-donor-identifying one-click rows; the Unsubscribed tile already counts that behaviour honestly). The
-panel shows **Opened (approx.)** — opens are never presented as exact (Apple Mail prefetches,
-image-blocking undercounts; a hint says so) — and **Clicked** tiles **only when engagement exists**:
-"0 Opened" on an untracked send would read as "nobody opened it". No relay change was needed (the
-relay honours the app-supplied `from`), so activation is: Phase 1 switch-on → add the newsletter-only
-subdomain in Resend + DNS → enable tracking on that domain only (receipts stay untracked) → point
-`NEWSLETTER_FROM_EMAIL` at it.
-
-**Delivery stats panel (TASK-256).** Opening a **sent** newsletter in the admin shows a Delivery
-panel: **Accepted / Delivered / Bounced / Spam / Unsubscribed** tiles with counts and rates
-(`AdminHelpers.rateOf` — honest at the edges: a non-zero count never reads "0%", a shortfall never
-reads "100%", and a missing denominator renders nothing rather than an invented rate), plus the
-bounced addresses as removable-list chips. The panel is honest about absence: a send that predates
-tracking says *"Sent before delivery tracking was switched on"* (never a grid of fake zeros), a
-redacted newsletter explains its per-address detail went with the content, a draft shows nothing, and
-a failed stats fetch just keeps the panel hidden — stats are decoration on the builder, never a
-dependency of it.
-
-**Email delivery stats, Phase 1 (TASK-255).** Per-newsletter **delivery truth**: Resend (the provider
-behind `services/email-relay`) POSTs a signed event to `POST /api/webhooks/resend` for every email on
-the domain; we verify the **Svix signature** over the raw bytes (`RESEND_WEBHOOK_SECRET`, mounted
-before `express.json` exactly like the Stripe webhook — the signature is the entire trust boundary on
-a public URL) and keep `delivered` / `bounced` / `complained` events **only when they match a
-newsletter send**. Matching runs against `newsletter_sends` (one row per accepted recipient, batch-
-recorded best-effort after the send loop): newest send for that address, ≤ 14 days before the event.
-Anything unmatched — receipts, login codes — is acknowledged and **dropped**, not warehoused. Inserts
-are idempotent on the Svix id (partial unique index), so Resend's retries can never double-count.
-Unsubscribes are attributed via the **v2 unsubscribe token** (`donorId.newsletterId.sig`); legacy
-2-part tokens in already-sent emails **verify forever** (an unsubscribe link that stops working is a
-compliance failure). `GET /api/admin/newsletters/:id/stats` (Editor+) returns **aggregates only** —
-sends/delivered/bounced/complained/unsubscribed + the bounced addresses for list cleaning; there is
-deliberately no "who opened what" view. Redacting a newsletter (TASK-252) also clears its sends/events
-rows — donor addresses, the same class as `failed_emails`. **Silent junk-folder placement is not
-measurable by anyone**; complaints and bounces are the honest proxies, and the dashboard never claims
-a "junk rate". Config: `RESEND_WEBHOOK_SECRET` (schema default `""` → endpoint answers 503 until
-configured, so deploys don't depend on dashboard setup; SSM `REPLACE_ME` + task-def secret +
-`exec_secrets` IAM + `pr.yml` env). **One-time setup:** Resend dashboard → Webhooks → add
-`https://nbcc.scot/api/webhooks/resend` (staging: `https://staging.nbcc.scot/...`), select
-`email.delivered`, `email.bounced`, `email.complained`, then put the `whsec_…` signing secret into the
-env's SSM parameter. Stats accrue from switch-on; Resend does not back-report. Phase 2 (opens/clicks
-via a newsletter-only sending subdomain, so receipts are never tracked) is specced but not built —
-see `docs/superpowers/specs/2026-07-16-newsletter-email-stats-design.md`.
-
-**`{{firstName}}` in the subject line (TASK-254).** The subject merges per recipient, like the body
-always has. Previously the body personalised and the subject went out **raw**, so a newsletter titled
-_"Hey, {{firstName}}!"_ reached every donor with the marker showing — the builder invites the merge
-field, and it only ever worked in half the email.
-
-Uses **`mergeSubject`**, deliberately *not* the body's `applyMerge`: a subject line is **plain text**,
-so escaping it would put `Hey, O&#39;Brien` and `Ben &amp; Jerry` in donors' inboxes. Two jobs, two
-functions. A blank name falls back to `"friend"` (matching `firstNameOf`), so `"Hey, !"` can't go out.
-The **test send** now personalises as `PREVIEW_FIRST_NAME` — the same sample donor the live preview
-uses, one constant shared by both — rather than `firstNameOf(claims.email)`, which greeted the tester
-as _"Dear admin@nbcc.scot"_ and would have put an email address in the title too. Preview, test send
-and the real send now agree about what personalisation looks like. The test-send response echoes the
-**subject actually sent**, which is what makes the merge assertable across the HTTP hop — the bug lived
-at the call site, not in the merge function.
-
-**Bold / italic on selected text (TASK-253).** Every **prose** field (the text block's body, a
-greeting's intro, a story's body, a spotlight's quote — i.e. every `kind: "textarea"` field) carries a
-**B / I** pair. They wrap the current selection in plain-text markers — `**bold**`, `*italic*` — which
-the server renders as `<strong>` / `<em>`, the two most universally supported tags in email (Outlook
-included). Not offered on titles or button labels: emphasis belongs in prose.
-
-The block's `data` stays a **plain string**, so templates, the size step and the `{{firstName}}` merge
-all keep working untouched — no rich-text model, no HTML in the document, nothing to sanitise. The
-pipeline in `src/newsletter/theme.ts` is:
-
-```
-escapeHtml(copy)  →  applyEmphasis  →  substitute {{firstName}}
-```
-
-Emphasis is applied to **already-escaped** copy, which is the entire safety argument: by that point the
-input cannot contain live markup, so the only tags that can reach an inbox are the two we introduce —
-`proseHtml` needs no sanitiser and no allowlist. The merge runs **last**, so a donor called `**Bob**`
-has their name printed, not bolded. Bold is matched before italic so `**x**` is consumed first, and a
-lone `*` (`2 * 3 = 6`) is left alone. The buttons **toggle** rather than stack, and pressing *I* on
-already-bold text nests (`***x***`) instead of stripping half of the `**` and silently demoting it.
+**Deleting a newsletter (TASK-252, hardened by TASK-258).** `DELETE /api/admin/newsletters/:id`,
+**Admin only**. A **draft** (never went anywhere) is really deleted, through `writeWithAudit` so the
+deletion and its `audit_log` row commit atomically. A **sent** newsletter is **immutable — a permanent
+record**: the server answers `409`, the UI renders no delete control on it at all, and the db function
+that could redact one (TASK-252's) was **removed, not disabled** — immutability by absence. Rationale:
+a sent campaign is what the charity produces when trustees, complainants or the Fundraising Regulator
+ask *"what exactly did you send?"*, and the stored content carries no donor data (names merge per
+recipient at send time), so privacy never required deleting it. Rows redacted before the reversal keep
+their `redacted_at` label and honest "Content deleted" display.
 
 **Sign-off block (TASK-251).** The letter-style close a newsletter ends on — a closing line, the
 signer's name, a line under it, and a contact email:

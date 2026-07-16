@@ -780,21 +780,16 @@ describe("sign-off block wiring (TASK-251)", () => {
   });
 });
 
-// TASK-252: the delete control. The SQL contract is proven in newsletter-delete.test.ts and the round
-// trip in the BDD scenario; what matters HERE is that the UI never misleads. A sent newsletter is only
-// REDACTED — its record survives — so calling that button "Delete" would tell the admin the newsletter
-// is gone when it deliberately is not. These pin the wording and the admin-only gate.
-describe("delete a newsletter (TASK-252)", () => {
+// TASK-258 (superseding TASK-252): a SENT newsletter is a permanent record. The UI's side of that
+// promise: no delete control of any kind renders on a sent newsletter, only drafts offer one, and
+// rows redacted before the reversal keep an honest label.
+describe("sent newsletters are permanent in the UI (TASK-258)", () => {
   const mount = (role: string) => {
     loginToken = tokenFor(role);
     singleNewsletter = legacyNewsletter;
     savedRequests.length = 0;
-    previewRequests.length = 0;
-    sendRequests.length = 0;
-    subscriberRequests.length = 0;
-    testSendRequests.length = 0;
-    templateRows = [];
     deleteRequests.length = 0;
+    templateRows = [];
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -808,25 +803,29 @@ describe("delete a newsletter (TASK-252)", () => {
   const sentRow = { id: 42, subject: "Sent one", status: "sent", sentAt: "2026-07-01T10:00:00.000Z", recipientCount: 120, redactedAt: null };
   const btn = (id: number) => el("newsletterList").querySelector(`[data-delete-newsletter="${id}"]`) as HTMLButtonElement;
 
-  it("says 'Delete content' on a SENT newsletter — never plain 'Delete', which would be a lie", async () => {
+  it("offers NO delete control on a sent newsletter — not even to an admin", async () => {
     newsletterListRows = [sentRow];
     mount("admin");
     await openNewsletterTab();
     await flush();
-    expect(btn(42)).toBeTruthy();
-    // The record of the send survives. The label has to say so.
-    expect(btn(42).textContent).toBe("Delete content");
+    expect(btn(42)).toBeNull();
   });
 
-  it("says plain 'Delete' on a draft, which really does go", async () => {
+  it("still offers Delete on a draft, admin-only, confirm-guarded", async () => {
     newsletterListRows = [draftRow];
     mount("admin");
     await openNewsletterTab();
     await flush();
-    expect(btn(41).textContent).toBe("Delete");
+    expect(btn(41)).toBeTruthy();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    btn(41).click();
+    await flush();
+    await flush();
+    expect(deleteRequests).toEqual(["/api/admin/newsletters/41"]);
+    confirmSpy.mockRestore();
   });
 
-  it("is offered to an admin only — an editor can write newsletters but not unsend them", async () => {
+  it("shows no delete controls at all to an editor", async () => {
     newsletterListRows = [draftRow, sentRow];
     mount("editor");
     await openNewsletterTab();
@@ -834,158 +833,12 @@ describe("delete a newsletter (TASK-252)", () => {
     expect(el("newsletterList").querySelectorAll("[data-delete-newsletter]").length).toBe(0);
   });
 
-  it("offers nothing on an already-redacted newsletter — its content is already gone", async () => {
+  it("keeps the honest label on rows redacted before the reversal", async () => {
     newsletterListRows = [{ ...sentRow, redactedAt: "2026-07-16T09:00:00.000Z" }];
     mount("admin");
     await openNewsletterTab();
     await flush();
-    expect(btn(42)).toBeNull();
     expect(el("newsletterList").textContent).toContain("Content deleted");
-  });
-
-  it("asks first, and tells the truth about what survives", async () => {
-    newsletterListRows = [sentRow];
-    mount("admin");
-    await openNewsletterTab();
-    await flush();
-
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    btn(42).click();
-    await flush();
-    expect(deleteRequests).toHaveLength(0); // declined -> nothing happens
-    // The admin must know the record is KEPT before deciding, not discover it after.
-    const asked = String(confirmSpy.mock.calls[0][0]);
-    expect(asked).toMatch(/record/i);
-    expect(asked).toMatch(/cannot be undone/i);
-
-    confirmSpy.mockReturnValue(true);
-    btn(42).click();
-    await flush();
-    await flush();
-    expect(deleteRequests).toEqual(["/api/admin/newsletters/42"]);
-    confirmSpy.mockRestore();
-  });
-});
-
-// TASK-253: the B / I buttons. They wrap the SELECTION in the plain-text markers the server renders
-// (**bold**, *italic*), so the block's data stays a plain string and nothing else in the model has to
-// change. What earns its keep here: the buttons act on the selection, they toggle rather than stack
-// markers, the change reaches the saved document, and — the fiddly one — hitting I on already-bold
-// text must not strip half of the `**` and silently turn it italic.
-describe("bold / italic buttons (TASK-253)", () => {
-  beforeEach(() => {
-    loginToken = tokenFor("editor");
-    singleNewsletter = legacyNewsletter;
-    newsletterListRows = [];
-    savedRequests.length = 0;
-    previewRequests.length = 0;
-    sendRequests.length = 0;
-    subscriberRequests.length = 0;
-    testSendRequests.length = 0;
-    templateRows = [];
-    window.sessionStorage.clear();
-    document.body.innerHTML = bodyHtml;
-    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
-    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
-      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
-    );
-    // eslint-disable-next-line no-eval
-    (0, eval)(appSrc);
-  });
-
-  const area = () => el("nlCanvas").querySelector("textarea") as HTMLTextAreaElement;
-  const emph = (label: string) =>
-    Array.prototype.find.call(
-      el("nlCanvas").querySelectorAll(".nl-emph"),
-      (b: HTMLButtonElement) => b.textContent === label,
-    ) as HTMLButtonElement;
-  const addText = async (value: string) => {
-    await openNewsletterTab();
-    (el("newsletterNew") as HTMLElement).click();
-    clickPalette("Text");
-    const t = area();
-    t.value = value;
-    t.dispatchEvent(new Event("input", { bubbles: true }));
-    return t;
-  };
-  const select = (t: HTMLTextAreaElement, word: string) => {
-    const i = t.value.indexOf(word);
-    t.setSelectionRange(i, i + word.length);
-  };
-
-  it("offers B and I on a prose field", async () => {
-    await addText("Give generously");
-    expect(emph("B")).toBeTruthy();
-    expect(emph("I")).toBeTruthy();
-  });
-
-  it("wraps the selected word, not the whole paragraph", async () => {
-    const t = await addText("Give generously today");
-    select(t, "generously");
-    emph("B").click();
-    expect(t.value).toBe("Give **generously** today");
-  });
-
-  it("italicises the selection", async () => {
-    const t = await addText("Give generously today");
-    select(t, "generously");
-    emph("I").click();
-    expect(t.value).toBe("Give *generously* today");
-  });
-
-  it("toggles off rather than stacking markers when you click twice", async () => {
-    const t = await addText("Give generously today");
-    select(t, "generously");
-    emph("B").click();
-    expect(t.value).toBe("Give **generously** today");
-    select(t, "generously"); // the word itself is still what's selected
-    emph("B").click();
-    expect(t.value).toBe("Give generously today"); // not ****generously****
-  });
-
-  it("does NOT turn bold into italic when you hit I on already-bold text", async () => {
-    // The fiddly one: `**x**` ends with a `*`, so a naive toggle would strip one and leave `*x*`.
-    const t = await addText("Give generously today");
-    select(t, "generously");
-    emph("B").click();
-    select(t, "generously");
-    emph("I").click();
-    // Bold survives; the italic wraps INSIDE it.
-    expect(t.value).toBe("Give ***generously*** today");
-    expect(t.value).not.toBe("Give *generously* today");
-  });
-
-  it("does nothing when nothing is selected — no stray markers in your copy", async () => {
-    const t = await addText("Give generously today");
-    t.setSelectionRange(4, 4); // a caret, not a selection
-    emph("B").click();
-    expect(t.value).toBe("Give generously today");
-  });
-
-  it("carries the markers into the saved document", async () => {
-    const t = await addText("Give generously today");
-    (el("newsletterSubject") as HTMLInputElement).value = "Emphasised";
-    select(t, "generously");
-    emph("B").click();
-
-    (el("newsletterForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-    await flush();
-    await flush();
-    const sent = savedRequests[0].body.bodyJson as { blocks: { data: { text: string } }[] };
-    expect(sent.blocks[0].data.text).toBe("Give **generously** today");
-  });
-
-  it("is withheld in read mode — emphasis is an edit", async () => {
-    loginToken = tokenFor("viewer");
-    singleNewsletter = {
-      id: 41, subject: "Sized draft", status: "draft", sentAt: null, recipientCount: null, bodyHtml: null,
-      bodyJson: { blocks: [{ type: "text", variant: 0, data: { text: "Body" } }] },
-    };
-    newsletterListRows = [{ id: 41, subject: "Sized draft", status: "draft", sentAt: null, recipientCount: null }];
-    await openNewsletterTab();
-    await flush();
-    const buttons = el("nlCanvas").querySelectorAll(".nl-emph");
-    Array.prototype.forEach.call(buttons, (b: HTMLButtonElement) => expect(b.disabled).toBe(true));
   });
 });
 

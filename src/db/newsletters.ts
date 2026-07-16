@@ -268,48 +268,10 @@ export async function deleteDraftNewsletter(id: number, actor: string, subject: 
   );
 }
 
-// Redact a SENT newsletter: strip the content and the donor addresses, keep the audit stub.
-//
-// KEPT (deliberately untouched): subject, status, sent_at, sent_by, recipient_count, sent_count,
-// failed_count — the record the charity has to be able to produce.
-// CLEARED: body_html, body_json, failed_emails, and the attachments.
-//
-// body_html is BLANKED to '' rather than nulled: the column is NOT NULL, and relaxing that would break
-// older code expecting a string if we ever rolled back. Returns false when nothing matched (already
-// redacted rows still match, so re-redacting is harmless and idempotent) — the `status = 'sent'` guard
-// means this can never touch a draft.
-export async function redactSentNewsletter(
-  id: number,
-  redactedBy: number | null,
-  actor: string,
-  subject: string,
-): Promise<boolean> {
-  return writeWithAudit(
-    async (client) => {
-      // Attachments are content too — and they are the actual files that went to donors. Inside the
-      // transaction, so a failure part-way cannot leave the files gone but the newsletter intact.
-      await client.query(`DELETE FROM newsletter_attachments WHERE newsletter_id = $1`, [id]);
-      // TASK-255: the delivery-tracking rows are keyed BY donor address — the same data class as
-      // failed_emails, so the redaction promise covers them. Same transaction: a partial redaction
-      // is not a redaction. The stub keeps the headline counts; per-address detail goes.
-      await client.query(`DELETE FROM newsletter_email_events WHERE newsletter_id = $1`, [id]);
-      await client.query(`DELETE FROM newsletter_sends WHERE newsletter_id = $1`, [id]);
-      const { rowCount } = await client.query(
-        `UPDATE newsletters
-            SET body_html = '', body_json = NULL, failed_emails = NULL,
-                redacted_at = now(), redacted_by = $2
-          WHERE id = $1 AND status = 'sent'`,
-        [id, redactedBy],
-      );
-      return (rowCount ?? 0) > 0;
-    },
-    (redacted) => ({
-      actor,
-      action: "newsletter.redacted",
-      entity: "newsletter",
-      entityId: id,
-      // The audit keeps what the redacted row no longer can: the audit trail the user asked for.
-      data: { subject, redacted },
-    }),
-  );
-}
+// TASK-258: there is deliberately NO redact/delete for a SENT newsletter in this module — the
+// function that did it (TASK-252's redactSentNewsletter) was REMOVED, not disabled. A sent campaign
+// is the charity's permanent record of what was said to donors (trustees, complaints and the
+// Fundraising Regulator all ask "what exactly did you send?"), and the stored content carries no
+// donor data — names merge per recipient at send time, so privacy never required deleting it.
+// Immutability by absence: nothing to call, nothing to guard, nothing to forget. The redacted_at /
+// redacted_by columns remain for the rows redacted before the reversal; the UI still labels those.

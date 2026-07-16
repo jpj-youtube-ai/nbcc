@@ -130,3 +130,26 @@ describe("SIGNERS (the one list of who can sign for NBCC)", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 });
+
+// TASK-256: the delivery-stats rate. Pure and defensive: rates read as "of the emails accepted, how
+// many...", and the two degenerate cases must render as ABSENCE, not as a scary "0%" — a newsletter
+// sent before tracking existed has no denominator, and that is "no data", not "nothing delivered".
+describe("rateOf (delivery stats)", () => {
+  it("formats a plain percentage of the denominator", () => {
+    expect(H.rateOf(139, 142)).toBe("98%");
+    expect(H.rateOf(3, 142)).toBe("2%"); // 1/142 would be 0.7% — that is the "<1%" case below, not "1%"
+  });
+
+  it("never rounds a non-zero count DOWN to 0% or a shortfall UP to 100%", () => {
+    // 1 bounce out of 500 is real — "0%" would hide it; 499/500 delivered is not "100%".
+    expect(H.rateOf(1, 500)).toBe("<1%");
+    expect(H.rateOf(499, 500)).toBe("99%");
+    expect(H.rateOf(500, 500)).toBe("100%");
+    expect(H.rateOf(0, 500)).toBe("0%");
+  });
+
+  it("returns empty for a missing denominator rather than inventing a rate", () => {
+    expect(H.rateOf(3, 0)).toBe("");
+    expect(H.rateOf(0, 0)).toBe("");
+  });
+});

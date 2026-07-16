@@ -2454,6 +2454,9 @@
         }
         var sent = n.status === "sent";
         nlSent = sent;
+        // TASK-256: delivery truth for a SENT newsletter; a draft has no delivery to report.
+        if (sent) nlRefreshStats(n.id, n.redactedAt);
+        else nlHideStats();
         // Read mode = no newsletter:edit permission OR an already-sent newsletter. Send/Save/New are
         // all gated to newsletter:edit (the server's authorizeSection level for these routes).
         var canWrite = canEdit("newsletter");
@@ -2648,6 +2651,64 @@
       .catch(function () { el("nlAttachMsg").textContent = "Could not remove that attachment."; });
   }
 
+  // --- Delivery stats panel (TASK-256, email stats Phase 1) -----------------------------------------
+  // Declared at the IIFE top level beside nlRefreshAttachments (the TASK-249 lesson: these are called
+  // from loadNewsletterInto, outside any if-block that might otherwise scope them away).
+  function nlHideStats() {
+    var host = el("nlStats");
+    if (host) host.hidden = true;
+  }
+
+  // Aggregates only, and honest about absence: a sent newsletter with NO send rows either predates
+  // tracking or was redacted — both get a sentence, never a grid of fake zeros.
+  function nlRenderStats(stats, redactedAt) {
+    var host = el("nlStats");
+    var grid = el("nlStatsGrid");
+    var note = el("nlStatsNote");
+    if (!host || !grid || !note) return;
+    grid.innerHTML = "";
+    note.textContent = "";
+    host.hidden = false;
+
+    if (!stats.sends) {
+      note.textContent = redactedAt
+        ? "The content was deleted, and its per-address delivery detail went with it. The send record above is kept."
+        : "Sent before delivery tracking was switched on — no delivery data for this one.";
+      return;
+    }
+
+    [
+      { label: "Accepted", n: stats.sends, rate: "" },
+      { label: "Delivered", n: stats.delivered, rate: H.rateOf(stats.delivered, stats.sends) },
+      { label: "Bounced", n: stats.bounced, rate: H.rateOf(stats.bounced, stats.sends) },
+      { label: "Spam", n: stats.complained, rate: H.rateOf(stats.complained, stats.sends) },
+      { label: "Unsubscribed", n: stats.unsubscribed, rate: H.rateOf(stats.unsubscribed, stats.sends) },
+    ].forEach(function (tile) {
+      var d = doc.createElement("div");
+      d.className = "nl-stat";
+      d.innerHTML =
+        '<span class="nl-stat-n">' + tile.n + "</span>" +
+        (tile.rate ? '<span class="nl-stat-rate">' + tile.rate + "</span>" : "") +
+        '<span class="nl-stat-label">' + tile.label + "</span>";
+      grid.appendChild(d);
+    });
+
+    if (stats.bouncedEmails && stats.bouncedEmails.length) {
+      note.innerHTML =
+        "Bounced (dead addresses, worth removing): " +
+        stats.bouncedEmails.map(function (e) { return "<code>" + H.escapeHtml(e) + "</code>"; }).join(", ");
+    }
+  }
+
+  // Best-effort by design: stats are decoration on the builder, so any failure just keeps the panel
+  // hidden — the builder must never care.
+  function nlRefreshStats(id, redactedAt) {
+    authFetch("/api/admin/newsletters/" + id + "/stats")
+      .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
+      .then(function (stats) { nlRenderStats(stats, redactedAt); })
+      .catch(function () { nlHideStats(); });
+  }
+
   // --- The SHARED saved-template library: helpers (TASK-249) ---------------------------------------
   // Declared HERE, at the IIFE's top level beside nlRefreshAttachments, NOT inside the if (nlForm)
   // block that holds the listeners: the tab-open flow calls nlRefreshTemplates from outside that
@@ -2787,6 +2848,7 @@
   if (nlForm) {
     el("newsletterNew").addEventListener("click", function () {
       if (!canEdit("newsletter")) return; // read mode: no new drafts
+      nlHideStats(); // a fresh draft has no delivery stats (TASK-256)
       el("newsletterId").value = "";
       el("newsletterSubject").value = "";
       nlDoc = { blocks: [] };

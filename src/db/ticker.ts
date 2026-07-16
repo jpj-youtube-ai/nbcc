@@ -29,18 +29,27 @@ const mapRow = (r: SupporterRow): Supporter => ({
   createdAt: r.created_at,
 });
 
-// Public: the active supporter NAMES for the ticker, in display order (sort_order, then id).
+// Display order (TASK-262), shared by the public feed and the admin list so they never disagree:
+// sort_order first (the manual override — every row defaults to 0, so it is inert until a staffer
+// pins something), then name A-Z, then id. Ordering by NAME rather than id is what keeps the list
+// alphabetical *permanently*: a partner added today sorts into place instead of landing at the
+// bottom, and the seeded batches interleave instead of sitting in per-batch blocks. lower() makes it
+// case-insensitive so "ASDA" and "Asda" can't straddle the alphabet; id is the final tiebreak so
+// duplicate names still have a stable, deterministic order.
+const DISPLAY_ORDER = `ORDER BY sort_order ASC, lower(name) ASC, id ASC`;
+
+// Public: the active supporter NAMES for the ticker, in display order.
 export async function listActiveSupporterNames(): Promise<string[]> {
   const res = await pool.query<{ name: string }>(
-    `SELECT name FROM supporter_ticker WHERE active = true ORDER BY sort_order ASC, id ASC`,
+    `SELECT name FROM supporter_ticker WHERE active = true ${DISPLAY_ORDER}`,
   );
   return res.rows.map((r) => r.name);
 }
 
-// Admin: every supporter (active and hidden), display order first.
+// Admin: every supporter (active and hidden), in the same display order.
 export async function listSupporters(): Promise<Supporter[]> {
   const res = await pool.query<SupporterRow>(
-    `SELECT id, name, active, sort_order, created_at FROM supporter_ticker ORDER BY sort_order ASC, id ASC`,
+    `SELECT id, name, active, sort_order, created_at FROM supporter_ticker ${DISPLAY_ORDER}`,
   );
   return res.rows.map(mapRow);
 }

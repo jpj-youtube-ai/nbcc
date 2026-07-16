@@ -77,6 +77,15 @@ When("I hide that supporter as {string}", async function (email) {
   this.tickerStatus = res.status;
 });
 
+When("I rename that supporter to {string} as {string}", async function (name, email) {
+  const res = await fetch(`${BASE_URL}/api/admin/ticker/${this.lastSupporterId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + this.tickerTokens[email] },
+    body: JSON.stringify({ name }),
+  });
+  this.tickerStatus = res.status;
+});
+
 When("I delete that supporter as {string}", async function (email) {
   const res = await fetch(`${BASE_URL}/api/admin/ticker/${this.lastSupporterId}`, {
     method: "DELETE",
@@ -103,6 +112,22 @@ Then("the public ticker feed should include {string}", async function (name) {
 Then("the public ticker feed should not include {string}", async function (name) {
   const names = await publicFeed();
   assert.ok(!names.includes(name), `expected public feed NOT to include ${name}`);
+});
+
+// TASK-262: the feed is ordered by name, not insertion order, so a partner added later still sorts
+// into place. Asserting relative position (rather than the whole feed) keeps this robust against the
+// other seeded partners already present.
+// Deliberately asserts RELATIVE position rather than sorting the whole feed in JS and comparing:
+// Postgres orders by its own collation, which disagrees with JS localeCompare on punctuation,
+// spaces and accents (the real list has "Bennett's", "Café 51"), so a whole-feed comparison would
+// fail spuriously. Unambiguous Aaa/Mmm/Zzz fixtures hold under any collation.
+Then("the public ticker feed should list {string} before {string}", async function (first, second) {
+  const names = await publicFeed();
+  const i = names.indexOf(first);
+  const k = names.indexOf(second);
+  assert.ok(i !== -1, `expected public feed to include ${first}`);
+  assert.ok(k !== -1, `expected public feed to include ${second}`);
+  assert.ok(i < k, `expected ${first} (index ${i}) to come before ${second} (index ${k})`);
 });
 
 AfterAll(async function () {

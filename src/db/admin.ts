@@ -864,6 +864,7 @@ export interface DunningRow {
   status: string;
   failed_attempts: number;
   lapsed_at: Date | null;
+  cancelled_at: Date | null;
   updated_at: Date;
 }
 
@@ -872,13 +873,18 @@ export interface DunningRow {
 export async function listDunning(status?: string): Promise<DunningRow[]> {
   const params: unknown[] = [];
   let whereSql = "";
-  if (status) {
+  // TASK-245: 'cancelled' is a derived filter — a voluntary cancel is stamped in cancelled_at, not the
+  // status enum ('active'/'past_due'/'lapsed') — so it filters on cancelled_at rather than sd.status.
+  if (status === "cancelled") {
+    whereSql = `WHERE sd.cancelled_at IS NOT NULL`;
+  } else if (status) {
     params.push(status);
     whereSql = `WHERE sd.status = $1`;
   }
   const res = await pool.query<DunningRow>(
     `SELECT sd.id, sd.donor_id, dn.full_name AS donor_name, dn.email AS donor_email,
-            sd.stripe_subscription_id, sd.status, sd.failed_attempts, sd.lapsed_at, sd.updated_at
+            sd.stripe_subscription_id, sd.status, sd.failed_attempts, sd.lapsed_at, sd.cancelled_at,
+            sd.updated_at
        FROM subscription_dunning sd
        JOIN donors dn ON dn.id = sd.donor_id
        ${whereSql}

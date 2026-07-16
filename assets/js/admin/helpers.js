@@ -114,6 +114,18 @@
     return { label: "Paid", state: "paid" };
   }
 
+  // TASK-245 (admin subscriptions view): one display label + state for a subscription_dunning row.
+  // A voluntary cancel is stamped in cancelled_at while status may stay 'active', so Cancelled takes
+  // precedence; otherwise the dunning status maps to Lapsed / At risk / Active. `state` drives the pill
+  // styling (.admin-pill--<state>). Pure/DOM-free.
+  function subscriptionStateLabel(row) {
+    if (row && row.cancelled_at) return { label: "Cancelled", state: "cancelled" };
+    var status = row && row.status;
+    if (status === "lapsed") return { label: "Lapsed", state: "lapsed" };
+    if (status === "past_due") return { label: "At risk", state: "past_due" };
+    return { label: "Active", state: "active" };
+  }
+
   var api = {
     formatPence: formatPence,
     escapeHtml: escapeHtml,
@@ -123,6 +135,7 @@
     consentAge: consentAge,
     storyLabel: storyLabel,
     paymentLabel: paymentLabel,
+    subscriptionStateLabel: subscriptionStateLabel,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

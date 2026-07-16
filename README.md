@@ -1610,7 +1610,12 @@ list. Verified by `test/unit/admin-payment-label.test.ts` and the donations-brow
 `test/unit/admin-app.test.ts`. `GET /api/admin/claim-batches`
 lists the batches with their donation count and summed pence. `GET /api/admin/audit` reads the
 append-only trail newest-first, optionally scoped by `?entity`/`?entityId` and paged the same way.
-`GET /api/admin/subscriptions/dunning` lists at-risk / lapsed monthly gifts (optional `?status`). The
+`GET /api/admin/subscriptions/dunning` lists at-risk / lapsed / **cancelled** monthly gifts (optional
+`?status`; **TASK-245** adds `?status=cancelled`, a derived filter on `cancelled_at IS NOT NULL` since a
+voluntary cancel is stamped in `cancelled_at`, not the status enum). The subscriptions view renders a
+state pill via the pure `helpers.subscriptionStateLabel` (Active / At risk / Lapsed / **Cancelled** —
+cancelled takes precedence over a still-`active` status) with an **Ended** column showing whichever of
+`cancelled_at`/`lapsed_at` applies, so a cancelled subscription is no longer mislabelled as active. The
 one **Editor and up** route (a claims op, like submit) is `GET /api/admin/claim-batches/:id/export`: it
 reuses `listClaimableDonationsForExport(batchId)` + the pure `toCharitiesOnlineCsv` serializer and
 streams the batch's Charities Online CSV as a `text/csv` download. No new config (reuses

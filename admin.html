@@ -307,6 +307,30 @@
                     <button type="submit" class="nl-item-add" id="amAddBtn"><span>Add to audience</span></button>
                   </form>
                   <div id="audienceMembers" aria-live="polite"></div>
+
+                  <!-- Spreadsheet import (TASK-260): CSV or Excel, name + email in two columns (either
+                       order). Preview first — the admin confirms exactly what they see — then the
+                       consent attestation unlocks the import. Opted-out addresses are shown and kept
+                       out: a spreadsheet cannot overrule an unsubscribe. -->
+                  <div class="nl-import">
+                    <h4 class="nl-import-head">Import a spreadsheet</h4>
+                    <p class="admin-help">CSV or Excel, two columns: name and email (either order). You'll see a preview before anything is added.</p>
+                    <div class="nl-import-bar">
+                      <input type="file" id="importFile" accept=".csv,.xlsx,.txt" aria-label="Spreadsheet to import" />
+                      <button type="button" id="importPreviewBtn">Preview import</button>
+                    </div>
+                    <div id="importPreview" hidden>
+                      <p id="importSummary" class="nl-import-summary"></p>
+                      <ul id="importIssues" class="nl-import-issues"></ul>
+                      <label class="nl-import-attest">
+                        <input type="checkbox" id="importAttest" />
+                        <span>These people have agreed to hear from NBCC (for example they signed up at an event or asked to be added).</span>
+                      </label>
+                      <button type="button" id="importCommitBtn" disabled>Import to this audience</button>
+                    </div>
+                    <p id="importMsg" class="nl-sub-msg" aria-live="polite"></p>
+                  </div>
+
                   <p id="audienceMsg" class="nl-sub-msg" aria-live="polite"></p>
                 </div>
                 <p id="subMsg" class="nl-sub-msg" aria-live="polite"></p>

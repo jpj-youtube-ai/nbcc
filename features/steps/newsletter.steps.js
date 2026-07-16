@@ -620,3 +620,64 @@ Then("the audience has {int} members", async function (expected) {
 Then("the newsletter stats should count {int} unsubscribe", function (n) {
   assert.equal(this.stats.unsubscribed, n, JSON.stringify(this.stats));
 });
+
+
+// --- TASK-260: spreadsheet import ------------------------------------------------------------------
+When("I remove {string} from that audience", async function (email) {
+  const members = await authFetch(`/api/admin/subscriber-lists/${this.audienceId}/members`, "GET", undefined, this.token);
+  const m = members.json.find((x) => x.email === email.toLowerCase());
+  assert.ok(m, `expected ${email} on the audience`);
+  const res = await fetch(`${BASE_URL}/api/admin/subscriber-lists/${this.audienceId}/members/${m.id}`, {
+    method: "DELETE",
+    headers: { Authorization: "Bearer " + this.token },
+  });
+  assert.equal(res.status, 204);
+});
+
+When("I preview an import into that audience:", async function (csv) {
+  const r = await authFetch(
+    `/api/admin/subscriber-lists/${this.audienceId}/import/preview`,
+    "POST",
+    { filename: "people.csv", dataBase64: Buffer.from(csv, "utf8").toString("base64") },
+    this.token,
+  );
+  this.audStatus = r.status;
+  this.importPreview = r.json;
+});
+
+Then(
+  "the import preview shows {int} ready, {int} previously opted out and {int} issues",
+  function (ready, optedOut, issues) {
+    assert.equal(this.audStatus, 200, JSON.stringify(this.importPreview));
+    assert.equal(this.importPreview.readyCount, ready, JSON.stringify(this.importPreview));
+    assert.equal(this.importPreview.previouslyUnsubscribed.length, optedOut);
+    assert.equal(this.importPreview.issues.length, issues, JSON.stringify(this.importPreview.issues));
+  },
+);
+
+When("I import it without attestation", async function () {
+  const r = await authFetch(
+    `/api/admin/subscriber-lists/${this.audienceId}/import`,
+    "POST",
+    { rows: this.importPreview.rows },
+    this.token,
+  );
+  this.audStatus = r.status;
+});
+
+When("I import it with attestation", async function () {
+  const r = await authFetch(
+    `/api/admin/subscriber-lists/${this.audienceId}/import`,
+    "POST",
+    { rows: this.importPreview.rows, attestation: true },
+    this.token,
+  );
+  this.audStatus = r.status;
+  this.importResult = r.json;
+});
+
+Then("the import result is {int} added and {int} kept out", function (added, keptOut) {
+  assert.equal(this.audStatus, 200, JSON.stringify(this.importResult));
+  assert.equal(this.importResult.added, added, JSON.stringify(this.importResult));
+  assert.equal(this.importResult.previouslyUnsubscribed, keptOut, JSON.stringify(this.importResult));
+});

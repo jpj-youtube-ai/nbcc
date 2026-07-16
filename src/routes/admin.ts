@@ -103,8 +103,10 @@ import {
   addListSubscriber,
   listListMembers,
   removeListMember,
+  getMembershipStates,
   DuplicateListError,
 } from "../db/subscriber-lists";
+import { parseImportFile } from "../newsletter/import-parse";
 import { recordNewsletterSends, getNewsletterStats } from "../db/newsletter-events";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
@@ -568,6 +570,96 @@ export async function deleteAdminListMember(req: Request, res: Response): Promis
   const removed = await removeListMember(listId, memberId);
   if (!removed) return res.status(404).json({ error: "Member not found" });
   return res.status(204).end();
+}
+
+// TASK-260: spreadsheet import, in two steps that the UI walks through:
+//   preview — parse the uploaded file (CSV or .xlsx) and report EXACTLY what an import would do:
+//             rows ready, problem rows (line + reason), already-on-list, and previously-opted-out
+//             (which an import may NEVER revive — a spreadsheet cannot overrule an opt-out);
+//   import  — takes the rows back WITH an explicit attestation that these people consented to be
+//             contacted. No attestation, no import: that tick is what the charity shows a regulator.
+const importFileSchema = z.object({
+  filename: z.string().trim().min(1),
+  dataBase64: z.string().min(1),
+});
+const IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+
+export async function postAdminListImportPreview(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const listId = Number(req.params.id);
+  if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
+  const list = await getSubscriberList(listId);
+  if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  const parsed = importFileSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Upload a CSV or Excel file" });
+  const data = Buffer.from(parsed.data.dataBase64, "base64");
+  if (data.length > IMPORT_MAX_BYTES) return res.status(413).json({ error: "File too large (2 MB max)" });
+
+  let fileRows;
+  try {
+    fileRows = await parseImportFile(parsed.data.filename, data);
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : "Could not read that file" });
+  }
+
+  const states = await getMembershipStates(listId, fileRows.rows.map((r) => r.email));
+  const active = new Set(states.filter((s) => !s.unsubscribed).map((s) => s.email));
+  const optedOut = new Set(states.filter((s) => s.unsubscribed).map((s) => s.email));
+  const ready = fileRows.rows.filter((r) => !active.has(r.email) && !optedOut.has(r.email));
+  return res.json({
+    rows: fileRows.rows,
+    issues: fileRows.issues,
+    readyCount: ready.length,
+    alreadyOnList: fileRows.rows.filter((r) => active.has(r.email)).map((r) => r.email),
+    previouslyUnsubscribed: fileRows.rows.filter((r) => optedOut.has(r.email)).map((r) => r.email),
+  });
+}
+
+const importCommitSchema = z.object({
+  rows: z
+    .array(z.object({ name: z.string().trim().max(120).nullable(), email: z.string().trim().email() }))
+    .min(1)
+    .max(5000),
+  attestation: z.literal(true),
+});
+
+export async function postAdminListImport(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const listId = Number(req.params.id);
+  if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
+  const list = await getSubscriberList(listId);
+  if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  const parsed = importCommitSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Confirm these people have agreed to be contacted before importing",
+    });
+  }
+  const counts = { added: 0, alreadyOnList: 0, previouslyUnsubscribed: 0 };
+  for (const row of parsed.data.rows) {
+    // source 'import' + revive:false — the tombstone rule: a spreadsheet cannot overrule an opt-out.
+    const outcome = await addListSubscriber(listId, { name: row.name, email: row.email, phone: null }, "import", {
+      revive: false,
+    });
+    if (outcome === "added") counts.added++;
+    else if (outcome === "exists") counts.alreadyOnList++;
+    else if (outcome === "previously_unsubscribed") counts.previouslyUnsubscribed++;
+  }
+  // A summary audit row (recordAudit — the memberships are already durably written; this mirrors the
+  // TASK-214 batch-summary pattern): who imported, into which list, with what result.
+  try {
+    await recordAudit({
+      actor: claims.email,
+      action: "subscribers.imported",
+      entity: "subscriber_list",
+      entityId: listId,
+      data: { list: list.slug, attestation: true, ...counts },
+    });
+  } catch (err) {
+    console.error("import audit failed:", err instanceof Error ? err.message : err);
+  }
+  return res.status(200).json(counts);
 }
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
@@ -1836,6 +1928,8 @@ adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
 // TASK-259: audiences. Own path for the same :id-capture reason as templates.
 adminRouter.get("/api/admin/subscriber-lists", getAdminSubscriberLists);
 adminRouter.post("/api/admin/subscriber-lists", postAdminSubscriberList);
+adminRouter.post("/api/admin/subscriber-lists/:id/import/preview", postAdminListImportPreview);
+adminRouter.post("/api/admin/subscriber-lists/:id/import", postAdminListImport);
 adminRouter.get("/api/admin/subscriber-lists/:id/members", getAdminListMembers);
 adminRouter.post("/api/admin/subscriber-lists/:id/members", postAdminListMember);
 adminRouter.delete("/api/admin/subscriber-lists/:id/members/:memberId", deleteAdminListMember);

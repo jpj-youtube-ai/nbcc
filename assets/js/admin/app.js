@@ -3164,6 +3164,83 @@
       });
     }
 
+    // --- Spreadsheet import (TASK-260) ------------------------------------------------------------
+    var importState = null; // { rows } from the last preview — what the commit sends back
+    function importMsg(t) { var m = el("importMsg"); if (m) m.textContent = t || ""; }
+
+    if (el("importPreviewBtn")) {
+      el("importPreviewBtn").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        var f = el("importFile").files && el("importFile").files[0];
+        if (!f) { importMsg("Choose a CSV or Excel file first."); return; }
+        var listId = el("audiencePick").value;
+        if (!listId) return;
+        importMsg("Reading…");
+        var reader = new FileReader();
+        reader.onload = function () {
+          var base64 = String(reader.result).split(",")[1] || "";
+          authFetch("/api/admin/subscriber-lists/" + listId + "/import/preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: f.name, dataBase64: base64 }),
+          })
+            .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+            .then(function (r) {
+              if (!r.ok) { importMsg((r.b && r.b.error) || "Could not read that file."); return; }
+              importState = { rows: r.b.rows };
+              var bits = [r.b.readyCount + " ready to import"];
+              if (r.b.alreadyOnList.length) bits.push(r.b.alreadyOnList.length + " already on this audience");
+              if (r.b.previouslyUnsubscribed.length) {
+                bits.push(r.b.previouslyUnsubscribed.length + " previously opted out (they will NOT be re-added)");
+              }
+              el("importSummary").textContent = bits.join(" · ");
+              var issues = el("importIssues");
+              issues.innerHTML = "";
+              (r.b.issues || []).forEach(function (i) {
+                var li = doc.createElement("li");
+                li.textContent = "Row " + i.line + ": " + i.reason + (i.value ? " — " + i.value : "");
+                issues.appendChild(li);
+              });
+              el("importAttest").checked = false;
+              el("importCommitBtn").disabled = true;
+              el("importPreview").hidden = false;
+              importMsg("");
+            })
+            .catch(function () { importMsg("Could not read that file."); });
+        };
+        reader.readAsDataURL(f);
+      });
+
+      // The attestation is the gate: the import button only exists behind that tick.
+      el("importAttest").addEventListener("change", function () {
+        el("importCommitBtn").disabled = !el("importAttest").checked;
+      });
+
+      el("importCommitBtn").addEventListener("click", function () {
+        if (!canEdit("newsletter") || !importState || !el("importAttest").checked) return;
+        var listId = el("audiencePick").value;
+        importMsg("Importing…");
+        authFetch("/api/admin/subscriber-lists/" + listId + "/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rows: importState.rows, attestation: true }),
+        })
+          .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+          .then(function (r) {
+            if (!r.ok) { importMsg((r.b && r.b.error) || "Import failed."); return; }
+            var bits = [r.b.added + " added"];
+            if (r.b.alreadyOnList) bits.push(r.b.alreadyOnList + " already on the audience");
+            if (r.b.previouslyUnsubscribed) bits.push(r.b.previouslyUnsubscribed + " kept out (previously opted out)");
+            importMsg(bits.join(" · "));
+            el("importPreview").hidden = true;
+            el("importFile").value = "";
+            importState = null;
+            return nlRefreshAudiences();
+          })
+          .catch(function () { importMsg("Import failed."); });
+      });
+    }
+
     // Send a single test copy to the signed-in admin's own inbox — the current builder doc, unsaved
     // changes and all (mirrors the preview payload). Lets you check real-inbox rendering before a blast.
     el("newsletterTest").addEventListener("click", function () {

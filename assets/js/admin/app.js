@@ -690,18 +690,23 @@
       .then(function (d) {
         var rows = d.results || [];
         if (!rows.length) {
-          wrap.innerHTML = '<p class="admin-empty">No at-risk subscriptions.</p>';
+          wrap.innerHTML = '<p class="admin-empty">No flagged subscriptions.</p>';
           return;
         }
         var body = rows
           .map(function (s) {
+            // TASK-245: a state pill that surfaces a Cancelled subscription (cancelled_at) as well as the
+            // dunning statuses; the Ended column shows whichever terminal date applies.
+            var st = H.subscriptionStateLabel(s);
+            var ended = s.cancelled_at || s.lapsed_at;
             return (
-              "<tr><td>" + s.id + "</td><td>" + H.escapeHtml(s.donor_name) + '</td><td><span class="admin-pill">' +
-              H.escapeHtml(s.status) + "</span></td><td>" + s.failed_attempts + "</td><td>" + H.fmtDate(s.lapsed_at) + "</td></tr>"
+              "<tr><td>" + s.id + "</td><td>" + H.escapeHtml(s.donor_name) +
+              '</td><td><span class="admin-pill admin-pill--' + st.state + '">' + H.escapeHtml(st.label) +
+              "</span></td><td>" + s.failed_attempts + "</td><td>" + H.fmtDate(ended) + "</td></tr>"
             );
           })
           .join("");
-        wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Status</th><th>Failed</th><th>Lapsed</th></tr></thead><tbody>' + body + "</tbody></table>";
+        wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Status</th><th>Failed</th><th>Ended</th></tr></thead><tbody>' + body + "</tbody></table>";
       })
       .catch(function () {
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';

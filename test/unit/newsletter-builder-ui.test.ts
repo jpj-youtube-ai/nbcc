@@ -1060,3 +1060,61 @@ describe("delivery stats panel (TASK-256)", () => {
     expect(el("nlStats").hidden).toBe(true);
   });
 });
+
+// TASK-257: engagement in the panel. The same honesty rule as the rest of it: a send with tracking
+// off has opened=0/clicked=0 — rendering "0 Opened" would read as "nobody opened it", which is a lie.
+// Engagement tiles and the per-link table appear only when there is engagement to show.
+describe("engagement stats in the panel (TASK-257)", () => {
+  const sentRow = { id: 41, subject: "Sent one", status: "sent", sentAt: "2026-07-01T10:00:00.000Z", recipientCount: 142, redactedAt: null };
+  const sentNewsletter = {
+    id: 41, subject: "Sent one", status: "sent", sentAt: "2026-07-01T10:00:00.000Z",
+    recipientCount: 142, sentCount: 142, failedCount: 0, failedEmails: null, redactedAt: null,
+    bodyHtml: "<p>x</p>", bodyJson: null,
+  };
+  const base = { sends: 142, delivered: 139, bounced: 0, complained: 0, unsubscribed: 0, bouncedEmails: [] };
+  const mount = async () => {
+    loginToken = tokenFor("editor");
+    newsletterListRows = [sentRow];
+    singleNewsletter = sentNewsletter;
+    templateRows = [];
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+    await openNewsletterTab();
+    await flush();
+    await flush();
+  };
+
+  it("shows Opened (marked approximate) and Clicked once engagement exists, with the per-link table", async () => {
+    statsFixture = {
+      ...base, opened: 61, clicked: 12,
+      links: [
+        { link: "https://nbcc.scot/donate", uniqueClicks: 12, totalClicks: 19 },
+        { link: "https://nbcc.scot/my-story", uniqueClicks: 5, totalClicks: 5 },
+      ],
+    };
+    await mount();
+    const text = el("nlStats").textContent || "";
+    expect(text).toContain("Opened");
+    expect(text).toMatch(/approx/i); // opens are never presented as exact
+    expect(text).toContain("Clicked");
+    expect(text).toContain("https://nbcc.scot/donate");
+    expect(text).toContain("12"); // unique clickers lead
+    expect(text).toContain("19"); // totals alongside
+  });
+
+  it("shows NO engagement tiles when tracking was off — zero would read as 'nobody opened it'", async () => {
+    statsFixture = { ...base, opened: 0, clicked: 0, links: [] };
+    await mount();
+    const text = el("nlStatsGrid").textContent || "";
+    expect(text).toContain("Delivered"); // Phase 1 tiles unaffected
+    expect(text).not.toContain("Opened");
+    expect(text).not.toContain("Clicked");
+    expect(el("nlStats").querySelector(".nl-links")).toBeNull();
+  });
+});

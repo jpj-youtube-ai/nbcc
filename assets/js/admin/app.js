@@ -2677,13 +2677,18 @@
       return;
     }
 
-    [
+    // Engagement tiles (TASK-257) appear only when there IS engagement: a send with tracking off has
+    // opened=0/clicked=0, and "0 Opened" would read as "nobody opened it" — a lie of presentation.
+    var tiles = [
       { label: "Accepted", n: stats.sends, rate: "" },
       { label: "Delivered", n: stats.delivered, rate: H.rateOf(stats.delivered, stats.sends) },
       { label: "Bounced", n: stats.bounced, rate: H.rateOf(stats.bounced, stats.sends) },
       { label: "Spam", n: stats.complained, rate: H.rateOf(stats.complained, stats.sends) },
       { label: "Unsubscribed", n: stats.unsubscribed, rate: H.rateOf(stats.unsubscribed, stats.sends) },
-    ].forEach(function (tile) {
+    ];
+    if (stats.opened > 0) tiles.push({ label: "Opened (approx.)", n: stats.opened, rate: H.rateOf(stats.opened, stats.sends) });
+    if (stats.clicked > 0) tiles.push({ label: "Clicked", n: stats.clicked, rate: H.rateOf(stats.clicked, stats.sends) });
+    tiles.forEach(function (tile) {
       var d = doc.createElement("div");
       d.className = "nl-stat";
       d.innerHTML =
@@ -2693,11 +2698,32 @@
       grid.appendChild(d);
     });
 
-    if (stats.bouncedEmails && stats.bouncedEmails.length) {
-      note.innerHTML =
-        "Bounced (dead addresses, worth removing): " +
-        stats.bouncedEmails.map(function (e) { return "<code>" + H.escapeHtml(e) + "</code>"; }).join(", ");
+    // Per-link clicks (TASK-257): unique people lead — one keen reader can click five times.
+    var oldLinks = host.querySelector(".nl-links");
+    if (oldLinks) oldLinks.remove();
+    if (stats.links && stats.links.length) {
+      var tbl = doc.createElement("table");
+      tbl.className = "nl-links admin-table";
+      tbl.innerHTML =
+        "<thead><tr><th>Link</th><th>People</th><th>Clicks</th></tr></thead><tbody>" +
+        stats.links.map(function (l) {
+          return "<tr><td class=\"nl-link-url\">" + H.escapeHtml(l.link) + "</td><td class=\"admin-num\">" +
+            l.uniqueClicks + "</td><td class=\"admin-num\">" + l.totalClicks + "</td></tr>";
+        }).join("") + "</tbody>";
+      note.parentNode.insertBefore(tbl, note);
     }
+
+    var noteBits = [];
+    if (stats.opened > 0) {
+      noteBits.push("Opens are approximate — some mail apps open images automatically, others block them.");
+    }
+    if (stats.bouncedEmails && stats.bouncedEmails.length) {
+      noteBits.push(
+        "Bounced (dead addresses, worth removing): " +
+        stats.bouncedEmails.map(function (e) { return "<code>" + H.escapeHtml(e) + "</code>"; }).join(", "),
+      );
+    }
+    if (noteBits.length) note.innerHTML = noteBits.join("<br>");
   }
 
   // Best-effort by design: stats are decoration on the builder, so any failure just keeps the panel

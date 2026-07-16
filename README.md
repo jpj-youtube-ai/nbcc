@@ -1708,6 +1708,19 @@ the record is gone when it deliberately isn't) and **"Delete"** on a draft; an a
 shows "Content deleted" and offers nothing. Both are `confirm()`-guarded with wording that states what
 survives.
 
+**Opens + clicks, per link (TASK-257 — email stats Phase 2, dormant until the subdomain exists).**
+`email.opened` / `email.clicked` join the consumed webhook set; a click stores its **destination
+link** (`link_url`; additive migration widens the event-type CHECK). Stats add `opened`, `clicked`
+(distinct people) and a **per-link table** — unique clickers first, totals alongside, capped at 50 —
+with **unsubscribe links excluded** (tokenised per person, they'd drown the table in
+donor-identifying one-click rows; the Unsubscribed tile already counts that behaviour honestly). The
+panel shows **Opened (approx.)** — opens are never presented as exact (Apple Mail prefetches,
+image-blocking undercounts; a hint says so) — and **Clicked** tiles **only when engagement exists**:
+"0 Opened" on an untracked send would read as "nobody opened it". No relay change was needed (the
+relay honours the app-supplied `from`), so activation is: Phase 1 switch-on → add the newsletter-only
+subdomain in Resend + DNS → enable tracking on that domain only (receipts stay untracked) → point
+`NEWSLETTER_FROM_EMAIL` at it.
+
 **Delivery stats panel (TASK-256).** Opening a **sent** newsletter in the admin shows a Delivery
 panel: **Accepted / Delivered / Bounced / Spam / Unsubscribed** tiles with counts and rates
 (`AdminHelpers.rateOf` — honest at the edges: a non-zero count never reads "0%", a shortfall never

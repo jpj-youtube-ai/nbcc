@@ -270,3 +270,11 @@ Feature: Admin newsletter (REQ-069)
     When Resend reports a signed "email.delivered" event for "receipt-only.bdd@example.com"
     Then the webhook response status should be 200
     And the webhook outcome should be "unmatched"
+
+    # TASK-257 (Phase 2): engagement rides the SAME webhook once tracking is on. A click carries WHICH
+    # link, and the stats break clicks down per link.
+    When Resend reports a signed click on "https://nbcc.scot/donate" by "delivered.newsletter.bdd@example.com"
+    Then the webhook response status should be 200
+    When I fetch that newsletter's stats
+    Then the newsletter stats should count 1 click
+    And the per-link stats should show 1 person clicked "https://nbcc.scot/donate"

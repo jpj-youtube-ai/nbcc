@@ -381,6 +381,10 @@
 .nl-stat-rate { font-size: .78rem; font-weight: 600; color: var(--crimson); font-variant-numeric: tabular-nums; }
 .nl-stat-label { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--slate-soft); }
 .nl-stats .nl-sub-msg code { background: var(--cream); border: 1px solid var(--line); border-radius: 5px; padding: 0 .3rem; }
+/* TASK-257: per-link clicks. URLs are the one cell allowed to wrap (admin-table defaults to nowrap) —
+   a long donate URL must fold, not force the whole admin to scroll sideways. */
+.nl-links { margin-top: .6rem; }
+.nl-links .nl-link-url { white-space: normal; word-break: break-all; font-size: .82rem; }
 
 /* TASK-253: the B / I pair above a prose field. Each button is SET in the style it applies, so the
    control describes itself without a tooltip. Sits tight under the label and above the textarea. */

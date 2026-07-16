@@ -79,8 +79,10 @@ describe("parseResendEvent (TASK-255)", () => {
   });
 
   it("returns null for event types we do not consume — acknowledged, never stored", () => {
-    expect(parseResendEvent(JSON.stringify({ type: "email.opened", created_at: "2026-07-16T12:00:00.000Z", data: { to: ["a@b.c"] } }))).toBeNull();
+    // email.opened moved to the consumed set in TASK-257 (Phase 2); email.sent and anything unknown
+    // stay dropped — "sent" is the relay's own act, not a delivery fact.
     expect(parseResendEvent(JSON.stringify({ type: "email.sent", created_at: "2026-07-16T12:00:00.000Z", data: { to: ["a@b.c"] } }))).toBeNull();
+    expect(parseResendEvent(JSON.stringify({ type: "email.delivery_delayed", created_at: "2026-07-16T12:00:00.000Z", data: { to: ["a@b.c"] } }))).toBeNull();
   });
 
   it("returns null rather than throwing on garbage — a malformed body must not 500 the endpoint", () => {
@@ -96,5 +98,35 @@ describe("parseResendEvent (TASK-255)", () => {
       data: { to: ["gone@example.com"], bounce: { message: "550 no such user" }, subject: "private" },
     }));
     expect(p?.detail).toEqual({ message: "550 no such user" });
+  });
+});
+
+// TASK-257 (Phase 2): opens + clicks. Same parser, two more event types — and the CLICK carries which
+// link it was for, which is the whole point (per-link counts on the dashboard). Defensive on the
+// payload shape: a click Resend reports without a link still counts as a click, just not per-link.
+describe("parseResendEvent — engagement events (TASK-257)", () => {
+  const at = "2026-07-16T12:00:00.000Z";
+
+  it("maps email.opened — no link, just the fact", () => {
+    const p = parseResendEvent(JSON.stringify({ type: "email.opened", created_at: at, data: { to: ["a@b.c"] } }));
+    expect(p).toMatchObject({ eventType: "opened", email: "a@b.c", linkUrl: null });
+  });
+
+  it("maps email.clicked and carries the DESTINATION link", () => {
+    const p = parseResendEvent(JSON.stringify({
+      type: "email.clicked", created_at: at,
+      data: { to: ["a@b.c"], click: { link: "https://nbcc.scot/donate", timestamp: at } },
+    }));
+    expect(p).toMatchObject({ eventType: "clicked", linkUrl: "https://nbcc.scot/donate" });
+  });
+
+  it("tolerates a click with no usable link — still a click, just not attributable to a link", () => {
+    const p = parseResendEvent(JSON.stringify({ type: "email.clicked", created_at: at, data: { to: ["a@b.c"] } }));
+    expect(p).toMatchObject({ eventType: "clicked", linkUrl: null });
+  });
+
+  it("keeps Phase 1 events linkUrl-null (the field exists on every parse, always typed)", () => {
+    const p = parseResendEvent(JSON.stringify({ type: "email.delivered", created_at: at, data: { to: ["a@b.c"] } }));
+    expect(p?.linkUrl).toBeNull();
   });
 });

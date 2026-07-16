@@ -70,7 +70,23 @@ insert idempotency, correlation + stats SQL shapes (mocked pool), redaction casc
 webhook round trip (send → delivered event → stats reflect it), bad signature rejected, v2 unsubscribe
 attributed. CI gets a test `RESEND_WEBHOOK_SECRET` in `pr.yml`.
 
-## Explicitly out of scope (Phase 2, needs user DNS + relay deploy)
+## Phase 2 (TASK-257): opens + clicks — CODE BUILT, dormant until the subdomain exists
 
-Opens/clicks via `updates.nbcc.scot` sending subdomain with tracking enabled; per-donor engagement
-views; back-filling historical sends.
+The engagement half is now implemented and rides the same signed webhook: `email.opened` and
+`email.clicked` join the consumed set; a click stores its DESTINATION link (`link_url`, additive
+migration widening the event-type CHECK); stats add `opened`, `clicked` (distinct people) and a
+per-link table (unique clickers first, totals alongside, unsubscribe links excluded — they are
+tokenised per person and already counted by our own endpoint). The panel shows Opened
+**(marked approximate — Apple Mail prefetches, image-blocking undercounts)** and Clicked tiles ONLY
+when engagement exists: rendering "0 Opened" on an untracked send would read as "nobody opened it".
+
+NO relay change turned out to be needed: the relay honours the app-supplied `from`, so the newsletter
+sending address is `NEWSLETTER_FROM_EMAIL` config alone.
+
+Still required to activate (user, in order): (1) Phase 1 switch-on (infra apply + Resend webhook +
+secret); (2) add the newsletter-only subdomain (e.g. `updates.nbcc.scot`) in Resend + its DNS records;
+(3) enable open/click tracking on THAT domain only (receipts stay untracked on the main domain);
+(4) point `NEWSLETTER_FROM_EMAIL` at the new address (SSM value change + redeploy).
+
+Remaining out of scope: per-donor engagement views (deliberate privacy wall); back-filling
+historical sends.

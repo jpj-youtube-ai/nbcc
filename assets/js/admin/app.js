@@ -45,6 +45,11 @@
   function canEdit(section) {
     return permCan(myPermissions, section, "edit");
   }
+  // A few actions are ADMIN-only regardless of the section matrix — sending a newsletter, and
+  // (TASK-252) deleting one. The server enforces it; this only decides whether to offer the control.
+  function isAdmin() {
+    return currentRole === "admin";
+  }
   // Mirrors roleToPermissions in src/admin/permissions.ts - a role's default matrix, used to pre-fill
   // the Team matrix editor for a person with no per-section overrides, and by its preset buttons.
   function rolePresetPermissions(role) {
@@ -2310,9 +2315,56 @@
         "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" + n.status + "</td><td>" +
         (n.sentAt ? new Date(n.sentAt).toLocaleString() : "-") + "</td><td>" +
         nlDeliveryCell(n) +
-        '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button></td></tr>';
+        '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button>' +
+        nlDeleteCell(n) + "</td></tr>";
     });
     return html + "</tbody></table>";
+  }
+
+  // TASK-252: delete. Admin only (sending is admin-only, so unsending's paper trail is too), and the
+  // LABEL tells the truth about which of the two things will happen — a draft is really deleted, a
+  // sent newsletter is only redacted, and calling that "Delete" would imply the record is gone when it
+  // deliberately is not. An already-redacted newsletter offers nothing: its content is already gone.
+  function nlDeleteCell(n) {
+    if (!isAdmin()) return "";
+    if (n.redactedAt) return ' <span class="admin-muted">Content deleted</span>';
+    var label = n.status === "sent" ? "Delete content" : "Delete";
+    return ' <button class="admin-link admin-link-danger" type="button" data-delete-newsletter="' + n.id +
+      '" data-newsletter-status="' + n.status + '">' + label + "</button>";
+  }
+
+  // TASK-252: delete a newsletter. The confirm says exactly what will happen, because the two cases
+  // differ in a way the user has to understand BEFORE clicking: a draft is really gone, while a sent
+  // newsletter only loses its content — the record that you sent it stays, on purpose. Saying "this
+  // cannot be undone" for a draft and being honest about the stub for a sent one is the difference
+  // between an informed decision and a nasty surprise.
+  function nlDelete(id, status) {
+    if (!isAdmin()) return;
+    var sent = status === "sent";
+    var message = sent
+      ? "Delete the content of this sent newsletter?\n\nThe newsletter itself, and the record of when " +
+        "you sent it and to how many people, is kept. What goes is the content, any attachments, and " +
+        "the addresses that bounced.\n\nThis cannot be undone."
+      : "Delete this draft?\n\nIt was never sent to anyone. This cannot be undone.";
+    if (!window.confirm(message)) return;
+    authFetch("/api/admin/newsletters/" + encodeURIComponent(id), { method: "DELETE" })
+      .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+      .then(function (r) {
+        if (!r.ok) {
+          el("newsletterMsg").textContent = (r.b && r.b.error) || "Could not delete that newsletter.";
+          return;
+        }
+        el("newsletterMsg").textContent =
+          r.b.status === "redacted" ? "Content deleted. The record of the send is kept." : "Draft deleted.";
+        // The open editor may be showing what we just removed — reset it rather than leave a ghost.
+        if (String(el("newsletterId").value) === String(id)) {
+          el("newsletterId").value = "";
+          nlDoc = { blocks: [] };
+          nlRenderCanvas();
+        }
+        loadNewsletters();
+      })
+      .catch(function () { el("newsletterMsg").textContent = "Could not delete that newsletter."; });
   }
 
   function loadNewsletterInto(id) {
@@ -2359,6 +2411,11 @@
         Array.prototype.forEach.call(doc.querySelectorAll("[data-edit-newsletter]"), function (b) {
           b.addEventListener("click", function () {
             loadNewsletterInto(b.getAttribute("data-edit-newsletter"));
+          });
+        });
+        Array.prototype.forEach.call(doc.querySelectorAll("[data-delete-newsletter]"), function (b) {
+          b.addEventListener("click", function () {
+            nlDelete(b.getAttribute("data-delete-newsletter"), b.getAttribute("data-newsletter-status"));
           });
         });
         // Open the first newsletter by default so the editor is never empty.

@@ -431,3 +431,25 @@ Then("the saved template should carry its block document", function () {
   assert.ok(doc && Array.isArray(doc.blocks), "expected the template to return a block document");
   assert.ok(doc.blocks.length > 0, "expected the template's document to carry blocks — an empty one is useless");
 });
+
+// --- TASK-252: deleting a newsletter ---------------------------------------------------------------
+// One endpoint, two behaviours, chosen server-side from the newsletter's own status: a draft is really
+// deleted; a sent one is redacted down to its audit stub.
+
+When("I delete that newsletter", async function () {
+  const r = await authFetch(`/api/admin/newsletters/${this.newsletterId}`, "DELETE", undefined, this.token);
+  this.nlStatus = r.status;
+  this.nlBody = r.json;
+});
+
+When("I fetch that newsletter", async function () {
+  const r = await authFetch(`/api/admin/newsletters/${this.newsletterId}`, "GET", undefined, this.token);
+  this.nlStatus = r.status;
+  this.nlBody = r.json;
+});
+
+// The redaction's promise: the content really is gone, not merely hidden.
+Then("the newsletter body should be empty", function () {
+  assert.equal(this.nlBody.bodyHtml, "", "expected the redacted newsletter's body_html to be blank");
+  assert.ok(!this.nlBody.bodyJson, "expected the redacted newsletter's body_json to be cleared");
+});

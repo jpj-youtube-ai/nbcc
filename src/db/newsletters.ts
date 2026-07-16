@@ -1,4 +1,8 @@
 import { pool } from "./pool";
+// TASK-252: deleting/redacting a newsletter is an audited STATE CHANGE, so it goes through
+// writeWithAudit — the row and its audit_log entry commit in one transaction. recordAudit would let
+// the content vanish while its audit failed, which is precisely the gap this feature exists to close.
+import { writeWithAudit } from "./donations";
 
 // DB access for the admin newsletter (TASK-161/REQ-069). Read/write over the newsletters table plus
 // the consented-donor recipient query and the unsubscribe write. Mirrors the pool-query style of
@@ -14,6 +18,9 @@ export interface NewsletterSummary {
   sentCount: number | null;
   failedCount: number | null;
   failedEmails: string[] | null;
+  // TASK-252: when a SENT newsletter's content was deleted; null on everything else. A redacted
+  // newsletter keeps this whole summary — that stub IS the record of what was sent, when, to how many.
+  redactedAt: string | null;
 }
 
 export interface Newsletter extends NewsletterSummary {
@@ -44,6 +51,7 @@ interface Row {
   sent_count: number | null;
   failed_count: number | null;
   failed_emails: string[] | null;
+  redacted_at: string | null;
 }
 
 function toNewsletter(r: Row): Newsletter {
@@ -58,13 +66,17 @@ function toNewsletter(r: Row): Newsletter {
     sentCount: r.sent_count ?? null,
     failedCount: r.failed_count ?? null,
     failedEmails: r.failed_emails ?? null,
+    // TASK-252: when a SENT newsletter's content was deleted. NULL on everything else, so the UI can
+    // both label it and stop offering a delete that would do nothing.
+    redactedAt: r.redacted_at ?? null,
   };
 }
 
 export async function listNewsletters(): Promise<NewsletterSummary[]> {
   const rows = (
     await pool.query<Row>(
-      `SELECT id, subject, body_html, status, sent_at, recipient_count, sent_count, failed_count, failed_emails
+      `SELECT id, subject, body_html, status, sent_at, recipient_count, sent_count, failed_count, failed_emails,
+              redacted_at
          FROM newsletters ORDER BY id DESC`,
     )
   ).rows;
@@ -74,7 +86,8 @@ export async function listNewsletters(): Promise<NewsletterSummary[]> {
 export async function getNewsletter(id: number): Promise<Newsletter | null> {
   const row = (
     await pool.query<Row>(
-      `SELECT id, subject, body_html, body_json, status, sent_at, recipient_count, sent_count, failed_count, failed_emails
+      `SELECT id, subject, body_html, body_json, status, sent_at, recipient_count, sent_count, failed_count, failed_emails,
+              redacted_at
          FROM newsletters WHERE id = $1`,
       [id],
     )
@@ -224,4 +237,74 @@ export async function addNewsletterSubscriber(
     [fullName, trimmed],
   );
   return { email: lower, status: "added" };
+}
+
+// --- Deleting a newsletter (TASK-252) -------------------------------------------------------------
+// A DRAFT never went anywhere, so it is really deleted. A SENT newsletter went to real donors: the row
+// is the record of what was emailed, and deleting it would leave the charity unable to answer "what
+// did you send me in July?". But keeping it forever also means holding donor addresses
+// (failed_emails) indefinitely. So a sent newsletter is REDACTED, not deleted — the content and the
+// bounced addresses go; the stub that answers what/when/how-many stays.
+
+// Hard-delete a DRAFT. The `status = 'draft'` guard is the safety catch: even handed the id of a sent
+// newsletter, this can never destroy the record of something that reached real donors. Returns false
+// when nothing matched, so the route 404s instead of pretending.
+//
+// Row + audit commit in ONE transaction (writeWithAudit): a deletion that vanished without its audit
+// row would be exactly the gap this feature exists to avoid.
+export async function deleteDraftNewsletter(id: number, actor: string, subject: string): Promise<boolean> {
+  return writeWithAudit(
+    async (client) => {
+      const { rowCount } = await client.query(`DELETE FROM newsletters WHERE id = $1 AND status = 'draft'`, [id]);
+      return (rowCount ?? 0) > 0;
+    },
+    (removed) => ({
+      actor,
+      action: "newsletter.deleted",
+      entity: "newsletter",
+      entityId: id,
+      data: { subject, removed },
+    }),
+  );
+}
+
+// Redact a SENT newsletter: strip the content and the donor addresses, keep the audit stub.
+//
+// KEPT (deliberately untouched): subject, status, sent_at, sent_by, recipient_count, sent_count,
+// failed_count — the record the charity has to be able to produce.
+// CLEARED: body_html, body_json, failed_emails, and the attachments.
+//
+// body_html is BLANKED to '' rather than nulled: the column is NOT NULL, and relaxing that would break
+// older code expecting a string if we ever rolled back. Returns false when nothing matched (already
+// redacted rows still match, so re-redacting is harmless and idempotent) — the `status = 'sent'` guard
+// means this can never touch a draft.
+export async function redactSentNewsletter(
+  id: number,
+  redactedBy: number | null,
+  actor: string,
+  subject: string,
+): Promise<boolean> {
+  return writeWithAudit(
+    async (client) => {
+      // Attachments are content too — and they are the actual files that went to donors. Inside the
+      // transaction, so a failure part-way cannot leave the files gone but the newsletter intact.
+      await client.query(`DELETE FROM newsletter_attachments WHERE newsletter_id = $1`, [id]);
+      const { rowCount } = await client.query(
+        `UPDATE newsletters
+            SET body_html = '', body_json = NULL, failed_emails = NULL,
+                redacted_at = now(), redacted_by = $2
+          WHERE id = $1 AND status = 'sent'`,
+        [id, redactedBy],
+      );
+      return (rowCount ?? 0) > 0;
+    },
+    (redacted) => ({
+      actor,
+      action: "newsletter.redacted",
+      entity: "newsletter",
+      entityId: id,
+      // The audit keeps what the redacted row no longer can: the audit trail the user asked for.
+      data: { subject, redacted },
+    }),
+  );
 }

@@ -1686,6 +1686,28 @@ rewritten), **masthead** (the brand signature; its variants already span 16→26
 **divider/image** (no text) take no step — `NO_SIZE_STEP` in `src/newsletter/blocks.ts` is the
 authority, mirrored by `NL_NO_SIZE` in the builder.
 
+**Deleting a newsletter (TASK-252).** `DELETE /api/admin/newsletters/:id`, **Admin only** (sending is
+admin-only, so unsending's paper trail is too). What it does is decided **server-side from the
+newsletter's own status**, never by the caller:
+
+- **draft** → really deleted. It never went anywhere.
+- **sent** → **redacted**, not deleted. It went to real donors, so deleting the row would destroy the
+  record of what was emailed — but keeping it forever means holding donor addresses indefinitely. So
+  the **content goes** (`body_html` blanked, `body_json`, `failed_emails` and the attachments cleared)
+  and a permanent **stub stays** — subject, `sent_at`, `recipient_count`, `sent_count`, `failed_count`
+  — so *"what did we send, when, to how many?"* is always answerable. Responds `200 {status:
+  "redacted"}` so the UI can say what actually happened.
+
+`body_html` is **blanked to `''`, never nulled**: the column is `NOT NULL`, and relaxing that would
+break older code expecting a string on a rollback. Both paths go through **`writeWithAudit`**, so the
+change and its `audit_log` row (`newsletter.deleted` / `newsletter.redacted`) commit in one
+transaction — a redaction can't land without the record of who did it. Each statement carries a
+`status = 'draft'` / `status = 'sent'` guard, so neither path can ever touch the other's newsletters.
+In the list the button reads **"Delete content"** on a sent newsletter (calling it "Delete" would imply
+the record is gone when it deliberately isn't) and **"Delete"** on a draft; an already-redacted one
+shows "Content deleted" and offers nothing. Both are `confirm()`-guarded with wording that states what
+survives.
+
 **Sign-off block (TASK-251).** The letter-style close a newsletter ends on — a closing line, the
 signer's name, a line under it, and a contact email:
 

@@ -48,6 +48,7 @@ let templateRows: unknown[] = [];
 let templateSaveStatus = 201; // flip to 409 to exercise the name-already-taken path
 const templateSaves: { body: Record<string, unknown> }[] = [];
 const templateDeletes: string[] = [];
+const deleteRequests: string[] = []; // TASK-252: DELETE /api/admin/newsletters/:id calls
 const templateDoc = { blocks: [{ type: "text", variant: 0, data: { text: "From the template" }, size: 1 }] };
 const savedRequests: { url: string; method: string; body: Record<string, unknown> }[] = [];
 const previewRequests: { body: Record<string, unknown> }[] = [];
@@ -98,6 +99,13 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   }
   if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "GET") {
     return j(singleNewsletter); // legacy bodyHtml by default; a test may swap in a block document
+  }
+  // TASK-252: delete. The server decides delete-vs-redact from the newsletter's own status; the stub
+  // echoes back which happened, because the UI's message depends on it.
+  if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "DELETE") {
+    deleteRequests.push(url);
+    const id = Number((url.match(/(\d+)$/) || [])[1]);
+    return j({ status: id === 42 ? "redacted" : "deleted", id });
   }
   if (/\/api\/admin\/newsletters\/\d+$/.test(url) && method === "PUT") {
     savedRequests.push({ url, method, body: parsedBody });
@@ -763,5 +771,92 @@ describe("sign-off block wiring (TASK-251)", () => {
     const sel = signerSelect();
     expect(sel.value).toBe("Someone Who Left");
     expect(Array.from(sel.options).map((o) => o.value)).toContain("Someone Who Left");
+  });
+});
+
+// TASK-252: the delete control. The SQL contract is proven in newsletter-delete.test.ts and the round
+// trip in the BDD scenario; what matters HERE is that the UI never misleads. A sent newsletter is only
+// REDACTED — its record survives — so calling that button "Delete" would tell the admin the newsletter
+// is gone when it deliberately is not. These pin the wording and the admin-only gate.
+describe("delete a newsletter (TASK-252)", () => {
+  const mount = (role: string) => {
+    loginToken = tokenFor(role);
+    singleNewsletter = legacyNewsletter;
+    savedRequests.length = 0;
+    previewRequests.length = 0;
+    sendRequests.length = 0;
+    subscriberRequests.length = 0;
+    testSendRequests.length = 0;
+    templateRows = [];
+    deleteRequests.length = 0;
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+  };
+  const draftRow = { id: 41, subject: "A draft", status: "draft", sentAt: null, recipientCount: null, redactedAt: null };
+  const sentRow = { id: 42, subject: "Sent one", status: "sent", sentAt: "2026-07-01T10:00:00.000Z", recipientCount: 120, redactedAt: null };
+  const btn = (id: number) => el("newsletterList").querySelector(`[data-delete-newsletter="${id}"]`) as HTMLButtonElement;
+
+  it("says 'Delete content' on a SENT newsletter — never plain 'Delete', which would be a lie", async () => {
+    newsletterListRows = [sentRow];
+    mount("admin");
+    await openNewsletterTab();
+    await flush();
+    expect(btn(42)).toBeTruthy();
+    // The record of the send survives. The label has to say so.
+    expect(btn(42).textContent).toBe("Delete content");
+  });
+
+  it("says plain 'Delete' on a draft, which really does go", async () => {
+    newsletterListRows = [draftRow];
+    mount("admin");
+    await openNewsletterTab();
+    await flush();
+    expect(btn(41).textContent).toBe("Delete");
+  });
+
+  it("is offered to an admin only — an editor can write newsletters but not unsend them", async () => {
+    newsletterListRows = [draftRow, sentRow];
+    mount("editor");
+    await openNewsletterTab();
+    await flush();
+    expect(el("newsletterList").querySelectorAll("[data-delete-newsletter]").length).toBe(0);
+  });
+
+  it("offers nothing on an already-redacted newsletter — its content is already gone", async () => {
+    newsletterListRows = [{ ...sentRow, redactedAt: "2026-07-16T09:00:00.000Z" }];
+    mount("admin");
+    await openNewsletterTab();
+    await flush();
+    expect(btn(42)).toBeNull();
+    expect(el("newsletterList").textContent).toContain("Content deleted");
+  });
+
+  it("asks first, and tells the truth about what survives", async () => {
+    newsletterListRows = [sentRow];
+    mount("admin");
+    await openNewsletterTab();
+    await flush();
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    btn(42).click();
+    await flush();
+    expect(deleteRequests).toHaveLength(0); // declined -> nothing happens
+    // The admin must know the record is KEPT before deciding, not discover it after.
+    const asked = String(confirmSpy.mock.calls[0][0]);
+    expect(asked).toMatch(/record/i);
+    expect(asked).toMatch(/cannot be undone/i);
+
+    confirmSpy.mockReturnValue(true);
+    btn(42).click();
+    await flush();
+    await flush();
+    expect(deleteRequests).toEqual(["/api/admin/newsletters/42"]);
+    confirmSpy.mockRestore();
   });
 });

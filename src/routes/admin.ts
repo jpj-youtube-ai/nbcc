@@ -71,6 +71,8 @@ import {
   unsubscribeSubscriberByEmail,
   claimNewsletterForSend,
   setNewsletterDeliverySummary,
+  deleteDraftNewsletter,
+  redactSentNewsletter,
 } from "../db/newsletters";
 import {
   templateNameSchema,
@@ -433,6 +435,41 @@ export async function deleteAdminNewsletterTemplate(req: Request, res: Response)
   const removed = await deleteNewsletterTemplate(id);
   if (!removed) return res.status(404).json({ error: "Template not found" });
   return res.status(204).end();
+}
+
+// DELETE /api/admin/newsletters/:id — remove a newsletter (Admin only: sending is Admin-only, so
+// unsending's paper trail should be too).
+//
+// What this does depends on what the newsletter IS, decided HERE from its own status rather than by
+// the caller — a client that got it wrong could otherwise destroy the record of a real send:
+//   draft — never went anywhere → really deleted.
+//   sent  — went to real donors → REDACTED: the content and the bounced donor addresses are cleared,
+//           and a permanent stub stays (subject, sent_at, recipient_count, sent_count, failed_count)
+//           so "what did we send, when, to how many?" is always answerable. Responds 200 with
+//           { status: "redacted" } so the UI can say what actually happened instead of implying the
+//           newsletter is gone.
+export async function deleteAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  if (claims.role !== "admin") {
+    return res.status(403).json({ error: "Only an admin can delete a newsletter" });
+  }
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const existing = await getNewsletter(id);
+  if (!existing) return res.status(404).json({ error: "Newsletter not found" });
+
+  // The audit row is written INSIDE each of these, in the same transaction as the change itself
+  // (writeWithAudit), so a redaction can never land without the record of who did it.
+  if (existing.status === "sent") {
+    const redacted = await redactSentNewsletter(id, claims.sub, claims.email, existing.subject);
+    if (!redacted) return res.status(404).json({ error: "Newsletter not found" });
+    return res.status(200).json({ status: "redacted", id });
+  }
+
+  const removed = await deleteDraftNewsletter(id, claims.email, existing.subject);
+  if (!removed) return res.status(404).json({ error: "Newsletter not found" });
+  return res.status(200).json({ status: "deleted", id });
 }
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
@@ -1659,6 +1696,9 @@ adminRouter.get("/api/admin/newsletters/:id", getAdminNewsletter);
 adminRouter.post("/api/admin/newsletters", postAdminNewsletter);
 adminRouter.put("/api/admin/newsletters/:id", putAdminNewsletter);
 adminRouter.post("/api/admin/newsletters/:id/send", postAdminSendNewsletter);
+// TASK-252: a draft is deleted; a SENT newsletter is redacted (content + bounced addresses cleared,
+// audit stub kept). Admin only — sending is admin-only, so unsending's paper trail is too.
+adminRouter.delete("/api/admin/newsletters/:id", deleteAdminNewsletter);
 adminRouter.get("/api/admin/newsletters/:id/attachments", getAdminNewsletterAttachments);
 adminRouter.post("/api/admin/newsletters/:id/attachments", postAdminNewsletterAttachment);
 adminRouter.delete("/api/admin/newsletters/:id/attachments/:attId", deleteAdminNewsletterAttachment);

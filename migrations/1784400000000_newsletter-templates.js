@@ -1,4 +1,13 @@
 /* eslint-disable */
+// NOTE ON THE FILENAME (TASK-250): this is numbered ABOVE 1784300000000_supporter-subscription-
+// cancelled-at, not stamped with the wall-clock time `node-pg-migrate create` gives you. Several
+// existing migrations carry hand-rounded numbers that sit slightly in the FUTURE, so a freshly
+// created migration sorts BEFORE them — and node-pg-migrate throws "Not run migration X is preceding
+// already run migration Y" against any database that already ran them. CI never catches this (its DB
+// is empty, so everything runs in order from zero); it fails on staging/production, where history
+// exists. If you create a migration and CI is green, check `ls migrations | sort | tail` and make sure
+// yours is genuinely last.
+//
 // TASK-249: saved newsletter templates — a SHARED library any Editor can start a newsletter from.
 // Additive: one brand-new table, no existing table touched, so a code-level rollback stays safe
 // (golden rule 2). A template is just a stored block document (the same shape newsletters.body_json

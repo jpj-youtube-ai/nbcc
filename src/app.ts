@@ -7,6 +7,7 @@ import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { resendWebhookRouter } from "./routes/resend-webhook";
+import { subscribeRouter } from "./routes/subscribe";
 import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { businessRouter } from "./routes/business";
@@ -51,6 +52,8 @@ export function createApp() {
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.
   app.use(unsubscribeRouter);
+  // Public footer signup (TASK-261) — JSON POST, rate-limited + honeypotted in the route.
+  app.use(subscribeRouter);
   // Public printable thank-you letter page (TASK-165/REQ-069). Also before the site catch-all so its
   // wildcard doesn't shadow /thank-you/letter/:token.
   app.use(thankYouLetterRouter);

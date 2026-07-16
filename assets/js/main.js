@@ -2089,6 +2089,84 @@
       .catch(function () {});
   }
 
+  // TASK-261: the footer "keep in touch" signup, injected into every page's shared footer
+  // (.site-footer .wrap) by the one script the whole site already loads — one implementation, every
+  // page. Name + email required; phone optional (stored for future texting — nothing sends texts
+  // yet); the UNTICKED consent checkbox is the legal bit (PECR needs a positive action, so it is
+  // never pre-ticked). The hidden "website" field is a honeypot: people never see it, bots fill it,
+  // and the server quietly drops those. Progressive enhancement: no JS, no form — never a broken one.
+  function initFooterSignup(doc, win) {
+    var wrap = doc.querySelector(".site-footer .wrap");
+    if (!wrap || doc.getElementById("footSignup")) return;
+
+    var section = doc.createElement("div");
+    section.className = "foot-signup";
+    section.id = "footSignup";
+    section.innerHTML =
+      '<h2 class="foot-signup-title">Keep in touch</h2>' +
+      '<p class="foot-signup-sub">Hear what your support makes possible — a few emails a year, unsubscribe any time.</p>' +
+      '<form class="foot-signup-form" id="footSignupForm" novalidate>' +
+      '<div class="foot-signup-fields">' +
+      '<input type="text" id="fsName" name="name" placeholder="Your name" autocomplete="name" required aria-label="Your name" />' +
+      '<input type="email" id="fsEmail" name="email" placeholder="Your email" autocomplete="email" required aria-label="Your email" />' +
+      '<input type="tel" id="fsPhone" name="phone" placeholder="Mobile (optional, for texts)" autocomplete="tel" aria-label="Mobile number, optional" />' +
+      "</div>" +
+      '<input type="text" id="fsWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" />' +
+      '<label class="foot-signup-consent" for="fsConsent">' +
+      '<input type="checkbox" id="fsConsent" required />' +
+      "<span>Yes, I'd like to hear from NBCC by email. We'll never share your details, and every email has an unsubscribe link.</span>" +
+      "</label>" +
+      '<p class="foot-signup-error" id="fsError" role="alert" aria-live="polite" hidden></p>' +
+      '<button type="submit" class="btn btn-primary foot-signup-btn" id="fsSubmit">Sign up</button>' +
+      "</form>" +
+      '<p class="foot-signup-done" id="fsDone" role="status" hidden>You\u2019re signed up \u2014 thank you. Look out for us in your inbox.</p>';
+    wrap.insertBefore(section, wrap.firstChild);
+
+    var form = doc.getElementById("footSignupForm");
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var error = doc.getElementById("fsError");
+      error.hidden = true;
+      var name = doc.getElementById("fsName").value.trim();
+      var email = doc.getElementById("fsEmail").value.trim();
+      var consent = doc.getElementById("fsConsent").checked;
+      if (!name || !email) {
+        error.textContent = "Please give your name and email address.";
+        error.hidden = false;
+        return;
+      }
+      if (!consent) {
+        error.textContent = "Please tick the box to confirm you\u2019d like to hear from us.";
+        error.hidden = false;
+        return;
+      }
+      var btn = doc.getElementById("fsSubmit");
+      btn.disabled = true;
+      win
+        .fetch("/api/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name,
+            email: email,
+            phone: doc.getElementById("fsPhone").value.trim() || undefined,
+            consent: true,
+            website: doc.getElementById("fsWebsite").value || undefined,
+          }),
+        })
+        .then(function (res) {
+          if (!res.ok) return res.json().then(function (b) { throw new Error(b.error || "failed"); });
+          form.hidden = true;
+          doc.getElementById("fsDone").hidden = false;
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          error.textContent = (err && err.message) || "Something went wrong \u2014 please try again.";
+          error.hidden = false;
+        });
+    });
+  }
+
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       validateForm,
@@ -2098,6 +2176,7 @@
       initGiveToggle,
       initDonorType,
       initContactCapture,
+      initFooterSignup,
       initDeclarationCapture,
       initPartnershipCapture,
       initContactForm,
@@ -2128,6 +2207,7 @@
     initStorySteps(document, window);
     initPortal(document, window);
     initPortalRequest(document, window);
+    initFooterSignup(document, window);
     // Also expose the checkout payload/redirect builder on window so any inline
     // handler (or the donate wizard) can trigger it with the selected tier.
     window.startCheckout = function (btn) {

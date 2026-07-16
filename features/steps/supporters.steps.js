@@ -78,9 +78,21 @@ When(
 // TASK-240: record a VOLUNTARY cancellation the way the webhook does (subscription_dunning.cancelled_at),
 // backdated by the given number of days so the grace-window arithmetic in listPublicSupporters is
 // exercised end to end. Joins the donor's monthly donation to reuse its subscription id.
+// TASK-246: seed REALISTICALLY — the last paid gift comes BEFORE the cancel (you pay, then later cancel),
+// so backdate the donation to a few days before the cancel. The recovery-aware active-sub check treats a
+// gift dated AFTER an end as a recovery, so a "now" donation with a back-dated cancel would wrongly read
+// as still-active.
 When(
   "the donor with email {string} cancelled their subscription {int} days ago",
   async function (email, days) {
+    // Backdate the donor's monthly gift to before the cancel.
+    await pool.query(
+      `UPDATE donations SET created_at = now() - make_interval(days => $2::int + 5)
+        WHERE id = (SELECT d.id FROM donations d JOIN donors dn ON dn.id = d.donor_id
+                     WHERE dn.email = $1 AND d.mode = 'monthly' AND d.stripe_subscription_id IS NOT NULL
+                     ORDER BY d.id ASC LIMIT 1)`,
+      [email, days],
+    );
     await pool.query(
       `INSERT INTO subscription_dunning (donor_id, stripe_subscription_id, status, failed_attempts, cancelled_at)
        SELECT dn.id, d.stripe_subscription_id, 'active', 0, now() - make_interval(days => $2::int)
@@ -89,6 +101,25 @@ When(
         ORDER BY d.id ASC LIMIT 1
        ON CONFLICT (stripe_subscription_id) DO UPDATE SET cancelled_at = EXCLUDED.cancelled_at`,
       [email, days],
+    );
+  },
+);
+
+// TASK-246: a RECOVERY — the donor lapsed/cancelled long ago (beyond the grace window) but is paying
+// again, so their latest monthly gift is dated AFTER the end. We stamp a cancel 60 days ago while the
+// donor's monthly gift stays at "now" (the webhook created it now, un-backdated), so the gift is after
+// the end and the active-sub check keeps the donor despite the old cancel.
+When(
+  "the donor with email {string} cancelled long ago but is paying again",
+  async function (email) {
+    await pool.query(
+      `INSERT INTO subscription_dunning (donor_id, stripe_subscription_id, status, failed_attempts, cancelled_at)
+       SELECT dn.id, d.stripe_subscription_id, 'active', 0, now() - make_interval(days => 60)
+         FROM donors dn JOIN donations d ON d.donor_id = dn.id
+        WHERE dn.email = $1 AND d.mode = 'monthly' AND d.stripe_subscription_id IS NOT NULL
+        ORDER BY d.id ASC LIMIT 1
+       ON CONFLICT (stripe_subscription_id) DO UPDATE SET cancelled_at = EXCLUDED.cancelled_at`,
+      [email],
     );
   },
 );

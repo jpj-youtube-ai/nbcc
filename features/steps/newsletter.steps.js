@@ -546,3 +546,26 @@ Then("the bounced addresses should include {string}", function (email) {
     `expected ${email} in ${JSON.stringify(this.stats.bouncedEmails)}`,
   );
 });
+
+// TASK-257: engagement events ride the same signed webhook; a click names its destination link.
+When("Resend reports a signed click on {string} by {string}", async function (link, email) {
+  const body = JSON.stringify({
+    type: "email.clicked",
+    created_at: new Date().toISOString(),
+    data: { to: [email], click: { link } },
+  });
+  this.lastSvix = { id: `msg_bdd_click_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, body };
+  const r = await postResendEvent(svixHeadersFor(this.lastSvix.id, body, RESEND_SECRET), body);
+  this.whStatus = r.status;
+  this.whBody = r.json;
+});
+
+Then("the newsletter stats should count {int} click", function (clicks) {
+  assert.equal(this.stats.clicked, clicks, JSON.stringify(this.stats));
+});
+
+Then("the per-link stats should show {int} person clicked {string}", function (people, link) {
+  const row = (this.stats.links || []).find((l) => l.link === link);
+  assert.ok(row, `expected a per-link row for ${link} in ${JSON.stringify(this.stats.links)}`);
+  assert.equal(row.uniqueClicks, people);
+});

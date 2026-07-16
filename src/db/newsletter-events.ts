@@ -54,10 +54,18 @@ export async function recordResendEvent(
   if (newsletterId == null) return "unmatched";
 
   const { rowCount } = await pool.query(
-    `INSERT INTO newsletter_email_events (svix_event_id, newsletter_id, email, event_type, occurred_at, detail)
-     VALUES ($1, $2, $3, $4, $5::timestamptz, $6::jsonb)
+    `INSERT INTO newsletter_email_events (svix_event_id, newsletter_id, email, event_type, occurred_at, detail, link_url)
+     VALUES ($1, $2, $3, $4, $5::timestamptz, $6::jsonb, $7)
      ON CONFLICT (svix_event_id) WHERE svix_event_id IS NOT NULL DO NOTHING`,
-    [svixEventId, newsletterId, event.email, event.eventType, occurredAtIso, event.detail ? JSON.stringify(event.detail) : null],
+    [
+      svixEventId,
+      newsletterId,
+      event.email,
+      event.eventType,
+      occurredAtIso,
+      event.detail ? JSON.stringify(event.detail) : null,
+      event.linkUrl, // TASK-257: which link a click was for; null on everything else
+    ],
   );
   return (rowCount ?? 0) > 0 ? "recorded" : "duplicate";
 }
@@ -75,12 +83,23 @@ export async function recordUnsubscribeEvent(newsletterId: number, donorId: numb
   );
 }
 
+export interface NewsletterLinkStat {
+  link: string;
+  uniqueClicks: number; // distinct people — the honest headline
+  totalClicks: number; // raw clicks, alongside (one keen reader can click five times)
+}
+
 export interface NewsletterStats {
   sends: number; // accepted recipients recorded for this newsletter (the rate denominator)
   delivered: number;
   bounced: number;
   complained: number;
   unsubscribed: number;
+  // TASK-257 (Phase 2): zero until tracking is enabled on the newsletter sending domain. Opens are
+  // approximate by nature (Apple Mail prefetches; image-blocking undercounts) — the UI says so.
+  opened: number;
+  clicked: number;
+  links: NewsletterLinkStat[];
   bouncedEmails: string[]; // the actual dead addresses, for list cleaning
 }
 
@@ -99,6 +118,20 @@ export async function getNewsletterStats(newsletterId: number): Promise<Newslett
       GROUP BY event_type`,
     [newsletterId],
   );
+  // Per-link clicks (TASK-257). Unsubscribe links are EXCLUDED: every recipient's unsubscribe URL is
+  // tokenised per person, so they would drown the table in one-click rows of donor-identifying URLs —
+  // and unsubscribes are already counted honestly by our own endpoint's events. Unique people lead
+  // (one keen reader can click five times); capped, the dashboard is not a log viewer.
+  const links = await pool.query(
+    `SELECT link_url, count(DISTINCT email) AS unique_clicks, count(*) AS total_clicks
+       FROM newsletter_email_events
+      WHERE newsletter_id = $1 AND event_type = 'clicked'
+        AND link_url IS NOT NULL AND link_url NOT LIKE '%/unsubscribe/%'
+      GROUP BY link_url
+      ORDER BY unique_clicks DESC, total_clicks DESC
+      LIMIT 50`,
+    [newsletterId],
+  );
   const byType = new Map<string, { n: number; emails: string[] | null }>(
     events.rows.map((r) => [r.event_type, { n: Number(r.n), emails: r.emails ?? null }]),
   );
@@ -108,6 +141,13 @@ export async function getNewsletterStats(newsletterId: number): Promise<Newslett
     bounced: byType.get("bounced")?.n ?? 0,
     complained: byType.get("complained")?.n ?? 0,
     unsubscribed: byType.get("unsubscribed")?.n ?? 0,
+    opened: byType.get("opened")?.n ?? 0,
+    clicked: byType.get("clicked")?.n ?? 0,
+    links: links.rows.map((r) => ({
+      link: r.link_url,
+      uniqueClicks: Number(r.unique_clicks),
+      totalClicks: Number(r.total_clicks),
+    })),
     bouncedEmails: byType.get("bounced")?.emails ?? [],
   };
 }

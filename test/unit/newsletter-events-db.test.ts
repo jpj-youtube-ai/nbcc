@@ -115,6 +115,9 @@ describe("getNewsletterStats", () => {
       bounced: 3,
       complained: 0,
       unsubscribed: 0,
+      opened: 0, // TASK-257 widened the shape; zero until engagement tracking is enabled
+      clicked: 0,
+      links: [],
       bouncedEmails: ["dead@example.com"],
     });
     expect(sqlOf(/from\s+newsletter_email_events/i)).toMatch(/distinct/i);
@@ -125,6 +128,77 @@ describe("getNewsletterStats", () => {
       .mockResolvedValueOnce({ rows: [{ sends: "0" }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
     const stats = await getNewsletterStats(99);
-    expect(stats).toEqual({ sends: 0, delivered: 0, bounced: 0, complained: 0, unsubscribed: 0, bouncedEmails: [] });
+    expect(stats).toEqual({
+      sends: 0, delivered: 0, bounced: 0, complained: 0, unsubscribed: 0,
+      opened: 0, clicked: 0, links: [], bouncedEmails: [],
+    });
+  });
+});
+
+// TASK-257 (Phase 2): opens + clicks in the store and the stats.
+describe("engagement events (TASK-257)", () => {
+  const clicked = {
+    eventType: "clicked" as const,
+    email: "dora@example.com",
+    occurredAt: new Date("2026-07-16T12:00:00.000Z"),
+    detail: null,
+    linkUrl: "https://nbcc.scot/donate",
+  };
+
+  it("stores WHICH link a click was for", async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ newsletter_id: 41 }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    await recordResendEvent("msg_c1", clicked);
+    const params = paramsOf(/insert\s+into\s+newsletter_email_events/i);
+    expect(params).toContain("https://nbcc.scot/donate");
+  });
+
+  it("counts opens and unique clickers in the stats", async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ sends: "100" }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [
+          { event_type: "opened", n: "40", emails: null },
+          { event_type: "clicked", n: "12", emails: null },
+        ],
+        rowCount: 2,
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // per-link
+    const stats = await getNewsletterStats(41);
+    expect(stats.opened).toBe(40);
+    expect(stats.clicked).toBe(12);
+  });
+
+  it("breaks clicks down per link — unique people first, total clicks alongside", async () => {
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ sends: "100" }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({
+        rows: [
+          { link_url: "https://nbcc.scot/donate", unique_clicks: "12", total_clicks: "19" },
+          { link_url: "https://nbcc.scot/my-story", unique_clicks: "5", total_clicks: "5" },
+        ],
+        rowCount: 2,
+      });
+    const stats = await getNewsletterStats(41);
+    expect(stats.links).toEqual([
+      { link: "https://nbcc.scot/donate", uniqueClicks: 12, totalClicks: 19 },
+      { link: "https://nbcc.scot/my-story", uniqueClicks: 5, totalClicks: 5 },
+    ]);
+  });
+
+  it("keeps unsubscribe links OUT of the per-link table — each donor's is unique, and unsubscribes are already counted", async () => {
+    // Every recipient's unsubscribe URL is tokenised-per-person: letting them into the per-link table
+    // would drown it in one-click rows of donor-identifying URLs. They are excluded in SQL, and the
+    // Unsubscribed tile (our own endpoint's events) is the honest count of that behaviour.
+    queryMock
+      .mockResolvedValueOnce({ rows: [{ sends: "100" }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    await getNewsletterStats(41);
+    const perLink = queryMock.mock.calls.map((c) => String(c[0])).find((s) => /link_url/i.test(s) && /group\s+by/i.test(s)) ?? "";
+    expect(perLink).toMatch(/not\s+like\s+'%\/unsubscribe\/%'/i);
+    expect(perLink).toMatch(/link_url\s+is\s+not\s+null/i);
   });
 });

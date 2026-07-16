@@ -39,26 +39,38 @@ export function verifySvixSignature(
   });
 }
 
-export type NewsletterEmailEventType = "delivered" | "bounced" | "complained";
+export type NewsletterEmailEventType = "delivered" | "bounced" | "complained" | "opened" | "clicked";
 
 export interface ParsedResendEvent {
   eventType: NewsletterEmailEventType;
   email: string; // first recipient, lowercased — our sends have exactly one
   occurredAt: Date;
   detail: Record<string, unknown> | null; // the bounce reason and nothing else — never a whole payload
+  // TASK-257: the DESTINATION a clicked event was for (per-link counts are the point of clicks).
+  // Null on every other type — and on a click Resend reported without a usable link, which still
+  // counts as a click, just not against a link.
+  linkUrl: string | null;
 }
 
 const EVENT_MAP: Record<string, NewsletterEmailEventType> = {
   "email.delivered": "delivered",
   "email.bounced": "bounced",
   "email.complained": "complained",
+  // TASK-257 (Phase 2): engagement. These only ever arrive once tracking is enabled on the
+  // newsletter-only sending subdomain — the parser being ready is dormant capacity, not tracking.
+  "email.opened": "opened",
+  "email.clicked": "clicked",
 };
 
 // Null means "acknowledge and drop": an unconsumed type (email.sent/opened/…), a malformed body, or a
 // payload with no recipient. The route 200s those — a webhook that 500s on surprises just gets
 // hammered by Svix retries for data we never wanted.
 export function parseResendEvent(rawBody: string): ParsedResendEvent | null {
-  let payload: { type?: unknown; created_at?: unknown; data?: { to?: unknown; bounce?: unknown } };
+  let payload: {
+    type?: unknown;
+    created_at?: unknown;
+    data?: { to?: unknown; bounce?: unknown; click?: { link?: unknown }; link?: unknown };
+  };
   try {
     payload = JSON.parse(rawBody);
   } catch {
@@ -77,5 +89,13 @@ export function parseResendEvent(rawBody: string): ParsedResendEvent | null {
   const bounce = payload?.data?.bounce;
   const detail = eventType === "bounced" && bounce && typeof bounce === "object" ? (bounce as Record<string, unknown>) : null;
 
-  return { eventType, email: first.trim().toLowerCase(), occurredAt, detail };
+  // The clicked link: Resend nests it under data.click.link; accept a flat data.link too, because a
+  // provider payload shape is theirs to evolve and a click without a link must degrade, not drop.
+  let linkUrl: string | null = null;
+  if (eventType === "clicked") {
+    const candidate = payload?.data?.click?.link ?? payload?.data?.link;
+    if (typeof candidate === "string" && candidate.trim()) linkUrl = candidate.trim();
+  }
+
+  return { eventType, email: first.trim().toLowerCase(), occurredAt, detail, linkUrl };
 }

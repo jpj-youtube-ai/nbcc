@@ -2048,6 +2048,75 @@
   // A labelled text input (or textarea) bound to obj[key] (obj is a block's data or a repeater item).
   // opts: { multiline, hint, type } — hint renders muted helper text under the input; type sets the
   // input type (e.g. "url") for the right mobile keyboard.
+  // TASK-253: is this selection already wrapped in `marker`?
+  // The subtlety: `**bold**` ends with a `*`, so a naive check would say italic-wrapped, strip one
+  // asterisk, and silently turn the author's bold into italic. A single `*` adjacent to another `*`
+  // belongs to a BOLD marker and is not ours to remove.
+  function nlWrappedIn(before, after, marker) {
+    var m = marker.length;
+    if (before.slice(-m) !== marker || after.slice(0, m) !== marker) return false;
+    if (marker === "*" && (before.slice(-2) === "**" || after.slice(0, 2) === "**")) return false;
+    return true;
+  }
+
+  // Wrap (or unwrap) the current selection in a plain-text marker the SERVER renders — the block's
+  // data stays a plain string, so templates, the size step and the merge all keep working untouched.
+  // Clicking with nothing selected does nothing: silently dropping `**` into someone's copy at the
+  // caret would be worse than no-op.
+  function nlWrapSelection(input, obj, key, marker) {
+    var start = input.selectionStart;
+    var end = input.selectionEnd;
+    if (start == null || start === end) return;
+    var value = input.value;
+    var before = value.slice(0, start);
+    var sel = value.slice(start, end);
+    var after = value.slice(end);
+    var m = marker.length;
+    var next, caret;
+    if (nlWrappedIn(before, after, marker)) {
+      next = before.slice(0, -m) + sel + after.slice(m); // toggle off
+      caret = start - m;
+    } else {
+      next = before + marker + sel + marker + after;
+      caret = start + m;
+    }
+    input.value = next;
+    obj[key] = next;
+    // Keep the same words selected, so a second click toggles the same thing rather than the author
+    // having to re-select after every press.
+    input.setSelectionRange(caret, caret + sel.length);
+    input.focus();
+    nlSchedulePreview();
+  }
+
+  // The B / I pair above a prose field. Not on titles or button labels — emphasis belongs in prose.
+  function nlEmphasisBar(input, obj, key) {
+    var bar = doc.createElement("div");
+    bar.className = "nl-emphasis";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Emphasis");
+    [
+      { marker: "**", label: "B", title: "Bold the selected text" },
+      { marker: "*", label: "I", title: "Italicise the selected text" },
+    ].forEach(function (spec) {
+      var btn = doc.createElement("button");
+      btn.type = "button";
+      btn.className = "nl-emph";
+      btn.textContent = spec.label;
+      btn.title = spec.title;
+      btn.setAttribute("aria-label", spec.title);
+      if (nlReadOnly()) btn.disabled = true;
+      else {
+        // mousedown would steal focus from the textarea and collapse the selection before the click
+        // lands — preventDefault here keeps the author's selection intact.
+        btn.addEventListener("mousedown", function (e) { e.preventDefault(); });
+        btn.addEventListener("click", function () { nlWrapSelection(input, obj, key, spec.marker); });
+      }
+      bar.appendChild(btn);
+    });
+    return bar;
+  }
+
   function nlText(host, obj, key, label, opts) {
     opts = opts || {};
     var wrap = doc.createElement("label");
@@ -2062,6 +2131,10 @@
     input.value = obj[key] != null ? obj[key] : "";
     if (nlReadOnly()) input.disabled = true;
     else input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
+    // TASK-253: a multiline field IS a prose field — the four of them (text, greeting intro, story
+    // body, spotlight quote) are exactly the ones the server renders emphasis in, so the buttons and
+    // the renderer can't disagree about where **bold** works.
+    if (opts.multiline) wrap.appendChild(nlEmphasisBar(input, obj, key));
     wrap.appendChild(input);
     if (opts.hint) {
       var h = doc.createElement("span");

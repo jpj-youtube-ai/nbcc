@@ -298,3 +298,31 @@ Feature: Admin newsletter (REQ-069)
     Then the audience has 0 members
     When I fetch that newsletter's stats
     Then the newsletter stats should count 1 unsubscribe
+
+  # TASK-260: spreadsheet import. Preview first (the admin confirms exactly what they see), the
+  # consent attestation is the gate, and an opted-out address is NEVER re-added by a spreadsheet.
+  Scenario: importing a spreadsheet previews first, requires attestation, and honours opt-outs
+    Given a newsletter admin "imp.admin.newsletter.bdd@example.com" with role "admin" and password "pw-imp"
+    When I create an audience named "Bdd Import Crew"
+    Then the audience response status should be 201
+    # Someone who was on the audience and opted out — the tombstone the import must respect.
+    When I add "gone@street.bdd.example.com" named "Gone" to that audience
+    And I remove "gone@street.bdd.example.com" from that audience
+
+    # The file: one good row, the opted-out person, a duplicate and a junk row.
+    When I preview an import into that audience:
+      """
+      Name,Email
+      Fresh Person,fresh@street.bdd.example.com
+      Gone Person,gone@street.bdd.example.com
+      Fresh Again,FRESH@street.bdd.example.com
+      No Email Here,
+      """
+    Then the import preview shows 1 ready, 1 previously opted out and 2 issues
+
+    # No attestation, no import.
+    When I import it without attestation
+    Then the audience response status should be 400
+    When I import it with attestation
+    Then the import result is 1 added and 1 kept out
+    And the audience has 1 members

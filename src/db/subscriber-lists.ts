@@ -151,6 +151,23 @@ export async function removeListMember(listId: number, memberId: number): Promis
   return (rowCount ?? 0) > 0;
 }
 
+// TASK-260: the import preview's compare — for a batch of addresses, which are already ACTIVE on
+// this list and which are TOMBSTONED (an import may never revive those). One query however big the
+// spreadsheet.
+export async function getMembershipStates(
+  listId: number,
+  emails: string[],
+): Promise<{ email: string; unsubscribed: boolean }[]> {
+  if (emails.length === 0) return [];
+  const { rows } = await pool.query(
+    `SELECT lower(email) AS email, (unsubscribed_at IS NOT NULL) AS unsubscribed
+       FROM list_subscribers
+      WHERE list_id = $1 AND lower(email) = ANY($2)`,
+    [listId, emails.map((e) => e.toLowerCase())],
+  );
+  return rows.map((r) => ({ email: r.email, unsubscribed: r.unsubscribed }));
+}
+
 // The public unsubscribe link's write. Idempotent, and a repeat click keeps the FIRST opt-out date —
 // the tombstone records when they left, not when they last pressed the link. Returns the address so
 // the caller can attribute a stats event, or null for an unknown id.

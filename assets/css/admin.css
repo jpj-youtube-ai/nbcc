@@ -383,6 +383,23 @@
 .nl-send-list select { font: inherit; padding: 7px 10px; border: 1.4px solid var(--line); border-radius: 8px;
   background: var(--cream); color: var(--slate); }
 
+/* TASK-260: spreadsheet import. The attestation is a full-width labelled checkbox — it is the legal
+   gate, so it reads like one, not like small print. Issues list in the soft slate. */
+.nl-import { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+.nl-import-head { font-size: .95rem; color: var(--maroon); margin: 0 0 .3rem; }
+.nl-import-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .4rem 0 .6rem; }
+.nl-import-bar button { font: inherit; font-weight: 600; padding: 7px 12px; border: 1.4px solid var(--line);
+  border-radius: 8px; background: var(--cream); color: var(--slate); cursor: pointer; }
+.nl-import-bar button:hover { border-color: var(--crimson); color: var(--crimson); }
+.nl-import-summary { font-weight: 600; color: var(--slate); margin: .4rem 0; }
+.nl-import-issues { margin: .2rem 0 .6rem; padding-left: 1.2rem; font-size: .82rem; color: var(--slate-soft); }
+.nl-import-attest { display: flex; gap: .55rem; align-items: flex-start; font-size: .88rem; color: var(--slate);
+  margin: .5rem 0; }
+.nl-import-attest input { margin-top: .2rem; }
+#importCommitBtn { font: inherit; font-weight: 700; padding: 8px 14px; border: 0; border-radius: 8px;
+  background: var(--crimson); color: var(--cream); cursor: pointer; }
+#importCommitBtn:disabled { opacity: .45; cursor: default; }
+
 /* TASK-256: the delivery-stats panel on a sent newsletter. Tiles read number-first (the number IS
    the content), rates sit beside them, labels underneath; tabular figures so columns of counts align.
    Bounced addresses render as code chips in the note line below. */

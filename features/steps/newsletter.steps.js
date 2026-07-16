@@ -53,6 +53,9 @@ Before({ tags: "@newsletter" }, async function () {
   // template belongs to the team, not its author), so they must be cleared by name or a re-run would
   // hit the unique-name rule and 409 where it expects 201.
   await pool.query("DELETE FROM newsletter_templates WHERE name LIKE 'Bdd %'");
+  // TASK-259: bdd audiences. Newsletters that referenced them were deleted above (their subjects are
+  // in the list), so the FK from newsletters.list_id no longer blocks; members cascade with the list.
+  await pool.query("DELETE FROM subscriber_lists WHERE slug LIKE 'bdd-%'");
 });
 
 After({ tags: "@newsletter" }, async function () {
@@ -563,4 +566,57 @@ Then("the per-link stats should show {int} person clicked {string}", function (p
   const row = (this.stats.links || []).find((l) => l.link === link);
   assert.ok(row, `expected a per-link row for ${link} in ${JSON.stringify(this.stats.links)}`);
   assert.equal(row.uniqueClicks, people);
+});
+
+
+// --- TASK-259: audiences -----------------------------------------------------------------------
+When("I create an audience named {string}", async function (name) {
+  const r = await authFetch("/api/admin/subscriber-lists", "POST", { name }, this.token);
+  this.audStatus = r.status;
+  if (r.json && r.json.id) this.audienceId = r.json.id;
+});
+
+When("I add {string} named {string} to that audience", async function (email, name) {
+  const r = await authFetch(
+    `/api/admin/subscriber-lists/${this.audienceId}/members`,
+    "POST",
+    { name, email },
+    this.token,
+  );
+  this.audStatus = r.status;
+});
+
+Then("the audience response status should be {int}", function (expected) {
+  assert.equal(this.audStatus, expected);
+});
+
+When("I send that newsletter to that audience", async function () {
+  const r = await authFetch(
+    `/api/admin/newsletters/${this.newsletterId}/send`,
+    "POST",
+    { listId: this.audienceId },
+    this.token,
+  );
+  this.nlStatus = r.status;
+  this.nlBody = r.json;
+});
+
+// The member's emailed link carries a SUBSCRIBER token (s<id>.<newsletterId>.<sig>) — signed here with
+// the same ADMIN_SESSION_SECRET the app verifies with, exactly as the email would carry it.
+When("that audience member unsubscribes via their link", async function () {
+  const members = await authFetch(`/api/admin/subscriber-lists/${this.audienceId}/members`, "GET", undefined, this.token);
+  assert.ok(members.json.length > 0, "expected a member to unsubscribe");
+  const body = `s${members.json[0].id}.${this.newsletterId}`;
+  const sig = createHmac("sha256", process.env.ADMIN_SESSION_SECRET || "dev-admin-session-secret").update(body).digest("base64url");
+  const res = await fetch(`${BASE_URL}/unsubscribe/${body}.${sig}`);
+  assert.equal(res.status, 200);
+});
+
+Then("the audience has {int} members", async function (expected) {
+  const members = await authFetch(`/api/admin/subscriber-lists/${this.audienceId}/members`, "GET", undefined, this.token);
+  assert.equal(members.json.length, expected, JSON.stringify(members.json));
+});
+
+Then("the newsletter stats should count {int} unsubscribe", function (n) {
+  assert.equal(this.stats.unsubscribed, n, JSON.stringify(this.stats));
 });

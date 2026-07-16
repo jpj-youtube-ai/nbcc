@@ -128,6 +128,46 @@ export async function updateNewsletterDraft(
   return row ? toNewsletter(row) : null;
 }
 
+// TASK-259: a recipient of a LIST send. donorId XOR subscriberId identifies them — it decides which
+// unsubscribe token their email carries.
+export interface ListRecipient {
+  email: string;
+  donorId: number | null;
+  subscriberId: number | null;
+  fullName: string | null;
+}
+
+// Resolve who a list actually reaches, at send time. The 'newsletter' audience is consenting donors
+// PLUS its own subscriber rows, deduped by address with the donor identity winning (their token keys
+// global newsletter consent); every other audience is exactly its active members.
+export async function listRecipientsForList(list: { id: number; slug: string }): Promise<ListRecipient[]> {
+  const subs = await pool.query(
+    `SELECT id, name, email FROM list_subscribers
+      WHERE list_id = $1 AND unsubscribed_at IS NULL ORDER BY email`,
+    [list.id],
+  );
+  const fromSubs: ListRecipient[] = subs.rows.map((r) => ({
+    email: r.email.toLowerCase(),
+    donorId: null,
+    subscriberId: r.id,
+    fullName: r.name,
+  }));
+  if (list.slug !== "newsletter") return fromSubs;
+
+  const donors = await listNewsletterRecipients();
+  const byEmail = new Map<string, ListRecipient>();
+  for (const s of fromSubs) byEmail.set(s.email, s);
+  for (const d of donors) {
+    byEmail.set(d.email, { email: d.email, donorId: d.donorId, subscriberId: null, fullName: d.fullName });
+  }
+  return Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email));
+}
+
+// Stamp which audience a send went to (read back by the stats panel and history).
+export async function setNewsletterList(id: number, listId: number): Promise<void> {
+  await pool.query(`UPDATE newsletters SET list_id = $2 WHERE id = $1`, [id, listId]);
+}
+
 // Recipients: every consenting donor with an email, deduped case-insensitively by address.
 export async function listNewsletterRecipients(): Promise<NewsletterRecipient[]> {
   const rows = (

@@ -30,14 +30,25 @@ export function signUnsubscribeTokenV2(donorId: number, newsletterId: number, se
   return `${body}.${sign(body, secret)}`;
 }
 
-export interface UnsubscribeClaims {
-  donorId: number;
-  newsletterId: number | null; // null on a legacy (pre-TASK-255) token
+// TASK-259: audience lists mean a recipient is not always a donor — volunteers/partners/referrers are
+// list_subscribers rows. Their token's first segment is "s<id>", and the prefix sits INSIDE the
+// signed body, so a donor-signed "7.41" can never be replayed as subscriber "s7.41".
+export function signSubscriberUnsubscribeToken(subscriberId: number, newsletterId: number, secret: string): string {
+  const body = `s${subscriberId}.${newsletterId}`;
+  return `${body}.${sign(body, secret)}`;
 }
 
-// Accepts BOTH shapes forever: `donorId.sig` (legacy — printed in every email sent before TASK-255)
-// and `donorId.newsletterId.sig` (v2). An unsubscribe link that stops unsubscribing is a compliance
-// failure, so the legacy path is permanent, not a deprecation window.
+export interface UnsubscribeClaims {
+  kind: "donor" | "subscriber";
+  id: number;
+  newsletterId: number | null; // null on a legacy (pre-TASK-255) donor token
+}
+
+// Accepts ALL issued shapes forever — an unsubscribe link that stops unsubscribing is a compliance
+// failure, so old formats are permanent, not deprecation windows:
+//   `donorId.sig`                      legacy donor (every email sent before TASK-255)
+//   `donorId.newsletterId.sig`         donor v2 (TASK-255)
+//   `s<subscriberId>.newsletterId.sig` list subscriber (TASK-259)
 export function verifyUnsubscribeToken(token: string, secret: string): UnsubscribeClaims {
   const parts = (token ?? "").split(".");
   if ((parts.length !== 2 && parts.length !== 3) || parts.some((p) => !p)) {
@@ -51,11 +62,12 @@ export function verifyUnsubscribeToken(token: string, secret: string): Unsubscri
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) throw new UnsubscribeTokenError("bad_signature");
 
-  const donorId = Number(parts[0]);
-  if (!Number.isInteger(donorId) || donorId <= 0) throw new UnsubscribeTokenError("malformed");
-  if (parts.length === 2) return { donorId, newsletterId: null };
+  const subscriber = parts.length === 3 && /^s\d+$/.test(parts[0]);
+  const id = Number(subscriber ? parts[0].slice(1) : parts[0]);
+  if (!Number.isInteger(id) || id <= 0) throw new UnsubscribeTokenError("malformed");
+  if (parts.length === 2) return { kind: "donor", id, newsletterId: null };
 
   const newsletterId = Number(parts[1]);
   if (!Number.isInteger(newsletterId) || newsletterId <= 0) throw new UnsubscribeTokenError("malformed");
-  return { donorId, newsletterId };
+  return { kind: subscriber ? "subscriber" : "donor", id, newsletterId };
 }

@@ -127,6 +127,7 @@
       // buttons are gated by canEdit) and regardless of whether any newsletter exists — a brand-new
       // draft is exactly when you most want to start from a template.
       nlRefreshTemplates();
+      nlRefreshAudiences(); // TASK-259: fill the audience pickers once permissions are known
       selectView("overview");
       loadOverview();
     }
@@ -2459,6 +2460,7 @@
         // all gated to newsletter:edit (the server's authorizeSection level for these routes).
         var canWrite = canEdit("newsletter");
         el("newsletterSend").hidden = !(canWrite && !sent);
+        if (el("sendListWrap")) el("sendListWrap").hidden = !(canWrite && !sent); // TASK-259
         el("newsletterSave").hidden = !canWrite;
         el("newsletterSave").disabled = sent || !canWrite;
         el("newsletterTest").hidden = !canWrite;
@@ -2731,6 +2733,79 @@
       .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
       .then(function (stats) { nlRenderStats(stats, redactedAt); })
       .catch(function () { nlHideStats(); });
+  }
+
+  // --- Audiences (TASK-259): separate mailing lists ------------------------------------------------
+  var nlAudiences = []; // {id, slug, name, memberCount}
+
+  function nlAudienceMsg(text) {
+    var m = el("audienceMsg");
+    if (m) m.textContent = text || "";
+  }
+
+  function nlFillAudienceSelect(select, keepValue) {
+    if (!select) return;
+    var keep = keepValue != null ? keepValue : select.value;
+    select.innerHTML = "";
+    nlAudiences.forEach(function (l) {
+      var o = doc.createElement("option");
+      o.value = String(l.id);
+      o.textContent = l.name + (typeof l.memberCount === "number" ? " (" + l.memberCount + ")" : "");
+      select.appendChild(o);
+    });
+    if (keep) select.value = keep;
+    if (!select.value && select.options.length) select.value = select.options[0].value;
+  }
+
+  function nlRenderAudienceMembers(members) {
+    var host = el("audienceMembers");
+    if (!host) return;
+    if (!members.length) {
+      host.innerHTML = '<p class="admin-loading">No one on this audience yet.</p>';
+      return;
+    }
+    var canWrite = canEdit("newsletter");
+    var html = '<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>How</th><th></th></tr></thead><tbody>';
+    members.forEach(function (m) {
+      html += "<tr><td>" + H.escapeHtml(m.name || "") + "</td><td>" + H.escapeHtml(m.email) + "</td><td>" +
+        H.escapeHtml(m.phone || "") + "</td><td>" + H.escapeHtml(m.consentSource) + "</td><td>" +
+        (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +
+        "</td></tr>";
+    });
+    host.innerHTML = html + "</tbody></table>";
+    Array.prototype.forEach.call(host.querySelectorAll("[data-remove-member]"), function (b) {
+      b.addEventListener("click", function () {
+        var listId = el("audiencePick").value;
+        if (!window.confirm("Remove this person from the audience? Their consent history is kept.")) return;
+        authFetch("/api/admin/subscriber-lists/" + listId + "/members/" + b.getAttribute("data-remove-member"), { method: "DELETE" })
+          .then(function (res) {
+            nlAudienceMsg(res.ok ? "Removed." : "Could not remove them.");
+            return nlRefreshAudiences();
+          })
+          .catch(function () { nlAudienceMsg("Could not remove them."); });
+      });
+    });
+  }
+
+  function nlLoadAudienceMembers() {
+    var pick = el("audiencePick");
+    if (!pick || !pick.value) return;
+    authFetch("/api/admin/subscriber-lists/" + pick.value + "/members")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (rows) { nlRenderAudienceMembers(Array.isArray(rows) ? rows : []); })
+      .catch(function () { /* the card is a convenience — never block the tab */ });
+  }
+
+  function nlRefreshAudiences() {
+    return authFetch("/api/admin/subscriber-lists")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (rows) {
+        nlAudiences = Array.isArray(rows) ? rows : [];
+        nlFillAudienceSelect(el("audiencePick"));
+        nlFillAudienceSelect(el("sendListPick"));
+        nlLoadAudienceMembers();
+      })
+      .catch(function () { /* never block the builder on the audience card */ });
   }
 
   // --- The SHARED saved-template library: helpers (TASK-249) ---------------------------------------
@@ -3018,6 +3093,77 @@
       });
     }
 
+    // --- Audiences card wiring (TASK-259) ---------------------------------------------------------
+    if (el("audiencePick")) {
+      el("audiencePick").addEventListener("change", nlLoadAudienceMembers);
+    }
+    if (el("audienceNew")) {
+      el("audienceNew").addEventListener("click", function () {
+        ["audienceName", "audienceCreate", "audienceCancel"].forEach(function (i) { el(i).hidden = false; });
+        el("audienceNew").hidden = true;
+        el("audienceName").focus();
+      });
+      el("audienceCancel").addEventListener("click", function () {
+        ["audienceName", "audienceCreate", "audienceCancel"].forEach(function (i) { el(i).hidden = true; });
+        el("audienceNew").hidden = false;
+        nlAudienceMsg("");
+      });
+      el("audienceCreate").addEventListener("click", function () {
+        var name = (el("audienceName").value || "").trim();
+        if (!name) { nlAudienceMsg("Give the audience a name."); return; }
+        authFetch("/api/admin/subscriber-lists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name }),
+        })
+          .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, status: res.status, b: b }; }); })
+          .then(function (r) {
+            if (!r.ok) {
+              nlAudienceMsg(r.status === 409 ? "An audience with that name already exists." : (r.b && r.b.error) || "Could not create it.");
+              return;
+            }
+            el("audienceName").value = "";
+            ["audienceName", "audienceCreate", "audienceCancel"].forEach(function (i) { el(i).hidden = true; });
+            el("audienceNew").hidden = false;
+            nlAudienceMsg("Audience created.");
+            return nlRefreshAudiences().then(function () {
+              if (el("audiencePick")) el("audiencePick").value = String(r.b.id);
+              nlLoadAudienceMembers();
+            });
+          })
+          .catch(function () { nlAudienceMsg("Could not create it."); });
+      });
+    }
+    var audienceMemberForm = el("audienceMemberForm");
+    if (audienceMemberForm) {
+      audienceMemberForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (!canEdit("newsletter")) return;
+        var listId = el("audiencePick").value;
+        if (!listId) return;
+        var email = (el("amEmail").value || "").trim();
+        if (!email) return;
+        nlAudienceMsg("Adding…");
+        authFetch("/api/admin/subscriber-lists/" + listId + "/members", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: (el("amName").value || "").trim() || undefined,
+            email: email,
+            phone: (el("amPhone").value || "").trim() || undefined,
+          }),
+        })
+          .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+          .then(function (r) {
+            if (!r.ok) { nlAudienceMsg((r.b && r.b.error) || "Could not add them."); return; }
+            el("amEmail").value = ""; el("amName").value = ""; el("amPhone").value = "";
+            nlAudienceMsg(r.b.outcome === "exists" ? "Already on this audience." : "Added.");
+            return nlRefreshAudiences();
+          })
+          .catch(function () { nlAudienceMsg("Could not add them."); });
+      });
+    }
+
     // Send a single test copy to the signed-in admin's own inbox — the current builder doc, unsaved
     // changes and all (mirrors the preview payload). Lets you check real-inbox rendering before a blast.
     el("newsletterTest").addEventListener("click", function () {
@@ -3079,7 +3225,12 @@
   function nlDoSend(id, sendBtn, closeModal) {
     sendBtn.disabled = true;
     el("newsletterMsg").textContent = "Sending…";
-    authFetch("/api/admin/newsletters/" + id + "/send", { method: "POST" })
+    var pickedList = el("sendListPick") && el("sendListPick").value ? Number(el("sendListPick").value) : null;
+    authFetch("/api/admin/newsletters/" + id + "/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(pickedList ? { listId: pickedList } : {}),
+    })
       .then(function (res) {
         if (!res.ok) throw new Error("send failed: " + res.status);
         return res.json();
@@ -3149,7 +3300,8 @@
 
     // Populate the recipient count + email list. Send stays available even if this lookup fails —
     // the server recomputes the authoritative list at send time.
-    authFetch("/api/admin/newsletters/recipients")
+    authFetch("/api/admin/newsletters/recipients" +
+      (el("sendListPick") && el("sendListPick").value ? "?listId=" + el("sendListPick").value : ""))
       .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
       .then(function (r) {
         var emails = r.emails || [];

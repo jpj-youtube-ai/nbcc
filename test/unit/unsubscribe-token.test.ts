@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   signUnsubscribeToken,
   signUnsubscribeTokenV2,
+  signSubscriberUnsubscribeToken,
   verifyUnsubscribeToken,
   UnsubscribeTokenError,
 } from "../../src/donors/unsubscribe-token";
@@ -13,7 +14,7 @@ describe("unsubscribe token", () => {
     const token = signUnsubscribeToken(42, SECRET);
     // TASK-255 widened the return to { donorId, newsletterId } so an unsubscribe can be attributed;
     // a legacy token attributes to no newsletter but MUST keep identifying its donor.
-    expect(verifyUnsubscribeToken(token, SECRET)).toEqual({ donorId: 42, newsletterId: null });
+    expect(verifyUnsubscribeToken(token, SECRET)).toEqual({ kind: "donor", id: 42, newsletterId: null });
   });
 
   it("rejects a tampered payload", () => {
@@ -41,12 +42,12 @@ describe("unsubscribe token v2 (TASK-255)", () => {
 
   it("round-trips donor + newsletter", () => {
     const token = signUnsubscribeTokenV2(7, 41, SECRET);
-    expect(verifyUnsubscribeToken(token, SECRET)).toEqual({ donorId: 7, newsletterId: 41 });
+    expect(verifyUnsubscribeToken(token, SECRET)).toEqual({ kind: "donor", id: 7, newsletterId: 41 });
   });
 
   it("still accepts a LEGACY token forever, with no newsletter attributed", () => {
     const legacy = signUnsubscribeToken(7, SECRET);
-    expect(verifyUnsubscribeToken(legacy, SECRET)).toEqual({ donorId: 7, newsletterId: null });
+    expect(verifyUnsubscribeToken(legacy, SECRET)).toEqual({ kind: "donor", id: 7, newsletterId: null });
   });
 
   it("rejects a v2 token whose signature does not cover BOTH ids", () => {
@@ -64,5 +65,38 @@ describe("unsubscribe token v2 (TASK-255)", () => {
   it("rejects garbage ids in either slot", () => {
     expect(() => verifyUnsubscribeToken("0.41.x", SECRET)).toThrow(UnsubscribeTokenError);
     expect(() => verifyUnsubscribeToken("7.-1.x", SECRET)).toThrow(UnsubscribeTokenError);
+  });
+});
+
+// TASK-259: audience lists mean a recipient is not always a donor — a volunteer or partner is a
+// list_subscribers row. Their unsubscribe link carries a SUBSCRIBER token ("s<id>.<newsletterId>"),
+// alongside the two donor shapes, all verifying forever.
+describe("subscriber unsubscribe token (TASK-259)", () => {
+  const SECRET = "test-secret";
+
+  it("round-trips a subscriber + newsletter", () => {
+    const token = signSubscriberUnsubscribeToken(9, 41, SECRET);
+    expect(verifyUnsubscribeToken(token, SECRET)).toEqual({ kind: "subscriber", id: 9, newsletterId: 41 });
+  });
+
+  it("still verifies BOTH donor shapes, forever, now with a kind", () => {
+    expect(verifyUnsubscribeToken(signUnsubscribeToken(7, SECRET), SECRET)).toEqual({
+      kind: "donor", id: 7, newsletterId: null,
+    });
+    expect(verifyUnsubscribeToken(signUnsubscribeTokenV2(7, 41, SECRET), SECRET)).toEqual({
+      kind: "donor", id: 7, newsletterId: 41,
+    });
+  });
+
+  it("rejects a subscriber token whose ids were tampered with", () => {
+    const token = signSubscriberUnsubscribeToken(9, 41, SECRET);
+    expect(() => verifyUnsubscribeToken(token.replace("s9.", "s8."), SECRET)).toThrow(UnsubscribeTokenError);
+    expect(() => verifyUnsubscribeToken(token.replace(".41.", ".40."), SECRET)).toThrow(UnsubscribeTokenError);
+  });
+
+  it("rejects a donor-signed body replayed as a subscriber token", () => {
+    // "7.41" signed as a donor must not verify when dressed as "s7.41" — the prefix is in the body.
+    const donor = signUnsubscribeTokenV2(7, 41, SECRET);
+    expect(() => verifyUnsubscribeToken("s" + donor, SECRET)).toThrow(UnsubscribeTokenError);
   });
 });

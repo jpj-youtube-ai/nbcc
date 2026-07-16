@@ -72,6 +72,8 @@ import {
   claimNewsletterForSend,
   setNewsletterDeliverySummary,
   deleteDraftNewsletter,
+  listRecipientsForList,
+  setNewsletterList,
 } from "../db/newsletters";
 import {
   templateNameSchema,
@@ -92,7 +94,17 @@ import {
   listNewsletterAttachmentsForSend,
   deleteNewsletterAttachment,
 } from "../db/newsletter-attachments";
-import { signUnsubscribeTokenV2 } from "../donors/unsubscribe-token";
+import { signUnsubscribeTokenV2, signSubscriberUnsubscribeToken } from "../donors/unsubscribe-token";
+import {
+  listSubscriberLists,
+  createSubscriberList,
+  getSubscriberList,
+  getSubscriberListBySlug,
+  addListSubscriber,
+  listListMembers,
+  removeListMember,
+  DuplicateListError,
+} from "../db/subscriber-lists";
 import { recordNewsletterSends, getNewsletterStats } from "../db/newsletter-events";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
@@ -487,6 +499,77 @@ export async function getAdminNewsletterStats(req: Request, res: Response): Prom
   return res.json(await getNewsletterStats(id));
 }
 
+// --- Subscriber lists / audiences (TASK-259) ------------------------------------------------------
+// Editor+, matching the tab. Memberships tombstone rather than delete (consent history), and the
+// 'newsletter' audience additionally includes consenting donors — resolved at send time, not stored.
+export async function getAdminSubscriberLists(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  return res.json(await listSubscriberLists());
+}
+
+export async function postAdminSubscriberList(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const parsed = z.object({ name: z.string().trim().min(1).max(60) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Give the audience a name" });
+  try {
+    return res.status(201).json(await createSubscriberList(parsed.data.name));
+  } catch (err) {
+    if (err instanceof DuplicateListError) {
+      return res.status(409).json({ error: "An audience with that name already exists" });
+    }
+    if (err instanceof Error && /no usable characters/.test(err.message)) {
+      return res.status(400).json({ error: "Give the audience a name" });
+    }
+    throw err;
+  }
+}
+
+export async function getAdminListMembers(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const listId = Number(req.params.id);
+  if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
+  const list = await getSubscriberList(listId);
+  if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  return res.json(await listListMembers(listId));
+}
+
+export async function postAdminListMember(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const listId = Number(req.params.id);
+  if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
+  const list = await getSubscriberList(listId);
+  if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  const parsed = z
+    .object({
+      name: z.string().trim().max(120).optional(),
+      email: z.string().trim().email(),
+      phone: z.string().trim().max(30).optional(),
+    })
+    .safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "A valid email address is needed" });
+  // Staff typing someone in is a deliberate act — it may revive an opted-out membership (unlike an
+  // import, which never may).
+  const outcome = await addListSubscriber(
+    listId,
+    { name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null },
+    "admin",
+    { revive: true },
+  );
+  return res.status(outcome === "added" ? 201 : 200).json({ outcome });
+}
+
+export async function deleteAdminListMember(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const listId = Number(req.params.id);
+  const memberId = Number(req.params.memberId);
+  if (!Number.isInteger(listId) || listId <= 0 || !Number.isInteger(memberId) || memberId <= 0) {
+    return res.status(400).json({ error: "Invalid id" });
+  }
+  const removed = await removeListMember(listId, memberId);
+  if (!removed) return res.status(404).json({ error: "Member not found" });
+  return res.status(204).end();
+}
+
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
 export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
@@ -534,6 +617,19 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
 // send would go to, for the send-confirmation dialog. Admin-gated (matches send) because it exposes
 // donor PII; returns the same recipient set the send loop uses, so the confirmation can't drift.
 export async function getAdminNewsletterRecipients(req: Request, res: Response): Promise<Response | void> {
+  // TASK-259: ?listId= previews the chosen audience; absent = the newsletter audience, as ever.
+  {
+    const rawListId = req.query.listId;
+    if (rawListId != null) {
+      const listId = Number(rawListId);
+      if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list" });
+      if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+      const list = await getSubscriberList(listId);
+      if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+      const recipients = await listRecipientsForList(list);
+      return res.json({ count: recipients.length, emails: recipients.map((r) => r.email) });
+    }
+  }
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const recipients = await listNewsletterRecipients();
   return res.json({ count: recipients.length, emails: recipients.map((r) => r.email) });
@@ -576,13 +672,23 @@ export async function putAdminNewsletter(req: Request, res: Response): Promise<R
   return res.json(updated);
 }
 
-// POST /api/admin/newsletters/:id/send — Admin only. Sends one email per consenting donor, each with
-// an unsubscribe link, then marks the newsletter sent. Idempotent: an already-sent newsletter → 409.
+// POST /api/admin/newsletters/:id/send — Admin only. Sends one email per recipient of the CHOSEN
+// AUDIENCE (TASK-259; body {listId} optional, defaulting to the newsletter list — consenting donors
+// plus its subscribers), each with an unsubscribe link, then marks the newsletter sent. Idempotent:
+// an already-sent newsletter → 409.
 export async function postAdminSendNewsletter(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "newsletter", "edit");
   if (!claims) return;
   const id = newsletterId(req, res);
   if (id === null) return;
+
+  // Resolve the audience BEFORE claiming: an unknown list must 404 without marking anything sent.
+  const listParse = z.object({ listId: z.number().int().positive().optional() }).safeParse(req.body ?? {});
+  if (!listParse.success) return res.status(400).json({ error: "Invalid list" });
+  const list = listParse.data.listId
+    ? await getSubscriberList(listParse.data.listId)
+    : await getSubscriberListBySlug("newsletter");
+  if (!list) return res.status(404).json({ error: "Subscriber list not found" });
 
   // Atomically claim the draft BEFORE sending. If another request already sent it (or it never
   // existed as a draft), we 409 without emailing anyone — a double-click cannot re-blast.
@@ -592,8 +698,9 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     if (!existing) return res.status(404).json({ error: "Newsletter not found" });
     return res.status(409).json({ error: "This newsletter has already been sent" });
   }
+  await setNewsletterList(id, list.id); // which audience this send went to — part of the record
 
-  const recipients = await listNewsletterRecipients();
+  const recipients = await listRecipientsForList(list);
   const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
   // Load any file attachments once and base64-encode them; the same set goes to every recipient.
   const attachmentRows = await listNewsletterAttachmentsForSend(id);
@@ -603,9 +710,11 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   const failedEmails: string[] = [];
   const accepted: { donorId: number | null; email: string }[] = [];
   for (const r of recipients) {
-    // TASK-255: the v2 token also names THIS newsletter, so an unsubscribe from this email can be
-    // attributed on the stats dashboard. Legacy tokens in already-sent emails verify forever.
-    const token = signUnsubscribeTokenV2(r.donorId, id, config.ADMIN_SESSION_SECRET);
+    // TASK-255/259: the token names THIS newsletter (stats attribution) and WHO the recipient is — a
+    // donor's link withdraws global newsletter consent, a list subscriber's leaves that one list.
+    const token = r.donorId != null
+      ? signUnsubscribeTokenV2(r.donorId, id, config.ADMIN_SESSION_SECRET)
+      : signSubscriberUnsubscribeToken(r.subscriberId as number, id, config.ADMIN_SESSION_SECRET);
     const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
     // Block-doc newsletters render per recipient (merge the first name) with the unsubscribe button
     // built into the branded frame footer. Legacy raw-HTML rows (no valid bodyJson) are not framed,
@@ -1724,6 +1833,12 @@ adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
 // --- Saved newsletter templates (TASK-249) -------------------------------------------------------
 // Its own path, NOT /api/admin/newsletters/templates — that would be captured by the /newsletters/:id
 // route below and 400 as an invalid id.
+// TASK-259: audiences. Own path for the same :id-capture reason as templates.
+adminRouter.get("/api/admin/subscriber-lists", getAdminSubscriberLists);
+adminRouter.post("/api/admin/subscriber-lists", postAdminSubscriberList);
+adminRouter.get("/api/admin/subscriber-lists/:id/members", getAdminListMembers);
+adminRouter.post("/api/admin/subscriber-lists/:id/members", postAdminListMember);
+adminRouter.delete("/api/admin/subscriber-lists/:id/members/:memberId", deleteAdminListMember);
 adminRouter.get("/api/admin/newsletter-templates", getAdminNewsletterTemplates);
 adminRouter.post("/api/admin/newsletter-templates", postAdminNewsletterTemplate);
 adminRouter.get("/api/admin/newsletter-templates/:id", getAdminNewsletterTemplate);

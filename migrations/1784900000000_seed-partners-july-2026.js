@@ -1,0 +1,332 @@
+/* eslint-disable */
+// TASK-262 (REQ-003): add the partners from the Master NBCC Supporter List (July 2026) to the
+// Partners ticker (supporter_ticker), on top of the original seed (1783709948147). NAMES ONLY --
+// the sheet's contact names, emails and phone numbers are deliberately NOT imported (no column
+// holds them, and this table feeds PUBLIC surfaces: the site-wide ticker and the Supporters page).
+//
+// Additive / expand-contract, safe on populated data (golden rule 2): a data-only INSERT -- no
+// schema change, nothing dropped, renamed or made NOT NULL, so a code-level rollback stays safe.
+//
+// active = false, DELIBERATELY. supporter_ticker.active DEFAULTS TO TRUE, and
+// 1783715098494_partners-hidden-by-default hid the first batch so staff could review and switch
+// partners on one at a time rather than a whole batch appearing at once. That migration was a
+// one-shot UPDATE and will NOT hide rows inserted later, so relying on the column default here
+// would push all of these live on deploy. Inserting them hidden preserves that review workflow.
+//
+// Idempotent WITHOUT a unique index: supporter_ticker.name has no unique constraint, so ON CONFLICT
+// is unavailable. The NOT EXISTS guard compares names normalised to a case/punctuation/whitespace-
+// insensitive key, so "Morrisons, Ayr" cannot duplicate the seeded "Morrisons Ayr" (the original
+// seed compared raw names, which would not have caught it). Re-running inserts nothing.
+//
+// Word-level variants the SQL key cannot catch ("The Carrick Quilters" vs "Carrick Quilters",
+// "Pro Lawn Ltd" vs "Pro Lawn") were reconciled against the existing seed when this list was
+// generated, and are already excluded -- as are same-partner-different-name cases confirmed by
+// staff (e.g. "Doonfoot Primary" is the seeded "Doonfoot Primary School").
+//
+// sort_order = 0, matching the existing rows: it is the manual-pin override, inert while every row
+// shares the same value. Display order is (sort_order, lower(name), id) -- see DISPLAY_ORDER in
+// src/db/ticker.ts -- so these interleave alphabetically with the already-seeded partners rather
+// than landing as a separate block after them.
+
+exports.shorthands = undefined;
+
+// The normalised key used by both statements below, kept identical to the SQL expression:
+//   regexp_replace(lower(name), '[^a-z0-9]+', '', 'g')
+const NAMES = [
+  "28th Ayrshire Troon Scout Group",
+  "A C Whyte",
+  "AAPCT",
+  "AAPCT, Rhona Robinson",
+  "Alexandra Court - 131 Prestwick",
+  "Alison Hudson (Nail Artist, Ayr)",
+  "Allan Doran MP",
+  "Alloway Parish Church",
+  "Alloway Primary",
+  "Andrew Dodds Autocare",
+  "Annbank Primary",
+  "Annbank United Community Football Club",
+  "AR26",
+  "Ardrossan and Saltcoats Kirkgate Parish Church",
+  "Arnold Clark Car & Van Rental Ayr/Prestwick",
+  "Aroma Coffee Shop",
+  "Asda Kilmarnock",
+  "Asda, Ayr",
+  "Auchencloigh SWI",
+  "Ayr Ambulance Station",
+  "Ayr Central",
+  "Ayr College",
+  "Ayr Eats",
+  "Ayr Fire Station/dreghorn/Kilwinning/Kilmarnock/Ardrossan",
+  "Ayr Hospital Theatres",
+  "Ayr Indoor Bowling Green",
+  "Ayr Rugby Football Club - U18's",
+  "Ayr School of Music",
+  "Ayr St Columba Church",
+  "Ayr United Football Academy",
+  "Ayrshire Ukelele Clan",
+  "Ayrshire Urgent Care",
+  "Azets, Wellington Square - Laura McClymont",
+  "Baby to Teen (4 Arthur Street)",
+  "Baird, Anne",
+  "Barnett, Jessica",
+  "Barony Universal",
+  "Baseline Fitness",
+  "Beauty Spot",
+  "Belmont Academy , Linzi Ross",
+  "Bishopbriggs School of Music",
+  "Boom and Mini Boom",
+  "Boots, Ayr",
+  "Braefoot Stores",
+  "Branding Hub - Ayr",
+  "Butterfly Beauty",
+  "Buzzworks",
+  "Carswell, Clare",
+  "Cathcart St. Surgery, Ayr",
+  "CC Hair",
+  "Chloe Coomer",
+  "Churches Homeless Action- North Ayrshire",
+  "CJ’s, CJ’s",
+  "Co op Funeralcare Troon",
+  "Cooper, Billy",
+  "Corum",
+  "Cosh Niven",
+  "Costa, Heathfield",
+  "Costcutter, Troon",
+  "Coylton Church Ladies Group",
+  "Coylton Primary",
+  "Crosshouse - OT Department",
+  "Cumnock Junior Boys Club 2013",
+  "Shapes",
+  "Da Vinci’s Cafe",
+  "Daldorch House School",
+  "Dansarena",
+  "Darcey’s",
+  "Darryl White Ltd",
+  "Darvel Parish Church (& Church Hall)",
+  "DSM-firmenich (Dalry)",
+  "Dundonald Castle Cafe, Friends of Dundonald",
+  "Dundonald Church",
+  "Dundonald Sheltered Housing Unit",
+  "Emergency One Group",
+  "Emporium",
+  "Endoscopy Unit, Ayr Hospital",
+  "Envy",
+  "Escape Prestwick",
+  "Eye Clinic, Ayr Hospital - Morag Aitken",
+  "Feast Troon",
+  "Finance Department-Eglinton House",
+  "Fire Service, Kilmarnock",
+  "Fisherton Primary",
+  "Flos Fitness Boutique",
+  "Forehill Primary School",
+  "Forrest, Dale",
+  "Forsyth, Claire",
+  "Foundation Hub Kilmarnock",
+  "Frazer Coogans Solicitors",
+  "G E Caledonian",
+  "Galston Gospel Hall",
+  "Galston Parish Church",
+  "GE Aviation",
+  "Gemmells Garden Centre",
+  "Get Stacked Pancake Van",
+  "Girdle Toll Bowling Club",
+  "Girvan Football Club",
+  "Glasgow Prestwick Airport",
+  "Glenburn MWFC Girls - 2012's",
+  "Goe Pilates",
+  "Graham, Sarah",
+  "Greenwood Academy",
+  "Greenwood Academy Science Dept",
+  "GSK, Shewalton Road, Irvine, North Ayrshire, KA11 5AP",
+  "Gym Group, Ayr",
+  "Hall, Janna",
+  "Halls of Scotland",
+  "Hansel Village",
+  "Happy Days Society",
+  "Harbour Ayr",
+  "Hayes, Symington",
+  "Heads of Ayr Farm Park",
+  "Heads of Ayr Nursery",
+  "Helping Handbags (Tracy)",
+  "Hitsona, Ayr",
+  "Home Bargains, Irvine",
+  "Hoppers Estate Agency Prestwick",
+  "Housing Services SAC",
+  "Howat, Anne",
+  "IMT Aviation, Prestwick",
+  "Inner Wheel Club of Ayr",
+  "Irvine Rugby Club",
+  "Irvine Valley Parish Church",
+  "J & J Event Bars",
+  "Jade Berry",
+  "Jean Howarth",
+  "John Fleming",
+  "Johnson, Hazel",
+  "Ken Nairn Ltd",
+  "Kilmarnock Santa Sleigh Team",
+  "Kincaidston Community Association",
+  "Kindness and Co",
+  "Kirkhall Surgery, Prestwick",
+  "Kirkwood, Liz & Harry",
+  "Kyle Academy",
+  "Lang, Lewis & Connor",
+  "Ledingham, Anne-Lise",
+  "LG Nails",
+  "Lindsay Gilbertson",
+  "Live With Stu",
+  "Loch Lomond Group",
+  "Lockharts Law LLP",
+  "Lodge Ayr St Paul 204",
+  "Loundoun Church of Scotland",
+  "Mackie, Margaret",
+  "Maggie's",
+  "Maharani, Troon",
+  "Mair, Lesley",
+  "Mass Vaccination Team, South Ayrshire",
+  "McAllister, Victoria",
+  "McCulloch, Mhairi, Eilidh & James",
+  "McCulloch, Pauline",
+  "McGarrie, Mark",
+  "McIlvenna, Robert",
+  "ME’s Cafe",
+  "Meadows Nursery",
+  "Melldun and Dusted",
+  "MGM Timber",
+  "MGM Timber & Kitchens",
+  "Millar, Fiona",
+  "Mission Fit Gym",
+  "Monkton Cosy Spaces",
+  "Morrison Caravan & Motorhome sales",
+  "Murphy, Kim",
+  "Musashi Brazilian Jiu-Jitsu",
+  "Myles",
+  "Nationwide Ayr",
+  "NATS",
+  "Nestle Factory",
+  "New City",
+  "Nichol, Erin",
+  "North Ayrshire Ice Hockey Club U14's",
+  "Northfield Bowling Club",
+  "NHS Ayrshire and Arran",
+  "O'Prey, Summer & Paige",
+  "Oasis Cafe, Ayr St Columbia Church",
+  "Office of Elena Whitham MSP",
+  "Original Factory Shop, Ayr",
+  "Outpatients Department at Crosshouse",
+  "Pickens Butcher",
+  "Pollock Williamson",
+  "Prestwick Aircraft Maintenance Ltd",
+  "Prestwick North EYC",
+  "Prestwick St Ninians Golf Club",
+  "Primark, Ayr",
+  "Pro2 Wrestling",
+  "QANW",
+  "Queens Court Dental Practice",
+  "QUEH",
+  "RAD Group",
+  "Radbury Double Glazing Ltd - Jodie",
+  "Reilly, Steven & Vanessa",
+  "Renaldo’s Ices",
+  "Richard Barrie - The Pest Expert",
+  "Riverbank Nursery",
+  "Robert Burns Academy (Parent Council)",
+  "Robertson, Fiona",
+  "Rock Choir Ayrshire and Glasgow Southside",
+  "Ross, Craig & Lindsay",
+  "Ryanair",
+  "Sainsbury's Prestwick (in the community)",
+  "Scott, Tracy",
+  "Shaw, Jean",
+  "Sillars, Ruth & David",
+  "Skinz",
+  "Smith, Kathy",
+  "Songs For All",
+  "South Ayrshire Dietetic Team",
+  "South Ayrshire Libraries",
+  "Spearhead Healthcare",
+  "Spirit Aerosystems",
+  "St Anne’s Chapel",
+  "St Columba Church",
+  "St Frances Xavier Church - Liz",
+  "St Margarets Church",
+  "St Mary’s Church Irvine",
+  "St Ninian's Primary",
+  "St Paul’s Church - Liz",
+  "Station 4, Ayr Hospital",
+  "Station 8 & ANPs.",
+  "Stevenston High Kirk",
+  "Straiton (St Cuthberts Parish Church)",
+  "Straiton Church of Scotland Guild",
+  "Symington Primary Rotakids",
+  "Synergy",
+  "Synergy, Glasgow",
+  "T French & Son Ltd",
+  "Tarbolton Primary",
+  "Temple House",
+  "The Bullish Coffee Company",
+  "The Cob Cafe",
+  "The Cutting Corner",
+  "The Iris Group",
+  "The Kris Boyd Charity",
+  "The Lovely Nutter Knitter’s Club",
+  "The McCanns",
+  "The Micah Project Troon",
+  "The Oaks Veterinary Centre",
+  "The Robert Burns Academy",
+  "The Rock Choir",
+  "The Works, Ayr",
+  "Thistle Cabs",
+  "Tilly’s Baby Boutique",
+  "Toytown Ayr",
+  "Troon and District Ladies Circle",
+  "Troon Church of Scotland",
+  "Troon Lady of Assumption Chuch",
+  "Troon Old Parish Church",
+  "Troon Round Table",
+  "TSB, Irvine",
+  "Urban Hair, Auchinleck",
+  "Vets4 Pets",
+  "Ward 3D, Crosshouse",
+  "Ward 3E,Crosshouse",
+  "Ward 3F, Crosshouse",
+  "Weir, Margaret",
+  "Wellington School Nursery",
+  "West Kilbride Golf Club",
+  "Whiteford, Tracy, Orla, family & friends",
+  "Whitletts Vics in the community",
+  "Whyte (AC) & Co Ltd",
+  "William Duncan Accountants",
+  "Wilson, Susan",
+  "Wise Penny",
+  "Woodward",
+];
+
+exports.up = (pgm) => {
+  const values = NAMES.map((n) => `('${n.replace(/'/g, "''")}')`).join(",\n    ");
+  pgm.sql(`
+    INSERT INTO supporter_ticker (name, active, sort_order)
+    SELECT v.name, false, 0 FROM (VALUES
+    ${values}
+    ) AS v(name)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM supporter_ticker s
+       WHERE regexp_replace(lower(s.name), '[^a-z0-9]+', '', 'g')
+           = regexp_replace(lower(v.name), '[^a-z0-9]+', '', 'g')
+    );
+  `);
+};
+
+exports.down = (pgm) => {
+  // Removes exactly the names this migration adds, matched on the same normalised key. If staff had
+  // already added one of these by hand, the NOT EXISTS above skipped inserting it -- and this DELETE
+  // would still remove it. Acceptable: supporter_ticker is an admin-curated display list and any
+  // entry is re-addable from the Partners screen.
+  const list = NAMES.map((n) => `'${n.replace(/'/g, "''")}'`).join(", ");
+  pgm.sql(`
+    DELETE FROM supporter_ticker
+     WHERE regexp_replace(lower(name), '[^a-z0-9]+', '', 'g') IN (
+       SELECT regexp_replace(lower(v.name), '[^a-z0-9]+', '', 'g')
+         FROM (VALUES ${NAMES.map((n) => `('${n.replace(/'/g, "''")}')`).join(", ")}) AS v(name)
+     );
+  `);
+};

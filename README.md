@@ -1915,7 +1915,23 @@ people) shown scrolling under the site nav — distinct from the donor-derived S
 public `GET /api/supporters/ticker` returns the **active** names in order, and the admin
 **Supporters ticker** tab (`view-ticker` + `loadTicker` in `assets/js/admin/app.js`) does full CRUD
 over `/api/admin/ticker` — reads are Viewer+, add/edit/hide/delete are **Editor+** and each write
-appends a `supporter.*` audit row (`src/db/ticker.ts`). The public marquee is injected by
+appends a `supporter.*` audit row (`src/db/ticker.ts`). Each row offers **Edit · Hide/Show · Delete**;
+Edit renames in place via `PATCH` (TASK-262), which keeps the row's `sort_order` and audit trail
+rather than losing them to a delete-and-re-add.
+
+**Display order (TASK-262).** Both the public feed and the admin list share one `DISPLAY_ORDER` in
+`src/db/ticker.ts` — `sort_order ASC, lower(name) ASC, id ASC` — so they can never disagree. Ordering
+by **name** (not `id`) is what keeps the list alphabetical permanently: a partner added or renamed
+today sorts into place instead of landing at the bottom. `sort_order` remains the manual-pin override
+(every row is `0`, so it is inert until a staffer sets one); `id` is the final tiebreak.
+
+**Seeded partners.** `1783709948147_seed-partners` (TASK-181) loaded the original ~124 names, then
+`1783715098494_partners-hidden-by-default` (TASK-182) hid them so staff reveal partners one at a time.
+`1784900000000_seed-partners-july-2026` (TASK-262) adds 266 more from the July 2026 Master Supporter
+List — **names only** (no contact details; this table feeds public surfaces) and inserted
+`active = false`, because that one-shot hide migration does **not** cover later rows and the column
+defaults to `true`. Its `NOT EXISTS` guard dedupes on a normalised (case/punctuation-insensitive) key,
+so re-running it inserts nothing. The public marquee is injected by
 `assets/js/main.js` (`initSupporterTicker`) on every marketing page: it fetches the feed and, only if
 there are supporters, renders a seamless CSS marquee fixed at `top:var(--nav-h)` and adds
 `body.has-ticker` (which reserves `--ticker-h` so nothing else shifts otherwise). It pauses on hover

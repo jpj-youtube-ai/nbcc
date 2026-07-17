@@ -3967,7 +3967,8 @@
           ? '<span class="ty-pill ty-pill-ready">Showing</span>'
           : '<span class="ty-pill ty-pill-blocked">Hidden</span>';
         var actions = canWrite
-          ? '<button class="admin-link" type="button" data-ticker-toggle="' + r.id + '" data-active="' + (r.active ? "1" : "0") + '">' +
+          ? '<button class="admin-link" type="button" data-ticker-edit="' + r.id + '" data-ticker-name="' + H.escapeHtml(r.name) + '">Edit</button>' +
+            ' · <button class="admin-link" type="button" data-ticker-toggle="' + r.id + '" data-active="' + (r.active ? "1" : "0") + '">' +
             (r.active ? "Hide" : "Show") + "</button>" +
             ' · <button class="admin-link ty-del" type="button" data-ticker-delete="' + r.id + '" data-ticker-name="' + H.escapeHtml(r.name) + '">Delete</button>'
           : "";
@@ -4024,6 +4025,32 @@
     el("tickerTable").addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
+      // Rename (TASK-262): PATCH accepts a name (supporterUpdateSchema), so this fixes a typo in
+      // place instead of delete-and-re-add, which would lose the row's sort_order and audit trail.
+      // prompt() pre-fills the current name and matches the confirm() used by Delete below.
+      var edit = t.closest("[data-ticker-edit]");
+      if (edit) {
+        var current = edit.getAttribute("data-ticker-name") || "";
+        var next = window.prompt("Partner name", current);
+        if (next === null) return; // cancelled
+        next = next.trim();
+        if (!next || next === current) return; // empty or unchanged — nothing to do
+        tickerStatus("Saving…");
+        authFetch("/api/admin/ticker/" + edit.getAttribute("data-ticker-edit"), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: next }),
+        })
+          .then(function (res) {
+            if (!res.ok) throw new Error("rename failed");
+            tickerStatus("Saved.", "is-ok");
+            loadTicker();
+          })
+          .catch(function () {
+            tickerStatus("Could not rename that partner.", "is-error");
+          });
+        return;
+      }
       var toggle = t.closest("[data-ticker-toggle]");
       if (toggle) {
         var makeActive = toggle.getAttribute("data-active") === "0";

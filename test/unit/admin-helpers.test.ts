@@ -153,3 +153,27 @@ describe("rateOf (delivery stats)", () => {
     expect(H.rateOf(0, 0)).toBe("");
   });
 });
+
+// Hosted newsletter documents (2026-07-22 design): the "Insert button" action in the Documents
+// panel builds a standard button block pointing at the public viewer page. Pure, so the label
+// default and href shape are pinned here rather than eyeballed in the composer.
+describe("documentButtonBlock (hosted documents)", () => {
+  const ID = "11111111-2222-4333-8444-555555555555";
+
+  it("builds a button block linking the hosted viewer page on the given origin", () => {
+    const b = H.documentButtonBlock("https://nbcc.scot", ID, "certificate.pdf");
+    expect(b.type).toBe("button");
+    expect(b.variant).toBe(0);
+    expect(b.data.href).toBe("https://nbcc.scot/newsletter/document/" + ID);
+  });
+
+  it("defaults the label from the filename without its extension", () => {
+    expect(H.documentButtonBlock("https://nbcc.scot", ID, "certificate.pdf").data.label)
+      .toBe("View & print certificate");
+    expect(H.documentButtonBlock("https://nbcc.scot", ID, "Order of Service.docx").data.label)
+      .toBe("View & print Order of Service");
+    // No extension: the whole name is the label.
+    expect(H.documentButtonBlock("https://nbcc.scot", ID, "certificate").data.label)
+      .toBe("View & print certificate");
+  });
+});

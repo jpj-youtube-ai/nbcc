@@ -46,17 +46,20 @@ export async function listNewsletterAttachments(newsletterId: number): Promise<A
   return rows.map((r) => ({ id: r.id, filename: r.filename, mime: r.mime, byteSize: r.byte_size }));
 }
 
-// The attachments with their bytes, for building the email payload at send time.
-export async function listNewsletterAttachmentsForSend(newsletterId: number): Promise<AttachmentForSend[]> {
-  const rows = (
-    await pool.query<{ filename: string; mime: string; bytes: Buffer }>(
-      `SELECT filename, mime, bytes FROM newsletter_attachments
-        WHERE newsletter_id = $1 ORDER BY created_at`,
-      [newsletterId],
+// One document with its bytes, addressed by uuid alone, for the public hosted-document routes.
+// No newsletter join on purpose: the random uuid is the capability, exactly as getNewsletterImage.
+export async function getNewsletterAttachmentById(
+  id: string,
+): Promise<(AttachmentForSend & { id: string }) | null> {
+  const row = (
+    await pool.query<{ id: string; filename: string; mime: string; bytes: Buffer }>(
+      `SELECT id, filename, mime, bytes FROM newsletter_attachments WHERE id = $1`,
+      [id],
     )
-  ).rows;
-  return rows.map((r) => ({ filename: r.filename, mime: r.mime, bytes: r.bytes }));
+  ).rows[0];
+  return row ?? null;
 }
+
 
 // Delete one attachment scoped to its newsletter; returns whether a row was removed.
 export async function deleteNewsletterAttachment(newsletterId: number, id: string): Promise<boolean> {

@@ -377,15 +377,17 @@
                   <p class="nl-sub-msg" id="nlStatsNote" aria-live="polite"></p>
                 </section>
 
-                <!-- File attachments (TASK-193): sent to every recipient. Needs a saved newsletter
+                <!-- Hosted documents (2026-07-22 design, formerly TASK-193 attachments): uploaded
+                     files are hosted on a public print/download page and linked from the newsletter
+                     via a button block — never attached to the email. Needs a saved newsletter
                      (an id); app.js shows the hint until then, and hides the whole block in read mode. -->
                 <div class="nl-attach" id="nlAttachments">
-                  <h3 class="admin-subhead">Attachments</h3>
-                  <p class="admin-help">Attach a file (PDF, image, Word/Excel, up to 10&nbsp;MB) to send with the newsletter.</p>
-                  <p class="nl-attach-hint" id="nlAttachHint" hidden>Save the newsletter first to add attachments.</p>
+                  <h3 class="admin-subhead">Documents</h3>
+                  <p class="admin-help">Upload a document (PDF, image, Word/Excel, up to 10&nbsp;MB) — a certificate, an order of service — then use <b>Insert button</b> to add a button readers click to view, print or download it. Documents are linked from the newsletter, not attached to the email.</p>
+                  <p class="nl-attach-hint" id="nlAttachHint" hidden>Save the newsletter first to add documents.</p>
                   <div id="nlAttachList" aria-live="polite"></div>
                   <div class="nl-attach-tools" id="nlAttachTools" hidden>
-                    <input type="file" id="nlAttachFile" aria-label="Attach a file"
+                    <input type="file" id="nlAttachFile" aria-label="Upload a document"
                       accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv,.doc,.docx,.xls,.xlsx" />
                   </div>
                   <p id="nlAttachMsg" class="nl-sub-msg" aria-live="polite"></p>

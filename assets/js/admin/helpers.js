@@ -153,6 +153,19 @@
     return rounded + "%";
   }
 
+  // Hosted newsletter documents (2026-07-22 design): the block the Documents panel's "Insert
+  // button" action appends — a standard `button` block whose href is the public viewer page for
+  // one uploaded document. The label defaults to the filename minus its extension ("View & print
+  // certificate") and stays fully editable in the builder like any other button label.
+  function documentButtonBlock(origin, docId, filename) {
+    var base = String(filename == null ? "" : filename).replace(/\.[^.]+$/, "");
+    return {
+      type: "button",
+      variant: 0,
+      data: { label: "View & print " + base, href: origin + "/newsletter/document/" + docId },
+    };
+  }
+
   var api = {
     formatPence: formatPence,
     escapeHtml: escapeHtml,
@@ -165,6 +178,7 @@
     subscriptionStateLabel: subscriptionStateLabel,
     SIGNERS: SIGNERS,
     rateOf: rateOf,
+    documentButtonBlock: documentButtonBlock,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = api;

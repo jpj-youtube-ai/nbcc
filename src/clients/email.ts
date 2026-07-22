@@ -300,10 +300,9 @@ export interface NewsletterEmail {
   replyTo: string; // same as from
   subject: string;
   html: string;
-  // Optional file attachments (TASK-193), base64-encoded, forwarded verbatim in the send payload.
-  // The email relay must accept an `attachments` array of { filename, content (base64), contentType }
-  // (the Resend attachment shape) for these to reach the recipient.
-  attachments?: { filename: string; content: string; contentType: string }[];
+  // No attachments field on purpose: uploaded files are HOSTED (public /newsletter/document/<uuid>
+  // pages) and linked from the body, never attached — the relay never forwarded attachments, and
+  // links keep deliverability clean (hosted-documents design, 2026-07-22).
 }
 
 export async function sendNewsletter(message: NewsletterEmail): Promise<void> {

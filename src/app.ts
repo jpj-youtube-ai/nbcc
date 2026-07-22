@@ -12,6 +12,7 @@ import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { businessRouter } from "./routes/business";
 import { newsletterImagesRouter } from "./routes/newsletter-images";
+import { newsletterDocumentsRouter } from "./routes/newsletter-documents";
 import { tickerRouter } from "./routes/ticker";
 import { createSiteRouter } from "./routes/site";
 
@@ -62,6 +63,9 @@ export function createApp() {
   app.use(businessRouter);
   // Public newsletter image serve — before the site catch-all so /media/* isn't shadowed.
   app.use(newsletterImagesRouter);
+  // Public hosted newsletter documents (viewer page + file) — before the site catch-all so
+  // /newsletter/document/* isn't shadowed.
+  app.use(newsletterDocumentsRouter);
   // Static marketing site: the four pages, their clean URLs, and /assets.
   // siteRoot resolves relative to this module — the repo root locally and under
   // tsx, /app in the container (where the Dockerfile copies the site files).

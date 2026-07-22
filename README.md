@@ -1820,7 +1820,11 @@ live forever), validated by the pure `validateAttachment`
 `POST/GET/DELETE /api/admin/newsletters/:id/attachments[/:attId]` (Editor+, draft-only) manage them
 from the **Documents** panel on the Newsletter tab (shown once the newsletter is saved, hidden in
 read mode); each row's **Insert button** appends a standard `button` block linking the document's
-public viewer page (`AdminHelpers.documentButtonBlock` pins the href/label shape). Two
+public viewer page (`AdminHelpers.documentButtonBlock` pins the href/label shape). The upload path
+has its own `express.json({ limit: "15mb" })` in `src/app.ts` (TASK-265, mirroring the
+newsletter-images 3mb parser): the 10 MB document cap is ~13.7 MB base64-encoded, and under the
+global 100kb default the parser 413'd any real file before auth ran — the composer's bare
+"Upload failed". Two
 unauthenticated routes serve recipients (`src/routes/newsletter-documents.ts`; the random uuid is
 the capability, the newsletter-images trust model): `GET /newsletter/document/:id` — the branded
 viewer page (`src/newsletter/document-page.ts`, pure) with an inline preview (PDF/images) and

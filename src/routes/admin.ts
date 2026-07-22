@@ -85,7 +85,7 @@ import {
 } from "../db/newsletter-templates";
 import { renderNewsletter, newsletterDocSchema } from "../newsletter/blocks";
 // TASK-254: the subject's own merge. NOT applyMerge — a subject is plain text, not HTML.
-import { mergeSubject } from "../newsletter/theme";
+import { mergeSubject, newsletterSender } from "../newsletter/theme";
 import { validateUpload, insertNewsletterImage } from "../db/newsletter-images";
 import {
   validateAttachment,
@@ -815,7 +815,7 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     try {
       await sendNewsletter({
         email: r.email,
-        from: config.NEWSLETTER_FROM_EMAIL,
+        from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
         replyTo: config.NEWSLETTER_FROM_EMAIL,
         // TASK-254: the SUBJECT merges per recipient too. The builder invites {{firstName}} and the
         // body has always honoured it, but the subject was passed through raw — so a newsletter titled
@@ -886,7 +886,7 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
   try {
     await sendNewsletter({
       email: claims.email,
-      from: config.NEWSLETTER_FROM_EMAIL,
+      from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
       replyTo: config.NEWSLETTER_FROM_EMAIL,
       subject: testSubject,
       html,

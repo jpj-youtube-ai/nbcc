@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { escapeHtml, applyMerge, renderFrame, brandButton } from "../../src/newsletter/theme";
+import { escapeHtml, applyMerge, renderFrame, brandButton, newsletterSender } from "../../src/newsletter/theme";
 
 describe("newsletter theme", () => {
   it("escapes HTML-special characters", () => {
@@ -28,6 +28,28 @@ describe("newsletter theme", () => {
     expect(html).toContain("nbcc.scot");
     expect(html).toContain("border-radius:50%"); // the circular icon chips
   });
+  // TASK-268: the inbox shows a human sender, not a bare address.
+  it("newsletterSender wraps the address in the NBCC Newsletter display name", () => {
+    expect(newsletterSender("newsletter@nbcc.scot")).toBe("NBCC Newsletter <newsletter@nbcc.scot>");
+  });
+
+  // TASK-268: text links carry underlines so readers can see they're clickable; pill/solid
+  // buttons stay un-underlined — they already read as buttons.
+  it("footer contact links are underlined", () => {
+    const html = renderFrame("<p>x</p>");
+    for (const href of ["tel:+441292811015", "mailto:newsletter@nbcc.scot", "https://nbcc.scot"]) {
+      const anchor = html.split(`href="${href}"`)[1]?.split(">")[0] ?? "";
+      expect(anchor, `anchor for ${href}`).toContain("text-decoration:underline");
+    }
+  });
+  it("link-style brand buttons are underlined; solid/outline/full stay clean", () => {
+    expect(brandButton("Read more", "https://nbcc.scot", "link")).toContain("text-decoration:underline");
+    for (const style of ["primary", "outline", "full"] as const) {
+      expect(brandButton("Donate", "https://nbcc.scot/donate", style)).toContain("text-decoration:none");
+      expect(brandButton("Donate", "https://nbcc.scot/donate", style)).not.toContain("underline");
+    }
+  });
+
   it("renders a branded Unsubscribe button only when an unsubscribe URL is given", () => {
     const without = renderFrame("<p>x</p>");
     expect(without).not.toContain("Unsubscribe");
@@ -47,9 +69,9 @@ describe("newsletter theme", () => {
     const html = renderFrame("<p>x</p>");
     // Each contact is an explicit <a> with an inline cream colour — pre-empts the phone/email/URL
     // auto-linkification that would otherwise render them as default blue links.
-    expect(html).toContain('<a href="tel:+441292811015" style="color:#F8F5EE;text-decoration:none">01292 811 015</a>');
-    expect(html).toContain('<a href="mailto:newsletter@nbcc.scot" style="color:#F8F5EE;text-decoration:none">newsletter@nbcc.scot</a>');
-    expect(html).toContain('<a href="https://nbcc.scot" style="color:#F8F5EE;text-decoration:none">nbcc.scot</a>');
+    expect(html).toContain('<a href="tel:+441292811015" style="color:#F8F5EE;text-decoration:underline">01292 811 015</a>');
+    expect(html).toContain('<a href="mailto:newsletter@nbcc.scot" style="color:#F8F5EE;text-decoration:underline">newsletter@nbcc.scot</a>');
+    expect(html).toContain('<a href="https://nbcc.scot" style="color:#F8F5EE;text-decoration:underline">nbcc.scot</a>');
   });
   it("brandButton renders an anchor with the label and href", () => {
     const b = brandButton("Donate", "https://nbcc.scot/donate", "primary");

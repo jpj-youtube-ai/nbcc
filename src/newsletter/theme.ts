@@ -38,6 +38,12 @@ export function escapeHtml(value: string): string {
 //
 // A blank name falls back to "friend" for the same reason the body's firstNameOf does: "Hey, !" must
 // never reach a donor. The send already passes a resolved name; this is the backstop.
+// TASK-268: the From header the inbox displays. RFC 5322 display-name + angle-addr — the relay and
+// Resend pass it through verbatim, so recipients see "NBCC Newsletter", not a bare address.
+export function newsletterSender(address: string): string {
+  return `NBCC Newsletter <${address}>`;
+}
+
 export function mergeSubject(subject: string, firstName: string): string {
   const name = firstName.trim() || "friend";
   return subject.replace(/\{\{firstName\}\}/g, name);
@@ -80,7 +86,10 @@ export function brandButton(
   const safeHref = escapeHtml(href);
   const base = `font-family:${BODY};font-weight:700;font-size:15px;text-decoration:none;display:inline-block`;
   if (style === "link") {
-    return `<a href="${safeHref}" style="${base};color:${CRIMSON}">${safeLabel} &rarr;</a>`;
+    // TASK-268: a link-STYLE button is a text link, so it carries the underline text links get;
+    // the pill/solid shapes below keep text-decoration:none — they already read as buttons.
+    const linkBase = base.replace("text-decoration:none", "text-decoration:underline");
+    return `<a href="${safeHref}" style="${linkBase};color:${CRIMSON}">${safeLabel} &rarr;</a>`;
   }
   if (style === "outline") {
     return `<a href="${safeHref}" style="${base};color:${CRIMSON};border:2px solid ${CRIMSON};border-radius:8px;padding:10px 22px">${safeLabel}</a>`;
@@ -117,7 +126,9 @@ function contactCell(inner: string, divider: boolean): string {
 // render them as default blue links (in the sent email AND the admin preview iframe). Because it is
 // already an <a> with an inline colour, the client leaves it cream instead of recolouring it.
 function contactLink(href: string, text: string): string {
-  return `<a href="${href}" style="color:${CREAM};text-decoration:none">${text}</a>`;
+  // TASK-268: underlined so readers can see the contacts are clickable (the cream inline colour
+  // still pre-empts the client's default blue auto-linking — see the comment above).
+  return `<a href="${href}" style="color:${CREAM};text-decoration:underline">${text}</a>`;
 }
 
 // The branded unsubscribe row for the footer: the PECR opt-in reason line + a cream pill button

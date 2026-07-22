@@ -1786,7 +1786,10 @@ line inside the maroon footer bar; the live preview passes a `#` placeholder so 
 visible while composing. Clicking it hits the public `GET /unsubscribe/<token>` route, which flips
 that donor's `email_consent` to `false` (idempotent) and shows a small confirmation page. Legacy
 raw-HTML rows (unframed) still get the standalone footer from `buildNewsletterHtml`. From and
-Reply-To are `NEWSLETTER_FROM_EMAIL` (see **Configuration**). A single failed send is logged and does
+Reply-To are `NEWSLETTER_FROM_EMAIL` (see **Configuration**) — the From is sent as
+`NBCC Newsletter <address>` (`newsletterSender`, TASK-268) so the inbox shows the charity's name,
+not a bare address. Text links in the email are underlined (footer contacts and link-style
+buttons; pill/solid buttons stay clean — TASK-268). A single failed send is logged and does
 not abort the batch.
 
 **Manually adding a subscriber (doorstep sign-ups).** `POST /api/admin/newsletters/subscribers`

@@ -158,12 +158,20 @@ export function renderFrame(innerHtml: string, unsubscribeUrl?: string): string 
 </style>
 </head>
 <body style="margin:0;background:${MAROON};padding:24px 0;font-family:${BODY}">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:660px;margin:0 auto;background:${CREAM}">
-    <tr><td style="padding:0">${innerHtml}</td></tr>
-    <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY};font-size:14px;text-align:center">
-      ${footRow}
-      <div style="color:${CREAM_82};font-size:11px;margin-top:12px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
-      ${unsubscribeUrl ? unsubscribeRow(unsubscribeUrl) : ""}
+  <!-- TASK-264: the maroon frame is part of the 660px card (outer maroon cell, 12px padding all
+       round), matching the thank-you letter's cream-card-on-maroon look. Body background alone is
+       not enough: Outlook ignores it, and the composer preview iframe is exactly card-width, so
+       only an in-card frame shows maroon on every edge everywhere. -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:660px;margin:0 auto">
+    <tr><td style="background:${MAROON};padding:12px">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${CREAM}">
+        <tr><td style="padding:0">${innerHtml}</td></tr>
+        <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY};font-size:14px;text-align:center">
+          ${footRow}
+          <div style="color:${CREAM_82};font-size:11px;margin-top:12px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
+          ${unsubscribeUrl ? unsubscribeRow(unsubscribeUrl) : ""}
+        </td></tr>
+      </table>
     </td></tr>
   </table>
 </body>

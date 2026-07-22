@@ -89,13 +89,17 @@ export function brandButton(
   return `<a href="${safeHref}" style="${base};${width}color:${CREAM};background:${CRIMSON};border-radius:8px;padding:12px 26px">${safeLabel}</a>`;
 }
 
-// Inline contact icons mirroring src/thank-you (the maroon contact bar of the on-screen letter).
-// SVGs render where the client supports them and simply fall back to the contact text where they're
-// stripped — so the footer never renders worse than the old plain text.
-const ICON_PHONE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${CREAM}" stroke-width="1.8" style="vertical-align:middle"><path d="M4 4h4l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 2 6a2 2 0 0 1 2-2z"/></svg>`;
-const ICON_MAIL = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${CREAM}" stroke-width="1.8" style="vertical-align:middle"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M3 6l9 7 9-7"/></svg>`;
-const ICON_FB = `<svg width="10" height="10" viewBox="0 0 24 24" fill="${CREAM}" style="vertical-align:middle"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg>`;
-const ICON_IG = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="${CREAM}" stroke-width="1.8" style="vertical-align:middle"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="${CREAM}" stroke="none"/></svg>`;
+// Contact icons as HOSTED PNG <img>s (TASK-266), the LOGO_URL pattern. They were inline SVG, but
+// Gmail (and other clients) strips <svg> entirely while keeping the styled chip <span> — recipients
+// saw empty rings where the phone/mail/social icons belonged. The PNGs are cream-on-transparent,
+// rendered at 3x their display size (assets/img/email-icon-*.png), decorative (empty alt: the
+// contact text sits right beside each icon).
+const iconImg = (name: string, display: number): string =>
+  `<img src="https://nbcc.scot/assets/img/email-icon-${name}.png" width="${display}" height="${display}" alt="" style="vertical-align:middle;display:inline-block;border:0" />`;
+const ICON_PHONE = iconImg("phone", 13);
+const ICON_MAIL = iconImg("mail", 13);
+const ICON_FB = iconImg("facebook", 10);
+const ICON_IG = iconImg("instagram", 10);
 
 // A circular icon chip: fixed-size span with a hairline ring, holding one inline SVG.
 function iconChip(svg: string, size = 22): string {

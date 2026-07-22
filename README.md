@@ -1745,8 +1745,10 @@ or edited (the server also gates writes at Editor+). The right rail shows a **li
 the exact HTML the email will render, recomputed on every edit (debounced) via
 `POST /api/admin/newsletters/preview`. Both the newsletter and thank-you email frames share the
 maroon contact/legal footer bar in `src/newsletter/theme.ts` / `src/thank-you/letter.ts`, with
-circular phone/envelope/social icon chips that degrade to plain contact text where a mail client
-strips inline SVG; each footer contact is an **explicit cream-coloured `<a>`** (`tel:` / `mailto:` /
+circular phone/envelope/social icon chips. The newsletter's chips hold **hosted PNG `<img>`s**
+(`assets/img/email-icon-*.png`, cream-on-transparent at 3x, the `LOGO_URL` absolute-URL pattern —
+TASK-266): they were inline SVG, but Gmail strips `<svg>` while keeping the styled chip span, so
+recipients saw empty rings. Each footer contact is an **explicit cream-coloured `<a>`** (`tel:` / `mailto:` /
 the site URL) so mail clients and the preview iframe don't auto-link the bare text into blue. A newsletter is stored as a JSON **block
 document** (`{ blocks: [{ type, variant, data }, …] }`) in the `newsletters.body_json` column
 (nullable — legacy raw-HTML drafts from before TASK-168 keep `body_json` `NULL` and hydrate into a

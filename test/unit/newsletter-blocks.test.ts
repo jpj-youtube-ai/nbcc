@@ -33,6 +33,19 @@ describe("newsletter blocks — core", () => {
     );
   });
 
+  it("footer contact icons are hosted PNG <img>s, never inline SVG (TASK-266)", () => {
+    const html = renderNewsletter(
+      { blocks: [{ type: "masthead", variant: 0, data: { issueTitle: "July Newsletter" } }] },
+      ctx,
+    );
+    // Gmail (and others) strip <svg> entirely, leaving the icon chips as empty rings in the sent
+    // email — icons must be <img> with absolute self-hosted URLs, the LOGO_URL pattern.
+    expect(html).not.toContain("<svg");
+    for (const icon of ["phone", "mail", "facebook", "instagram"]) {
+      expect(html).toContain(`https://nbcc.scot/assets/img/email-icon-${icon}.png`);
+    }
+  });
+
   it("rawHtml passthrough renders its HTML verbatim inside the frame", () => {
     const html = renderNewsletter(
       { blocks: [{ type: "rawHtml", variant: 0, data: { html: "<p>LEGACY-BODY</p>" } }] },
@@ -373,7 +386,12 @@ describe("newsletter blocks — story variants", () => {
   });
 
   it("variant 0: degrades to no image markup when imageUrl is absent, title/body still render", () => {
-    const html = mk(0, { title: "A Winter to Remember", body: "Forty families helped." });
+    // Block-only render: the frame footer now carries <img> icon chips (TASK-266), which would
+    // mask this block-level assertion in a full-frame render.
+    const html = renderBlock(
+      { type: "story", variant: 0, data: { title: "A Winter to Remember", body: "Forty families helped." } },
+      ctx,
+    );
     expect(html).toContain("A Winter to Remember");
     expect(html).toContain("Forty families helped.");
     expect(html).not.toContain("<img");
@@ -423,11 +441,19 @@ describe("newsletter blocks — story variants", () => {
   });
 
   it("variant 3: text-only with a top rule — no image markup even when imageUrl is provided", () => {
-    const html = mk(3, {
-      imageUrl: "https://example.org/story.jpg",
-      title: "A Winter to Remember",
-      body: "Forty families helped.",
-    });
+    // Block-only render: the frame footer's <img> icon chips (TASK-266) would mask this assertion.
+    const html = renderBlock(
+      {
+        type: "story",
+        variant: 3,
+        data: {
+          imageUrl: "https://example.org/story.jpg",
+          title: "A Winter to Remember",
+          body: "Forty families helped.",
+        },
+      },
+      ctx,
+    );
     expect(html).toContain("A Winter to Remember");
     expect(html).toContain("Forty families helped.");
     expect(html).toContain("<hr");
@@ -483,7 +509,11 @@ describe("newsletter blocks — spotlight variants", () => {
   });
 
   it("variant 0: degrades to no photo markup when photoUrl is absent, name/quote still render", () => {
-    const html = mk(0, { name: "Margaret Kerr", quote: "Thank you for everything." });
+    // Block-only render: the frame footer's <img> icon chips (TASK-266) would mask this assertion.
+    const html = renderBlock(
+      { type: "spotlight", variant: 0, data: { name: "Margaret Kerr", quote: "Thank you for everything." } },
+      ctx,
+    );
     expect(html).toContain("Margaret Kerr");
     expect(html).toContain("Thank you for everything.");
     expect(html).not.toContain("<img");
@@ -508,19 +538,31 @@ describe("newsletter blocks — spotlight variants", () => {
   });
 
   it("variant 1: degrades to no photo markup when photoUrl is absent", () => {
-    const html = mk(1, { name: "Margaret Kerr", quote: "Thank you for everything." });
+    // Block-only render: the frame footer's <img> icon chips (TASK-266) would mask this assertion.
+    const html = renderBlock(
+      { type: "spotlight", variant: 1, data: { name: "Margaret Kerr", quote: "Thank you for everything." } },
+      ctx,
+    );
     expect(html).toContain("Margaret Kerr");
     expect(html).toContain("Thank you for everything.");
     expect(html).not.toContain("<img");
   });
 
   it("variant 2: big-quote in the HEAD font with name/role attribution, no photo", () => {
-    const html = mk(2, {
-      photoUrl: "https://example.org/margaret.jpg",
-      name: "Margaret Kerr",
-      quote: "The shelter gave my family somewhere warm to be.",
-      role: "Volunteer",
-    });
+    // Block-only render: the frame footer's <img> icon chips (TASK-266) would mask this assertion.
+    const html = renderBlock(
+      {
+        type: "spotlight",
+        variant: 2,
+        data: {
+          photoUrl: "https://example.org/margaret.jpg",
+          name: "Margaret Kerr",
+          quote: "The shelter gave my family somewhere warm to be.",
+          role: "Volunteer",
+        },
+      },
+      ctx,
+    );
     expect(html).toContain("Margaret Kerr");
     expect(html).toContain("The shelter gave my family somewhere warm to be.");
     expect(html).toContain("Volunteer");
@@ -542,7 +584,11 @@ describe("newsletter blocks — spotlight variants", () => {
   });
 
   it("variant 3: degrades to no photo markup when photoUrl is absent", () => {
-    const html = mk(3, { name: "Margaret Kerr", quote: "Thank you for everything." });
+    // Block-only render: the frame footer's <img> icon chips (TASK-266) would mask this assertion.
+    const html = renderBlock(
+      { type: "spotlight", variant: 3, data: { name: "Margaret Kerr", quote: "Thank you for everything." } },
+      ctx,
+    );
     expect(html).toContain("Margaret Kerr");
     expect(html).toContain("Thank you for everything.");
     expect(html).not.toContain("<img");
@@ -887,11 +933,15 @@ describe("newsletter blocks — donationCta variants", () => {
   });
 
   it("variant 0: degrades to no image markup when imageUrl is absent, heading/button still render", () => {
-    const html = mk(0, {
-      heading: "Make a donation today",
-      label: "Donate now",
-      href: "https://nbcc.scot/donate",
-    });
+    // Block-only render: the frame footer's <img> icon chips (TASK-266) would mask this assertion.
+    const html = renderBlock(
+      {
+        type: "donationCta",
+        variant: 0,
+        data: { heading: "Make a donation today", label: "Donate now", href: "https://nbcc.scot/donate" },
+      },
+      ctx,
+    );
     expect(html).toContain("Make a donation today");
     expect(html).toContain('href="https://nbcc.scot/donate"');
     expect(html).not.toContain("<img");

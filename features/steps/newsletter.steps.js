@@ -251,6 +251,18 @@ When("I attach a {string} file named {string} to that newsletter", async functio
   this.attStatus = r.status;
   this.attBody = r.json;
 });
+When("I attach a large {int} KB {string} file named {string} to that newsletter", async function (kb, mime, filename) {
+  const dataBase64 = Buffer.alloc(kb * 1024, 0x41).toString("base64");
+  const r = await authFetch(
+    `/api/admin/newsletters/${this.newsletterId}/attachments`,
+    "POST",
+    { filename, mime, dataBase64 },
+    this.token,
+  );
+  this.attStatus = r.status;
+  this.attBody = r.json;
+});
+
 Then("the attachment response status should be {int}", function (expected) {
   assert.equal(this.attStatus, expected);
 });

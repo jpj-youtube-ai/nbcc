@@ -168,6 +168,11 @@ Feature: Admin newsletter (REQ-069)
     Then the newsletter response status should be 201
     When I attach a "application/pdf" file named "certificate.pdf" to that newsletter
     Then the attachment response status should be 201
+    # A REAL document: the JSON body (base64 ≈ ×1.37) far exceeds express.json's 100 KB default, so
+    # this pins the path-scoped parser limit — without it the upload 413s before auth even runs
+    # (the "Upload failed" bug: TASK-193 shipped with only tiny test payloads ever exercised).
+    When I attach a large 200 KB "application/pdf" file named "big-certificate.pdf" to that newsletter
+    Then the attachment response status should be 201
     When I open the hosted document page for that upload with no session
     Then the hosted document page status should be 200
     And the hosted document page should include "certificate.pdf"

@@ -41,6 +41,11 @@ export function createApp() {
   // the global express.json 100kb cap. Give just this path a larger parser BEFORE the global one;
   // body-parser then sees the body already parsed and skips it. Mirrors the /api/my-story guard.
   app.use("/api/admin/newsletter-images", express.json({ limit: "3mb" }));
+  // Hosted-document uploads (TASK-265): same problem, bigger files — the 10 MB document cap is
+  // ~13.7 MB base64-encoded, so without this the parser 413s a real certificate BEFORE auth runs
+  // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the
+  // :id segment matches, it is not read here); every other newsletter route keeps the 100kb cap.
+  app.use("/api/admin/newsletters/:id/attachments", express.json({ limit: "15mb" }));
   app.use(express.json());
   app.use(apiRouter);
   // Public supporter-ticker feed (TASK-178/REQ-003): GET /api/supporters/ticker.

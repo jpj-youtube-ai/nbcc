@@ -467,8 +467,11 @@
 /* The wrapper is the (capped) scroll viewport; the iframe inside is the true 660px email, zoomed
    down by JS (nlFitPreview) to fit the column width — so there is no horizontal scroll, and vertical
    scrolling happens on the wrapper (its position is preserved across live-preview reloads). */
-.nl-preview-wrap { height: min(760px, 78vh); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: var(--shadow-sm); }
-.nl-preview { display: block; width: 660px; border: 0; background: #fff; }
+/* TASK-264: the wrapper ground is MAROON, not white — the email now carries its own maroon frame
+   (theme.ts renderFrame), so the scrollbar gutter and the rounded corners read as part of that
+   frame instead of an uneven white strip beside it. */
+.nl-preview-wrap { height: min(760px, 78vh); overflow-y: auto; overflow-x: hidden; scrollbar-gutter: stable; border: 1px solid var(--line); border-radius: var(--radius); background: var(--maroon); box-shadow: var(--shadow-sm); }
+.nl-preview { display: block; width: 660px; border: 0; background: var(--maroon); }
 @media (max-width: 900px) { .nl-right { position: static; } }
 .nl-preview-label { margin: 0 0 .5rem; font-family: var(--font-body); font-weight: 700; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--slate-soft); }
 .nl-actions { margin: .75rem 0; display: flex; flex-wrap: wrap; gap: .5rem; }

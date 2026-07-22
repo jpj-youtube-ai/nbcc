@@ -20,6 +20,19 @@ describe("newsletter blocks — core", () => {
     expect(html).toContain("SC047995"); // footer
   });
 
+  it("wraps the cream card in a maroon border frame on every edge (TASK-264)", () => {
+    const html = renderNewsletter(
+      { blocks: [{ type: "masthead", variant: 0, data: { issueTitle: "July Newsletter" } }] },
+      ctx,
+    );
+    // The frame is part of the 660px card itself (an outer maroon cell with padding), NOT just the
+    // body background — Outlook ignores body backgrounds, and the composer preview iframe is
+    // exactly card-width, so a body-only maroon shows no frame at the sides anywhere it matters.
+    expect(html).toMatch(
+      /<td[^>]*background:#800000[^>]*padding:12px[^>]*>\s*<table[^>]*background:#F8F5EE/i,
+    );
+  });
+
   it("rawHtml passthrough renders its HTML verbatim inside the frame", () => {
     const html = renderNewsletter(
       { blocks: [{ type: "rawHtml", variant: 0, data: { html: "<p>LEGACY-BODY</p>" } }] },

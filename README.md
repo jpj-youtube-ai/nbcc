@@ -1753,7 +1753,12 @@ document** (`{ blocks: [{ type, variant, data }, …] }`) in the `newsletters.bo
 single `rawHtml` block in the builder). One pure renderer, `renderNewsletter` in
 `src/newsletter/blocks.ts` (brand tokens/frame in `src/newsletter/theme.ts`), compiles a block
 document to a brand-inlined HTML email — the **single source of truth** behind the live preview,
-the `body_html` saved alongside every draft, and the send. Reads and drafting are **Editor+**:
+the `body_html` saved alongside every draft, and the send. The frame (TASK-264) wraps the cream
+card in a **maroon border on every edge as part of the 660px card itself** (outer maroon cell,
+12px padding — the thank-you letter's cream-card-on-maroon look): body background alone shows no
+frame in Outlook (which ignores it) or in the composer preview iframe (exactly card-width). The
+composer's preview wrapper ground is maroon to match, so the scrollbar gutter reads as frame, not
+as an uneven white strip. Reads and drafting are **Editor+**:
 `GET /api/admin/newsletters` lists summaries, `GET /api/admin/newsletters/:id` returns one
 newsletter's full `body_html` (+ `body_json` for the builder to hydrate), `POST
 /api/admin/newsletters` creates a draft (`{ subject, bodyJson }`, or legacy `{ subject, bodyHtml }`),

@@ -20,9 +20,10 @@ describe("newsletter theme", () => {
   });
   it("footer mirrors the thank-you letter: circular contact icons around the text", () => {
     const html = renderFrame("<p>x</p>");
-    // inline SVGs (phone/envelope/social) render in clients that support them and
-    // degrade to the plain contact text where they're stripped.
-    expect((html.match(/<svg/g) || []).length).toBeGreaterThanOrEqual(3);
+    // Hosted PNG <img> icons (TASK-266): Gmail strips inline <svg> while keeping the chip span,
+    // which left empty rings in real inboxes — so the footer must carry <img>s, never <svg>.
+    expect((html.match(/email-icon-/g) || []).length).toBeGreaterThanOrEqual(4);
+    expect(html).not.toContain("<svg");
     expect(html).toContain("01292 811 015");
     expect(html).toContain("nbcc.scot");
     expect(html).toContain("border-radius:50%"); // the circular icon chips

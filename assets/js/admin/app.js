@@ -2416,7 +2416,7 @@
     var sent = status === "sent";
     var message = sent
       ? "Delete the content of this sent newsletter?\n\nThe newsletter itself, and the record of when " +
-        "you sent it and to how many people, is kept. What goes is the content, any attachments, and " +
+        "you sent it and to how many people, is kept. What goes is the content, any documents, and " +
         "the addresses that bounced.\n\nThis cannot be undone."
       : "Delete this draft?\n\nIt was never sent to anyone. This cannot be undone.";
     if (!window.confirm(message)) return;
@@ -2614,15 +2614,29 @@
   function nlRenderAttachments(list) {
     var host = el("nlAttachList");
     if (!host) return;
-    if (!list.length) { host.innerHTML = '<p class="admin-empty">No attachments yet.</p>'; return; }
+    if (!list.length) { host.innerHTML = '<p class="admin-empty">No documents yet.</p>'; return; }
     var rows = list.map(function (a) {
       return '<li class="nl-attach-item"><span class="nl-attach-name">' + H.escapeHtml(a.filename) +
         '</span><span class="nl-attach-size">' + nlAttachHumanSize(a.byteSize) + "</span>" +
+        '<button type="button" class="admin-link" data-att-insert="' + H.escapeHtml(a.id) +
+        '" data-att-filename="' + H.escapeHtml(a.filename) + '">Insert button</button>' +
         '<button type="button" class="admin-link nl-attach-remove" data-att-remove="' + H.escapeHtml(a.id) + '">Remove</button></li>';
     }).join("");
     host.innerHTML = '<ul class="nl-attach-list">' + rows + "</ul>";
     Array.prototype.forEach.call(host.querySelectorAll("[data-att-remove]"), function (b) {
       b.addEventListener("click", function () { nlRemoveAttachment(b.getAttribute("data-att-remove")); });
+    });
+    // "Insert button": append a ready-made button block linking this document's hosted viewer page
+    // (H.documentButtonBlock pins the href/label shape). The admin then edits the label like any
+    // other button.
+    Array.prototype.forEach.call(host.querySelectorAll("[data-att-insert]"), function (b) {
+      b.addEventListener("click", function () {
+        if (nlReadOnly()) return;
+        nlDoc.blocks.push(H.documentButtonBlock(location.origin, b.getAttribute("data-att-insert"), b.getAttribute("data-att-filename")));
+        nlRenderCanvas();
+        nlSchedulePreview();
+        el("nlAttachMsg").textContent = "Button added at the end of the newsletter — drag it into place and edit its label there.";
+      });
     });
   }
   // Reflect the current newsletter id + edit permission: hint (no id yet), tools + list (saved), or
@@ -2640,7 +2654,7 @@
     authFetch("/api/admin/newsletters/" + id + "/attachments")
       .then(j)
       .then(function (d) { nlRenderAttachments(d.attachments || []); })
-      .catch(function () { el("nlAttachList").innerHTML = '<p class="admin-empty">Could not load attachments.</p>'; });
+      .catch(function () { el("nlAttachList").innerHTML = '<p class="admin-empty">Could not load documents.</p>'; });
   }
   function nlRemoveAttachment(attId) {
     var id = el("newsletterId").value;
@@ -2648,7 +2662,7 @@
     authFetch("/api/admin/newsletters/" + id + "/attachments/" + encodeURIComponent(attId), { method: "DELETE" })
       .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
       .then(function () { nlRefreshAttachments(); })
-      .catch(function () { el("nlAttachMsg").textContent = "Could not remove that attachment."; });
+      .catch(function () { el("nlAttachMsg").textContent = "Could not remove that document."; });
   }
 
   // --- Delivery stats panel (TASK-256, email stats Phase 1) -----------------------------------------
@@ -2881,7 +2895,7 @@
         })
           .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
           .then(function (r) {
-            el("nlAttachMsg").textContent = r.ok ? "Attached " + f.name + "." : (r.b && r.b.error) || "Upload failed.";
+            el("nlAttachMsg").textContent = r.ok ? "Uploaded " + f.name + ". Use Insert button to link it in the newsletter." : (r.b && r.b.error) || "Upload failed.";
             el("nlAttachFile").value = "";
             if (r.ok) nlRefreshAttachments();
           })

@@ -277,6 +277,47 @@ Then("the attachment delete status should be {int}", function (expected) {
   assert.equal(this.attDelStatus, expected);
 });
 
+// Hosted documents (2026-07-22 design): the public viewer page + file routes. Deliberately plain
+// fetch with NO auth header — recipients arrive from an email with no session; the uuid is the
+// whole capability.
+When("I open the hosted document page for that upload with no session", async function () {
+  const r = await fetch(`${BASE_URL}/newsletter/document/${this.attBody.id}`);
+  this.docPageStatus = r.status;
+  this.docPageBody = await r.text();
+});
+When("I open the hosted document page for an unknown id", async function () {
+  const r = await fetch(`${BASE_URL}/newsletter/document/00000000-0000-4000-8000-000000000000`);
+  this.docPageStatus = r.status;
+  this.docPageBody = await r.text();
+});
+Then("the hosted document page status should be {int}", function (expected) {
+  assert.equal(this.docPageStatus, expected);
+});
+Then("the hosted document page should include {string}", function (needle) {
+  assert.ok(this.docPageBody.includes(needle), `expected page to include ${needle}`);
+});
+When("I fetch the hosted document file for that upload", async function () {
+  const r = await fetch(`${BASE_URL}/newsletter/document/${this.attBody.id}/file`);
+  this.docFileStatus = r.status;
+  this.docFileType = r.headers.get("content-type");
+  this.docFileDisposition = r.headers.get("content-disposition");
+});
+When("I fetch the hosted document file for that upload with download", async function () {
+  const r = await fetch(`${BASE_URL}/newsletter/document/${this.attBody.id}/file?download=1`);
+  this.docFileStatus = r.status;
+  this.docFileType = r.headers.get("content-type");
+  this.docFileDisposition = r.headers.get("content-disposition");
+});
+Then("the hosted document file status should be {int}", function (expected) {
+  assert.equal(this.docFileStatus, expected);
+});
+Then("the hosted document file content type should be {string}", function (expected) {
+  assert.ok(String(this.docFileType).startsWith(expected), `content-type was ${this.docFileType}`);
+});
+Then("the hosted document file disposition should be {string}", function (expected) {
+  assert.ok(String(this.docFileDisposition).startsWith(expected), `disposition was ${this.docFileDisposition}`);
+});
+
 function signUnsubscribeToken(donorId, secret) {
   const body = String(donorId);
   const sig = createHmac("sha256", secret).update(body).digest("base64url");

@@ -159,6 +159,28 @@ Feature: Admin newsletter (REQ-069)
     When I list the attachments for that newsletter
     Then the attachment list should not include "flyer.pdf"
 
+  # Hosted documents (2026-07-22 design): an uploaded file is never attached to the email — it is
+  # served from a public viewer page (print/download) that a button block links. The uuid is the
+  # capability: with it the page opens with no session; without a valid one there is only a 404.
+  Scenario: an uploaded document is hosted on a public print and download page
+    Given a newsletter admin "doc.editor.newsletter.bdd@example.com" with role "editor" and password "pw-doc"
+    When I create a block newsletter with subject "Certificate issue"
+    Then the newsletter response status should be 201
+    When I attach a "application/pdf" file named "certificate.pdf" to that newsletter
+    Then the attachment response status should be 201
+    When I open the hosted document page for that upload with no session
+    Then the hosted document page status should be 200
+    And the hosted document page should include "certificate.pdf"
+    And the hosted document page should include "Download"
+    When I fetch the hosted document file for that upload
+    Then the hosted document file status should be 200
+    And the hosted document file content type should be "application/pdf"
+    And the hosted document file disposition should be "inline"
+    When I fetch the hosted document file for that upload with download
+    Then the hosted document file disposition should be "attachment"
+    When I open the hosted document page for an unknown id
+    Then the hosted document page status should be 404
+
   Scenario: an unsupported attachment type is rejected
     Given a newsletter admin "att.mime.newsletter.bdd@example.com" with role "editor" and password "pw-attm"
     When I create a block newsletter with subject "Blocks update"

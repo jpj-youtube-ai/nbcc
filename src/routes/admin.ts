@@ -91,7 +91,6 @@ import {
   validateAttachment,
   insertNewsletterAttachment,
   listNewsletterAttachments,
-  listNewsletterAttachmentsForSend,
   deleteNewsletterAttachment,
 } from "../db/newsletter-attachments";
 import { signUnsubscribeTokenV2, signSubscriberUnsubscribeToken } from "../donors/unsubscribe-token";
@@ -794,11 +793,9 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
 
   const recipients = await listRecipientsForList(list);
   const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
-  // Load any file attachments once and base64-encode them; the same set goes to every recipient.
-  const attachmentRows = await listNewsletterAttachmentsForSend(id);
-  const attachments = attachmentRows.length
-    ? attachmentRows.map((a) => ({ filename: a.filename, content: a.bytes.toString("base64"), contentType: a.mime }))
-    : undefined;
+  // Documents are NOT attached to the email: they are hosted (public /newsletter/document/<uuid>
+  // viewer + file routes) and linked from the body via a button block — a link, not an attachment,
+  // keeps deliverability clean and the relay contract minimal (hosted-documents design, 2026-07-22).
   const failedEmails: string[] = [];
   const accepted: { donorId: number | null; email: string }[] = [];
   for (const r of recipients) {
@@ -826,7 +823,6 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
         // applyMerge: a subject is plain text, and escaping it would send "Hey, O&#39;Brien".
         subject: mergeSubject(newsletter.subject, firstName),
         html,
-        attachments,
       });
     } catch (err) {
       // Best-effort: a single failed send is recorded (not fatal to the batch) so the delivery

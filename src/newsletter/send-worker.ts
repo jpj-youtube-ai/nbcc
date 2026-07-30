@@ -75,10 +75,11 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
     return;
   }
 
-  // Pace WITHIN the tick too. Claiming 20 and firing them in the same millisecond would trip the
-  // provider's per-second limit just as the old loop did; spreading them across the tick is the
-  // whole point of a throttle.
-  const gapMs = Math.max(0, Math.floor((TICK_SECONDS * 1000) / batch.length));
+  // Pace WITHIN the tick too: claiming 20 and firing them in the same millisecond would trip the
+  // provider's per-second limit exactly as the old loop did. The gap comes from the THROTTLE (60/min
+  // -> one per second), not from dividing the tick by the batch size — that stretched a single
+  // recipient into a full tick of sleeping, so a one-person send took 20 seconds.
+  const gapMs = Math.max(0, Math.floor(60_000 / Math.max(1, job.perMinute)));
   const accepted: { donorId: number | null; email: string }[] = [];
 
   for (const r of batch) {
@@ -108,7 +109,9 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
       // temporary, and the old code dropped those people permanently.
       await markRecipientFailed(r.id, err instanceof Error ? err.message : String(err), MAX_ATTEMPTS);
     }
-    if (gapMs > 0) await sleep(gapMs);
+    // No pause after the LAST one — sleeping when there is nothing left to pace just makes every
+    // send finish a gap later than it needed to.
+    if (gapMs > 0 && r !== batch[batch.length - 1]) await sleep(gapMs);
   }
 
   if (accepted.length) {

@@ -151,7 +151,7 @@ async function waitForSendToFinish(world) {
   throw new Error("the send did not finish within 15s");
 }
 
-When("I send that newsletter", async function () {
+When("I send that newsletter", { timeout: 30000 }, async function () {
   const r = await authFetch(`/api/admin/newsletters/${this.newsletterId}/send`, "POST", undefined, this.token);
   this.nlStatus = r.status;
   this.nlBody = r.json;
@@ -663,7 +663,7 @@ Then("the audience response status should be {int}", function (expected) {
   assert.equal(this.audStatus, expected);
 });
 
-When("I send that newsletter to that audience", async function () {
+When("I send that newsletter to that audience", { timeout: 30000 }, async function () {
   const r = await authFetch(
     `/api/admin/newsletters/${this.newsletterId}/send`,
     "POST",

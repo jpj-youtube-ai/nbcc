@@ -20,9 +20,10 @@ Feature: Admin newsletter (REQ-069)
     When I create a newsletter with subject "Send me" and body "<p>Go</p>"
     And I send that newsletter
     Then the newsletter response status should be 202
-    And the newsletter response field "status" should be "sent"
+    And the newsletter response field "status" should be "queued"
     And the newsletter recipient count should be at least 2
-    And the newsletter response field "sentCount" should be at least 2
+    When I fetch that newsletter
+    Then the newsletter response field "sentCount" should be at least 2
     And the newsletter response field "failedCount" should be "0"
     When I send that newsletter
     Then the newsletter response status should be 409

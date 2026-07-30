@@ -234,3 +234,18 @@ export async function listJobRecipients(
   );
   return rows.map((r) => ({ email: r.email, status: r.status, sentAt: r.sent_at, lastError: r.last_error }));
 }
+
+// The final tally for a drained job, written back onto the newsletter so the history shows what
+// actually happened rather than the zeroes stamped when the job was queued.
+export async function jobOutcome(jobId: number): Promise<{ sent: number; failed: number; failedEmails: string[] }> {
+  const { rows } = await pool.query(
+    `SELECT status, email FROM newsletter_send_queue WHERE job_id = $1`,
+    [jobId],
+  );
+  const failedEmails = rows.filter((r) => r.status === "failed").map((r) => r.email as string);
+  return {
+    sent: rows.filter((r) => r.status === "sent").length,
+    failed: failedEmails.length,
+    failedEmails,
+  };
+}

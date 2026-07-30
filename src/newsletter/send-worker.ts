@@ -1,5 +1,5 @@
 import { config } from "../config";
-import { getNewsletter } from "../db/newsletters";
+import { getNewsletter, setNewsletterDeliverySummary } from "../db/newsletters";
 import { recordNewsletterSends } from "../db/newsletter-events";
 import {
   listRunnableJobs,
@@ -9,6 +9,7 @@ import {
   markRecipientSent,
   markRecipientFailed,
   sentTodayCount,
+  jobOutcome,
   type SendJob,
 } from "../db/newsletter-send-jobs";
 import { sendNewsletter } from "../clients/email";
@@ -121,7 +122,18 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
       console.error("recording newsletter sends failed:", err instanceof Error ? err.message : err);
     }
   }
-  await finishJobIfDrained(job.id);
+  // When the queue empties, write the real outcome onto the newsletter. The send stamped zeroes at
+  // queue time (the counts were not knowable yet); leaving them there would have the history claim
+  // every send delivered nothing.
+  if (await finishJobIfDrained(job.id)) {
+    const outcome = await jobOutcome(job.id);
+    await setNewsletterDeliverySummary(job.newsletterId, {
+      recipientCount: job.total,
+      sentCount: outcome.sent,
+      failedCount: outcome.failed,
+      failedEmails: outcome.failedEmails,
+    });
+  }
 }
 
 function sleep(ms: number): Promise<void> {

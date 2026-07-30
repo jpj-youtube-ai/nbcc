@@ -3804,9 +3804,13 @@ decides *who gets a newsletter* sat ~110 lines away from the audiences it names.
 - **One way to add a person.** There were two add forms twenty lines apart writing to *different
   tables*: "Add a subscriber" (a `donors` row, with no audience choice) and "Add to audience". The
   first is gone from the UI; adding someone is now one form that states which audience they join.
-  ⚠️ Behaviour change: adding a person no longer sets `email_consent` on a matching **donor** row — it
-  creates a list membership. They still receive the newsletter. `POST /api/admin/newsletters/subscribers`
-  is untouched and still served for any other caller.
+  Adding a person no longer sets `email_consent` on a matching **donor** row — it creates a list
+  membership. They still receive the newsletter.
+- **Re-consenting a donor is now its own deliberate action** ("Someone asked us to email them again"),
+  behind a summary and a `window.confirm` that spells out the blast radius. It hits the same
+  `POST /api/admin/newsletters/subscribers` endpoint as before, but where that switch used to be a
+  silent *side effect* of typing an address into the plain add box — undoing an opt-out across every
+  email the charity sends — it is now something staff choose on purpose.
 - **The send confirmation names the audience** ("Send to Volunteers?" / "Yes, send to Volunteers"), and
   a line under the Send button states who it reaches and how many *before* you open it. The old dialog
   said "N consenting subscribers" whoever they were — identical wording whether you were mailing the

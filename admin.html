@@ -320,6 +320,23 @@
                   </form>
                 </div>
 
+                <!-- Switching someone's emails back ON is its own deliberate action, behind a summary
+                     and a confirm. It used to be a silent SIDE EFFECT of the plain "add a subscriber"
+                     box: typing an address re-consented a donor who had opted out, across every email
+                     we send, with nothing on screen saying so. Same endpoint, stated intent. -->
+                <details class="nl-manage" id="nlReconsent">
+                  <summary>Someone asked us to email them again</summary>
+                  <div class="nl-manage-body">
+                    <p class="admin-help">Use this only if they have actually asked. It switches <b>all</b> our emails back on for them — receipts and appeals too, not just the newsletter.</p>
+                    <form id="reconsentForm" class="nl-subscriber-form" autocomplete="off">
+                      <input type="email" id="reEmail" placeholder="email@example.com" required aria-label="Email address to turn emails back on for" />
+                      <input type="text" id="reName" placeholder="Name (optional)" aria-label="Name" />
+                      <button type="submit" class="nl-item-add" id="reAddBtn"><span>Turn their emails back on</span></button>
+                    </form>
+                    <p id="reMsg" class="nl-sub-msg" aria-live="polite"></p>
+                  </div>
+                </details>
+
                 <!-- Spreadsheet import (TASK-260): CSV or Excel, name + email in two columns (either
                      order). Preview first — the admin confirms exactly what they see — then the
                      consent attestation unlocks the import. Opted-out addresses are shown and kept

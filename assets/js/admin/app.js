@@ -2506,7 +2506,46 @@
       .catch(function () {});
   }
 
-  // TASK-271: the standalone "add a subscriber" form is gone. There were two add forms twenty lines
+  // TASK-271: "someone asked us to email them again" — switching a donor's email consent back ON is
+  // now a deliberate action with its own button and a confirm that spells out the blast radius. It
+  // used to be a silent side effect of the plain "add a subscriber" box, so simply typing an address
+  // could undo an opt-out across EVERY email the charity sends. Same endpoint, stated intent.
+  var reconsentForm = el("reconsentForm");
+  if (reconsentForm) {
+    reconsentForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!canEdit("newsletter")) return;
+      var email = (el("reEmail").value || "").trim();
+      var name = (el("reName").value || "").trim();
+      if (!email) return;
+      if (!window.confirm(
+        "Turn emails back on for " + email + "?\n\nOnly do this if they have asked us to. It switches " +
+        "ALL our emails back on for them — receipts and appeals too, not just the newsletter.",
+      )) return;
+      var btn = el("reAddBtn");
+      btn.disabled = true;
+      el("reMsg").textContent = "Saving…";
+      authFetch("/api/admin/newsletters/subscribers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(name ? { email: email, name: name } : { email: email }),
+      })
+        .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+        .then(function (r) {
+          if (!r.ok) { el("reMsg").textContent = (r.b && r.b.error) || "Could not do that."; return; }
+          el("reMsg").textContent = r.b.status === "resubscribed"
+            ? r.b.email + " — their emails are back on."
+            : "Added " + r.b.email + ", with emails on.";
+          el("reEmail").value = "";
+          el("reName").value = "";
+          if (el("subManage") && el("subManage").open) nlLoadSubscribers();
+        })
+        .catch(function () { el("reMsg").textContent = "Could not do that."; })
+        .finally(function () { btn.disabled = false; });
+    });
+  }
+
+  // The old standalone "add a subscriber" form is gone. There were two add forms twenty lines
   // apart writing to DIFFERENT tables — that one created a donors row with no audience choice, the
   // other added a list membership — which is exactly the confusion this restructure removes. Adding
   // someone is now one form that names the audience it puts them on (POST .../subscriber-lists/:id/

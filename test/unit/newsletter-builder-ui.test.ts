@@ -439,6 +439,35 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect(document.getElementById("amList")).toBeTruthy(); // destination chosen on the form itself
   });
 
+  // TASK-271: re-consenting a donor ("they asked us to email them again") is its own deliberate
+  // action. It used to be a silent side effect of the plain add box, so typing an address could undo
+  // someone's opt-out across every email the charity sends.
+  it("turns a donor's emails back on only behind an explicit confirmation", async () => {
+    loginToken = tokenFor("editor");
+    await openNewsletterTab();
+    await flush();
+
+    (el("reEmail") as HTMLInputElement).value = "changed@example.com";
+    const submit = () =>
+      el("reconsentForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+
+    // Declining the confirmation must not touch the server.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    submit();
+    await flush();
+    expect(subscriberRequests.length).toBe(0);
+    // ...and the warning must say the change is wider than the newsletter.
+    expect(confirmSpy.mock.calls[0][0]).toMatch(/receipts and appeals/i);
+
+    confirmSpy.mockReturnValue(true);
+    submit();
+    await flush();
+    await flush();
+    expect(subscriberRequests.length).toBe(1);
+    expect(subscriberRequests[0].body).toEqual({ email: "changed@example.com" });
+    confirmSpy.mockRestore();
+  });
+
   it("Send test to me posts the current builder doc and reports the address", async () => {
     loginToken = tokenFor("editor");
     await openNewsletterTab();

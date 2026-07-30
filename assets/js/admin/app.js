@@ -2372,9 +2372,12 @@
 
   if (el("nlPalette")) nlRenderPalette();
 
+  // TASK-272: this is ACCEPTED, not delivered — sentCount is "the relay took it", which is a promise
+  // to try, not an arrival. A send where every address hard-bounced still showed "150 / 150" under a
+  // column headed Delivered. Real delivery is a webhook fact and lives in the stats panel; the column
+  // is now labelled honestly rather than quietly overstating every send.
   function nlDeliveryCell(n) {
     if (n.recipientCount == null) return "-";
-    // Sent newsletters carry a delivery summary; show delivered/total and flag any failures.
     if (n.sentCount == null) return String(n.recipientCount);
     var cell = n.sentCount + " / " + n.recipientCount;
     if (n.failedCount) cell += ' <span class="nl-fail-badge">' + n.failedCount + " failed</span>";
@@ -2386,7 +2389,7 @@
     // TASK-271: WHO each one went to. The audience was stamped at send time but never read back, so
     // the history couldn't tell you whether a message reached volunteers or every donor. Older sends
     // predate audiences and were always the newsletter audience.
-    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Audience</th><th>Status</th><th>Sent</th><th>Delivered</th><th></th></tr></thead><tbody>';
+    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Audience</th><th>Status</th><th>Sent</th><th>Accepted</th><th></th></tr></thead><tbody>';
     rows.forEach(function (n) {
       html +=
         "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" +
@@ -2601,7 +2604,10 @@
     }
     if (el("subExport")) {
       el("subExport").addEventListener("click", function () {
-        authFetch("/api/admin/newsletters/subscribers.csv")
+        // TASK-272: export what you are LOOKING AT. The button ignored the search box, so filtering to
+        // a dozen people and exporting handed you the whole list.
+        var q = (el("subSearch") && el("subSearch").value ? el("subSearch").value : "").trim();
+        authFetch("/api/admin/newsletters/subscribers.csv" + (q ? "?q=" + encodeURIComponent(q) : ""))
           .then(function (res) { return res.text(); })
           .then(function (csv) {
             var blob = new Blob([csv], { type: "text/csv" });
@@ -2841,6 +2847,55 @@
       a.memberCount + (a.memberCount === 1 ? " person." : " people.") + extra;
   }
 
+  // Blocked addresses (TASK-272): hard bounces and spam complaints, dropped from every future send.
+  // Rendered so the blocking is never silent — and liftable, because a real supporter whose mailbox
+  // bounced during an outage must have a way back.
+  function nlRefreshSuppressions() {
+    var host = el("suppressionList");
+    if (!host) return;
+    authFetch("/api/admin/newsletters/suppressions")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (rows) {
+        var list = Array.isArray(rows) ? rows : [];
+        if (!list.length) {
+          host.innerHTML = '<p class="admin-empty">Nothing blocked — no permanent bounces or spam reports.</p>';
+          return;
+        }
+        var canWrite = canEdit("newsletter");
+        var why = { bounced: "Mailbox doesn’t exist", complained: "Marked us as spam", manual: "Blocked by staff" };
+        var html = '<table class="admin-table"><thead><tr><th>Email</th><th>Why</th><th>Since</th><th></th></tr></thead><tbody>';
+        list.forEach(function (s) {
+          html += "<tr><td>" + H.escapeHtml(s.email) + "</td><td>" + H.escapeHtml(why[s.reason] || s.reason) +
+            (s.detail ? '<span class="admin-sub">' + H.escapeHtml(s.detail) + "</span>" : "") +
+            "</td><td>" + H.fmtDate(s.createdAt) + "</td><td>" +
+            (canWrite ? '<button class="admin-link" type="button" data-unblock="' + H.escapeHtml(s.email) + '">Unblock</button>' : "") +
+            "</td></tr>";
+        });
+        host.innerHTML = html + "</tbody></table>";
+        Array.prototype.forEach.call(host.querySelectorAll("[data-unblock]"), function (b) {
+          b.addEventListener("click", function () {
+            var email = b.getAttribute("data-unblock");
+            if (!window.confirm(
+              "Start emailing " + email + " again?\n\nWe stopped because their mail bounced permanently or they " +
+              "marked us as spam. Only do this if you know the address works and they want to hear from us — " +
+              "emailing dead or complaining addresses is what sends our emails to junk.",
+            )) return;
+            authFetch("/api/admin/newsletters/suppressions/lift", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email: email }),
+            })
+              .then(function (res) {
+                el("suppressionMsg").textContent = res.ok ? "Unblocked " + email + "." : "Could not unblock that address.";
+                return nlRefreshSuppressions();
+              })
+              .catch(function () { el("suppressionMsg").textContent = "Could not unblock that address."; });
+          });
+        });
+      })
+      .catch(function () { /* a convenience panel — never block the tab */ });
+  }
+
   // Archived audiences (TASK-270): retired, not deleted. Hidden entirely until there are some.
   function nlRefreshArchivedAudiences() {
     var box = el("audienceArchived");
@@ -2928,6 +2983,7 @@
         nlSyncSendAudience();
         nlLoadAudienceMembers();
         nlRefreshArchivedAudiences();
+        nlRefreshSuppressions();
       })
       .catch(function () { /* never block the builder on the audience card */ });
   }

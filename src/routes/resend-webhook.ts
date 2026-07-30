@@ -1,6 +1,7 @@
 import express, { Router, type Request, type Response } from "express";
-import { verifySvixSignature, parseResendEvent } from "../newsletter/resend-events";
+import { verifySvixSignature, parseResendEvent, suppressionFor } from "../newsletter/resend-events";
 import { recordResendEvent } from "../db/newsletter-events";
+import { suppressEmail } from "../db/email-suppressions";
 import { config } from "../config";
 
 // TASK-255: the Resend delivery webhook (email stats Phase 1 — see
@@ -41,6 +42,14 @@ async function postResendWebhook(req: Request, res: Response): Promise<Response>
 
   try {
     const outcome = await recordResendEvent(String(headers["svix-id"]), parsed);
+    // TASK-272: a complaint or a PERMANENT bounce takes the address out of every future send. This
+    // runs even when the event matched no newsletter (outcome 'unmatched') — the address is just as
+    // dead whether or not we can tie the bounce to a particular send, and a big send can outrun the
+    // correlation window. Suppression is independent of attribution on purpose.
+    const suppression = suppressionFor(parsed);
+    if (suppression) {
+      await suppressEmail(parsed.email, suppression.reason, suppression.detail);
+    }
     return res.status(200).json({ outcome });
   } catch (err) {
     // A DB hiccup is worth a retry from Svix's side — this is the one path where 500 is right.

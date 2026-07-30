@@ -381,6 +381,19 @@
                   </div>
                 </details>
 
+                <!-- Blocked addresses (TASK-272). A hard bounce or a spam complaint takes an address
+                     out of every future send automatically — mailing those two groups repeatedly is
+                     what gets a sending domain junked. Shown here so the blocking is never silent,
+                     and liftable in case a real supporter bounced during an outage. -->
+                <details class="nl-manage" id="nlSuppressions">
+                  <summary>Blocked addresses</summary>
+                  <div class="nl-manage-body">
+                    <p class="admin-help">We stop emailing an address automatically when it bounces permanently (the mailbox doesn't exist) or the person marks us as spam. Continuing to email either one is what gets our emails sent to junk. Unblock only if you know the address works and they want to hear from us.</p>
+                    <div id="suppressionList" aria-live="polite"></div>
+                    <p id="suppressionMsg" class="nl-sub-msg" aria-live="polite"></p>
+                  </div>
+                </details>
+
                 <!-- Archived audiences (TASK-270): retired, not deleted — their consent history and
                      past sends survive, and one can be brought back. Hidden until there are some. -->
                 <details class="nl-manage" id="audienceArchived" hidden>

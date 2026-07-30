@@ -110,6 +110,7 @@ import {
   BuiltInListError,
   type SubscriberListRef,
 } from "../db/subscriber-lists";
+import { listSuppressions, unsuppressEmail } from "../db/email-suppressions";
 import { parseImportFile } from "../newsletter/import-parse";
 import { recordNewsletterSends, getNewsletterStats } from "../db/newsletter-events";
 import { buildNewsletterHtml } from "../donors/newsletter";
@@ -412,13 +413,13 @@ function templateId(req: Request, res: Response): number | null {
 
 // GET /api/admin/newsletter-templates — the library (Editor+, matching the rest of the tab).
 export async function getAdminNewsletterTemplates(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   return res.json(await listNewsletterTemplates());
 }
 
 // GET /api/admin/newsletter-templates/:id — one template, including its block document (Editor+).
 export async function getAdminNewsletterTemplate(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   const id = templateId(req, res);
   if (id === null) return;
   const row = await getNewsletterTemplate(id);
@@ -497,7 +498,7 @@ export async function deleteAdminNewsletter(req: Request, res: Response): Promis
 // Editor+ like the rest of the tab. AGGREGATES ONLY — there is deliberately no "who opened what" view
 // (see the Phase 1 spec); the bounced list is operational (dead addresses), not behavioural.
 export async function getAdminNewsletterStats(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   const id = newsletterId(req, res);
   if (id === null) return;
   const existing = await getNewsletter(id);
@@ -510,12 +511,30 @@ export async function getAdminNewsletterStats(req: Request, res: Response): Prom
 // `kind` says what it MEANS — 'donors' is the live donor audience, 'everyone' is Newsletter (its own
 // members plus the donors), 'manual' is exactly the people on it. Archiving is likewise a tombstone.
 export async function getAdminSubscriberLists(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   return res.json(await listSubscriberLists());
 }
 
+// TASK-272: the suppression list, made visible and reversible. Silent blocking would be its own
+// failure mode — if a real supporter's mailbox bounced once during an outage, staff need to see that
+// we stopped writing to them and be able to undo it. Viewing is Viewer+, lifting is Editor+.
+export async function getAdminSuppressions(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
+  return res.json(await listSuppressions());
+}
+
+export async function postAdminSuppressionLift(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const parsed = z.object({ email: z.string().trim().email() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "A valid email address is needed" });
+  const lifted = await unsuppressEmail(parsed.data.email, claims.email);
+  if (!lifted) return res.status(404).json({ error: "That address is not blocked" });
+  return res.status(200).json({ lifted: true });
+}
+
 export async function getAdminArchivedSubscriberLists(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   return res.json(await listArchivedSubscriberLists());
 }
 
@@ -575,7 +594,7 @@ export async function postAdminSubscriberList(req: Request, res: Response): Prom
 }
 
 export async function getAdminListMembers(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   const listId = Number(req.params.id);
   if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
   const list = await getSubscriberList(listId);
@@ -718,13 +737,13 @@ export async function postAdminListImport(req: Request, res: Response): Promise<
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
 export async function getAdminNewsletters(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   return res.json(await listNewsletters());
 }
 
 // GET /api/admin/newsletters/:id — one newsletter incl. body_html (Editor+).
 export async function getAdminNewsletter(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   const id = newsletterId(req, res);
   if (id === null) return;
   const row = await getNewsletter(id);
@@ -889,6 +908,10 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
         // applyMerge: a subject is plain text, and escaping it would send "Hey, O&#39;Brien".
         subject: mergeSubject(newsletter.subject, firstName),
         html,
+        // TASK-272: the same per-recipient link, promoted to the RFC 8058 one-click headers by the
+        // relay. Gmail/Yahoo want unsubscribing to be one press in their own UI; when it isn't,
+        // people use "report spam" instead — and a complaint costs the domain far more.
+        unsubscribeUrl,
       });
     } catch (err) {
       // Best-effort: a single failed send is recorded (not fatal to the batch) so the delivery
@@ -978,7 +1001,11 @@ export async function getAdminNewsletterSubscribers(req: Request, res: Response)
 // GET /api/admin/newsletters/subscribers.csv — the full subscriber list as CSV (Editor+).
 export async function getAdminNewsletterSubscribersCsv(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
-  const subscribers = await listNewsletterSubscribers();
+  // TASK-272: honour the SAME ?q= the on-screen search uses. The export ignored it, so filtering to a
+  // dozen people and pressing Export handed you the entire list — a quietly wrong answer, and a
+  // needlessly large pile of personal data to have downloaded.
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const subscribers = await listNewsletterSubscribers(q || undefined);
   const esc = (v: string): string => `"${v.replace(/"/g, '""')}"`;
   const csv = ["email,name", ...subscribers.map((s) => `${esc(s.email)},${esc(s.name ?? "")}`)].join("\r\n");
   return res
@@ -1036,7 +1063,7 @@ export async function postAdminNewsletterAttachment(req: Request, res: Response)
 
 // GET /api/admin/newsletters/:id/attachments — list this newsletter's attachments (metadata only).
 export async function getAdminNewsletterAttachments(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
   const id = newsletterId(req, res);
   if (id === null) return;
   const attachments = await listNewsletterAttachments(id);
@@ -1993,6 +2020,9 @@ adminRouter.post("/api/admin/subscriber-lists", postAdminSubscriberList);
 // TASK-270: archived audiences. The literal path is declared BEFORE the :id routes so it is not
 // captured as an id (the same ordering reason as the templates routes above).
 adminRouter.get("/api/admin/subscriber-lists/archived", getAdminArchivedSubscriberLists);
+// TASK-272: blocked addresses (hard bounces + spam complaints), visible and liftable.
+adminRouter.get("/api/admin/newsletters/suppressions", getAdminSuppressions);
+adminRouter.post("/api/admin/newsletters/suppressions/lift", postAdminSuppressionLift);
 adminRouter.post("/api/admin/subscriber-lists/:id/restore", postAdminSubscriberListRestore);
 adminRouter.delete("/api/admin/subscriber-lists/:id", deleteAdminSubscriberList);
 adminRouter.post("/api/admin/subscriber-lists/:id/import/preview", postAdminListImportPreview);

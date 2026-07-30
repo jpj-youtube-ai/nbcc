@@ -18,10 +18,17 @@ import { listRecipientsForList } from "../../src/db/newsletters";
 
 const MEMBERS = /from\s+list_subscribers/i;
 const DONORS = /from\s+donors/i;
+const SUPPRESSED = /from\s+email_suppressions/i;
 
 // Answer each query by what it asks for, so a test states its world once.
-function world(members: { id: number; name: string | null; email: string }[], donors: { email: string; donor_id: number; full_name: string | null }[]) {
+function world(
+  members: { id: number; name: string | null; email: string }[],
+  donors: { email: string; donor_id: number; full_name: string | null }[],
+  suppressed: string[] = [],
+) {
   queryMock.mockImplementation((sql: string) => {
+    // order matters: the suppression query also mentions no other table, so test it first
+    if (SUPPRESSED.test(String(sql))) return Promise.resolve({ rows: suppressed.map((email) => ({ email })) });
     if (MEMBERS.test(String(sql))) return Promise.resolve({ rows: members });
     if (DONORS.test(String(sql))) return Promise.resolve({ rows: donors });
     return Promise.resolve({ rows: [] });
@@ -69,6 +76,33 @@ describe("listRecipientsForList — audience kinds (TASK-270)", () => {
     expect(out).toHaveLength(1);
     // donor identity wins: their token revokes global consent, the wider of the two
     expect(out[0]).toEqual({ email: "both@x.example", donorId: 9, subscriberId: null, fullName: "Donor Name" });
+  });
+
+  // TASK-272: the whole point of the suppression list. Mailing a dead address or someone who pressed
+  // "report spam" is what gets a sending domain junked — and this resolver is the ONE place both the
+  // send loop and the recipient preview go through, so the count confirmed is the count mailed.
+  it("drops hard-bounced and complained addresses from every audience kind", async () => {
+    for (const kind of ["manual", "everyone", "donors"] as const) {
+      world(
+        [{ id: 7, name: "Casey", email: "casey@street.example" }],
+        [{ email: "dead@x.example", donor_id: 3, full_name: "Dee" }],
+        ["dead@x.example", "casey@street.example"],
+      );
+      const out = await listRecipientsForList({ id: 1, kind });
+      expect(out, `kind=${kind}`).toEqual([]);
+    }
+  });
+
+  it("leaves everyone else alone, and asks about suppression ONCE per send", async () => {
+    world(
+      [{ id: 7, name: "Casey", email: "casey@street.example" }],
+      [{ email: "dead@x.example", donor_id: 3, full_name: "Dee" }],
+      ["dead@x.example"],
+    );
+    const out = await listRecipientsForList({ id: 1, kind: "everyone" });
+    expect(out.map((r) => r.email)).toEqual(["casey@street.example"]);
+    const lookups = queryMock.mock.calls.filter((c) => SUPPRESSED.test(String(c[0])));
+    expect(lookups).toHaveLength(1); // batched, never per-recipient
   });
 
   it("only ACTIVE members count — the tombstone filter stays in the query", async () => {

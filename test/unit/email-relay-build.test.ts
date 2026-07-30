@@ -34,6 +34,14 @@ describe("email-relay buildEmail:newsletter payload", () => {
     expect(built.html).toBe("<p>Hello</p>");
   });
 
+  // TASK-272: RFC 8058 one-click unsubscribe. Gmail/Yahoo require bulk senders to offer it; without
+  // it people press "report spam" instead, and a complaint costs the sending domain far more.
+  it("carries the per-recipient unsubscribe URL through for the one-click headers", () => {
+    const built = buildEmail({ ...payload, unsubscribeUrl: "https://nbcc.scot/unsubscribe/abc" });
+    expect(built.unsubscribeUrl).toBe("https://nbcc.scot/unsubscribe/abc");
+    expect(buildEmail(payload).unsubscribeUrl).toBeUndefined();
+  });
+
   it("does not misclassify a donation confirmation as a newsletter", () => {
     // A donation-confirmation payload (no `newsletter` flag) must still hit the default branch.
     const built = buildEmail({ email: "d@example.com", fullName: "Ada", amountPence: 2500, currency: "GBP", html: "<p>Thanks</p>", text: "Thanks" });

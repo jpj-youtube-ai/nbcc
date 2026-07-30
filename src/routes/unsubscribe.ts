@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { verifyUnsubscribeToken, UnsubscribeTokenError } from "../donors/unsubscribe-token";
-import { unsubscribeDonor } from "../db/newsletters";
+import { unsubscribeDonor, unsubscribeAllListsForEmail } from "../db/newsletters";
 import { recordUnsubscribeEvent, recordUnsubscribeEventForEmail } from "../db/newsletter-events";
 import { unsubscribeListMember } from "../db/subscriber-lists";
 import { config } from "../config";
@@ -20,7 +20,10 @@ function page(message: string): string {
 <h1>Newsletter</h1><p>${message}</p></body></html>`;
 }
 
-unsubscribeRouter.get("/unsubscribe/:token", async (req: Request, res: Response) => {
+// TASK-272: shared by the GET (the in-body link a person clicks) and the POST that mail clients fire
+// for RFC 8058 one-click unsubscribe. Same effect either way — the token in the URL is the whole
+// instruction, so the POST body is irrelevant and deliberately not parsed.
+async function handleUnsubscribe(req: Request, res: Response): Promise<Response> {
   let claims: { kind: "donor" | "subscriber"; id: number; newsletterId: number | null };
   try {
     // TASK-255/259: the token names the newsletter the link was printed in (feeds the stats), and —
@@ -38,8 +41,18 @@ unsubscribeRouter.get("/unsubscribe/:token", async (req: Request, res: Response)
   // A donor's flag is their global newsletter consent; a subscriber's tombstone is one list only — a
   // volunteer leaving volunteer emails must not silently lose the newsletter they also wanted.
   let unsubscribedEmail: string | null = null;
+  // TASK-272: what we tell them depends on what we actually did — a donor link stops ALL our
+  // marketing email, a subscriber link leaves one audience. Saying "you will no longer receive our
+  // newsletter" for both was wrong in each direction: a donor was not told their thank-you letters
+  // stop too, and a volunteer was told the newsletter stops when it doesn't.
+  let scope: "everything" | "one-list" = "one-list";
   if (claims.kind === "donor") {
-    await unsubscribeDonor(claims.id);
+    unsubscribedEmail = await unsubscribeDonor(claims.id);
+    scope = "everything";
+    // Make it STICK: the same person may also sit on a list as a plain subscriber (donated with the
+    // box ticked, then signed up through the website footer). Without this they were mailed again on
+    // the very next send, after being told they had unsubscribed.
+    if (unsubscribedEmail) await unsubscribeAllListsForEmail(unsubscribedEmail);
   } else {
     const member = await unsubscribeListMember(claims.id);
     if (!member) {
@@ -61,5 +74,17 @@ unsubscribeRouter.get("/unsubscribe/:token", async (req: Request, res: Response)
   return res
     .status(200)
     .type("html")
-    .send(page("You've been unsubscribed. You will no longer receive our newsletter."));
-});
+    .send(
+      page(
+        scope === "everything"
+          ? "You've been unsubscribed. We'll stop sending you emails — including our newsletter and thank-you letters. Donation receipts still come through, because those are records of your gift. If this was a mistake, just reply to any of our emails or contact us and we'll put it right."
+          : "You've been unsubscribed from this mailing list. If you're on any of our other lists, those are separate — contact us if you'd like to leave those too.",
+      ),
+    );
+}
+
+unsubscribeRouter.get("/unsubscribe/:token", handleUnsubscribe);
+// RFC 8058 one-click. Gmail and Yahoo POST here from their own "unsubscribe" button, expecting a 2xx
+// and no interaction. Registered alongside the GET so a link that was mailed before this existed
+// keeps working exactly as it did.
+unsubscribeRouter.post("/unsubscribe/:token", handleUnsubscribe);

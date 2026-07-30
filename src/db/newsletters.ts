@@ -4,6 +4,7 @@ import { pool } from "./pool";
 // the content vanish while its audit failed, which is precisely the gap this feature exists to close.
 import { writeWithAudit } from "./donations";
 import type { ListKind } from "./subscriber-lists";
+import { suppressedAmong } from "./email-suppressions";
 
 // DB access for the admin newsletter (TASK-161/REQ-069). Read/write over the newsletters table plus
 // the consented-donor recipient query and the unsubscribe write. Mirrors the pool-query style of
@@ -165,7 +166,7 @@ export async function listRecipientsForList(list: { id: number; kind: ListKind }
       fromSubs.push({ email: r.email.toLowerCase(), donorId: null, subscriberId: r.id, fullName: r.name });
     }
   }
-  if (list.kind === "manual") return fromSubs;
+  if (list.kind === "manual") return dropSuppressed(fromSubs);
 
   const donors = await listNewsletterRecipients();
   const byEmail = new Map<string, ListRecipient>();
@@ -173,7 +174,16 @@ export async function listRecipientsForList(list: { id: number; kind: ListKind }
   for (const d of donors) {
     byEmail.set(d.email, { email: d.email, donorId: d.donorId, subscriberId: null, fullName: d.fullName });
   }
-  return Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email));
+  return dropSuppressed(Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email)));
+}
+
+// TASK-272: the last gate before anyone is mailed. Hard bounces and spam complaints are dropped HERE,
+// inside the one resolver both the send loop and the recipient preview use — so the count an admin
+// confirms is the count that goes out, and a suppressed address cannot be reached by any send path.
+async function dropSuppressed(recipients: ListRecipient[]): Promise<ListRecipient[]> {
+  if (recipients.length === 0) return recipients;
+  const blocked = await suppressedAmong(recipients.map((r) => r.email));
+  return blocked.size === 0 ? recipients : recipients.filter((r) => !blocked.has(r.email));
 }
 
 // Stamp which audience a send went to (read back by the stats panel and history).
@@ -260,8 +270,29 @@ export async function unsubscribeSubscriberByEmail(email: string): Promise<numbe
   return res.rowCount ?? 0;
 }
 
-export async function unsubscribeDonor(donorId: number): Promise<void> {
-  await pool.query(`UPDATE donors SET email_consent = false WHERE id = $1`, [donorId]);
+// Returns the address that was unsubscribed, so the caller can make the opt-out STICK across both
+// data models (TASK-272 — see unsubscribeEverywhereForEmail).
+export async function unsubscribeDonor(donorId: number): Promise<string | null> {
+  const { rows } = await pool.query(
+    `UPDATE donors SET email_consent = false WHERE id = $1 RETURNING lower(email) AS email`,
+    [donorId],
+  );
+  return rows[0]?.email ?? null;
+}
+
+// TASK-272: an unsubscribe has to be true for the ADDRESS, not just for one row that happens to
+// represent them. Someone who donated with the box ticked AND signed up through the website footer
+// exists twice: a consenting donor and an active list membership. The send deduped them and let the
+// DONOR identity win, so they got a donor token — clearing that flag left the subscriber row active
+// and the very next newsletter reached them again, after we had told them they were unsubscribed.
+// Tombstoning every membership for the address closes that, and is a no-op for the common case.
+export async function unsubscribeAllListsForEmail(email: string): Promise<number> {
+  const { rowCount } = await pool.query(
+    `UPDATE list_subscribers SET unsubscribed_at = COALESCE(unsubscribed_at, now())
+      WHERE lower(email) = $1 AND unsubscribed_at IS NULL`,
+    [email.trim().toLowerCase()],
+  );
+  return rowCount ?? 0;
 }
 
 // Add a newsletter subscriber captured manually (e.g. an email given verbally on a doorstep). If a

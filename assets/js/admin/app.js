@@ -2383,10 +2383,15 @@
 
   function renderNewsletterList(rows) {
     if (!rows.length) return '<p class="admin-loading">No newsletters yet.</p>';
-    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Status</th><th>Sent</th><th>Delivered</th><th></th></tr></thead><tbody>';
+    // TASK-271: WHO each one went to. The audience was stamped at send time but never read back, so
+    // the history couldn't tell you whether a message reached volunteers or every donor. Older sends
+    // predate audiences and were always the newsletter audience.
+    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Audience</th><th>Status</th><th>Sent</th><th>Delivered</th><th></th></tr></thead><tbody>';
     rows.forEach(function (n) {
       html +=
-        "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" + n.status + "</td><td>" +
+        "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" +
+        (n.audience ? H.escapeHtml(n.audience) : (n.status === "sent" ? '<span class="admin-muted">Newsletter</span>' : "-")) +
+        "</td><td>" + n.status + "</td><td>" +
         (n.sentAt ? new Date(n.sentAt).toLocaleString() : "-") + "</td><td>" +
         nlDeliveryCell(n) +
         '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button>' +
@@ -2461,6 +2466,7 @@
         var canWrite = canEdit("newsletter");
         el("newsletterSend").hidden = !(canWrite && !sent);
         if (el("sendListWrap")) el("sendListWrap").hidden = !(canWrite && !sent); // TASK-259
+        nlSyncSendAudience(); // TASK-271: the "who this reaches" line follows the send controls
         el("newsletterSave").hidden = !canWrite;
         el("newsletterSave").disabled = sent || !canWrite;
         el("newsletterTest").hidden = !canWrite;
@@ -2500,41 +2506,11 @@
       .catch(function () {});
   }
 
-  // Manual "add a subscriber" form: create/re-consent a donor by email (Editor+). The card is hidden
-  // in read mode (see updateNewsletterSubscriberCard, called once permissions load).
-  var subscriberForm = el("subscriberForm");
-  if (subscriberForm) {
-    subscriberForm.addEventListener("submit", function (e) {
-      e.preventDefault();
-      if (!canEdit("newsletter")) return;
-      var email = el("subEmail").value.trim();
-      var name = el("subName").value.trim();
-      if (!email) return;
-      var btn = el("subAddBtn");
-      btn.disabled = true;
-      el("subMsg").textContent = "Adding…";
-      authFetch("/api/admin/newsletters/subscribers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(name ? { email: email, name: name } : { email: email }),
-      })
-        .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
-        .then(function (r) {
-          if (!r.ok) {
-            el("subMsg").textContent = (r.b && r.b.error) || "Could not add that email.";
-            return;
-          }
-          el("subMsg").textContent = r.b.status === "resubscribed"
-            ? r.b.email + " was already on file — their consent is now on."
-            : "Added " + r.b.email + " to the newsletter.";
-          el("subEmail").value = "";
-          el("subName").value = "";
-          if (el("subManage") && el("subManage").open) nlLoadSubscribers();
-        })
-        .catch(function () { el("subMsg").textContent = "Could not add that email."; })
-        .finally(function () { btn.disabled = false; });
-    });
-  }
+  // TASK-271: the standalone "add a subscriber" form is gone. There were two add forms twenty lines
+  // apart writing to DIFFERENT tables — that one created a donors row with no audience choice, the
+  // other added a list membership — which is exactly the confusion this restructure removes. Adding
+  // someone is now one form that names the audience it puts them on (POST .../subscriber-lists/:id/
+  // members). The donor-row endpoint is untouched and still served for any other caller.
 
   // Subscriber management: list (with search), remove, and CSV export. Loaded on first panel open.
   function nlRenderSubscribers(subs) {
@@ -2757,11 +2733,25 @@
     if (m) m.textContent = text || "";
   }
 
-  function nlFillAudienceSelect(select, keepValue) {
+  function nlAudienceById(id) {
+    for (var i = 0; i < nlAudiences.length; i++) {
+      if (String(nlAudiences[i].id) === String(id)) return nlAudiences[i];
+    }
+    return null;
+  }
+
+  // TASK-271: the picker you BROWSE with, the one an import TARGETS and the one a send GOES TO are
+  // deliberately separate controls. They used to be one, which is how a spreadsheet previewed against
+  // Volunteers could be committed into Newsletter.
+  // `manageableOnly` drops the Donors audience: it follows donor consent, so there is nothing to add
+  // to by hand — leaving it out of those pickers beats letting someone pick it and get an error.
+  function nlFillAudienceSelect(select, keepValue, opts) {
     if (!select) return;
+    var manageableOnly = !!(opts && opts.manageableOnly);
     var keep = keepValue != null ? keepValue : select.value;
     select.innerHTML = "";
     nlAudiences.forEach(function (l) {
+      if (manageableOnly && l.kind === "donors") return;
       var o = doc.createElement("option");
       o.value = String(l.id);
       o.textContent = l.name + (typeof l.memberCount === "number" ? " (" + l.memberCount + ")" : "");
@@ -2769,6 +2759,81 @@
     });
     if (keep) select.value = keep;
     if (!select.value && select.options.length) select.value = select.options[0].value;
+  }
+
+  // What the selected audience MEANS, in plain words — the counts alone never explained why Donors
+  // has no Add form, or that Newsletter quietly includes every consenting donor.
+  function nlAudienceKindText(a) {
+    if (!a) return "";
+    if (a.kind === "donors") {
+      return "Donors looks after itself: every donor who agreed to email is in it. People can't be added or removed here — it follows their consent.";
+    }
+    if (a.kind === "everyone") {
+      return "Newsletter is everyone: the people on this list plus every donor who agreed to email.";
+    }
+    return "This audience is exactly the people on it. Donors are not included.";
+  }
+
+  // Keep stage 1's explanation and its Archive button in step with the audience being browsed.
+  function nlSyncAudienceContext() {
+    var pick = el("audiencePick");
+    var a = pick ? nlAudienceById(pick.value) : null;
+    var note = el("audienceKindNote");
+    if (note) note.textContent = nlAudienceKindText(a);
+    // Only a hand-managed audience can be archived — Newsletter and Donors are what the send model
+    // is built on, so the server refuses them and the button should not pretend otherwise.
+    var arch = el("audienceArchive");
+    if (arch) arch.hidden = !(a && a.kind === "manual" && canEdit("newsletter"));
+  }
+
+  // TASK-271: name the audience and its size next to the Send button, before the confirmation repeats
+  // it. The send controls used to say only "Send to subscribers", whoever that was.
+  function nlSyncSendAudience() {
+    var note = el("sendAudienceNote");
+    if (!note) return;
+    var wrap = el("sendListWrap");
+    var pick = el("sendListPick");
+    var a = pick ? nlAudienceById(pick.value) : null;
+    if (!a || (wrap && wrap.hidden)) { note.hidden = true; note.textContent = ""; return; }
+    var extra = a.kind === "everyone" ? " That includes every donor who agreed to email."
+      : a.kind === "donors" ? " Donors only — no volunteers or other audiences." : "";
+    note.hidden = false;
+    note.textContent = "This will go to " + a.name + " — " +
+      a.memberCount + (a.memberCount === 1 ? " person." : " people.") + extra;
+  }
+
+  // Archived audiences (TASK-270): retired, not deleted. Hidden entirely until there are some.
+  function nlRefreshArchivedAudiences() {
+    var box = el("audienceArchived");
+    if (!box) return;
+    authFetch("/api/admin/subscriber-lists/archived")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (rows) {
+        var list = Array.isArray(rows) ? rows : [];
+        box.hidden = list.length === 0;
+        var host = el("audienceArchivedList");
+        if (!host) return;
+        var canWrite = canEdit("newsletter");
+        var html = "";
+        list.forEach(function (a) {
+          html += '<p class="nl-archived-row">' + H.escapeHtml(a.name) +
+            ' <span class="admin-sub">' + a.memberCount + " kept on file</span> " +
+            (canWrite ? '<button class="admin-link" type="button" data-restore-list="' + a.id + '">Restore</button>' : "") +
+            "</p>";
+        });
+        host.innerHTML = html;
+        Array.prototype.forEach.call(host.querySelectorAll("[data-restore-list]"), function (b) {
+          b.addEventListener("click", function () {
+            authFetch("/api/admin/subscriber-lists/" + b.getAttribute("data-restore-list") + "/restore", { method: "POST" })
+              .then(function (res) {
+                nlAudienceMsg(res.ok ? "Audience restored." : "Could not restore it.");
+                return nlRefreshAudiences();
+              })
+              .catch(function () { nlAudienceMsg("Could not restore it."); });
+          });
+        });
+      })
+      .catch(function () { /* the archive box is a convenience — never block the tab */ });
   }
 
   function nlRenderAudienceMembers(members) {
@@ -2817,7 +2882,13 @@
         nlAudiences = Array.isArray(rows) ? rows : [];
         nlFillAudienceSelect(el("audiencePick"));
         nlFillAudienceSelect(el("sendListPick"));
+        // Adding and importing can't target Donors — it follows consent (TASK-271).
+        nlFillAudienceSelect(el("amList"), null, { manageableOnly: true });
+        nlFillAudienceSelect(el("importListPick"), null, { manageableOnly: true });
+        nlSyncAudienceContext();
+        nlSyncSendAudience();
         nlLoadAudienceMembers();
+        nlRefreshArchivedAudiences();
       })
       .catch(function () { /* never block the builder on the audience card */ });
   }
@@ -3109,7 +3180,33 @@
 
     // --- Audiences card wiring (TASK-259) ---------------------------------------------------------
     if (el("audiencePick")) {
-      el("audiencePick").addEventListener("change", nlLoadAudienceMembers);
+      el("audiencePick").addEventListener("change", function () {
+        nlLoadAudienceMembers();
+        nlSyncAudienceContext();
+      });
+    }
+    if (el("sendListPick")) {
+      el("sendListPick").addEventListener("change", nlSyncSendAudience);
+    }
+    // Archiving is a tombstone, not a delete — say so in the confirm, because "archive" invites the
+    // question "does this lose the people?" and the answer is no.
+    if (el("audienceArchive")) {
+      el("audienceArchive").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        var pick = el("audiencePick");
+        var a = pick ? nlAudienceById(pick.value) : null;
+        if (!a) return;
+        if (!window.confirm(
+          "Archive “" + a.name + "”?\n\nIt disappears from the audience lists so nothing can be sent to it. " +
+          "Nobody is deleted — who was on it, and every newsletter already sent to it, are kept. You can restore it later.",
+        )) return;
+        authFetch("/api/admin/subscriber-lists/" + a.id, { method: "DELETE" })
+          .then(function (res) {
+            if (res.status === 204) { nlAudienceMsg("“" + a.name + "” archived."); return nlRefreshAudiences(); }
+            return res.json().then(function (b) { nlAudienceMsg((b && b.error) || "Could not archive it."); });
+          })
+          .catch(function () { nlAudienceMsg("Could not archive it."); });
+      });
     }
     if (el("audienceNew")) {
       el("audienceNew").addEventListener("click", function () {
@@ -3153,7 +3250,9 @@
       audienceMemberForm.addEventListener("submit", function (e) {
         e.preventDefault();
         if (!canEdit("newsletter")) return;
-        var listId = el("audiencePick").value;
+        // TASK-271: the destination is this form's OWN "Add to" picker, so what you add and where it
+        // lands are stated together — it used to silently borrow the browse picker further up.
+        var listId = el("amList") ? el("amList").value : el("audiencePick").value;
         if (!listId) return;
         var email = (el("amEmail").value || "").trim();
         if (!email) return;
@@ -3179,15 +3278,34 @@
     }
 
     // --- Spreadsheet import (TASK-260) ------------------------------------------------------------
-    var importState = null; // { rows } from the last preview — what the commit sends back
+    // { rows, listId } from the last preview. TASK-271: the preview now REMEMBERS which audience it
+    // was taken against, and the commit refuses if that no longer matches the picker. Previously the
+    // preview was only cleared by a successful import, so previewing against Volunteers, changing the
+    // picker and clicking Import put the Volunteers rows into Newsletter.
+    var importState = null;
     function importMsg(t) { var m = el("importMsg"); if (m) m.textContent = t || ""; }
+
+    // Any change of destination or file invalidates a preview taken against the old one.
+    function importReset() {
+      importState = null;
+      if (el("importPreview")) el("importPreview").hidden = true;
+      if (el("importAttest")) el("importAttest").checked = false;
+      if (el("importCommitBtn")) el("importCommitBtn").disabled = true;
+    }
+    if (el("importListPick")) {
+      el("importListPick").addEventListener("change", function () {
+        if (importState) importMsg("Destination changed — preview the file again.");
+        importReset();
+      });
+    }
+    if (el("importFile")) el("importFile").addEventListener("change", importReset);
 
     if (el("importPreviewBtn")) {
       el("importPreviewBtn").addEventListener("click", function () {
         if (!canEdit("newsletter")) return;
         var f = el("importFile").files && el("importFile").files[0];
         if (!f) { importMsg("Choose a CSV or Excel file first."); return; }
-        var listId = el("audiencePick").value;
+        var listId = el("importListPick") ? el("importListPick").value : el("audiencePick").value;
         if (!listId) return;
         importMsg("Reading…");
         var reader = new FileReader();
@@ -3201,8 +3319,16 @@
             .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
             .then(function (r) {
               if (!r.ok) { importMsg((r.b && r.b.error) || "Could not read that file."); return; }
-              importState = { rows: r.b.rows };
-              var bits = [r.b.readyCount + " ready to import"];
+              importState = { rows: r.b.rows, listId: String(listId) };
+              var target = nlAudienceById(listId);
+              // The destination is repeated ON the button you press, so the last thing you read
+              // before importing is where these people are going.
+              if (el("importCommitBtn")) {
+                el("importCommitBtn").textContent = target
+                  ? "Import " + r.b.readyCount + " into " + target.name
+                  : "Import";
+              }
+              var bits = [r.b.readyCount + " ready to import" + (target ? " into " + target.name : "")];
               if (r.b.alreadyOnList.length) bits.push(r.b.alreadyOnList.length + " already on this audience");
               if (r.b.previouslyUnsubscribed.length) {
                 bits.push(r.b.previouslyUnsubscribed.length + " previously opted out (they will NOT be re-added)");
@@ -3232,7 +3358,13 @@
 
       el("importCommitBtn").addEventListener("click", function () {
         if (!canEdit("newsletter") || !importState || !el("importAttest").checked) return;
-        var listId = el("audiencePick").value;
+        var listId = el("importListPick") ? el("importListPick").value : el("audiencePick").value;
+        // Last line of defence: never import rows into an audience they were not previewed against.
+        if (String(listId) !== importState.listId) {
+          importMsg("Destination changed since the preview — preview the file again.");
+          importReset();
+          return;
+        }
         importMsg("Importing…");
         authFetch("/api/admin/subscriber-lists/" + listId + "/import", {
           method: "POST",
@@ -3346,19 +3478,24 @@
   // send" runs nlDoSend. Focus moves into the dialog on open and returns to the Send button on close.
   function nlShowSendConfirm(id, sendBtn) {
     var prevFocus = doc.activeElement;
+    // TASK-271: the confirmation NAMES the audience. It used to say "N consenting subscribers"
+    // whoever they were, which read identically whether you were about to mail the volunteers or
+    // every donor the charity has — the one check standing between the two.
+    var audience = el("sendListPick") ? nlAudienceById(el("sendListPick").value) : null;
+    var audienceName = audience ? audience.name : "the newsletter audience";
     var overlay = doc.createElement("div");
     overlay.className = "nl-modal-overlay";
     overlay.innerHTML =
       '<div class="nl-modal" role="dialog" aria-modal="true" aria-labelledby="nlModalTitle">' +
-      '<h3 class="nl-modal-title" id="nlModalTitle">Send this newsletter?</h3>' +
-      '<p class="nl-modal-text">Are you sure you want to send this newsletter?' +
+      '<h3 class="nl-modal-title" id="nlModalTitle">Send to ' + H.escapeHtml(audienceName) + "?</h3>" +
+      '<p class="nl-modal-text">This newsletter is about to go to <b>' + H.escapeHtml(audienceName) + "</b>." +
       '<span class="nl-recipients"><button type="button" class="nl-info" aria-label="Who will receive this?">' +
       '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
       '</button><span class="nl-tooltip" role="tooltip"><span class="nl-tooltip-head">Loading recipients…</span></span></span></p>' +
       '<p class="nl-modal-count" aria-live="polite">Loading recipient list…</p>' +
       '<div class="nl-modal-actions">' +
       '<button type="button" class="nl-modal-cancel">Cancel</button>' +
-      '<button type="button" class="nl-modal-confirm">Yes, send</button>' +
+      '<button type="button" class="nl-modal-confirm">Yes, send to ' + H.escapeHtml(audienceName) + "</button>" +
       "</div></div>";
     doc.body.appendChild(overlay);
 
@@ -3397,13 +3534,19 @@
       .then(function (r) {
         var emails = r.emails || [];
         var n = typeof r.count === "number" ? r.count : emails.length;
-        countEl.textContent = "This will be sent to " + n + " consenting subscriber" + (n === 1 ? "" : "s") + ".";
+        // The server's own name for the audience wins over the client's copy — it is the one that
+        // will actually be mailed.
+        var named = r.audience || audienceName;
+        countEl.textContent = "That is " + n + " " + (n === 1 ? "person" : "people") + " on " + named +
+          (r.kind === "everyone" ? ", including every donor who agreed to email." : ".");
         var list = emails.map(function (e) { return '<span class="nl-tooltip-email">' + H.escapeHtml(e) + "</span>"; }).join("");
         tooltip.innerHTML = '<span class="nl-tooltip-head">Recipients (' + n + ')</span>' +
-          (list || '<span class="nl-tooltip-email">No consenting subscribers.</span>');
+          (list || '<span class="nl-tooltip-email">No one on this audience.</span>');
       })
       .catch(function () {
-        countEl.textContent = "Recipient count unavailable — the send will still reach all consenting subscribers.";
+        // Never claim a reach we could not confirm — the old copy said the send "will still reach all
+        // consenting subscribers" even for a volunteers-only send.
+        countEl.textContent = "Could not load the recipient list. The send will go to " + audienceName + ".";
         tooltip.innerHTML = '<span class="nl-tooltip-head">Could not load the recipient list.</span>';
       });
   }

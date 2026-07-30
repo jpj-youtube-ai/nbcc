@@ -3789,6 +3789,35 @@ special case, and a **tombstone archive**:
 - The send-recipients endpoint returns `audience`/`kind` alongside the count, so the send
   confirmation can **name** what it is about to mail rather than saying "consenting subscribers".
 
+**Newsletter tab restructure (TASK-271).** The tab now runs in four numbered stages —
+**1 Audiences & people → 2 Write the newsletter → 3 Send → 4 Sent newsletters**. Previously audience
+management, the send history, the composer and the send controls were interleaved, so the picker that
+decides *who gets a newsletter* sat ~110 lines away from the audiences it names. **The composer
+(`.nl-builder`) is unchanged** — only its surroundings moved. What changed and why:
+
+- **Every action that touches an audience names it.** Adding a person and importing a spreadsheet each
+  have their **own** destination picker (`#amList`, `#importListPick`), separate from the picker you
+  browse with. Sharing one control was a live data bug: the preview was only cleared by a *successful*
+  import, so previewing a sheet against Volunteers, changing the picker and clicking Import put the
+  Volunteers rows into **Newsletter**. The preview now remembers which audience it was taken against,
+  changing destination or file clears it, and the commit refuses on a mismatch.
+- **One way to add a person.** There were two add forms twenty lines apart writing to *different
+  tables*: "Add a subscriber" (a `donors` row, with no audience choice) and "Add to audience". The
+  first is gone from the UI; adding someone is now one form that states which audience they join.
+  ⚠️ Behaviour change: adding a person no longer sets `email_consent` on a matching **donor** row — it
+  creates a list membership. They still receive the newsletter. `POST /api/admin/newsletters/subscribers`
+  is untouched and still served for any other caller.
+- **The send confirmation names the audience** ("Send to Volunteers?" / "Yes, send to Volunteers"), and
+  a line under the Send button states who it reaches and how many *before* you open it. The old dialog
+  said "N consenting subscribers" whoever they were — identical wording whether you were mailing the
+  volunteers or every donor the charity has. Its failure fallback no longer claims the send "will
+  still reach all consenting subscribers" regardless of the chosen list.
+- **Donors is explained where it matters** — stage 1 says Donors follows consent, Newsletter is
+  everyone, and other audiences are exactly who you add. Donors is omitted from the add/import pickers
+  entirely (rather than offered and then refused), and **Archive** appears only on hand-managed
+  audiences, with a confirm that spells out that nobody is deleted.
+- **History shows the audience** each newsletter went to.
+
 > **Watch the page-weight budget.** `donate.html` sits at ~99.8% of the 255KB first-paint budget
 > (`test/unit/perf-budget.test.ts`) — roughly 460 bytes spare. Any addition to `assets/css/styles.css`
 > or `assets/js/main.js` can turn it red. On Windows checkouts with `core.autocrlf=true` the test

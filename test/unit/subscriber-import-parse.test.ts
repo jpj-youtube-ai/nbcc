@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import ExcelJS from "exceljs";
-import { parseCsvRows, normalizeImportRows, parseImportFile } from "../../src/newsletter/import-parse";
+import { parseCsvRows, normalizeImportRows, parseImportFile, tidyName } from "../../src/newsletter/import-parse";
 
 // TASK-260: parsing "a spreadsheet with name and email in 2 columns". The whole feature hangs on the
 // PREVIEW being trustworthy — the admin confirms what they see, so what they see must be exactly what
@@ -79,6 +79,36 @@ describe("normalizeImportRows", () => {
   it("lowercases addresses and trims names", () => {
     const out = normalizeImportRows([["  Ann  ", " Ann@X.Com "]]);
     expect(out.rows).toEqual([{ name: "Ann", email: "ann@x.com" }]);
+  });
+
+  // TASK-269: the first name is what the newsletter greets people by, and spreadsheets arrive
+  // SHOUTY. Tidy on import so the admin approves the tidied name in the preview.
+  it("tidies the capitalisation of imported names", () => {
+    expect(normalizeImportRows([["JOHN SMITH", "j@x.com"]]).rows).toEqual([
+      { name: "John Smith", email: "j@x.com" },
+    ]);
+    expect(normalizeImportRows([["margaret", "m@x.com"]]).rows).toEqual([
+      { name: "Margaret", email: "m@x.com" },
+    ]);
+  });
+});
+
+describe("tidyName (TASK-269)", () => {
+  it("gives a shouty or flat name exactly one capital per word", () => {
+    expect(tidyName("JOHN")).toBe("John");
+    expect(tidyName("john")).toBe("John");
+    expect(tidyName("jOhN sMiTh")).toBe("John Smith");
+  });
+
+  it("keeps the capital after a hyphen or apostrophe — Anne-Marie, not Anne-marie", () => {
+    expect(tidyName("ANNE-MARIE")).toBe("Anne-Marie");
+    expect(tidyName("o'brien")).toBe("O'Brien");
+    expect(tidyName("O’NEILL")).toBe("O’Neill"); // curly apostrophe too
+  });
+
+  it("handles accented and empty names without throwing", () => {
+    expect(tidyName("ÉMILE")).toBe("Émile");
+    expect(tidyName("")).toBe("");
   });
 });
 

@@ -11,6 +11,12 @@ export const TAN_SOFT = "#F3E4DD";
 export const HOLLY_DARK = "#123C12";
 export const CREAM_82 = "rgba(248,245,238,.82)";
 export const CREAM_24 = "rgba(248,245,238,.24)";
+// TASK-269: rules and borders on the cream card. The old hairline (#e5ded3) sat at roughly 1.08:1
+// against the card — all but invisible in a real inbox, so dividers read as nothing. RULE is for
+// dividers and separators (~3:1, the non-text contrast bar); LINE is the quieter border for cards
+// and image frames, still clearly darker than the hairline it replaces.
+export const RULE = "#A08A6E";
+export const LINE = "#D6C7B4";
 export const HEAD = "'Playfair Display', Georgia, 'Times New Roman', serif";
 export const BODY = "'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
 export const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";

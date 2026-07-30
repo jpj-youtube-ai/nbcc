@@ -2469,7 +2469,9 @@
         var canWrite = canEdit("newsletter");
         el("newsletterSend").hidden = !(canWrite && !sent);
         if (el("sendListWrap")) el("sendListWrap").hidden = !(canWrite && !sent); // TASK-259
+        if (el("sendRolloutWrap")) el("sendRolloutWrap").hidden = !(canWrite && !sent); // TASK-274
         nlSyncSendAudience(); // TASK-271: the "who this reaches" line follows the send controls
+        nlRenderSendJob(el("newsletterId").value); // TASK-274: resume the progress view after a reload
         el("newsletterSave").hidden = !canWrite;
         el("newsletterSave").disabled = sent || !canWrite;
         el("newsletterTest").hidden = !canWrite;
@@ -3283,6 +3285,11 @@
     if (el("sendListPick")) {
       el("sendListPick").addEventListener("change", nlSyncSendAudience);
     }
+    // TASK-274: a send in flight can now be paused or stopped — there was previously no way at all,
+    // and closing the browser did not stop the server.
+    if (el("sendPause")) el("sendPause").addEventListener("click", function () { nlSendJobAction("pause"); });
+    if (el("sendResume")) el("sendResume").addEventListener("click", function () { nlSendJobAction("resume"); });
+    if (el("sendCancel")) el("sendCancel").addEventListener("click", function () { nlSendJobAction("cancel"); });
     // Archiving is a tombstone, not a delete — say so in the confirm, because "archive" invites the
     // question "does this lose the people?" and the answer is no.
     if (el("audienceArchive")) {
@@ -3542,29 +3549,83 @@
   // The actual send POST, run only after the admin confirms in the dialog.
   function nlDoSend(id, sendBtn, closeModal) {
     sendBtn.disabled = true;
-    el("newsletterMsg").textContent = "Sending…";
+    el("newsletterMsg").textContent = "Queueing…";
     var pickedList = el("sendListPick") && el("sendListPick").value ? Number(el("sendListPick").value) : null;
+    var body = pickedList ? { listId: pickedList } : {};
+    // TASK-274: the gentle rollout. A quiet domain that suddenly emits thousands of messages looks
+    // like a compromised account to Gmail; easing out over a few days builds the record that earns
+    // the next day's larger allowance.
+    if (el("sendRollout") && el("sendRollout").checked) body.rollout = "gentle";
     authFetch("/api/admin/newsletters/" + id + "/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(pickedList ? { listId: pickedList } : {}),
+      body: JSON.stringify(body),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("send failed: " + res.status);
+        if (!res.ok) return res.json().then(function (b) { throw new Error((b && b.error) || "send failed"); });
         return res.json();
       })
       .then(function (r) {
-        var msg = "Sent to " + (r.sentCount != null ? r.sentCount : r.recipientCount) + " of " + r.recipientCount + " subscriber(s).";
-        if (r.failedCount) msg += " " + r.failedCount + " failed: " + (r.failedEmails || []).join(", ");
-        el("newsletterMsg").textContent = msg;
+        // Sending now happens in the background, so the honest message is "started", not "sent" —
+        // and the progress panel below is what says how far it has got.
+        el("newsletterMsg").textContent = r.rollout === "gentle"
+          ? "Sending started, easing out gradually to " + r.recipientCount + " people."
+          : "Sending started — " + r.recipientCount + " people queued.";
+        nlWatchSendJob(id);
         loadNewsletters();
-        loadNewsletterInto(id);
       })
-      .catch(function () {
+      .catch(function (err) {
         sendBtn.disabled = false;
-        el("newsletterMsg").textContent = "Send failed (already sent, or not permitted).";
+        el("newsletterMsg").textContent = (err && err.message) || "Send failed (already sent, or not permitted).";
       })
       .finally(function () { if (closeModal) closeModal(); });
+  }
+
+  // TASK-274: live progress for a background send. Polls while the job is alive, and keeps working
+  // after a page reload — the send is server-side now, so closing the browser does not stop it.
+  var nlSendPoll = null;
+  function nlWatchSendJob(id) {
+    if (nlSendPoll) clearInterval(nlSendPoll);
+    nlRenderSendJob(id);
+    nlSendPoll = setInterval(function () { nlRenderSendJob(id); }, 5000);
+  }
+
+  function nlRenderSendJob(id) {
+    var box = el("sendProgress");
+    if (!box) return;
+    authFetch("/api/admin/newsletters/" + id + "/send-job")
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (job) {
+        if (!job) { box.hidden = true; return; }
+        box.hidden = false;
+        var done = job.sent + job.failed;
+        var pct = job.total > 0 ? Math.round((done / job.total) * 100) : 0;
+        el("sendProgressFill").style.width = pct + "%";
+        var text = job.sent + " of " + job.total + " sent";
+        if (job.failed) text += " · " + job.failed + " failed";
+        if (job.status === "paused") text += " · paused";
+        else if (job.status === "cancelled") text += " · stopped";
+        else if (job.status === "done") text = "All " + job.sent + " sent.";
+        else if (job.summary) text += " — " + job.summary;
+        el("sendProgressText").textContent = text;
+        var live = job.status === "queued" || job.status === "running" || job.status === "paused";
+        el("sendPause").hidden = job.status !== "running" && job.status !== "queued";
+        el("sendResume").hidden = job.status !== "paused";
+        el("sendCancel").hidden = !live;
+        if (!live && nlSendPoll) { clearInterval(nlSendPoll); nlSendPoll = null; }
+      })
+      .catch(function () { /* progress is a convenience — the send continues regardless */ });
+  }
+
+  function nlSendJobAction(action) {
+    var id = el("newsletterId") && el("newsletterId").value;
+    if (!id) return;
+    if (action === "cancel" && !window.confirm(
+      "Stop this send?\n\nAnyone already emailed keeps their copy — this only stops the rest going out. It cannot be restarted.",
+    )) return;
+    authFetch("/api/admin/newsletters/" + id + "/send-job/" + action, { method: "POST" })
+      .then(function () { nlWatchSendJob(id); })
+      .catch(function () { /* the panel refresh will show the real state */ });
   }
 
   // Centered confirmation dialog for sending. Shows the recipient count and an info tooltip listing

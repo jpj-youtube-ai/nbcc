@@ -50,6 +50,15 @@ export function newsletterSender(address: string): string {
   return `NBCC Newsletter <${address}>`;
 }
 
+// First name for the greeting merge: first whitespace-delimited token of the name, falling back to
+// "friend" when there is no usable one. TASK-274 moved it here from src/routes/admin.ts so the
+// background send worker and the on-screen preview merge names by the SAME rule — two copies of
+// this would drift, and the drift would show up in real donor greetings.
+export function firstNameOf(fullName: string | null): string {
+  const token = (fullName ?? "").trim().split(/\s+/)[0];
+  return token.length > 0 ? token : "friend";
+}
+
 export function mergeSubject(subject: string, firstName: string): string {
   const name = firstName.trim() || "friend";
   return subject.replace(/\{\{firstName\}\}/g, name);

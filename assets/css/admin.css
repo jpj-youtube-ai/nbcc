@@ -383,6 +383,25 @@
 .nl-send-list select { font: inherit; padding: 7px 10px; border: 1.4px solid var(--line); border-radius: 8px;
   background: var(--cream); color: var(--slate); }
 
+/* TASK-271: the newsletter tab runs in four numbered stages (audiences & people → write → send →
+   history). The number is the whole device: it turns a long scroll of loosely related cards into an
+   order you can follow, without a tab bar that would hide the composer behind a click. */
+.nl-stage-head { display: flex; align-items: center; gap: .55rem; font-family: var(--font-head);
+  font-size: 1.12rem; color: var(--maroon); margin: 1.8rem 0 .5rem; }
+.nl-stage-head:first-child { margin-top: 0; }
+.nl-stage-num { display: inline-flex; align-items: center; justify-content: center; width: 1.55rem;
+  height: 1.55rem; border-radius: 50%; background: var(--maroon); color: var(--cream);
+  font-family: var(--font-body); font-size: .82rem; font-weight: 700; flex: none; }
+/* What the selected audience MEANS — sits under the picker, not buried in help text. */
+.nl-audience-kind { font-size: .84rem; color: var(--slate-soft); margin: 0 0 .7rem; max-width: 68ch; }
+/* "Add to" / "Import into": the destination label reads as part of the control, not a stray word. */
+.nl-dest-label { font-size: .85rem; font-weight: 600; color: var(--slate); }
+.nl-add-person { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+/* Stage 3: the audience and the Send button on one line, with who-it-reaches directly beneath. */
+.nl-send-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: .2rem 0 .4rem; }
+.nl-send-note { font-size: .9rem; font-weight: 600; color: var(--maroon); margin: 0 0 .8rem; }
+.nl-archived-row { display: flex; align-items: center; gap: .5rem; margin: .3rem 0; font-size: .9rem; }
+
 /* TASK-260: spreadsheet import. The attestation is a full-width labelled checkbox — it is the legal
    gate, so it reads like one, not like small print. Issues list in the soft slate. */
 .nl-import { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--line); }

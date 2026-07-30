@@ -273,66 +273,100 @@
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
 
-              <!-- Manually add a subscriber (e.g. an email given verbally on a doorstep). Editor+ only;
-                   hidden in read mode by app.js. Adds/re-consents a donor via POST .../subscribers. -->
-              <div class="nl-subscriber-card" id="nlSubscriberCard">
-                <h3 class="admin-subhead" style="margin-top:0">Add a subscriber</h3>
-                <p class="admin-help">Collected an email in person? Add it here — they’ll receive the next newsletter and can unsubscribe any time.</p>
-                <form id="subscriberForm" class="nl-subscriber-form" autocomplete="off">
-                  <input type="email" id="subEmail" placeholder="email@example.com" required aria-label="Subscriber email" />
-                  <input type="text" id="subName" placeholder="Name (optional)" aria-label="Subscriber name" />
-                  <button type="submit" class="nl-item-add" id="subAddBtn"><span>Add subscriber</span></button>
-                </form>
+              <!-- TASK-271: the page runs in four numbered stages — audiences & people, compose,
+                   send, history. Before, audience management, the send history, the composer and the
+                   send controls were interleaved, so the audience picker that decides who gets a
+                   newsletter sat ~110 lines away from the audiences it names. Every stage that acts
+                   on an audience now says WHICH one, on screen, at the moment you act.
+                   The composer (.nl-builder) itself is unchanged — only its surroundings moved. -->
 
-                <!-- Audiences (TASK-259): separate mailing lists — Newsletter (donors join it
-                     automatically), Volunteers, Partners, Referrers, plus any the team adds. Members
-                     here are list_subscribers rows; removing one tombstones the membership (consent
-                     history survives). app.js fills the picker, renders members, and wires create/
-                     add/remove. Hidden in read mode with the card above. -->
-                <div class="nl-audiences" id="nlAudiences">
-                  <h3 class="admin-subhead">Audiences</h3>
-                  <p class="admin-help">Who you can send to. Donors with email consent are always part of Newsletter; other audiences are exactly the people you add.</p>
-                  <div class="nl-audience-bar">
-                    <label for="audiencePick">Audience</label>
-                    <select id="audiencePick"></select>
-                    <button type="button" id="audienceNew">New audience</button>
-                    <input type="text" id="audienceName" maxlength="60" placeholder="Audience name" aria-label="New audience name" hidden />
-                    <button type="button" id="audienceCreate" hidden>Create</button>
-                    <button type="button" id="audienceCancel" hidden>Cancel</button>
-                  </div>
+              <!-- Stage 1. Editor+ only; app.js hides this whole card in read mode, which is why the
+                   audience picker and member list live inside it (they carry Remove controls). -->
+              <div class="nl-subscriber-card" id="nlSubscriberCard">
+                <h3 class="nl-stage-head" id="nlStageAudience"><span class="nl-stage-num">1</span> Audiences &amp; people</h3>
+                <p class="admin-help">
+                  <b>Donors</b> looks after itself — every donor who agreed to email is in it, and nobody adds or removes them by hand.
+                  <b>Newsletter</b> is <i>everyone</i>: those donors <b>plus</b> the people on the Newsletter list.
+                  Every other audience is exactly the people you put on it. So a message for donors can go to <b>Donors</b> alone,
+                  and a message for everybody goes to <b>Newsletter</b>.
+                </p>
+                <div class="nl-audience-bar">
+                  <label for="audiencePick">Audience</label>
+                  <select id="audiencePick"></select>
+                  <button type="button" id="audienceNew">New audience</button>
+                  <button type="button" id="audienceArchive" hidden>Archive</button>
+                  <input type="text" id="audienceName" maxlength="60" placeholder="Audience name" aria-label="New audience name" hidden />
+                  <button type="button" id="audienceCreate" hidden>Create</button>
+                  <button type="button" id="audienceCancel" hidden>Cancel</button>
+                </div>
+                <!-- What the selected audience MEANS, in its own words — a live audience explains why
+                     it has no Add form, an archived one explains why it cannot be sent to. -->
+                <p class="nl-audience-kind" id="audienceKindNote" aria-live="polite"></p>
+                <div id="audienceMembers" aria-live="polite"></div>
+
+                <!-- ONE way to add a person, and it names the audience it is adding to. There used to
+                     be two forms twenty lines apart writing to different tables: "Add a subscriber"
+                     (a donors row, no audience choice) and "Add to audience". -->
+                <div class="nl-add-person" id="nlAddPerson">
+                  <h4 class="nl-import-head">Add a person</h4>
+                  <p class="admin-help">Collected an email in person? Add it here. Choose which audience they join — every email carries an unsubscribe link.</p>
                   <form id="audienceMemberForm" class="nl-subscriber-form" autocomplete="off">
+                    <label class="nl-dest-label" for="amList">Add to</label>
+                    <select id="amList" aria-label="Audience to add this person to"></select>
                     <input type="text" id="amName" placeholder="Name" aria-label="Member name" />
                     <input type="email" id="amEmail" placeholder="email@example.com" required aria-label="Member email" />
                     <input type="tel" id="amPhone" placeholder="Phone (optional)" aria-label="Member phone" />
                     <button type="submit" class="nl-item-add" id="amAddBtn"><span>Add to audience</span></button>
                   </form>
-                  <div id="audienceMembers" aria-live="polite"></div>
-
-                  <!-- Spreadsheet import (TASK-260): CSV or Excel, name + email in two columns (either
-                       order). Preview first — the admin confirms exactly what they see — then the
-                       consent attestation unlocks the import. Opted-out addresses are shown and kept
-                       out: a spreadsheet cannot overrule an unsubscribe. -->
-                  <div class="nl-import">
-                    <h4 class="nl-import-head">Import a spreadsheet</h4>
-                    <p class="admin-help">CSV or Excel, two columns: name and email (either order). You'll see a preview before anything is added.</p>
-                    <div class="nl-import-bar">
-                      <input type="file" id="importFile" accept=".csv,.xlsx,.txt" aria-label="Spreadsheet to import" />
-                      <button type="button" id="importPreviewBtn">Preview import</button>
-                    </div>
-                    <div id="importPreview" hidden>
-                      <p id="importSummary" class="nl-import-summary"></p>
-                      <ul id="importIssues" class="nl-import-issues"></ul>
-                      <label class="nl-import-attest">
-                        <input type="checkbox" id="importAttest" />
-                        <span>These people have agreed to hear from NBCC (for example they signed up at an event or asked to be added).</span>
-                      </label>
-                      <button type="button" id="importCommitBtn" disabled>Import to this audience</button>
-                    </div>
-                    <p id="importMsg" class="nl-sub-msg" aria-live="polite"></p>
-                  </div>
-
-                  <p id="audienceMsg" class="nl-sub-msg" aria-live="polite"></p>
                 </div>
+
+                <!-- Switching someone's emails back ON is its own deliberate action, behind a summary
+                     and a confirm. It used to be a silent SIDE EFFECT of the plain "add a subscriber"
+                     box: typing an address re-consented a donor who had opted out, across every email
+                     we send, with nothing on screen saying so. Same endpoint, stated intent. -->
+                <details class="nl-manage" id="nlReconsent">
+                  <summary>Someone asked us to email them again</summary>
+                  <div class="nl-manage-body">
+                    <p class="admin-help">Use this only if they have actually asked. It switches <b>all</b> our emails back on for them — receipts and appeals too, not just the newsletter.</p>
+                    <form id="reconsentForm" class="nl-subscriber-form" autocomplete="off">
+                      <input type="email" id="reEmail" placeholder="email@example.com" required aria-label="Email address to turn emails back on for" />
+                      <input type="text" id="reName" placeholder="Name (optional)" aria-label="Name" />
+                      <button type="submit" class="nl-item-add" id="reAddBtn"><span>Turn their emails back on</span></button>
+                    </form>
+                    <p id="reMsg" class="nl-sub-msg" aria-live="polite"></p>
+                  </div>
+                </details>
+
+                <!-- Spreadsheet import (TASK-260): CSV or Excel, name + email in two columns (either
+                     order). Preview first — the admin confirms exactly what they see — then the
+                     consent attestation unlocks the import. Opted-out addresses are shown and kept
+                     out: a spreadsheet cannot overrule an unsubscribe.
+                     TASK-271: the destination is chosen HERE, on its own control, and is repeated on
+                     the confirm button. It used to borrow the browse picker above, and changing that
+                     picker after previewing did not clear the preview — so a sheet previewed against
+                     Volunteers could be committed into Newsletter. -->
+                <div class="nl-import">
+                  <h4 class="nl-import-head">Import a spreadsheet</h4>
+                  <p class="admin-help">CSV or Excel, two columns: name and email (either order). You'll see a preview before anything is added.</p>
+                  <div class="nl-import-bar">
+                    <label class="nl-dest-label" for="importListPick">Import into</label>
+                    <select id="importListPick" aria-label="Audience to import into"></select>
+                    <input type="file" id="importFile" accept=".csv,.xlsx,.txt" aria-label="Spreadsheet to import" />
+                    <button type="button" id="importPreviewBtn">Preview import</button>
+                  </div>
+                  <div id="importPreview" hidden>
+                    <p id="importSummary" class="nl-import-summary"></p>
+                    <ul id="importIssues" class="nl-import-issues"></ul>
+                    <label class="nl-import-attest">
+                      <input type="checkbox" id="importAttest" />
+                      <span>These people have agreed to hear from NBCC (for example they signed up at an event or asked to be added).</span>
+                    </label>
+                    <button type="button" id="importCommitBtn" disabled>Import</button>
+                  </div>
+                  <p id="importMsg" class="nl-sub-msg" aria-live="polite"></p>
+                </div>
+
+                <p id="audienceMsg" class="nl-sub-msg" aria-live="polite"></p>
                 <p id="subMsg" class="nl-sub-msg" aria-live="polite"></p>
 
                 <!-- Manage the full subscriber list: search, remove, export. Loaded on first open. -->
@@ -346,10 +380,17 @@
                     <div id="subList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
                   </div>
                 </details>
+
+                <!-- Archived audiences (TASK-270): retired, not deleted — their consent history and
+                     past sends survive, and one can be brought back. Hidden until there are some. -->
+                <details class="nl-manage" id="audienceArchived" hidden>
+                  <summary>Archived audiences</summary>
+                  <div class="nl-manage-body" id="audienceArchivedList" aria-live="polite"></div>
+                </details>
               </div>
 
-              <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <form id="newsletterForm">
+                <h3 class="nl-stage-head"><span class="nl-stage-num">2</span> Write the newsletter</h3>
                 <input type="hidden" id="newsletterId" />
                 <p><label>Subject<br /><input type="text" id="newsletterSubject" required style="width:100%" /></label></p>
                 <div class="nl-builder">
@@ -401,11 +442,6 @@
                   <button type="button" id="newsletterTemplate">Start from example</button>
                   <button type="submit" id="newsletterSave">Save</button>
                   <button type="button" id="newsletterTest">Send test to me</button>
-                  <span class="nl-send-list" id="sendListWrap" hidden>
-                    <label for="sendListPick">Send to</label>
-                    <select id="sendListPick" aria-label="Audience to send to"></select>
-                  </span>
-                  <button type="button" id="newsletterSend" hidden>Send to subscribers</button>
                 </div>
 
                 <!-- The SHARED saved-template library (TASK-249). Whatever anyone saves here, the whole
@@ -427,8 +463,27 @@
                   <button type="button" id="newsletterTemplateSaveCancel" hidden>Cancel</button>
                 </div>
                 <p id="nlTemplateMsg" class="nl-sub-msg" aria-live="polite"></p>
+
+                <!-- Stage 3. The audience lives with the Send button, not 110 lines away in the
+                     actions row, and the note under it spells out who is about to be mailed and how
+                     many that is — the same number the confirmation repeats. -->
+                <h3 class="nl-stage-head"><span class="nl-stage-num">3</span> Send</h3>
+                <div class="nl-send-row">
+                  <span class="nl-send-list" id="sendListWrap" hidden>
+                    <label for="sendListPick">Send to</label>
+                    <select id="sendListPick" aria-label="Audience to send to"></select>
+                  </span>
+                  <button type="button" id="newsletterSend" hidden>Send</button>
+                </div>
+                <p class="nl-send-note" id="sendAudienceNote" aria-live="polite" hidden></p>
                 <p id="newsletterMsg" aria-live="polite"></p>
               </form>
+
+              <!-- Stage 4. Moved BELOW the composer: the history is a record you look back at, not
+                   the first thing you meet on opening the tab. Now carries the audience each send
+                   went to (list_id was stamped at send time but never read back). -->
+              <h3 class="nl-stage-head"><span class="nl-stage-num">4</span> Sent newsletters</h3>
+              <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Thank you: pick a donor over the threshold, personalise the letter, watch it update

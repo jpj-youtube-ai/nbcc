@@ -366,8 +366,10 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
 
     const modal = overlay();
     expect(modal).toBeTruthy();
-    expect(modal!.textContent).toContain("Are you sure you want to send this newsletter?");
-    expect(modal!.querySelector(".nl-modal-count")!.textContent).toContain("2 consenting subscribers");
+    // TASK-271: the dialog NAMES the audience. "N consenting subscribers" read identically whether
+    // you were mailing the volunteers or every donor — this is the check that stops the wrong send.
+    expect(modal!.textContent).toContain("is about to go to");
+    expect(modal!.querySelector(".nl-modal-count")!.textContent).toMatch(/\b2 people\b/);
     const tip = modal!.querySelector(".nl-tooltip")!;
     expect(tip.textContent).toContain("ann@bdd.example");
     expect(tip.textContent).toContain("ben@bdd.example");
@@ -423,22 +425,47 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect((el("newsletterTest") as HTMLElement).hidden).toBe(true);
   });
 
-  it("an Editor can manually add a subscriber via the form", async () => {
+  // TASK-271: there used to be TWO add forms twenty lines apart, writing to different tables — "Add a
+  // subscriber" (a donors row, with no audience choice at all) and "Add to audience". That is the
+  // confusion this restructure removes: one form, and it names where the person lands.
+  it("gives an Editor ONE way to add a person, and the form names the destination audience", async () => {
     loginToken = tokenFor("editor");
     await openNewsletterTab();
     await flush();
 
     expect((el("nlSubscriberCard") as HTMLElement).hidden).toBe(false);
-    (el("subEmail") as HTMLInputElement).value = "doorstep@example.com";
-    (el("subName") as HTMLInputElement).value = "Doorstep Donor";
-    (el("subscriberForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-    await flush();
+    expect(document.getElementById("subscriberForm")).toBeNull(); // the audience-less form is gone
+    expect(document.getElementById("audienceMemberForm")).toBeTruthy();
+    expect(document.getElementById("amList")).toBeTruthy(); // destination chosen on the form itself
+  });
+
+  // TASK-271: re-consenting a donor ("they asked us to email them again") is its own deliberate
+  // action. It used to be a silent side effect of the plain add box, so typing an address could undo
+  // someone's opt-out across every email the charity sends.
+  it("turns a donor's emails back on only behind an explicit confirmation", async () => {
+    loginToken = tokenFor("editor");
+    await openNewsletterTab();
     await flush();
 
+    (el("reEmail") as HTMLInputElement).value = "changed@example.com";
+    const submit = () =>
+      el("reconsentForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+
+    // Declining the confirmation must not touch the server.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    submit();
+    await flush();
+    expect(subscriberRequests.length).toBe(0);
+    // ...and the warning must say the change is wider than the newsletter.
+    expect(confirmSpy.mock.calls[0][0]).toMatch(/receipts and appeals/i);
+
+    confirmSpy.mockReturnValue(true);
+    submit();
+    await flush();
+    await flush();
     expect(subscriberRequests.length).toBe(1);
-    expect(subscriberRequests[0].body).toEqual({ email: "doorstep@example.com", name: "Doorstep Donor" });
-    expect(el("subMsg").textContent).toContain("doorstep@example.com");
-    expect((el("subEmail") as HTMLInputElement).value).toBe(""); // cleared on success
+    expect(subscriberRequests[0].body).toEqual({ email: "changed@example.com" });
+    confirmSpy.mockRestore();
   });
 
   it("Send test to me posts the current builder doc and reports the address", async () => {
@@ -1036,9 +1063,12 @@ describe("audiences (TASK-259)", () => {
     expect(Array.from(send.options).map((o) => o.value)).toEqual(["1", "2"]);
   });
 
-  it("adds a member to the SELECTED audience with the typed details", async () => {
+  // TASK-271: the destination is the Add form's OWN "Add to" picker, not the browse picker above it.
+  // Sharing one control is what let an import previewed against one audience commit into another.
+  it("adds a member to the audience chosen on the ADD form, not the one being browsed", async () => {
     await mount();
-    (el("audiencePick") as HTMLSelectElement).value = "2";
+    (el("audiencePick") as HTMLSelectElement).value = "1"; // browsing a different audience...
+    (el("amList") as HTMLSelectElement).value = "2"; // ...adding to this one
     (el("amName") as HTMLInputElement).value = "Casey";
     (el("amEmail") as HTMLInputElement).value = "casey@example.com";
     (el("amPhone") as HTMLInputElement).value = "07000 000000";

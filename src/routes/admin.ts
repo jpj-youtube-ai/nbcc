@@ -104,6 +104,11 @@ import {
   removeListMember,
   getMembershipStates,
   DuplicateListError,
+  listArchivedSubscriberLists,
+  archiveSubscriberList,
+  restoreSubscriberList,
+  BuiltInListError,
+  type SubscriberListRef,
 } from "../db/subscriber-lists";
 import { parseImportFile } from "../newsletter/import-parse";
 import { recordNewsletterSends, getNewsletterStats } from "../db/newsletter-events";
@@ -500,12 +505,56 @@ export async function getAdminNewsletterStats(req: Request, res: Response): Prom
   return res.json(await getNewsletterStats(id));
 }
 
-// --- Subscriber lists / audiences (TASK-259) ------------------------------------------------------
-// Editor+, matching the tab. Memberships tombstone rather than delete (consent history), and the
-// 'newsletter' audience additionally includes consenting donors — resolved at send time, not stored.
+// --- Subscriber lists / audiences (TASK-259; donor audience + archiving TASK-270) -----------------
+// Editor+, matching the tab. Memberships tombstone rather than delete (consent history). An audience's
+// `kind` says what it MEANS — 'donors' is the live donor audience, 'everyone' is Newsletter (its own
+// members plus the donors), 'manual' is exactly the people on it. Archiving is likewise a tombstone.
 export async function getAdminSubscriberLists(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   return res.json(await listSubscriberLists());
+}
+
+export async function getAdminArchivedSubscriberLists(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  return res.json(await listArchivedSubscriberLists());
+}
+
+// TASK-270: the two things an audience can refuse. 'donors' is resolved live from donor consent, so
+// there is nothing to hand-manage; an archived audience is retired and must take no new people.
+// Returned as a message so every caller refuses in the same words the admin will read.
+function listNotManageable(list: SubscriberListRef): string | null {
+  if (list.archivedAt) return "That audience is archived — restore it before adding people";
+  if (list.kind === "donors") {
+    return "Donors updates itself from donor consent, so people can't be added to it by hand";
+  }
+  return null;
+}
+
+// Retire an audience. A tombstone (archived_at), never a delete: past sends keep their audience label
+// and the membership rows survive as consent history. Built-ins (Newsletter, Donors) refuse — 409.
+export async function deleteAdminSubscriberList(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const listId = Number(req.params.id);
+  if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
+  try {
+    const archived = await archiveSubscriberList(listId);
+    if (!archived) return res.status(404).json({ error: "Subscriber list not found" });
+    return res.status(204).end();
+  } catch (err) {
+    if (err instanceof BuiltInListError) {
+      return res.status(409).json({ error: "Newsletter and Donors are built in and can't be archived" });
+    }
+    throw err;
+  }
+}
+
+export async function postAdminSubscriberListRestore(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const listId = Number(req.params.id);
+  if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
+  const restored = await restoreSubscriberList(listId);
+  if (!restored) return res.status(404).json({ error: "Archived list not found" });
+  return res.status(200).json({ restored: true });
 }
 
 export async function postAdminSubscriberList(req: Request, res: Response): Promise<Response | void> {
@@ -540,6 +589,8 @@ export async function postAdminListMember(req: Request, res: Response): Promise<
   if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
   const list = await getSubscriberList(listId);
   if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  const refusal = listNotManageable(list);
+  if (refusal) return res.status(400).json({ error: refusal });
   const parsed = z
     .object({
       name: z.string().trim().max(120).optional(),
@@ -589,6 +640,8 @@ export async function postAdminListImportPreview(req: Request, res: Response): P
   if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
   const list = await getSubscriberList(listId);
   if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  const refusal = listNotManageable(list);
+  if (refusal) return res.status(400).json({ error: refusal });
   const parsed = importFileSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Upload a CSV or Excel file" });
   const data = Buffer.from(parsed.data.dataBase64, "base64");
@@ -629,6 +682,8 @@ export async function postAdminListImport(req: Request, res: Response): Promise<
   if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
   const list = await getSubscriberList(listId);
   if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  const refusal = listNotManageable(list);
+  if (refusal) return res.status(400).json({ error: refusal });
   const parsed = importCommitSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -718,7 +773,15 @@ export async function getAdminNewsletterRecipients(req: Request, res: Response):
       const list = await getSubscriberList(listId);
       if (!list) return res.status(404).json({ error: "Subscriber list not found" });
       const recipients = await listRecipientsForList(list);
-      return res.json({ count: recipients.length, emails: recipients.map((r) => r.email) });
+      // TASK-270: the audience's NAME and KIND ride along so the send confirmation can name what it
+      // is about to mail ("Send to Volunteers — 42 people?") instead of the old generic "consenting
+      // subscribers", which read identically whether you were mailing volunteers or every donor.
+      return res.json({
+        count: recipients.length,
+        emails: recipients.map((r) => r.email),
+        audience: list.name,
+        kind: list.kind,
+      });
     }
   }
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
@@ -780,6 +843,9 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     ? await getSubscriberList(listParse.data.listId)
     : await getSubscriberListBySlug("newsletter");
   if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+  // TASK-270: an archived audience is retired — refuse the send rather than mailing a list someone
+  // deliberately took out of circulation. Checked before the claim, so the draft stays sendable.
+  if (list.archivedAt) return res.status(400).json({ error: "That audience is archived — restore it to send to it" });
 
   // Atomically claim the draft BEFORE sending. If another request already sent it (or it never
   // existed as a draft), we 409 without emailing anyone — a double-click cannot re-blast.
@@ -1924,6 +1990,11 @@ adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);
 // TASK-259: audiences. Own path for the same :id-capture reason as templates.
 adminRouter.get("/api/admin/subscriber-lists", getAdminSubscriberLists);
 adminRouter.post("/api/admin/subscriber-lists", postAdminSubscriberList);
+// TASK-270: archived audiences. The literal path is declared BEFORE the :id routes so it is not
+// captured as an id (the same ordering reason as the templates routes above).
+adminRouter.get("/api/admin/subscriber-lists/archived", getAdminArchivedSubscriberLists);
+adminRouter.post("/api/admin/subscriber-lists/:id/restore", postAdminSubscriberListRestore);
+adminRouter.delete("/api/admin/subscriber-lists/:id", deleteAdminSubscriberList);
 adminRouter.post("/api/admin/subscriber-lists/:id/import/preview", postAdminListImportPreview);
 adminRouter.post("/api/admin/subscriber-lists/:id/import", postAdminListImport);
 adminRouter.get("/api/admin/subscriber-lists/:id/members", getAdminListMembers);

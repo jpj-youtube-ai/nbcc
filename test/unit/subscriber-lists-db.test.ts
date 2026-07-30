@@ -18,6 +18,11 @@ import {
   addListSubscriber,
   removeListMember,
   unsubscribeListMember,
+  listSubscriberLists,
+  listArchivedSubscriberLists,
+  archiveSubscriberList,
+  restoreSubscriberList,
+  BuiltInListError,
 } from "../../src/db/subscriber-lists";
 
 const sqlOf = (re: RegExp): string => queryMock.mock.calls.map((c) => String(c[0])).find((s) => re.test(s)) ?? "";
@@ -95,5 +100,65 @@ describe("tombstones, not deletes", () => {
     const row = await unsubscribeListMember(9);
     expect(row).toEqual({ email: "ann@example.com" });
     expect(sqlOf(/update\s+list_subscribers/i)).toMatch(/coalesce\(unsubscribed_at,\s*now\(\)\)/i);
+  });
+});
+
+// TASK-270: audiences gained a KIND and an archive tombstone. The promises under test:
+//   - the member count tells the TRUTH for the dynamic audiences (it used to count stored rows only,
+//     so the picker said "Newsletter (3)" while the send reached every consenting donor);
+//   - archiving hides an audience from the pickers but never deletes it — consent history survives;
+//   - the built-in audiences (Newsletter, Donors) cannot be archived out from under the send model.
+describe("audience kinds and archiving (TASK-270)", () => {
+  it("counts the LIVE donor audience for donors/everyone, not just stored rows", async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id: 1, slug: "newsletter", name: "Newsletter", kind: "everyone", member_count: "412" }],
+    });
+    const lists = await listSubscriberLists();
+    expect(lists).toEqual([
+      { id: 1, slug: "newsletter", name: "Newsletter", kind: "everyone", memberCount: 412 },
+    ]);
+    const sql = sqlOf(/from\s+subscriber_lists/i);
+    // the count must consult donors for the dynamic kinds, and union them for 'everyone'
+    expect(sql).toMatch(/email_consent\s*=\s*true/i);
+    expect(sql).toMatch(/union/i);
+  });
+
+  it("hides archived audiences from the pickers, and lists them separately", async () => {
+    await listSubscriberLists();
+    expect(sqlOf(/where\s+l\.archived_at\s+is\s+null/i)).toBeTruthy();
+    queryMock.mockReset();
+    queryMock.mockResolvedValue({ rows: [], rowCount: 0 });
+    await listArchivedSubscriberLists();
+    expect(sqlOf(/where\s+l\.archived_at\s+is\s+not\s+null/i)).toBeTruthy();
+  });
+
+  it("archives as a TOMBSTONE — it stamps archived_at, it never deletes the audience", async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id: 4, slug: "volunteers", name: "Volunteers", kind: "manual", archived_at: null }],
+    });
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    expect(await archiveSubscriberList(4)).toBe(true);
+    expect(sqlOf(/update\s+subscriber_lists\s+set\s+archived_at\s*=\s*now\(\)/i)).toBeTruthy();
+    expect(sqlOf(/delete\s+from\s+subscriber_lists/i)).toBe(""); // never a delete
+  });
+
+  it("refuses to archive a built-in audience — the send model is built on them", async () => {
+    for (const kind of ["everyone", "donors"] as const) {
+      queryMock.mockReset();
+      queryMock.mockResolvedValueOnce({ rows: [{ id: 1, slug: kind, name: "X", kind, archived_at: null }] });
+      await expect(archiveSubscriberList(1)).rejects.toBeInstanceOf(BuiltInListError);
+      expect(sqlOf(/set\s+archived_at/i)).toBe(""); // nothing was written
+    }
+  });
+
+  it("returns false for an unknown audience rather than pretending it archived one", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    expect(await archiveSubscriberList(999)).toBe(false);
+  });
+
+  it("restores an archived audience by clearing the tombstone", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    expect(await restoreSubscriberList(4)).toBe(true);
+    expect(sqlOf(/set\s+archived_at\s*=\s*null/i)).toMatch(/archived_at\s+is\s+not\s+null/i);
   });
 });

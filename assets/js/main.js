@@ -2120,7 +2120,8 @@
       '<button type="submit" class="btn btn-primary foot-signup-btn" id="fsSubmit">Sign up</button>' +
       "</form>" +
       '<p class="foot-signup-done" id="fsDone" role="status" hidden>You\u2019re signed up \u2014 thank you. Look out for us in your inbox.</p>';
-    wrap.insertBefore(section, wrap.firstChild);
+    // TASK-269: append LAST (under the columns, DOM order = reading order); CSS spans it full width.
+    wrap.appendChild(section);
 
     var form = doc.getElementById("footSignupForm");
     form.addEventListener("submit", function (e) {

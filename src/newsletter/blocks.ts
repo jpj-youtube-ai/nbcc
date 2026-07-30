@@ -19,6 +19,8 @@ import {
   HEAD,
   BODY,
   LOGO_URL,
+  RULE,
+  LINE,
 } from "./theme";
 // TASK-251: the sign-off block signs in the SAME hand as the thank-you email. Imported from that
 // module rather than copied here, so the two can never drift apart — if the signature changes there,
@@ -285,7 +287,7 @@ function divider(b: Block): string {
   }
 
   // variant 0 (default): hairline rule
-  return `<div style="padding:12px 40px"><hr style="border:none;border-top:1px solid #e5ded3" /></div>`;
+  return `<div style="padding:12px 40px"><hr style="border:none;border-top:2px solid ${RULE}" /></div>`;
 }
 
 // button — a call-to-action link, delegating to the shared brandButton styles.
@@ -334,7 +336,7 @@ function image(b: Block): string {
 
   if (b.variant === 3) {
     // width=566 matches max-width:566px (580 total minus 2x(6px padding + 1px border)).
-    return `<div style="padding:12px 40px"><div style="border:1px solid #e5ded3;padding:6px"><img src="${safeUrl}" alt="${alt}" width="566" style="display:block;width:100%;max-width:566px;height:auto" /></div></div>`;
+    return `<div style="padding:12px 40px"><div style="border:1px solid ${LINE};padding:6px"><img src="${safeUrl}" alt="${alt}" width="566" style="display:block;width:100%;max-width:566px;height:auto" /></div></div>`;
   }
 
   // variant 0 (default): full-width
@@ -409,7 +411,7 @@ function story(b: Block): string {
 
   if (b.variant === 3) {
     // text-only with a top rule — never shows an image, even if imageUrl is present
-    return `<div style="padding:12px 40px"><hr style="border:none;border-top:1px solid #e5ded3;margin:0 0 12px" />
+    return `<div style="padding:12px 40px"><hr style="border:none;border-top:1px solid ${RULE};margin:0 0 12px" />
   ${storyBody(b.data, "18px", "14px")}
 </div>`;
   }
@@ -629,7 +631,7 @@ function waysToHelp(b: Block): string {
     const rows = items
       .map(
         (item) =>
-          `<div style="padding:12px 0;border-bottom:1px solid #e5ded3">${wayToHelpItem(item)}</div>`,
+          `<div style="padding:12px 0;border-bottom:1px solid ${RULE}">${wayToHelpItem(item)}</div>`,
       )
       .join("");
     return `<div style="padding:12px 40px">${rows}</div>`;
@@ -702,7 +704,7 @@ function events(b: Block): string {
         const day = escapeHtml(str(item, "day"));
         const month = escapeHtml(str(item, "month"));
         const name = escapeHtml(str(item, "name"));
-        return `<div style="padding:8px 0;border-bottom:1px solid #e5ded3">
+        return `<div style="padding:8px 0;border-bottom:1px solid ${RULE}">
   <span style="font-family:${BODY};color:${CRIMSON};font-weight:700;font-size:13px">${day} ${month}</span>
   <span style="font-family:${BODY};color:${SLATE};font-size:14px;margin-left:8px">${name}</span>
 </div>`;
@@ -719,7 +721,7 @@ function events(b: Block): string {
         const month = escapeHtml(str(item, "month"));
         const name = escapeHtml(str(item, "name"));
         const location = str(item, "location");
-        return `<div style="border:1px solid #e5ded3;border-radius:8px;padding:16px;margin-bottom:12px">
+        return `<div style="border:1px solid ${LINE};border-radius:8px;padding:16px;margin-bottom:12px">
   <div style="font-family:${HEAD};color:${CRIMSON};font-size:13px;font-weight:800;text-transform:uppercase">${day} ${month}</div>
   <h3 style="font-family:${HEAD};color:${MAROON};font-size:16px;font-weight:800;margin:4px 0 0">${name}</h3>
   ${eventLocationLine(location, "13px")}

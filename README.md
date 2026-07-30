@@ -3747,6 +3747,31 @@ recommended for inbox placement. The **business-supporter thank-you invite** (TA
 `GIVING_FROM_EMAIL` From/Reply-To, so it needs **no** relay `kind` and **no** extra Worker redeploy —
 the relay already forwards its app-built `subject`/`html`/`text` verbatim.
 
+**Signup band, import names and email rules (TASK-269).** Three fixes around the newsletter's edges:
+
+- **Imported names are tidied** (`tidyName` in `src/newsletter/import-parse.ts`). Spreadsheets arrive
+  SHOUTY or flat; the first name is what the newsletter greets people by ("Dear John,"). Names are
+  normalised in the **parser**, so the admin sees the tidied value in the import preview — what they
+  approve is exactly what lands. One capital per word, preserved after a hyphen or apostrophe
+  (Anne-Marie, O'Brien), accents included.
+- **The footer signup band** (`initFooterSignup`, `assets/js/main.js`) is now **appended last** inside
+  the footer's column grid and spans it (`.foot-signup{grid-column:1/-1}`), so it runs the long way
+  under the other footer content — and DOM order matches reading order, so tab order is right.
+  Previously it was the *first* child of a 3-column grid, so it took one 1.5fr column and shoved the
+  brand and link columns out of place. Its consent label was also **invisible**: the global `form{}`
+  rule paints a white card, putting cream text (`--cream-82`) on near-white. `.foot-signup-form` now
+  clears that card, so the label sits on the footer maroon at ~10:1 contrast.
+- **Email rules are visible** (`RULE`/`LINE` in `src/newsletter/theme.ts`). The old `#e5ded3` hairline
+  sat at ~1.2:1 on the cream card — nothing in a real inbox. Dividers and list separators now use
+  `RULE` (`#A08A6E`, ~3:1 — the non-text contrast bar) with the divider block at **2px**; card and
+  image borders use the quieter `LINE` (`#D6C7B4`), still darker than before.
+
+> **Watch the page-weight budget.** `donate.html` sits at ~99.8% of the 255KB first-paint budget
+> (`test/unit/perf-budget.test.ts`) — roughly 460 bytes spare. Any addition to `assets/css/styles.css`
+> or `assets/js/main.js` can turn it red. On Windows checkouts with `core.autocrlf=true` the test
+> fails **locally** but passes in CI, because CRLF adds ~3.8KB that the LF files in CI don't carry —
+> measure the LF total before assuming a real regression.
+
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in
   `infra/modules/app/main.tf` if you must.

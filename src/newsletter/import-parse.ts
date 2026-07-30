@@ -64,6 +64,15 @@ export function parseCsvRows(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ""));
 }
 
+// Spreadsheets arrive shouty or flat ("JOHN SMITH", "john smith"), and the first name is what the
+// newsletter greets people by ("Dear John,"). Capitalisation is normalised HERE, in the parser, so
+// the admin sees the tidied name in the import preview — what they approve is exactly what lands.
+// One capital per word, including after a hyphen or apostrophe, so Anne-Marie and O'Brien survive
+// rather than becoming Anne-marie and O'brien.
+export function tidyName(raw: string): string {
+  return raw.toLowerCase().replace(/(^|[\s\-'’])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
+}
+
 // Cells → normalized people + named issues. Line numbers are 1-based against the ORIGINAL sheet so
 // the admin can find the row they're told about.
 export function normalizeImportRows(cells: string[][]): ParsedImport {
@@ -95,8 +104,8 @@ export function normalizeImportRows(cells: string[][]): ParsedImport {
       return;
     }
     seen.add(lower);
-    const name = trimmed.find((c) => c && c !== email) ?? null;
-    rows.push({ name, email: lower });
+    const rawName = trimmed.find((c) => c && c !== email) ?? null;
+    rows.push({ name: rawName ? tidyName(rawName) : null, email: lower });
   });
 
   return { rows, issues };

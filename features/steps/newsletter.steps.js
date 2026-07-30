@@ -135,10 +135,27 @@ When(
   },
 );
 
+// TASK-274: sending is a BACKGROUND job now — the endpoint returns 202 with a job id and the worker
+// drains the queue. Every assertion that follows a send (stats, unsubscribe attribution, delivery
+// summary) describes a COMPLETED send, so the step waits for the queue to empty before moving on.
+// Without this the scenarios would race the worker and fail intermittently, which is worse than
+// failing outright.
+async function waitForSendToFinish(world) {
+  for (let i = 0; i < 150; i++) {
+    const r = await authFetch(`/api/admin/newsletters/${world.newsletterId}/send-job`, "GET", undefined, world.token);
+    if (r.status !== 200) return; // no job (legacy path) — nothing to wait for
+    const job = r.json || {};
+    if (job.status === "done" || job.status === "cancelled" || job.pending === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("the send did not finish within 15s");
+}
+
 When("I send that newsletter", async function () {
   const r = await authFetch(`/api/admin/newsletters/${this.newsletterId}/send`, "POST", undefined, this.token);
   this.nlStatus = r.status;
   this.nlBody = r.json;
+  await waitForSendToFinish(this);
 });
 
 Then("the newsletter response status should be {int}", function (expected) {
@@ -655,6 +672,7 @@ When("I send that newsletter to that audience", async function () {
   );
   this.nlStatus = r.status;
   this.nlBody = r.json;
+  await waitForSendToFinish(this);
 });
 
 // The member's emailed link carries a SUBSCRIBER token (s<id>.<newsletterId>.<sig>) — signed here with

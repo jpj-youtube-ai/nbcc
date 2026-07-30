@@ -117,6 +117,7 @@ import {
   listJobRecipients,
 } from "../db/newsletter-send-jobs";
 import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
+import { runSendTick } from "../newsletter/send-worker";
 import { parseImportFile } from "../newsletter/import-parse";
 import { getNewsletterStats } from "../db/newsletter-events";
 import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
@@ -913,6 +914,14 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     failedCount: 0,
     failedEmails: [],
   });
+
+  // Start draining straight away rather than waiting up to a whole tick. Deliberately NOT awaited:
+  // the 202 goes back immediately and the sending continues in the background, which is the entire
+  // point of the change. Errors are the worker's own problem — the queue rows stay pending and the
+  // next tick retries them.
+  void runSendTick().catch((err) =>
+    console.error("immediate send tick failed:", err instanceof Error ? err.message : err),
+  );
 
   return res.status(202).json({
     status: "queued",

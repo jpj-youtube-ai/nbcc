@@ -99,3 +99,22 @@ export function parseResendEvent(rawBody: string): ParsedResendEvent | null {
 
   return { eventType, email: first.trim().toLowerCase(), occurredAt, detail, linkUrl };
 }
+
+// TASK-272: which events take an address off every future send. Pure, so the rule is testable without
+// a webhook or a database.
+//   complained — ALWAYS. They pressed "report spam"; mailing them again is both against their wishes
+//                and the fastest way to get the whole sending domain junked.
+//   bounced    — only when the provider calls it PERMANENT (the mailbox does not exist). A transient
+//                bounce is a full inbox or a server having a moment; suppressing on one of those
+//                would silently lose a real supporter. Suppressing after N repeated soft bounces is a
+//                deliberate follow-up, not an oversight.
+// Anything else returns null — recorded for the stats, never suppressed.
+export function suppressionFor(
+  event: ParsedResendEvent,
+): { reason: "bounced" | "complained"; detail: string | null } | null {
+  if (event.eventType === "complained") return { reason: "complained", detail: null };
+  if (event.eventType !== "bounced") return null;
+  if (String(event.detail?.type ?? "").toLowerCase() !== "permanent") return null;
+  const words = event.detail?.message ?? event.detail?.subType ?? null;
+  return { reason: "bounced", detail: typeof words === "string" ? words : null };
+}

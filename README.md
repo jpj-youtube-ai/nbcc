@@ -3840,3 +3840,35 @@ decides *who gets a newsletter* sat ~110 lines away from the audiences it names.
 
 > Generated as a starting baseline. Run `terraform validate` / `plan` and
 > `npm ci` before trusting it end to end.
+
+**Deliverability essentials (TASK-272).** The first slice of the mailing-platform review. Everything
+here protects the `nbcc.scot` sending reputation, which also carries admin sign-in codes and receipts:
+
+- **Suppression list** (`email_suppressions`, `src/db/email-suppressions.ts`). A spam complaint or a
+  **permanent** bounce now takes an address out of every future send. Previously both were recorded
+  and then ignored — the recipient queries filtered on consent alone, so a dead mailbox and someone
+  who pressed "report spam" were re-mailed on every send, forever, which is the single strongest
+  signal a mailbox provider uses to judge a sender careless. Transient bounces (a full inbox) are
+  **not** suppressed; suppressing after N repeats is a deliberate follow-up. Filtering happens inside
+  `listRecipientsForList`, the one resolver both the send loop and the recipient preview use, so the
+  count an admin confirms is the count that goes out. Blocked addresses are listed in the admin
+  ("Blocked addresses") and can be lifted — suppression is a tombstone, never a delete.
+- **RFC 8058 one-click unsubscribe.** The relay now sets `List-Unsubscribe` and
+  `List-Unsubscribe-Post` from a per-recipient `unsubscribeUrl`, and `/unsubscribe/:token` accepts
+  **POST** as well as GET. Gmail and Yahoo require this of bulk senders; without it recipients reach
+  for "report spam" instead, and a complaint costs far more than an unsubscribe.
+  ⚠️ **Ops:** the relay Worker must be redeployed (`cd services/email-relay && wrangler deploy`) for
+  the headers to take effect.
+- **An unsubscribe now sticks.** Someone who donated with the box ticked *and* signed up through the
+  website footer exists twice — a consenting donor and a list membership. The send deduped them with
+  the donor identity winning, so clearing that flag left the subscriber row active and the next
+  newsletter reached them anyway. A donor unsubscribe now tombstones every list membership for that
+  address (`unsubscribeAllListsForEmail`).
+- **The unsubscribe page says what it did** — a donor link stops all marketing including thank-you
+  letters (receipts still come, being records of a gift); a subscriber link leaves one audience.
+- **"Delivered" was not delivered.** The history column showed relay-*accepted* counts, so a send
+  where every address hard-bounced still read "150 / 150". Relabelled **Accepted**; real delivery is a
+  webhook fact and lives in the stats panel.
+- **CSV export honours the search box** — it exported the whole list regardless of the filter.
+- **Viewer accounts can open the Newsletter tab again.** Every read route required `edit`, so a Viewer
+  got 403s swallowed by empty catch handlers and a tab stuck on "Loading…". Reads now accept `view`.

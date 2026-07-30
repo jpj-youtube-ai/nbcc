@@ -137,7 +137,11 @@ export function buildEmail(p) {
   // plus a per-message from/reply-to (newsletter@nbcc.scot) so the send is repliable. Flagged by
   // `newsletter` and left exactly as-is. from/replyTo are honoured by sendViaResend.
   if (p.newsletter && (p.html || p.text)) {
-    return { to, subject: p.subject, html: p.html, text: p.text, from: p.from, replyTo: p.replyTo };
+    // unsubscribeUrl (TASK-272) becomes the RFC 8058 one-click headers in sendViaResend.
+    return {
+      to, subject: p.subject, html: p.html, text: p.text,
+      from: p.from, replyTo: p.replyTo, unsubscribeUrl: p.unsubscribeUrl,
+    };
   }
 
   // Thank-you letter (sendThankYou): like the newsletter, the app ships its OWN subject + fully
@@ -304,6 +308,17 @@ async function sendViaResend(env, msg) {
     text: msg.text,
   };
   if (msg.replyTo) body.reply_to = msg.replyTo;
+  // TASK-272: RFC 8058 one-click unsubscribe. Gmail and Yahoo require bulk senders to offer this and
+  // to honour it within two days; without it recipients press "report spam" instead, which costs the
+  // sending domain far more than an unsubscribe. Both headers must be present for one-click to work —
+  // List-Unsubscribe alone only gets the mail client's "unsubscribe" affordance, not the POST.
+  if (msg.unsubscribeUrl) {
+    body.headers = {
+      ...(body.headers || {}),
+      "List-Unsubscribe": `<${msg.unsubscribeUrl}>`,
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    };
+  }
   if (msg.cc) body.cc = msg.cc; // optional CC (TASK-168)
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",

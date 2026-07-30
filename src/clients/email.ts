@@ -300,6 +300,11 @@ export interface NewsletterEmail {
   replyTo: string; // same as from
   subject: string;
   html: string;
+  // TASK-272: the recipient's own one-click unsubscribe URL. The relay turns this into the
+  // List-Unsubscribe / List-Unsubscribe-Post headers (RFC 8058) that Gmail and Yahoo require of bulk
+  // senders. Without them people reach for "report spam" instead of the in-body link — and a
+  // complaint costs the sending domain far more than an unsubscribe does.
+  unsubscribeUrl?: string;
   // No attachments field on purpose: uploaded files are HOSTED (public /newsletter/document/<uuid>
   // pages) and linked from the body, never attached — the relay never forwarded attachments, and
   // links keep deliverability clean (hosted-documents design, 2026-07-22).

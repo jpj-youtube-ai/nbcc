@@ -50,7 +50,27 @@ resource "aws_route53_record" "txt_apex" {
   name    = var.domain_name
   type    = "TXT"
   ttl     = 3600
-  records = ["google-site-verification=jUKUlpbnahczgBEa-dhCEnKbRtt45dkWnnXgUdEpr-8"]
+  # TASK-273: the apex TXT set carries BOTH the Google site verification and the root SPF record.
+  # They must live in one record set — Route 53 allows only one TXT set per name, and a second
+  # resource at the apex would collide.
+  #
+  # Why a root SPF at all: there was none, so anyone could send mail claiming to be @nbcc.scot and
+  # nothing contradicted them. Donors, HMRC correspondence, appeals — all spoofable.
+  #
+  # Why _spf.google.com specifically: the apex MX is smtp.google.com (above), i.e. staff mail is
+  # Google Workspace. Publishing an SPF record that omitted Google would start FAILING every real
+  # email a human sends from @nbcc.scot — worse than having none.
+  #
+  # Resend is deliberately NOT included here: its envelope sender is send.nbcc.scot, which has its
+  # own SPF record (resend_spf below). Adding include:amazonses.com at the apex would authorise every
+  # Amazon SES customer to send as @nbcc.scot — far broader than we need.
+  #
+  # ~all (softfail) not -all: a hard fail is the goal, but only after the DMARC reports (rua below)
+  # show nothing legitimate is being missed. Tightening is a deliberate later step.
+  records = [
+    "google-site-verification=jUKUlpbnahczgBEa-dhCEnKbRtt45dkWnnXgUdEpr-8",
+    "v=spf1 include:_spf.google.com ~all",
+  ]
 }
 
 resource "aws_route53_record" "dkim" {
@@ -96,7 +116,21 @@ resource "aws_route53_record" "dmarc" {
   name    = "_dmarc.${var.domain_name}"
   type    = "TXT"
   ttl     = 3600
-  records = ["v=DMARC1; p=none;"]
+  # TASK-273: DMARC with REPORTING. The policy was `p=none;` and nothing else — monitor-only with no
+  # rua address, so it neither protected the domain nor told anyone what was happening. It satisfied
+  # the letter of the Gmail/Yahoo bulk-sender rule and delivered none of the value.
+  #
+  # rua gives the aggregate XML reports that say who is sending as nbcc.scot and whether SPF/DKIM
+  # pass. Those reports are the EVIDENCE needed before tightening the policy: going straight to
+  # p=reject blind risks silently binning legitimate mail (a fundraising platform, an events tool)
+  # nobody remembered was sending on the charity's behalf.
+  #
+  # The intended path, once a few weeks of reports look clean:
+  #   p=none  ->  p=quarantine; pct=25  ->  p=quarantine  ->  p=reject
+  #
+  # MANUAL STEP: dmarc@nbcc.scot must exist in Google Workspace (a group or alias is fine) or the
+  # reports bounce and this stays as blind as it was before.
+  records = ["v=DMARC1; p=none; rua=mailto:dmarc@nbcc.scot; fo=1;"]
 }
 
 # ---- ACM certificate, DNS-validated, auto-renewing -----------------------------

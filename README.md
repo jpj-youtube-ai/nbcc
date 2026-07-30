@@ -3991,3 +3991,26 @@ this, who got it, and who added this person.
   now shows **Added / How / By**. A revive re-stamps it, so the record follows the latest consent
   rather than the original. Nullable by design: memberships predating this show "not recorded" rather
   than inventing an actor for historic rows.
+
+**Email authentication hardening (TASK-273).** Two DNS gaps found by checking the live records:
+
+- **No SPF on the apex.** `nbcc.scot` published only a Google site-verification TXT, so nothing
+  contradicted anyone sending mail as `@nbcc.scot`. The apex TXT set now also carries
+  `v=spf1 include:_spf.google.com ~all`. It must include Google because the apex MX is
+  `smtp.google.com` — staff mail is Google Workspace, and an SPF record omitting it would start
+  failing every real email a human sends from the domain. Resend is deliberately absent: its envelope
+  sender is `send.nbcc.scot`, which has its own SPF record, and `include:amazonses.com` at the apex
+  would authorise every Amazon SES customer to send as NBCC.
+- **DMARC reported nothing.** The record was `p=none;` with no `rua`, so it neither protected the
+  domain nor told anyone what was happening — it met the letter of the Gmail/Yahoo bulk-sender rule
+  and delivered none of the value. Now `v=DMARC1; p=none; rua=mailto:dmarc@nbcc.scot; fo=1;`.
+  ⚠️ **Manual step:** `dmarc@nbcc.scot` must exist in Google Workspace (an alias or group is enough)
+  or the reports bounce.
+  **Intended path once a few weeks of reports look clean:**
+  `p=none` → `p=quarantine; pct=25` → `p=quarantine` → `p=reject`. Do not skip to reject blind: it
+  risks silently binning legitimate mail from a platform nobody remembered was sending for the charity.
+
+> **Still to do for deliverability** (documented, not yet built): a dedicated `news.nbcc.scot`
+> sending subdomain so a bad campaign cannot damage receipts and admin sign-in codes (needs the
+> domain added in Resend first, then `NEWSLETTER_FROM_EMAIL` repointed); enabling open/click tracking
+> in the Resend dashboard; and volume warm-up on any new sending domain.

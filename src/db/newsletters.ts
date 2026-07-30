@@ -3,6 +3,7 @@ import { pool } from "./pool";
 // writeWithAudit — the row and its audit_log entry commit in one transaction. recordAudit would let
 // the content vanish while its audit failed, which is precisely the gap this feature exists to close.
 import { writeWithAudit } from "./donations";
+import type { ListKind } from "./subscriber-lists";
 
 // DB access for the admin newsletter (TASK-161/REQ-069). Read/write over the newsletters table plus
 // the consented-donor recipient query and the unsubscribe write. Mirrors the pool-query style of
@@ -21,6 +22,10 @@ export interface NewsletterSummary {
   // TASK-252: when a SENT newsletter's content was deleted; null on everything else. A redacted
   // newsletter keeps this whole summary — that stub IS the record of what was sent, when, to how many.
   redactedAt: string | null;
+  // TASK-270: WHICH audience this went to. The list was stamped at send time but never read back, so
+  // the history couldn't tell you whether a message went to volunteers or to donors. Null for
+  // pre-audience sends, which were always the newsletter audience.
+  audience: string | null;
 }
 
 export interface Newsletter extends NewsletterSummary {
@@ -52,6 +57,7 @@ interface Row {
   failed_count: number | null;
   failed_emails: string[] | null;
   redacted_at: string | null;
+  audience?: string | null;
 }
 
 function toNewsletter(r: Row): Newsletter {
@@ -69,15 +75,18 @@ function toNewsletter(r: Row): Newsletter {
     // TASK-252: when a SENT newsletter's content was deleted. NULL on everything else, so the UI can
     // both label it and stop offering a delete that would do nothing.
     redactedAt: r.redacted_at ?? null,
+    audience: r.audience ?? null,
   };
 }
 
 export async function listNewsletters(): Promise<NewsletterSummary[]> {
   const rows = (
     await pool.query<Row>(
-      `SELECT id, subject, body_html, status, sent_at, recipient_count, sent_count, failed_count, failed_emails,
-              redacted_at
-         FROM newsletters ORDER BY id DESC`,
+      `SELECT n.id, n.subject, n.body_html, n.status, n.sent_at, n.recipient_count, n.sent_count,
+              n.failed_count, n.failed_emails, n.redacted_at, l.name AS audience
+         FROM newsletters n
+         LEFT JOIN subscriber_lists l ON l.id = n.list_id
+        ORDER BY n.id DESC`,
     )
   ).rows;
   return rows.map((r) => toNewsletter({ ...r, body_html: "", body_json: null }));
@@ -137,22 +146,26 @@ export interface ListRecipient {
   fullName: string | null;
 }
 
-// Resolve who a list actually reaches, at send time. The 'newsletter' audience is consenting donors
-// PLUS its own subscriber rows, deduped by address with the donor identity winning (their token keys
-// global newsletter consent); every other audience is exactly its active members.
-export async function listRecipientsForList(list: { id: number; slug: string }): Promise<ListRecipient[]> {
-  const subs = await pool.query(
-    `SELECT id, name, email FROM list_subscribers
-      WHERE list_id = $1 AND unsubscribed_at IS NULL ORDER BY email`,
-    [list.id],
-  );
-  const fromSubs: ListRecipient[] = subs.rows.map((r) => ({
-    email: r.email.toLowerCase(),
-    donorId: null,
-    subscriberId: r.id,
-    fullName: r.name,
-  }));
-  if (list.slug !== "newsletter") return fromSubs;
+// Resolve who a list actually reaches, at send time — driven by the audience's KIND (TASK-270), not
+// by its slug. It used to key off the literal string 'newsletter', so renaming that row would have
+// silently dropped every donor from the send with nothing on screen to say so.
+//   donors   — the live donor audience only (no stored rows of its own)
+//   everyone — its own members PLUS the donors, deduped by address with the DONOR identity winning
+//              (their token keys global newsletter consent, the subscriber's leaves one list)
+//   manual   — exactly its active members
+export async function listRecipientsForList(list: { id: number; kind: ListKind }): Promise<ListRecipient[]> {
+  const fromSubs: ListRecipient[] = [];
+  if (list.kind !== "donors") {
+    const subs = await pool.query(
+      `SELECT id, name, email FROM list_subscribers
+        WHERE list_id = $1 AND unsubscribed_at IS NULL ORDER BY email`,
+      [list.id],
+    );
+    for (const r of subs.rows) {
+      fromSubs.push({ email: r.email.toLowerCase(), donorId: null, subscriberId: r.id, fullName: r.name });
+    }
+  }
+  if (list.kind === "manual") return fromSubs;
 
   const donors = await listNewsletterRecipients();
   const byEmail = new Map<string, ListRecipient>();

@@ -3766,6 +3766,29 @@ the relay already forwards its app-built `subject`/`html`/`text` verbatim.
   `RULE` (`#A08A6E`, ~3:1 — the non-text contrast bar) with the divider block at **2px**; card and
   image borders use the quieter `LINE` (`#D6C7B4`), still darker than before.
 
+**Donor audience + archiving (TASK-270).** Audiences gained a **`kind`**, replacing a slug-string
+special case, and a **tombstone archive**:
+
+- **`kind`** (`subscriber_lists.kind`, `src/db/subscriber-lists.ts`) says what an audience *means*:
+  `manual` (exactly the people on it — Volunteers, Partners, Referrers), `donors` (every donor with
+  email consent, resolved live, never hand-managed), `everyone` (its own members **plus** the donors —
+  the `Newsletter` audience). `listRecipientsForList` now switches on `kind`. Previously donors were
+  spliced in **only when the list's slug was literally `newsletter`**, so a rename would have silently
+  dropped every donor from a send with nothing on screen to say so — and there was no way to mail
+  donors *alone*. A new seeded **Donors** audience makes that possible.
+- **Member counts tell the truth.** The count consults the live donor audience for `donors`/`everyone`,
+  so the picker no longer says "Newsletter (3)" while the send reaches every consenting donor.
+- **Archiving is a tombstone, never a delete** (`archived_at`): the audience leaves the pickers and
+  can't be sent to (`DELETE /api/admin/subscriber-lists/:id`, restore via `POST …/:id/restore`,
+  `GET …/archived`), while past sends keep their audience label and the membership rows survive as
+  consent history. Built-ins (Newsletter, Donors) refuse with a 409.
+- **Guards:** you can't hand-add or import into `Donors` (it follows consent) or into an archived
+  audience, and a send to an archived audience is refused before the draft is claimed.
+- **History shows the audience.** `listNewsletters` joins the list name; the stamped `list_id` was
+  previously write-only, so the history couldn't say whether a message went to volunteers or donors.
+- The send-recipients endpoint returns `audience`/`kind` alongside the count, so the send
+  confirmation can **name** what it is about to mail rather than saying "consenting subscribers".
+
 > **Watch the page-weight budget.** `donate.html` sits at ~99.8% of the 255KB first-paint budget
 > (`test/unit/perf-budget.test.ts`) — roughly 460 bytes spare. Any addition to `assets/css/styles.css`
 > or `assets/js/main.js` can turn it red. On Windows checkouts with `core.autocrlf=true` the test

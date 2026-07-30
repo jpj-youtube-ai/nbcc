@@ -9,11 +9,22 @@ import { pool } from "./pool";
 // "This person opted out on this date" is consent history a regulator can ask for, and the tombstone
 // is what stops a later spreadsheet import silently re-subscribing someone who opted out.
 
+// TASK-270: what an audience MEANS. This replaced a slug-string special case ("if the slug is
+// literally 'newsletter', add the donors"), which no screen could show and a rename would break.
+//   manual   — exactly the people on it (Volunteers, Partners, Referrers)
+//   donors   — every donor with email consent, resolved live; nobody adds or removes them by hand
+//   everyone — that list's own members PLUS the donors (the 'Newsletter' audience)
+export type ListKind = "manual" | "donors" | "everyone";
+
 export interface SubscriberList {
   id: number;
   slug: string;
   name: string;
-  memberCount: number; // active members (tombstoned rows excluded); donors are NOT counted here
+  kind: ListKind;
+  // TASK-270: the TRUE reach — for donors/everyone this counts the live donor audience too. It used
+  // to count stored rows only, so the picker said "Newsletter (3)" while the send reached every
+  // consenting donor; the number the admin confirms now matches the number that gets mailed.
+  memberCount: number;
 }
 
 export interface ListMember {
@@ -50,25 +61,110 @@ export function slugifyListName(name: string): string {
   return slug;
 }
 
+// The live donor audience, as SQL — every donor with email consent, deduped case-insensitively.
+// Shared by the count and the send so the two can never disagree.
+const DONOR_EMAILS = `SELECT lower(email) AS email FROM donors
+                       WHERE email_consent = true AND email IS NOT NULL`;
+const ACTIVE_MEMBERS = `SELECT lower(email) AS email FROM list_subscribers
+                         WHERE list_id = l.id AND unsubscribed_at IS NULL`;
+// One expression, three meanings — see ListKind.
+const MEMBER_COUNT = `CASE l.kind
+        WHEN 'donors' THEN (SELECT count(DISTINCT email) FROM (${DONOR_EMAILS}) d)
+        WHEN 'everyone' THEN (SELECT count(*) FROM (${ACTIVE_MEMBERS} UNION ${DONOR_EMAILS}) u)
+        ELSE (SELECT count(*) FROM (${ACTIVE_MEMBERS}) m)
+      END`;
+
+const LIST_COLUMNS = `l.id, l.slug, l.name, l.kind, ${MEMBER_COUNT} AS member_count`;
+
+function toList(r: {
+  id: number;
+  slug: string;
+  name: string;
+  kind: ListKind;
+  member_count: string | number;
+}): SubscriberList {
+  return { id: r.id, slug: r.slug, name: r.name, kind: r.kind, memberCount: Number(r.member_count) };
+}
+
+// Archived audiences are excluded — they must not be sendable or pickable (TASK-270).
 export async function listSubscriberLists(): Promise<SubscriberList[]> {
   const { rows } = await pool.query(
-    `SELECT l.id, l.slug, l.name,
-            (SELECT count(*) FROM list_subscribers s
-              WHERE s.list_id = l.id AND s.unsubscribed_at IS NULL) AS member_count
-       FROM subscriber_lists l
-      ORDER BY l.id`,
+    `SELECT ${LIST_COLUMNS} FROM subscriber_lists l WHERE l.archived_at IS NULL ORDER BY l.id`,
   );
-  return rows.map((r) => ({ id: r.id, slug: r.slug, name: r.name, memberCount: Number(r.member_count) }));
+  return rows.map(toList);
 }
 
-export async function getSubscriberList(id: number): Promise<{ id: number; slug: string; name: string } | null> {
-  const { rows } = await pool.query(`SELECT id, slug, name FROM subscriber_lists WHERE id = $1`, [id]);
-  return rows[0] ?? null;
+// The retired ones, so the admin can see what was archived and put it back.
+export async function listArchivedSubscriberLists(): Promise<SubscriberList[]> {
+  const { rows } = await pool.query(
+    `SELECT ${LIST_COLUMNS} FROM subscriber_lists l WHERE l.archived_at IS NOT NULL ORDER BY l.id`,
+  );
+  return rows.map(toList);
 }
 
-export async function getSubscriberListBySlug(slug: string): Promise<{ id: number; slug: string; name: string } | null> {
-  const { rows } = await pool.query(`SELECT id, slug, name FROM subscriber_lists WHERE slug = $1`, [slug]);
-  return rows[0] ?? null;
+export interface SubscriberListRef {
+  id: number;
+  slug: string;
+  name: string;
+  kind: ListKind;
+  archivedAt: string | null;
+}
+
+function toRef(r: Record<string, unknown> | undefined): SubscriberListRef | null {
+  if (!r) return null;
+  return {
+    id: r.id as number,
+    slug: r.slug as string,
+    name: r.name as string,
+    kind: r.kind as ListKind,
+    archivedAt: (r.archived_at as string) ?? null,
+  };
+}
+
+export async function getSubscriberList(id: number): Promise<SubscriberListRef | null> {
+  const { rows } = await pool.query(
+    `SELECT id, slug, name, kind, archived_at FROM subscriber_lists WHERE id = $1`,
+    [id],
+  );
+  return toRef(rows[0]);
+}
+
+export async function getSubscriberListBySlug(slug: string): Promise<SubscriberListRef | null> {
+  const { rows } = await pool.query(
+    `SELECT id, slug, name, kind, archived_at FROM subscriber_lists WHERE slug = $1`,
+    [slug],
+  );
+  return toRef(rows[0]);
+}
+
+export class BuiltInListError extends Error {
+  constructor(public readonly slug: string) {
+    super(`the ${slug} audience is built in and cannot be archived`);
+    this.name = "BuiltInListError";
+  }
+}
+
+// TASK-270: retiring an audience is a TOMBSTONE, never a delete — the same rule as an unsubscribe.
+// It leaves the pickers so nothing can be sent to it, while past sends keep their audience label and
+// the membership rows survive as consent history. Built-in audiences (Newsletter, Donors) can't go:
+// they are what the send model is built on, and losing them would strand the donor promise.
+export async function archiveSubscriberList(id: number): Promise<boolean> {
+  const list = await getSubscriberList(id);
+  if (!list) return false;
+  if (list.kind !== "manual") throw new BuiltInListError(list.slug);
+  const { rowCount } = await pool.query(
+    `UPDATE subscriber_lists SET archived_at = now() WHERE id = $1 AND archived_at IS NULL`,
+    [id],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+export async function restoreSubscriberList(id: number): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE subscriber_lists SET archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL`,
+    [id],
+  );
+  return (rowCount ?? 0) > 0;
 }
 
 export async function createSubscriberList(name: string): Promise<{ id: number; slug: string; name: string }> {

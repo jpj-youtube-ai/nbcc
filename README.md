@@ -3921,3 +3921,25 @@ and the day someone forgets is the day half the text part goes missing. Links ke
 (`Donate now (https://nbcc.scot/donate)`) so a reader who cannot click still has somewhere to go;
 mailto/tel stay as their readable label; script/style/comments are dropped whole; and the whitespace a
 table-based email produces is collapsed so the result reads as paragraphs.
+
+**Welcome email on website signup (TASK-276, letter I).** Someone who signs up through the footer now
+gets an immediate, branded welcome.
+
+It is not only a courtesy — it is the **safeguard that makes one-step signup safe**. Joining is
+immediate (no confirmation click, so nobody is lost to an unclicked email), and the welcome arrives at
+once saying what happened, carrying the same one-click unsubscribe as every other send. Anyone added
+by somebody else therefore finds out immediately and can leave in one press.
+
+- **Never sent for an import.** `shouldSendWelcome` (`src/newsletter/welcome.ts`) is a predicate, not a
+  convention: only `'footer'` qualifies. A volunteer importing a spreadsheet of several hundred people
+  must not trigger several hundred unexpected emails — that is the "why am I getting this?" reaction
+  that produces spam complaints, and complaints cost the sending domain far more than a welcome is
+  worth. `'admin'` is excluded too: staff typing someone in are usually recording a conversation
+  already had. Wiring the welcome into another path later would have to change that rule *and* the
+  test pinning it.
+- **Built as a block document** and rendered through the ordinary newsletter renderer, so the frame,
+  footer and unsubscribe button come from the same place as everything else and a future brand change
+  flows through automatically.
+- **Best-effort and last**: the person is subscribed by the write before it, so a provider outage
+  never fails their signup. Recorded in the audit log (`welcome.sent`) so "what have we sent this
+  person?" stays answerable.

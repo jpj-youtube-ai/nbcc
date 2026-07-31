@@ -130,7 +130,7 @@ resource "aws_route53_record" "dmarc" {
   #
   # MANUAL STEP: dmarc@nbcc.scot must exist in Google Workspace (a group or alias is fine) or the
   # reports bounce and this stays as blind as it was before.
-  records = ["v=DMARC1; p=none; rua=mailto:dmarc@nbcc.scot; fo=1;"]
+  records = ["v=DMARC1; p=none; rua=mailto:newsletter@nbcc.scot; fo=1;"]
 }
 
 # ---- ACM certificate, DNS-validated, auto-renewing -----------------------------

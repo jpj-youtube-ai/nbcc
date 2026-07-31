@@ -79,7 +79,7 @@ const JOB_COLUMNS = `j.id, j.newsletter_id, j.list_id, j.status, j.rollout, j.pe
         j.total, j.created_by, j.started_at, j.finished_at,
         (SELECT count(*) FROM newsletter_send_queue q WHERE q.job_id = j.id AND q.status = 'sent') AS sent,
         (SELECT count(*) FROM newsletter_send_queue q WHERE q.job_id = j.id AND q.status = 'failed') AS failed,
-        (SELECT count(*) FROM newsletter_send_queue q WHERE q.job_id = j.id AND q.status = 'pending') AS pending`;
+        (SELECT count(*) FROM newsletter_send_queue q WHERE q.job_id = j.id AND q.status IN ('pending', 'sending')) AS pending`;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function toJob(r: any): SendJob {
@@ -139,7 +139,8 @@ export async function finishJobIfDrained(id: number): Promise<boolean> {
   const { rowCount } = await pool.query(
     `UPDATE newsletter_send_jobs SET status = 'done', finished_at = now()
       WHERE id = $1 AND status = 'running'
-        AND NOT EXISTS (SELECT 1 FROM newsletter_send_queue q WHERE q.job_id = $1 AND q.status = 'pending')`,
+        AND NOT EXISTS (SELECT 1 FROM newsletter_send_queue q
+                         WHERE q.job_id = $1 AND q.status IN ('pending', 'sending'))`,
     [id],
   );
   return (rowCount ?? 0) > 0;
@@ -160,40 +161,44 @@ export async function setJobStatus(id: number, status: "paused" | "running" | "c
 // than one ECS task to run the worker at once: each row is handed to exactly one of them.
 export async function claimRecipients(jobId: number, limit: number): Promise<QueuedRecipient[]> {
   if (limit <= 0) return [];
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const { rows } = await client.query(
-      `SELECT id, email, donor_id, subscriber_id, full_name, attempts
-         FROM newsletter_send_queue
-        WHERE job_id = $1 AND status = 'pending'
-        ORDER BY id
-        LIMIT $2
-        FOR UPDATE SKIP LOCKED`,
-      [jobId, limit],
-    );
-    // Bump attempts inside the same transaction so a crash mid-send cannot loop on one address
-    // forever — the row comes back with a higher count and the worker can give up on it.
-    if (rows.length) {
-      await client.query(`UPDATE newsletter_send_queue SET attempts = attempts + 1 WHERE id = ANY($1)`, [
-        rows.map((r) => r.id),
-      ]);
-    }
-    await client.query("COMMIT");
-    return rows.map((r) => ({
-      id: r.id,
-      email: r.email,
-      donorId: r.donor_id,
-      subscriberId: r.subscriber_id,
-      fullName: r.full_name,
-      attempts: r.attempts,
-    }));
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
+  // TASK-276: one statement that SELECTs and MARKS. FOR UPDATE SKIP LOCKED hands each row to exactly
+  // one claimer, and moving it to 'sending' makes that durable past the commit — previously the row
+  // went back to being plain 'pending', so an overlapping tick could claim it again and email the
+  // same person twice.
+  const { rows } = await pool.query(
+    `UPDATE newsletter_send_queue q
+        SET status = 'sending', attempts = q.attempts + 1, claimed_at = now()
+      WHERE q.id IN (
+        SELECT id FROM newsletter_send_queue
+         WHERE job_id = $1 AND status = 'pending'
+         ORDER BY id
+         LIMIT $2
+         FOR UPDATE SKIP LOCKED
+      )
+      RETURNING q.id, q.email, q.donor_id, q.subscriber_id, q.full_name, q.attempts`,
+    [jobId, limit],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    donorId: r.donor_id,
+    subscriberId: r.subscriber_id,
+    fullName: r.full_name,
+    attempts: r.attempts,
+  }));
+}
+
+// A task killed mid-batch leaves rows stuck in 'sending'. Sweep them back so the queue stays
+// resumable — otherwise closing a duplicate-send hole would just open a lost-recipient one. The grace
+// period is generous: a slow provider must not have its in-flight rows stolen and re-sent.
+export async function reclaimStalledRecipients(graceMinutes = 15): Promise<number> {
+  const { rowCount } = await pool.query(
+    `UPDATE newsletter_send_queue
+        SET status = 'pending'
+      WHERE status = 'sending' AND claimed_at < now() - ($1 || ' minutes')::interval`,
+    [String(graceMinutes)],
+  );
+  return rowCount ?? 0;
 }
 
 export async function markRecipientSent(queueId: number): Promise<void> {

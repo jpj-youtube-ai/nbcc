@@ -117,6 +117,7 @@ import {
   listJobRecipients,
 } from "../db/newsletter-send-jobs";
 import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
+import { htmlToPlainText } from "../newsletter/plain-text";
 import { runSendTick } from "../newsletter/send-worker";
 import { parseImportFile } from "../newsletter/import-parse";
 import { getNewsletterStats } from "../db/newsletter-events";
@@ -1006,6 +1007,9 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
       replyTo: config.NEWSLETTER_FROM_EMAIL,
       subject: testSubject,
       html,
+      // TASK-275: the test copy carries the text part too — a test that differs from the real send is
+      // not a test of the real send.
+      text: htmlToPlainText(html),
     });
   } catch (err) {
     console.error("newsletter test-send failed", err);

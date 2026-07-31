@@ -3908,3 +3908,16 @@ roughly 2/second) and no retry, so a burst simply lost people.
 `GET …/send-job/recipients` (who it reached, and who it didn't and why),
 `POST …/send-job/:action` (`pause` | `resume` | `cancel`). The send endpoint now returns **202
 queued** with a job id rather than blocking until every email has gone.
+
+**Plain-text newsletters (TASK-275, letter G).** Every newsletter now carries a `text/plain`
+alternative alongside the HTML. It went out HTML-only, which counts against a sender with spam
+filters and leaves text-only clients, some screen readers and notification previews with nothing but
+stripped markup — the thank-you letters have carried a text part for ages; the newsletter was the one
+send that skipped it. The test-send carries it too, so a test is a test of the real thing.
+
+`htmlToPlainText` (`src/newsletter/plain-text.ts`) derives it from the **rendered HTML**, not by
+walking the block document: a per-block text renderer would need extending for every new block type,
+and the day someone forgets is the day half the text part goes missing. Links keep their destination
+(`Donate now (https://nbcc.scot/donate)`) so a reader who cannot click still has somewhere to go;
+mailto/tel stay as their readable label; script/style/comments are dropped whole; and the whitespace a
+table-based email produces is collapsed so the result reads as paragraphs.

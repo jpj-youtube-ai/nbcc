@@ -19,6 +19,7 @@ import { newsletterDocSchema, renderNewsletter } from "./blocks";
 import { mergeSubject, newsletterSender, firstNameOf } from "./theme";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { tickAllowance, TICK_SECONDS } from "./send-pacing";
+import { htmlToPlainText } from "./plain-text";
 
 // TASK-274: the background sender. It replaces a loop that ran inside the HTTP request, where a few
 // hundred recipients outran the ALB's 60-second timeout — the admin saw "Send failed" while sending
@@ -101,6 +102,8 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
         replyTo: config.NEWSLETTER_FROM_EMAIL,
         subject: mergeSubject(newsletter.subject, firstName),
         html,
+        // TASK-275: derived from the very html we are sending, so the two can never disagree.
+        text: htmlToPlainText(html),
         unsubscribeUrl,
       });
       await markRecipientSent(r.id);

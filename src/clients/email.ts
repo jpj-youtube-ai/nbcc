@@ -300,6 +300,10 @@ export interface NewsletterEmail {
   replyTo: string; // same as from
   subject: string;
   html: string;
+  // TASK-275: the plain-text alternative. Newsletters went out HTML-only, which counts against a
+  // sender with spam filters and leaves text-only clients and some screen readers with nothing. The
+  // thank-you letters have carried one for ages; the newsletter was the one send that skipped it.
+  text?: string;
   // TASK-272: the recipient's own one-click unsubscribe URL. The relay turns this into the
   // List-Unsubscribe / List-Unsubscribe-Post headers (RFC 8058) that Gmail and Yahoo require of bulk
   // senders. Without them people reach for "report spam" instead of the in-body link — and a

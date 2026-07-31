@@ -3943,3 +3943,14 @@ by somebody else therefore finds out immediately and can leave in one press.
 - **Best-effort and last**: the person is subscribed by the write before it, so a provider outage
   never fails their signup. Recorded in the audit log (`welcome.sent`) so "what have we sent this
   person?" stays answerable.
+
+> **Double-send fix (TASK-276).** TASK-274's worker claimed queue rows with `FOR UPDATE SKIP LOCKED`,
+> which hands a row to exactly one claimer *for the life of that transaction* — but the claim only
+> bumped `attempts`, so the row was plain `pending` again after the commit. Between claiming and
+> marking sent, a second tick could take the same row and **email that person twice**. Reachable in
+> normal operation: the send route fires a tick immediately (so a send starts at once) while the
+> interval worker is also running, and production may run more than one ECS task. Claiming now moves
+> the row to **`sending`** in the same statement, making the claim durable past the commit; progress
+> and drain treat an in-flight row as still outstanding, so a gentle rollout cannot finish early; and
+> rows stranded by a task killed mid-batch are swept back to `pending` after a grace period, so
+> closing a duplicate-send hole does not open a lost-recipient one.

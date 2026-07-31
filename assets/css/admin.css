@@ -552,3 +552,20 @@
 .admin-fulfil-credit{font-size:.8rem;color:var(--slate-soft)}
 .admin-fulfil-wants{display:flex;flex-wrap:wrap;gap:5px}
 .admin-fulfil-flags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;white-space:normal;max-width:340px}
+
+/* TASK-274: background send — the gentle-rollout choice and the live progress bar. Sending no longer
+   happens inside the request, so this has to show state the admin can no longer infer from the page
+   simply having finished loading. */
+.nl-rollout { display: flex; gap: .6rem; align-items: flex-start; font-size: .9rem; color: var(--slate);
+  background: var(--cream); border: 1.4px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  margin: 0 0 .9rem; max-width: 74ch; cursor: pointer; }
+.nl-rollout input { margin-top: .2rem; accent-color: var(--crimson); flex: none; }
+.nl-send-progress { margin: .2rem 0 1rem; max-width: 74ch; }
+.nl-progress-bar { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.nl-progress-bar span { display: block; height: 100%; width: 0; background: var(--crimson);
+  transition: width .4s ease; }
+.nl-progress-text { font-size: .9rem; font-weight: 600; color: var(--maroon); margin: .5rem 0 .4rem; }
+.nl-progress-actions { display: flex; gap: .5rem; }
+.nl-progress-actions button { font: inherit; font-weight: 600; padding: 6px 12px; border: 1.4px solid var(--line);
+  border-radius: 8px; background: var(--cream); color: var(--slate); cursor: pointer; }
+.nl-progress-actions button:hover { border-color: var(--crimson); color: var(--crimson); }

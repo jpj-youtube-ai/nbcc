@@ -93,7 +93,6 @@ import {
   listNewsletterAttachments,
   deleteNewsletterAttachment,
 } from "../db/newsletter-attachments";
-import { signUnsubscribeTokenV2, signSubscriberUnsubscribeToken } from "../donors/unsubscribe-token";
 import {
   listSubscriberLists,
   createSubscriberList,
@@ -111,9 +110,16 @@ import {
   type SubscriberListRef,
 } from "../db/subscriber-lists";
 import { listSuppressions, unsuppressEmail } from "../db/email-suppressions";
+import {
+  createSendJob,
+  getJobForNewsletter,
+  setJobStatus,
+  listJobRecipients,
+} from "../db/newsletter-send-jobs";
+import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
+import { runSendTick } from "../newsletter/send-worker";
 import { parseImportFile } from "../newsletter/import-parse";
-import { recordNewsletterSends, getNewsletterStats } from "../db/newsletter-events";
-import { buildNewsletterHtml } from "../donors/newsletter";
+import { getNewsletterStats } from "../db/newsletter-events";
 import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
 import { createRateLimiter } from "../portal/request-limiter";
 import { clampPage } from "../db/admin";
@@ -385,12 +391,6 @@ function compileNewsletterBody(data: z.infer<typeof newsletterBodySchema>): {
   return { bodyHtml: data.bodyHtml as string, bodyJson: null };
 }
 
-// First name for the greeting merge: first whitespace-delimited token of the donor's full name,
-// falling back to "friend" when we have no usable name.
-function firstNameOf(fullName: string | null): string {
-  const token = (fullName ?? "").trim().split(/\s+/)[0];
-  return token.length > 0 ? token : "friend";
-}
 
 // The sample donor the live preview and the test send both personalise as (TASK-254). One constant,
 // because those two exist to show the SAME thing — what a donor will actually receive — and a second
@@ -876,77 +876,104 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   }
   await setNewsletterList(id, list.id); // which audience this send went to — part of the record
 
+  // TASK-274: ENQUEUE, don't send here. The old loop ran every recipient inside this request, behind
+  // the ALB's 60-second default: a few hundred people outran it, the admin saw "Send failed" while the
+  // server was in fact still sending, and a restart left a newsletter marked sent, partly delivered,
+  // with no record of who had been reached and no way to resume. There was no pacing (the provider
+  // accepts roughly 2/second) and no retry, so a burst simply lost people.
+  //
+  // Now the recipients become queue rows and a background worker sends them at a controlled rate.
+  // `rollout: "gentle"` ramps a daily cap (200, then 400, 800 ...) so a first big send from a lightly
+  // used domain warms up instead of arriving as one spike that looks like a compromised account.
   const recipients = await listRecipientsForList(list);
-  const parsedDoc = newsletterDocSchema.safeParse(newsletter.bodyJson);
-  // Documents are NOT attached to the email: they are hosted (public /newsletter/document/<uuid>
-  // viewer + file routes) and linked from the body via a button block — a link, not an attachment,
-  // keeps deliverability clean and the relay contract minimal (hosted-documents design, 2026-07-22).
-  const failedEmails: string[] = [];
-  const accepted: { donorId: number | null; email: string }[] = [];
-  for (const r of recipients) {
-    // TASK-255/259: the token names THIS newsletter (stats attribution) and WHO the recipient is — a
-    // donor's link withdraws global newsletter consent, a list subscriber's leaves that one list.
-    const token = r.donorId != null
-      ? signUnsubscribeTokenV2(r.donorId, id, config.ADMIN_SESSION_SECRET)
-      : signSubscriberUnsubscribeToken(r.subscriberId as number, id, config.ADMIN_SESSION_SECRET);
-    const unsubscribeUrl = `${config.PORTAL_BASE_URL}/unsubscribe/${token}`;
-    // Block-doc newsletters render per recipient (merge the first name) with the unsubscribe button
-    // built into the branded frame footer. Legacy raw-HTML rows (no valid bodyJson) are not framed,
-    // so they still get the standalone unsubscribe footer appended via buildNewsletterHtml.
-    const firstName = firstNameOf(r.fullName);
-    const html = parsedDoc.success
-      ? renderNewsletter(parsedDoc.data, { firstName, unsubscribeUrl })
-      : buildNewsletterHtml(newsletter.bodyHtml, unsubscribeUrl);
-    try {
-      await sendNewsletter({
-        email: r.email,
-        from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
-        replyTo: config.NEWSLETTER_FROM_EMAIL,
-        // TASK-254: the SUBJECT merges per recipient too. The builder invites {{firstName}} and the
-        // body has always honoured it, but the subject was passed through raw — so a newsletter titled
-        // "Hey, {{firstName}}!" reached every donor with the marker showing. mergeSubject, not
-        // applyMerge: a subject is plain text, and escaping it would send "Hey, O&#39;Brien".
-        subject: mergeSubject(newsletter.subject, firstName),
-        html,
-        // TASK-272: the same per-recipient link, promoted to the RFC 8058 one-click headers by the
-        // relay. Gmail/Yahoo want unsubscribing to be one press in their own UI; when it isn't,
-        // people use "report spam" instead — and a complaint costs the domain far more.
-        unsubscribeUrl,
-      });
-    } catch (err) {
-      // Best-effort: a single failed send is recorded (not fatal to the batch) so the delivery
-      // summary can surface which addresses did not get it.
-      console.error(`newsletter send to ${r.email} failed`, err);
-      failedEmails.push(r.email);
-      continue;
-    }
-    accepted.push({ donorId: r.donorId, email: r.email });
+  if (recipients.length === 0) {
+    return res.status(400).json({ error: "That audience has nobody to send to" });
   }
+  const optionsParse = z
+    .object({
+      rollout: z.enum(["immediate", "gentle"]).optional(),
+      perMinute: z.number().int().min(1).max(600).optional(),
+    })
+    .safeParse(req.body ?? {});
+  if (!optionsParse.success) return res.status(400).json({ error: "Invalid send options" });
 
-  // TASK-255: record who this newsletter was ACCEPTED for — the correlation target the delivery
-  // webhook matches against, and the denominator the stats rates divide by. Best-effort by design:
-  // the emails have already gone; failing the request over bookkeeping would tell the admin a send
-  // that happened didn't.
-  try {
-    await recordNewsletterSends(id, accepted);
-  } catch (err) {
-    console.error("newsletter sends recording failed:", err instanceof Error ? err.message : err);
-  }
+  const job = await createSendJob({
+    newsletterId: id,
+    listId: list.id,
+    recipients,
+    rollout: optionsParse.data.rollout ?? "immediate",
+    perMinute: optionsParse.data.perMinute ?? DEFAULT_PER_MINUTE,
+    createdBy: claims.email,
+  });
 
-  const sentCount = recipients.length - failedEmails.length;
+  // The recipient count is known NOW and is part of the record; the sent/failed split is filled in by
+  // the worker as it goes (the job's own counters are the live truth in the meantime).
   await setNewsletterDeliverySummary(id, {
     recipientCount: recipients.length,
-    sentCount,
-    failedCount: failedEmails.length,
-    failedEmails,
+    sentCount: 0,
+    failedCount: 0,
+    failedEmails: [],
   });
-  return res.json({
-    status: "sent",
+
+  // Start draining straight away rather than waiting up to a whole tick. Deliberately NOT awaited:
+  // the 202 goes back immediately and the sending continues in the background, which is the entire
+  // point of the change. Errors are the worker's own problem — the queue rows stay pending and the
+  // next tick retries them.
+  void runSendTick().catch((err) =>
+    console.error("immediate send tick failed:", err instanceof Error ? err.message : err),
+  );
+
+  return res.status(202).json({
+    status: "queued",
+    jobId: job.id,
     recipientCount: recipients.length,
-    sentCount,
-    failedCount: failedEmails.length,
-    failedEmails,
+    rollout: job.rollout,
   });
+}
+
+// GET /api/admin/newsletters/:id/send-job — live progress for the send bar. Viewer+ (reading how far
+// a send got is not a write).
+export async function getAdminNewsletterSendJob(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const job = await getJobForNewsletter(id);
+  if (!job) return res.status(404).json({ error: "No send for this newsletter" });
+  const summary = pacingSummary(
+    { rollout: job.rollout, perMinute: job.perMinute, dailyCap: job.dailyCap, startedAt: job.startedAt ? new Date(job.startedAt) : null },
+    0,
+    job.pending,
+    new Date(),
+  );
+  return res.json({ ...job, summary });
+}
+
+// POST /api/admin/newsletters/:id/send-job/:action — pause, resume or cancel a send in flight. There
+// was previously NO way to stop one: once the loop started, closing the browser did not stop the
+// server, and a newsletter going to the wrong audience could not be halted.
+export async function postAdminNewsletterSendJobAction(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const action = String(req.params.action);
+  const status = action === "pause" ? "paused" : action === "resume" ? "running" : action === "cancel" ? "cancelled" : null;
+  if (!status) return res.status(400).json({ error: "Unknown action" });
+  const job = await getJobForNewsletter(id);
+  if (!job) return res.status(404).json({ error: "No send for this newsletter" });
+  const changed = await setJobStatus(job.id, status);
+  if (!changed) return res.status(409).json({ error: "That send has already finished" });
+  return res.json({ status });
+}
+
+// GET /api/admin/newsletters/:id/send-job/recipients — exactly who this send reached, and who it did
+// not, with the reason. The old aggregate-only design could not answer this at all.
+export async function getAdminNewsletterSendRecipients(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
+  const id = newsletterId(req, res);
+  if (id === null) return;
+  const job = await getJobForNewsletter(id);
+  if (!job) return res.status(404).json({ error: "No send for this newsletter" });
+  return res.json(await listJobRecipients(job.id));
 }
 
 // POST /api/admin/newsletters/test-send — send ONE copy of the posted draft to the signed-in admin's
@@ -2022,6 +2049,10 @@ adminRouter.post("/api/admin/subscriber-lists", postAdminSubscriberList);
 adminRouter.get("/api/admin/subscriber-lists/archived", getAdminArchivedSubscriberLists);
 // TASK-272: blocked addresses (hard bounces + spam complaints), visible and liftable.
 adminRouter.get("/api/admin/newsletters/suppressions", getAdminSuppressions);
+// TASK-274: background send job — live progress, pause/resume/cancel, and who it reached.
+adminRouter.get("/api/admin/newsletters/:id/send-job", getAdminNewsletterSendJob);
+adminRouter.get("/api/admin/newsletters/:id/send-job/recipients", getAdminNewsletterSendRecipients);
+adminRouter.post("/api/admin/newsletters/:id/send-job/:action", postAdminNewsletterSendJobAction);
 adminRouter.post("/api/admin/newsletters/suppressions/lift", postAdminSuppressionLift);
 adminRouter.post("/api/admin/subscriber-lists/:id/restore", postAdminSubscriberListRestore);
 adminRouter.delete("/api/admin/subscriber-lists/:id", deleteAdminSubscriberList);

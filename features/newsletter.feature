@@ -19,10 +19,11 @@ Feature: Admin newsletter (REQ-069)
     And a non-consenting donor with email "nope.newsletter.bdd@example.com"
     When I create a newsletter with subject "Send me" and body "<p>Go</p>"
     And I send that newsletter
-    Then the newsletter response status should be 200
-    And the newsletter response field "status" should be "sent"
+    Then the newsletter response status should be 202
+    And the newsletter response field "status" should be "queued"
     And the newsletter recipient count should be at least 2
-    And the newsletter response field "sentCount" should be at least 2
+    When I fetch that newsletter
+    Then the newsletter response field "sentCount" should be at least 2
     And the newsletter response field "failedCount" should be "0"
     When I send that newsletter
     Then the newsletter response status should be 409
@@ -247,7 +248,7 @@ Feature: Admin newsletter (REQ-069)
     # A SENT newsletter cannot be deleted — by anyone.
     When I create a newsletter with subject "Send me" and body "<p>Real content</p>"
     And I send that newsletter
-    Then the newsletter response status should be 200
+    Then the newsletter response status should be 202
     When I delete that newsletter
     Then the newsletter response status should be 409
 
@@ -270,7 +271,7 @@ Feature: Admin newsletter (REQ-069)
     And a consenting donor with email "bounced.newsletter.bdd@example.com"
     When I create a newsletter with subject "Send me" and body "<p>Go</p>"
     And I send that newsletter
-    Then the newsletter response status should be 200
+    Then the newsletter response status should be 202
 
     # Resend reports: one delivered, one bounced — each signed with the real webhook secret.
     When Resend reports a signed "email.delivered" event for "delivered.newsletter.bdd@example.com"
@@ -317,7 +318,7 @@ Feature: Admin newsletter (REQ-069)
     # The send reaches the audience — and ONLY the audience: the consenting donor is not in it.
     When I create a newsletter with subject "Send me" and body "<p>Team news</p>"
     And I send that newsletter to that audience
-    Then the newsletter response status should be 200
+    Then the newsletter response status should be 202
     And the newsletter response field "recipientCount" should be "1"
 
     # Their unsubscribe link (a SUBSCRIBER token) leaves this one list.

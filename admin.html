@@ -489,6 +489,28 @@
                   <button type="button" id="newsletterSend" hidden>Send</button>
                 </div>
                 <p class="nl-send-note" id="sendAudienceNote" aria-live="polite" hidden></p>
+
+                <!-- TASK-274: the gentle rollout. A lightly-used sending domain that suddenly emits
+                     thousands of messages looks like a compromised account, and mailbox providers
+                     treat it as one — the mail lands in junk and the damage outlives the campaign.
+                     Easing out over a few days builds the track record that earns the next day's
+                     larger allowance. Recommended for a first big send; harmless afterwards. -->
+                <label class="nl-rollout" id="sendRolloutWrap" hidden>
+                  <input type="checkbox" id="sendRollout" />
+                  <span><b>Ease this one out gradually</b> — send about 200 on the first day, then double each day until everyone has it. Recommended for your first big send, so we don't look like spam to Gmail.</span>
+                </label>
+
+                <!-- Live progress. Sending happens in the background now, so this survives closing
+                     the browser — and can be paused or stopped, which was previously impossible. -->
+                <div class="nl-send-progress" id="sendProgress" hidden>
+                  <div class="nl-progress-bar"><span id="sendProgressFill"></span></div>
+                  <p class="nl-progress-text" id="sendProgressText" aria-live="polite"></p>
+                  <div class="nl-progress-actions">
+                    <button type="button" id="sendPause">Pause</button>
+                    <button type="button" id="sendResume" hidden>Resume</button>
+                    <button type="button" id="sendCancel" class="admin-link-danger">Stop sending</button>
+                  </div>
+                </div>
                 <p id="newsletterMsg" aria-live="polite"></p>
               </form>
 

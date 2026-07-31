@@ -3872,3 +3872,39 @@ here protects the `nbcc.scot` sending reputation, which also carries admin sign-
 - **CSV export honours the search box** — it exported the whole list regardless of the filter.
 - **Viewer accounts can open the Newsletter tab again.** Every read route required `edit`, so a Viewer
   got 403s swallowed by empty catch handlers and a tab stuck on "Loading…". Reads now accept `view`.
+
+**Background sending with a gentle rollout (TASK-274).** Sending is no longer a loop inside the HTTP
+request. It is a **job with a queue**, one row per recipient, drained by a background worker.
+
+*Why:* the old loop ran every recipient inside `POST /api/admin/newsletters/:id/send`, one sequential
+call each, behind the ALB's 60-second default. A few hundred recipients outran it — the admin saw
+**"Send failed" while the server was still sending** — and because the newsletter was flipped to
+`sent` *before* the first email left, a timeout or task restart left it marked sent, partly delivered,
+with no record of who had been reached and no way to resume. There was no pacing (the provider accepts
+roughly 2/second) and no retry, so a burst simply lost people.
+
+- **`newsletter_send_jobs` + `newsletter_send_queue`** — the per-recipient row is what buys
+  resumability, retry (3 attempts, failures return to `pending`), honest progress, and the answer to
+  *"who exactly received this?"* that the aggregate-only design could not give.
+- **Two brakes** (`src/newsletter/send-pacing.ts`, pure and unit-tested): a **throttle** (`per_minute`,
+  default 60 — comfortably under the provider's ceiling, spread *within* each tick so a claimed batch
+  isn't fired in one millisecond) and a **daily cap**.
+- **The gentle rollout** ramps that daily cap: **200 on day 1, then doubling** (400, 800, 1600…) to a
+  5,000/day ceiling — about four days for a 2,000-person list. A lightly-used domain that suddenly
+  emits thousands of messages looks like a compromised account and is treated as one; a modest first
+  day that gets delivered and opened is the evidence that earns the next day's larger allowance.
+  Offered as a checkbox at send time and recommended for a first big send.
+- **Pause, resume and stop** a send in flight — previously impossible: once the loop started, closing
+  the browser did not stop the server.
+- **Live progress** that survives a page reload, because the send is server-side. When the daily
+  allowance is spent the panel says so and names tomorrow's allowance, rather than looking stuck.
+- **Safe across ECS tasks:** the worker claims rows `FOR UPDATE SKIP LOCKED`, so each recipient goes to
+  exactly one task. The worker starts in `src/index.ts` (not `createApp()`), so tests and BDD runs
+  never start a timer that sends real email.
+- `firstNameOf` moved to `src/newsletter/theme.ts` so the worker and the on-screen preview merge names
+  by the same rule — two copies would drift, and the drift would show in real donor greetings.
+
+**New endpoints:** `GET /api/admin/newsletters/:id/send-job` (progress),
+`GET …/send-job/recipients` (who it reached, and who it didn't and why),
+`POST …/send-job/:action` (`pause` | `resume` | `cancel`). The send endpoint now returns **202
+queued** with a job id rather than blocking until every email has gone.

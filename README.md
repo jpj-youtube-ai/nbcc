@@ -3966,8 +3966,8 @@ by somebody else therefore finds out immediately and can leave in one press.
   would authorise every Amazon SES customer to send as NBCC.
 - **DMARC reported nothing.** The record was `p=none;` with no `rua`, so it neither protected the
   domain nor told anyone what was happening — it met the letter of the Gmail/Yahoo bulk-sender rule
-  and delivered none of the value. Now `v=DMARC1; p=none; rua=mailto:dmarc@nbcc.scot; fo=1;`.
-  ⚠️ **Manual step:** `dmarc@nbcc.scot` must exist in Google Workspace (an alias or group is enough)
+  and delivered none of the value. Now `v=DMARC1; p=none; rua=mailto:newsletter@nbcc.scot; fo=1;`.
+  ⚠️ **Manual step:** `newsletter@nbcc.scot` is the reporting mailbox (an existing, real mailbox)
   or the reports bounce.
   **Intended path once a few weeks of reports look clean:**
   `p=none` → `p=quarantine; pct=25` → `p=quarantine` → `p=reject`. Do not skip to reject blind: it

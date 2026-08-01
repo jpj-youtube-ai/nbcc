@@ -10,6 +10,7 @@ import {
   markRecipientFailed,
   sentTodayCount,
   jobOutcome,
+  reclaimStalledRecipients,
   type SendJob,
 } from "../db/newsletter-send-jobs";
 import { sendNewsletter } from "../clients/email";
@@ -42,6 +43,13 @@ let timer: NodeJS.Timeout | null = null;
 let running = false;
 
 export async function runSendTick(now: Date = new Date()): Promise<void> {
+  // Sweep rows left 'sending' by a task that died mid-batch back to 'pending', so a crash costs a
+  // delay rather than a lost recipient. Runs first, so this tick can pick them straight back up.
+  try {
+    await reclaimStalledRecipients();
+  } catch (err) {
+    console.error("reclaiming stalled sends failed:", err instanceof Error ? err.message : err);
+  }
   const jobs = await listRunnableJobs();
   for (const job of jobs) {
     try {

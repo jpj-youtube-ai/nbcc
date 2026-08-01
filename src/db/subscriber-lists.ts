@@ -275,3 +275,16 @@ export async function unsubscribeListMember(memberId: number): Promise<{ email: 
   );
   return rows[0] ? { email: rows[0].email } : null;
 }
+
+// The membership row for one address on one list. TASK-276 needs its id to sign the recipient's own
+// unsubscribe token for the welcome email — addListSubscriber reports only what it did, not who.
+export async function getListMemberByEmail(
+  listId: number,
+  email: string,
+): Promise<{ id: number; name: string | null } | null> {
+  const { rows } = await pool.query(
+    `SELECT id, name FROM list_subscribers WHERE list_id = $1 AND lower(email) = $2`,
+    [listId, email.trim().toLowerCase()],
+  );
+  return rows[0] ? { id: rows[0].id, name: rows[0].name } : null;
+}

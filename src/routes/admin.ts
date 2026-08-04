@@ -118,6 +118,7 @@ import {
 } from "../db/newsletter-send-jobs";
 import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
 import { htmlToPlainText } from "../newsletter/plain-text";
+import { preflightNewsletter } from "../newsletter/preflight";
 import { runSendTick } from "../newsletter/send-worker";
 import { parseImportFile } from "../newsletter/import-parse";
 import { getNewsletterStats } from "../db/newsletter-events";
@@ -604,7 +605,8 @@ export async function getAdminListMembers(req: Request, res: Response): Promise<
 }
 
 export async function postAdminListMember(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
   const listId = Number(req.params.id);
   if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
   const list = await getSubscriberList(listId);
@@ -625,7 +627,9 @@ export async function postAdminListMember(req: Request, res: Response): Promise<
     listId,
     { name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null },
     "admin",
-    { revive: true },
+    // TASK-278: stamp WHO added them. "Who put this person on the list?" is the first question when
+    // an address turns out to be wrong or someone says they never signed up.
+    { revive: true, addedBy: claims.email },
   );
   return res.status(outcome === "added" ? 201 : 200).json({ outcome });
 }
@@ -715,6 +719,7 @@ export async function postAdminListImport(req: Request, res: Response): Promise<
     // source 'import' + revive:false — the tombstone rule: a spreadsheet cannot overrule an opt-out.
     const outcome = await addListSubscriber(listId, { name: row.name, email: row.email, phone: null }, "import", {
       revive: false,
+      addedBy: claims.email, // TASK-278: which volunteer imported this list
     });
     if (outcome === "added") counts.added++;
     else if (outcome === "exists") counts.alreadyOnList++;
@@ -981,7 +986,35 @@ export async function getAdminNewsletterSendRecipients(req: Request, res: Respon
 // own email (Editor+), so they can check how it lands in a real inbox before blasting everyone. Does
 // not touch newsletter state (no claim, no status change). Mirrors the preview body ({ subject,
 // bodyJson }); the subject is prefixed [TEST] and a placeholder unsubscribe URL is used.
-const testSendSchema = z.object({ subject: z.string().trim().min(1), bodyJson: newsletterDocSchema });
+// TASK-277 (letter S): `to` is the optional SEED LIST — a handful of your own addresses at different
+// providers, because where a message lands is decided per provider and one inbox cannot tell you.
+// Capped at five: this sends real email to arbitrary addresses, so it stays a seed test rather than a
+// second, ungoverned way to mail people.
+const testSendSchema = z.object({
+  subject: z.string().trim().min(1),
+  bodyJson: newsletterDocSchema,
+  to: z.array(z.string().trim().email()).min(1).max(5).optional(),
+});
+// POST /api/admin/newsletters/preflight — the pre-send checks (TASK-277, letter P). Takes the CURRENT
+// draft, exactly like the preview and the test send do, so it checks what is about to go out rather
+// than the last saved version. Read-only; Editor+ because only they can send.
+const preflightSchema = z.object({
+  subject: z.string().default(""),
+  bodyJson: newsletterDocSchema,
+  testSent: z.boolean().default(false),
+});
+
+export async function postAdminNewsletterPreflight(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const parsed = preflightSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Invalid newsletter" });
+  const findings = preflightNewsletter(parsed.data.bodyJson, {
+    subject: parsed.data.subject,
+    testSent: parsed.data.testSent,
+  });
+  return res.json({ findings });
+}
+
 export async function postAdminNewsletterTestSend(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "newsletter", "edit");
   if (!claims) return;
@@ -1000,25 +1033,40 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
   // Built once and both sent and echoed back, so what the tester is told to look for is necessarily
   // what actually went out.
   const testSubject = `[TEST] ${mergeSubject(parsed.data.subject, PREVIEW_FIRST_NAME)}`;
-  try {
-    await sendNewsletter({
-      email: claims.email,
-      from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
-      replyTo: config.NEWSLETTER_FROM_EMAIL,
-      subject: testSubject,
-      html,
-      // TASK-275: the test copy carries the text part too — a test that differs from the real send is
-      // not a test of the real send.
-      text: htmlToPlainText(html),
-    });
-  } catch (err) {
-    console.error("newsletter test-send failed", err);
+  // TASK-277 (letter S): the SEED TEST. A test to one inbox tells you the email renders; it tells you
+  // nothing about where it LANDS. Gmail, Outlook and Yahoo each decide inbox-vs-junk differently, so
+  // the only way to know is to send to an address at each before committing to the real audience.
+  // Defaults to the signed-in admin, so the existing one-click test is unchanged.
+  const seeds = parsed.data.to?.length ? parsed.data.to : [claims.email];
+  const failed: string[] = [];
+  for (const address of seeds) {
+    try {
+      await sendNewsletter({
+        email: address,
+        from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
+        replyTo: config.NEWSLETTER_FROM_EMAIL,
+        subject: testSubject,
+        html,
+        // TASK-275: the test copy carries the text part too — a test that differs from the real send is
+        // not a test of the real send.
+        text: htmlToPlainText(html),
+      });
+    } catch (err) {
+      console.error(`newsletter test-send to ${address} failed`, err);
+      failed.push(address);
+    }
+  }
+  if (failed.length === seeds.length) {
     return res.status(502).json({ error: "Could not send the test email." });
   }
   // Echo the subject actually sent (TASK-254). It makes the merge observable end to end — the
   // raw-subject bug lived at this call site, not in the merge function — and it is worth showing the
   // tester: "check your inbox for '[TEST] Hey, Jane!'" beats "sent".
-  return res.json({ sentTo: claims.email, subject: testSubject });
+  return res.json({
+    sentTo: seeds.filter((a) => !failed.includes(a)),
+    failed,
+    subject: testSubject,
+  });
 }
 
 // GET /api/admin/newsletters/subscribers[?q=] — the managed subscriber list (Editor+, donor PII).
@@ -2052,6 +2100,7 @@ adminRouter.post("/api/admin/subscriber-lists", postAdminSubscriberList);
 // captured as an id (the same ordering reason as the templates routes above).
 adminRouter.get("/api/admin/subscriber-lists/archived", getAdminArchivedSubscriberLists);
 // TASK-272: blocked addresses (hard bounces + spam complaints), visible and liftable.
+adminRouter.post("/api/admin/newsletters/preflight", postAdminNewsletterPreflight);
 adminRouter.get("/api/admin/newsletters/suppressions", getAdminSuppressions);
 // TASK-274: background send job — live progress, pause/resume/cancel, and who it reached.
 adminRouter.get("/api/admin/newsletters/:id/send-job", getAdminNewsletterSendJob);

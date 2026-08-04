@@ -162,3 +162,17 @@ export async function getNewsletterStats(newsletterId: number): Promise<Newslett
     bouncedEmails: byType.get("bounced")?.emails ?? [],
   };
 }
+
+// TASK-277 (letter R): how many times this address has bounced, ever. A PERMANENT bounce suppresses
+// on its own (TASK-272); a transient one does not, because a full mailbox or a server having a moment
+// is temporary and dropping a real supporter over it is its own failure. But an address that keeps
+// bouncing is dead in practice whatever the provider calls it, and mailing it forever is exactly what
+// damages a sender's reputation — so repetition is the signal.
+export async function countBounces(email: string): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT count(DISTINCT svix_event_id) AS n FROM newsletter_email_events
+      WHERE lower(email) = $1 AND event_type = 'bounced'`,
+    [email.trim().toLowerCase()],
+  );
+  return Number(rows[0]?.n ?? 0);
+}

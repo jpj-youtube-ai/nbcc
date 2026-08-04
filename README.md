@@ -3975,3 +3975,19 @@ mass send safe.
   you can send to your own Gmail, Outlook and Yahoo addresses before committing to the real audience.
   Where a message *lands* is decided per provider, and one inbox cannot tell you. Defaults to the
   signed-in admin, so the existing one-click test is unchanged.
+
+**Full audit trail (TASK-278 — letters M and N).** Answers the questions the admin could not: who sent
+this, who got it, and who added this person.
+
+- **Who sent it (M).** `sent_by` has been stamped at send time since the atomic claim landed, but was
+  never selected back — so the history could not say who pressed the button. Now joined and shown as a
+  **Sent by** column.
+- **Who got it (M).** `newsletter_send_queue` has held the per-recipient record since TASK-274, and
+  nothing read it back: "did Margaret get it?" was unanswerable despite the answer being on file. A
+  **Who got it** action on any sent newsletter now lists every address with its outcome, the time, and
+  the provider's reason where it failed. Older sends predating the queue show totals only, and say so.
+- **Who added this person (N).** `list_subscribers.added_by` records the staff member behind a manual
+  add or an import; NULL for a self-signup, where the person themselves is the actor. The member table
+  now shows **Added / How / By**. A revive re-stamps it, so the record follows the latest consent
+  rather than the original. Nullable by design: memberships predating this show "not recorded" rather
+  than inventing an actor for historic rows.

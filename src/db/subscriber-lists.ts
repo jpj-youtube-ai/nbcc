@@ -34,6 +34,9 @@ export interface ListMember {
   phone: string | null;
   consentSource: "footer" | "import" | "admin";
   consentedAt: string;
+  // TASK-278: the staff member who added them. NULL for a self-signup (the person is the actor) and
+  // for memberships predating this — a blank means "we didn't record it", not "added by nobody".
+  addedBy: string | null;
 }
 
 export class DuplicateListError extends Error {
@@ -191,7 +194,10 @@ export async function addListSubscriber(
   listId: number,
   person: { name: string | null; email: string; phone: string | null },
   source: "footer" | "import" | "admin",
-  opts: { revive: boolean },
+  // TASK-278: the staff member behind a manual add or an import. NULL for a self-signup, where the
+  // person themselves is the actor — the first question when an address turns out to be wrong is
+  // "who added them?", and consent_source alone could not answer it.
+  opts: { revive: boolean; addedBy?: string | null },
 ): Promise<AddSubscriberOutcome> {
   const email = person.email.trim().toLowerCase();
   const existing = await pool.query(
@@ -201,8 +207,9 @@ export async function addListSubscriber(
   const row = existing.rows[0];
   if (!row) {
     await pool.query(
-      `INSERT INTO list_subscribers (list_id, name, email, phone, consent_source) VALUES ($1, $2, $3, $4, $5)`,
-      [listId, person.name, email, person.phone, source],
+      `INSERT INTO list_subscribers (list_id, name, email, phone, consent_source, added_by)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [listId, person.name, email, person.phone, source, opts.addedBy ?? null],
     );
     return "added";
   }
@@ -212,16 +219,16 @@ export async function addListSubscriber(
   await pool.query(
     `UPDATE list_subscribers
         SET unsubscribed_at = NULL, consented_at = now(), consent_source = $2,
-            name = COALESCE($3, name), phone = COALESCE($4, phone)
+            name = COALESCE($3, name), phone = COALESCE($4, phone), added_by = $5
       WHERE id = $1`,
-    [row.id, source, person.name, person.phone],
+    [row.id, source, person.name, person.phone, opts.addedBy ?? null],
   );
   return "resubscribed";
 }
 
 export async function listListMembers(listId: number): Promise<ListMember[]> {
   const { rows } = await pool.query(
-    `SELECT id, name, email, phone, consent_source, consented_at
+    `SELECT id, name, email, phone, consent_source, consented_at, added_by
        FROM list_subscribers
       WHERE list_id = $1 AND unsubscribed_at IS NULL
       ORDER BY email`,
@@ -232,6 +239,7 @@ export async function listListMembers(listId: number): Promise<ListMember[]> {
     name: r.name,
     email: r.email,
     phone: r.phone,
+    addedBy: r.added_by ?? null,
     consentSource: r.consent_source,
     consentedAt: r.consented_at,
   }));

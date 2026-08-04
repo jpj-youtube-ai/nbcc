@@ -23,6 +23,9 @@ export interface NewsletterSummary {
   // TASK-252: when a SENT newsletter's content was deleted; null on everything else. A redacted
   // newsletter keeps this whole summary — that stub IS the record of what was sent, when, to how many.
   redactedAt: string | null;
+  // TASK-278: WHO sent it. sent_by has been stamped at send time since the atomic claim landed, but
+  // was never selected back — so the history could not say who pressed the button.
+  sentBy: string | null;
   // TASK-270: WHICH audience this went to. The list was stamped at send time but never read back, so
   // the history couldn't tell you whether a message went to volunteers or to donors. Null for
   // pre-audience sends, which were always the newsletter audience.
@@ -59,6 +62,7 @@ interface Row {
   failed_emails: string[] | null;
   redacted_at: string | null;
   audience?: string | null;
+  sent_by_email?: string | null;
 }
 
 function toNewsletter(r: Row): Newsletter {
@@ -77,6 +81,7 @@ function toNewsletter(r: Row): Newsletter {
     // both label it and stop offering a delete that would do nothing.
     redactedAt: r.redacted_at ?? null,
     audience: r.audience ?? null,
+    sentBy: r.sent_by_email ?? null,
   };
 }
 
@@ -84,9 +89,11 @@ export async function listNewsletters(): Promise<NewsletterSummary[]> {
   const rows = (
     await pool.query<Row>(
       `SELECT n.id, n.subject, n.body_html, n.status, n.sent_at, n.recipient_count, n.sent_count,
-              n.failed_count, n.failed_emails, n.redacted_at, l.name AS audience
+              n.failed_count, n.failed_emails, n.redacted_at, l.name AS audience,
+              u.email AS sent_by_email
          FROM newsletters n
          LEFT JOIN subscriber_lists l ON l.id = n.list_id
+         LEFT JOIN users u ON u.id = n.sent_by
         ORDER BY n.id DESC`,
     )
   ).rows;
@@ -96,9 +103,13 @@ export async function listNewsletters(): Promise<NewsletterSummary[]> {
 export async function getNewsletter(id: number): Promise<Newsletter | null> {
   const row = (
     await pool.query<Row>(
-      `SELECT id, subject, body_html, body_json, status, sent_at, recipient_count, sent_count, failed_count, failed_emails,
-              redacted_at
-         FROM newsletters WHERE id = $1`,
+      `SELECT n.id, n.subject, n.body_html, n.body_json, n.status, n.sent_at, n.recipient_count,
+              n.sent_count, n.failed_count, n.failed_emails, n.redacted_at,
+              l.name AS audience, u.email AS sent_by_email
+         FROM newsletters n
+         LEFT JOIN subscriber_lists l ON l.id = n.list_id
+         LEFT JOIN users u ON u.id = n.sent_by
+        WHERE n.id = $1`,
       [id],
     )
   ).rows[0];

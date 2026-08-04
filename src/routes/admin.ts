@@ -605,7 +605,8 @@ export async function getAdminListMembers(req: Request, res: Response): Promise<
 }
 
 export async function postAdminListMember(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
   const listId = Number(req.params.id);
   if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
   const list = await getSubscriberList(listId);
@@ -626,7 +627,9 @@ export async function postAdminListMember(req: Request, res: Response): Promise<
     listId,
     { name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null },
     "admin",
-    { revive: true },
+    // TASK-278: stamp WHO added them. "Who put this person on the list?" is the first question when
+    // an address turns out to be wrong or someone says they never signed up.
+    { revive: true, addedBy: claims.email },
   );
   return res.status(outcome === "added" ? 201 : 200).json({ outcome });
 }
@@ -716,6 +719,7 @@ export async function postAdminListImport(req: Request, res: Response): Promise<
     // source 'import' + revive:false — the tombstone rule: a spreadsheet cannot overrule an opt-out.
     const outcome = await addListSubscriber(listId, { name: row.name, email: row.email, phone: null }, "import", {
       revive: false,
+      addedBy: claims.email, // TASK-278: which volunteer imported this list
     });
     if (outcome === "added") counts.added++;
     else if (outcome === "exists") counts.alreadyOnList++;

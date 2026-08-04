@@ -2389,15 +2389,19 @@
     // TASK-271: WHO each one went to. The audience was stamped at send time but never read back, so
     // the history couldn't tell you whether a message reached volunteers or every donor. Older sends
     // predate audiences and were always the newsletter audience.
-    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Audience</th><th>Status</th><th>Sent</th><th>Accepted</th><th></th></tr></thead><tbody>';
+    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Audience</th><th>Sent by</th><th>Status</th><th>Sent</th><th>Accepted</th><th></th></tr></thead><tbody>';
     rows.forEach(function (n) {
       html +=
         "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" +
         (n.audience ? H.escapeHtml(n.audience) : (n.status === "sent" ? '<span class="admin-muted">Newsletter</span>' : "-")) +
+        // TASK-278: sent_by has been stamped since the atomic claim landed but was never read back,
+        // so the history could not say who pressed the button.
+        "</td><td>" + (n.sentBy ? H.escapeHtml(n.sentBy) : '<span class="admin-muted">-</span>') +
         "</td><td>" + n.status + "</td><td>" +
         (n.sentAt ? new Date(n.sentAt).toLocaleString() : "-") + "</td><td>" +
         nlDeliveryCell(n) +
         '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button>' +
+        (n.status === "sent" ? ' <button class="admin-link" type="button" data-who-got="' + n.id + '">Who got it</button>' : "") +
         nlDeleteCell(n) + "</td></tr>";
     });
     return html + "</tbody></table>";
@@ -2499,6 +2503,14 @@
         Array.prototype.forEach.call(doc.querySelectorAll("[data-edit-newsletter]"), function (b) {
           b.addEventListener("click", function () {
             loadNewsletterInto(b.getAttribute("data-edit-newsletter"));
+          });
+        });
+        // TASK-278: exactly who a send reached, and who it did not and why. newsletter_send_queue has
+        // held this per-recipient record since TASK-274; nothing ever read it back, so "did Margaret
+        // get it?" was unanswerable despite the answer being on file.
+        Array.prototype.forEach.call(doc.querySelectorAll("[data-who-got]"), function (b) {
+          b.addEventListener("click", function () {
+            nlShowRecipients(b.getAttribute("data-who-got"));
           });
         });
         Array.prototype.forEach.call(doc.querySelectorAll("[data-delete-newsletter]"), function (b) {
@@ -2941,10 +2953,17 @@
       return;
     }
     var canWrite = canEdit("newsletter");
-    var html = '<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>How</th><th></th></tr></thead><tbody>';
+    // TASK-278: the full provenance of a membership — when they joined, how consent arrived, and
+    // which of us added them. "Who put this person on the list?" is the first question asked when an
+    // address turns out to be wrong, or when someone says they never signed up.
+    var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff" };
+    var html = '<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Added</th><th>How</th><th>By</th><th></th></tr></thead><tbody>';
     members.forEach(function (m) {
       html += "<tr><td>" + H.escapeHtml(m.name || "") + "</td><td>" + H.escapeHtml(m.email) + "</td><td>" +
-        H.escapeHtml(m.phone || "") + "</td><td>" + H.escapeHtml(m.consentSource) + "</td><td>" +
+        H.escapeHtml(m.phone || "") + "</td><td>" + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") + "</td><td>" +
+        H.escapeHtml(howLabel[m.consentSource] || m.consentSource) + "</td><td>" +
+        (m.addedBy ? H.escapeHtml(m.addedBy) : '<span class="admin-muted">' + (m.consentSource === "footer" ? "themselves" : "not recorded") + "</span>") +
+        "</td><td>" +
         (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +
         "</td></tr>";
     });
@@ -3620,6 +3639,46 @@
         if (!live && nlSendPoll) { clearInterval(nlSendPoll); nlSendPoll = null; }
       })
       .catch(function () { /* progress is a convenience — the send continues regardless */ });
+  }
+
+  // A plain, scannable list: who it reached, who it did not, and the reason. Reuses the modal shell
+  // the send confirmation uses so it looks like the rest of the admin rather than a bolted-on report.
+  function nlShowRecipients(newsletterId) {
+    var overlay = doc.createElement("div");
+    overlay.className = "nl-modal-overlay";
+    overlay.innerHTML =
+      '<div class="nl-modal nl-modal-wide" role="dialog" aria-modal="true" aria-labelledby="nlWhoTitle">' +
+      '<h3 class="nl-modal-title" id="nlWhoTitle">Who got this newsletter</h3>' +
+      '<div class="nl-who-body">Loading…</div>' +
+      '<div class="nl-modal-actions"><button type="button" class="nl-modal-cancel">Close</button></div>' +
+      "</div>";
+    doc.body.appendChild(overlay);
+    function close() { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }
+    overlay.querySelector(".nl-modal-cancel").addEventListener("click", close);
+    overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) close(); });
+
+    authFetch("/api/admin/newsletters/" + newsletterId + "/send-job/recipients")
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (rows) {
+        var host = overlay.querySelector(".nl-who-body");
+        if (!rows || !rows.length) {
+          host.innerHTML = '<p class="admin-empty">No per-person record for this send. Newsletters sent before the send queue existed only have totals.</p>';
+          return;
+        }
+        var sent = rows.filter(function (r) { return r.status === "sent"; }).length;
+        var label = { sent: "Received", failed: "Not delivered", pending: "Still to send", sending: "Sending now" };
+        host.innerHTML =
+          "<p class=\"nl-who-summary\">" + sent + " of " + rows.length + " received it.</p>" +
+          '<table class="admin-table"><thead><tr><th>Email</th><th>Status</th><th>When</th><th>Problem</th></tr></thead><tbody>' +
+          rows.map(function (r) {
+            return "<tr><td>" + H.escapeHtml(r.email) + "</td><td>" + H.escapeHtml(label[r.status] || r.status) +
+              "</td><td>" + (r.sentAt ? H.fmtDate(r.sentAt) : "-") + "</td><td>" +
+              (r.lastError ? '<span class="admin-muted">' + H.escapeHtml(r.lastError) + "</span>" : "") + "</td></tr>";
+          }).join("") + "</tbody></table>";
+      })
+      .catch(function () {
+        overlay.querySelector(".nl-who-body").textContent = "Could not load the recipient list.";
+      });
   }
 
   function nlSendJobAction(action) {

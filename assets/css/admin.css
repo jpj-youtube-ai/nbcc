@@ -582,3 +582,8 @@
 .nl-preflight-ack { display: flex; gap: .5rem; align-items: flex-start; margin-top: .7rem;
   font-size: .85rem; font-weight: 600; color: var(--slate); cursor: pointer; }
 .nl-preflight-ack input { margin-top: .2rem; accent-color: var(--crimson); }
+
+/* TASK-278: the "who got it" panel. Wider than the send confirmation because it holds a table. */
+.nl-modal-wide { max-width: 760px; width: 92vw; }
+.nl-who-body { max-height: 60vh; overflow: auto; text-align: left; }
+.nl-who-summary { font-weight: 700; color: var(--maroon); margin: 0 0 .6rem; }

@@ -569,3 +569,16 @@
 .nl-progress-actions button { font: inherit; font-weight: 600; padding: 6px 12px; border: 1.4px solid var(--line);
   border-radius: 8px; background: var(--cream); color: var(--slate); cursor: pointer; }
 .nl-progress-actions button:hover { border-color: var(--crimson); color: var(--crimson); }
+
+/* TASK-277: the pre-send checks, shown inside the send confirmation. A send cannot be undone, so
+   these read as things to act on — not as decoration. Blocking findings carry the crimson the rest of
+   the admin uses for "this needs you"; warnings stay quieter. */
+.nl-preflight { text-align: left; background: var(--tint); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px 14px; margin: 0 0 14px; }
+.nl-preflight-head { font-weight: 700; font-size: .9rem; color: var(--maroon); margin: 0 0 .4rem; }
+.nl-preflight ul { margin: 0; padding-left: 1.1rem; font-size: .86rem; line-height: 1.5; }
+.nl-preflight-block { color: var(--crimson); font-weight: 600; }
+.nl-preflight-warn { color: var(--slate); }
+.nl-preflight-ack { display: flex; gap: .5rem; align-items: flex-start; margin-top: .7rem;
+  font-size: .85rem; font-weight: 600; color: var(--slate); cursor: pointer; }
+.nl-preflight-ack input { margin-top: .2rem; accent-color: var(--crimson); }

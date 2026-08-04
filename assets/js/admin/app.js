@@ -2470,6 +2470,7 @@
         el("newsletterSend").hidden = !(canWrite && !sent);
         if (el("sendListWrap")) el("sendListWrap").hidden = !(canWrite && !sent); // TASK-259
         if (el("sendRolloutWrap")) el("sendRolloutWrap").hidden = !(canWrite && !sent); // TASK-274
+        nlTestSent = false; // TASK-277: a different newsletter has not been tested
         nlSyncSendAudience(); // TASK-271: the "who this reaches" line follows the send controls
         nlRenderSendJob(el("newsletterId").value); // TASK-274: resume the progress view after a reload
         el("newsletterSave").hidden = !canWrite;
@@ -3503,6 +3504,7 @@
       })
         .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
         .then(function (r) {
+          nlTestSent = true; // TASK-277: the pre-send check stops nagging once a test has gone
           el("newsletterMsg").textContent = r.ok
             ? "Test sent to " + r.b.sentTo + "."
             : (r.b && r.b.error) || "Could not send the test.";
@@ -3583,6 +3585,9 @@
 
   // TASK-274: live progress for a background send. Polls while the job is alive, and keeps working
   // after a page reload — the send is server-side now, so closing the browser does not stop it.
+  // TASK-277: whether a test copy of the CURRENT draft has been sent. Reset whenever a different
+  // newsletter is opened, so "you have tested this" can never be inherited from the last one.
+  var nlTestSent = false;
   var nlSendPoll = null;
   function nlWatchSendJob(id) {
     if (nlSendPoll) clearInterval(nlSendPoll);
@@ -3649,6 +3654,7 @@
       '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
       '</button><span class="nl-tooltip" role="tooltip"><span class="nl-tooltip-head">Loading recipients…</span></span></span></p>' +
       '<p class="nl-modal-count" aria-live="polite">Loading recipient list…</p>' +
+      '<div class="nl-preflight" hidden></div>' +
       '<div class="nl-modal-actions">' +
       '<button type="button" class="nl-modal-cancel">Cancel</button>' +
       '<button type="button" class="nl-modal-confirm">Yes, send to ' + H.escapeHtml(audienceName) + "</button>" +
@@ -3681,6 +3687,46 @@
       nlDoSend(id, sendBtn, close);
     });
     confirmBtn.focus();
+
+    // TASK-277: the pre-send checks. A send cannot be undone, so the mistakes that are obvious in
+    // hindsight and invisible while writing — a button that goes nowhere, a mistyped merge tag that
+    // reaches every reader as literal text — are surfaced HERE, where someone can still act.
+    // A blocking finding requires a deliberate override rather than refusing outright: it is the
+    // charity's newsletter, and a tool that flatly blocks invites people to work around it.
+    (function runPreflight() {
+      var host = overlay.querySelector(".nl-preflight");
+      if (!host) return;
+      authFetch("/api/admin/newsletters/preflight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: el("newsletterSubject") ? el("newsletterSubject").value : "",
+          bodyJson: nlDoc,
+          testSent: nlTestSent,
+        }),
+      })
+        .then(function (res) { return res.ok ? res.json() : { findings: [] }; })
+        .then(function (r) {
+          var findings = (r && r.findings) || [];
+          if (!findings.length) { host.hidden = true; return; }
+          var blocking = findings.some(function (f) { return f.level === "block"; });
+          host.hidden = false;
+          host.innerHTML =
+            '<p class="nl-preflight-head">' + (blocking ? "Worth fixing before you send" : "A couple of things to check") + "</p>" +
+            "<ul>" + findings.map(function (f) {
+              return '<li class="nl-preflight-' + f.level + '">' + H.escapeHtml(f.message) + "</li>";
+            }).join("") + "</ul>" +
+            (blocking
+              ? '<label class="nl-preflight-ack"><input type="checkbox" class="nl-preflight-ok" /> <span>Send anyway — I know about the above</span></label>'
+              : "");
+          if (blocking) {
+            confirmBtn.disabled = true;
+            var ack = host.querySelector(".nl-preflight-ok");
+            ack.addEventListener("change", function () { confirmBtn.disabled = !ack.checked; });
+          }
+        })
+        .catch(function () { /* checks are advisory — never block a send on their failure */ });
+    })();
 
     // Populate the recipient count + email list. Send stays available even if this lookup fails —
     // the server recomputes the authoritative list at send time.

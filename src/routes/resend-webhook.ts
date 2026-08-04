@@ -1,6 +1,6 @@
 import express, { Router, type Request, type Response } from "express";
 import { verifySvixSignature, parseResendEvent, suppressionFor } from "../newsletter/resend-events";
-import { recordResendEvent } from "../db/newsletter-events";
+import { recordResendEvent, countBounces } from "../db/newsletter-events";
 import { suppressEmail } from "../db/email-suppressions";
 import { config } from "../config";
 
@@ -20,6 +20,11 @@ import { config } from "../config";
 //   200 — everything else, INCLUDING events we drop (unconsumed types, receipts/login codes that
 //         match no newsletter send, duplicates). Anything but a 2xx would make Svix hammer us with
 //         retries for data we never wanted.
+// How many bounces of ANY kind before an address is treated as dead. Three is late enough that a
+// provider outage does not cost a supporter, and early enough that we are not the sender still
+// hammering a dead mailbox months later.
+const REPEAT_BOUNCE_LIMIT = 3;
+
 export const resendWebhookRouter = Router();
 
 async function postResendWebhook(req: Request, res: Response): Promise<Response> {
@@ -49,6 +54,14 @@ async function postResendWebhook(req: Request, res: Response): Promise<Response>
     const suppression = suppressionFor(parsed);
     if (suppression) {
       await suppressEmail(parsed.email, suppression.reason, suppression.detail);
+    } else if (parsed.eventType === "bounced") {
+      // TASK-277 (letter R): a transient bounce does not suppress on its own — a full mailbox is
+      // temporary. But an address that keeps bouncing is dead in practice whatever the provider calls
+      // it, and mailing it forever is what damages a sender's reputation. Repetition is the signal.
+      const bounces = await countBounces(parsed.email);
+      if (bounces >= REPEAT_BOUNCE_LIMIT) {
+        await suppressEmail(parsed.email, "bounced", `bounced ${bounces} times`);
+      }
     }
     return res.status(200).json({ outcome });
   } catch (err) {

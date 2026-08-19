@@ -19,6 +19,7 @@ import {
   removeListMember,
   unsubscribeListMember,
   listSubscriberLists,
+  listListMembers,
   listArchivedSubscriberLists,
   archiveSubscriberList,
   restoreSubscriberList,
@@ -160,5 +161,51 @@ describe("audience kinds and archiving (TASK-270)", () => {
     queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     expect(await restoreSubscriberList(4)).toBe(true);
     expect(sqlOf(/set\s+archived_at\s*=\s*null/i)).toMatch(/archived_at\s+is\s+not\s+null/i);
+  });
+});
+
+// TASK-278 (letter N): who put this person on the list. consent_source recorded HOW someone arrived
+// and consented_at recorded WHEN, but neither could answer "which of us added them?" — the first
+// question asked when an address turns out to be wrong, or when someone says they never signed up.
+describe("membership provenance (TASK-278)", () => {
+  it("records the staff member who typed someone in", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] }); // no existing membership
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    await addListSubscriber(4, { name: "Casey", email: "casey@x.example", phone: null }, "admin", {
+      revive: true,
+      addedBy: "kenny@nbcc.test",
+    });
+    const params = paramsOf(/insert into list_subscribers/i);
+    expect(params).toContain("kenny@nbcc.test");
+    expect(sqlOf(/insert into list_subscribers/i)).toMatch(/added_by/i);
+  });
+
+  it("leaves it blank for a self-signup — the person themselves is the actor", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [] });
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    await addListSubscriber(1, { name: "Ann", email: "ann@x.example", phone: null }, "footer", { revive: true });
+    expect(paramsOf(/insert into list_subscribers/i)).toContain(null);
+  });
+
+  it("re-stamps who revived a tombstoned membership, so the record follows the latest consent", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [{ id: 9, unsubscribed_at: "2026-01-01T00:00:00Z" }] });
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    const outcome = await addListSubscriber(4, { name: null, email: "back@x.example", phone: null }, "admin", {
+      revive: true,
+      addedBy: "kenny@nbcc.test",
+    });
+    expect(outcome).toBe("resubscribed");
+    expect(sqlOf(/update\s+list_subscribers/i)).toMatch(/added_by/i);
+    expect(paramsOf(/update\s+list_subscribers/i)).toContain("kenny@nbcc.test");
+  });
+
+  it("reads the provenance back with the members", async () => {
+    queryMock.mockResolvedValueOnce({
+      rows: [{ id: 1, name: "Ann", email: "ann@x.example", phone: null, consent_source: "import",
+               consented_at: "2026-07-01T00:00:00Z", added_by: "kenny@nbcc.test" }],
+    });
+    const [member] = await listListMembers(4);
+    expect(member.addedBy).toBe("kenny@nbcc.test");
+    expect(member.consentSource).toBe("import");
   });
 });

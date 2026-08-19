@@ -3954,3 +3954,24 @@ by somebody else therefore finds out immediately and can leave in one press.
 > and drain treat an in-flight row as still outstanding, so a gentle rollout cannot finish early; and
 > rows stranded by a task killed mid-batch are swept back to `pending` after a grace period, so
 > closing a duplicate-send hole does not open a lost-recipient one.
+
+**Pre-send safety (TASK-277 — letters P, R, S).** Three changes aimed squarely at making a *first*
+mass send safe.
+
+- **Pre-send checks (P).** `preflightNewsletter` (`src/newsletter/preflight.ts`, pure) runs against the
+  CURRENT draft when the send confirmation opens — the mistakes that are obvious in hindsight and
+  invisible while writing. **Blocking:** empty content or subject, a button with no working link (the
+  renderer silently drops an empty href, so it never looks wrong in the preview either), and a merge
+  tag we don't understand (`{{firstname}}` is NOT substituted — it reaches every reader as literal
+  text). **Warnings:** images with no description (many inboxes block images by default, so that
+  reader sees nothing), and not having sent yourself a test copy. A blocking finding requires an
+  explicit "send anyway" tick rather than refusing outright — it is the charity's newsletter, and a
+  tool that flatly blocks invites people to work around it.
+- **Repeat-bounce suppression (R).** A *permanent* bounce suppresses on its own (TASK-272); a transient
+  one still does not, because a full mailbox is temporary and dropping a real supporter over it is its
+  own failure. But an address that has bounced **three times** is dead in practice whatever the
+  provider calls it, so repetition now suppresses.
+- **Seed test (S).** `POST /api/admin/newsletters/test-send` accepts an optional `to` list (max 5) so
+  you can send to your own Gmail, Outlook and Yahoo addresses before committing to the real audience.
+  Where a message *lands* is decided per provider, and one inbox cannot tell you. Defaults to the
+  signed-in admin, so the existing one-click test is unchanged.

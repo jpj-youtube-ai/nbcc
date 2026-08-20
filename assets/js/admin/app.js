@@ -2451,7 +2451,25 @@
       .catch(function () { el("newsletterMsg").textContent = "Could not delete that newsletter."; });
   }
 
+  // TASK-279: the four stages as switchable panels instead of one long scroll. The tab was ~19,000
+  // characters of markup end to end, so reaching the composer meant scrolling past all the audience
+  // and people management every time. Everything still exists and every element keeps its id — only
+  // what is ON SCREEN at once changed.
+  var NL_PANELS = ["nlPanelAudience", "nlPanelWrite", "nlPanelSend", "nlPanelHistory"];
+  function nlShowPanel(panelId) {
+    NL_PANELS.forEach(function (id) {
+      var panel = el(id);
+      if (panel) panel.hidden = id !== panelId;
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-nl-panel]"), function (b) {
+      var on = b.getAttribute("data-nl-panel") === panelId;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-current", on ? "true" : "false");
+    });
+  }
+
   function loadNewsletterInto(id) {
+    nlShowPanel("nlPanelWrite"); // TASK-279: open the one you clicked, where you write it
     authFetch("/api/admin/newsletters/" + id)
       .then(j)
       .then(function (n) {
@@ -3302,6 +3320,9 @@
         nlSyncAudienceContext();
       });
     }
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-nl-panel]"), function (b) {
+      b.addEventListener("click", function () { nlShowPanel(b.getAttribute("data-nl-panel")); });
+    });
     if (el("sendListPick")) {
       el("sendListPick").addEventListener("change", nlSyncSendAudience);
     }
@@ -3592,6 +3613,7 @@
         el("newsletterMsg").textContent = r.rollout === "gentle"
           ? "Sending started, easing out gradually to " + r.recipientCount + " people."
           : "Sending started — " + r.recipientCount + " people queued.";
+        nlShowPanel("nlPanelSend"); // TASK-279: watch it go, rather than leaving you on the editor
         nlWatchSendJob(id);
         loadNewsletters();
       })

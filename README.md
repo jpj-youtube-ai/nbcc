@@ -4014,3 +4014,20 @@ this, who got it, and who added this person.
 > sending subdomain so a bad campaign cannot damage receipts and admin sign-in codes (needs the
 > domain added in Resend first, then `NEWSLETTER_FROM_EMAIL` repointed); enabling open/click tracking
 > in the Resend dashboard; and volume warm-up on any new sending domain.
+
+**Newsletter tab flow (TASK-279).** The tab was one continuous ~19,000-character scroll: reaching the
+composer meant scrolling past all the audience and people management every time, three full-width
+collapsible bars sat stacked in the middle of it, and the Send controls were below the template
+library. Staff reported it as "all over the place and hard to navigate".
+
+The four stages are now **switchable panels** with a step nav (Audiences & people / Write / Send /
+Sent), so one job is on screen at a time and the rest are one click away. Opening a newsletter from
+the history jumps to **Write**; starting a send jumps to **Send**, where the progress bar lives.
+Measured effect: the tab is **55% shorter** (2635px to 1190px) with no horizontal overflow.
+
+**Nothing was removed and no element id changed** — `app.js` binds by id, so the change is purely
+wrapping existing content in panel containers plus CSS. Verified mechanically: all 88 pre-existing ids
+still present (5 new panel ids added), all 42 controls `app.js` binds to still reachable inside a
+panel, and the composer (`.nl-builder`) untouched. Secondary tools (Manage subscribers, Blocked
+addresses, Archived audiences) are grouped into a compact grid rather than stacked full-width; an open
+one spans the full row so its table has room.

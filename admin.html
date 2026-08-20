@@ -273,6 +273,18 @@
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
 
+              <!-- TASK-279: the tab was ONE ~19,000-character scroll. Reaching the composer meant
+                   scrolling past all the audience and people management every single time, and four
+                   full-width collapsible panels competed with the primary flow. The four stages are
+                   now switchable panels: one job on screen at a time, the others one click away.
+                   Nothing was removed - every control still exists, and every element keeps its id. -->
+              <nav class="nl-steps" id="nlSteps" aria-label="Newsletter sections">
+                <button type="button" class="nl-step" data-nl-panel="nlPanelAudience"><span class="nl-step-n">1</span> Audiences &amp; people</button>
+                <button type="button" class="nl-step is-active" data-nl-panel="nlPanelWrite"><span class="nl-step-n">2</span> Write</button>
+                <button type="button" class="nl-step" data-nl-panel="nlPanelSend"><span class="nl-step-n">3</span> Send</button>
+                <button type="button" class="nl-step" data-nl-panel="nlPanelHistory"><span class="nl-step-n">4</span> Sent</button>
+              </nav>
+
               <!-- TASK-271: the page runs in four numbered stages — audiences & people, compose,
                    send, history. Before, audience management, the send history, the composer and the
                    send controls were interleaved, so the audience picker that decides who gets a
@@ -282,6 +294,7 @@
 
               <!-- Stage 1. Editor+ only; app.js hides this whole card in read mode, which is why the
                    audience picker and member list live inside it (they carry Remove controls). -->
+              <div class="nl-panel" id="nlPanelAudience" hidden>
               <div class="nl-subscriber-card" id="nlSubscriberCard">
                 <h3 class="nl-stage-head" id="nlStageAudience"><span class="nl-stage-num">1</span> Audiences &amp; people</h3>
                 <p class="admin-help">
@@ -370,6 +383,9 @@
                 <p id="subMsg" class="nl-sub-msg" aria-live="polite"></p>
 
                 <!-- Manage the full subscriber list: search, remove, export. Loaded on first open. -->
+                <!-- Secondary tools. Three full-width collapsible bars stacked under the main flow
+                     read as clutter; grouped here they stay available without competing. -->
+                <div class="nl-tools">
                 <details class="nl-manage" id="subManage">
                   <summary>Manage subscribers</summary>
                   <div class="nl-manage-body">
@@ -400,9 +416,12 @@
                   <summary>Archived audiences</summary>
                   <div class="nl-manage-body" id="audienceArchivedList" aria-live="polite"></div>
                 </details>
+                </div>
+              </div>
               </div>
 
               <form id="newsletterForm">
+                <div class="nl-panel" id="nlPanelWrite">
                 <h3 class="nl-stage-head"><span class="nl-stage-num">2</span> Write the newsletter</h3>
                 <input type="hidden" id="newsletterId" />
                 <p><label>Subject<br /><input type="text" id="newsletterSubject" required style="width:100%" /></label></p>
@@ -476,7 +495,9 @@
                   <button type="button" id="newsletterTemplateSaveCancel" hidden>Cancel</button>
                 </div>
                 <p id="nlTemplateMsg" class="nl-sub-msg" aria-live="polite"></p>
+                </div>
 
+                <div class="nl-panel" id="nlPanelSend" hidden>
                 <!-- Stage 3. The audience lives with the Send button, not 110 lines away in the
                      actions row, and the note under it spells out who is about to be mailed and how
                      many that is — the same number the confirmation repeats. -->
@@ -512,13 +533,16 @@
                   </div>
                 </div>
                 <p id="newsletterMsg" aria-live="polite"></p>
+                </div>
               </form>
 
+              <div class="nl-panel" id="nlPanelHistory" hidden>
               <!-- Stage 4. Moved BELOW the composer: the history is a record you look back at, not
                    the first thing you meet on opening the tab. Now carries the audience each send
                    went to (list_id was stamped at send time but never read back). -->
               <h3 class="nl-stage-head"><span class="nl-stage-num">4</span> Sent newsletters</h3>
               <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              </div>
             </section>
 
             <!-- Thank you: pick a donor over the threshold, personalise the letter, watch it update

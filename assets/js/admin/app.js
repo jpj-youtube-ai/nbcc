@@ -2492,6 +2492,7 @@
         el("newsletterSend").hidden = !(canWrite && !sent);
         if (el("sendListWrap")) el("sendListWrap").hidden = !(canWrite && !sent); // TASK-259
         if (el("sendRolloutWrap")) el("sendRolloutWrap").hidden = !(canWrite && !sent); // TASK-274
+        if (el("sendScheduleWrap")) el("sendScheduleWrap").hidden = !(canWrite && !sent); // TASK-280
         nlTestSent = false; // TASK-277: a different newsletter has not been tested
         nlSyncSendAudience(); // TASK-271: the "who this reaches" line follows the send controls
         nlRenderSendJob(el("newsletterId").value); // TASK-274: resume the progress view after a reload
@@ -3328,6 +3329,11 @@
     }
     // TASK-274: a send in flight can now be paused or stopped — there was previously no way at all,
     // and closing the browser did not stop the server.
+    if (el("sendScheduleClear")) {
+      el("sendScheduleClear").addEventListener("click", function () {
+        if (el("sendScheduleAt")) el("sendScheduleAt").value = "";
+      });
+    }
     if (el("sendPause")) el("sendPause").addEventListener("click", function () { nlSendJobAction("pause"); });
     if (el("sendResume")) el("sendResume").addEventListener("click", function () { nlSendJobAction("resume"); });
     if (el("sendCancel")) el("sendCancel").addEventListener("click", function () { nlSendJobAction("cancel"); });
@@ -3598,6 +3604,11 @@
     // like a compromised account to Gmail; easing out over a few days builds the record that earns
     // the next day's larger allowance.
     if (el("sendRollout") && el("sendRollout").checked) body.rollout = "gentle";
+    // TASK-280: <input type="datetime-local"> yields local wall-clock with no zone ("2026-08-25T09:00").
+    // new Date() reads that as LOCAL time, which is what the person meant, and toISOString sends the
+    // real instant — so a 9am schedule is 9am where they are, not 9am UTC.
+    var when = el("sendScheduleAt") && el("sendScheduleAt").value;
+    if (when) body.scheduledAt = new Date(when).toISOString();
     authFetch("/api/admin/newsletters/" + id + "/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -3610,9 +3621,15 @@
       .then(function (r) {
         // Sending now happens in the background, so the honest message is "started", not "sent" —
         // and the progress panel below is what says how far it has got.
-        el("newsletterMsg").textContent = r.rollout === "gentle"
-          ? "Sending started, easing out gradually to " + r.recipientCount + " people."
-          : "Sending started — " + r.recipientCount + " people queued.";
+        if (r.status === "scheduled") {
+          el("newsletterMsg").textContent =
+            "Scheduled — " + r.recipientCount + " people will get it at " +
+            new Date(r.scheduledAt).toLocaleString() + ". Nothing sends until then.";
+        } else {
+          el("newsletterMsg").textContent = r.rollout === "gentle"
+            ? "Sending started, easing out gradually to " + r.recipientCount + " people."
+            : "Sending started — " + r.recipientCount + " people queued.";
+        }
         nlShowPanel("nlPanelSend"); // TASK-279: watch it go, rather than leaving you on the editor
         nlWatchSendJob(id);
         loadNewsletters();
@@ -3652,6 +3669,7 @@
         if (job.status === "paused") text += " · paused";
         else if (job.status === "cancelled") text += " · stopped";
         else if (job.status === "done") text = "All " + job.sent + " sent.";
+        else if (job.scheduledAt && job.sent === 0) text = job.scheduleSummary || text;
         else if (job.summary) text += " — " + job.summary;
         el("sendProgressText").textContent = text;
         var live = job.status === "queued" || job.status === "running" || job.status === "paused";

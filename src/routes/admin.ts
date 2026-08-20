@@ -117,6 +117,7 @@ import {
   listJobRecipients,
 } from "../db/newsletter-send-jobs";
 import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
+import { parseScheduleAt, scheduleSummary } from "../newsletter/schedule";
 import { htmlToPlainText } from "../newsletter/plain-text";
 import { preflightNewsletter } from "../newsletter/preflight";
 import { runSendTick } from "../newsletter/send-worker";
@@ -899,9 +900,18 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     .object({
       rollout: z.enum(["immediate", "gentle"]).optional(),
       perMinute: z.number().int().min(1).max(600).optional(),
+      // TASK-280 (letter J): an ISO time to start at. Absent = send now, so the common case is
+      // unchanged and nobody has to opt out of scheduling.
+      scheduledAt: z.string().optional().nullable(),
     })
     .safeParse(req.body ?? {});
   if (!optionsParse.success) return res.status(400).json({ error: "Invalid send options" });
+
+  // Validated by the same pure rules the UI uses, so the two cannot disagree about what is a valid
+  // time — and a past time is refused rather than sending instantly, which is the opposite of what
+  // someone reaching for "schedule" wants.
+  const when = parseScheduleAt(optionsParse.data.scheduledAt, new Date());
+  if (!when.ok) return res.status(400).json({ error: when.reason });
 
   const job = await createSendJob({
     newsletterId: id,
@@ -910,6 +920,7 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     rollout: optionsParse.data.rollout ?? "immediate",
     perMinute: optionsParse.data.perMinute ?? DEFAULT_PER_MINUTE,
     createdBy: claims.email,
+    scheduledAt: when.at,
   });
 
   // The recipient count is known NOW and is part of the record; the sent/failed split is filled in by
@@ -925,15 +936,18 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   // the 202 goes back immediately and the sending continues in the background, which is the entire
   // point of the change. Errors are the worker's own problem — the queue rows stay pending and the
   // next tick retries them.
-  void runSendTick().catch((err) =>
+  // Only start draining straight away when this is meant to go now; a scheduled job waits for the
+  // worker to find it due.
+  if (!when.at) void runSendTick().catch((err) =>
     console.error("immediate send tick failed:", err instanceof Error ? err.message : err),
   );
 
   return res.status(202).json({
-    status: "queued",
+    status: when.at ? "scheduled" : "queued",
     jobId: job.id,
     recipientCount: recipients.length,
     rollout: job.rollout,
+    scheduledAt: job.scheduledAt,
   });
 }
 
@@ -951,7 +965,10 @@ export async function getAdminNewsletterSendJob(req: Request, res: Response): Pr
     job.pending,
     new Date(),
   );
-  return res.json({ ...job, summary });
+  // TASK-280: while a send is waiting for its time, say WHEN plainly — "pending" invites someone to
+  // assume it is stuck and press send a second time.
+  const scheduled = scheduleSummary(job.scheduledAt ? new Date(job.scheduledAt) : null, new Date());
+  return res.json({ ...job, summary: scheduled || summary, scheduleSummary: scheduled });
 }
 
 // POST /api/admin/newsletters/:id/send-job/:action — pause, resume or cancel a send in flight. There

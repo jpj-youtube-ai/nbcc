@@ -511,6 +511,16 @@
                 </div>
                 <p class="nl-send-note" id="sendAudienceNote" aria-live="polite" hidden></p>
 
+                <!-- TASK-280 (letter J): send it later. Volunteers write in the evening or at the
+                     weekend, but a newsletter lands best on a weekday morning. Empty = send now, so
+                     the common case never has to opt out of anything. -->
+                <div class="nl-schedule" id="sendScheduleWrap" hidden>
+                  <label class="nl-dest-label" for="sendScheduleAt">Send at</label>
+                  <input type="datetime-local" id="sendScheduleAt" aria-describedby="sendScheduleHint" />
+                  <button type="button" id="sendScheduleClear">Send now instead</button>
+                  <span class="nl-schedule-hint" id="sendScheduleHint">Leave empty to send as soon as you confirm.</span>
+                </div>
+
                 <!-- TASK-274: the gentle rollout. A lightly-used sending domain that suddenly emits
                      thousands of messages looks like a compromised account, and mailbox providers
                      treat it as one — the mail lands in junk and the damage outlives the campaign.

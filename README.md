@@ -4031,3 +4031,22 @@ still present (5 new panel ids added), all 42 controls `app.js` binds to still r
 panel, and the composer (`.nl-builder`) untouched. Secondary tools (Manage subscribers, Blocked
 addresses, Archived audiences) are grouped into a compact grid rather than stacked full-width; an open
 one spans the full row so its table has room.
+
+**Scheduled sends (TASK-280, letter J).** A newsletter can now be given a time to go out. Volunteers
+write when they have time — an evening, a weekend — but a newsletter lands best on a weekday morning;
+until now the options were "send now" or "remember to come back and press it yourself".
+
+Deliberately small, because TASK-274 already built the machinery: sending is a background job a worker
+picks up, so scheduling is **not a new mechanism** — just an instruction not to pick this one up yet.
+`listRunnableJobs` skips a job whose `scheduled_at` is still in the future, and `NULL` means "start
+now", so every existing job and every unscheduled send behaves exactly as before.
+
+- **Rules are pure and shared** (`src/newsletter/schedule.ts`), so the API and UI cannot disagree about
+  what is valid. A time in the **past is refused** rather than sending instantly (the opposite of what
+  reaching for "schedule" means), and anything more than **180 days out** is refused because a mistyped
+  year would otherwise silently park a newsletter for twelve months with no other symptom. A minute of
+  grace either side of *now* absorbs clock skew between browser and server.
+- **Time zones:** `<input type="datetime-local">` gives local wall-clock with no zone, so the browser
+  converts to a real instant before sending. 9am means 9am where the sender is, not 9am UTC.
+- **While waiting** the progress panel names the time and says it can still be cancelled — "pending"
+  invites someone to assume it is stuck and press send a second time. Cancel/pause work as before.

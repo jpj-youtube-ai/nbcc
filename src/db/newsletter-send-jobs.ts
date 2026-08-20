@@ -27,6 +27,9 @@ export interface SendJob {
   createdBy: string;
   startedAt: string | null;
   finishedAt: string | null;
+  // TASK-280: when this send may begin. NULL = immediately, which is every pre-existing job and
+  // every send that doesn't ask for a time.
+  scheduledAt: string | null;
 }
 
 export interface QueuedRecipient {
@@ -47,15 +50,18 @@ export async function createSendJob(input: {
   rollout: Rollout;
   perMinute: number;
   createdBy: string;
+  scheduledAt?: Date | null;
 }): Promise<SendJob> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
     const job = (
       await client.query(
-        `INSERT INTO newsletter_send_jobs (newsletter_id, list_id, rollout, per_minute, total, created_by, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'queued') RETURNING id`,
-        [input.newsletterId, input.listId, input.rollout, input.perMinute, input.recipients.length, input.createdBy],
+        `INSERT INTO newsletter_send_jobs
+           (newsletter_id, list_id, rollout, per_minute, total, created_by, status, scheduled_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'queued', $7) RETURNING id`,
+        [input.newsletterId, input.listId, input.rollout, input.perMinute, input.recipients.length,
+         input.createdBy, input.scheduledAt ?? null],
       )
     ).rows[0];
     for (const r of input.recipients) {
@@ -76,7 +82,7 @@ export async function createSendJob(input: {
 }
 
 const JOB_COLUMNS = `j.id, j.newsletter_id, j.list_id, j.status, j.rollout, j.per_minute, j.daily_cap,
-        j.total, j.created_by, j.started_at, j.finished_at,
+        j.total, j.created_by, j.started_at, j.finished_at, j.scheduled_at,
         (SELECT count(*) FROM newsletter_send_queue q WHERE q.job_id = j.id AND q.status = 'sent') AS sent,
         (SELECT count(*) FROM newsletter_send_queue q WHERE q.job_id = j.id AND q.status = 'failed') AS failed,
         (SELECT count(*) FROM newsletter_send_queue q WHERE q.job_id = j.id AND q.status IN ('pending', 'sending')) AS pending`;
@@ -98,6 +104,7 @@ function toJob(r: any): SendJob {
     createdBy: r.created_by,
     startedAt: r.started_at,
     finishedAt: r.finished_at,
+    scheduledAt: r.scheduled_at ?? null,
   };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -120,7 +127,11 @@ export async function getJobForNewsletter(newsletterId: number): Promise<SendJob
 export async function listRunnableJobs(): Promise<SendJob[]> {
   const { rows } = await pool.query(
     `SELECT ${JOB_COLUMNS} FROM newsletter_send_jobs j
-      WHERE j.status IN ('queued', 'running') ORDER BY j.id`,
+      WHERE j.status IN ('queued', 'running')
+        -- TASK-280: a scheduled job is simply not runnable yet. NULL means start now, so every
+        -- unscheduled send behaves exactly as it did before scheduling existed.
+        AND (j.scheduled_at IS NULL OR j.scheduled_at <= now())
+      ORDER BY j.id`,
   );
   return rows.map(toJob);
 }

@@ -4055,3 +4055,8 @@ now", so every existing job and every unscheduled send behaves exactly as before
   system does not have. Once real click data exists, that is what should drive it.
 - **While waiting** the progress panel names the time and says it can still be cancelled — "pending"
   invites someone to assume it is stuck and press send a second time. Cancel/pause work as before.
+
+**Where the newsletter platform stands** is kept in `docs/NEWSLETTER-STATUS.md` — what is live, what
+was deliberately not built and why, and the gotchas (migration ordering, squash-merge rebases, the
+`donate.html` page-weight ceiling) that have already cost a round trip each. Read it before picking
+the newsletter work back up.

@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed once TASK-280 shipped. Point a fresh session at this file to continue.
 
 ## State: LIVE and send-ready
 
@@ -21,7 +21,7 @@ newsletter safely today.
 | 277 | Pre-send checks, seed test (up to 5 addresses), repeat-bounce suppression |
 | 278 | Audit trail: who sent it, who got it, who added each person |
 | 279 | Newsletter tab as four switchable panels (55% shorter) |
-| 280 | **Scheduled sends** — OPEN as PR #446, green, not yet merged |
+| 280 | **Scheduled sends** — pick a date and time, plus a send-time hint with quick-picks |
 
 ### Verified live
 - Production app healthy; four-panel newsletter tab live
@@ -33,7 +33,7 @@ newsletter safely today.
 
 ## Outstanding
 
-**Immediate:** merge PR #446 (scheduled sends), then promote to production.
+Nothing is in flight. No open PRs, clean tree, production healthy.
 
 **Not built** (approved by the user, deliberately deferred — none block sending):
 - **K** Segments — filtered slices ("donors who gave this year"). Needs a query builder + storage.
@@ -48,8 +48,9 @@ newsletter safely today.
 - **B** Tighten DMARC `p=none` -> `quarantine` -> `reject`. Needs a few weeks of the reports that
   started arriving 2026-08-20. Do NOT skip straight to reject.
 
-**Idea, not built:** a "recommended send time" hint (general evidence favours Tue-Thu 9-11am). Would
-be honest as a *hint*, not a recommendation — there is no open-tracking data to personalise it.
+**Shipped as part of 280:** the send-time hint. Deliberately worded as general guidance, not a
+recommendation — there is no open-tracking data to personalise it. The quick-picks always land on
+the *next* Tuesday/Thursday, skipping a week if today matches but the hour has already gone.
 
 ## Gotchas that will bite (learned the hard way)
 

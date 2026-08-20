@@ -4048,5 +4048,10 @@ now", so every existing job and every unscheduled send behaves exactly as before
   grace either side of *now* absorbs clock skew between browser and server.
 - **Time zones:** `<input type="datetime-local">` gives local wall-clock with no zone, so the browser
   converts to a real instant before sending. 9am means 9am where the sender is, not 9am UTC.
+- **A send-time hint, honestly framed.** Next to the field: charity newsletters generally do best
+  Tuesday to Thursday, 9-11am, plus two quick-pick buttons. Deliberately worded as *general guidance,
+  not based on your readers* — with open tracking off and no send history there is nothing to
+  personalise from, and presenting a rule of thumb as a "recommended time" would imply knowledge the
+  system does not have. Once real click data exists, that is what should drive it.
 - **While waiting** the progress panel names the time and says it can still be cancelled — "pending"
   invites someone to assume it is stuck and press send a second time. Cancel/pause work as before.

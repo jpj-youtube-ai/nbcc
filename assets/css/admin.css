@@ -631,3 +631,7 @@
   border: 1.4px solid var(--line); border-radius: 8px; background: var(--cream); color: var(--slate); cursor: pointer; }
 .nl-schedule button:hover { border-color: var(--crimson); color: var(--crimson); }
 .nl-schedule-hint { font-size: .82rem; color: var(--slate-soft); flex: 1 1 100%; }
+
+/* TASK-280: schedule quick picks. Secondary to the field itself — they are a shortcut, not the point. */
+.nl-schedule-picks { display: flex; flex-wrap: wrap; gap: .4rem; flex: 1 1 100%; }
+.nl-schedule-picks button { font-size: .82rem; padding: 5px 10px; }

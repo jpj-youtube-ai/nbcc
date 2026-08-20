@@ -3329,6 +3329,33 @@
     }
     // TASK-274: a send in flight can now be paused or stopped — there was previously no way at all,
     // and closing the browser did not stop the server.
+    // TASK-280: quick picks for the times charity newsletters generally do best. Deliberately framed
+    // as GUIDANCE, not a recommendation: with open tracking off and no send history there is nothing
+    // to personalise from, and dressing a rule of thumb up as intelligence would be dishonest. Once
+    // real click data exists, that is what should drive this.
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-schedule-pick]"), function (b) {
+      b.addEventListener("click", function () {
+        var parts = b.getAttribute("data-schedule-pick").split(",");
+        var wantDay = Number(parts[0]); // 0=Sun .. 6=Sat
+        var wantHour = Number(parts[1]);
+        var d = new Date();
+        d.setSeconds(0, 0);
+        d.setHours(wantHour, 0);
+        // Always land on the NEXT such day: if today matches but the time has gone, skip a week
+        // rather than offering a moment in the past, which the server would refuse anyway.
+        var delta = (wantDay - d.getDay() + 7) % 7;
+        if (delta === 0 && d.getTime() <= Date.now()) delta = 7;
+        d.setDate(d.getDate() + delta);
+        // datetime-local wants LOCAL wall-clock, so format by hand — toISOString would shift the zone.
+        var pad = function (n) { return String(n).padStart(2, "0"); };
+        if (el("sendScheduleAt")) {
+          el("sendScheduleAt").value =
+            d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+            "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+        }
+      });
+    });
+
     if (el("sendScheduleClear")) {
       el("sendScheduleClear").addEventListener("click", function () {
         if (el("sendScheduleAt")) el("sendScheduleAt").value = "";

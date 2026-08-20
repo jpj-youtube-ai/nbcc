@@ -511,6 +511,20 @@
                 </div>
                 <p class="nl-send-note" id="sendAudienceNote" aria-live="polite" hidden></p>
 
+                <!-- TASK-280 (letter J): send it later. Volunteers write in the evening or at the
+                     weekend, but a newsletter lands best on a weekday morning. Empty = send now, so
+                     the common case never has to opt out of anything. -->
+                <div class="nl-schedule" id="sendScheduleWrap" hidden>
+                  <label class="nl-dest-label" for="sendScheduleAt">Send at</label>
+                  <input type="datetime-local" id="sendScheduleAt" aria-describedby="sendScheduleHint" />
+                  <button type="button" id="sendScheduleClear">Send now instead</button>
+                  <span class="nl-schedule-hint" id="sendScheduleHint">Leave empty to send as soon as you confirm. Charity newsletters generally do best <b>Tuesday to Thursday, 9-11am</b> — that is general guidance, not based on your readers. Once you have sent a few, your own click figures will tell you better.</span>
+                  <div class="nl-schedule-picks">
+                    <button type="button" data-schedule-pick="2,9">Next Tuesday 9am</button>
+                    <button type="button" data-schedule-pick="4,10">Next Thursday 10am</button>
+                  </div>
+                </div>
+
                 <!-- TASK-274: the gentle rollout. A lightly-used sending domain that suddenly emits
                      thousands of messages looks like a compromised account, and mailbox providers
                      treat it as one — the mail lands in junk and the damage outlives the campaign.

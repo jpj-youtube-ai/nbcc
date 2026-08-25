@@ -636,6 +636,99 @@ describe("per-block text size control (TASK-248)", () => {
   });
 });
 
+// TASK-289: blocks collapse. Ten blocks used to mean ten fully expanded forms, so finding the one
+// you wanted meant scrolling past every field of every other one.
+describe("collapsible blocks (TASK-289)", () => {
+  const threeBlockDraft = {
+    id: 41,
+    subject: "Three blocks",
+    status: "draft",
+    sentAt: null,
+    recipientCount: null,
+    bodyHtml: null,
+    bodyJson: {
+      blocks: [
+        { type: "heading", variant: 0, data: { heading: "Two days, four hundred bags" } },
+        { type: "text", variant: 0, data: { text: "We are packing at the Kelvin Hall." } },
+        { type: "button", variant: 0, data: { label: "Put my name down", href: "https://nbcc.scot/v" } },
+      ],
+    },
+  };
+
+  const blocks = () =>
+    Array.prototype.slice.call(el("nlCanvas").querySelectorAll(".nl-block")) as HTMLElement[];
+
+  const openThree = async () => {
+    // Editor, explicitly: read mode omits the move/duplicate/delete controls entirely, and the
+    // move test needs them.
+    loginToken = tokenFor("editor");
+    singleNewsletter = threeBlockDraft;
+    newsletterListRows = [{ id: 41, subject: threeBlockDraft.subject, status: "draft", sentAt: null, recipientCount: null }];
+    await openNewsletterTab();
+    await flush();
+  };
+
+  // The complaint this fixes: opening a newsletter and being met with every field of every block.
+  it("starts every block collapsed when a newsletter is opened", async () => {
+    await openThree();
+    expect(blocks()).toHaveLength(3);
+    expect(blocks().every((b) => b.classList.contains("is-collapsed"))).toBe(true);
+  });
+
+  // A stack of identical bars would be worse than the scrolling it replaced, so a collapsed block
+  // still says what it holds.
+  it("shows what a collapsed block contains", async () => {
+    await openThree();
+    const summaries = blocks().map((b) => (b.querySelector(".nl-block-sum") as HTMLElement).textContent);
+    expect(summaries[0]).toContain("Two days");
+    expect(summaries[2]).toContain("Put my name down");
+  });
+
+  it("expands one block without touching the others", async () => {
+    await openThree();
+    (blocks()[1].querySelector(".nl-block-toggle") as HTMLElement).click();
+    await flush();
+    expect(blocks()[0].classList.contains("is-collapsed")).toBe(true);
+    expect(blocks()[1].classList.contains("is-collapsed")).toBe(false);
+    expect(blocks()[2].classList.contains("is-collapsed")).toBe(true);
+  });
+
+  it("expands and collapses everything at once", async () => {
+    await openThree();
+    (el("nlExpandAll") as HTMLElement).click();
+    await flush();
+    expect(blocks().some((b) => b.classList.contains("is-collapsed"))).toBe(false);
+    (el("nlCollapseAll") as HTMLElement).click();
+    await flush();
+    expect(blocks().every((b) => b.classList.contains("is-collapsed"))).toBe(true);
+  });
+
+  // The part that can go quietly wrong. The canvas rebuilds on every change, so state keyed by
+  // INDEX would follow the position instead of the block: moving the open block up would leave it
+  // shut and open whatever landed in its place. Keyed by the block object, it travels with it.
+  it("keeps a block open when it is moved", async () => {
+    await openThree();
+    (blocks()[2].querySelector(".nl-block-toggle") as HTMLElement).click();
+    await flush();
+    expect(blocks()[2].classList.contains("is-collapsed")).toBe(false);
+
+    // Move the open (third) block up one.
+    const up = blocks()[2].querySelector(".nl-block-ctrls button") as HTMLButtonElement;
+    up.click();
+    await flush();
+
+    const after = blocks();
+    expect((after[1].querySelector(".nl-block-sum") as HTMLElement).textContent).toContain("Put my name down");
+    expect(after[1].classList.contains("is-collapsed"), "the block that was open should still be open").toBe(false);
+    expect(after[2].classList.contains("is-collapsed"), "the block it swapped with should still be collapsed").toBe(true);
+  });
+
+  it("counts the blocks so the list has a scale", async () => {
+    await openThree();
+    expect((el("nlCanvasCount") as HTMLElement).textContent).toBe("3 blocks");
+  });
+});
+
 // TASK-249: the SHARED saved-template library. The name rules, query shapes and 409 live in
 // newsletter-templates.test.ts; the round trip lives in the BDD scenario. What earns its keep HERE is
 // the wiring: that the library actually loads when the tab opens (it is called from a different scope

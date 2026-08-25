@@ -522,6 +522,14 @@
                 <div class="nl-builder">
                   <div class="nl-left">
                     <div class="nl-palette" id="nlPalette" aria-label="Add a block"></div>
+                    <!-- TASK-289: blocks collapse so a long newsletter can be scanned rather than
+                         scrolled. Opening a newsletter starts everything collapsed; adding a block
+                         leaves it open, because you are about to fill it in. -->
+                    <div class="nl-canvas-bar">
+                      <span class="nl-canvas-count" id="nlCanvasCount" aria-live="polite"></span>
+                      <button type="button" class="nl-canvas-toggle" id="nlCollapseAll">Collapse all</button>
+                      <button type="button" class="nl-canvas-toggle" id="nlExpandAll">Expand all</button>
+                    </div>
                     <ol class="nl-canvas" id="nlCanvas" aria-label="Newsletter blocks"></ol>
                   </div>
                   <div class="nl-right">

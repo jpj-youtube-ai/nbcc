@@ -1919,6 +1919,59 @@
     return b;
   }
 
+  // TASK-289: which blocks are collapsed, keyed by the block OBJECT rather than its index.
+  // nlRenderCanvas rebuilds everything on every change, and an index-keyed set would follow the
+  // position instead of the block — so moving block 3 up would collapse whatever landed in its
+  // place. A WeakMap also keeps the key off the object itself, so nothing extra is ever saved.
+  var nlBlockKeys = new WeakMap();
+  var nlNextBlockKey = 1;
+  var nlCollapsed = new Set();
+
+  // Set when a whole document arrives, applied on the next render. Doing it here rather than at the
+  // call sites means every path that loads a newsletter gets the same behaviour.
+  var nlCollapseAllOnNextRender = false;
+
+  function nlKeyFor(block) {
+    if (!nlBlockKeys.has(block)) nlBlockKeys.set(block, nlNextBlockKey++);
+    return nlBlockKeys.get(block);
+  }
+
+  function nlToggleBlock(key) {
+    if (nlCollapsed.has(key)) nlCollapsed.delete(key);
+    else nlCollapsed.add(key);
+    nlRenderCanvas();
+  }
+
+  function nlSetAllCollapsed(on) {
+    nlCollapsed.clear();
+    if (on) (nlDoc.blocks || []).forEach(function (b) { nlCollapsed.add(nlKeyFor(b)); });
+    nlRenderCanvas();
+  }
+
+  /**
+   * A one-line hint of what a collapsed block contains. Takes the first piece of real text in
+   * the block's data, so a Text block shows its opening words and a Button shows its label —
+   * without this a long newsletter collapses into a stack of indistinguishable bars.
+   */
+  function nlBlockSummary(block) {
+    var data = block && block.data;
+    if (!data) return "";
+    var preferred = ["heading", "title", "label", "text", "lead", "name", "caption", "href", "src"];
+    for (var i = 0; i < preferred.length; i++) {
+      var v = data[preferred[i]];
+      if (typeof v === "string" && v.trim()) return nlTrim(v);
+    }
+    for (var k in data) {
+      if (typeof data[k] === "string" && data[k].trim()) return nlTrim(data[k]);
+    }
+    return "";
+  }
+
+  function nlTrim(v) {
+    var t = String(v).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    return t.length > 64 ? t.slice(0, 63) + "\u2026" : t;
+  }
+
   function nlRenderCanvas() {
     var host = el("nlCanvas");
     host.innerHTML = "";
@@ -1934,16 +1987,44 @@
       host.appendChild(empty);
       return;
     }
+    var countEl = el("nlCanvasCount");
+    if (countEl) {
+      var n = (nlDoc.blocks || []).length;
+      countEl.textContent = n === 1 ? "1 block" : n + " blocks";
+    }
+    if (nlCollapseAllOnNextRender) {
+      nlCollapseAllOnNextRender = false;
+      nlCollapsed.clear();
+      nlDoc.blocks.forEach(function (b) { nlCollapsed.add(nlKeyFor(b)); });
+    }
     nlDoc.blocks.forEach(function (block, i) {
       var li = doc.createElement("li");
-      li.className = "nl-block";
+      var key = nlKeyFor(block);
+      var collapsed = nlCollapsed.has(key);
+      li.className = "nl-block" + (collapsed ? " is-collapsed" : "");
       var def = nlBlockDefs[block.type] || { label: "Raw HTML", icon: "text" };
 
       var head = doc.createElement("div");
       head.className = "nl-block-head";
+      // The head is the toggle. A collapsed block still says WHAT it holds — a stack of
+      // identical "Text" bars you have to open one by one to find the right one is worse than
+      // the scrolling it replaced.
       head.innerHTML =
+        '<button type="button" class="nl-block-toggle" aria-expanded="' + (collapsed ? "false" : "true") +
+        '" aria-label="' + (collapsed ? "Expand" : "Collapse") + ' ' + def.label + '"></button>' +
         '<span class="nl-block-ic">' + nlIcon(def.icon) + "</span>" +
-        '<span class="nl-block-title">' + def.label + "</span>";
+        '<span class="nl-block-title">' + def.label + "</span>" +
+        '<span class="nl-block-sum">' + H.escapeHtml(nlBlockSummary(block)) + "</span>";
+      head.querySelector(".nl-block-toggle").addEventListener("click", function (e) {
+        e.stopPropagation();
+        nlToggleBlock(key);
+      });
+      // Clicking the bar itself toggles too, but never when the click was meant for one of the
+      // move/duplicate/delete controls sitting in the same row.
+      head.addEventListener("click", function (e) {
+        if (e.target.closest(".nl-block-ctrls")) return;
+        nlToggleBlock(key);
+      });
       // In read mode the mutation controls (move / duplicate / delete) are omitted entirely.
       if (!readOnly) {
         var ctrls = doc.createElement("span");
@@ -2922,8 +3003,12 @@
         // A block-doc newsletter hydrates its blocks; a legacy raw-HTML draft becomes one rawHtml block.
         if (n.bodyJson && Array.isArray(n.bodyJson.blocks)) {
           nlDoc = n.bodyJson;
+          // TASK-289: open a newsletter and every block is collapsed. You are orienting, not
+          // editing - and a ten-block newsletter of fully-expanded forms was the whole complaint.
+          nlCollapseAllOnNextRender = true;
         } else {
           nlDoc = { blocks: [{ type: "rawHtml", variant: 0, data: { html: n.bodyHtml || "" } }] };
+          nlCollapseAllOnNextRender = true;
         }
         var sent = n.status === "sent";
         nlSent = sent;
@@ -4136,6 +4221,12 @@
     // "Send now" is the default, so the schedule field starts hidden and the two agree from the
     // outset rather than after the first click.
     nlSetWhen(false);
+    if (el("nlCollapseAll")) {
+      el("nlCollapseAll").addEventListener("click", function () { nlSetAllCollapsed(true); });
+    }
+    if (el("nlExpandAll")) {
+      el("nlExpandAll").addEventListener("click", function () { nlSetAllCollapsed(false); });
+    }
     if (cpBack) {
       cpBack.addEventListener("click", function () {
         var at = NL_COMPOSE_PANELS.indexOf(nlLivePanel());

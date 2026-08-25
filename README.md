@@ -4273,3 +4273,20 @@ Donors and both get it — in one send, from one draft.
   unchanged on old and new rows alike. Dropping `list_id` belongs in a later release, once nothing
   reads it.
 - `listId` is still accepted on the send and preview endpoints; `listIds` is the richer form.
+
+**Collapsible blocks (TASK-289).** A ten-block newsletter was ten fully expanded forms, so finding
+the one you wanted meant scrolling past every field of every other one. Blocks now collapse.
+
+- **Opening a newsletter starts everything collapsed.** You are orienting, not editing — and the
+  scrolling was the complaint. Adding a block leaves it open, because you are about to fill it in.
+  **Collapse all** / **Expand all** sit above the canvas with the block count.
+- **A collapsed block still says what it holds** — the first real text in its data, so a Text block
+  shows its opening words and a Button shows its label. A stack of identical "Text" bars you have to
+  open one by one would be worse than the scrolling it replaced.
+- **Collapsed state is keyed by the block object, not its index** (`WeakMap`). `nlRenderCanvas`
+  rebuilds everything on every change, so an index-keyed set would follow the *position*: moving the
+  open block up would leave it shut and open whatever landed in its place. Pinned by a test, verified
+  by mutation — swapping the WeakMap for `indexOf` turns it red. The WeakMap also keeps the key off
+  the block itself, so nothing extra is ever saved.
+- **The builder itself is untouched.** The DOM is unchanged; CSS hides everything after the head when
+  a block carries `.is-collapsed`. The 49 existing builder tests stay green.

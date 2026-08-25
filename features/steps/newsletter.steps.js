@@ -43,12 +43,15 @@ Before({ tags: "@newsletter" }, async function () {
   await pool.query(
     "DELETE FROM newsletter_images WHERE uploaded_by IN (SELECT id FROM users WHERE email LIKE '%newsletter.bdd@example.com')",
   );
+  // Newsletters BEFORE users: newsletters.sent_by references users, so deleting the admins first
+  // fails the moment any scenario has actually SENT something. That is what TASK-288's dedupe
+  // scenario tripped over - it left a sent newsletter behind and the next run could not clear the
+  // user who sent it. Order matters more than the subject list, which will always drift.
+  await pool.query(
+    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update','Dedupe check')",
+  );
   await pool.query("DELETE FROM users WHERE email LIKE '%newsletter.bdd@example.com'");
   await pool.query("DELETE FROM donors WHERE email LIKE '%newsletter.bdd@example.com'");
-  // Remove any newsletters a prior run created (subjects are test-specific).
-  await pool.query(
-    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update')",
-  );
   // TASK-249: templates OUTLIVE the users deleted above (created_by is ON DELETE SET NULL — a
   // template belongs to the team, not its author), so they must be cleared by name or a re-run would
   // hit the unique-name rule and 409 where it expects 201.
@@ -66,7 +69,7 @@ After({ tags: "@newsletter" }, async function () {
     "DELETE FROM newsletter_images WHERE uploaded_by IN (SELECT id FROM users WHERE email LIKE '%newsletter.bdd@example.com')",
   );
   await pool.query(
-    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update')",
+    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update','Dedupe check')",
   );
 });
 

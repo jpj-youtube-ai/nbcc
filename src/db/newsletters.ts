@@ -404,12 +404,18 @@ export async function addNewsletterSubscriber(
     [lower],
   );
   if (existing.rows.length > 0) {
-    await pool.query(`UPDATE donors SET email_consent = true WHERE lower(email) = $1`, [lower]);
+    // TASK-291: both consents. This action's own confirmation promises "all our emails back on",
+    // so leaving thank-you letters off would make that wording untrue.
+    await pool.query(
+      `UPDATE donors SET email_consent = true, thankyou_consent = true WHERE lower(email) = $1`,
+      [lower],
+    );
     return { email: lower, status: "resubscribed" };
   }
   const fullName = name && name.trim() ? name.trim() : trimmed.split("@")[0];
   await pool.query(
-    `INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', $1, $2, true)`,
+    `INSERT INTO donors (donor_type, full_name, email, email_consent, thankyou_consent)
+     VALUES ('individual', $1, $2, true, true)`,
     [fullName, trimmed],
   );
   return { email: lower, status: "added" };

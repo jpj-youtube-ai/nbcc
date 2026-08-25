@@ -112,11 +112,29 @@ describe("tombstones, not deletes", () => {
 describe("audience kinds and archiving (TASK-270)", () => {
   it("counts the LIVE donor audience for donors/everyone, not just stored rows", async () => {
     queryMock.mockResolvedValueOnce({
-      rows: [{ id: 1, slug: "newsletter", name: "Newsletter", kind: "everyone", member_count: "412" }],
+      rows: [
+        {
+          id: 1,
+          slug: "newsletter",
+          name: "Newsletter",
+          kind: "everyone",
+          visibility: "public",
+          member_count: "412",
+        },
+      ],
     });
     const lists = await listSubscriberLists();
+    // TASK-291: visibility rides along - private (staff add only, never shown outside) or public
+    // (people may opt in from the preferences page).
     expect(lists).toEqual([
-      { id: 1, slug: "newsletter", name: "Newsletter", kind: "everyone", memberCount: 412 },
+      {
+        id: 1,
+        slug: "newsletter",
+        name: "Newsletter",
+        kind: "everyone",
+        visibility: "public",
+        memberCount: 412,
+      },
     ]);
     const sql = sqlOf(/from\s+subscriber_lists/i);
     // the count must consult donors for the dynamic kinds, and union them for 'everyone'

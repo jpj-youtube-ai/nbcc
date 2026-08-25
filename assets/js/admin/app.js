@@ -1849,6 +1849,21 @@
     del: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
     plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
   };
+  // TASK-291: a padlock and a globe, on the same grid and stroke weight as every other icon here.
+  var NL_VIS_ICONS = {
+    lock:
+      '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/>' +
+      '<path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+    globe:
+      '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/>' +
+      '<path d="M12 3.5a13 13 0 0 1 0 17 13 13 0 0 1 0-17"/>',
+  };
+  function nlVisIcon(name) {
+    return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" ' +
+      'stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      (NL_VIS_ICONS[name] || "") + "</svg>";
+  }
+
   function nlIcon(name) {
     return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" ' +
       'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
@@ -3536,6 +3551,26 @@
     // is built on, so the server refuses them and the button should not pretend otherwise.
     var arch = el("audienceArchive");
     if (arch) arch.hidden = !(a && a.kind === "manual" && canEdit("newsletter"));
+    nlSyncVisibility(a);
+  }
+
+  // TASK-291: the padlock / globe. Only a MANUAL audience can change: Newsletter is publicly
+  // joinable by definition (the website footer) and Donors follows donor consent, so offering to
+  // flip either would promise something the code does not do.
+  function nlSyncVisibility(a) {
+    var btn = el("audienceVisibility");
+    if (!btn) return;
+    if (!a || a.kind !== "manual" || !canEdit("newsletter")) { btn.hidden = true; return; }
+    var isPublic = a.visibility === "public";
+    btn.hidden = false;
+    btn.setAttribute("aria-pressed", String(isPublic));
+    btn.classList.toggle("is-public", isPublic);
+    btn.title = isPublic
+      ? "Public — people can add themselves from the email preferences page. Click to make it private."
+      : "Private — only you can add people, and nobody outside knows it exists. Click to make it public.";
+    // The word does the work; the symbol is a reinforcement, never the only signal.
+    btn.innerHTML =
+      nlVisIcon(isPublic ? "globe" : "lock") + " " + (isPublic ? "Public" : "Private");
   }
 
   // TASK-271: name the audience and its size next to the Send button, before the confirmation repeats
@@ -4182,6 +4217,31 @@
     }
 
     // --- Audiences card wiring (TASK-259) ---------------------------------------------------------
+    if (el("audienceVisibility")) {
+      el("audienceVisibility").addEventListener("click", function () {
+        if (!canEdit("newsletter")) return;
+        var a = nlAudienceById(el("audiencePick").value);
+        if (!a) return;
+        var next = a.visibility === "public" ? "private" : "public";
+        if (next === "public" && !window.confirm(
+          "Make \"" + a.name + "\" public?\n\nAnyone with one of our emails will be able to add " +
+          "themselves to it from the preferences page. Private audiences are never shown to anyone."
+        )) return;
+        authFetch("/api/admin/subscriber-lists/" + a.id + "/visibility", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ visibility: next }),
+        })
+          .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
+          .then(function (r) {
+            nlAudienceMsg(r.ok
+              ? (next === "public" ? "Anyone can now join this audience." : "This audience is private again.")
+              : (r.b && r.b.error) || "Could not change that.");
+            return nlRefreshAudiences();
+          })
+          .catch(function () { nlAudienceMsg("Could not change that."); });
+      });
+    }
     if (el("audiencePick")) {
       el("audiencePick").addEventListener("change", function () {
         nlLoadAudienceMembers();

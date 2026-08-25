@@ -1230,3 +1230,15 @@ tr.nl-click:hover { background: var(--tint); }
   font-size: .78rem; cursor: pointer; transition: border-color .16s, color .16s; }
 .nl-canvas-toggle:hover { border-color: var(--crimson); color: var(--crimson); }
 .nl-canvas-toggle:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }
+
+/* ---- TASK-291: the private / public marker on an audience. The WORD carries the meaning and the
+   symbol reinforces it — a padlock alone would be a guess, and this decides who can see the
+   audience exists. ---- */
+#audienceVisibility { display: inline-flex; align-items: center; gap: .4rem;
+  border: 1.4px solid var(--line); background: var(--cream); color: var(--slate-soft);
+  border-radius: 999px; padding: 6px 13px; font-family: var(--font-body); font-weight: 600;
+  font-size: .82rem; cursor: pointer; transition: border-color .16s, color .16s, background .16s; }
+#audienceVisibility:hover { border-color: var(--slate-soft); color: var(--slate); }
+#audienceVisibility.is-public { border-color: var(--holly); background: var(--holly-soft);
+  color: var(--holly); }
+#audienceVisibility:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }

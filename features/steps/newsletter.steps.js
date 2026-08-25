@@ -891,3 +891,34 @@ When("I send that newsletter to both audiences", { timeout: 30000 }, async funct
 Then("the send should have reached {int} people", function (n) {
   assert.equal(this.nlBody.recipientCount, n, JSON.stringify(this.nlBody));
 });
+
+
+// --- TASK-291: the preference centre --------------------------------------------------------------
+// The token is built exactly as an email carries it — a subscriber token signed with the same
+// secret the app verifies with — so this exercises the real entry point, not a test-only door.
+When("that person opens their email preferences", async function () {
+  const members = await authFetch(
+    `/api/admin/subscriber-lists/${this.audienceId}/members`,
+    "GET",
+    undefined,
+    this.token,
+  );
+  assert.ok(members.json.length > 0, "expected the person to be on the first audience");
+  const body = `s${members.json[0].id}.1`;
+  const sig = createHmac("sha256", process.env.ADMIN_SESSION_SECRET || "dev-admin-session-secret")
+    .update(body)
+    .digest("base64url");
+  const res = await fetch(`${BASE_URL}/preferences/${body}.${sig}`);
+  this.prefsStatus = res.status;
+  this.prefsHtml = await res.text();
+});
+
+Then("the preferences page should offer {string}", function (name) {
+  assert.equal(this.prefsStatus, 200, this.prefsHtml.slice(0, 200));
+  assert.ok(this.prefsHtml.includes(name), `expected the page to offer ${name}`);
+});
+
+// The whole point. A private audience must not appear anywhere in the response body.
+Then("the preferences page should not mention {string}", function (name) {
+  assert.ok(!this.prefsHtml.includes(name), `the page leaked the private audience ${name}`);
+});

@@ -12,12 +12,19 @@ import { config } from "../config";
 // (avoids Dockerfile-COPY / page-list guard drift). An invalid token → 400.
 export const unsubscribeRouter = Router();
 
-function page(message: string): string {
+// TASK-291: every confirmation now offers the preference centre. The unsubscribe itself has
+// already happened by the time this renders - the link is what you can do NEXT, never a gate in
+// front of leaving.
+function page(message: string, token?: string): string {
+  const manage = token
+    ? `<p><a href="/preferences/${encodeURIComponent(token)}">Choose which emails you get</a> —
+       you can keep some and stop others.</p>`
+    : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Newsletter | Night Before Christmas Campaign</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:40rem;margin:4rem auto;padding:0 1rem">
-<h1>Newsletter</h1><p>${message}</p></body></html>`;
+<h1>Newsletter</h1><p>${message}</p>${manage}</body></html>`;
 }
 
 // TASK-272: shared by the GET (the in-body link a person clicks) and the POST that mail clients fire
@@ -78,7 +85,10 @@ async function handleUnsubscribe(req: Request, res: Response): Promise<Response>
       page(
         scope === "everything"
           ? "You've been unsubscribed. We'll stop sending you emails — including our newsletter and thank-you letters. Donation receipts still come through, because those are records of your gift. If this was a mistake, just reply to any of our emails or contact us and we'll put it right."
-          : "You've been unsubscribed from this mailing list. If you're on any of our other lists, those are separate — contact us if you'd like to leave those too.",
+          : "You've been unsubscribed from this mailing list. Anything else you get from us is separate and still on.",
+        // TASK-291: the token is still good, so the person can go straight on to turn individual
+        // things back on or off — including undoing this if they meant to keep it.
+        req.params.token,
       ),
     );
 }

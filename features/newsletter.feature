@@ -414,3 +414,16 @@ Feature: Admin newsletter (REQ-069)
     And I create a newsletter draft "Dedupe check"
     And I send that newsletter to both audiences
     Then the send should have reached 2 people
+
+  # TASK-291: the preference centre. The rule that matters is DISCLOSURE — the page must never
+  # mention a private audience. An unsubscribe link travels by email and gets forwarded, so anyone
+  # holding the message holds the token; a page listing every audience would tell a stranger which
+  # private groups the charity keeps.
+  Scenario: the preferences page never names a private audience
+    Given a newsletter admin "prefs.admin.newsletter.bdd@example.com" with role "admin" and password "pw-prefs"
+    When I create an audience named "Bdd Prefs Home"
+    And I add "prefs.person.bdd@example.com" named "Prefs" to that audience
+    And I create a second audience named "Bdd Secret Volunteers"
+    And that person opens their email preferences
+    Then the preferences page should offer "Bdd Prefs Home"
+    And the preferences page should not mention "Bdd Secret Volunteers"

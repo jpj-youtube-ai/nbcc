@@ -168,7 +168,8 @@ interface EligibleDonorDbRow {
   business_name: string | null;
   donor_type: string;
   email: string | null;
-  email_consent: boolean;
+  // TASK-291: thank-you letters have their own consent now; email_consent gates the newsletter.
+  thankyou_consent: boolean;
   anonymous: boolean;
   max_amount: string | number; // MAX() can come back as a string from pg
   gift_aided: boolean;
@@ -181,13 +182,13 @@ interface EligibleDonorDbRow {
 export async function listThankYouEligible(thresholdPence: number): Promise<ThankYouEligibleDonor[]> {
   const res = await pool.query<EligibleDonorDbRow>(
     `SELECT dn.id AS donor_id, dn.full_name, dn.business_name, dn.donor_type,
-            dn.email, dn.email_consent, dn.anonymous,
+            dn.email, dn.thankyou_consent, dn.anonymous,
             MAX(d.amount_pence) AS max_amount,
             BOOL_OR(d.gift_aid) AS gift_aided,
             (SELECT MAX(sent_at) FROM thank_you_sent ty WHERE ty.donor_id = dn.id) AS last_thanked_at
        FROM donors dn
        JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid'
-      GROUP BY dn.id, dn.full_name, dn.business_name, dn.donor_type, dn.email, dn.email_consent, dn.anonymous
+      GROUP BY dn.id, dn.full_name, dn.business_name, dn.donor_type, dn.email, dn.thankyou_consent, dn.anonymous
      HAVING MAX(d.amount_pence) >= $1
       ORDER BY MAX(d.amount_pence) DESC, dn.id ASC`,
     [thresholdPence],
@@ -201,7 +202,8 @@ export async function listThankYouEligible(thresholdPence: number): Promise<Than
     anonymous: r.anonymous,
     alreadyThanked: r.last_thanked_at !== null,
     lastThankedAt: r.last_thanked_at ? r.last_thanked_at.toISOString() : null,
-    sendState: deriveSendState({ email: r.email, emailConsent: r.email_consent }),
+    // TASK-291: a donor who stopped the newsletter can still be thanked, and vice versa.
+    sendState: deriveSendState({ email: r.email, emailConsent: r.thankyou_consent }),
   }));
 }
 

@@ -2933,16 +2933,21 @@
           '<p class="admin-help">Nothing has gone out yet. When it has, this is where you will see ' +
           "how it landed — delivered, bounced, clicked and unsubscribed, for every send.</p>";
       } else {
+        // TASK-286: THREE columns, not four. The overview's main column is ~620px in the real
+        // shell (1280 max-width minus the 210px nav and padding), and four columns needed ~750 —
+        // so the table scrolled sideways inside its own card. The audience moves into the meta
+        // line, where it reads better anyway: "9 June · Jaimie · Newsletter" is one fact about the
+        // send, not a column you scan.
         var html =
-          '<table class="admin-table"><thead><tr><th>Newsletter</th><th>Audience</th>' +
+          '<table class="admin-table nl-sends"><thead><tr><th>Newsletter</th>' +
           '<th class="nl-r">Delivered</th><th class="nl-r">Clicked</th></tr></thead><tbody>';
         sent.slice(0, 6).forEach(function (r) {
           var n = r.recipientCount || 0;
+          var meta = [nlWhen(r.sentAt), r.sentBy, r.audience].filter(Boolean).map(H.escapeHtml);
           html +=
             '<tr class="nl-click" data-who-got="' + r.id + '">' +
-            "<td><span class=\"nl-subj\">" + H.escapeHtml(r.subject || "Untitled") + "</span>" +
-            '<span class="nl-meta">' + H.escapeHtml(nlWhen(r.sentAt)) + (r.sentBy ? " · " + H.escapeHtml(r.sentBy) : "") + "</span></td>" +
-            "<td>" + (r.audience ? '<span class="nl-pill">' + H.escapeHtml(r.audience) + "</span>" : '<span class="nl-meta">—</span>') + "</td>" +
+            '<td><span class="nl-subj">' + H.escapeHtml(r.subject || "Untitled") + "</span>" +
+            '<span class="nl-meta">' + meta.join(" · ") + "</span></td>" +
             '<td class="nl-r">' + nlRateCell(r.deliveredCount, n) + "</td>" +
             '<td class="nl-r">' + nlRateCell(r.clickedCount, n) + "</td></tr>";
         });

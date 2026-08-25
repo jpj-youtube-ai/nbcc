@@ -731,7 +731,10 @@ tr.nl-click:hover { background: var(--tint); }
   font-size: .86rem; color: var(--slate-soft); padding: 0; flex: 0 0 auto; }
 .nl-cp-close:hover { color: var(--crimson); }
 .nl-cp-title { flex: 1; min-width: 170px; }
-.nl-cp-title b { display: block; font-weight: 600; font-size: .93rem; line-height: 1.3; }
+/* One line, always. A sticky bar that grows as you type a long subject shifts everything under
+   it, which is worse than not seeing the whole subject — the field itself is right below. */
+.nl-cp-title b { display: block; font-weight: 600; font-size: .93rem; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nl-cp-saved { font-size: .76rem; color: var(--slate-soft); }
 
 .nl-cp-steps { display: flex; align-items: center; flex-wrap: wrap; }
@@ -1057,3 +1060,79 @@ tr.nl-click:hover { background: var(--tint); }
   .nl-res-tiles { grid-template-columns: 1fr; }
   .nl-aud-card { flex-wrap: wrap; }
 }
+
+/* =================================================================
+   TASK-286 — four layout faults, all from designing against the wrong
+   width. The real content column is ~1006px (1280 max-width minus the
+   210px nav and padding), and the overview's main column ~620px of that.
+   ================================================================= */
+
+/* ---- 1. Recent sends: FIT the card, never scroll inside it. Horizontal scroll in a box that
+   looks like a finished table reads as broken, and the scrollbar hides the last column. Three
+   columns, and the rate cells give up fixed widths so the subject can take what it needs. ---- */
+.nl-sends { table-layout: fixed; width: 100%; }
+.nl-sends th, .nl-sends td { padding-left: 0; padding-right: .5rem; }
+.nl-sends th:last-child, .nl-sends td:last-child { padding-right: 0; }
+.nl-sends th:not(:first-child), .nl-sends td:not(:first-child) { width: 6.5rem; }
+.nl-sends .nl-subj { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nl-sends .nl-meta { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nl-sends .nl-rate { gap: .4rem; }
+.nl-sends .nl-rate-bar { width: 34px; }
+.nl-sends .nl-rate-n { min-width: 3.1rem; font-size: .8rem; }
+/* The wrapper keeps overflow:auto as a safety net for very long names, but with the table fixed
+   it should never actually engage. */
+#nlRecentSends { overflow-x: auto; }
+
+/* ---- 2. The tick lists run SIDE TO SIDE. They were stacking in a 303px column because the
+   fieldset is a flex item inside .nl-subscriber-form and never claimed a full row — grid-column
+   does nothing in a flex container. Full row, then wrap horizontally. ---- */
+.nl-ticks { flex: 1 1 100%; width: 100%; flex-direction: row; flex-wrap: wrap; gap: .45rem; }
+.nl-ticks .nl-tick { flex: 1 1 190px; min-width: 0; }
+/* The "Add to" / "Import into" label belongs above the choices, not floating beside a tall
+   column of them. */
+.nl-dest-label { flex: 1 1 100%; width: 100%; margin: 0 0 .1rem;
+  font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .09em;
+  color: var(--slate-soft); }
+/* Donors is explanatory rather than choosable, so it takes a full row and stops competing for
+   width with the audiences you can actually tick. */
+.nl-ticks .nl-tick.is-off { flex: 1 1 100%; }
+
+/* ---- 3 & 4. The compose bars. Both ran edge to edge with no horizontal padding, so "Close" and
+   the footer hint sat flush against the border, and the sticky bar had nothing separating it from
+   the content sliding under it. Inset to match the cards, with a hairline and a soft shadow so
+   they read as chrome floating over the page rather than part of it. ---- */
+.nl-cp-bar {
+  padding: 12px clamp(14px, 2vw, 20px);
+  margin: 0 0 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(74, 50, 28, .05), 0 6px 18px rgba(74, 50, 28, .05);
+  /* Clear of the sticky admin topbar, with a little air rather than butted against it. */
+  top: 68px;
+}
+.nl-cp-foot {
+  padding: 12px clamp(14px, 2vw, 20px);
+  margin-top: 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 -1px 2px rgba(74, 50, 28, .05), 0 -6px 18px rgba(74, 50, 28, .06);
+  bottom: 12px;
+}
+/* A sticky bar with a transparent edge lets content show through as it scrolls under. */
+.nl-cp-bar, .nl-cp-foot { background: color-mix(in srgb, var(--card) 94%, transparent);
+  backdrop-filter: saturate(140%) blur(8px); }
+
+@media (max-width: 700px) {
+  .nl-cp-bar, .nl-cp-foot { border-radius: 10px; }
+  .nl-ticks .nl-tick { flex: 1 1 100%; }
+}
+
+/* ---- TASK-286: a grid/flex item defaults to min-width:auto, so its widest child can force the
+   whole column wider than the viewport. The preview iframe is a fixed 660px until nlFitPreview
+   zooms it down — and nlFitPreview deliberately bails while the panel is hidden — so without this
+   the entire admin page can end up scrolling sideways on a phone. Costs nothing, removes a whole
+   class of layout bug. */
+.admin-content { min-width: 0; }
+.nl-builder > *, .nl-left, .nl-right { min-width: 0; }
+.nl-ov-grid > *, .nl-send-grid > *, .nl-res-grid > *, .nl-who-grid > *, .nl-extras > * { min-width: 0; }
+.nl-preview-frame, .nl-preview-wrap { max-width: 100%; }

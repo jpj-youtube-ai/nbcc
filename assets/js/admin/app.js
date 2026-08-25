@@ -2337,6 +2337,12 @@
     if (!iframe || !wrap) return;
     var cdoc = iframe.contentDocument;
     if (!cdoc || !cdoc.body) return;
+    // TASK-284: bail while the panel is hidden. Since TASK-283 the tab opens on the Overview and
+    // prefills the editor in the background, so the preview's load event fires with the Write panel
+    // still hidden — clientWidth 0, scale 0, zoom 0, and the iframe collapses to nothing. What you
+    // then saw was the wrapper's own background filling its fixed height, which read as a solid
+    // block rather than a broken preview. nlShowPanel re-fits when the panel becomes visible.
+    if (!wrap.clientWidth) return;
     var scale = Math.min(1, wrap.clientWidth / EMAIL_W);
     iframe.style.width = EMAIL_W + "px";
     iframe.style.height = "0px"; // reset so scrollHeight reflects content, not the old height
@@ -2489,6 +2495,10 @@
       b.classList.toggle("is-done", at > -1 && i < at);
     });
     if (composing) nlPaintComposeFoot(panelId);
+    // The preview cannot size itself while hidden (see nlFitPreview), so re-fit the moment the
+    // Write panel is on screen and has a real width.
+    if (panelId === "nlPanelWrite" && typeof nlFitPreview === "function") nlFitPreview();
+    if (panelId === "nlPanelSend") nlPaintSendSummary();
     // Coming back to a destination should start at the top of it, not wherever the composer was
     // scrolled to. Only when the page can actually scroll: jsdom has no layout, so calling it there
     // just prints "Not implemented" noise into the test output for no behaviour.
@@ -2499,6 +2509,42 @@
         window.scrollTo(0, 0);
       }
     }
+  }
+
+  // TASK-284: the summary beside the Send button. It restates the decisions made on the previous two
+  // steps, because the button that mails several hundred people should not be the only thing on
+  // screen that has no idea what it is about to do. Every figure is read back from the live controls
+  // rather than remembered, so it cannot drift from what will actually happen.
+  function nlPaintSendSummary() {
+    var box = el("nlSendSummaryList");
+    if (!box) return;
+    var pick = el("sendListPick");
+    var a = pick ? nlAudienceById(pick.value) : null;
+    var when = el("sendScheduleAt") && el("sendScheduleAt").value;
+    var gradual = el("sendRollout") && el("sendRollout").checked;
+    var subject = (el("newsletterSubject") && el("newsletterSubject").value) || "Untitled newsletter";
+    var whenText = "Straight away";
+    if (when) {
+      var d = new Date(when);
+      whenText = isNaN(d.getTime())
+        ? "Straight away"
+        : d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) +
+          ", " + d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" });
+    }
+    box.innerHTML =
+      nlPair("Subject", H.escapeHtml(subject)) +
+      nlPair("Audience", a ? H.escapeHtml(a.name) : "Not chosen yet") +
+      nlPair("Will reach", a ? a.memberCount + (a.memberCount === 1 ? " person" : " people") : "—", true) +
+      '<div class="nl-summary-rule"></div>' +
+      nlPair("Goes out", H.escapeHtml(whenText)) +
+      nlPair("Pace", gradual ? "Gradual, over a few days" : "All at once");
+  }
+
+  function nlPair(k, v, num) {
+    return (
+      '<div class="nl-pair"><dt>' + H.escapeHtml(k) + '</dt><dd' + (num ? ' class="num"' : "") + ">" +
+      v + "</dd></div>"
+    );
   }
 
   /** Which panel is on screen right now. Read from the DOM so it cannot drift from what is shown. */

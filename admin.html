@@ -503,7 +503,11 @@
                 <div class="nl-panel" id="nlPanelWrite">
                 <h3 class="nl-stage-head"><span class="nl-stage-num">2</span> Write the newsletter</h3>
                 <input type="hidden" id="newsletterId" />
-                <p><label>Subject<br /><input type="text" id="newsletterSubject" required style="width:100%" /></label></p>
+                <div class="nl-subject">
+                  <label for="newsletterSubject">Subject line</label>
+                  <input type="text" id="newsletterSubject" required style="width:100%" />
+                  <p class="nl-subject-hint">This is the first thing people see in their inbox.</p>
+                </div>
                 <div class="nl-builder">
                   <div class="nl-left">
                     <div class="nl-palette" id="nlPalette" aria-label="Add a block"></div>
@@ -511,10 +515,31 @@
                   </div>
                   <div class="nl-right">
                     <div class="nl-preview-label">Preview</div>
-                    <div class="nl-preview-wrap" id="nlPreviewWrap">
-                      <iframe id="nlPreview" title="Newsletter preview" class="nl-preview" scrolling="no"></iframe>
+                    <!-- Framed like a mail client rather than shown as a bare rectangle: the frame
+                         is what tells you this is the email, not part of the admin. -->
+                    <div class="nl-preview-frame">
+                      <div class="nl-preview-chrome">
+                        <span class="nl-preview-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                        <span>From NBCC &lt;newsletter@nbcc.scot&gt;</span>
+                      </div>
+                      <div class="nl-preview-wrap" id="nlPreviewWrap">
+                        <iframe id="nlPreview" title="Newsletter preview" class="nl-preview" scrolling="no"></iframe>
+                      </div>
                     </div>
                   </div>
+                </div>
+
+                <!-- TASK-284: the actions sit directly under the builder, where the work is. They
+                     used to come after Documents and the template library, so the two buttons you
+                     press constantly were below two panels you rarely touch. -->
+                <div class="nl-actions">
+                  <button type="button" id="newsletterNew">New newsletter</button>
+                  <!-- Loads the built-in showcase covering every block type. Renamed from "Start from
+                       template" in TASK-249: once real templates can be saved, one word meant two
+                       things. This one is an EXAMPLE; the saved library below holds templates. -->
+                  <button type="button" id="newsletterTemplate">Start from example</button>
+                  <button type="submit" id="newsletterSave">Save</button>
+                  <button type="button" id="newsletterTest">Send test to me</button>
                 </div>
 
                 <!-- Delivery stats (TASK-256, email stats Phase 1): shown only for a SENT newsletter.
@@ -533,7 +558,11 @@
                      files are hosted on a public print/download page and linked from the newsletter
                      via a button block — never attached to the email. Needs a saved newsletter
                      (an id); app.js shows the hint until then, and hides the whole block in read mode. -->
-                <div class="nl-attach" id="nlAttachments">
+                <!-- TASK-284: Documents and Templates were two full-width panels stacked down the
+                     page. Side by side as cards they take a third of the height and read as the
+                     secondary tools they are, matching the approved prototype. -->
+                <div class="nl-extras">
+                <div class="nl-card nl-attach" id="nlAttachments">
                   <h3 class="admin-subhead">Documents</h3>
                   <p class="admin-help">Upload a document (PDF, image, Word/Excel, up to 10&nbsp;MB) — a certificate, an order of service — then use <b>Insert button</b> to add a button readers click to view, print or download it. Documents are linked from the newsletter, not attached to the email.</p>
                   <p class="nl-attach-hint" id="nlAttachHint" hidden>Save the newsletter first to add documents.</p>
@@ -545,16 +574,10 @@
                   <p id="nlAttachMsg" class="nl-sub-msg" aria-live="polite"></p>
                 </div>
 
-                <div class="nl-actions">
-                  <button type="button" id="newsletterNew">New newsletter</button>
-                  <!-- Loads the built-in showcase covering every block type. Renamed from "Start from
-                       template" in TASK-249: once real templates can be saved, one word meant two
-                       things. This one is an EXAMPLE; the saved library below holds templates. -->
-                  <button type="button" id="newsletterTemplate">Start from example</button>
-                  <button type="submit" id="newsletterSave">Save</button>
-                  <button type="button" id="newsletterTest">Send test to me</button>
-                </div>
 
+                <div class="nl-card">
+                  <h4>Templates</h4>
+                  <p class="admin-help">Start from a layout the team has saved, or save this one for next time.</p>
                 <!-- The SHARED saved-template library (TASK-249). Whatever anyone saves here, the whole
                      team can start from. Hidden entirely until the library has something in it, so a
                      brand-new install doesn't show an empty picker. -->
@@ -574,6 +597,8 @@
                   <button type="button" id="newsletterTemplateSaveCancel" hidden>Cancel</button>
                 </div>
                 <p id="nlTemplateMsg" class="nl-sub-msg" aria-live="polite"></p>
+                </div>
+                </div>
                 </div>
 
                 <!-- Step 2. Choosing WHO is its own step now. It used to share a panel with the
@@ -598,12 +623,17 @@
                 </div>
 
                 <div class="nl-panel" id="nlPanelSend" hidden>
-                <!-- Step 3. Nothing goes out until the button here is pressed, and the summary
-                     beside it repeats the audience and the count one last time. -->
+                <!-- Step 3. Two columns, matching the approved prototype: the decisions on the left,
+                     and a summary on the right CARRYING the send button — so the last thing you read
+                     before mailing several hundred people is who it is going to and how many that
+                     is. Previously the Send button sat alone at the top of a loose stack of
+                     controls, with nothing restating what pressing it would do. -->
                 <h3 class="nl-stage-head">Ready to send</h3>
-                <div class="nl-send-row">
-                  <button type="button" id="newsletterSend" hidden>Send</button>
-                </div>
+                <div class="nl-send-grid">
+                  <div>
+                    <div class="nl-card">
+                      <h4>When should it go?</h4>
+                      <p class="admin-help">Write now, land when people are reading.</p>
 
                 <!-- TASK-280 (letter J): send it later. Volunteers write in the evening or at the
                      weekend, but a newsletter lands best on a weekday morning. Empty = send now, so
@@ -624,23 +654,37 @@
                      treat it as one — the mail lands in junk and the damage outlives the campaign.
                      Easing out over a few days builds the track record that earns the next day's
                      larger allowance. Recommended for a first big send; harmless afterwards. -->
-                <label class="nl-rollout" id="sendRolloutWrap" hidden>
-                  <input type="checkbox" id="sendRollout" />
-                  <span><b>Ease this one out gradually</b> — send about 200 on the first day, then double each day until everyone has it. Recommended for your first big send, so we don't look like spam to Gmail.</span>
-                </label>
+                    </div>
 
-                <!-- Live progress. Sending happens in the background now, so this survives closing
-                     the browser — and can be paused or stopped, which was previously impossible. -->
-                <div class="nl-send-progress" id="sendProgress" hidden>
-                  <div class="nl-progress-bar"><span id="sendProgressFill"></span></div>
-                  <p class="nl-progress-text" id="sendProgressText" aria-live="polite"></p>
-                  <div class="nl-progress-actions">
-                    <button type="button" id="sendPause">Pause</button>
-                    <button type="button" id="sendResume" hidden>Resume</button>
-                    <button type="button" id="sendCancel" class="admin-link-danger">Stop sending</button>
+                    <label class="nl-rollout" id="sendRolloutWrap" hidden>
+                      <input type="checkbox" id="sendRollout" />
+                      <span><b>Ease this one out gradually</b> — send about 200 on the first day, then double each day until everyone has it. Recommended for your first big send, so we don't look like spam to Gmail.</span>
+                    </label>
+
+                    <!-- Live progress. Sending happens in the background, so this survives closing
+                         the browser — and can be paused or stopped, which was once impossible. -->
+                    <div class="nl-send-progress" id="sendProgress" hidden>
+                      <div class="nl-progress-bar"><span id="sendProgressFill"></span></div>
+                      <p class="nl-progress-text" id="sendProgressText" aria-live="polite"></p>
+                      <div class="nl-progress-actions">
+                        <button type="button" id="sendPause">Pause</button>
+                        <button type="button" id="sendResume" hidden>Resume</button>
+                        <button type="button" id="sendCancel" class="admin-link-danger">Stop sending</button>
+                      </div>
+                    </div>
+                    <p id="newsletterMsg" aria-live="polite"></p>
                   </div>
+
+                  <!-- Filled by app.js from the same audience figures step 2 showed, so the count
+                       here and the count on the confirmation can never disagree. -->
+                  <aside class="nl-summary" id="nlSendSummary">
+                    <h4>Before you send</h4>
+                    <dl id="nlSendSummaryList"></dl>
+                    <div class="nl-send-row">
+                      <button type="button" id="newsletterSend" hidden>Send</button>
+                    </div>
+                  </aside>
                 </div>
-                <p id="newsletterMsg" aria-live="polite"></p>
                 </div>
               </form>
 

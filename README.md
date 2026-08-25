@@ -4218,3 +4218,35 @@ full-bleed, so every measurement taken during TASK-283–285 was a lie.
 
 **The harness now mirrors the real shell** (210px nav column inside the 1280px grid). Measuring
 against a full-width page is what produced these four faults in the first place.
+
+**Fit and the blank tab (TASK-287).**
+
+**The tab opened completely blank.** Every panel starts hidden and `app.js` reveals one — except
+`nlPanelWrite`, which was the single panel left un-hidden in the markup. That made `nlLivePanel()`
+report `"nlPanelWrite"` on first open, so the guard meant to land you on the Overview never fired;
+and because `nlPanelWrite` lives inside `.nl-compose` (`display: none` until composing), *nothing at
+all* was on screen. The markup no longer picks a winner — `app.js` decides — and a test pins the
+invariant, verified by mutation.
+
+**Every table now fits its card.** The shared `.admin-table` sets `white-space: nowrap` on every
+cell, so a table grows to its longest email address and the card scrolls sideways with the last
+column pushed off the edge. Fixed by carrying fewer columns rather than by hiding the scrollbar:
+
+| Table | Was | Now |
+|---|---|---|
+| Recent sends | 4 columns | 3 — audience folded into the meta line |
+| People on an audience | 7 columns | **3** — Person · Added · Remove |
+| All newsletters | 7 columns | **4** — Newsletter · Status · Accepted · actions |
+
+Nothing was dropped. The same facts are grouped as the two questions people actually ask — *who is
+this?* and *how did they get here?* — instead of seven columns nobody can read at once. Inside the
+newsletter panels cells wrap rather than refuse to, and the tables are fixed-layout so the columns
+are shared out rather than fought over.
+
+**Text no longer sits in the card's rounded corner.** The wrap has a 16px radius and the first cell
+had 14px of padding, so a long name ran straight into the curve. Now 19px of clearance.
+
+**"Add a person" and "Import a spreadsheet" sit side by side**, as the prototype has them. Stacked
+full-width they read as a long form to work down; beside each other they read as a choice: one
+person, or a spreadsheet. "Someone asked us to email them again" moved below the pair — it is a rare,
+deliberate action and was wedged between the two things that belong together.

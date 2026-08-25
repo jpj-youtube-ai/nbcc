@@ -4250,3 +4250,26 @@ had 14px of padding, so a long name ran straight into the curve. Now 19px of cle
 full-width they read as a long form to work down; beside each other they read as a choice: one
 person, or a spreadsheet. "Someone asked us to email them again" moved below the pair — it is a rare,
 deliberate action and was wedged between the two things that belong together.
+
+**One newsletter, several audiences (TASK-288).** The Who step is multi-select. Pick Volunteers *and*
+Donors and both get it — in one send, from one draft.
+
+- **The rule that matters is deduplication.** Somebody on two chosen audiences gets **one** email.
+  Sending twice is the fastest way to be marked as spam, and the person who reports it is one of your
+  most engaged supporters. The fold lives in `src/newsletter/merge-recipients.ts` — pure and DB-free,
+  so the rule is pinned by tests that need no database, plus a BDD scenario that proves it end to end.
+- **When the same address appears twice, the better-informed record wins.** A donor row carries the
+  donor id the unsubscribe token is built from and usually the full name; letting a bare subscriber
+  row overwrite it would cost the greeting and the correct unsubscribe link.
+- **The count comes from the server, never from adding the audiences up.** A sum would promise more
+  people than will be mailed. The reach panel shows the union *and* the overlap — "on more than one"
+  is exactly the number who would otherwise have been mailed twice — and the confirmation repeats the
+  same figure from the same endpoint.
+- **The confirmation names every audience.** Saying "Volunteers" when it is going to Volunteers and
+  Donors would make the one check standing between a draft and several hundred inboxes actively
+  misleading.
+- **Expand-only migration.** `newsletters.list_ids int[]`, nullable. `list_id` is untouched and still
+  holds the first audience, so the history join, the stats panel and `listNewsletters` all work
+  unchanged on old and new rows alike. Dropping `list_id` belongs in a later release, once nothing
+  reads it.
+- `listId` is still accepted on the send and preview endpoints; `listIds` is the richer form.

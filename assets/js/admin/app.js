@@ -2680,11 +2680,16 @@
   // what each audience means and how big it is until you opened it. The cards say all of it up
   // front. #sendListPick is kept in sync as the hidden mirror, so the send request, the confirmation
   // and sendAudienceNote all keep reading exactly what they always did.
+  // Which audiences are chosen. The hidden #sendListPick still mirrors the FIRST, so anything
+  // that has always read it keeps working.
+  var nlChosenAudiences = [];
+
   function nlRenderAudienceCards() {
     var host = el("nlAudienceCards");
     if (!host) return;
     var pick = el("sendListPick");
-    var current = pick ? String(pick.value) : "";
+    // Seed from the mirror the first time, so the audience already selected stays selected.
+    if (!nlChosenAudiences.length && pick && pick.value) nlChosenAudiences = [Number(pick.value)];
     if (!nlAudiences.length) {
       host.innerHTML = '<p class="admin-empty">No audiences yet — add one under Audiences &amp; people.</p>';
       return;
@@ -2699,9 +2704,9 @@
               : "Exactly the people you have put on this list, nobody else.";
         var tag =
           a.kind === "everyone" ? "Everyone" : a.kind === "donors" ? "Automatic" : "";
-        var on = String(a.id) === current;
+        var on = nlChosenAudiences.indexOf(a.id) !== -1;
         return (
-          '<button type="button" class="nl-aud-card' + (on ? " is-on" : "") + '" role="radio"' +
+          '<button type="button" class="nl-aud-card' + (on ? " is-on" : "") + '" role="checkbox"' +
           ' aria-checked="' + (on ? "true" : "false") + '" data-aud-card="' + a.id + '">' +
           '<span class="nl-aud-tick" aria-hidden="true"></span>' +
           '<span class="nl-aud-info"><b>' + H.escapeHtml(a.name) +
@@ -2715,14 +2720,78 @@
       .join("");
     Array.prototype.forEach.call(host.querySelectorAll("[data-aud-card]"), function (b) {
       b.addEventListener("click", function () {
-        if (pick) {
-          pick.value = b.getAttribute("data-aud-card");
-          // Fire change so every existing listener behaves exactly as it did with the dropdown.
+        var id = Number(b.getAttribute("data-aud-card"));
+        var at = nlChosenAudiences.indexOf(id);
+        if (at === -1) nlChosenAudiences.push(id);
+        else nlChosenAudiences.splice(at, 1);
+        // The mirror follows the first choice, so the send request, the confirmation and
+        // sendAudienceNote keep reading exactly what they always have.
+        if (pick && nlChosenAudiences.length) {
+          pick.value = String(nlChosenAudiences[0]);
           pick.dispatchEvent(new Event("change", { bubbles: true }));
         }
         nlRenderAudienceCards();
+        nlRefreshReach();
       });
     });
+    nlRefreshReach();
+  }
+
+  // TASK-288: the reach figure comes from the SERVER, never from adding the audience counts up.
+  // Somebody on Volunteers AND Donors is one person and one email; a sum would promise two, and
+  // the number shown here is the number the confirmation repeats.
+  var nlReachTimer = null;
+  function nlRefreshReach() {
+    var box = el("nlReach");
+    if (!box) return;
+    if (!nlChosenAudiences.length) {
+      box.hidden = true;
+      nlPaintSendSummary();
+      return;
+    }
+    if (nlReachTimer) clearTimeout(nlReachTimer);
+    nlReachTimer = setTimeout(function () {
+      var ids = nlChosenAudiences.slice();
+      authFetch("/api/admin/newsletters/recipients?listIds=" + ids.join(","))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (b) {
+          // A slower earlier request must not overwrite a newer selection.
+          if (ids.join(",") !== nlChosenAudiences.join(",")) return;
+          nlPaintReachFrom(b, ids);
+        })
+        .catch(function () { /* the panel is guidance; never block the send on it */ });
+    }, 180);
+  }
+
+  function nlPaintReachFrom(b, ids) {
+    var box = el("nlReach");
+    if (!box || !b) return;
+    var names = (b.audiences || []).map(function (a) { return a.name; });
+    var onLists = ids.reduce(function (sum, id) {
+      var a = nlAudienceById(id);
+      return sum + (a && typeof a.memberCount === "number" ? a.memberCount : 0);
+    }, 0);
+    // The gap between the audiences added up and the people actually mailed IS the story when
+    // more than one is chosen: it is the people who would otherwise have been mailed twice.
+    var overlap = Math.max(0, onLists - b.count);
+    nlReachTotal = nlReachTotal == null ? b.count : nlReachTotal;
+    box.hidden = false;
+    box.innerHTML =
+      '<span class="admin-help" style="text-transform:uppercase;letter-spacing:.1em;font-size:.72rem">This newsletter will reach</span>' +
+      '<div class="nl-reach-big">' + b.count + "</div>" +
+      '<p class="nl-reach-who">people on <b>' + H.escapeHtml(names.join(" + ") || "the chosen audience") + "</b></p>" +
+      "<ul>" +
+      (names.length > 1
+        ? "<li><span>Across " + names.length + " audiences</span><b>" + onLists + "</b></li>" +
+          "<li><span>On more than one</span><b>" + overlap + "</b></li>"
+        : "<li><span>On the audience</span><b>" + onLists + "</b></li>") +
+      "</ul>" +
+      '<p class="nl-reach-note">' +
+      (names.length > 1
+        ? "Anyone on more than one of these gets the newsletter <b>once</b>. Unsubscribed and blocked people are left out automatically."
+        : "Anyone who unsubscribed, bounced permanently or reported us as spam is left out automatically. Emailing them is what gets NBCC sent to junk.") +
+      "</p>";
+    nlPaintSendSummary();
   }
 
   // TASK-284: the summary beside the Send button. It restates the decisions made on the previous two
@@ -4408,6 +4477,10 @@
     el("newsletterMsg").textContent = "Queueing…";
     var pickedList = el("sendListPick") && el("sendListPick").value ? Number(el("sendListPick").value) : null;
     var body = pickedList ? { listId: pickedList } : {};
+    // TASK-288: every chosen audience rides along. The server resolves them into ONE
+    // deduplicated recipient list, so somebody on two of them is mailed once. listId stays for
+    // the single-audience case and for anything older that still sends it.
+    if (nlChosenAudiences.length) body.listIds = nlChosenAudiences.slice();
     // TASK-274: the gentle rollout. A quiet domain that suddenly emits thousands of messages looks
     // like a compromised account to Gmail; easing out over a few days builds the record that earns
     // the next day's larger allowance.
@@ -4549,8 +4622,17 @@
     // TASK-271: the confirmation NAMES the audience. It used to say "N consenting subscribers"
     // whoever they were, which read identically whether you were about to mail the volunteers or
     // every donor the charity has — the one check standing between the two.
-    var audience = el("sendListPick") ? nlAudienceById(el("sendListPick").value) : null;
-    var audienceName = audience ? audience.name : "the newsletter audience";
+    // TASK-288: name EVERY chosen audience, not just the first. This dialog is the last thing
+    // between a draft and several hundred inboxes; saying "Volunteers" when it is going to
+    // Volunteers AND Donors would make the one check that matters actively misleading.
+    var chosenNames = nlChosenAudiences
+      .map(function (cid) { var a = nlAudienceById(cid); return a ? a.name : null; })
+      .filter(Boolean);
+    if (!chosenNames.length) {
+      var single = el("sendListPick") ? nlAudienceById(el("sendListPick").value) : null;
+      if (single) chosenNames = [single.name];
+    }
+    var audienceName = chosenNames.length ? nlAndList(chosenNames) : "the newsletter audience";
     var overlay = doc.createElement("div");
     overlay.className = "nl-modal-overlay";
     overlay.innerHTML =
@@ -4637,8 +4719,15 @@
 
     // Populate the recipient count + email list. Send stays available even if this lookup fails —
     // the server recomputes the authoritative list at send time.
+    // TASK-288: ask for the DEDUPLICATED union of every chosen audience, so the count in the
+    // confirmation is the count that will actually be mailed - not a sum that double-counts anyone
+    // on two lists.
     authFetch("/api/admin/newsletters/recipients" +
-      (el("sendListPick") && el("sendListPick").value ? "?listId=" + el("sendListPick").value : ""))
+      (nlChosenAudiences.length
+        ? "?listIds=" + nlChosenAudiences.join(",")
+        : el("sendListPick") && el("sendListPick").value
+          ? "?listId=" + el("sendListPick").value
+          : ""))
       .then(function (res) { if (!res.ok) throw new Error(String(res.status)); return res.json(); })
       .then(function (r) {
         var emails = r.emails || [];

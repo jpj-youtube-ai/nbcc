@@ -5,6 +5,7 @@ import { pool } from "./pool";
 import { writeWithAudit } from "./donations";
 import type { ListKind } from "./subscriber-lists";
 import { suppressedAmong } from "./email-suppressions";
+import { mergeRecipients } from "../newsletter/merge-recipients";
 
 // DB access for the admin newsletter (TASK-161/REQ-069). Read/write over the newsletters table plus
 // the consented-donor recipient query and the unsubscribe write. Mirrors the pool-query style of
@@ -215,6 +216,21 @@ export async function listRecipientsForList(list: { id: number; kind: ListKind }
   return dropSuppressed(Array.from(byEmail.values()).sort((a, b) => a.email.localeCompare(b.email)));
 }
 
+// TASK-288: several audiences, resolved into the ONE list that will actually be mailed. Each
+// audience goes through listRecipientsForList above - the same already-trusted query, including its
+// suppression gate - and mergeRecipients folds them, deduplicated by email. Somebody on Volunteers
+// AND Donors gets one email, not two: sending twice is the fastest way to be marked as spam, and the
+// person who reports it is one of your most engaged supporters.
+export async function listRecipientsForLists(
+  lists: { id: number; kind: ListKind }[],
+): Promise<ListRecipient[]> {
+  if (lists.length === 0) return [];
+  if (lists.length === 1) return listRecipientsForList(lists[0]);
+  const perAudience: ListRecipient[][] = [];
+  for (const list of lists) perAudience.push(await listRecipientsForList(list));
+  return mergeRecipients(perAudience) as ListRecipient[];
+}
+
 // TASK-272: the last gate before anyone is mailed. Hard bounces and spam complaints are dropped HERE,
 // inside the one resolver both the send loop and the recipient preview use — so the count an admin
 // confirms is the count that goes out, and a suppressed address cannot be reached by any send path.
@@ -222,6 +238,17 @@ async function dropSuppressed(recipients: ListRecipient[]): Promise<ListRecipien
   if (recipients.length === 0) return recipients;
   const blocked = await suppressedAmong(recipients.map((r) => r.email));
   return blocked.size === 0 ? recipients : recipients.filter((r) => !blocked.has(r.email));
+}
+
+// TASK-288: stamp EVERY audience a send went to. list_id keeps the first, so the history join, the
+// stats panel and listNewsletters all keep working exactly as they did - the array is additive.
+export async function setNewsletterLists(id: number, listIds: number[]): Promise<void> {
+  if (listIds.length === 0) return;
+  await pool.query("UPDATE newsletters SET list_id = $1, list_ids = $2 WHERE id = $3", [
+    listIds[0],
+    listIds,
+    id,
+  ]);
 }
 
 // Stamp which audience a send went to (read back by the stats panel and history).

@@ -860,3 +860,34 @@ Then("both audiences have {int} member", async function (expected) {
     assert.equal(members.json.length, expected, `audience ${id}: ${JSON.stringify(members.json)}`);
   }
 });
+
+
+// --- TASK-288: one newsletter, several audiences ------------------------------------------------
+When("I create a newsletter draft {string}", async function (subject) {
+  const r = await authFetch(
+    "/api/admin/newsletters",
+    "POST",
+    { subject, bodyJson: { blocks: [{ type: "text", variant: 0, data: { text: "Hello." } }] } },
+    this.token,
+  );
+  this.newsletterId = r.json && r.json.id;
+  this.nlStatus = r.status;
+});
+
+// The union of the two audiences, deduplicated by the server. "Both" sits on each one, so the
+// recipient count proves the dedup rather than merely that the request was accepted.
+When("I send that newsletter to both audiences", { timeout: 30000 }, async function () {
+  const r = await authFetch(
+    `/api/admin/newsletters/${this.newsletterId}/send`,
+    "POST",
+    { listIds: [this.audienceId, this.audienceId2] },
+    this.token,
+  );
+  this.nlStatus = r.status;
+  this.nlBody = r.json;
+  await waitForSendToFinish(this);
+});
+
+Then("the send should have reached {int} people", function (n) {
+  assert.equal(this.nlBody.recipientCount, n, JSON.stringify(this.nlBody));
+});

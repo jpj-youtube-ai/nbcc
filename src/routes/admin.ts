@@ -73,7 +73,8 @@ import {
   setNewsletterDeliverySummary,
   deleteDraftNewsletter,
   listRecipientsForList,
-  setNewsletterList,
+  listRecipientsForLists,
+  setNewsletterLists,
 } from "../db/newsletters";
 import {
   templateNameSchema,
@@ -985,7 +986,63 @@ export async function postAdminNewsletterPreview(req: Request, res: Response): P
 // GET /api/admin/newsletters/recipients — Admin only. The deduped list of consenting donor emails a
 // send would go to, for the send-confirmation dialog. Admin-gated (matches send) because it exposes
 // donor PII; returns the same recipient set the send loop uses, so the confirmation can't drift.
+// TASK-288: turn whatever the client sent — `listIds`, a single `listId`, or nothing at all —
+// into the audiences to mail. One place, so the send and the preview beside it can never
+// disagree about what a selection means, which would show one count and mail another.
+async function resolveAudiences(
+  raw: { listIds?: number[]; listId?: number },
+): Promise<{ lists: SubscriberListRef[] } | { error: string; status: number }> {
+  let ids: number[] = [];
+  if (Array.isArray(raw.listIds) && raw.listIds.length) {
+    const parsed = parseTargetListIds(raw.listIds);
+    if (!parsed) return { error: "Choose at least one audience", status: 400 };
+    ids = parsed;
+  } else if (raw.listId) {
+    ids = [raw.listId];
+  }
+  if (!ids.length) {
+    // Unchanged default: no audience named means the newsletter audience, as it always has.
+    const fallback = await getSubscriberListBySlug("newsletter");
+    if (!fallback) return { error: "Subscriber list not found", status: 404 };
+    return { lists: [fallback] };
+  }
+  const lists: SubscriberListRef[] = [];
+  for (const id of ids) {
+    const list = await getSubscriberList(id);
+    if (!list) return { error: "Subscriber list not found", status: 404 };
+    // TASK-270: an archived audience is retired. Refused here, before anything is claimed, so
+    // one archived pick cannot half-send to the others.
+    if (list.archivedAt) {
+      return { error: `${list.name} is archived — restore it to send to it`, status: 400 };
+    }
+    lists.push(list);
+  }
+  return { lists };
+}
+
 export async function getAdminNewsletterRecipients(req: Request, res: Response): Promise<Response | void> {
+  // TASK-288: ?listIds=1,2 previews the DEDUPLICATED union of several audiences — the count shown
+  // here is the count that will be mailed, which is the whole point of showing it.
+  {
+    const rawIds = req.query.listIds;
+    if (rawIds != null) {
+      if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+      const ids = String(rawIds)
+        .split(",")
+        .map((x) => Number(x.trim()))
+        .filter((x) => Number.isInteger(x) && x > 0);
+      const resolved = await resolveAudiences({ listIds: ids });
+      if ("error" in resolved) return res.status(resolved.status).json({ error: resolved.error });
+      const recipients = await listRecipientsForLists(resolved.lists);
+      return res.json({
+        count: recipients.length,
+        emails: recipients.map((r) => r.email),
+        audience: resolved.lists.map((l) => l.name).join(" + "),
+        audiences: resolved.lists.map((l) => ({ id: l.id, name: l.name, kind: l.kind })),
+        kind: resolved.lists.length === 1 ? resolved.lists[0].kind : "multi",
+      });
+    }
+  }
   // TASK-259: ?listId= previews the chosen audience; absent = the newsletter audience, as ever.
   {
     const rawListId = req.query.listId;
@@ -1059,16 +1116,18 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   const id = newsletterId(req, res);
   if (id === null) return;
 
-  // Resolve the audience BEFORE claiming: an unknown list must 404 without marking anything sent.
-  const listParse = z.object({ listId: z.number().int().positive().optional() }).safeParse(req.body ?? {});
+  // Resolve the audiences BEFORE claiming: an unknown or archived list must fail without marking
+  // anything sent. TASK-288: `listIds` for several, `listId` still accepted for one.
+  const listParse = z
+    .object({
+      listId: z.number().int().positive().optional(),
+      listIds: z.array(z.number()).optional(),
+    })
+    .safeParse(req.body ?? {});
   if (!listParse.success) return res.status(400).json({ error: "Invalid list" });
-  const list = listParse.data.listId
-    ? await getSubscriberList(listParse.data.listId)
-    : await getSubscriberListBySlug("newsletter");
-  if (!list) return res.status(404).json({ error: "Subscriber list not found" });
-  // TASK-270: an archived audience is retired — refuse the send rather than mailing a list someone
-  // deliberately took out of circulation. Checked before the claim, so the draft stays sendable.
-  if (list.archivedAt) return res.status(400).json({ error: "That audience is archived — restore it to send to it" });
+  const resolved = await resolveAudiences(listParse.data);
+  if ("error" in resolved) return res.status(resolved.status).json({ error: resolved.error });
+  const lists = resolved.lists;
 
   // Atomically claim the draft BEFORE sending. If another request already sent it (or it never
   // existed as a draft), we 409 without emailing anyone — a double-click cannot re-blast.
@@ -1078,7 +1137,12 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
     if (!existing) return res.status(404).json({ error: "Newsletter not found" });
     return res.status(409).json({ error: "This newsletter has already been sent" });
   }
-  await setNewsletterList(id, list.id); // which audience this send went to — part of the record
+  // TASK-288: every audience is recorded. list_id keeps the first, so the history join and the
+  // stats panel read exactly as they always have.
+  await setNewsletterLists(
+    id,
+    lists.map((l) => l.id),
+  );
 
   // TASK-274: ENQUEUE, don't send here. The old loop ran every recipient inside this request, behind
   // the ALB's 60-second default: a few hundred people outran it, the admin saw "Send failed" while the
@@ -1089,9 +1153,15 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
   // Now the recipients become queue rows and a background worker sends them at a controlled rate.
   // `rollout: "gentle"` ramps a daily cap (200, then 400, 800 ...) so a first big send from a lightly
   // used domain warms up instead of arriving as one spike that looks like a compromised account.
-  const recipients = await listRecipientsForList(list);
+  // Deduplicated across every chosen audience: somebody on two lists gets ONE email.
+  const recipients = await listRecipientsForLists(lists);
   if (recipients.length === 0) {
-    return res.status(400).json({ error: "That audience has nobody to send to" });
+    return res.status(400).json({
+      error:
+        lists.length === 1
+          ? "That audience has nobody to send to"
+          : "Those audiences have nobody to send to",
+    });
   }
   const optionsParse = z
     .object({
@@ -1112,7 +1182,10 @@ export async function postAdminSendNewsletter(req: Request, res: Response): Prom
 
   const job = await createSendJob({
     newsletterId: id,
-    listId: list.id,
+    // The job records the FIRST audience, matching newsletters.list_id. The recipients it carries
+    // are already the deduplicated union, so this is a label for the job, not the thing that
+    // decides who gets mailed (TASK-288).
+    listId: lists[0].id,
     recipients,
     rollout: optionsParse.data.rollout ?? "immediate",
     perMinute: optionsParse.data.perMinute ?? DEFAULT_PER_MINUTE,

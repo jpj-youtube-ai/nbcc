@@ -1,11 +1,10 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed once TASK-280 shipped. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed after TASK-289. Point a fresh session at this file to continue.
 
 ## State: LIVE and send-ready
 
-Everything below is merged and in production unless marked otherwise. The system can send a
-newsletter safely today.
+Everything below is merged and in production. Nothing is in flight — no open PRs, clean tree.
 
 ### Shipped
 | Task | What |
@@ -20,22 +19,47 @@ newsletter safely today.
 | 276 | Welcome email on website signup (never on import) + **double-send fix** |
 | 277 | Pre-send checks, seed test (up to 5 addresses), repeat-bounce suppression |
 | 278 | Audit trail: who sent it, who got it, who added each person |
-| 279 | Newsletter tab as four switchable panels (55% shorter) |
-| 280 | **Scheduled sends** — pick a date and time, plus a send-time hint with quick-picks |
+| 279 | Newsletter tab as four switchable panels |
+| 280 | **Scheduled sends** — date and time, plus a send-time hint with quick-picks |
+| 281 | Status doc refresh + README pointer |
+| 282 | **Add a person or a spreadsheet to several audiences at once** (API) |
+| 283 | **Newsletter Studio**: three destinations + composing as a full-screen takeover |
+| 284 | The panel interiors — 10 unstyled controls, a 639px checkbox, the maroon-slab preview |
+| 285 | Audience cards, visible pre-send checks, the results destination, 5 dead elements wired |
+| 286 | Four layout faults from measuring against the wrong width |
+| 287 | **The blank newsletter tab**, and every table made to fit its card |
+| 288 | **Send one newsletter to several audiences at once**, deduplicated |
+| 289 | Collapsible blocks |
 
-### Verified live
-- Production app healthy; four-panel newsletter tab live
-- Resend webhook returns 401 to unsigned requests (secret configured correctly)
+### The tab as it is now
+Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a
+takeover: **Write → Who → Send**, with the actions pinned to a bottom bar.
+
+- **Overview** is the front door: reach, sends this year, typical delivery, blocked count; recent
+  sends with their outcomes inline; anything in flight; what needs a look.
+- **Who** is audience **cards, multi-select**. Several audiences fold into one deduplicated list.
+- **Send** shows the pre-send checks, two explicit "when" choices, the gentle rollout, and a summary
+  carrying the Send button.
+- **Results** is its own destination — one click from any sent row.
+
+### Verified live (re-checked after TASK-289)
+- Production healthy (`/health` 200); every feature marker present in the served HTML/JS/CSS
+- **DNS:** exactly one apex SPF (`v=spf1 include:_spf.google.com ~all`), DMARC
+  `p=none; rua=mailto:newsletter@nbcc.scot; fo=1`, MX still `smtp.google.com` (Gmail untouched),
+  Resend DKIM present at `resend._domainkey`, `send.nbcc.scot` SPF → amazonses
+- **Webhook** `POST /api/webhooks/resend` returns **401** to an unsigned request — signature
+  verification is on
+- **Unsubscribe** rejects a bogus token (400)
+- **Send worker** starts on boot (`src/index.ts` → `startSendWorker()`), on an interval with a
+  re-entrancy guard. Safe across multiple Fargate tasks: the queue claim uses
+  `FOR UPDATE SKIP LOCKED` plus a `sending` status and a stall sweep (TASK-274/276)
 - Click tracking ON; open tracking deliberately OFF (unreliable + more invasive)
-- DNS: exactly one apex SPF (`v=spf1 include:_spf.google.com ~all`), DMARC with
-  `rua=mailto:newsletter@nbcc.scot`, propagated across Google/Cloudflare/Quad9. MX, A records,
-  Google verification, Resend DKIM/SPF all intact.
 
 ## Outstanding
 
-Nothing is in flight. No open PRs, clean tree, production healthy.
+Nothing blocking. The system can send a newsletter safely today.
 
-**Not built** (approved by the user, deliberately deferred — none block sending):
+**Not built** (approved, deliberately deferred — none block sending):
 - **K** Segments — filtered slices ("donors who gave this year"). Needs a query builder + storage.
 - **L** A/B testing + drip sequences. Biggest build; least likely to earn its place at this size.
 - **O** Newsletter roles + send-approval workflow. Permissions model change + state machine.
@@ -45,30 +69,35 @@ Nothing is in flight. No open PRs, clean tree, production healthy.
 - **D** Move newsletters to a `news.nbcc.scot` subdomain so a bad campaign can't damage receipts and
   admin login codes. **Recommended.** Blocked on adding the domain in Resend first, then repointing
   `NEWSLETTER_FROM_EMAIL`.
-- **B** Tighten DMARC `p=none` -> `quarantine` -> `reject`. Needs a few weeks of the reports that
+- **B** Tighten DMARC `p=none` → `quarantine` → `reject`. Needs a few weeks of the reports that
   started arriving 2026-08-20. Do NOT skip straight to reject.
-
-**Shipped as part of 280:** the send-time hint. Deliberately worded as general guidance, not a
-recommendation — there is no open-tracking data to personalise it. The quick-picks always land on
-the *next* Tuesday/Thursday, skipping a week if today matches but the hour has already gone.
 
 ## Gotchas that will bite (learned the hard way)
 
-1. **Migrations must sort LAST.** `ls migrations | sort | tail`. Highest is `1785500000000`. CI can't
+1. **Migrations must sort LAST.** `ls migrations | sort | tail`. Highest is `1785600000000`. CI can't
    catch a bad order (its DB is empty); staging/production can.
-2. **Squash-merge orphans stacked PRs.** Merging one PR makes the next conflict. Rebase with
+2. **Squash-merge orphans stacked PRs.** Merging one makes the next conflict. Rebase with
    `git rebase --onto origin/main <last-commit-of-the-merged-branch>`.
 3. **`donate.html` is at ~99.8% of its 255KB page-weight budget.** Any addition to
-   `assets/css/styles.css` or `assets/js/main.js` can turn CI red.
+   `assets/css/styles.css` or `assets/js/main.js` can turn CI red. `admin.html` is **not** in the
+   budget, so admin work is unconstrained by it.
 4. **`perf-budget` fails LOCALLY on Windows only** — `core.autocrlf` adds ~3.8KB of CR bytes. Compute
    the LF total before believing a regression.
 5. **npm registry is blocked on the owner's machine** by IT policy, so `exceljs` won't install:
-   `tsc` and `subscriber-import-parse.test.ts` run in CI only. Do not try to bypass the block.
-6. **`app.js` binds by element id.** When restructuring `admin.html`, never remove or rename an id —
-   wrap and restyle instead, then verify the id set before/after.
+   `tsc` and 13 admin suites run in CI only. Do not try to bypass the block.
+6. **`app.js` binds by element id, and fails SILENTLY.** Never remove or rename an id — wrap and
+   restyle. Pinned by `test/unit/newsletter-studio-ui.test.ts`, which also asserts every container
+   the tab renders into is actually referenced by `app.js` (TASK-283 shipped five dead elements).
+7. **No `.nl-panel` may start visible.** `app.js` chooses which one shows; markup that picked a
+   winner made the whole tab open blank (TASK-287). Pinned by the same test.
+8. **`.admin-table` sets `white-space: nowrap` on every cell**, so any table grows to its longest
+   value and scrolls its card sideways. Newsletter tables override it and use `table-layout: fixed`.
+9. **Measure against the REAL width.** Content is ~1006px (1280 max-width − 210px nav − padding), and
+   the Overview's main column ~620px of that. Four layout faults came from a CSS harness that
+   rendered full-bleed and so measured a page that does not exist.
 
 ## Before the first real send
-1. Seed test to your own Gmail / Outlook / Yahoo — check WHERE each lands, not just that it renders
-2. Read the confirmation (it names the audience and the count)
+1. **Seed test** to your own Gmail / Outlook / Yahoo — check WHERE each lands, not just that it renders
+2. Read the confirmation — it names every chosen audience and the deduplicated count
 3. Tick **"Ease this one out gradually"**
-4. Next day: check delivery stats and the **Blocked addresses** panel
+4. Next day: check the delivery figures on the Overview and the **Blocked addresses** panel

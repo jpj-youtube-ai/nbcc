@@ -23,6 +23,17 @@ describe("shouldSendWelcome — who gets one", () => {
   it("does not welcome someone staff typed in — usually a conversation already had", () => {
     expect(shouldSendWelcome("admin")).toBe(false);
   });
+
+  // TASK-282: adding one person to five audiences must not become five emails — or even one. The
+  // multi-audience routes call addListSubscriber with source 'admin' (typed in) or 'import'
+  // (spreadsheet), and neither gets a welcome. Pinned here so a later "be friendlier, send a
+  // welcome" change has to come past this test and think about the import case first.
+  it.each(["admin", "import"] as const)(
+    "stays false for '%s' — the sources the multi-audience routes use",
+    (source) => {
+      expect(shouldSendWelcome(source)).toBe(false);
+    },
+  );
 });
 
 describe("buildWelcomeEmail", () => {

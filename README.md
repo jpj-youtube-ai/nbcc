@@ -3789,6 +3789,43 @@ special case, and a **tombstone archive**:
 - The send-recipients endpoint returns `audience`/`kind` alongside the count, so the send
   confirmation can **name** what it is about to mail rather than saying "consenting subscribers".
 
+**One person, several audiences (TASK-282).** Somebody met at an event is often a volunteer *and* a
+business contact *and* wants the newsletter. Doing that as three trips through the same form is where
+a list ends up half-populated, so a person — or a whole spreadsheet — can now be written to several
+audiences in one action.
+
+Three **additive** endpoints. They carry their targets in the **body**, not the path, because there is
+no single `:id` to name; the existing `/subscriber-lists/:id/…` routes are untouched and still serve
+anything aimed at one audience.
+
+| Endpoint | Body | Returns |
+|---|---|---|
+| `POST /api/admin/subscriber-list-members` | `listIds[]`, `email`, `name?`, `phone?` | per-audience outcomes, folded |
+| `POST /api/admin/subscriber-list-import/preview` | `listIds[]`, `filename`, `dataBase64` | rows, issues, per-audience `alreadyOnList` |
+| `POST /api/admin/subscriber-list-import` | `listIds[]`, `rows`, `attestation` | totals plus a per-audience breakdown |
+
+- **The rules are pure** (`src/newsletter/audience-targets.ts`), so they are pinned by tests that need
+  no database. `parseTargetListIds` returns **`null`, not `[]`**, for an empty or invalid selection:
+  a silent no-op that reports success is the worst outcome here, because the volunteer walks away
+  believing the person was added.
+- **Every audience is checked before any is written.** A half-finished add that still reports success
+  is worse than a clean refusal — pressing it again doubles the part that already worked, and nothing
+  on screen says which part that was. A BDD scenario pins it: adding to a real audience *and* a
+  non-existent one writes nothing at all.
+- **Resubscribing is counted apart from adding.** A deliberate staff add may revive an opted-out
+  membership (`revive: true`); folding that into "added" would hide a **re-consent** inside a
+  routine-looking confirmation. An import still may never revive (`revive: false`) — a spreadsheet
+  cannot overrule an opt-out.
+- **"Ready" means something precise on an import.** A row is ready if it would join **at least one**
+  chosen audience. Somebody already on Volunteers but not on Newsletter is genuinely work to do, and
+  calling them "already on the list" would report nothing to do when four hundred additions were.
+- **No path sends a welcome email.** `shouldSendWelcome` is true only for the website footer signup,
+  so one add across five audiences cannot become five emails — or even one. Pinned in
+  `newsletter-welcome.test.ts` so a later "be friendlier" change has to come past that test.
+- **Not a transaction, deliberately.** Each membership is an independent, idempotent row, so a partial
+  write is recoverable (press it again — `exists` is a no-op) and honestly reportable. A transaction
+  would buy an atomicity nobody asked for while hiding *which* audience failed.
+
 **Newsletter tab restructure (TASK-271).** The tab now runs in four numbered stages —
 **1 Audiences & people → 2 Write the newsletter → 3 Send → 4 Sent newsletters**. Previously audience
 management, the send history, the composer and the send controls were interleaved, so the picker that

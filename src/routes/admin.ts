@@ -122,6 +122,7 @@ import { htmlToPlainText } from "../newsletter/plain-text";
 import { preflightNewsletter } from "../newsletter/preflight";
 import { runSendTick } from "../newsletter/send-worker";
 import { parseImportFile } from "../newsletter/import-parse";
+import { parseTargetListIds, foldOutcomes, type TargetOutcome } from "../newsletter/audience-targets";
 import { getNewsletterStats } from "../db/newsletter-events";
 import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
 import { createRateLimiter } from "../portal/request-limiter";
@@ -635,6 +636,80 @@ export async function postAdminListMember(req: Request, res: Response): Promise<
   return res.status(outcome === "added" ? 201 : 200).json({ outcome });
 }
 
+// TASK-282: add ONE person to SEVERAL audiences in one action. Someone met at an event is often a
+// volunteer AND a business contact AND wants the newsletter, and doing that as three trips through
+// the same form is where a list gets half-populated.
+//
+// The single-list endpoint above is untouched and still serves anything aimed at one audience.
+// This one lives outside /subscriber-lists/:id because there is no single :id to put in the path.
+//
+// Deliberately NOT a transaction. Each membership is an independent, idempotent row: pressing it
+// again is a no-op ('exists'), so a partial write is recoverable and honestly reportable. Wrapping
+// five independent writes in a transaction would buy an atomicity nobody asked for while hiding
+// WHICH audience failed — the one fact the volunteer needs.
+export async function postAdminListMembersMulti(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const parsed = z
+    .object({
+      listIds: z.array(z.number()).min(1),
+      name: z.string().trim().max(120).optional(),
+      email: z.string().trim().email(),
+      phone: z.string().trim().max(30).optional(),
+    })
+    .safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "A valid email address is needed" });
+  const listIds = parseTargetListIds(parsed.data.listIds);
+  if (!listIds) return res.status(400).json({ error: "Choose at least one audience" });
+
+  // Check EVERY audience before writing ANY. A half-done add that still reports success is worse
+  // than a clean refusal: the volunteer has no way to tell which half happened, and the obvious
+  // fix — press it again — silently doubles the work that did succeed.
+  const lists: SubscriberListRef[] = [];
+  for (const id of listIds) {
+    const list = await getSubscriberList(id);
+    if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+    const refusal = listNotManageable(list);
+    if (refusal) return res.status(400).json({ error: refusal });
+    lists.push(list);
+  }
+
+  const results: TargetOutcome[] = [];
+  for (const list of lists) {
+    // Same call, same options as the single-list route: staff typing someone in is a deliberate
+    // act, so it may revive an opted-out membership (revive: true) — unlike an import, which may
+    // never. addedBy stamps which volunteer did it (TASK-278).
+    const outcome = await addListSubscriber(
+      list.id,
+      { name: parsed.data.name ?? null, email: parsed.data.email, phone: parsed.data.phone ?? null },
+      "admin",
+      { revive: true, addedBy: claims.email },
+    );
+    results.push({ listId: list.id, listName: list.name, outcome });
+  }
+  const folded = foldOutcomes(results);
+  try {
+    await recordAudit({
+      actor: claims.email,
+      action: "subscribers.added",
+      entity: "subscriber_list",
+      entityId: lists[0].id,
+      data: {
+        email: parsed.data.email,
+        audiences: lists.map((l) => l.slug),
+        added: folded.added,
+        resubscribed: folded.resubscribed,
+        alreadyOnList: folded.alreadyOnList,
+        previouslyUnsubscribed: folded.previouslyUnsubscribed,
+      },
+    });
+  } catch (err) {
+    console.error("multi-add audit failed:", err instanceof Error ? err.message : err);
+  }
+  // 201 for anything that actually changed - a revived membership is a change, not a no-op.
+  return res.status(folded.changed > 0 ? 201 : 200).json(folded);
+}
+
 export async function deleteAdminListMember(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
   const listId = Number(req.params.id);
@@ -740,6 +815,127 @@ export async function postAdminListImport(req: Request, res: Response): Promise<
     console.error("import audit failed:", err instanceof Error ? err.message : err);
   }
   return res.status(200).json(counts);
+}
+
+// TASK-282: preview an import against SEVERAL audiences.
+//
+// "Already on the list" is per-audience, so the aggregate has to mean something precise. A row is
+// READY if it would join at least ONE of the chosen audiences: somebody already on Volunteers but
+// not on Newsletter is genuinely work to do, and folding them into "already on the list" would
+// tell the volunteer nothing needed doing when four hundred additions did.
+export async function postAdminListImportPreviewMulti(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const parsed = importFileSchema.extend({ listIds: z.array(z.number()).min(1) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Upload a CSV or Excel file" });
+  const listIds = parseTargetListIds(parsed.data.listIds);
+  if (!listIds) return res.status(400).json({ error: "Choose at least one audience" });
+
+  const lists: SubscriberListRef[] = [];
+  for (const id of listIds) {
+    const list = await getSubscriberList(id);
+    if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+    const refusal = listNotManageable(list);
+    if (refusal) return res.status(400).json({ error: refusal });
+    lists.push(list);
+  }
+
+  const data = Buffer.from(parsed.data.dataBase64, "base64");
+  if (data.length > IMPORT_MAX_BYTES) return res.status(413).json({ error: "File too large (2 MB max)" });
+  let fileRows;
+  try {
+    fileRows = await parseImportFile(parsed.data.filename, data);
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : "Could not read that file" });
+  }
+
+  const emails = fileRows.rows.map((r) => r.email);
+  const optedOut = new Set<string>();
+  const activeIn = new Map<string, number>();
+  const audiences: { listId: number; listName: string; alreadyOnList: number }[] = [];
+  for (const list of lists) {
+    const states = await getMembershipStates(list.id, emails);
+    const active = states.filter((s) => !s.unsubscribed).map((s) => s.email);
+    states.filter((s) => s.unsubscribed).forEach((s) => optedOut.add(s.email));
+    active.forEach((e) => activeIn.set(e, (activeIn.get(e) ?? 0) + 1));
+    audiences.push({ listId: list.id, listName: list.name, alreadyOnList: active.length });
+  }
+
+  const isOptedOut = (email: string) => optedOut.has(email);
+  const onEvery = (email: string) => (activeIn.get(email) ?? 0) === lists.length;
+  return res.json({
+    rows: fileRows.rows,
+    issues: fileRows.issues,
+    readyCount: fileRows.rows.filter((r) => !isOptedOut(r.email) && !onEvery(r.email)).length,
+    audiences,
+    // Named for what it means with several audiences in play: on ALL of them already, so this
+    // import genuinely has nothing to do for that person.
+    alreadyOnEvery: fileRows.rows.filter((r) => !isOptedOut(r.email) && onEvery(r.email)).map((r) => r.email),
+    previouslyUnsubscribed: fileRows.rows.filter((r) => isOptedOut(r.email)).map((r) => r.email),
+  });
+}
+
+// TASK-282: commit an import into SEVERAL audiences. revive:false is applied per audience, so the
+// tombstone rule — a spreadsheet may never overrule an opt-out — stays exactly where it already is
+// rather than being restated somewhere it could drift.
+export async function postAdminListImportMulti(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const parsed = importCommitSchema.extend({ listIds: z.array(z.number()).min(1) }).safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      error: "Confirm these people have agreed to be contacted before importing",
+    });
+  }
+  const listIds = parseTargetListIds(parsed.data.listIds);
+  if (!listIds) return res.status(400).json({ error: "Choose at least one audience" });
+
+  const lists: SubscriberListRef[] = [];
+  for (const id of listIds) {
+    const list = await getSubscriberList(id);
+    if (!list) return res.status(404).json({ error: "Subscriber list not found" });
+    const refusal = listNotManageable(list);
+    if (refusal) return res.status(400).json({ error: refusal });
+    lists.push(list);
+  }
+
+  const audiences: { listId: number; listName: string; added: number; alreadyOnList: number; previouslyUnsubscribed: number }[] = [];
+  const total = { added: 0, alreadyOnList: 0, previouslyUnsubscribed: 0 };
+  for (const list of lists) {
+    // Folded through the same tested helper as the single-person route rather than a second
+    // hand-rolled counter, so a new outcome can never go silently uncounted here.
+    const results: TargetOutcome[] = [];
+    for (const row of parsed.data.rows) {
+      const outcome = await addListSubscriber(list.id, { name: row.name, email: row.email, phone: null }, "import", {
+        revive: false,
+        addedBy: claims.email,
+      });
+      results.push({ listId: list.id, listName: list.name, outcome });
+    }
+    const folded = foldOutcomes(results);
+    // revive:false cannot produce a resubscribe, but count it as added if it ever did rather than
+    // dropping it - a membership that is now active must show up somewhere in the totals.
+    const counts = {
+      added: folded.added + folded.resubscribed,
+      alreadyOnList: folded.alreadyOnList,
+      previouslyUnsubscribed: folded.previouslyUnsubscribed,
+    };
+    total.added += counts.added;
+    total.alreadyOnList += counts.alreadyOnList;
+    total.previouslyUnsubscribed += counts.previouslyUnsubscribed;
+    audiences.push({ listId: list.id, listName: list.name, ...counts });
+  }
+  try {
+    await recordAudit({
+      actor: claims.email,
+      action: "subscribers.imported",
+      entity: "subscriber_list",
+      entityId: lists[0].id,
+      data: { lists: lists.map((l) => l.slug), attestation: true, rows: parsed.data.rows.length, ...total },
+    });
+  } catch (err) {
+    console.error("import audit failed:", err instanceof Error ? err.message : err);
+  }
+  return res.status(200).json({ ...total, audiences });
 }
 
 // GET /api/admin/newsletters — list summaries (Editor+; read-only but the tab is a staff tool).
@@ -2131,6 +2327,12 @@ adminRouter.post("/api/admin/subscriber-lists/:id/import", postAdminListImport);
 adminRouter.get("/api/admin/subscriber-lists/:id/members", getAdminListMembers);
 adminRouter.post("/api/admin/subscriber-lists/:id/members", postAdminListMember);
 adminRouter.delete("/api/admin/subscriber-lists/:id/members/:memberId", deleteAdminListMember);
+// TASK-282: multi-audience writes. They carry a set of list ids in the BODY, so they cannot live
+// under /subscriber-lists/:id — there is no single id to put in the path. The single-list routes
+// above are unchanged and still serve anything aimed at one audience.
+adminRouter.post("/api/admin/subscriber-list-members", postAdminListMembersMulti);
+adminRouter.post("/api/admin/subscriber-list-import/preview", postAdminListImportPreviewMulti);
+adminRouter.post("/api/admin/subscriber-list-import", postAdminListImportMulti);
 adminRouter.get("/api/admin/newsletter-templates", getAdminNewsletterTemplates);
 adminRouter.post("/api/admin/newsletter-templates", postAdminNewsletterTemplate);
 adminRouter.get("/api/admin/newsletter-templates/:id", getAdminNewsletterTemplate);

@@ -806,3 +806,57 @@ Then("the Newsletter audience does not include {string}", async function (email)
   const emails = await newsletterAudienceEmails(this.token);
   assert.ok(!emails.includes(email.toLowerCase()), JSON.stringify(emails));
 });
+
+
+// --- TASK-282: one person, several audiences ---------------------------------------------------
+// The multi-audience endpoint takes its targets in the BODY, not the path, so there is no single
+// :id to name. These steps exercise the three cases that matter: the happy path, an empty
+// selection (must be refused, never a silent no-op), and a refusal partway through a set (must
+// leave nothing written).
+When("I create a second audience named {string}", async function (name) {
+  const r = await authFetch("/api/admin/subscriber-lists", "POST", { name }, this.token);
+  this.audStatus = r.status;
+  if (r.json && r.json.id) this.audienceId2 = r.json.id;
+});
+
+When("I add {string} named {string} to both audiences", async function (email, name) {
+  const r = await authFetch(
+    "/api/admin/subscriber-list-members",
+    "POST",
+    { listIds: [this.audienceId, this.audienceId2], name, email },
+    this.token,
+  );
+  this.audStatus = r.status;
+  this.multiBody = r.json;
+});
+
+When("I add {string} named {string} to no audiences", async function (email, name) {
+  const r = await authFetch("/api/admin/subscriber-list-members", "POST", { listIds: [], name, email }, this.token);
+  this.audStatus = r.status;
+  this.multiBody = r.json;
+});
+
+// 2147483000 is inside int4 but far beyond any real id, so the handler's getSubscriberList lookup
+// misses and it refuses BEFORE writing the valid audience alongside it.
+When("I add {string} named {string} to that audience and one that does not exist", async function (email, name) {
+  const r = await authFetch(
+    "/api/admin/subscriber-list-members",
+    "POST",
+    { listIds: [this.audienceId, 2147483000], name, email },
+    this.token,
+  );
+  this.audStatus = r.status;
+  this.multiBody = r.json;
+});
+
+Then("the response should report {int} audiences joined", function (n) {
+  assert.equal(this.multiBody.added, n, JSON.stringify(this.multiBody));
+  assert.equal(this.multiBody.addedTo.length, n, JSON.stringify(this.multiBody));
+});
+
+Then("both audiences have {int} member", async function (expected) {
+  for (const id of [this.audienceId, this.audienceId2]) {
+    const members = await authFetch(`/api/admin/subscriber-lists/${id}/members`, "GET", undefined, this.token);
+    assert.equal(members.json.length, expected, `audience ${id}: ${JSON.stringify(members.json)}`);
+  }
+});

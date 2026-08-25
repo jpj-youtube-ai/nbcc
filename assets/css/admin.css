@@ -1136,3 +1136,61 @@ tr.nl-click:hover { background: var(--tint); }
 .nl-builder > *, .nl-left, .nl-right { min-width: 0; }
 .nl-ov-grid > *, .nl-send-grid > *, .nl-res-grid > *, .nl-who-grid > *, .nl-extras > * { min-width: 0; }
 .nl-preview-frame, .nl-preview-wrap { max-width: 100%; }
+
+/* =================================================================
+   TASK-287 — tables that fit their card, and the two ways onto a list
+   sitting side by side.
+   ================================================================= */
+
+/* ---- Newsletter tables fit. The shared .admin-table sets white-space:nowrap on EVERY cell, so a
+   table grows to its longest email address and the card scrolls sideways with the last column
+   pushed off the edge. Inside the newsletter panels the primary cell wraps instead, and the table
+   is fixed-layout so the columns are shared out rather than fought over. ---- */
+.nl-panel .admin-table { table-layout: fixed; }
+.nl-panel .admin-table th, .nl-panel .admin-table td { white-space: normal; vertical-align: top; }
+/* Text must not sit in the card's rounded corner. The wrap has a radius and the first cell had only
+   14px of padding, so a long name ran straight into the curve. */
+.nl-panel .admin-table-wrap { padding: 2px 8px; }
+.nl-panel .admin-table th:first-child, .nl-panel .admin-table td:first-child { padding-left: 10px; }
+.nl-panel .admin-table th:last-child, .nl-panel .admin-table td:last-child { padding-right: 10px; }
+
+/* The name/date line, with its supporting facts beneath. Two lines in one cell beats six columns
+   nobody can read. */
+.nl-person-nm { display: block; font-weight: 600; }
+.nl-panel .admin-table .nl-meta { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+
+/* People: Person | Added | Remove */
+.nl-people td:nth-child(2), .nl-people th:nth-child(2) { width: 34%; }
+.nl-people td:last-child, .nl-people th:last-child { width: 6.5rem; }
+
+/* Archive: Newsletter | Status | Accepted | actions */
+.nl-archive th:nth-child(2), .nl-archive td:nth-child(2) { width: 6rem; }
+.nl-archive th:nth-child(3), .nl-archive td:nth-child(3) { width: 6rem; }
+.nl-archive th:last-child, .nl-archive td:last-child { width: 9.5rem; }
+.nl-archive-acts { display: flex; flex-wrap: wrap; gap: .3rem .7rem; justify-content: flex-end; }
+.nl-pill-draft { background: var(--tint); color: var(--slate-soft); }
+.nl-pill-sent { background: var(--holly-soft); color: var(--holly); }
+
+/* ---- The two ways onto a list, side by side. Stacked full-width they read as a long form to work
+   down; beside each other they read as a choice: one person, or a spreadsheet. ---- */
+.nl-people-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start;
+  margin: 1.25rem 0; }
+.nl-people-tools > * { min-width: 0; }
+.nl-people-tools .nl-add-person, .nl-people-tools .nl-import {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: clamp(16px, 2vw, 22px); margin: 0; }
+.nl-people-tools .nl-import-head { font-family: var(--font-head); font-size: 1.05rem;
+  color: var(--crimson); margin: 0 0 .3rem; letter-spacing: -.015em; }
+.nl-people-tools .admin-help { margin-top: 0; font-size: .82rem; }
+/* In a half-width card the ticks go two across, not four. */
+.nl-people-tools .nl-ticks .nl-tick { flex: 1 1 150px; }
+.nl-people-tools .nl-import-bar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.nl-people-tools .nl-import-bar input[type="file"] { flex: 1 1 100%; }
+
+@media (max-width: 900px) {
+  .nl-people-tools { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .nl-people th:nth-child(2), .nl-people td:nth-child(2) { width: 40%; }
+  .nl-archive th:last-child, .nl-archive td:last-child { width: 5.5rem; }
+}

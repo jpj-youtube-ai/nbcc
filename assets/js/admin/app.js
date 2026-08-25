@@ -2395,19 +2395,24 @@
     // TASK-271: WHO each one went to. The audience was stamped at send time but never read back, so
     // the history couldn't tell you whether a message reached volunteers or every donor. Older sends
     // predate audiences and were always the newsletter audience.
-    var html = '<table class="admin-table"><thead><tr><th>Subject</th><th>Audience</th><th>Sent by</th><th>Status</th><th>Sent</th><th>Accepted</th><th></th></tr></thead><tbody>';
+    // TASK-287: four columns, not seven. The audience and the sender move into the meta line under
+    // the subject — they describe the send, they are not things you scan a column of. TASK-278's
+    // sent_by is still shown; it just lives with the date it belongs to.
+    var html = '<table class="admin-table nl-archive"><thead><tr><th>Newsletter</th><th>Status</th>' +
+      '<th class="nl-r">Accepted</th><th></th></tr></thead><tbody>';
     rows.forEach(function (n) {
+      var meta = [
+        n.sentAt ? new Date(n.sentAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null,
+        n.sentBy || null,
+        n.audience || (n.status === "sent" ? "Newsletter" : null),
+      ].filter(Boolean).map(H.escapeHtml);
       html +=
-        "<tr><td>" + H.escapeHtml(n.subject) + "</td><td>" +
-        (n.audience ? H.escapeHtml(n.audience) : (n.status === "sent" ? '<span class="admin-muted">Newsletter</span>' : "-")) +
-        // TASK-278: sent_by has been stamped since the atomic claim landed but was never read back,
-        // so the history could not say who pressed the button.
-        "</td><td>" + (n.sentBy ? H.escapeHtml(n.sentBy) : '<span class="admin-muted">-</span>') +
-        "</td><td>" + n.status + "</td><td>" +
-        (n.sentAt ? new Date(n.sentAt).toLocaleString() : "-") + "</td><td>" +
-        nlDeliveryCell(n) +
-        '</td><td><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button>' +
-        (n.status === "sent" ? ' <button class="admin-link" type="button" data-who-got="' + n.id + '">Who got it</button>' : "") +
+        '<tr><td><span class="nl-subj">' + H.escapeHtml(n.subject) + "</span>" +
+        '<span class="nl-meta">' + (meta.length ? meta.join(" · ") : "Not sent yet") + "</span></td>" +
+        '<td><span class="nl-pill nl-pill-' + H.escapeHtml(n.status) + '">' + H.escapeHtml(n.status) + "</span></td>" +
+        '<td class="nl-r">' + nlDeliveryCell(n) + "</td>" +
+        '<td class="nl-r nl-archive-acts"><button class="admin-link" type="button" data-edit-newsletter="' + n.id + '">Open</button>' +
+        (n.status === "sent" ? '<button class="admin-link" type="button" data-who-got="' + n.id + '">Results</button>' : "") +
         nlDeleteCell(n) + "</td></tr>";
     });
     return html + "</tbody></table>";
@@ -3049,7 +3054,10 @@
         nlLastNewsletters = rows;
         nlRenderOverview(rows);
         nlRefreshInflight();
-        if (nlLivePanel() === "nlPanelOverview") nlShowPanel("nlPanelOverview");
+        // Land on the Overview unless the user is already mid-compose. The old guard compared
+        // against nlLivePanel(), which reported the one panel that started un-hidden - so it never
+        // fired and nothing was shown at all.
+        if (NL_COMPOSE_PANELS.indexOf(nlLivePanel()) === -1) nlShowPanel("nlPanelOverview");
       })
       .catch(function () {});
   }
@@ -3510,13 +3518,25 @@
     // which of us added them. "Who put this person on the list?" is the first question asked when an
     // address turns out to be wrong, or when someone says they never signed up.
     var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff" };
-    var html = '<table class="admin-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Added</th><th>How</th><th>By</th><th></th></tr></thead><tbody>';
+    // TASK-287: three columns, not seven. Seven never fitted the card, and .admin-table sets
+    // white-space:nowrap on every cell, so the table grew to its longest email address and the card
+    // scrolled sideways with Remove pushed off the edge. Nothing is lost — the same six facts are
+    // here, grouped as the two questions people actually ask: "who is this?" and "how did they get
+    // here?".
+    var html = '<table class="admin-table nl-people"><thead><tr><th>Person</th><th>Added</th>' +
+      "<th></th></tr></thead><tbody>";
     members.forEach(function (m) {
-      html += "<tr><td>" + H.escapeHtml(m.name || "") + "</td><td>" + H.escapeHtml(m.email) + "</td><td>" +
-        H.escapeHtml(m.phone || "") + "</td><td>" + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") + "</td><td>" +
-        H.escapeHtml(howLabel[m.consentSource] || m.consentSource) + "</td><td>" +
-        (m.addedBy ? H.escapeHtml(m.addedBy) : '<span class="admin-muted">' + (m.consentSource === "footer" ? "themselves" : "not recorded") + "</span>") +
-        "</td><td>" +
+      var contact = [m.email, m.phone].filter(Boolean).map(H.escapeHtml).join(" · ");
+      var by = m.addedBy
+        ? H.escapeHtml(m.addedBy)
+        : m.consentSource === "footer" ? "themselves" : "not recorded";
+      var how = [H.escapeHtml(howLabel[m.consentSource] || m.consentSource), "by " + by].join(" · ");
+      html +=
+        '<tr><td><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
+        '</span><span class="nl-meta">' + contact + "</span></td>" +
+        '<td><span class="nl-person-nm">' + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") +
+        '</span><span class="nl-meta">' + how + "</span></td>" +
+        '<td class="nl-r">' +
         (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +
         "</td></tr>";
     });

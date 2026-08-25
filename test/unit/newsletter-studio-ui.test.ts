@@ -81,6 +81,25 @@ const DRIVEN_IDS = [
   "amAudiences", "importAudiences",
 ] as const;
 
+// TASK-287: the tab opened COMPLETELY BLANK. Every panel starts hidden and app.js reveals one —
+// except nlPanelWrite, which was the single panel left un-hidden in the markup. That made
+// nlLivePanel() report "nlPanelWrite" on first open, so the guard meant to land you on the Overview
+// never fired; and because nlPanelWrite lives inside .nl-compose (display:none until composing),
+// nothing at all was on screen.
+//
+// The invariant is simply: the markup picks no winner. app.js decides what is shown.
+describe("no panel starts visible - app.js chooses", () => {
+  it("every .nl-panel carries the hidden attribute in the markup", () => {
+    const section = newsletterSection(html);
+    const panels = [...section.matchAll(/<div class="nl-panel"[^>]*id="([^"]+)"([^>]*)>/g)]
+      // The tail is a short attribute string; a plain substring test is enough and cannot be
+      // mangled by escaping the way a word-boundary regex was.
+      .map((m) => ({ id: m[1], visible: !m[2].includes("hidden") }));
+    expect(panels.length).toBeGreaterThan(4);
+    expect(panels.filter((p) => p.visible).map((p) => p.id)).toEqual([]);
+  });
+});
+
 describe("every container the tab renders into is actually driven", () => {
   const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
 

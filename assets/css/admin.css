@@ -1194,3 +1194,39 @@ tr.nl-click:hover { background: var(--tint); }
   .nl-people th:nth-child(2), .nl-people td:nth-child(2) { width: 40%; }
   .nl-archive th:last-child, .nl-archive td:last-child { width: 5.5rem; }
 }
+
+/* =================================================================
+   TASK-289 — collapsible blocks. Ten blocks used to mean ten fully
+   expanded forms, so finding one meant scrolling past every field of
+   every other. The DOM is unchanged: everything after the head is
+   simply hidden, which keeps the working builder working.
+   ================================================================= */
+.nl-block.is-collapsed > *:not(.nl-block-head) { display: none; }
+.nl-block.is-collapsed { background: var(--cream); }
+.nl-block-head { cursor: pointer; }
+
+/* The chevron. Rotates rather than swapping glyph, so the state change is legible as a movement. */
+.nl-block-toggle { width: 22px; height: 22px; flex: 0 0 auto; border: 0; background: none;
+  cursor: pointer; padding: 0; position: relative; border-radius: 6px; color: var(--slate-soft); }
+.nl-block-toggle:hover { background: var(--tint); color: var(--slate); }
+.nl-block-toggle:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }
+.nl-block-toggle::after { content: ""; position: absolute; left: 7px; top: 7px;
+  width: 7px; height: 7px; border: solid currentColor; border-width: 0 1.8px 1.8px 0;
+  transform: rotate(45deg); transition: transform .18s ease; }
+.nl-block-toggle[aria-expanded="false"]::after { transform: rotate(-45deg); top: 8px; left: 6px; }
+
+/* A collapsed block still says what it holds. A stack of identical "Text" bars you must open one by
+   one to find the right one is worse than the scrolling it replaced. */
+.nl-block-sum { flex: 1 1 auto; min-width: 0; font-size: .82rem; color: var(--slate-soft);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nl-block:not(.is-collapsed) .nl-block-sum { display: none; }
+
+/* Collapse all / expand all, with the block count so the list has a scale. */
+.nl-canvas-bar { display: flex; align-items: center; gap: .5rem; margin: 0 0 .6rem; }
+.nl-canvas-count { flex: 1; font-size: .78rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--slate-soft); }
+.nl-canvas-toggle { border: 1.4px solid var(--line); background: var(--cream); color: var(--slate);
+  border-radius: 8px; padding: 5px 11px; font-family: var(--font-body); font-weight: 600;
+  font-size: .78rem; cursor: pointer; transition: border-color .16s, color .16s; }
+.nl-canvas-toggle:hover { border-color: var(--crimson); color: var(--crimson); }
+.nl-canvas-toggle:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }

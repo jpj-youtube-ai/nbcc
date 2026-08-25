@@ -48,7 +48,10 @@ async function seedDonor(world, name, email, emailConsent, giftPence) {
   const donor = await pool.query(
     // business_name = 'TYBDD' marks the row for this feature's scoped cleanup; it is
     // ignored by recipientName for individuals, so it doesn't affect assertions.
-    "INSERT INTO donors (donor_type, full_name, business_name, email, email_consent) VALUES ('individual', $1, 'TYBDD', $2, $3) RETURNING id",
+    // TASK-291: thank-you letters have their own consent now. This seed stands in for a real
+    // donation, where the app writes both from the same answer - so a donor who declined email is
+    // seeded declining both, not left eligible for thank-you letters by the column's default.
+    "INSERT INTO donors (donor_type, full_name, business_name, email, email_consent, thankyou_consent) VALUES ('individual', $1, 'TYBDD', $2, $3, $3) RETURNING id",
     [name, email, emailConsent],
   );
   const id = donor.rows[0].id;

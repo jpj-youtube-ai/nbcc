@@ -4290,3 +4290,34 @@ the one you wanted meant scrolling past every field of every other one. Blocks n
   the block itself, so nothing extra is ever saved.
 - **The builder itself is untouched.** The DOM is unchanged; CSS hides everything after the head when
   a block carries `.is-collapsed`. The 49 existing builder tests stay green.
+
+**Email preferences, and private vs public audiences (TASK-291).** Unsubscribing was all-or-nothing
+in whichever direction the link happened to point: a subscriber link left one list, a donor link
+stopped *everything*. Now a person can choose.
+
+- **Clicking unsubscribe still unsubscribes, immediately.** The preference centre is reached *from*
+  the confirmation — it is what you can do next, never a gate in front of leaving. RFC 8058 one-click
+  (which Gmail and Apple Mail fire automatically) is untouched and still instant. "Stop all emails"
+  is its own submit button, so the way out stays one click; a preference centre that makes leaving
+  harder than it was is a dark pattern and a PECR problem.
+- **Donor consent is split.** `email_consent` keeps its exact meaning for the newsletter;
+  `thankyou_consent` (new) gates thank-you letters, so a donor can stop one and keep the other. The
+  migration backfills `thankyou_consent = email_consent` rather than defaulting everyone to true —
+  someone who had opted out of everything must not start receiving thank-you letters again because
+  we split a column.
+- **An audience is private or public** (`subscriber_lists.visibility`, default **private**). Private
+  means staff add people to it and nobody outside ever learns it exists; public means people may opt
+  in themselves from the preferences page. The admin picker shows a padlock or a globe, with the word
+  beside it — the symbol reinforces, it never carries the meaning alone. Only *manual* audiences can
+  be flipped: Newsletter is publicly joinable by definition (the website footer) and Donors follows
+  donor consent, so offering to change either would record a promise the code does not keep.
+- **The disclosure rule is the point of the feature.** An unsubscribe link travels by email and gets
+  forwarded, so anyone holding the message holds the token. The page shows only the lists that
+  address is genuinely on, plus **public** lists it is not on. A private list never reaches the page
+  at all — not greyed out, not mentioned, because a greyed-out row still says the list exists.
+  Enforced in `src/newsletter/preferences.ts` (pure, DB-free, 16 tests) and proved end to end by a
+  BDD scenario that fails if the response body so much as contains a private audience's name.
+- **A submission may only act on what the page offered.** A membership id the person does not hold is
+  ignored rather than obeyed, and a join naming a list that was not offered is dropped — otherwise
+  the page becomes a way to unsubscribe other people or add yourself to audiences you were never
+  meant to see.

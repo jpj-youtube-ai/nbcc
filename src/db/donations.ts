@@ -204,10 +204,15 @@ export async function insertDonorAndDonation(
   partnerShareIds: number[];
 }> {
   const donorRes = await client.query<{ id: number }>(
+    // TASK-291: thankyou_consent is written from the SAME answer as email_consent. The column's
+    // DEFAULT true only covers rows the app does not name it in - and a donor who declined email
+    // would then have been eligible for thank-you letters, which is the exact consent violation
+    // splitting the column was meant to make impossible. Splitting lets someone change their mind
+    // LATER; it must never start them somewhere they did not agree to.
     `INSERT INTO donors
-       (donor_type, full_name, business_name, company_number, email, email_consent, anonymous,
-        billing_address, billing_postcode, list_on_supporters, credit_name)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       (donor_type, full_name, business_name, company_number, email, email_consent, thankyou_consent,
+        anonymous, billing_address, billing_postcode, list_on_supporters, credit_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
     [
       donation.donorType,

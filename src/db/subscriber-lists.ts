@@ -16,11 +16,18 @@ import { pool } from "./pool";
 //   everyone — that list's own members PLUS the donors (the 'Newsletter' audience)
 export type ListKind = "manual" | "donors" | "everyone";
 
+// TASK-291: who may join. 'private' = staff add only and never shown outside; 'public' = people may
+// opt in themselves from the email preferences page.
+export type ListVisibility = "private" | "public";
+
 export interface SubscriberList {
   id: number;
   slug: string;
   name: string;
   kind: ListKind;
+  // TASK-291: private (staff add only, never shown outside) or public (people may opt in from the
+  // email preferences page). The admin picker shows a padlock or a globe from this.
+  visibility: ListVisibility;
   // TASK-270: the TRUE reach — for donors/everyone this counts the live donor audience too. It used
   // to count stored rows only, so the picker said "Newsletter (3)" while the send reached every
   // consenting donor; the number the admin confirms now matches the number that gets mailed.
@@ -77,16 +84,26 @@ const MEMBER_COUNT = `CASE l.kind
         ELSE (SELECT count(*) FROM (${ACTIVE_MEMBERS}) m)
       END`;
 
-const LIST_COLUMNS = `l.id, l.slug, l.name, l.kind, ${MEMBER_COUNT} AS member_count`;
+const LIST_COLUMNS = `l.id, l.slug, l.name, l.kind, l.visibility, ${MEMBER_COUNT} AS member_count`;
 
 function toList(r: {
   id: number;
   slug: string;
   name: string;
   kind: ListKind;
+  visibility?: ListVisibility;
   member_count: string | number;
 }): SubscriberList {
-  return { id: r.id, slug: r.slug, name: r.name, kind: r.kind, memberCount: Number(r.member_count) };
+  return {
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    kind: r.kind,
+    // TASK-291: private (staff add only, never shown outside) or public (people may opt in from the
+    // email preferences page). Rows written before the column existed read as private.
+    visibility: (r.visibility as ListVisibility) ?? "private",
+    memberCount: Number(r.member_count),
+  };
 }
 
 // Archived audiences are excluded — they must not be sendable or pickable (TASK-270).
@@ -275,6 +292,52 @@ export async function getMembershipStates(
 // The public unsubscribe link's write. Idempotent, and a repeat click keeps the FIRST opt-out date —
 // the tombstone records when they left, not when they last pressed the link. Returns the address so
 // the caller can attribute a stats event, or null for an unknown id.
+// TASK-291: which lists this address is currently on. Only LIVE memberships, and only for the one
+// address — this is what the preference centre renders, so a query that could return anything else
+// would become a way to enumerate our private audiences from a forwarded email.
+export async function listMembershipsForEmail(
+  email: string,
+): Promise<{ id: number; listId: number; listName: string }[]> {
+  const { rows } = await pool.query(
+    `SELECT ls.id, ls.list_id, l.name AS list_name
+       FROM list_subscribers ls
+       JOIN subscriber_lists l ON l.id = ls.list_id
+      WHERE lower(ls.email) = $1
+        AND ls.unsubscribed_at IS NULL
+        AND l.archived_at IS NULL
+      ORDER BY l.name`,
+    [email.trim().toLowerCase()],
+  );
+  return rows.map((r) => ({ id: r.id, listId: r.list_id, listName: r.list_name }));
+}
+
+// TASK-291: mark an audience private or public. Only a MANUAL list can change - Newsletter is
+// publicly joinable by definition (the website footer) and Donors cannot be joined by hand at all,
+// so letting either be flipped would record something the code does not honour.
+export async function setListVisibility(id: number, visibility: ListVisibility): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `UPDATE subscriber_lists SET visibility = $2 WHERE id = $1 AND kind = 'manual'`,
+    [id, visibility],
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+// Every live list with the facts the preference page needs to decide what may be OFFERED. The
+// filtering itself is pure (joinableLists) so the disclosure rule is testable without a database.
+export async function listOfferableLists(): Promise<
+  { id: number; name: string; kind: ListKind; visibility: ListVisibility }[]
+> {
+  const { rows } = await pool.query(
+    `SELECT id, name, kind, visibility FROM subscriber_lists WHERE archived_at IS NULL ORDER BY name`,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    kind: r.kind as ListKind,
+    visibility: (r.visibility as ListVisibility) ?? "private",
+  }));
+}
+
 export async function unsubscribeListMember(memberId: number): Promise<{ email: string } | null> {
   const { rows } = await pool.query(
     `UPDATE list_subscribers SET unsubscribed_at = COALESCE(unsubscribed_at, now())

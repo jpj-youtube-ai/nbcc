@@ -43,12 +43,15 @@ Before({ tags: "@newsletter" }, async function () {
   await pool.query(
     "DELETE FROM newsletter_images WHERE uploaded_by IN (SELECT id FROM users WHERE email LIKE '%newsletter.bdd@example.com')",
   );
+  // Newsletters BEFORE users: newsletters.sent_by references users, so deleting the admins first
+  // fails the moment any scenario has actually SENT something. That is what TASK-288's dedupe
+  // scenario tripped over - it left a sent newsletter behind and the next run could not clear the
+  // user who sent it. Order matters more than the subject list, which will always drift.
+  await pool.query(
+    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update','Dedupe check')",
+  );
   await pool.query("DELETE FROM users WHERE email LIKE '%newsletter.bdd@example.com'");
   await pool.query("DELETE FROM donors WHERE email LIKE '%newsletter.bdd@example.com'");
-  // Remove any newsletters a prior run created (subjects are test-specific).
-  await pool.query(
-    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update')",
-  );
   // TASK-249: templates OUTLIVE the users deleted above (created_by is ON DELETE SET NULL — a
   // template belongs to the team, not its author), so they must be cleared by name or a re-run would
   // hit the unique-name rule and 409 where it expects 201.
@@ -66,7 +69,7 @@ After({ tags: "@newsletter" }, async function () {
     "DELETE FROM newsletter_images WHERE uploaded_by IN (SELECT id FROM users WHERE email LIKE '%newsletter.bdd@example.com')",
   );
   await pool.query(
-    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update')",
+    "DELETE FROM newsletters WHERE subject IN ('Winter update','Winter update v2','Send me','Nope','Blocks update','Dedupe check')",
   );
 });
 
@@ -890,4 +893,35 @@ When("I send that newsletter to both audiences", { timeout: 30000 }, async funct
 
 Then("the send should have reached {int} people", function (n) {
   assert.equal(this.nlBody.recipientCount, n, JSON.stringify(this.nlBody));
+});
+
+
+// --- TASK-291: the preference centre --------------------------------------------------------------
+// The token is built exactly as an email carries it — a subscriber token signed with the same
+// secret the app verifies with — so this exercises the real entry point, not a test-only door.
+When("that person opens their email preferences", async function () {
+  const members = await authFetch(
+    `/api/admin/subscriber-lists/${this.audienceId}/members`,
+    "GET",
+    undefined,
+    this.token,
+  );
+  assert.ok(members.json.length > 0, "expected the person to be on the first audience");
+  const body = `s${members.json[0].id}.1`;
+  const sig = createHmac("sha256", process.env.ADMIN_SESSION_SECRET || "dev-admin-session-secret")
+    .update(body)
+    .digest("base64url");
+  const res = await fetch(`${BASE_URL}/preferences/${body}.${sig}`);
+  this.prefsStatus = res.status;
+  this.prefsHtml = await res.text();
+});
+
+Then("the preferences page should offer {string}", function (name) {
+  assert.equal(this.prefsStatus, 200, this.prefsHtml.slice(0, 200));
+  assert.ok(this.prefsHtml.includes(name), `expected the page to offer ${name}`);
+});
+
+// The whole point. A private audience must not appear anywhere in the response body.
+Then("the preferences page should not mention {string}", function (name) {
+  assert.ok(!this.prefsHtml.includes(name), `the page leaked the private audience ${name}`);
 });

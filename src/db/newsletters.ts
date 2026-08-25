@@ -231,6 +231,33 @@ export async function listRecipientsForLists(
   return mergeRecipients(perAudience) as ListRecipient[];
 }
 
+// TASK-291: the donor consent behind an address, for the preference centre. Returns null when the
+// address is not a donor - a plain subscriber has list memberships and no donor consent to offer.
+export async function donorConsentForEmail(
+  email: string,
+): Promise<{ id: number; emailConsent: boolean; thankyouConsent: boolean } | null> {
+  const { rows } = await pool.query(
+    `SELECT id, email_consent, thankyou_consent FROM donors
+      WHERE lower(email) = $1 ORDER BY id LIMIT 1`,
+    [email.trim().toLowerCase()],
+  );
+  const r = rows[0];
+  return r ? { id: r.id, emailConsent: r.email_consent, thankyouConsent: r.thankyou_consent } : null;
+}
+
+// TASK-291: set the two consents independently, for EVERY donor row with this address. A person can
+// have more than one donor row (a second gift recorded separately), and leaving the others alone is
+// how somebody who unsubscribed kept being emailed.
+export async function setDonorConsents(
+  email: string,
+  consents: { newsletter: boolean; thankYou: boolean },
+): Promise<void> {
+  await pool.query(
+    `UPDATE donors SET email_consent = $2, thankyou_consent = $3 WHERE lower(email) = $1`,
+    [email.trim().toLowerCase(), consents.newsletter, consents.thankYou],
+  );
+}
+
 // TASK-272: the last gate before anyone is mailed. Hard bounces and spam complaints are dropped HERE,
 // inside the one resolver both the send loop and the recipient preview use — so the count an admin
 // confirms is the count that goes out, and a suppressed address cannot be reached by any send path.
@@ -377,12 +404,18 @@ export async function addNewsletterSubscriber(
     [lower],
   );
   if (existing.rows.length > 0) {
-    await pool.query(`UPDATE donors SET email_consent = true WHERE lower(email) = $1`, [lower]);
+    // TASK-291: both consents. This action's own confirmation promises "all our emails back on",
+    // so leaving thank-you letters off would make that wording untrue.
+    await pool.query(
+      `UPDATE donors SET email_consent = true, thankyou_consent = true WHERE lower(email) = $1`,
+      [lower],
+    );
     return { email: lower, status: "resubscribed" };
   }
   const fullName = name && name.trim() ? name.trim() : trimmed.split("@")[0];
   await pool.query(
-    `INSERT INTO donors (donor_type, full_name, email, email_consent) VALUES ('individual', $1, $2, true)`,
+    `INSERT INTO donors (donor_type, full_name, email, email_consent, thankyou_consent)
+     VALUES ('individual', $1, $2, true, true)`,
     [fullName, trimmed],
   );
   return { email: lower, status: "added" };

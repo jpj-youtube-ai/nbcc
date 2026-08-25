@@ -108,6 +108,7 @@ import {
   archiveSubscriberList,
   restoreSubscriberList,
   BuiltInListError,
+  setListVisibility,
   type SubscriberListRef,
 } from "../db/subscriber-lists";
 import { listSuppressions, unsuppressEmail } from "../db/email-suppressions";
@@ -710,6 +711,36 @@ export async function postAdminListMembersMulti(req: Request, res: Response): Pr
   }
   // 201 for anything that actually changed - a revived membership is a change, not a no-op.
   return res.status(folded.changed > 0 ? 201 : 200).json(folded);
+}
+
+// TASK-291: mark an audience private or public. Only MANUAL lists can change - Newsletter is
+// publicly joinable by definition (the website footer) and Donors cannot be joined by hand, so
+// letting either be flipped would record a promise the code does not keep.
+export async function postAdminListVisibility(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
+  const listId = Number(req.params.id);
+  if (!Number.isInteger(listId) || listId <= 0) return res.status(400).json({ error: "Invalid list id" });
+  const parsed = z.object({ visibility: z.enum(["private", "public"]) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose private or public" });
+  const changed = await setListVisibility(listId, parsed.data.visibility);
+  if (!changed) {
+    return res.status(400).json({
+      error: "Only your own audiences can be made public — Newsletter and Donors are fixed",
+    });
+  }
+  try {
+    await recordAudit({
+      actor: claims.email,
+      action: "subscribers.list_visibility",
+      entity: "subscriber_list",
+      entityId: listId,
+      data: { visibility: parsed.data.visibility },
+    });
+  } catch (err) {
+    console.error("visibility audit failed:", err instanceof Error ? err.message : err);
+  }
+  return res.json({ visibility: parsed.data.visibility });
 }
 
 export async function deleteAdminListMember(req: Request, res: Response): Promise<Response | void> {
@@ -2423,6 +2454,7 @@ adminRouter.post("/api/admin/subscriber-lists/:id/import", postAdminListImport);
 adminRouter.get("/api/admin/subscriber-lists/:id/members", getAdminListMembers);
 adminRouter.post("/api/admin/subscriber-lists/:id/members", postAdminListMember);
 adminRouter.delete("/api/admin/subscriber-lists/:id/members/:memberId", deleteAdminListMember);
+adminRouter.post("/api/admin/subscriber-lists/:id/visibility", postAdminListVisibility);
 // TASK-282: multi-audience writes. They carry a set of list ids in the BODY, so they cannot live
 // under /subscriber-lists/:id — there is no single id to put in the path. The single-list routes
 // above are unchanged and still serve anything aimed at one audience.

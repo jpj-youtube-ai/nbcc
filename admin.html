@@ -350,6 +350,10 @@
                   <select id="audiencePick"></select>
                   <button type="button" id="audienceNew">New audience</button>
                   <button type="button" id="audienceArchive" hidden>Archive</button>
+                  <!-- TASK-291: private (staff add only, never shown outside) or public (people may
+                       opt in from the email preferences page). Only your own audiences can change -
+                       Newsletter is publicly joinable by definition and Donors cannot be joined. -->
+                  <button type="button" id="audienceVisibility" hidden aria-pressed="false"></button>
                   <input type="text" id="audienceName" maxlength="60" placeholder="Audience name" aria-label="New audience name" hidden />
                   <button type="button" id="audienceCreate" hidden>Create</button>
                   <button type="button" id="audienceCancel" hidden>Cancel</button>

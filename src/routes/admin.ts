@@ -115,6 +115,7 @@ import {
   getJobForNewsletter,
   setJobStatus,
   listJobRecipients,
+  listInflightJobs,
 } from "../db/newsletter-send-jobs";
 import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
 import { parseScheduleAt, scheduleSummary } from "../newsletter/schedule";
@@ -1182,6 +1183,26 @@ export async function postAdminNewsletterSendJobAction(req: Request, res: Respon
   const changed = await setJobStatus(job.id, status);
   if (!changed) return res.status(409).json({ error: "That send has already finished" });
   return res.json({ status });
+}
+
+// GET /api/admin/newsletters/send-jobs/inflight — everything currently queued, scheduled, running or
+// paused (TASK-285). The Overview needs to say "one newsletter is waiting to go" without asking about
+// each newsletter in turn, and a send paused halfway is exactly the thing that gets forgotten.
+// Viewer+: this is scheduling state, not donor data.
+export async function getAdminNewsletterInflight(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "newsletter", "view"))) return;
+  const jobs = await listInflightJobs();
+  if (!jobs.length) return res.json(null);
+  const job = jobs[0];
+  const newsletter = await getNewsletter(job.newsletterId);
+  return res.json({
+    newsletterId: job.newsletterId,
+    subject: newsletter ? newsletter.subject : null,
+    status: job.status,
+    scheduledAt: job.scheduledAt,
+    total: job.total,
+    sent: job.sent,
+  });
 }
 
 // GET /api/admin/newsletters/:id/send-job/recipients — exactly who this send reached, and who it did
@@ -2316,6 +2337,8 @@ adminRouter.get("/api/admin/subscriber-lists/archived", getAdminArchivedSubscrib
 adminRouter.post("/api/admin/newsletters/preflight", postAdminNewsletterPreflight);
 adminRouter.get("/api/admin/newsletters/suppressions", getAdminSuppressions);
 // TASK-274: background send job — live progress, pause/resume/cancel, and who it reached.
+// A literal path, so it must be registered BEFORE /:id/... or "send-jobs" is captured as an id.
+adminRouter.get("/api/admin/newsletters/send-jobs/inflight", getAdminNewsletterInflight);
 adminRouter.get("/api/admin/newsletters/:id/send-job", getAdminNewsletterSendJob);
 adminRouter.get("/api/admin/newsletters/:id/send-job/recipients", getAdminNewsletterSendRecipients);
 adminRouter.post("/api/admin/newsletters/:id/send-job/:action", postAdminNewsletterSendJobAction);

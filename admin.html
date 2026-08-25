@@ -611,7 +611,15 @@
                 <h3 class="nl-stage-head">Who gets this?</h3>
                 <p class="admin-help">Pick one audience. Anyone who unsubscribed or bounced is left out automatically — you never have to think about it.</p>
                 <div class="nl-who-grid">
-                  <div class="nl-send-row">
+                  <div>
+                    <!-- TASK-285: the audiences as CARDS, not a dropdown. Who a newsletter goes to
+                         is the most consequential decision in the flow, and a <select> makes it look
+                         like a formality you pass on the way to the Send button — you also cannot
+                         see what the options mean or how big they are without opening it.
+                         #sendListPick stays as the hidden mirror of the chosen card, so every
+                         existing code path (the send request, the confirmation, sendAudienceNote)
+                         keeps working untouched. -->
+                    <div class="nl-aud-cards" id="nlAudienceCards" role="radiogroup" aria-label="Audience to send to"></div>
                     <span class="nl-send-list" id="sendListWrap" hidden>
                       <label for="sendListPick">Send to</label>
                       <select id="sendListPick" aria-label="Audience to send to"></select>
@@ -631,9 +639,33 @@
                 <h3 class="nl-stage-head">Ready to send</h3>
                 <div class="nl-send-grid">
                   <div>
+                    <!-- TASK-285: the pre-send checks, SHOWN rather than only enforced. The same
+                         /preflight endpoint already ran inside the send confirmation, where it could
+                         only stop you at the last moment. On the panel it becomes something you can
+                         act on: a dead button link or a missing test send is fixable in one click
+                         from here, before you have committed to anything. -->
+                    <div class="nl-card">
+                      <h4>Checks</h4>
+                      <p class="admin-help">Run automatically as you write. Nothing here blocks a send unless it would actually break.</p>
+                      <ul class="nl-checks" id="nlChecks" aria-live="polite"><li class="admin-loading">Checking…</li></ul>
+                    </div>
+
                     <div class="nl-card">
                       <h4>When should it go?</h4>
                       <p class="admin-help">Write now, land when people are reading.</p>
+                      <!-- Two explicit choices rather than "fill this in, or press the button that
+                           clears it". Empty-means-now was invisible: nothing on screen said which
+                           you had picked. -->
+                      <div class="nl-when" role="radiogroup" aria-label="When to send">
+                        <button type="button" class="nl-when-row" id="nlWhenNow" role="radio" aria-checked="true">
+                          <span class="nl-when-tick" aria-hidden="true"></span>
+                          <span class="nl-when-bd"><b>Send now</b><span>Starts as soon as you confirm.</span></span>
+                        </button>
+                        <button type="button" class="nl-when-row" id="nlWhenLater" role="radio" aria-checked="false">
+                          <span class="nl-when-tick" aria-hidden="true"></span>
+                          <span class="nl-when-bd"><b>Send later</b><span>Pick a date and time.</span></span>
+                        </button>
+                      </div>
 
                 <!-- TASK-280 (letter J): send it later. Volunteers write in the evening or at the
                      weekend, but a newsletter lands best on a weekday morning. Empty = send now, so
@@ -695,6 +727,40 @@
                   <div class="nl-cp-acts">
                     <button type="button" class="admin-btn" id="nlComposeBack" hidden>Back</button>
                     <button type="button" class="admin-btn nl-cp-next" id="nlComposeNext">Choose who gets it</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TASK-285: where it landed, as its own destination. The per-send figures used to
+                   live inside the Write panel and only appeared for an already-sent newsletter,
+                   while the history table sat elsewhere — so answering "where did it land" meant
+                   visiting two places and knowing to look. One click from any sent row now opens
+                   the whole record: the five numbers, what people clicked, and who sent it. -->
+              <div class="nl-panel" id="nlPanelResults" hidden>
+                <button type="button" class="nl-back" id="nlResultsBack">
+                  <span aria-hidden="true">&#8249;</span> Back
+                </button>
+                <div class="nl-res-head">
+                  <div>
+                    <span class="nl-eyebrow">Sent newsletter</span>
+                    <h3 class="nl-res-title" id="nlResultsTitle"></h3>
+                    <p class="nl-res-meta" id="nlResultsMeta"></p>
+                  </div>
+                  <div class="nl-res-acts">
+                    <button type="button" class="admin-btn" id="nlResultsWho">Who got it</button>
+                  </div>
+                </div>
+                <div class="nl-res-tiles" id="nlResultsTiles" aria-live="polite"></div>
+                <div class="nl-res-grid">
+                  <div class="nl-card">
+                    <h4>What people clicked</h4>
+                    <p class="admin-help">Unique people, not total clicks — one keen reader pressing five times is still one person.</p>
+                    <div id="nlResultsLinks" aria-live="polite"></div>
+                  </div>
+                  <div class="nl-card">
+                    <h4>Record</h4>
+                    <dl id="nlResultsRecord"></dl>
+                    <p class="nl-sub-msg" id="nlResultsNote" aria-live="polite"></p>
                   </div>
                 </div>
               </div>

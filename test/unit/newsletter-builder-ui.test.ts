@@ -143,6 +143,25 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     memberAdds.push({ url, body: parsedBody });
     return j({ outcome: "added" }, 201);
   }
+  // TASK-283: one person, several audiences. The single-list route above still exists and is
+  // still stubbed, so a regression that silently reverted to it shows up as the wrong url here.
+  if (url === "/api/admin/subscriber-list-members" && method === "POST") {
+    memberAdds.push({ url, body: parsedBody });
+    const ids = (parsedBody.listIds as number[]) || [];
+    return j(
+      {
+        added: ids.length,
+        resubscribed: 0,
+        alreadyOnList: 0,
+        previouslyUnsubscribed: 0,
+        addedTo: ids.map((id) => (id === 1 ? "Newsletter" : "Volunteers")),
+        resubscribedTo: [],
+        changed: ids.length,
+        perList: [],
+      },
+      201,
+    );
+  }
   if (/\/api\/admin\/subscriber-lists\/\d+\/members\/\d+$/.test(url) && method === "DELETE") {
     memberDeletes.push(url);
     return j({}, 204);
@@ -1063,12 +1082,21 @@ describe("audiences (TASK-259)", () => {
     expect(Array.from(send.options).map((o) => o.value)).toEqual(["1", "2"]);
   });
 
-  // TASK-271: the destination is the Add form's OWN "Add to" picker, not the browse picker above it.
+  /** Tick one audience on a TASK-283 tick list by its id, firing the change the UI listens for. */
+  const tickAudience = (fieldsetId: string, id: string) => {
+    const box = el(fieldsetId)!.querySelector<HTMLInputElement>("input[value=" + JSON.stringify(id) + "]");
+    if (!box) throw new Error("no tick for audience " + id + " in #" + fieldsetId);
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+
+  // TASK-271: the destination is the Add form's OWN control, not the browse picker above it.
   // Sharing one control is what let an import previewed against one audience commit into another.
-  it("adds a member to the audience chosen on the ADD form, not the one being browsed", async () => {
+  // TASK-283: that control is a tick list, and the call goes to the multi-audience endpoint.
+  it("adds a member to the audience ticked on the ADD form, not the one being browsed", async () => {
     await mount();
     (el("audiencePick") as HTMLSelectElement).value = "1"; // browsing a different audience...
-    (el("amList") as HTMLSelectElement).value = "2"; // ...adding to this one
+    tickAudience("amAudiences", "2"); // ...adding to this one
     (el("amName") as HTMLInputElement).value = "Casey";
     (el("amEmail") as HTMLInputElement).value = "casey@example.com";
     (el("amPhone") as HTMLInputElement).value = "07000 000000";
@@ -1076,8 +1104,48 @@ describe("audiences (TASK-259)", () => {
     await flush();
     await flush();
     expect(memberAdds).toHaveLength(1);
-    expect(memberAdds[0].url).toBe("/api/admin/subscriber-lists/2/members");
-    expect(memberAdds[0].body).toEqual({ name: "Casey", email: "casey@example.com", phone: "07000 000000" });
+    expect(memberAdds[0].url).toBe("/api/admin/subscriber-list-members");
+    expect(memberAdds[0].body).toEqual({
+      listIds: [2],
+      name: "Casey",
+      email: "casey@example.com",
+      phone: "07000 000000",
+    });
+  });
+
+  // The whole point of TASK-283: one action, several audiences. Somebody met at an event is often
+  // a volunteer AND on the newsletter, and three trips through this form is where a list ends up
+  // half-populated.
+  it("adds one person to SEVERAL audiences in a single request", async () => {
+    await mount();
+    tickAudience("amAudiences", "1");
+    tickAudience("amAudiences", "2");
+    (el("amEmail") as HTMLInputElement).value = "isla@example.com";
+    (el("audienceMemberForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    await flush();
+    expect(memberAdds).toHaveLength(1);
+    expect(memberAdds[0].url).toBe("/api/admin/subscriber-list-members");
+    expect(memberAdds[0].body.listIds).toEqual([1, 2]);
+  });
+
+  // Donors follows donor consent, so it is rendered for completeness but must never be tickable.
+  // A tick list reads as "all your audiences", so omitting it entirely looks like a bug instead.
+  it("shows every audience on the tick list, with a checkbox only where one can be added", async () => {
+    await mount();
+    const ticks = el("amAudiences")!;
+    expect(ticks.textContent).toContain("Newsletter");
+    expect(ticks.querySelectorAll("input[type=checkbox]")).toHaveLength(2);
+  });
+
+  // Nothing ticked must be refused, never treated as "proceed with no targets": a silent no-op
+  // that reports success is the worst outcome, because the volunteer believes it worked.
+  it("refuses to submit with no audience ticked", async () => {
+    await mount();
+    (el("amEmail") as HTMLInputElement).value = "nobody@example.com";
+    (el("audienceMemberForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    expect(memberAdds).toHaveLength(0);
   });
 
   it("sends to the CHOSEN audience — the listId reaches the send request", async () => {

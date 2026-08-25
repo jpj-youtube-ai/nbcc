@@ -2455,7 +2455,21 @@
   // characters of markup end to end, so reaching the composer meant scrolling past all the audience
   // and people management every time. Everything still exists and every element keeps its id — only
   // what is ON SCREEN at once changed.
-  var NL_PANELS = ["nlPanelAudience", "nlPanelWrite", "nlPanelSend", "nlPanelHistory"];
+  // TASK-283: three DESTINATIONS (Overview, Audiences & people, All newsletters) plus a three-step
+  // COMPOSE takeover (Write, Who, Send). The switch below is still one generic mechanism driven by
+  // data-nl-panel — the change is what the panels mean, not how they swap.
+  var NL_PANELS = [
+    "nlPanelOverview",
+    "nlPanelAudience",
+    "nlPanelWrite",
+    "nlPanelWho",
+    "nlPanelSend",
+    "nlPanelHistory",
+  ];
+  // The three that make up composing. While one of these is live the section wears .is-composing,
+  // which is what lifts the composer over the rest of the admin.
+  var NL_COMPOSE_PANELS = ["nlPanelWrite", "nlPanelWho", "nlPanelSend"];
+
   function nlShowPanel(panelId) {
     NL_PANELS.forEach(function (id) {
       var panel = el(id);
@@ -2466,10 +2480,63 @@
       b.classList.toggle("is-active", on);
       b.setAttribute("aria-current", on ? "true" : "false");
     });
+    var composing = NL_COMPOSE_PANELS.indexOf(panelId) !== -1;
+    var view = el("view-newsletter");
+    if (view) view.classList.toggle("is-composing", composing);
+    // Mark the steps already passed, so the rail reads as progress rather than three equal tabs.
+    var at = NL_COMPOSE_PANELS.indexOf(panelId);
+    Array.prototype.forEach.call(doc.querySelectorAll(".nl-cp-step"), function (b, i) {
+      b.classList.toggle("is-done", at > -1 && i < at);
+    });
+    if (composing) nlPaintComposeFoot(panelId);
+    // Coming back to a destination should start at the top of it, not wherever the composer was
+    // scrolled to. Only when the page can actually scroll: jsdom has no layout, so calling it there
+    // just prints "Not implemented" noise into the test output for no behaviour.
+    if (window.pageYOffset > 0 && typeof window.scrollTo === "function") {
+      try {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      } catch (err) {
+        window.scrollTo(0, 0);
+      }
+    }
   }
 
-  function loadNewsletterInto(id) {
-    nlShowPanel("nlPanelWrite"); // TASK-279: open the one you clicked, where you write it
+  /** Which panel is on screen right now. Read from the DOM so it cannot drift from what is shown. */
+  function nlLivePanel() {
+    for (var i = 0; i < NL_PANELS.length; i++) {
+      var p = el(NL_PANELS[i]);
+      if (p && !p.hidden) return NL_PANELS[i];
+    }
+    return "nlPanelOverview";
+  }
+
+  // The footer action always names what pressing it will do, and is the only thing that advances
+  // the flow — the step rail is there to jump back, not to be the primary path forward.
+  function nlPaintComposeFoot(panelId) {
+    var next = el("nlComposeNext");
+    var back = el("nlComposeBack");
+    var hint = el("nlComposeHint");
+    if (!next || !back || !hint) return;
+    back.hidden = panelId === "nlPanelWrite";
+    if (panelId === "nlPanelWrite") {
+      next.textContent = "Choose who gets it";
+      hint.textContent = "Everything saves as you go. You can leave and come back.";
+    } else if (panelId === "nlPanelWho") {
+      next.textContent = "Check and send";
+      hint.textContent = "Unsubscribed and blocked people are left out automatically.";
+    } else {
+      next.textContent = "Go to send";
+      hint.textContent = "Nothing goes out until you press Send.";
+    }
+    // On the last step the footer must not look like it sends — the real Send button, with its
+    // confirmation, is the only thing that mails anybody.
+    next.hidden = panelId === "nlPanelSend";
+  }
+
+  // opts.stay keeps the current panel — used on tab open, where the editor is prefilled in the
+  // background but the Overview is what you should be looking at (TASK-283).
+  function loadNewsletterInto(id, opts) {
+    if (!opts || !opts.stay) nlShowPanel("nlPanelWrite"); // open the one you clicked, where you write it
     authFetch("/api/admin/newsletters/" + id)
       .then(j)
       .then(function (n) {
@@ -2514,6 +2581,136 @@
       .catch(function () {});
   }
 
+  // --- TASK-283: the Overview -------------------------------------------------------------------
+  // The front door. Every figure here comes from endpoints that already existed — the work was
+  // deciding WHICH questions the page should answer, not fetching anything new. Rendered from the
+  // same `rows` the archive uses, so the two can never disagree.
+
+  /** A percentage as a string, or an em dash when the denominator is zero. */
+  function nlPct(n, of) {
+    if (!of) return "—";
+    return (Math.round((n / of) * 1000) / 10).toFixed(1) + "%";
+  }
+
+  /** A rate as a bar plus a figure: a number alone makes you read every row to spot the odd one. */
+  function nlRateCell(n, of) {
+    if (!of || n == null) return '<span class="nl-meta">—</span>';
+    var pct = (n / of) * 100;
+    var band = pct >= 90 ? "" : pct >= 70 ? " is-mid" : " is-low";
+    return (
+      '<span class="nl-rate' + band + '"><span class="nl-rate-bar"><i style="width:' +
+      Math.max(2, Math.min(100, Math.round(pct))) + '%"></i></span><span class="nl-rate-n">' +
+      nlPct(n, of) + "</span></span>"
+    );
+  }
+
+  function nlRenderOverview(rows) {
+    var sent = rows.filter(function (r) { return r.status === "sent"; });
+    var accepted = sent.reduce(function (a, r) { return a + (r.recipientCount || 0); }, 0);
+    var delivered = sent.reduce(function (a, r) { return a + (r.deliveredCount || 0); }, 0);
+    var thisYear = sent.filter(function (r) {
+      return r.sentAt && new Date(r.sentAt).getFullYear() === new Date().getFullYear();
+    }).length;
+
+    var tiles = el("nlOverviewTiles");
+    if (tiles) {
+      // "Delivered" is only shown once there is something to divide by. A confident 0.0% on a
+      // charity that has not sent yet reads as a broken system rather than an empty one.
+      tiles.innerHTML =
+        nlTile("People you can reach", nlReachTotal == null ? "—" : H.escapeHtml(String(nlReachTotal)), "Across every audience", true) +
+        nlTile("Sent this year", String(thisYear), sent.length ? "Last one " + H.escapeHtml(nlAgo(sent[0].sentAt)) : "Nothing sent yet") +
+        nlTile("Usually delivered", accepted ? nlPct(delivered, accepted) : "—", accepted ? "Across your last " + sent.length + " sends" : "No sends to measure yet") +
+        nlTile("Blocked", nlBlockedCount == null ? "—" : String(nlBlockedCount), "Bounced or marked us as spam");
+    }
+
+    var recent = el("nlRecentSends");
+    if (recent) {
+      if (!sent.length) {
+        recent.innerHTML =
+          '<p class="admin-help">Nothing has gone out yet. When it has, this is where you will see ' +
+          "how it landed — delivered, bounced, clicked and unsubscribed, for every send.</p>";
+      } else {
+        var html =
+          '<table class="admin-table"><thead><tr><th>Newsletter</th><th>Audience</th>' +
+          '<th class="nl-r">Delivered</th><th class="nl-r">Clicked</th></tr></thead><tbody>';
+        sent.slice(0, 6).forEach(function (r) {
+          var n = r.recipientCount || 0;
+          html +=
+            '<tr class="nl-click" data-who-got="' + r.id + '">' +
+            "<td><span class=\"nl-subj\">" + H.escapeHtml(r.subject || "Untitled") + "</span>" +
+            '<span class="nl-meta">' + H.escapeHtml(nlWhen(r.sentAt)) + (r.sentBy ? " · " + H.escapeHtml(r.sentBy) : "") + "</span></td>" +
+            "<td>" + (r.audience ? '<span class="nl-pill">' + H.escapeHtml(r.audience) + "</span>" : '<span class="nl-meta">—</span>') + "</td>" +
+            '<td class="nl-r">' + nlRateCell(r.deliveredCount, n) + "</td>" +
+            '<td class="nl-r">' + nlRateCell(r.clickedCount, n) + "</td></tr>";
+        });
+        recent.innerHTML = html + "</tbody></table>";
+        Array.prototype.forEach.call(recent.querySelectorAll("[data-who-got]"), function (tr) {
+          tr.addEventListener("click", function () { nlShowRecipients(tr.getAttribute("data-who-got")); });
+        });
+      }
+    }
+    nlRenderAttention(sent);
+  }
+
+  function nlTile(k, v, meta, lead) {
+    return (
+      '<div class="nl-tile' + (lead ? " is-lead" : "") + '"><span class="nl-tile-k">' + H.escapeHtml(k) +
+      '</span><span class="nl-tile-v">' + v + '</span><span class="nl-tile-m">' + H.escapeHtml(meta) + "</span></div>"
+    );
+  }
+
+  /** Short, human relative time. "11 weeks ago" beats a date you have to subtract from today. */
+  function nlAgo(iso) {
+    if (!iso) return "";
+    var days = Math.round((Date.now() - new Date(iso).getTime()) / 86400000);
+    if (days <= 0) return "today";
+    if (days === 1) return "yesterday";
+    if (days < 14) return days + " days ago";
+    if (days < 70) return Math.round(days / 7) + " weeks ago";
+    return Math.round(days / 30) + " months ago";
+  }
+
+  function nlWhen(iso) {
+    if (!iso) return "";
+    try {
+      return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    } catch (err) {
+      return String(iso).slice(0, 10);
+    }
+  }
+
+  // Counts the Overview needs that do not come from the newsletter list. Held here and filled by
+  // the audience/suppression loads that already run on tab open, so the Overview never fires a
+  // request of its own.
+  var nlReachTotal = null;
+  var nlBlockedCount = null;
+
+  function nlRenderAttention(sent) {
+    var box = el("nlAttention");
+    if (!box) return;
+    var items = [];
+    if (nlBlockedCount) {
+      items.push(
+        nlAttn("b", nlBlockedCount + " addresses are blocked",
+          "Dead mailboxes and spam complaints, taken out of every send automatically. Nothing to do unless you recognise one.")
+      );
+    }
+    if (!sent.length) {
+      items.push(nlAttn("g", "Nothing has been sent yet",
+        "Send a test to your own Gmail and Outlook first, and tick “Ease this one out gradually” on the first real one."));
+    }
+    box.innerHTML = items.length
+      ? items.join("")
+      : '<li class="nl-attn-ok"><b>Nothing needs your attention</b><span>No bounces, no complaints, nothing waiting.</span></li>';
+  }
+
+  function nlAttn(kind, title, body) {
+    return (
+      '<li><span class="nl-attn-ic is-' + kind + '" aria-hidden="true"></span>' +
+      "<div><b>" + H.escapeHtml(title) + "</b><span>" + H.escapeHtml(body) + "</span></div></li>"
+    );
+  }
+
   function loadNewsletters() {
     authFetch("/api/admin/newsletters")
       .then(j)
@@ -2537,8 +2734,12 @@
             nlDelete(b.getAttribute("data-delete-newsletter"), b.getAttribute("data-newsletter-status"));
           });
         });
-        // Open the first newsletter by default so the editor is never empty.
-        if (rows.length) loadNewsletterInto(rows[0].id);
+        // TASK-283: still prefill the editor from the most recent newsletter so it is never empty,
+        // but do NOT jump to it. Opening the tab used to drop you into the composer mid-task; you
+        // now land on the Overview, which answers the questions you actually arrive with.
+        if (rows.length) loadNewsletterInto(rows[0].id, { stay: true });
+        nlRenderOverview(rows);
+        if (nlLivePanel() === "nlPanelOverview") nlShowPanel("nlPanelOverview");
       })
       .catch(function () {});
   }
@@ -2879,6 +3080,26 @@
     note.hidden = false;
     note.textContent = "This will go to " + a.name + " — " +
       a.memberCount + (a.memberCount === 1 ? " person." : " people.") + extra;
+    nlPaintReach(a);
+  }
+
+  // TASK-283: the reach panel on step 2. The count alone is not enough — showing its WORKING is what
+  // stops the number on the confirmation being a surprise, and it is the only place the admin ever
+  // sees that unsubscribed and blocked people are dropped for them.
+  function nlPaintReach(a) {
+    var box = el("nlReach");
+    if (!box) return;
+    if (!a) { box.hidden = true; box.innerHTML = ""; return; }
+    var blocked = nlBlockedCount || 0;
+    box.hidden = false;
+    box.innerHTML =
+      '<span class="admin-help" style="text-transform:uppercase;letter-spacing:.1em;font-size:.72rem">This newsletter will reach</span>' +
+      '<div class="nl-reach-big">' + a.memberCount + "</div>" +
+      '<p class="nl-reach-who">people on <b>' + H.escapeHtml(a.name) + "</b></p>" +
+      "<ul><li><span>On the audience</span><b>" + a.memberCount + "</b></li>" +
+      "<li><span>Blocked (bounced or spam)</span><b>" + blocked + "</b></li></ul>" +
+      '<p class="nl-reach-note">Anyone who unsubscribed, bounced permanently or reported us as spam is left ' +
+      "out automatically. Emailing them is what gets NBCC sent to junk.</p>";
   }
 
   // Blocked addresses (TASK-272): hard bounces and spam complaints, dropped from every future send.
@@ -2891,6 +3112,9 @@
       .then(function (res) { return res.ok ? res.json() : []; })
       .then(function (rows) {
         var list = Array.isArray(rows) ? rows : [];
+        // TASK-283: the Overview needs this number too. Taken from the load that already runs on tab
+        // open rather than a second request, so the tile and this panel can never disagree.
+        nlBlockedCount = list.length;
         if (!list.length) {
           host.innerHTML = '<p class="admin-empty">Nothing blocked — no permanent bounces or spam reports.</p>';
           return;
@@ -3010,6 +3234,159 @@
       .catch(function () { /* the card is a convenience — never block the tab */ });
   }
 
+  // --- TASK-283: multi-audience tick lists -------------------------------------------------------
+  // Built from the same nlAudiences the pickers use. Donors is rendered but NOT tickable: it follows
+  // donor consent, so there is nothing to add to by hand, and the server refuses it. A dropdown can
+  // silently omit it; a tick list reads as "here are all your audiences", so a gap looks like a bug.
+  // Shown greyed with the reason instead.
+  function nlFillAudienceTicks(host, mirrorSelect) {
+    if (!host) return;
+    host.innerHTML = nlAudiences
+      .map(function (a) {
+        var manageable = a.kind !== "donors";
+        var count = typeof a.memberCount === "number" ? a.memberCount : "";
+        if (!manageable) {
+          return (
+            '<span class="nl-tick is-off"><span class="nl-tick-bx" aria-hidden="true"></span>' +
+            '<span class="nl-tick-l">' + H.escapeHtml(a.name) +
+            "<em>Looks after itself — follows donor consent</em></span></span>"
+          );
+        }
+        return (
+          '<label class="nl-tick"><input type="checkbox" value="' + a.id + '" data-aud-tick>' +
+          '<span class="nl-tick-bx" aria-hidden="true"></span>' +
+          '<span class="nl-tick-l">' + H.escapeHtml(a.name) + "</span>" +
+          '<span class="nl-tick-n">' + count + "</span></label>"
+        );
+      })
+      .join("");
+    Array.prototype.forEach.call(host.querySelectorAll("[data-aud-tick]"), function (cb) {
+      cb.addEventListener("change", function () {
+        cb.parentNode.classList.toggle("is-on", cb.checked);
+        nlSyncTickMirror(host, mirrorSelect);
+      });
+    });
+    nlSyncTickMirror(host, mirrorSelect);
+  }
+
+  /**
+   * Did the tick list actually render? Distinguishes "nothing ticked" (a refusal) from "the list
+   * never built" (fall back to the legacy select). Without this the fallback silently sends the
+   * person to whichever audience the hidden select happened to default to — the exact
+   * silent-wrong-destination bug the whole screen exists to prevent.
+   */
+  function nlTicksReady(host) {
+    return !!(host && host.querySelector("[data-aud-tick]"));
+  }
+
+  /** The ticked audience ids, as numbers, in the order they appear. */
+  function nlTickedIds(host) {
+    if (!host) return [];
+    return Array.prototype.slice
+      .call(host.querySelectorAll("[data-aud-tick]"))
+      .filter(function (cb) { return cb.checked; })
+      .map(function (cb) { return Number(cb.value); });
+  }
+
+  /** Keep the hidden legacy <select> pointing at the first ticked audience. */
+  function nlSyncTickMirror(host, mirrorSelect) {
+    var sel = el(mirrorSelect);
+    var ids = nlTickedIds(host);
+    if (sel && ids.length) sel.value = String(ids[0]);
+    nlPaintTickButtons();
+  }
+
+  /** Buttons name what they will do, and refuse to be pressed with nothing chosen. */
+  function nlPaintTickButtons() {
+    var addIds = nlTickedIds(el("amAudiences"));
+    var addBtn = el("amAddBtn");
+    if (addBtn) {
+      var label = addBtn.querySelector("span") || addBtn;
+      label.textContent =
+        addIds.length === 0 ? "Pick at least one audience"
+          : addIds.length === 1 ? "Add to audience"
+            : "Add to " + addIds.length + " audiences";
+      addBtn.disabled = addIds.length === 0;
+    }
+    var impIds = nlTickedIds(el("importAudiences"));
+    var impBtn = el("importPreviewBtn");
+    if (impBtn) impBtn.disabled = impIds.length === 0;
+    // A preview belongs to the audiences it was previewed against. Changing them invalidates it,
+    // because committing a checked sheet into an unchecked audience is exactly the mistake this
+    // whole screen exists to prevent.
+    if (nlImportPreviewFor !== null && nlImportPreviewFor !== impIds.join(",")) {
+      nlInvalidateImportPreview();
+    }
+  }
+
+  var nlImportPreviewFor = null;
+
+  // Says back exactly what happened, naming the audiences. A resubscribe is called out separately
+  // from an add: somebody who once asked us to stop has been switched back on, and that should never
+  // be buried inside a routine-looking "Added."
+  function nlAddOutcomeText(b) {
+    if (!b) return "Added.";
+    var bits = [];
+    if (b.addedTo && b.addedTo.length) bits.push("Added to " + nlAndList(b.addedTo) + ".");
+    if (b.resubscribedTo && b.resubscribedTo.length) {
+      bits.push("Emails switched back on for " + nlAndList(b.resubscribedTo) + " — they had opted out.");
+    }
+    if (b.alreadyOnList) bits.push(b.alreadyOnList + " already had them.");
+    if (b.previouslyUnsubscribed) {
+      bits.push(b.previouslyUnsubscribed + " skipped — they opted out and an import cannot overrule that.");
+    }
+    return bits.length ? bits.join(" ") : "Nothing to do — they were already on every audience you picked.";
+  }
+
+  /** "a", "a and b", "a, b and c" — reads as a sentence, not a debug array. */
+  function nlAndList(names) {
+    if (!names.length) return "";
+    if (names.length === 1) return names[0];
+    return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
+
+  function nlInvalidateImportPreview() {
+    nlImportPreviewFor = null;
+    var pv = el("importPreview");
+    if (pv) pv.hidden = true;
+    var commit = el("importCommitBtn");
+    if (commit) commit.disabled = true;
+    var attest = el("importAttest");
+    if (attest) attest.checked = false;
+    var msg = el("importMsg");
+    if (msg) msg.textContent = "You changed the audiences — preview the file again before importing.";
+  }
+
+  // TASK-283: who you could write to today, on the Overview. Also the source of the "People you can
+  // reach" tile — the widest audience, which is Newsletter (everyone) unless someone has retired it.
+  function nlRenderAudienceSnapshot() {
+    var box = el("nlAudienceSnapshot");
+    var widest = 0;
+    nlAudiences.forEach(function (a) {
+      if (typeof a.memberCount === "number" && a.memberCount > widest) widest = a.memberCount;
+    });
+    nlReachTotal = nlAudiences.length ? widest : null;
+    if (!box) return;
+    if (!nlAudiences.length) {
+      box.innerHTML = '<p class="admin-empty">No audiences yet.</p>';
+      return;
+    }
+    box.innerHTML = nlAudiences
+      .map(function (a) {
+        var what =
+          a.kind === "everyone" ? "Everyone — donors plus the sign-up list"
+            : a.kind === "donors" ? "Looks after itself"
+              : "";
+        return (
+          '<div class="nl-aud-snap-row"><span class="nl-aud-snap-nm">' + H.escapeHtml(a.name) +
+          (what ? "<em>" + H.escapeHtml(what) + "</em>" : "") +
+          '</span><span class="nl-aud-snap-ct">' +
+          (typeof a.memberCount === "number" ? a.memberCount : "—") + "</span></div>"
+        );
+      })
+      .join("");
+  }
+
   function nlRefreshAudiences() {
     return authFetch("/api/admin/subscriber-lists")
       .then(function (res) { return res.ok ? res.json() : []; })
@@ -3017,14 +3394,19 @@
         nlAudiences = Array.isArray(rows) ? rows : [];
         nlFillAudienceSelect(el("audiencePick"));
         nlFillAudienceSelect(el("sendListPick"));
-        // Adding and importing can't target Donors — it follows consent (TASK-271).
+        // Adding and importing can't target Donors — it follows consent (TASK-271). The hidden
+        // selects stay filled as the legacy single-audience mirror; the tick lists are what the
+        // admin actually uses (TASK-283).
         nlFillAudienceSelect(el("amList"), null, { manageableOnly: true });
         nlFillAudienceSelect(el("importListPick"), null, { manageableOnly: true });
+        nlFillAudienceTicks(el("amAudiences"), "amList");
+        nlFillAudienceTicks(el("importAudiences"), "importListPick");
         nlSyncAudienceContext();
         nlSyncSendAudience();
         nlLoadAudienceMembers();
         nlRefreshArchivedAudiences();
         nlRefreshSuppressions();
+        nlRenderAudienceSnapshot();
       })
       .catch(function () { /* never block the builder on the audience card */ });
   }
@@ -3324,6 +3706,22 @@
     Array.prototype.forEach.call(doc.querySelectorAll("[data-nl-panel]"), function (b) {
       b.addEventListener("click", function () { nlShowPanel(b.getAttribute("data-nl-panel")); });
     });
+    // TASK-283: the footer walks the three compose steps in order. Kept separate from the rail
+    // above so the primary path forward is one button in one place.
+    var cpNext = el("nlComposeNext");
+    var cpBack = el("nlComposeBack");
+    if (cpNext) {
+      cpNext.addEventListener("click", function () {
+        var at = NL_COMPOSE_PANELS.indexOf(nlLivePanel());
+        if (at > -1 && at < NL_COMPOSE_PANELS.length - 1) nlShowPanel(NL_COMPOSE_PANELS[at + 1]);
+      });
+    }
+    if (cpBack) {
+      cpBack.addEventListener("click", function () {
+        var at = NL_COMPOSE_PANELS.indexOf(nlLivePanel());
+        if (at > 0) nlShowPanel(NL_COMPOSE_PANELS[at - 1]);
+      });
+    }
     if (el("sendListPick")) {
       el("sendListPick").addEventListener("change", nlSyncSendAudience);
     }
@@ -3426,17 +3824,26 @@
       audienceMemberForm.addEventListener("submit", function (e) {
         e.preventDefault();
         if (!canEdit("newsletter")) return;
-        // TASK-271: the destination is this form's OWN "Add to" picker, so what you add and where it
-        // lands are stated together — it used to silently borrow the browse picker further up.
-        var listId = el("amList") ? el("amList").value : el("audiencePick").value;
-        if (!listId) return;
+        // TASK-271: the destination is this form's OWN picker, so what you add and where it lands
+        // are stated together — it used to silently borrow the browse picker further up.
+        // TASK-283: that picker is now a tick list, and one add can reach several audiences. Falls
+        // back to the hidden legacy select if the tick list has not rendered.
+        var amTicks = el("amAudiences");
+        var listIds = nlTickedIds(amTicks);
+        // Only fall back when the tick list never rendered. If it DID render and nothing is ticked,
+        // that is a refusal, not a reason to guess a destination.
+        if (!listIds.length && !nlTicksReady(amTicks) && el("amList") && el("amList").value) {
+          listIds = [Number(el("amList").value)];
+        }
+        if (!listIds.length) { nlAudienceMsg("Choose at least one audience to add them to."); return; }
         var email = (el("amEmail").value || "").trim();
         if (!email) return;
         nlAudienceMsg("Adding…");
-        authFetch("/api/admin/subscriber-lists/" + listId + "/members", {
+        authFetch("/api/admin/subscriber-list-members", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            listIds: listIds,
             name: (el("amName").value || "").trim() || undefined,
             email: email,
             phone: (el("amPhone").value || "").trim() || undefined,
@@ -3446,7 +3853,7 @@
           .then(function (r) {
             if (!r.ok) { nlAudienceMsg((r.b && r.b.error) || "Could not add them."); return; }
             el("amEmail").value = ""; el("amName").value = ""; el("amPhone").value = "";
-            nlAudienceMsg(r.b.outcome === "exists" ? "Already on this audience." : "Added.");
+            nlAudienceMsg(nlAddOutcomeText(r.b));
             return nlRefreshAudiences();
           })
           .catch(function () { nlAudienceMsg("Could not add them."); });
@@ -3464,6 +3871,7 @@
     // Any change of destination or file invalidates a preview taken against the old one.
     function importReset() {
       importState = null;
+      nlImportPreviewFor = null;
       if (el("importPreview")) el("importPreview").hidden = true;
       if (el("importAttest")) el("importAttest").checked = false;
       if (el("importCommitBtn")) el("importCommitBtn").disabled = true;
@@ -3481,31 +3889,43 @@
         if (!canEdit("newsletter")) return;
         var f = el("importFile").files && el("importFile").files[0];
         if (!f) { importMsg("Choose a CSV or Excel file first."); return; }
-        var listId = el("importListPick") ? el("importListPick").value : el("audiencePick").value;
-        if (!listId) return;
+        // TASK-283: several audiences at once. Falls back to the hidden legacy select if the tick
+        // list has not rendered.
+        var impTicks = el("importAudiences");
+        var listIds = nlTickedIds(impTicks);
+        if (!listIds.length && !nlTicksReady(impTicks) && el("importListPick") && el("importListPick").value) {
+          listIds = [Number(el("importListPick").value)];
+        }
+        if (!listIds.length) { importMsg("Choose at least one audience to import into."); return; }
         importMsg("Reading…");
         var reader = new FileReader();
         reader.onload = function () {
           var base64 = String(reader.result).split(",")[1] || "";
-          authFetch("/api/admin/subscriber-lists/" + listId + "/import/preview", {
+          authFetch("/api/admin/subscriber-list-import/preview", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: f.name, dataBase64: base64 }),
+            body: JSON.stringify({ listIds: listIds, filename: f.name, dataBase64: base64 }),
           })
             .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
             .then(function (r) {
               if (!r.ok) { importMsg((r.b && r.b.error) || "Could not read that file."); return; }
-              importState = { rows: r.b.rows, listId: String(listId) };
-              var target = nlAudienceById(listId);
+              importState = { rows: r.b.rows, listIds: listIds };
+              // The preview belongs to the audiences it was taken against. nlPaintTickButtons
+              // compares this on every tick change and tears the preview down if they diverge.
+              nlImportPreviewFor = listIds.join(",");
+              var names = (r.b.audiences || []).map(function (x) { return x.listName; });
+              var where = names.length ? " into " + nlAndList(names) : "";
               // The destination is repeated ON the button you press, so the last thing you read
               // before importing is where these people are going.
               if (el("importCommitBtn")) {
-                el("importCommitBtn").textContent = target
-                  ? "Import " + r.b.readyCount + " into " + target.name
-                  : "Import";
+                el("importCommitBtn").textContent = "Import " + r.b.readyCount + where;
               }
-              var bits = [r.b.readyCount + " ready to import" + (target ? " into " + target.name : "")];
-              if (r.b.alreadyOnList.length) bits.push(r.b.alreadyOnList.length + " already on this audience");
+              var bits = [r.b.readyCount + " ready to import" + where];
+              // "Already on EVERY one you picked" — with several audiences in play, "already on the
+              // list" would say nothing needed doing when hundreds of additions did.
+              if (r.b.alreadyOnEvery && r.b.alreadyOnEvery.length) {
+                bits.push(r.b.alreadyOnEvery.length + " already on every audience you picked");
+              }
               if (r.b.previouslyUnsubscribed.length) {
                 bits.push(r.b.previouslyUnsubscribed.length + " previously opted out (they will NOT be re-added)");
               }
@@ -3534,24 +3954,31 @@
 
       el("importCommitBtn").addEventListener("click", function () {
         if (!canEdit("newsletter") || !importState || !el("importAttest").checked) return;
-        var listId = el("importListPick") ? el("importListPick").value : el("audiencePick").value;
-        // Last line of defence: never import rows into an audience they were not previewed against.
-        if (String(listId) !== importState.listId) {
-          importMsg("Destination changed since the preview — preview the file again.");
+        var ct = el("importAudiences");
+        var listIds = nlTickedIds(ct);
+        if (!listIds.length && !nlTicksReady(ct) && el("importListPick") && el("importListPick").value) {
+          listIds = [Number(el("importListPick").value)];
+        }
+        // Last line of defence: never import rows into audiences they were not previewed against.
+        // The tick handler already tears the preview down, but this is the check that actually
+        // guards the write, and it compares the ids rather than trusting the UI to have kept up.
+        if (listIds.join(",") !== (importState.listIds || []).join(",")) {
+          importMsg("Audiences changed since the preview — preview the file again.");
           importReset();
           return;
         }
         importMsg("Importing…");
-        authFetch("/api/admin/subscriber-lists/" + listId + "/import", {
+        authFetch("/api/admin/subscriber-list-import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rows: importState.rows, attestation: true }),
+          body: JSON.stringify({ listIds: listIds, rows: importState.rows, attestation: true }),
         })
           .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
           .then(function (r) {
             if (!r.ok) { importMsg((r.b && r.b.error) || "Import failed."); return; }
-            var bits = [r.b.added + " added"];
-            if (r.b.alreadyOnList) bits.push(r.b.alreadyOnList + " already on the audience");
+            var into = (r.b.audiences || []).map(function (x) { return x.listName; });
+            var bits = [r.b.added + " added" + (into.length ? " across " + nlAndList(into) : "")];
+            if (r.b.alreadyOnList) bits.push(r.b.alreadyOnList + " already there");
             if (r.b.previouslyUnsubscribed) bits.push(r.b.previouslyUnsubscribed + " kept out (previously opted out)");
             importMsg(bits.join(" · "));
             el("importPreview").hidden = true;

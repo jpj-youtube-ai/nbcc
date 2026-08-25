@@ -4097,3 +4097,62 @@ now", so every existing job and every unscheduled send behaves exactly as before
 was deliberately not built and why, and the gotchas (migration ordering, squash-merge rebases, the
 `donate.html` page-weight ceiling) that have already cost a round trip each. Read it before picking
 the newsletter work back up.
+
+**Newsletter Studio (TASK-283).** TASK-279 turned the tab into four switchable panels instead of one
+19,000-character scroll. That fixed the scrolling but left the real problem: **one four-step rail was
+doing two unrelated jobs.** "Audiences & people" sat at step 1, which reads as *do this every time* —
+you don't, it is reference work. "Sent" sat at step 4, which frames the history as the end of
+writing, when it is the thing you actually want to land on. And results were split in two: per-send
+stats were buried inside the Write panel and only appeared for an already-sent newsletter, while the
+history table lived elsewhere, so answering *where did it land* meant visiting both.
+
+Now **three destinations, and composing is a takeover**:
+
+| | |
+|---|---|
+| **Overview** | The front door. Reach, sends this year, typical delivery, blocked count; recent sends with their outcomes inline; what is in flight; what is worth a look. |
+| **Audiences & people** | Reference work — audiences, members, import, blocked addresses, re-consent, archive. A place you visit, not a step you pass through. |
+| **All newsletters** | Drafts, scheduled and sent, with a row click through to the full record. |
+| **Compose** *(takeover)* | Write → Who → Send, with the actions pinned to the bottom bar. |
+
+- **Composing takes over the screen.** Every real mailing platform does this, and it is what makes the
+  flow feel quick: `app.js` puts `.is-composing` on the section, which hides the destination rail and
+  the page heading. One job on screen, three steps at the top, actions at the bottom where your hands
+  already are.
+- **Choosing WHO is its own step.** It used to share a panel with the Send button, which made the most
+  consequential decision in the flow look like a dropdown you pass on the way. The reach panel shows
+  its **working** — on the audience, minus blocked — so the number on the confirmation is never a
+  surprise.
+- **Outcomes are on the list, not only behind a stats call.** `listNewsletters` gained a single
+  aggregate join over `newsletter_email_events` giving `deliveredCount` / `clickedCount` for every
+  newsletter at once. `count(DISTINCT email)` matches `getNewsletterStats` exactly, so the list and
+  the detail can never disagree, and both are **null, never 0**, when nothing is known — a send
+  predating event tracking must show an em dash, not a confident zero reading as "nobody got it".
+- **A rate is drawn as well as counted.** A column of bare percentages makes you read every row to
+  find the odd one out, so each is a small bar banded green / amber / red. Semantic colour, separate
+  from the brand accent.
+- **The element contract is pinned as data.** `app.js` binds by element **id** and fails *silently*
+  when one goes missing — no build error, no test failure, just a control that quietly stops working.
+  That is the biggest risk in a restructure this size, so `test/unit/newsletter-studio-ui.test.ts`
+  asserts all **97** ids the tab had beforehand still exist, and that none is used twice. Elements may
+  move, be re-parented, wrapped, restyled or hidden; they may not be renamed or deleted. The list is
+  generated from the markup, not typed by hand — typing it produced a phantom id that the test caught.
+
+**Multi-audience tick lists (TASK-283, UI for TASK-282).** `#amList` and `#importListPick` became tick
+lists. Both hidden `<select>`s stay in the DOM as a mirror of the first ticked audience, so any path
+still reading them keeps working.
+
+- **Donors is shown but not tickable**, with the reason on the row. The dropdown simply omitted it,
+  which is fine in a dropdown — a tick list reads as *here are all your audiences*, so a silent gap
+  looks like a bug.
+- **Nothing ticked is a refusal.** The legacy select is only consulted when the tick list never
+  rendered at all. Consulting it when the list *did* render and nothing was ticked would send the
+  person to whatever the hidden select happened to default to — the silent-wrong-destination bug this
+  screen exists to prevent. A jsdom test pins it.
+- **Changing the ticks invalidates an import preview.** A preview belongs to the audiences it was
+  taken against; this is the multi-audience form of the TASK-271 bug where a sheet checked against one
+  audience could be committed into another, and it is worse here because one wrong tick lands dozens
+  of people somewhere they never agreed to be. The commit re-checks the ids rather than trusting the
+  UI to have kept up.
+- **A resubscribe is said out loud.** "Emails switched back on for X — they had opted out" is never
+  folded into a routine-looking "Added."

@@ -59,6 +59,37 @@ const REQUIRED_IDS = [
   "subManage", "subMsg", "subSearch", "suppressionList", "suppressionMsg", "view-newsletter",
 ] as const;
 
+// TASK-285: the OTHER half of the contract. TASK-283 shipped five elements — the in-flight strip,
+// the compose subject echo, the saved indicator — as markup with nothing driving them: they rendered
+// as empty boxes forever and no test noticed, because "the id exists" was all anyone checked.
+//
+// So every container the tab is supposed to FILL is listed here and must be referenced by app.js.
+// An element that exists but is never written to is not a feature, it is a gap that looks like one.
+const DRIVEN_IDS = [
+  // TASK-283 overview
+  "nlOverviewTiles", "nlRecentSends", "nlAttention", "nlAudienceSnapshot",
+  "nlInflight", "nlInflightTxt", "nlInflightOpen",
+  // TASK-283 compose chrome
+  "nlComposeSubject", "nlComposeSaved", "nlComposeNext", "nlComposeBack", "nlComposeHint",
+  // TASK-284 send step
+  "nlSendSummaryList", "nlReach",
+  // TASK-285 parity screens
+  "nlAudienceCards", "nlChecks", "nlWhenNow", "nlWhenLater",
+  "nlResultsTitle", "nlResultsMeta", "nlResultsTiles", "nlResultsLinks",
+  "nlResultsRecord", "nlResultsNote", "nlResultsBack", "nlResultsWho",
+  // TASK-282/283 tick lists
+  "amAudiences", "importAudiences",
+] as const;
+
+describe("every container the tab renders into is actually driven", () => {
+  const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+
+  it.each(DRIVEN_IDS)("app.js references #%s", (id) => {
+    expect(idsInSection.has(id), `#${id} is not in the newsletter markup`).toBe(true);
+    expect(app.includes('"' + id + '"'), `#${id} exists in admin.html but nothing in app.js touches it`).toBe(true);
+  });
+});
+
 describe("the newsletter tab keeps its element contract", () => {
   it("still has every id the tab had before the restructure", () => {
     const missing = REQUIRED_IDS.filter((id) => !idsInSection.has(id));

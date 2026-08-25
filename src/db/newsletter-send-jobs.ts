@@ -136,6 +136,20 @@ export async function listRunnableJobs(): Promise<SendJob[]> {
   return rows.map(toJob);
 }
 
+// TASK-285: everything currently in flight, for the Overview strip — queued, scheduled, running or
+// paused. DIFFERENT from listRunnableJobs on purpose: that one answers "what should the worker pick
+// up now?" and so excludes both paused jobs and future-scheduled ones. This one answers "what has
+// the volunteer got going on?", where a send paused at 40% and a send scheduled for Tuesday are
+// exactly the two things they most need reminding about.
+export async function listInflightJobs(): Promise<SendJob[]> {
+  const { rows } = await pool.query(
+    `SELECT ${JOB_COLUMNS} FROM newsletter_send_jobs j
+      WHERE j.status IN ('queued', 'running', 'paused')
+      ORDER BY j.scheduled_at NULLS FIRST, j.id`,
+  );
+  return rows.map(toJob);
+}
+
 export async function markJobRunning(id: number): Promise<void> {
   await pool.query(
     `UPDATE newsletter_send_jobs SET status = 'running', started_at = COALESCE(started_at, now())

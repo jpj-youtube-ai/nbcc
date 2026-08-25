@@ -2471,6 +2471,7 @@
     "nlPanelWho",
     "nlPanelSend",
     "nlPanelHistory",
+    "nlPanelResults",
   ];
   // The three that make up composing. While one of these is live the section wears .is-composing,
   // which is what lifts the composer over the rest of the admin.
@@ -2498,7 +2499,8 @@
     // The preview cannot size itself while hidden (see nlFitPreview), so re-fit the moment the
     // Write panel is on screen and has a real width.
     if (panelId === "nlPanelWrite" && typeof nlFitPreview === "function") nlFitPreview();
-    if (panelId === "nlPanelSend") nlPaintSendSummary();
+    if (panelId === "nlPanelWho") nlRenderAudienceCards();
+    if (panelId === "nlPanelSend") { nlPaintSendSummary(); nlRunChecks(); }
     // Coming back to a destination should start at the top of it, not wherever the composer was
     // scrolled to. Only when the page can actually scroll: jsdom has no layout, so calling it there
     // just prints "Not implemented" noise into the test output for no behaviour.
@@ -2509,6 +2511,213 @@
         window.scrollTo(0, 0);
       }
     }
+  }
+
+  // --- TASK-285: the pre-send checks, on the panel ------------------------------------------------
+  // The /preflight endpoint already existed but only ran inside the send confirmation, where it
+  // could do nothing except stop you at the last moment. Shown here it becomes something you can
+  // act on while there is still time: a dead button link or a missing test send is one click away.
+  var nlChecksTimer = null;
+  function nlScheduleChecks() {
+    if (nlChecksTimer) clearTimeout(nlChecksTimer);
+    nlChecksTimer = setTimeout(nlRunChecks, 400);
+  }
+
+  function nlRunChecks() {
+    var host = el("nlChecks");
+    if (!host) return;
+    authFetch("/api/admin/newsletters/preflight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bodyJson: nlDoc,
+        subject: (el("newsletterSubject") || {}).value || "",
+        // Same flag the confirmation dialog passes, so the panel and the dialog agree about
+        // whether a test has gone out for THIS draft.
+        testSent: nlTestSent,
+      }),
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (b) {
+        var findings = (b && b.findings) || [];
+        // Nothing wrong is itself worth SAYING. A silent empty list reads as "the checks did not
+        // run", which is the opposite of the reassurance this panel exists to give.
+        if (!findings.length) {
+          host.innerHTML =
+            '<li><span class="nl-check-mk is-ok" aria-hidden="true"></span><div>' +
+            '<b>Everything checks out</b><span>Subject set, every button links somewhere real, and the ' +
+            'plain-text version is ready.</span></div></li>';
+          return;
+        }
+        // Blocking findings first: a warning you can live with should never sit above the thing
+        // that will actually refuse to send.
+        var ordered = findings.slice().sort(function (x, y) {
+          return (x.level === "block" ? 0 : 1) - (y.level === "block" ? 0 : 1);
+        });
+        host.innerHTML = ordered
+          .map(function (f) {
+            var blocking = f.level === "block";
+            return (
+              '<li><span class="nl-check-mk is-' + (blocking ? "no" : "warn") + '" aria-hidden="true"></span>' +
+              "<div><b>" + H.escapeHtml(f.message) + "</b>" +
+              '<span>' + (blocking ? "This one stops a send." : "Worth a look, but it will not stop you.") +
+              "</span></div></li>"
+            );
+          })
+          .join("");
+      })
+      .catch(function () {
+        // A failed check must never read like a failed newsletter.
+        host.innerHTML =
+          '<li><span class="nl-check-mk is-warn" aria-hidden="true"></span><div><b>Could not run the ' +
+          'checks</b><span>The send itself still checks before it goes, so nothing unsafe can slip ' +
+          'through.</span></div></li>';
+      });
+  }
+
+  // --- TASK-285: two explicit choices for WHEN ----------------------------------------------------
+  // It used to be "fill in a date, or press the button that clears it". Empty-means-now was
+  // invisible: nothing on screen told you which you had chosen.
+  function nlSetWhen(later) {
+    var now = el("nlWhenNow"), lat = el("nlWhenLater"), wrap = el("sendScheduleWrap");
+    if (!now || !lat) return;
+    now.setAttribute("aria-checked", later ? "false" : "true");
+    lat.setAttribute("aria-checked", later ? "true" : "false");
+    now.classList.toggle("is-on", !later);
+    lat.classList.toggle("is-on", later);
+    if (wrap) wrap.hidden = !later;
+    // Choosing "now" clears the field, so the two can never disagree about what will happen.
+    if (!later && el("sendScheduleAt")) el("sendScheduleAt").value = "";
+    nlPaintSendSummary();
+  }
+
+  // --- TASK-285: where it landed, as its own destination ------------------------------------------
+  function nlShowResults(id) {
+    nlShowPanel("nlPanelResults");
+    var row = nlLastNewsletters.filter(function (n) { return String(n.id) === String(id); })[0];
+    el("nlResultsTitle").textContent = row ? row.subject || "Untitled newsletter" : "Newsletter";
+    el("nlResultsMeta").textContent = row
+      ? "Sent " + nlWhen(row.sentAt) + (row.sentBy ? " by " + row.sentBy : "") +
+        (row.audience ? " to " + row.audience : "")
+      : "";
+    el("nlResultsWho").onclick = function () { nlShowRecipients(id); };
+    el("nlResultsTiles").innerHTML = '<p class="admin-loading">Loading…</p>';
+    el("nlResultsLinks").innerHTML = "";
+    el("nlResultsRecord").innerHTML = "";
+    authFetch("/api/admin/newsletters/" + id + "/stats")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (st) { nlPaintResults(st, row); })
+      .catch(function () {
+        el("nlResultsTiles").innerHTML = "";
+        el("nlResultsNote").textContent = "Could not load the figures for this send.";
+      });
+  }
+
+  function nlPaintResults(st, row) {
+    var note = el("nlResultsNote");
+    if (!st) {
+      el("nlResultsTiles").innerHTML = "";
+      note.textContent = "No figures for this send.";
+      return;
+    }
+    var acc = st.sends || 0;
+    // Accepted is what the relay TOOK, delivered is what a mailbox confirmed. Keeping them apart
+    // is the difference between a promise and a fact (TASK-272).
+    var tiles = [
+      ["Accepted", acc, "Handed to the mail service"],
+      ["Delivered", st.delivered, acc ? nlPct(st.delivered, acc) + " of accepted" : ""],
+      ["Clicked", st.clicked, acc ? nlPct(st.clicked, acc) + " of accepted" : ""],
+      ["Bounced", st.bounced, acc ? nlPct(st.bounced, acc) + " — now blocked" : ""],
+      ["Unsubscribed", st.unsubscribed, acc ? nlPct(st.unsubscribed, acc) : ""],
+    ];
+    el("nlResultsTiles").innerHTML = tiles
+      .map(function (t) {
+        return (
+          '<div class="nl-tile"><span class="nl-tile-k">' + t[0] + '</span>' +
+          '<span class="nl-tile-v">' + (t[1] == null ? "—" : t[1]) + '</span>' +
+          '<span class="nl-tile-m">' + H.escapeHtml(t[2] || "") + "</span></div>"
+        );
+      })
+      .join("");
+
+    var links = st.links || [];
+    el("nlResultsLinks").innerHTML = links.length
+      ? '<ul class="nl-attn">' +
+        links
+          .slice(0, 8)
+          .map(function (l) {
+            return (
+              "<li><div><b>" + H.escapeHtml(l.link) + "</b><span>" + l.uniqueClicks +
+              (l.uniqueClicks === 1 ? " person" : " people") +
+              (acc ? " · " + nlPct(l.uniqueClicks, acc) : "") + "</span></div></li>"
+            );
+          })
+          .join("") +
+        "</ul>"
+      : '<p class="admin-empty">No clicks recorded. Click tracking only counts links inside the ' +
+        "newsletter, and unsubscribe links are deliberately left out.</p>";
+
+    el("nlResultsRecord").innerHTML =
+      nlPair("Sent by", row && row.sentBy ? H.escapeHtml(row.sentBy) : "—") +
+      nlPair("Audience", row && row.audience ? H.escapeHtml(row.audience) : "—") +
+      nlPair("Accepted", String(acc), true) +
+      nlPair("Marked us as spam", String(st.complained == null ? "—" : st.complained), true);
+    note.textContent = acc
+      ? ""
+      : "This send predates delivery tracking, so only the accepted count is on file.";
+  }
+
+  // The rows the overview and archive last rendered, so the results view can label itself without
+  // a second request for something already in hand.
+  var nlLastNewsletters = [];
+  // --- TASK-285: the audience as CARDS on step 2 -------------------------------------------------
+  // A <select> made the most consequential decision in the flow look like a formality, and hid both
+  // what each audience means and how big it is until you opened it. The cards say all of it up
+  // front. #sendListPick is kept in sync as the hidden mirror, so the send request, the confirmation
+  // and sendAudienceNote all keep reading exactly what they always did.
+  function nlRenderAudienceCards() {
+    var host = el("nlAudienceCards");
+    if (!host) return;
+    var pick = el("sendListPick");
+    var current = pick ? String(pick.value) : "";
+    if (!nlAudiences.length) {
+      host.innerHTML = '<p class="admin-empty">No audiences yet — add one under Audiences &amp; people.</p>';
+      return;
+    }
+    host.innerHTML = nlAudiences
+      .map(function (a) {
+        var what =
+          a.kind === "everyone"
+            ? "Donors who agreed to email, plus everyone on the sign-up list. Use this for anything meant for all your supporters."
+            : a.kind === "donors"
+              ? "Every donor who agreed to email. Nobody adds or removes them by hand — it updates itself as donations come in."
+              : "Exactly the people you have put on this list, nobody else.";
+        var tag =
+          a.kind === "everyone" ? "Everyone" : a.kind === "donors" ? "Automatic" : "";
+        var on = String(a.id) === current;
+        return (
+          '<button type="button" class="nl-aud-card' + (on ? " is-on" : "") + '" role="radio"' +
+          ' aria-checked="' + (on ? "true" : "false") + '" data-aud-card="' + a.id + '">' +
+          '<span class="nl-aud-tick" aria-hidden="true"></span>' +
+          '<span class="nl-aud-info"><b>' + H.escapeHtml(a.name) +
+          (tag ? ' <span class="nl-pill">' + tag + "</span>" : "") + "</b>" +
+          "<span>" + H.escapeHtml(what) + "</span></span>" +
+          '<span class="nl-aud-count"><b>' +
+          (typeof a.memberCount === "number" ? a.memberCount : "—") +
+          "</b><span>people</span></span></button>"
+        );
+      })
+      .join("");
+    Array.prototype.forEach.call(host.querySelectorAll("[data-aud-card]"), function (b) {
+      b.addEventListener("click", function () {
+        if (pick) {
+          pick.value = b.getAttribute("data-aud-card");
+          // Fire change so every existing listener behaves exactly as it did with the dropdown.
+          pick.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        nlRenderAudienceCards();
+      });
+    });
   }
 
   // TASK-284: the summary beside the Send button. It restates the decisions made on the previous two
@@ -2545,6 +2754,53 @@
       '<div class="nl-pair"><dt>' + H.escapeHtml(k) + '</dt><dd' + (num ? ' class="num"' : "") + ">" +
       v + "</dd></div>"
     );
+  }
+
+  // --- TASK-285: elements TASK-283 shipped with nothing driving them ------------------------------
+
+  // The compose header echoes the subject, so the takeover always says WHICH newsletter you are in.
+  // With the destination rail hidden there is otherwise nothing on screen naming it.
+  function nlSyncComposeTitle() {
+    var out = el("nlComposeSubject");
+    if (!out) return;
+    var v = (el("newsletterSubject") && el("newsletterSubject").value || "").trim();
+    out.textContent = v || "Untitled newsletter";
+  }
+
+  // "Saved" has to be earned: it says nothing until a save actually succeeds, because a label that
+  // claims your work is safe when it is not is worse than no label.
+  function nlMarkSaved(text) {
+    var out = el("nlComposeSaved");
+    if (out) out.textContent = text || "";
+  }
+
+  // The in-flight strip: a send that is queued, scheduled or running, surfaced on the Overview so
+  // it cannot be forgotten about. Reads the same job endpoint the progress bar uses.
+  function nlRefreshInflight() {
+    var strip = el("nlInflight");
+    if (!strip) return;
+    authFetch("/api/admin/newsletters/send-jobs/inflight")
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (job) { nlPaintInflight(job); })
+      .catch(function () { nlPaintInflight(null); });
+  }
+
+  function nlPaintInflight(job) {
+    var strip = el("nlInflight");
+    var txt = el("nlInflightTxt");
+    var open = el("nlInflightOpen");
+    if (!strip || !txt) return;
+    if (!job || !job.newsletterId) { strip.hidden = true; return; }
+    var when = job.scheduledAt ? new Date(job.scheduledAt) : null;
+    var whenText = when && !isNaN(when.getTime())
+      ? "scheduled for " + when.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) +
+        ", " + when.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" })
+      : "sending now";
+    txt.innerHTML =
+      "<b>" + H.escapeHtml(job.subject || "A newsletter") + "</b> is " + H.escapeHtml(whenText) +
+      ". <span>You can still change or cancel it.</span>";
+    if (open) open.onclick = function () { loadNewsletterInto(job.newsletterId); nlShowPanel("nlPanelSend"); };
+    strip.hidden = false;
   }
 
   /** Which panel is on screen right now. Read from the DOM so it cannot drift from what is shown. */
@@ -2588,6 +2844,7 @@
       .then(function (n) {
         el("newsletterId").value = n.id;
         el("newsletterSubject").value = n.subject;
+        nlSyncComposeTitle();
         // A block-doc newsletter hydrates its blocks; a legacy raw-HTML draft becomes one rawHtml block.
         if (n.bodyJson && Array.isArray(n.bodyJson.blocks)) {
           nlDoc = n.bodyJson;
@@ -2691,7 +2948,7 @@
         });
         recent.innerHTML = html + "</tbody></table>";
         Array.prototype.forEach.call(recent.querySelectorAll("[data-who-got]"), function (tr) {
-          tr.addEventListener("click", function () { nlShowRecipients(tr.getAttribute("data-who-got")); });
+          tr.addEventListener("click", function () { nlShowResults(tr.getAttribute("data-who-got")); });
         });
       }
     }
@@ -2772,7 +3029,7 @@
         // get it?" was unanswerable despite the answer being on file.
         Array.prototype.forEach.call(doc.querySelectorAll("[data-who-got]"), function (b) {
           b.addEventListener("click", function () {
-            nlShowRecipients(b.getAttribute("data-who-got"));
+            nlShowResults(b.getAttribute("data-who-got"));
           });
         });
         Array.prototype.forEach.call(doc.querySelectorAll("[data-delete-newsletter]"), function (b) {
@@ -2784,7 +3041,9 @@
         // but do NOT jump to it. Opening the tab used to drop you into the composer mid-task; you
         // now land on the Overview, which answers the questions you actually arrive with.
         if (rows.length) loadNewsletterInto(rows[0].id, { stay: true });
+        nlLastNewsletters = rows;
         nlRenderOverview(rows);
+        nlRefreshInflight();
         if (nlLivePanel() === "nlPanelOverview") nlShowPanel("nlPanelOverview");
       })
       .catch(function () {});
@@ -3453,6 +3712,7 @@
         nlRefreshArchivedAudiences();
         nlRefreshSuppressions();
         nlRenderAudienceSnapshot();
+        nlRenderAudienceCards();
       })
       .catch(function () { /* never block the builder on the audience card */ });
   }
@@ -3762,6 +4022,26 @@
         if (at > -1 && at < NL_COMPOSE_PANELS.length - 1) nlShowPanel(NL_COMPOSE_PANELS[at + 1]);
       });
     }
+    // TASK-285: the two explicit "when" choices, the results back button, and a subject that keeps
+    // the compose header and the pre-send checks honest as you type.
+    if (el("nlWhenNow")) el("nlWhenNow").addEventListener("click", function () { nlSetWhen(false); });
+    if (el("nlWhenLater")) el("nlWhenLater").addEventListener("click", function () { nlSetWhen(true); });
+    if (el("nlResultsBack")) {
+      el("nlResultsBack").addEventListener("click", function () { nlShowPanel("nlPanelOverview"); });
+    }
+    if (el("newsletterSubject")) {
+      el("newsletterSubject").addEventListener("input", function () {
+        nlSyncComposeTitle();
+        // A subject change can clear the "no subject" finding, so re-check - debounced, because
+        // this fires on every keystroke.
+        nlScheduleChecks();
+        // Typing after a save means the header must stop claiming the work is saved.
+        nlMarkSaved("");
+      });
+    }
+    // "Send now" is the default, so the schedule field starts hidden and the two agree from the
+    // outset rather than after the first click.
+    nlSetWhen(false);
     if (cpBack) {
       cpBack.addEventListener("click", function () {
         var at = NL_COMPOSE_PANELS.indexOf(nlLivePanel());
@@ -4079,6 +4359,9 @@
         .then(function (res) {
           if (!res.ok) { el("newsletterMsg").textContent = res.body.error || "Save failed."; return; }
           el("newsletterMsg").textContent = "Saved.";
+          // TASK-285: "Saved" has to be earned - said only where a save genuinely succeeded, so
+          // the header can never claim your work is safe when it is not.
+          nlMarkSaved("Saved just now");
           loadNewsletters();
           loadNewsletterInto(res.body.id);
         })

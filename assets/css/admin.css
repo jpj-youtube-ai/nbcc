@@ -964,3 +964,96 @@ tr.nl-click:hover { background: var(--tint); }
 .nl-actions { margin: 1rem 0 0; gap: .55rem; }
 
 @media (max-width: 860px) { .nl-extras { grid-template-columns: 1fr; } }
+
+/* =================================================================
+   TASK-285 — the three screens the prototype had and the build did not:
+   audience cards, the visible pre-send checks, and where it landed.
+   ================================================================= */
+
+/* ---- Step 2: audiences as cards. A <select> made the most consequential decision in the flow
+   look like a formality, and hid both what each audience means and how big it is. ---- */
+.nl-aud-cards { display: flex; flex-direction: column; gap: .6rem; margin: 0 0 1rem; }
+.nl-aud-card { display: flex; align-items: center; gap: .95rem; width: 100%; text-align: left;
+  border: 1.4px solid var(--line); border-radius: 12px; background: var(--card);
+  padding: 15px 17px; cursor: pointer; font-family: var(--font-body); color: var(--slate);
+  transition: border-color .18s, background .18s, box-shadow .18s; }
+.nl-aud-card:hover { border-color: var(--slate-soft); box-shadow: 0 1px 2px rgba(74,50,28,.05); }
+.nl-aud-card.is-on { border-color: var(--crimson); background: var(--tan-soft); }
+.nl-aud-card:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }
+.nl-aud-tick { width: 19px; height: 19px; border-radius: 50%; border: 1.5px solid var(--line);
+  flex: 0 0 auto; background: var(--card); display: grid; place-items: center; position: relative; }
+.nl-aud-card.is-on .nl-aud-tick { border-color: var(--crimson); }
+.nl-aud-card.is-on .nl-aud-tick::after { content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--crimson); }
+.nl-aud-info { flex: 1; min-width: 0; }
+.nl-aud-info b { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+  font-weight: 600; font-size: .95rem; }
+.nl-aud-info > span { display: block; font-size: .81rem; color: var(--slate-soft); margin-top: .2rem;
+  line-height: 1.5; }
+.nl-aud-count { text-align: right; flex: 0 0 auto; }
+.nl-aud-count b { display: block; font-variant-numeric: tabular-nums; font-size: 1.2rem;
+  font-weight: 700; letter-spacing: -.03em; line-height: 1.1; }
+.nl-aud-count span { font-size: .68rem; color: var(--slate-soft); text-transform: uppercase;
+  letter-spacing: .08em; }
+
+/* ---- Step 3: the checks, shown rather than only enforced ---- */
+.nl-checks { list-style: none; margin: 0; padding: 0; }
+.nl-checks li { display: flex; gap: .75rem; padding: 11px 0; border-bottom: 1px solid var(--line);
+  align-items: flex-start; }
+.nl-checks li:last-child { border-bottom: 0; padding-bottom: 0; }
+.nl-checks b { display: block; font-weight: 600; font-size: .87rem; }
+.nl-checks span { display: block; font-size: .8rem; color: var(--slate-soft); }
+.nl-check-mk { width: 18px; height: 18px; border-radius: 50%; flex: 0 0 auto; margin-top: .1rem;
+  display: grid; place-items: center; position: relative; }
+.nl-check-mk.is-ok { background: var(--holly-soft); }
+.nl-check-mk.is-ok::after { content: ""; width: 5px; height: 9px; border: solid var(--holly);
+  border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.nl-check-mk.is-warn { background: var(--tan-soft); }
+.nl-check-mk.is-warn::after { content: "!"; font: 700 11px/1 var(--font-body); color: var(--gold-ink); }
+.nl-check-mk.is-no { background: var(--tan-soft); }
+.nl-check-mk.is-no::after { content: "!"; font: 700 11px/1 var(--font-body); color: var(--crimson); }
+
+/* Two explicit choices for WHEN. It used to be "fill in a date, or press the button that clears
+   it" — empty-means-now was invisible. */
+.nl-when { display: flex; flex-direction: column; gap: .55rem; margin: 0 0 .9rem; }
+.nl-when-row { display: flex; align-items: flex-start; gap: .8rem; width: 100%; text-align: left;
+  border: 1.4px solid var(--line); border-radius: 10px; background: var(--card); padding: 13px 15px;
+  cursor: pointer; font-family: var(--font-body); color: var(--slate);
+  transition: border-color .18s, background .18s; }
+.nl-when-row:hover { border-color: var(--slate-soft); }
+.nl-when-row.is-on { border-color: var(--crimson); background: var(--tan-soft); }
+.nl-when-row:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }
+.nl-when-tick { width: 17px; height: 17px; border-radius: 50%; border: 1.5px solid var(--line);
+  flex: 0 0 auto; margin-top: .15rem; background: var(--card); display: grid; place-items: center; }
+.nl-when-row.is-on .nl-when-tick { border-color: var(--crimson); }
+.nl-when-row.is-on .nl-when-tick::after { content: ""; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--crimson); }
+.nl-when-bd b { display: block; font-weight: 600; font-size: .89rem; }
+.nl-when-bd span { display: block; font-size: .8rem; color: var(--slate-soft); }
+.nl-schedule { margin-top: 0; }
+
+/* ---- Where it landed: its own destination ---- */
+.nl-back { display: inline-flex; align-items: center; gap: .35rem; border: 0; background: none;
+  cursor: pointer; font-family: var(--font-body); font-weight: 600; font-size: .86rem;
+  color: var(--slate-soft); padding: 0; margin: 0 0 .9rem; }
+.nl-back:hover { color: var(--crimson); }
+.nl-eyebrow { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .13em;
+  color: var(--slate-soft); }
+.nl-res-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1.25rem;
+  flex-wrap: wrap; margin: 0 0 1.25rem; }
+.nl-res-title { font-family: var(--font-head); font-size: clamp(1.25rem, 1.1rem + .8vw, 1.65rem);
+  color: var(--crimson); margin: .3rem 0 0; max-width: 26ch; letter-spacing: -.018em; }
+.nl-res-meta { font-size: .84rem; color: var(--slate-soft); margin: .5rem 0 0; }
+.nl-res-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: .6rem; margin: 0 0 1.25rem; }
+.nl-res-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(240px, 1fr); gap: 1rem;
+  align-items: start; }
+.nl-res-grid dl { margin: 0; display: flex; flex-direction: column; gap: .6rem; }
+
+@media (max-width: 1000px) {
+  .nl-res-tiles { grid-template-columns: repeat(2, 1fr); }
+  .nl-res-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .nl-res-tiles { grid-template-columns: 1fr; }
+  .nl-aud-card { flex-wrap: wrap; }
+}

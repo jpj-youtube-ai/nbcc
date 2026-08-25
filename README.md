@@ -4156,3 +4156,37 @@ still reading them keeps working.
   UI to have kept up.
 - **A resubscribe is said out loud.** "Emails switched back on for X — they had opted out" is never
   folded into a routine-looking "Added."
+
+**Studio parity (TASK-285).** TASK-283 built the shell and TASK-284 the panel interiors; this closes
+the last three gaps against the approved prototype, and fixes something worse than a gap — **five
+elements shipped as markup with nothing driving them**. The in-flight strip, the compose subject echo
+and the saved indicator rendered as empty boxes forever, and no test noticed, because "the id exists"
+was all anything checked.
+
+- **The audience is chosen from cards, not a dropdown.** Who a newsletter goes to is the most
+  consequential decision in the flow, and a `<select>` made it look like a formality you pass on the
+  way to the Send button — you also could not see what each audience *meant* or how big it was
+  without opening it. `#sendListPick` stays as the hidden mirror of the chosen card and dispatches a
+  real `change`, so the send request, the confirmation and `sendAudienceNote` are untouched.
+- **The pre-send checks are shown, not just enforced.** `/preflight` already existed, but only ran
+  inside the send confirmation, where it could do nothing except stop you at the last moment. On the
+  panel it becomes something you can act on while there is still time. Blocking findings sort above
+  warnings, and *nothing wrong* is itself stated — a silent empty list reads as "the checks did not
+  run", which is the opposite of the reassurance the panel exists to give.
+- **"When" is two explicit choices.** It was "fill in a date, or press the button that clears it";
+  empty-means-now was invisible, with nothing on screen saying which you had picked. Choosing *now*
+  clears the field, so the control and the summary can never disagree.
+- **Where it landed is its own destination** (`#nlPanelResults`). One click from any sent row opens
+  the whole record — accepted, delivered, clicked, bounced, unsubscribed, what people clicked, and
+  who sent it. The recipient list is one click further in, where it belongs: it is the detail behind
+  the summary, not the summary.
+- **`GET /api/admin/newsletters/send-jobs/inflight`** (Viewer+) backs the overview strip.
+  `listInflightJobs` is deliberately **not** `listRunnableJobs`: that one answers *what should the
+  worker pick up now?* and so excludes both paused and future-scheduled jobs. This one answers *what
+  has the volunteer got going on?* — where a send paused at 40% and a send scheduled for Tuesday are
+  exactly the two things they most need reminding about. Literal path, so it is registered **before**
+  `/:id/...` or `send-jobs` is captured as an id.
+- **A test for dead markup.** `newsletter-studio-ui.test.ts` now lists every container the tab is
+  supposed to *fill* and asserts `app.js` references each one. An element that exists but is never
+  written to is not a feature, it is a gap that looks like one. Verified by mutation: renaming a
+  single reference turns the suite red with the right message.

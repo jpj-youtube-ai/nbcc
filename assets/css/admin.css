@@ -725,7 +725,7 @@ tr.nl-click:hover { background: var(--tint); }
 .is-composing .nl-dests { display: none; }
 .is-composing > h2, .is-composing > .admin-view-intro { display: none; }
 
-.nl-cp-bar { position: sticky; top: 56px; z-index: 12; display: flex; flex-wrap: wrap; align-items: center;
+.nl-cp-bar { position: sticky; top: 60px; z-index: 12; display: flex; flex-wrap: wrap; align-items: center;
   gap: 1.1rem; background: var(--card); border-bottom: 1px solid var(--line); padding: 11px 0; margin: 0 0 1.25rem; }
 .nl-cp-close { border: 0; background: none; cursor: pointer; font-family: var(--font-body); font-weight: 600;
   font-size: .86rem; color: var(--slate-soft); padding: 0; flex: 0 0 auto; }
@@ -806,3 +806,161 @@ tr.nl-click:hover { background: var(--tint); }
 .nl-tick.is-off { background: var(--tint); border-style: dashed; cursor: default; }
 .nl-tick.is-off .nl-tick-l { font-weight: 400; color: var(--slate-soft); }
 .nl-tick.is-off:hover { border-color: var(--line); }
+
+/* =================================================================
+   TASK-284 — finishing the Studio: the panel INTERIORS.
+   TASK-283 restructured the shell but left the contents on their old
+   styles, so ten controls were still rendering as browser defaults
+   and the send step had no shape at all.
+   ================================================================= */
+
+/* ---- 1. Controls that had NO styling whatsoever -------------------------------
+   Grey #f0f0f0, 2px black border, Arial, 21px tall. The newsletter panels only ever
+   styled buttons per-container, and these four containers never got a rule — so
+   Save, Send and "Send test to me" were raw browser buttons.
+   Named explicitly rather than as a descendant of the section: a selector like
+   `#view-newsletter button` would outrank the palette and step-rail rules and
+   flatten them too. */
+.nl-actions button,
+.nl-templates button,
+.nl-template-save button,
+.nl-send-row button {
+  font-family: var(--font-body); font-weight: 600; font-size: .88rem;
+  padding: 9px 16px; border-radius: 9px; cursor: pointer;
+  border: 1.4px solid var(--line); background: var(--cream); color: var(--slate);
+  transition: background .18s, border-color .18s, color .18s, transform .12s;
+}
+.nl-actions button:hover,
+.nl-templates button:hover,
+.nl-template-save button:hover,
+.nl-send-row button:hover { background: var(--card); border-color: var(--slate-soft); }
+.nl-actions button:active,
+.nl-templates button:active,
+.nl-template-save button:active,
+.nl-send-row button:active { transform: scale(.985); }
+.nl-actions button:disabled, .nl-send-row button:disabled { opacity: .45; cursor: default; }
+.nl-actions button:focus-visible,
+.nl-templates button:focus-visible,
+.nl-template-save button:focus-visible,
+.nl-send-row button:focus-visible,
+.nl-dest:focus-visible, .nl-dest-write:focus-visible, .nl-cp-step:focus-visible {
+  outline: 2px solid var(--holly); outline-offset: 2px;
+}
+
+/* Save is the one you press most while writing; Send is the one that mails people. */
+#newsletterSave { background: var(--crimson); border-color: var(--crimson); color: var(--cream); }
+#newsletterSave:hover { background: var(--maroon); border-color: var(--maroon); color: var(--cream); }
+#newsletterSend { background: var(--crimson); border-color: var(--crimson); color: var(--cream);
+  font-size: .95rem; padding: 11px 26px; }
+#newsletterSend:hover { background: var(--maroon); border-color: var(--maroon); color: var(--cream); }
+#newsletterTemplateDelete:hover { background: var(--tan-soft); border-color: var(--crimson); color: var(--maroon); }
+
+/* ---- 2. styles.css sets `input, textarea, select { width: 100% }` for the public forms.
+   A checkbox or radio is never 100% wide: it stretches to fill its flex row and shoves its own
+   label clean outside the box. That is what made the gentle-rollout row look broken — a 639px
+   checkbox in a 669px container. Scoped to the admin so the public site (and its enforced
+   page-weight budget) is untouched. */
+.admin-body input[type="checkbox"],
+.admin-body input[type="radio"] { width: auto; flex: none; }
+
+/* ---- 3. Panel interiors: real cards, matching the approved prototype ---------- */
+.nl-card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: clamp(16px, 2vw, 24px); margin: 0 0 1rem; }
+.nl-card > h4 { font-family: var(--font-head); font-size: 1.05rem; color: var(--crimson);
+  margin: 0 0 .3rem; letter-spacing: -.015em; }
+.nl-card > .admin-help { margin-top: 0; }
+
+/* Step 3 gets the prototype's two-column shape: the decisions on the left, and a summary
+   carrying the Send button on the right, so the last thing you read before sending is who it
+   is going to and how many that is. */
+.nl-send-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .68fr);
+  gap: 1.25rem; align-items: start; }
+.nl-summary { background: var(--tint); border: 1px solid var(--line); border-radius: 14px;
+  padding: 20px; position: sticky; top: 130px; }
+.nl-summary h4 { font-family: var(--font-head); font-size: 1.05rem; color: var(--crimson);
+  margin: 0 0 .8rem; }
+.nl-summary dl { margin: 0; display: flex; flex-direction: column; gap: .65rem; }
+.nl-summary .nl-pair { display: flex; justify-content: space-between; gap: .9rem;
+  font-size: .84rem; align-items: baseline; }
+.nl-summary dt { color: var(--slate-soft); flex: 0 0 auto; margin: 0; }
+.nl-summary dd { margin: 0; font-weight: 600; text-align: right; }
+.nl-summary dd.num { font-variant-numeric: tabular-nums; }
+.nl-summary-rule { height: 1px; background: var(--line); margin: .2rem 0; }
+.nl-summary .nl-send-row { margin: 1.1rem 0 0; }
+.nl-summary .nl-send-row button { width: 100%; justify-content: center; }
+
+/* The rollout choice, now that its checkbox behaves. Green when armed: it is the safe option,
+   and the one recommended for a first big send. */
+.nl-rollout { max-width: none; align-items: flex-start; gap: .7rem; transition: border-color .18s, background .18s; }
+.nl-rollout:hover { border-color: var(--slate-soft); }
+.nl-rollout:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }
+/* Beats the .admin-body reset above (which only needs to undo the 100% width), so the tick is a
+   real target rather than the browser's 13px default. */
+.admin-body .nl-rollout input[type="checkbox"] { accent-color: var(--holly); width: 18px; height: 18px;
+  margin-top: .1rem; }
+.nl-rollout > span { flex: 1; min-width: 0; }
+
+/* The schedule block, as a bordered choice rather than a loose row of controls. */
+.nl-schedule { background: var(--card); border: 1.4px solid var(--line); border-radius: 10px;
+  padding: 14px 16px; margin: 0 0 .9rem; }
+.nl-schedule input[type="datetime-local"] { max-width: 260px; width: auto; }
+.nl-schedule-hint { margin-top: .6rem; padding-left: .7rem; border-left: 2px solid var(--line);
+  line-height: 1.55; }
+.nl-schedule-picks { margin-top: .6rem; }
+
+/* ---- 4. The live preview, framed like a real inbox rather than a bare maroon box.
+   The wrapper used to paint itself maroon, so any failure to size the iframe showed as a
+   solid maroon slab — which is exactly what a zoom of 0 produced. Neutral ground now, so a
+   sizing failure looks like an empty frame instead of a deliberate design. */
+.nl-preview-wrap { background: var(--tint); }
+.nl-preview { background: transparent; }
+.nl-preview-frame { border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+  background: var(--card); box-shadow: 0 1px 2px rgba(74,50,28,.05), 0 10px 28px rgba(74,50,28,.06); }
+.nl-preview-chrome { display: flex; align-items: center; gap: .5rem; padding: 8px 12px;
+  background: var(--tint); border-bottom: 1px solid var(--line);
+  font-size: .74rem; color: var(--slate-soft); }
+.nl-preview-dots { display: flex; gap: 4px; }
+.nl-preview-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); display: block; }
+.nl-preview-frame .nl-preview-wrap { border: 0; border-radius: 0; box-shadow: none; }
+
+@media (max-width: 900px) { .nl-send-grid { grid-template-columns: 1fr; } }
+
+/* ---- 5. Write panel: the tail, as the prototype has it --------------------------
+   Documents and Templates were two full-width panels stacked down the page below the
+   builder. Side by side as cards they take a third of the height and read as the
+   secondary tools they are. */
+.nl-extras { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start;
+  margin: 1.25rem 0 0; }
+.nl-extras .nl-attach { margin: 0; }
+.nl-extras .nl-attach .admin-subhead { font-family: var(--font-head); font-size: 1.05rem;
+  color: var(--crimson); margin: 0 0 .3rem; letter-spacing: -.015em; }
+.nl-extras .admin-help { margin-top: 0; font-size: .82rem; }
+.nl-templates { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: 0 0 .6rem; }
+.nl-templates label { font-size: .78rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--slate-soft); flex: 1 1 100%; }
+.nl-templates select { width: auto; min-width: 0; flex: 1 1 140px; }
+.nl-template-save { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.nl-template-save input[type="text"] { width: auto; flex: 1 1 140px; }
+
+/* The subject line is the first thing a reader sees in their inbox; give it the weight of a
+   real field rather than a bare paragraph. */
+.nl-subject { margin: 0 0 1rem; }
+.nl-subject label { display: block; font-size: .78rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--slate-soft); margin-bottom: .4rem; }
+.nl-subject input { font-size: 1rem; font-weight: 500; padding: 11px 14px; border-radius: 10px;
+  border: 1.4px solid var(--line); background: var(--card); font-family: var(--font-body);
+  color: var(--slate); }
+.nl-subject input:focus { outline: 2px solid var(--crimson); outline-offset: -1px; border-color: transparent; }
+.nl-subject-hint { font-size: .78rem; color: var(--slate-soft); margin: .35rem 0 0; }
+
+/* Delivery stats only appear on a SENT newsletter; as a card it stops looking like an
+   afterthought bolted under the builder. */
+.nl-stats { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: clamp(16px, 2vw, 22px); margin: 1.25rem 0 0; }
+.nl-stats .admin-subhead { font-family: var(--font-head); font-size: 1.05rem; color: var(--crimson);
+  margin: 0 0 .6rem; }
+
+/* The actions row: the two you press constantly, plus the two you rarely do. */
+.nl-actions { margin: 1rem 0 0; gap: .55rem; }
+
+@media (max-width: 860px) { .nl-extras { grid-template-columns: 1fr; } }

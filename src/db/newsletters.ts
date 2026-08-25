@@ -30,6 +30,15 @@ export interface NewsletterSummary {
   // the history couldn't tell you whether a message went to volunteers or to donors. Null for
   // pre-audience sends, which were always the newsletter audience.
   audience: string | null;
+  // TASK-283: what actually HAPPENED, on the list itself rather than only behind a per-newsletter
+  // stats call. The overview exists to answer "where did it all land" in one place, and it cannot
+  // do that if every row needs its own request. Counted as distinct addresses, matching
+  // getNewsletterStats exactly so the list and the detail can never disagree.
+  //
+  // Null, never 0, when nothing is known — a send that predates event tracking must show an em dash,
+  // not a confident zero that reads as "nobody got it".
+  deliveredCount: number | null;
+  clickedCount: number | null;
 }
 
 export interface Newsletter extends NewsletterSummary {
@@ -63,6 +72,8 @@ interface Row {
   redacted_at: string | null;
   audience?: string | null;
   sent_by_email?: string | null;
+  delivered_count?: string | number | null;
+  clicked_count?: string | number | null;
 }
 
 function toNewsletter(r: Row): Newsletter {
@@ -82,6 +93,12 @@ function toNewsletter(r: Row): Newsletter {
     redactedAt: r.redacted_at ?? null,
     audience: r.audience ?? null,
     sentBy: r.sent_by_email ?? null,
+    // TASK-283: real outcomes on the LIST, not only behind a per-newsletter stats call. The overview
+    // exists to answer "where did it all land" in one place, and it cannot do that if every row
+    // needs its own request. Null (not 0) when nothing is known, so a send that predates tracking
+    // shows an em dash rather than a confident, wrong zero.
+    deliveredCount: r.delivered_count == null ? null : Number(r.delivered_count),
+    clickedCount: r.clicked_count == null ? null : Number(r.clicked_count),
   };
 }
 
@@ -90,10 +107,20 @@ export async function listNewsletters(): Promise<NewsletterSummary[]> {
     await pool.query<Row>(
       `SELECT n.id, n.subject, n.body_html, n.status, n.sent_at, n.recipient_count, n.sent_count,
               n.failed_count, n.failed_emails, n.redacted_at, l.name AS audience,
-              u.email AS sent_by_email
+              u.email AS sent_by_email, ev.delivered_count, ev.clicked_count
          FROM newsletters n
          LEFT JOIN subscriber_lists l ON l.id = n.list_id
          LEFT JOIN users u ON u.id = n.sent_by
+         -- TASK-283: delivered/clicked for EVERY newsletter in one aggregate, so the overview can
+         -- show outcomes inline instead of firing a stats request per row. DISTINCT email matches
+         -- getNewsletterStats exactly, so the list and the detail can never disagree.
+         LEFT JOIN (
+           SELECT newsletter_id,
+                  count(DISTINCT email) FILTER (WHERE event_type = 'delivered') AS delivered_count,
+                  count(DISTINCT email) FILTER (WHERE event_type = 'clicked') AS clicked_count
+             FROM newsletter_email_events
+            GROUP BY newsletter_id
+         ) ev ON ev.newsletter_id = n.id
         ORDER BY n.id DESC`,
     )
   ).rows;

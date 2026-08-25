@@ -273,17 +273,59 @@
             <section class="admin-view" id="view-newsletter" aria-labelledby="newsletter-heading" hidden>
               <h2 id="newsletter-heading">Newsletter</h2>
 
-              <!-- TASK-279: the tab was ONE ~19,000-character scroll. Reaching the composer meant
-                   scrolling past all the audience and people management every single time, and four
-                   full-width collapsible panels competed with the primary flow. The four stages are
-                   now switchable panels: one job on screen at a time, the others one click away.
-                   Nothing was removed - every control still exists, and every element keeps its id. -->
-              <nav class="nl-steps" id="nlSteps" aria-label="Newsletter sections">
-                <button type="button" class="nl-step" data-nl-panel="nlPanelAudience"><span class="nl-step-n">1</span> Audiences &amp; people</button>
-                <button type="button" class="nl-step is-active" data-nl-panel="nlPanelWrite"><span class="nl-step-n">2</span> Write</button>
-                <button type="button" class="nl-step" data-nl-panel="nlPanelSend"><span class="nl-step-n">3</span> Send</button>
-                <button type="button" class="nl-step" data-nl-panel="nlPanelHistory"><span class="nl-step-n">4</span> Sent</button>
+              <!-- TASK-279 made the tab four switchable panels instead of one ~19,000-character
+                   scroll. TASK-283 fixes what that left: ONE four-step rail was doing two unrelated
+                   jobs. "Audiences & people" sat at step 1, which says you must do it every time —
+                   you don't, it is reference work. "Sent" sat at step 4, which frames the history as
+                   the end of writing, when it is the thing you actually want to land on.
+
+                   So: three DESTINATIONS, not four steps. Overview is the front door; audiences and
+                   the archive are places you visit; and writing is a takeover with its own three
+                   steps (below). Nothing was removed — every control still exists and every element
+                   keeps its id, pinned by test/unit/newsletter-studio-ui.test.ts. -->
+              <nav class="nl-dests" id="nlSteps" aria-label="Newsletter sections">
+                <button type="button" class="nl-dest" data-nl-panel="nlPanelOverview">Overview</button>
+                <button type="button" class="nl-dest" data-nl-panel="nlPanelAudience">Audiences &amp; people</button>
+                <button type="button" class="nl-dest" data-nl-panel="nlPanelHistory">All newsletters</button>
+                <span class="nl-dests-gap"></span>
+                <button type="button" class="nl-dest-write" data-nl-panel="nlPanelWrite" data-edit-gate="newsletter">Write a newsletter</button>
               </nav>
+
+              <!-- The front door. Opening the tab used to drop you straight into the composer,
+                   mid-task, with no sense of state. This answers the questions you actually arrive
+                   with: who can I reach, what went out, where did it land, what needs a look.
+                   Every figure is rendered by app.js from endpoints that already existed. -->
+              <div class="nl-panel" id="nlPanelOverview" hidden>
+                <div class="nl-inflight" id="nlInflight" hidden aria-live="polite">
+                  <span class="nl-inflight-dot" aria-hidden="true"></span>
+                  <p class="nl-inflight-txt" id="nlInflightTxt"></p>
+                  <button type="button" class="admin-btn" id="nlInflightOpen">Review it</button>
+                </div>
+
+                <div class="nl-tiles" id="nlOverviewTiles" aria-live="polite"></div>
+
+                <div class="nl-act">
+                  <div>
+                    <h3>Write a newsletter</h3>
+                    <p>Three steps — write it, choose who gets it, send. It saves as you go, so you can leave and come back.</p>
+                  </div>
+                  <button type="button" class="admin-btn nl-act-btn" data-nl-panel="nlPanelWrite" data-edit-gate="newsletter">Start writing</button>
+                </div>
+
+                <div class="nl-ov-grid">
+                  <div class="nl-ov-main">
+                    <h3 class="admin-subhead">Recent sends</h3>
+                    <p class="admin-help">Click any one to see exactly where it landed — delivered, bounced, clicked, unsubscribed.</p>
+                    <div class="admin-table-wrap" id="nlRecentSends" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+                  </div>
+                  <div class="nl-ov-side">
+                    <h3 class="admin-subhead">Worth a look</h3>
+                    <ul class="nl-attn" id="nlAttention" aria-live="polite"></ul>
+                    <h3 class="admin-subhead">Your audiences</h3>
+                    <div class="nl-aud-snap" id="nlAudienceSnapshot" aria-live="polite"></div>
+                  </div>
+                </div>
+              </div>
 
               <!-- TASK-271: the page runs in four numbered stages — audiences & people, compose,
                    send, history. Before, audience management, the send history, the composer and the
@@ -324,8 +366,16 @@
                   <h4 class="nl-import-head">Add a person</h4>
                   <p class="admin-help">Collected an email in person? Add it here. Choose which audience they join — every email carries an unsubscribe link.</p>
                   <form id="audienceMemberForm" class="nl-subscriber-form" autocomplete="off">
-                    <label class="nl-dest-label" for="amList">Add to</label>
-                    <select id="amList" aria-label="Audience to add this person to"></select>
+                    <!-- TASK-283: several audiences at once. Somebody met at an event is often a
+                         volunteer AND a business contact AND wants the newsletter; three trips
+                         through this form is where a list ends up half-populated.
+                         #amList stays in the DOM as a hidden mirror of the FIRST ticked audience,
+                         so any code path still reading it keeps working. app.js fills the tick list
+                         from the same audiences, and Donors appears greyed rather than absent -
+                         a tick list reads as "all your audiences", so a silent gap looks like a bug. -->
+                    <span class="nl-dest-label">Add to</span>
+                    <fieldset class="nl-ticks" id="amAudiences" aria-label="Audiences to add this person to"></fieldset>
+                    <select id="amList" aria-label="Audience to add this person to" hidden></select>
                     <input type="text" id="amName" placeholder="Name" aria-label="Member name" />
                     <input type="email" id="amEmail" placeholder="email@example.com" required aria-label="Member email" />
                     <input type="tel" id="amPhone" placeholder="Phone (optional)" aria-label="Member phone" />
@@ -362,8 +412,14 @@
                   <h4 class="nl-import-head">Import a spreadsheet</h4>
                   <p class="admin-help">CSV or Excel, two columns: name and email (either order). You'll see a preview before anything is added.</p>
                   <div class="nl-import-bar">
-                    <label class="nl-dest-label" for="importListPick">Import into</label>
-                    <select id="importListPick" aria-label="Audience to import into"></select>
+                    <!-- TASK-283: same tick list as above. A preview is only valid for the audiences
+                         it was previewed AGAINST, so changing the ticks invalidates it — the
+                         multi-audience form of the TASK-271 bug where a sheet checked against one
+                         audience could be committed into another. Wrong ticks here land dozens of
+                         people somewhere they never agreed to be. -->
+                    <span class="nl-dest-label">Import into</span>
+                    <fieldset class="nl-ticks" id="importAudiences" aria-label="Audiences to import into"></fieldset>
+                    <select id="importListPick" aria-label="Audience to import into" hidden></select>
                     <input type="file" id="importFile" accept=".csv,.xlsx,.txt" aria-label="Spreadsheet to import" />
                     <button type="button" id="importPreviewBtn">Preview import</button>
                   </div>
@@ -419,6 +475,29 @@
                 </div>
               </div>
               </div>
+
+              <!-- Composing is a TAKEOVER, which is the single biggest change here and the thing
+                   every real mailing platform does. While you are writing, the destination rail and
+                   the surrounding admin get out of the way: one job on screen, three steps along the
+                   top, and the actions pinned to the bottom where your hands already are. app.js
+                   adds .is-composing to the section whenever Write/Who/Send is the live panel. -->
+              <div class="nl-compose" id="nlCompose">
+                <div class="nl-cp-bar">
+                  <button type="button" class="nl-cp-close" id="nlComposeClose" data-nl-panel="nlPanelOverview">
+                    <span aria-hidden="true">&#8249;</span> Close
+                  </button>
+                  <div class="nl-cp-title">
+                    <b id="nlComposeSubject">Untitled newsletter</b>
+                    <span class="nl-cp-saved" id="nlComposeSaved"></span>
+                  </div>
+                  <nav class="nl-cp-steps" aria-label="Steps">
+                    <button type="button" class="nl-cp-step" data-nl-panel="nlPanelWrite"><span class="nl-cp-n">1</span><span class="nl-cp-lbl">Write</span></button>
+                    <span class="nl-cp-line" aria-hidden="true"></span>
+                    <button type="button" class="nl-cp-step" data-nl-panel="nlPanelWho"><span class="nl-cp-n">2</span><span class="nl-cp-lbl">Who</span></button>
+                    <span class="nl-cp-line" aria-hidden="true"></span>
+                    <button type="button" class="nl-cp-step" data-nl-panel="nlPanelSend"><span class="nl-cp-n">3</span><span class="nl-cp-lbl">Send</span></button>
+                  </nav>
+                </div>
 
               <form id="newsletterForm">
                 <div class="nl-panel" id="nlPanelWrite">
@@ -497,19 +576,34 @@
                 <p id="nlTemplateMsg" class="nl-sub-msg" aria-live="polite"></p>
                 </div>
 
+                <!-- Step 2. Choosing WHO is its own step now. It used to share a panel with the
+                     Send button, which made the most consequential decision in the flow look like a
+                     dropdown you pass on the way to pressing send. The reach panel shows the real
+                     number BEFORE you commit, and shows its working — on the list, minus
+                     unsubscribed, minus blocked — so the count on the confirmation is never a
+                     surprise. -->
+                <div class="nl-panel" id="nlPanelWho" hidden>
+                <h3 class="nl-stage-head">Who gets this?</h3>
+                <p class="admin-help">Pick one audience. Anyone who unsubscribed or bounced is left out automatically — you never have to think about it.</p>
+                <div class="nl-who-grid">
+                  <div class="nl-send-row">
+                    <span class="nl-send-list" id="sendListWrap" hidden>
+                      <label for="sendListPick">Send to</label>
+                      <select id="sendListPick" aria-label="Audience to send to"></select>
+                    </span>
+                    <p class="nl-send-note" id="sendAudienceNote" aria-live="polite" hidden></p>
+                  </div>
+                  <aside class="nl-reach" id="nlReach" aria-live="polite" hidden></aside>
+                </div>
+                </div>
+
                 <div class="nl-panel" id="nlPanelSend" hidden>
-                <!-- Stage 3. The audience lives with the Send button, not 110 lines away in the
-                     actions row, and the note under it spells out who is about to be mailed and how
-                     many that is — the same number the confirmation repeats. -->
-                <h3 class="nl-stage-head"><span class="nl-stage-num">3</span> Send</h3>
+                <!-- Step 3. Nothing goes out until the button here is pressed, and the summary
+                     beside it repeats the audience and the count one last time. -->
+                <h3 class="nl-stage-head">Ready to send</h3>
                 <div class="nl-send-row">
-                  <span class="nl-send-list" id="sendListWrap" hidden>
-                    <label for="sendListPick">Send to</label>
-                    <select id="sendListPick" aria-label="Audience to send to"></select>
-                  </span>
                   <button type="button" id="newsletterSend" hidden>Send</button>
                 </div>
-                <p class="nl-send-note" id="sendAudienceNote" aria-live="polite" hidden></p>
 
                 <!-- TASK-280 (letter J): send it later. Volunteers write in the evening or at the
                      weekend, but a newsletter lands best on a weekday morning. Empty = send now, so
@@ -550,11 +644,21 @@
                 </div>
               </form>
 
+                <!-- Pinned to the bottom, where your hands are. Populated by app.js so the primary
+                     action always names what pressing it will do. -->
+                <div class="nl-cp-foot">
+                  <p class="nl-cp-hint" id="nlComposeHint">Everything saves as you go. You can leave and come back.</p>
+                  <div class="nl-cp-acts">
+                    <button type="button" class="admin-btn" id="nlComposeBack" hidden>Back</button>
+                    <button type="button" class="admin-btn nl-cp-next" id="nlComposeNext">Choose who gets it</button>
+                  </div>
+                </div>
+              </div>
+
               <div class="nl-panel" id="nlPanelHistory" hidden>
-              <!-- Stage 4. Moved BELOW the composer: the history is a record you look back at, not
-                   the first thing you meet on opening the tab. Now carries the audience each send
-                   went to (list_id was stamped at send time but never read back). -->
-              <h3 class="nl-stage-head"><span class="nl-stage-num">4</span> Sent newsletters</h3>
+              <!-- A destination, not the last step of writing. Carries the audience each send went
+                   to, and a row click opens that send's full results. -->
+              <h3 class="nl-stage-head">All newsletters</h3>
               <div class="admin-table-wrap" id="newsletterList" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               </div>
             </section>

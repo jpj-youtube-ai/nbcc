@@ -635,3 +635,174 @@
 /* TASK-280: schedule quick picks. Secondary to the field itself — they are a shortcut, not the point. */
 .nl-schedule-picks { display: flex; flex-wrap: wrap; gap: .4rem; flex: 1 1 100%; }
 .nl-schedule-picks button { font-size: .82rem; padding: 5px 10px; }
+
+/* =================================================================
+   TASK-283 — Newsletter Studio. Three destinations and a compose
+   takeover. Token-only colours, same brand as the rest of the admin;
+   what changes is the information design, not the palette.
+   ================================================================= */
+
+/* ---- Destination rail. Three PLACES, not four steps: the old rail put
+   "Audiences & people" at step 1, which reads as "do this every time". ---- */
+.nl-dests { display: flex; flex-wrap: wrap; align-items: center; gap: 2px;
+  background: var(--tint); padding: 3px; border-radius: 12px; margin: 0 0 1.5rem; }
+.nl-dest { border: 0; background: none; padding: 8px 16px; border-radius: 9px; cursor: pointer;
+  font-family: var(--font-body); font-weight: 600; font-size: .88rem; color: var(--slate-soft);
+  transition: background .18s, color .18s; }
+.nl-dest:hover { color: var(--slate); }
+.nl-dest.is-active { background: var(--card); color: var(--slate); box-shadow: 0 1px 2px rgba(74, 50, 28, .06); }
+.nl-dests-gap { flex: 1; }
+.nl-dest-write { border: 0; background: var(--crimson); color: var(--cream); cursor: pointer;
+  padding: 8px 18px; border-radius: 9px; font-family: var(--font-body); font-weight: 600; font-size: .88rem;
+  transition: background .18s; }
+.nl-dest-write:hover { background: var(--maroon); }
+
+/* ---- Overview: the front door ---- */
+.nl-inflight { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem;
+  background: var(--tan-soft); border: 1px solid var(--line); border-left: 3px solid var(--gold-ink);
+  border-radius: 10px; padding: 13px 17px; margin: 0 0 1.25rem; }
+.nl-inflight-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gold-ink); flex: 0 0 auto; }
+.nl-inflight-txt { flex: 1; min-width: 220px; font-size: .88rem; margin: 0; }
+
+.nl-tiles { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: .75rem; margin: 0 0 1rem; }
+.nl-tile { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 16px 18px 14px; display: flex; flex-direction: column; }
+.nl-tile.is-lead { background: var(--tint); }
+.nl-tile-k { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--slate-soft); }
+.nl-tile-v { font-variant-numeric: tabular-nums; font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
+  font-weight: 700; letter-spacing: -.03em; line-height: 1.1; margin-top: 5px; }
+.nl-tile.is-lead .nl-tile-v { color: var(--maroon); }
+.nl-tile-m { font-size: .78rem; color: var(--slate-soft); margin-top: 3px; }
+
+.nl-act { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.25rem;
+  background: var(--maroon); color: var(--cream); border-radius: 14px; padding: 20px 24px; margin: 0 0 1.5rem; }
+.nl-act h3 { color: var(--cream); font-size: 1.2rem; margin: 0 0 3px; }
+.nl-act p { font-size: .86rem; margin: 0; max-width: 52ch; color: var(--cream-82); }
+.nl-act-btn { background: var(--cream); color: var(--maroon); border-color: var(--cream); }
+.nl-act-btn:hover { background: var(--card); color: var(--maroon); }
+
+.nl-ov-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+.nl-ov-side .admin-subhead:first-child { margin-top: 0; }
+
+.nl-attn { list-style: none; margin: 0 0 1.5rem; padding: 0; }
+.nl-attn li { display: flex; gap: .75rem; padding: 12px 0; border-bottom: 1px solid var(--line); align-items: flex-start; }
+.nl-attn li:last-child { border-bottom: 0; }
+.nl-attn b { display: block; font-weight: 600; font-size: .87rem; }
+.nl-attn span { font-size: .8rem; color: var(--slate-soft); }
+.nl-attn-ic { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; margin-top: 6px; background: var(--slate-soft); }
+.nl-attn-ic.is-b { background: var(--crimson); }
+.nl-attn-ic.is-w { background: var(--gold-ink); }
+.nl-attn-ic.is-g { background: var(--holly); }
+
+.nl-aud-snap { display: flex; flex-direction: column; }
+.nl-aud-snap-row { display: flex; align-items: center; gap: .75rem; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.nl-aud-snap-row:last-child { border-bottom: 0; }
+.nl-aud-snap-nm { flex: 1; min-width: 0; font-weight: 600; font-size: .87rem; }
+.nl-aud-snap-nm em { display: block; font-style: normal; font-weight: 400; font-size: .76rem; color: var(--slate-soft); }
+.nl-aud-snap-ct { font-variant-numeric: tabular-nums; font-weight: 700; font-size: .9rem; }
+
+/* A rate needs a SHAPE as well as a number: a column of bare figures makes you read every row to
+   find the odd one out. The band colours are semantic, and separate from the brand accent. */
+.nl-r { text-align: right; }
+.nl-rate { display: inline-flex; align-items: center; gap: .55rem; justify-content: flex-end; }
+.nl-rate-bar { width: 46px; height: 5px; border-radius: 3px; background: var(--tint); overflow: hidden; flex: 0 0 auto; }
+.nl-rate-bar i { display: block; height: 100%; border-radius: 3px; background: var(--holly); }
+.nl-rate.is-mid .nl-rate-bar i { background: var(--gold-ink); }
+.nl-rate.is-low .nl-rate-bar i { background: var(--crimson); }
+.nl-rate-n { font-variant-numeric: tabular-nums; font-size: .84rem; min-width: 46px; text-align: right; }
+.nl-subj { display: block; font-weight: 600; margin-bottom: 2px; }
+.nl-meta { color: var(--slate-soft); font-size: .78rem; }
+.nl-pill { display: inline-block; font-size: .72rem; font-weight: 600; background: var(--tint);
+  color: var(--slate); border-radius: 999px; padding: 3px 10px; }
+tr.nl-click { cursor: pointer; }
+tr.nl-click:hover { background: var(--tint); }
+
+/* ---- Compose takeover. While writing, the rest of the admin gets out of the way: one job on
+   screen, three steps at the top, actions pinned at the bottom where your hands are. ---- */
+.nl-compose { display: none; }
+.is-composing .nl-compose { display: block; }
+.is-composing .nl-dests { display: none; }
+.is-composing > h2, .is-composing > .admin-view-intro { display: none; }
+
+.nl-cp-bar { position: sticky; top: 56px; z-index: 12; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 1.1rem; background: var(--card); border-bottom: 1px solid var(--line); padding: 11px 0; margin: 0 0 1.25rem; }
+.nl-cp-close { border: 0; background: none; cursor: pointer; font-family: var(--font-body); font-weight: 600;
+  font-size: .86rem; color: var(--slate-soft); padding: 0; flex: 0 0 auto; }
+.nl-cp-close:hover { color: var(--crimson); }
+.nl-cp-title { flex: 1; min-width: 170px; }
+.nl-cp-title b { display: block; font-weight: 600; font-size: .93rem; line-height: 1.3; }
+.nl-cp-saved { font-size: .76rem; color: var(--slate-soft); }
+
+.nl-cp-steps { display: flex; align-items: center; flex-wrap: wrap; }
+.nl-cp-step { display: flex; align-items: center; gap: .5rem; border: 0; background: none; cursor: pointer;
+  padding: 6px 13px; border-radius: 999px; font-family: var(--font-body); font-size: .86rem; font-weight: 500;
+  color: var(--slate-soft); transition: color .18s; }
+.nl-cp-step:hover { color: var(--slate); }
+.nl-cp-n { width: 21px; height: 21px; border-radius: 50%; display: grid; place-items: center; flex: 0 0 auto;
+  font-variant-numeric: tabular-nums; font-size: .72rem; font-weight: 700; border: 1.5px solid currentColor; }
+.nl-cp-step.is-active { color: var(--slate); font-weight: 600; }
+.nl-cp-step.is-active .nl-cp-n { background: var(--crimson); border-color: var(--crimson); color: var(--cream); }
+.nl-cp-step.is-done { color: var(--holly); }
+.nl-cp-step.is-done .nl-cp-n { background: var(--holly-soft); border-color: var(--holly); }
+.nl-cp-line { width: 22px; height: 1.5px; background: var(--line); flex: 0 0 auto; }
+
+.nl-cp-foot { position: sticky; bottom: 0; z-index: 12; display: flex; flex-wrap: wrap; align-items: center;
+  justify-content: space-between; gap: .9rem; background: var(--card); border-top: 1px solid var(--line);
+  padding: 12px 0; margin-top: 1.5rem; }
+.nl-cp-hint { flex: 1; min-width: 180px; font-size: .82rem; color: var(--slate-soft); margin: 0; }
+.nl-cp-acts { display: flex; gap: .6rem; flex-wrap: wrap; }
+.nl-cp-next { background: var(--crimson); color: var(--cream); border-color: var(--crimson); }
+.nl-cp-next:hover { background: var(--maroon); border-color: var(--maroon); }
+
+/* ---- Step 2: who. The reach panel shows the real number BEFORE you commit, and shows its
+   working, so the count on the confirmation is never a surprise. ---- */
+.nl-who-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, .6fr); gap: 1.25rem; align-items: start; }
+.nl-reach { background: var(--tint); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.nl-reach-big { font-variant-numeric: tabular-nums; font-size: 2.4rem; font-weight: 700; letter-spacing: -.04em;
+  line-height: 1; color: var(--maroon); }
+.nl-reach-who { font-size: .87rem; margin: 7px 0 0; }
+.nl-reach ul { list-style: none; margin: 1rem 0 0; padding: 1rem 0 0; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: .55rem; font-size: .81rem; color: var(--slate-soft); }
+.nl-reach li { display: flex; justify-content: space-between; gap: .75rem; }
+.nl-reach li b { font-variant-numeric: tabular-nums; color: var(--slate); }
+.nl-reach-note { font-size: .79rem; color: var(--slate-soft); margin: .9rem 0 0; }
+
+@media (max-width: 1000px) {
+  .nl-ov-grid { grid-template-columns: 1fr; }
+  .nl-who-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 900px) {
+  .nl-tiles { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .nl-tiles { grid-template-columns: 1fr; }
+  .nl-cp-lbl { display: none; }
+  .nl-cp-line { width: 10px; }
+}
+
+/* ---- TASK-283: multi-audience tick lists. Donors is rendered but not tickable — it follows donor
+   consent, so there is nothing to add to by hand. A dropdown can silently omit it; a tick list reads
+   as "here are all your audiences", so a gap looks like a bug. Greyed with the reason instead. ---- */
+.nl-ticks { border: 0; margin: 0 0 .6rem; padding: 0; display: flex; flex-direction: column; gap: 5px;
+  grid-column: 1 / -1; }
+.nl-tick { display: flex; align-items: center; gap: .6rem; padding: 8px 11px; position: relative;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--cream); cursor: pointer;
+  transition: border-color .16s, background .16s; }
+.nl-tick:hover { border-color: var(--slate-soft); }
+.nl-tick input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.nl-tick-bx { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line); flex: 0 0 auto;
+  background: var(--card); transition: background .16s, border-color .16s; position: relative; }
+.nl-tick-bx::after { content: ""; position: absolute; left: 4px; top: 1px; width: 5px; height: 9px;
+  border: solid var(--cream); border-width: 0 2px 2px 0; transform: rotate(45deg); opacity: 0;
+  transition: opacity .14s; }
+.nl-tick.is-on { border-color: var(--crimson); background: var(--tan-soft); }
+.nl-tick.is-on .nl-tick-bx { background: var(--crimson); border-color: var(--crimson); }
+.nl-tick.is-on .nl-tick-bx::after { opacity: 1; }
+.nl-tick input:focus-visible ~ .nl-tick-bx { outline: 2px solid var(--holly); outline-offset: 2px; }
+.nl-tick-l { flex: 1; min-width: 0; font-size: .86rem; font-weight: 600; }
+.nl-tick-l em { display: block; font-style: normal; font-weight: 400; font-size: .78rem; color: var(--slate-soft); }
+.nl-tick-n { font-variant-numeric: tabular-nums; font-size: .8rem; color: var(--slate-soft); }
+.nl-tick.is-off { background: var(--tint); border-style: dashed; cursor: default; }
+.nl-tick.is-off .nl-tick-l { font-weight: 400; color: var(--slate-soft); }
+.nl-tick.is-off:hover { border-color: var(--line); }

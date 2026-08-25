@@ -6,7 +6,9 @@
 
 export const MAX_TARGETS = 20;
 
-export type AddOutcome = "added" | "exists" | "previously_unsubscribed";
+// Mirrors AddSubscriberOutcome in src/db/subscriber-lists.ts. Kept as its own name so this module
+// stays DB-free and testable without a pool; tsc catches any drift at the call site.
+export type AddOutcome = "added" | "exists" | "resubscribed" | "previously_unsubscribed";
 
 export interface TargetOutcome {
   listId: number;
@@ -16,10 +18,21 @@ export interface TargetOutcome {
 
 export interface FoldedOutcomes {
   added: number;
+  /**
+   * A membership REVIVED from an opt-out. Counted apart from `added` on purpose: somebody who once
+   * asked us to stop has just been switched back on, and folding that into "added" would hide a
+   * re-consent inside a routine-looking confirmation. Only a deliberate staff add can produce it
+   * (revive: true); an import never can.
+   */
+  resubscribed: number;
   alreadyOnList: number;
   previouslyUnsubscribed: number;
-  /** Names of the audiences the person actually joined - what the confirmation says back. */
+  /** Audiences the person actually joined - what the confirmation says back. */
   addedTo: string[];
+  /** Audiences where they were switched back on, named so the confirmation can say so plainly. */
+  resubscribedTo: string[];
+  /** Anything that actually changed. Zero means the whole action was a no-op. */
+  changed: number;
   perList: TargetOutcome[];
 }
 
@@ -48,17 +61,24 @@ export function parseTargetListIds(raw: unknown): number[] | null {
 export function foldOutcomes(results: TargetOutcome[]): FoldedOutcomes {
   const folded: FoldedOutcomes = {
     added: 0,
+    resubscribed: 0,
     alreadyOnList: 0,
     previouslyUnsubscribed: 0,
     addedTo: [],
+    resubscribedTo: [],
+    changed: 0,
     perList: results,
   };
   for (const r of results) {
     if (r.outcome === "added") {
       folded.added++;
       folded.addedTo.push(r.listName);
+    } else if (r.outcome === "resubscribed") {
+      folded.resubscribed++;
+      folded.resubscribedTo.push(r.listName);
     } else if (r.outcome === "exists") folded.alreadyOnList++;
     else folded.previouslyUnsubscribed++;
   }
+  folded.changed = folded.added + folded.resubscribed;
   return folded;
 }

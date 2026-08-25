@@ -372,3 +372,32 @@ Feature: Admin newsletter (REQ-069)
     When a bot fills the footer honeypot with email "bot@street.bdd.example.com"
     Then the subscribe response status should be 200
     And the Newsletter audience does not include "bot@street.bdd.example.com"
+
+  # TASK-282: one action, several audiences. Somebody met at an event is often a volunteer AND a
+  # business contact AND wants the newsletter, and doing that as three trips through the same form
+  # is where a list ends up half-populated.
+  Scenario: one person joins two audiences in a single action
+    Given a newsletter admin "multi.admin.newsletter.bdd@example.com" with role "admin" and password "pw-multi-a"
+    When I create an audience named "Bdd Packers A"
+    And I create a second audience named "Bdd Packers B"
+    And I add "isla.beattie.bdd@example.com" named "Isla" to both audiences
+    Then the audience response status should be 201
+    And the response should report 2 audiences joined
+    And both audiences have 1 member
+
+  # An empty selection must be refused, never treated as "proceed with no targets". A silent no-op
+  # that reports success is the worst outcome: the volunteer walks away believing it worked.
+  Scenario: adding to no audience is refused rather than silently doing nothing
+    Given a newsletter admin "multi2.admin.newsletter.bdd@example.com" with role "admin" and password "pw-multi-b"
+    When I add "nobody.bdd@example.com" named "Nobody" to no audiences
+    Then the audience response status should be 400
+
+  # Every audience is checked BEFORE any is written, so a refusal cannot leave half the add done.
+  # A half-finished add is worse than a clean failure: pressing it again doubles the part that
+  # already worked, and nothing on screen says which part that was.
+  Scenario: a refusal leaves no half-finished add behind
+    Given a newsletter admin "multi3.admin.newsletter.bdd@example.com" with role "admin" and password "pw-multi-c"
+    When I create an audience named "Bdd Packers C"
+    And I add "fraser.kinnaird.bdd@example.com" named "Fraser" to that audience and one that does not exist
+    Then the audience response status should be 404
+    And the audience has 0 members

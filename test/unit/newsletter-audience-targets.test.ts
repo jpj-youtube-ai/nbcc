@@ -52,3 +52,33 @@ describe("foldOutcomes", () => {
     expect(folded.addedTo).toEqual([]);
   });
 });
+
+// A deliberate staff add may REVIVE an opted-out membership (revive: true). That is materially
+// different from a fresh add - somebody who once asked us to stop is being switched back on - so it
+// is counted and named separately. Folding it into "added" would hide a re-consent inside a
+// routine-looking confirmation.
+describe("foldOutcomes - resubscribing is not the same as adding", () => {
+  it("counts a revived membership separately and names the audience", () => {
+    const folded = foldOutcomes([
+      { listId: 3, listName: "Volunteers", outcome: "added" },
+      { listId: 7, listName: "Newsletter", outcome: "resubscribed" },
+    ]);
+    expect(folded.added).toBe(1);
+    expect(folded.addedTo).toEqual(["Volunteers"]);
+    expect(folded.resubscribed).toBe(1);
+    expect(folded.resubscribedTo).toEqual(["Newsletter"]);
+  });
+
+  it("treats a resubscribe as a real change, so the caller can report success", () => {
+    const folded = foldOutcomes([{ listId: 7, listName: "Newsletter", outcome: "resubscribed" }]);
+    expect(folded.changed).toBe(1);
+  });
+
+  it("reports no change when every audience already had them", () => {
+    const folded = foldOutcomes([
+      { listId: 3, listName: "Volunteers", outcome: "exists" },
+      { listId: 7, listName: "Newsletter", outcome: "exists" },
+    ]);
+    expect(folded.changed).toBe(0);
+  });
+});

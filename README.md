@@ -4190,3 +4190,31 @@ was all anything checked.
   supposed to *fill* and asserts `app.js` references each one. An element that exists but is never
   written to is not a feature, it is a gap that looks like one. Verified by mutation: renaming a
   single reference turns the suite red with the right message.
+
+**Layout fixes (TASK-286).** Four faults, all from the same root cause: the Studio was designed
+against the wrong width. The real content column is **~1006px** — 1280px max-width minus the 210px
+nav and padding — and the Overview's main column only ~620px of that. The CSS harness was rendering
+full-bleed, so every measurement taken during TASK-283–285 was a lie.
+
+- **Recent sends fits its card.** Four columns needed ~750px in a ~620px column, so the table scrolled
+  sideways inside a box that looked like a finished table — and the scrollbar covered the last column.
+  The audience moved into the meta line, where it reads better anyway: *"15 July · jon@nbcc.scot ·
+  Newsletter"* is one fact about the send, not a column you scan. `table-layout: fixed` with the
+  subject ellipsised, so a very long name can never bring the scrollbar back.
+- **The tick lists run side to side.** They were stacking in a 303px column: the fieldset is a flex
+  item inside `.nl-subscriber-form`, and the `grid-column: 1 / -1` it carried does nothing in a flex
+  container. Now a full row that wraps horizontally, with the "Add to" label above rather than
+  floating beside a tall column. Donors takes a full row of its own — it is explanatory, not
+  choosable, so it should not compete for width with the audiences you can actually tick.
+- **Both compose bars are inset.** They ran edge to edge with **no horizontal padding**, so "Close"
+  and the footer hint sat flush against the border and the sticky bar had nothing separating it from
+  content sliding underneath. Now padded, rounded and shadowed to match the cards, so they read as
+  chrome floating over the page. The compose title is clamped to one line: a sticky bar that grows as
+  you type shifts everything under it.
+- **`min-width: 0` on every grid child.** A grid or flex item defaults to `min-width: auto`, so its
+  widest child can force the column wider than the viewport. The preview iframe is a fixed 660px
+  until `nlFitPreview` zooms it — and that deliberately bails while the panel is hidden — so on a
+  phone the whole admin page could end up scrolling sideways. Verified fixed at 375px.
+
+**The harness now mirrors the real shell** (210px nav column inside the 1280px grid). Measuring
+against a full-width page is what produced these four faults in the first place.

@@ -401,3 +401,16 @@ Feature: Admin newsletter (REQ-069)
     And I add "fraser.kinnaird.bdd@example.com" named "Fraser" to that audience and one that does not exist
     Then the audience response status should be 404
     And the audience has 0 members
+
+  # TASK-288: one newsletter, several audiences. The rule that matters is DEDUPLICATION — a person
+  # on two of the chosen audiences must get ONE email. Sending twice is the fastest way to be
+  # marked as spam, and the person who reports it is one of your most engaged supporters.
+  Scenario: someone on two chosen audiences is emailed only once
+    Given a newsletter admin "dedupe.admin.newsletter.bdd@example.com" with role "admin" and password "pw-dedupe"
+    When I create an audience named "Bdd Dedupe One"
+    And I create a second audience named "Bdd Dedupe Two"
+    And I add "onboth.bdd@example.com" named "Both" to both audiences
+    And I add "onlyone.bdd@example.com" named "One" to that audience
+    And I create a newsletter draft "Dedupe check"
+    And I send that newsletter to both audiences
+    Then the send should have reached 2 people

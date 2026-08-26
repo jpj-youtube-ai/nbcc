@@ -4450,6 +4450,17 @@ reported the domain verified — flipping the from-address before the DNS resolv
 unauthenticated mail, the exact opposite of the point. That change also had to split Reply-To out
 into `NEWSLETTER_REPLY_TO_EMAIL`, because this subdomain has no MX and cannot receive a reply.
 
-**Click/open tracking is configured per sending domain in Resend.** The apex has `links.nbcc.scot`
-verified with click tracking on; `news.nbcc.scot` needs its own tracking subdomain configured
-before click data resumes for newsletters sent from it.
+**Click/open tracking is configured per sending domain in Resend**, so moving the From address in
+TASK-298 did not carry the apex tracking domain with it. TASK-299 added the matching record for the
+new sender:
+
+| Record | Type | Serves |
+|---|---|---|
+| `links` | CNAME | `links.nbcc.scot` - anything still sent from the apex (TASK-295) |
+| `links.news` | CNAME | `links.news.nbcc.scot` - the newsletter (TASK-299) |
+
+Both point at `links1.resend-dns.com`. Resend fixes the parent domain in its UI, so the newsletter
+tracker can only be a subdomain of `news.nbcc.scot` - which is the tighter alignment anyway: the
+From address and the rewritten link domain now share the same subdomain exactly. Open tracking
+stays OFF on both (it embeds an invisible image, which Apple Mail and Gmail pre-load, so the numbers
+lie, and some filters read it as a negative signal). Clicks are the honest measure.

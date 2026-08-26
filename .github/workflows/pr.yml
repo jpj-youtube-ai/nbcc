@@ -67,7 +67,8 @@ jobs:
       # placeholder is fine for CI (the admin-auth unit test signs/verifies with its own key).
       ADMIN_SESSION_SECRET: ci-admin-session-secret
       # Newsletter From/Reply-To address (TASK-161): required by the schema so the app boots.
-      NEWSLETTER_FROM_EMAIL: newsletter@nbcc.scot
+      NEWSLETTER_FROM_EMAIL: newsletter@news.nbcc.scot
+      NEWSLETTER_REPLY_TO_EMAIL: newsletter@nbcc.scot
       # Thank-you From/Reply-To address (TASK-165): defaulted in the schema, set here for parity.
       GIVING_FROM_EMAIL: giving@nbcc.scot
       BASE_URL: http://localhost:3000

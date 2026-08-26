@@ -245,13 +245,21 @@ resource "aws_ssm_parameter" "admin_session_secret" {
   lifecycle { ignore_changes = [value] }
 }
 
-# From/Reply-To address for the admin newsletter (TASK-161/REQ-069). NOT a secret (it ships in
-# the email headers), but SSM-held and injected like ADMIN_NOTIFICATION_EMAIL so it varies per
-# environment. A plain String; the value is the real production address.
+# From address for the admin newsletter (TASK-161/REQ-069, moved to news.nbcc.scot in TASK-298).
+# NOT a secret (it ships in the email headers), but SSM-held and injected like
+# ADMIN_NOTIFICATION_EMAIL so it varies per environment. A plain String.
 resource "aws_ssm_parameter" "newsletter_from_email" {
   name  = "/${var.project}/${var.environment}/NEWSLETTER_FROM_EMAIL"
   type  = "String"
   value = var.newsletter_from_email
+}
+
+# Reply-To for the admin newsletter (TASK-298). Deliberately NOT the same as the From: the sending
+# subdomain has no MX, so a reply addressed there would bounce. This one points at the real inbox.
+resource "aws_ssm_parameter" "newsletter_reply_to_email" {
+  name  = "/${var.project}/${var.environment}/NEWSLETTER_REPLY_TO_EMAIL"
+  type  = "String"
+  value = var.newsletter_reply_to_email
 }
 
 # From/Reply-To address for donor thank-you letters (TASK-165/REQ-069). NOT a secret (it ships in

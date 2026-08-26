@@ -106,7 +106,7 @@ async function sendWelcome(listId: number, email: string): Promise<void> {
   await sendNewsletter({
     email,
     from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
-    replyTo: config.NEWSLETTER_FROM_EMAIL,
+    replyTo: config.NEWSLETTER_REPLY_TO_EMAIL,
     subject: built.subject,
     html: built.html,
     text: built.text,

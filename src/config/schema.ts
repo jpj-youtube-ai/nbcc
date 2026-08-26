@@ -104,12 +104,23 @@ export const configSchema = z.object({
   // locally/CI, a SecureString in SSM in staging/prod. Kept long/random in real environments.
   ADMIN_SESSION_SECRET: z.string().min(1),
 
-  // The From/Reply-To address for the admin newsletter (TASK-161/REQ-069). Every newsletter
-  // email is sent From and Reply-To this address so donors can reply to a real inbox (not a
-  // noreply). NOT a secret (it ships in the email headers), but AWS-injected like
-  // ADMIN_NOTIFICATION_EMAIL (SSM String → task-def). Validated as an email address. Defaulted
-  // to the production address so local dev / CI boot without extra setup.
-  NEWSLETTER_FROM_EMAIL: z.string().email().default("newsletter@nbcc.scot"),
+  // The From address for the admin newsletter (TASK-161/REQ-069). TASK-298 moved it onto
+  // news.nbcc.scot, the dedicated sending subdomain (TASK-296), so a campaign that upsets a spam
+  // filter builds and risks its OWN reputation instead of the apex's — the apex carries donation
+  // receipts, Gift Aid confirmations and admin login codes, which people must receive.
+  // NOT a secret (it ships in the email headers), but AWS-injected like ADMIN_NOTIFICATION_EMAIL
+  // (SSM String → task-def). Validated as an email address. Defaulted to the production address so
+  // local dev / CI boot without extra setup.
+  NEWSLETTER_FROM_EMAIL: z.string().email().default("newsletter@news.nbcc.scot"),
+
+  // Where a reply GOES (TASK-298), and why it is a separate setting from the From above.
+  // news.nbcc.scot exists only to SEND: it has no MX and no A record, so mail addressed to it
+  // hard-bounces. From and Reply-To used to be one value, so moving the From alone would have
+  // silently broken every reply — including the ones our own unsubscribe page invites ("just reply
+  // to any of our emails and we'll put it right"). This stays on the apex, where a real Google
+  // Workspace inbox is listening. DMARC aligns on the From domain, not this one, so pointing it at
+  // the apex costs nothing in deliverability.
+  NEWSLETTER_REPLY_TO_EMAIL: z.string().email().default("newsletter@nbcc.scot"),
   // The From/Reply-To address for donor thank-you letters (TASK-165/REQ-069). Every thank-you
   // email is sent From and Reply-To this address so a donor's reply reaches the giving inbox (not
   // a noreply). NOT a secret (it ships in the email headers), but AWS-injected like

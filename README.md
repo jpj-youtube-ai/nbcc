@@ -4394,3 +4394,24 @@ click data, nothing suspicious.
 **Open tracking stays off.** It works by embedding an invisible image, which Apple Mail and Gmail
 pre-load — so the numbers lie — and some filters read a tracking pixel as a negative signal. Clicks
 are the honest measure: somebody actually pressed something.
+
+**A dedicated newsletter sending domain (TASK-296).** Newsletters sent from the apex, `nbcc.scot` —
+the same domain as donation receipts, Gift Aid declarations and admin login codes. One campaign that
+upsets a spam filter could therefore damage the deliverability of mail people actually *need* to
+receive.
+
+`news.nbcc.scot` gives the newsletter its own reputation to build, and its own to lose. Three records,
+all inside the existing hosted zone — no delegation, no new zone, nothing about the apex changes:
+
+| Name | Type | Purpose |
+|---|---|---|
+| `resend._domainkey.news` | TXT | DKIM — **its own key**, distinct from the apex |
+| `send.news` | MX | Return-Path: bounce and complaint feedback |
+| `send.news` | TXT | SPF |
+
+DMARC is inherited from the apex policy (there is no `sp=` tag), so the tightened `p=quarantine`
+covers this subdomain too without a second record.
+
+Switching `NEWSLETTER_FROM_EMAIL` over is a **separate** change, made only once Resend reports the
+domain verified — flipping the from-address before the DNS resolves would send unauthenticated mail,
+which is the exact opposite of the point.

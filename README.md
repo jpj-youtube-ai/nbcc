@@ -4382,3 +4382,15 @@ The policy only ever acts on mail that **fails**. Genuine mail passes and is unt
 go to a mailbox this codebase can't read, so if some forgotten sender does exist, three quarters of
 its mail still lands while the reports surface it. Next steps on the documented path are
 `p=quarantine` (full) then `p=reject`, once the reports are clean.
+
+**Click-tracking on our own domain (TASK-295).** Resend rewrites every link in a newsletter so clicks
+can be counted. By default those rewritten links point at Resend's **shared** tracking domain — so an
+email that says it is from `nbcc.scot` carries links to somewhere else entirely. That is the shape of
+a phishing message, and it is very likely part of why a real send reached Hotmail's junk folder.
+
+A `links.nbcc.scot` CNAME → `links1.resend-dns.com` makes the rewritten links match the sender. Same
+click data, nothing suspicious.
+
+**Open tracking stays off.** It works by embedding an invisible image, which Apple Mail and Gmail
+pre-load — so the numbers lie — and some filters read a tracking pixel as a negative signal. Clicks
+are the honest measure: somebody actually pressed something.

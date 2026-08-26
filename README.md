@@ -4347,3 +4347,20 @@ it, because the two places need different answers:
 - **The hint explains the rule rather than re-implementing it.** A browser copy of the merge logic
   would be a second version of the thing that decides what actually goes out, free to drift from the
   one that does.
+
+**Registered postal address everywhere (TASK-293).** Microsoft and the other large filters look for a
+real postal address in bulk email; its absence is a small but real spam signal, and every legitimate
+charity newsletter carries one. **The Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank,
+KA6 5EE** now appears in the site footer on all 11 pages, in the newsletter frame (so the live
+preview and every send carry it), in the thank-you letter, and in the donation receipt and
+confirmation emails.
+
+- **One source of truth.** It lives in `src/legal/registration.ts` beside the charity number, so the
+  footer, the newsletter and the letters cannot drift apart.
+- **`FOOTER_TEXT` / `FOOTER_HTML` are new, and `REGISTRATION_TEXT` / `REGISTRATION_HTML` are
+  unchanged.** The footer block is registration *plus* address; the registration constants keep
+  meaning the mandated statement alone. A constant called `REGISTRATION_TEXT` that quietly contained
+  an address would be a name that lies, and the next person reusing it would carry the address
+  somewhere it does not belong.
+- The plain-text parts get a real newline, not a `<br />` — worth stating because the first pass got
+  that wrong.

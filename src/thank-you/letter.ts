@@ -6,6 +6,9 @@
 // The transactional send + audit live in src/db/thank-you.ts and src/routes/admin.ts
 // and are exercised via BDD.
 import { formatGiftAmount, giftAidUpliftPence } from "./model";
+// TASK-293: the registered postal address, from the one module that owns NBCC's registration
+// details — so the site footer, the newsletter and this letter cannot drift apart.
+import { POSTAL_ADDRESS } from "../legal/registration";
 
 // The presentation view of a thank-you letter. It mirrors ThankYouInput's letter
 // fields, plus the two presentation-only values the route supplies: a formatted
@@ -109,6 +112,9 @@ export function buildThankYouEmailText(v: ThankYouLetterView): string {
     "",
     "01292 811 015 · giving@nbcc.scot · nbcc.scot",
     "Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.",
+    // TASK-293: a real postal address in bulk email. Its absence is a small but real spam signal,
+    // and this is the plain-text part, so it gets a plain newline rather than a <br />.
+    POSTAL_ADDRESS,
   );
   return lines.join("\n");
 }
@@ -190,7 +196,7 @@ export function buildThankYouEmailHtml(v: ThankYouLetterView): string {
     </td></tr>
     <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY};font-size:14px;text-align:center">
       <div style="font-weight:700"><a href="tel:+441292811015" style="color:${CREAM};text-decoration:none">01292 811 015</a> &nbsp;·&nbsp; <a href="mailto:giving@nbcc.scot" style="color:${CREAM};text-decoration:underline">giving@nbcc.scot</a> &nbsp;·&nbsp; <a href="https://nbcc.scot" style="color:${CREAM};text-decoration:underline">nbcc.scot</a></div>
-      <div style="color:${CREAM_82};font-size:11px;margin-top:8px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
+      <div style="color:${CREAM_82};font-size:11px;margin-top:8px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.<br />${POSTAL_ADDRESS}</div>
     </td></tr>
   </table>
 </body>

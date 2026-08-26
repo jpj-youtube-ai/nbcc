@@ -130,7 +130,26 @@ resource "aws_route53_record" "dmarc" {
   #
   # MANUAL STEP: dmarc@nbcc.scot must exist in Google Workspace (a group or alias is fine) or the
   # reports bounce and this stays as blind as it was before.
-  records = ["v=DMARC1; p=none; rua=mailto:newsletter@nbcc.scot; fo=1;"]
+  #
+  # TASK-294: taking the FIRST step on that path — p=none -> p=quarantine; pct=25.
+  #
+  # Why now: a real send went to Hotmail junk, and Microsoft weighs DMARC policy strength. p=none is
+  # the weakest possible signal, and a domain that never asserts anything about forgery is treated
+  # as one.
+  #
+  # Why it is safe: both things that send as nbcc.scot were checked to authenticate AND align, so
+  # neither is affected by a stricter policy —
+  #   - Resend (newsletters, receipts): envelope on send.nbcc.scot -> SPF include:amazonses.com;
+  #     DKIM at resend._domainkey signs d=nbcc.scot. Aligns on both.
+  #   - Google Workspace (staff mail): apex SPF include:_spf.google.com, and google._domainkey is
+  #     present, so it aligns on DKIM too rather than on SPF alone.
+  # The policy only ever acts on mail that FAILS. Genuine mail passes and is untouched.
+  #
+  # Why pct=25 rather than straight to quarantine: the aggregate reports are the real evidence and
+  # they go to a mailbox this repo cannot read. 25% means that if some forgotten sender does exist,
+  # three quarters of its mail still lands while the reports surface it — a hedge against the one
+  # thing that cannot be verified from here, not a hedge against the two that can.
+  records = ["v=DMARC1; p=quarantine; pct=25; rua=mailto:newsletter@nbcc.scot; fo=1;"]
 }
 
 # ---- ACM certificate, DNS-validated, auto-renewing -----------------------------

@@ -148,7 +148,15 @@ variable "google_dkim_txt" {
 # the task-def secrets list like ADMIN_NOTIFICATION_EMAIL. Override per env in
 # infra/envs/*/main.tf if needed.
 variable "newsletter_from_email" {
-  description = "From/Reply-To address for the admin newsletter"
+  description = "From address for the admin newsletter (the dedicated sending subdomain)"
+  type        = string
+  default     = "newsletter@news.nbcc.scot"
+}
+
+# TASK-298: separate from the From above, because news.nbcc.scot is send-only — no MX, no A record,
+# so a reply addressed there bounces. This must stay a mailbox that actually receives.
+variable "newsletter_reply_to_email" {
+  description = "Reply-To address for the admin newsletter (must be a receiving mailbox)"
   type        = string
   default     = "newsletter@nbcc.scot"
 }

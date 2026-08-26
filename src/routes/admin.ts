@@ -1387,7 +1387,7 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
       await sendNewsletter({
         email: address,
         from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
-        replyTo: config.NEWSLETTER_FROM_EMAIL,
+        replyTo: config.NEWSLETTER_REPLY_TO_EMAIL,
         subject: testSubject,
         html,
         // TASK-275: the test copy carries the text part too — a test that differs from the real send is

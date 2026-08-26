@@ -1787,7 +1787,8 @@ visible while composing. Clicking it hits the public `GET /unsubscribe/<token>` 
 TASK-297 **asks before it acts** — it renders a confirmation page whose button `POST`s back, and the
 `POST` is what flips that donor's `email_consent` to `false` (idempotent). Legacy
 raw-HTML rows (unframed) still get the standalone footer from `buildNewsletterHtml`. From and
-Reply-To are `NEWSLETTER_FROM_EMAIL` (see **Configuration**) — the From is sent as
+From is `NEWSLETTER_FROM_EMAIL` and Reply-To is `NEWSLETTER_REPLY_TO_EMAIL` — two different
+settings since TASK-298 (see **Configuration**). The From is sent as
 `NBCC Newsletter <address>` (`newsletterSender`, TASK-268) so the inbox shows the charity's name,
 not a bare address. Text links in the email are underlined (footer contacts and link-style
 buttons; pill/solid buttons stay clean — TASK-268). A single failed send is logged and does
@@ -3735,12 +3736,26 @@ schema (`z.string().min(1)`) so a missing key fails boot rather than letting any
 with a placeholder in `.env.example` and the CI env. Wired through all six touch-points (schema,
 `.env.example`, `pr.yml` env, SSM param, task-def `secrets`, `exec_secrets` IAM).
 
-`NEWSLETTER_FROM_EMAIL` (TASK-161 · REQ-069) is the From **and** Reply-To address stamped on every
-admin-newsletter email, so a donor can reply to a real inbox rather than a noreply. **Not** a
-secret (it ships in the email headers) — a plain SSM `String` injected via `valueFrom` like
-`DECLARATION_FORM_BASE_URL`/`PORTAL_BASE_URL` (its ARN still lives in the `exec_secrets` policy,
-matching that pattern), validated as an email address and **defaulted** to
-`newsletter@nbcc.scot`, so local dev / CI boot without extra setup. `sendNewsletter`
+`NEWSLETTER_FROM_EMAIL` (TASK-161 · REQ-069) is the From address stamped on every admin-newsletter
+email. Since TASK-298 it defaults to `newsletter@news.nbcc.scot` — the **dedicated sending
+subdomain** (TASK-296), so a campaign that upsets a spam filter builds and risks its own reputation
+rather than the apex's, which carries donation receipts, Gift Aid confirmations and admin login
+codes.
+
+`NEWSLETTER_REPLY_TO_EMAIL` (TASK-298) is where a reply GOES, and it is deliberately a **separate
+setting** defaulting to `newsletter@nbcc.scot`. This is not tidiness — `news.nbcc.scot` exists only
+to send: it has **no MX and no A record**, so mail addressed there hard-bounces. From and Reply-To
+used to be one value, so moving the From alone would have silently broken every reply, including the
+ones our own unsubscribe page invites ("just reply to any of our emails and we'll put it right").
+DMARC aligns on the From domain, not Reply-To, so pointing it at the apex costs nothing.
+
+**If you ever change the From domain, check the Reply-To still lands somewhere that receives.**
+Pinned by `test/unit/newsletter-addresses.test.ts`.
+
+Neither is a secret (both ship in the email headers) — plain SSM `String`s injected via `valueFrom`
+like `DECLARATION_FORM_BASE_URL`/`PORTAL_BASE_URL` (their ARNs live in the `exec_secrets` policy,
+matching that pattern), validated as email addresses and defaulted so local dev / CI boot without
+extra setup. `sendNewsletter`
 (`src/clients/email.ts`) POSTs the recipient in `email`, its own `subject`/`from`/`replyTo`, and a
 `newsletter: true` discriminator; the relay Worker (`services/email-relay/src/index.js`) has a
 dedicated newsletter branch that maps those to a Resend send honouring the per-message `from`/`reply_to`
@@ -4430,6 +4445,11 @@ all inside the existing hosted zone — no delegation, no new zone, nothing abou
 DMARC is inherited from the apex policy (there is no `sp=` tag), so the tightened `p=quarantine`
 covers this subdomain too without a second record.
 
-Switching `NEWSLETTER_FROM_EMAIL` over is a **separate** change, made only once Resend reports the
-domain verified — flipping the from-address before the DNS resolves would send unauthenticated mail,
-which is the exact opposite of the point.
+Switching `NEWSLETTER_FROM_EMAIL` over was a **separate** change (TASK-298), made only once Resend
+reported the domain verified — flipping the from-address before the DNS resolved would have sent
+unauthenticated mail, the exact opposite of the point. That change also had to split Reply-To out
+into `NEWSLETTER_REPLY_TO_EMAIL`, because this subdomain has no MX and cannot receive a reply.
+
+**Click/open tracking is configured per sending domain in Resend.** The apex has `links.nbcc.scot`
+verified with click tracking on; `news.nbcc.scot` needs its own tracking subdomain configured
+before click data resumes for newsletters sent from it.

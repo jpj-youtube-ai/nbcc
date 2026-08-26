@@ -68,7 +68,10 @@ data "aws_iam_policy_document" "exec_secrets" {
       # role must be able to read it. Needed by the running app AND by the one-off bootstrap:contact/
       # migrate:contact tasks (they reuse this task definition with a command override).
       aws_ssm_parameter.contact_db_url.arn,
-      # Newsletter From/Reply-To address (TASK-161): non-secret String injected via valueFrom, so
+      # Newsletter Reply-To (TASK-298): non-secret String injected via valueFrom, so the exec role
+      # must be able to read it.
+      aws_ssm_parameter.newsletter_reply_to_email.arn,
+      # Newsletter From address (TASK-161): non-secret String injected via valueFrom, so
       # the exec role must be able to read it.
       aws_ssm_parameter.newsletter_from_email.arn,
       # Thank-you From/Reply-To address (TASK-165): non-secret String injected via valueFrom, so
@@ -176,9 +179,12 @@ resource "aws_ecs_task_definition" "app" {
       # must also appear in exec_secrets above. Used by the app and by the one-off
       # bootstrap:contact / migrate:contact tasks.
       { name = "CONTACT_DATABASE_URL", valueFrom = aws_ssm_parameter.contact_db_url.arn },
-      # Newsletter From/Reply-To address (TASK-161/REQ-069): non-secret SSM String, injected via
+      # Newsletter From address (TASK-161/REQ-069, TASK-298): non-secret SSM String, injected via
       # valueFrom like PORTAL_BASE_URL — so its ARN must also appear in exec_secrets below.
       { name = "NEWSLETTER_FROM_EMAIL", valueFrom = aws_ssm_parameter.newsletter_from_email.arn },
+      # Newsletter Reply-To (TASK-298): must differ from the From — the sending subdomain cannot
+      # receive. Its ARN must also appear in exec_secrets above.
+      { name = "NEWSLETTER_REPLY_TO_EMAIL", valueFrom = aws_ssm_parameter.newsletter_reply_to_email.arn },
       # Thank-you From/Reply-To address (TASK-165/REQ-069): non-secret SSM String, injected via
       # valueFrom like NEWSLETTER_FROM_EMAIL — so its ARN must also appear in exec_secrets below.
       { name = "GIVING_FROM_EMAIL", valueFrom = aws_ssm_parameter.giving_from_email.arn },

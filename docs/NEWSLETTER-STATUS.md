@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-297. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed after TASK-298. Point a fresh session at this file to continue.
 
 ## State: LIVE and send-ready
 
@@ -38,6 +38,7 @@ Everything below is merged and in production. Nothing is in flight — no open P
 | 295 | Click tracking served from **links.nbcc.scot** (**DNS applied and verified live**) |
 | 296 | DNS for **news.nbcc.scot**, a dedicated newsletter sending domain (**applied and verified live**) |
 | 297 | **Unsubscribe: the GET asks, the POST acts** — mail-security scanners no longer unsubscribe people silently |
+| 298 | **Newsletter sends from news.nbcc.scot**, with Reply-To split out to the real inbox |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a

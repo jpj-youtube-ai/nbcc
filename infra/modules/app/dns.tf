@@ -110,6 +110,26 @@ resource "aws_route53_record" "resend_spf" {
   records = ["v=spf1 include:amazonses.com ~all"]
 }
 
+# TASK-295: the click-tracking subdomain, links.nbcc.scot.
+#
+# Resend rewrites every link in a newsletter so clicks can be counted. By default those rewritten
+# links point at Resend's own SHARED tracking domain — so an email that says it is from nbcc.scot
+# carries links to somewhere else entirely, which is the shape of a phishing message and is very
+# likely part of why a real send reached Hotmail's junk folder.
+#
+# With this CNAME the rewritten links become links.nbcc.scot: same sender, same link domain, and the
+# click data is kept. Open tracking is deliberately left OFF in Resend — it works by embedding an
+# invisible image, which Apple Mail and Gmail pre-load (so the numbers lie) and some filters read as
+# a negative signal. Clicks are the honest measure.
+resource "aws_route53_record" "resend_tracking" {
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
+  name    = "links.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 3600
+  records = ["links1.resend-dns.com"]
+}
+
 resource "aws_route53_record" "dmarc" {
   count   = local.create_zone ? 1 : 0
   zone_id = local.zone_id

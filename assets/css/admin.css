@@ -456,6 +456,10 @@
 .nl-emph:disabled { opacity: .45; cursor: default; }
 .nl-note { margin: .5rem 0 .1rem; font-size: .8rem; font-style: italic; color: var(--slate-soft); }
 .nl-img-tools { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .35rem; }
+/* TASK-300: the upload speaks beside the button that started it. It used to write into the Send
+   panel, which is hidden while composing, so every failure was invisible. */
+.nl-img-msg { margin: .35rem 0 0; font-size: .85rem; color: #6B655E; min-height: 1.1em; }
+.nl-img-msg.is-bad { color: #A8182C; font-weight: 600; }
 .nl-img-tools select, .nl-img-tools input[type="file"] {
   font-family: var(--font-body); font-size: .8rem; color: var(--slate);
   background: var(--card); border: 1.4px solid var(--line); border-radius: 8px; padding: 5px 8px;

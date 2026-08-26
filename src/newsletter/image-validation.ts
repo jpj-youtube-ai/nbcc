@@ -5,6 +5,21 @@
 // This module holds only the PURE validation pieces (no DB/config import) so it can be
 // unit-tested without a full env (golden rule 5). DB access lives in ../db/newsletter-images.
 export const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+// TASK-300: the JSON body cap for the upload route, kept HERE next to the image cap it has to
+// clear rather than as a loose string in src/app.ts - which is how the two drifted apart.
+//
+// The composer sends the file base64-encoded, which costs four bytes for every three. When the
+// parser cap sat at 3 MB, any photo over roughly 2.2 MB was refused by express BEFORE this
+// module ever saw it - and express answers with an HTML page, which the composer cannot parse.
+// The upload simply vanished. Phone photos are 3-12 MB, so that was most of them.
+//
+// The limit is therefore generous ON PURPOSE. It is not a permission to store big images -
+// MAX_IMAGE_BYTES above still decides that - it exists so an oversized upload reaches our own
+// validator and comes back as JSON the composer can actually show someone. Mirrors the same fix
+// already made for hosted documents in TASK-265.
+export const IMAGE_JSON_BODY_LIMIT_BYTES = 15 * 1024 * 1024;
+export const IMAGE_JSON_BODY_LIMIT = "15mb";
 export const ALLOWED_IMAGE_MIME = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
 
 export function validateUpload(

@@ -1853,7 +1853,32 @@ others — a fixed list in `assets/js/admin/app.js`), or a direct **upload**. `P
 /api/admin/newsletter-images` (Editor+, `{ mime, dataBase64 }` JSON — the client base64-encodes the
 file) accepts `image/png`, `image/jpeg`, `image/webp` or `image/gif` up to **2 MB**, rejecting an
 unsupported type with **400** and an oversized file with **413** (`validateUpload`,
-`src/newsletter/image-validation.ts`); the bytes are stored in the new `newsletter_images` table
+`src/newsletter/image-validation.ts`).
+
+**The composer shrinks a picture before it uploads it (TASK-300).** A newsletter image is displayed
+at most 580px wide, so `nlShrinkImage` redraws anything larger through a canvas at **1200px** on its
+longest side (`nlFitWithin`, pure and unit-tested) and re-encodes at quality 0.82 — keeping PNG as
+PNG so transparency is not filled black, and never touching a GIF, which a canvas would flatten to
+one frame. A 6 MB phone photo becomes a few hundred KB, so the 2 MB cap stops being a wall and
+becomes a backstop. If the browser cannot decode the file, the original bytes are sent unchanged.
+
+Why it was built: uploading an ordinary phone photo used to do **nothing at all**. Photos are
+3–12 MB; base64 costs four bytes for every three; the parser cap on that route was 3 MB, so anything
+over roughly 2.2 MB was refused by express *before* the handler ran. Express answers its own 413 with
+an HTML page, the composer called `r.json()` on it, that threw, and the promise chain had no
+`.catch` — so the rejection was swallowed and the picture simply never appeared. Even the cases that
+*did* reach the handler wrote their error into `#newsletterMsg`, which lives inside the Send panel
+and is hidden while you are writing. Two layers of silence on top of a cap real photographs exceed.
+
+Three things changed, and each is pinned by `test/unit/newsletter-image-upload.test.ts`: the parser
+limit is now `IMAGE_JSON_BODY_LIMIT`, exported from `image-validation.ts` **beside** the image cap it
+has to clear (so the two cannot drift apart again, and an oversized upload reaches our validator and
+comes back as JSON we can display); the image field reports inline, next to the button that started
+it; and every failure path — including a non-JSON body and a dropped connection — is caught.
+`nlRenderItems` also honours `kind` now, so the two-up story style offers the same upload control as
+every other style instead of a bare text box.
+
+The bytes are stored in the `newsletter_images` table
 (`src/db/newsletter-images.ts`) and the response is the public serve URL. `GET
 /media/newsletter/:id` (`src/routes/newsletter-images.ts`, mounted in `src/app.ts`) serves an
 uploaded image **unauthenticated** (email clients fetch images with no session) by uuid lookup only

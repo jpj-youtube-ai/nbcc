@@ -1,6 +1,7 @@
 // Shared brand theme + frame for the newsletter block renderer (TASK-168/REQ-069). Mirrors the
 // inline-hex palette + 660px cream-card-on-maroon frame of src/thank-you/letter.ts, because email
 // clients don't load the site stylesheet. Pure + DB-free — unit-tested directly.
+import { mergeName } from "./name-fallback";
 
 export const MAROON = "#800000";
 export const CRIMSON = "#C02238";
@@ -23,6 +24,11 @@ export const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";
 
 export interface RenderCtx {
   firstName: string;
+  // TASK-292: what {{firstName}} becomes with no name. Blank means "take it out and tidy the
+  // punctuation" - see src/newsletter/name-fallback.ts.
+  nameFallback?: string;
+  // TASK-292: who "Dear ___," addresses with no name. Never blank in effect.
+  greetingFallback?: string;
   // Per-recipient unsubscribe URL. When present, the frame footer renders a branded Unsubscribe
   // button + the PECR opt-in reason line. The live preview passes a placeholder so the button shows.
   unsubscribeUrl?: string;
@@ -42,8 +48,9 @@ export function escapeHtml(value: string): string {
 // TEXT that a mail client prints literally, so escaping it would put "Hey, O&#39;Brien" and
 // "Ben &amp; Jerry" in donors' inboxes. Two different jobs, two functions.
 //
-// A blank name falls back to "friend" for the same reason the body's firstNameOf does: "Hey, !" must
-// never reach a donor. The send already passes a resolved name; this is the backstop.
+// TASK-292: a blank name no longer means the word "friend". It means whatever nameFallback says —
+// and when that is blank too, the name is removed and the punctuation tidied, so "Hey, !" still
+// never reaches a donor. See src/newsletter/name-fallback.ts.
 // TASK-268: the From header the inbox displays. RFC 5322 display-name + angle-addr — the relay and
 // Resend pass it through verbatim, so recipients see "NBCC Newsletter", not a bare address.
 export function newsletterSender(address: string): string {
@@ -54,14 +61,16 @@ export function newsletterSender(address: string): string {
 // "friend" when there is no usable one. TASK-274 moved it here from src/routes/admin.ts so the
 // background send worker and the on-screen preview merge names by the SAME rule — two copies of
 // this would drift, and the drift would show up in real donor greetings.
+// TASK-292: returns "" when there is no usable name, so the CALLER decides what a missing name
+// becomes. It used to return "friend" itself, which is exactly why that word could never be changed.
 export function firstNameOf(fullName: string | null): string {
-  const token = (fullName ?? "").trim().split(/\s+/)[0];
-  return token.length > 0 ? token : "friend";
+  return (fullName ?? "").trim().split(/\s+/)[0] ?? "";
 }
 
-export function mergeSubject(subject: string, firstName: string): string {
-  const name = firstName.trim() || "friend";
-  return subject.replace(/\{\{firstName\}\}/g, name);
+// TASK-292: nameFallback decides what a missing name becomes. Left blank it removes the name and
+// tidies the punctuation, so "Hey, {{firstName}}!" arrives as "Hey!" rather than "Hey, friend!".
+export function mergeSubject(subject: string, firstName: string, nameFallback = ""): string {
+  return mergeName(subject, firstName, nameFallback);
 }
 
 // TASK-253: inline emphasis. An author marks a phrase **bold** or *italic* in the plain text; those
@@ -89,7 +98,9 @@ export function proseHtml(text: string): string {
 // The emphasis pass runs BEFORE the substitution, so a donor called "**Bob**" has their name printed
 // rather than bolded: their name is never read for markers.
 export function applyMerge(text: string, ctx: RenderCtx): string {
-  return proseHtml(text).replace(/\{\{firstName\}\}/g, escapeHtml(ctx.firstName));
+  // TASK-292: proseHtml escapes first, so the name is substituted into already-safe copy — the
+  // ordering that makes the whole merge safe. mergeName decides what a missing name becomes.
+  return mergeName(proseHtml(text), escapeHtml(ctx.firstName), escapeHtml(ctx.nameFallback ?? ""));
 }
 
 export function brandButton(

@@ -1242,3 +1242,22 @@ tr.nl-click:hover { background: var(--tint); }
 #audienceVisibility.is-public { border-color: var(--holly); background: var(--holly-soft);
   color: var(--holly); }
 #audienceVisibility:focus-visible { outline: 2px solid var(--holly); outline-offset: 2px; }
+
+/* ---- TASK-292: what a reader with no name against them sees. Sits with the subject, because that
+   is where the {{firstName}} they are answering was typed. ---- */
+.nl-fallbacks { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; margin: 0 0 1.25rem; }
+.nl-fallbacks h4 { font-family: var(--font-head); font-size: .98rem; color: var(--crimson);
+  margin: 0 0 .6rem; letter-spacing: -.015em; }
+.nl-fallback-row { display: grid; grid-template-columns: minmax(140px, auto) minmax(0, 1fr);
+  gap: .5rem .8rem; align-items: center; margin-bottom: .6rem; }
+.nl-fallback-row:last-child { margin-bottom: 0; }
+.nl-fallback-row label { font-size: .84rem; font-weight: 600; color: var(--slate); }
+.nl-fallback-row input { width: 100%; font: inherit; font-size: .88rem; padding: 8px 11px;
+  border: 1.4px solid var(--line); border-radius: 8px; background: var(--cream); color: var(--slate); }
+.nl-fallback-row input:focus { outline: 2px solid var(--crimson); outline-offset: -1px; border-color: transparent; }
+.nl-fallback-hint { grid-column: 2; font-size: .79rem; color: var(--slate-soft); line-height: 1.5; }
+@media (max-width: 620px) {
+  .nl-fallback-row { grid-template-columns: 1fr; }
+  .nl-fallback-hint { grid-column: 1; }
+}

@@ -1370,7 +1370,12 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
   });
   // Built once and both sent and echoed back, so what the tester is told to look for is necessarily
   // what actually went out.
-  const testSubject = `[TEST] ${mergeSubject(parsed.data.subject, PREVIEW_FIRST_NAME)}`;
+  // TASK-292: the same fallback the real send uses, so a test shows what will actually arrive.
+  const testSubject = `[TEST] ${mergeSubject(
+    parsed.data.subject,
+    PREVIEW_FIRST_NAME,
+    parsed.data.bodyJson?.merge?.nameFallback ?? "",
+  )}`;
   // TASK-277 (letter S): the SEED TEST. A test to one inbox tells you the email renders; it tells you
   // nothing about where it LANDS. Gmail, Outlook and Yahoo each decide inbox-vs-junk differently, so
   // the only way to know is to send to an address at each before committing to the real audience.

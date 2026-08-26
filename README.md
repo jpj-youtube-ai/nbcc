@@ -4321,3 +4321,29 @@ stopped *everything*. Now a person can choose.
   ignored rather than obeyed, and a join naming a list that was not offered is dropped — otherwise
   the page becomes a way to unsubscribe other people or add yourself to audiences you were never
   meant to see.
+
+**What a reader with no name sees (TASK-292).** `{{firstName}}` used to fall back to the hardcoded
+word **"friend"**, so `Hey, {{firstName}}! It's the NBCC Newsletter` arrived as
+`Hey, friend! It's the NBCC Newsletter` whether that suited the message or not. Two settings replace
+it, because the two places need different answers:
+
+| Setting | Where | Blank means |
+|---|---|---|
+| `nameFallback` | the subject line, and body copy | **remove the name and tidy the punctuation** — `Hey, {{firstName}}!` becomes `Hey!` |
+| `greetingFallback` | the greeting block's "Dear …," | fall back to a word — `Dear,` is not a salutation |
+
+- **The tidying is small and predictable** (`src/newsletter/name-fallback.ts`, pure and DB-free, 14
+  tests): drop the tag, remove a comma left dangling in front of punctuation, collapse the doubled
+  space, fix the capital if the name opened the line. It does **not** rewrite grammar — `A gift for
+  {{firstName}}` becomes `A gift for`, which is why the field's hint says to put a word in when the
+  sentence needs one.
+- **`firstNameOf` now returns `""`** for a nameless person instead of `"friend"`, so the *caller*
+  decides what a missing name becomes. Returning the word itself is exactly why it could never be
+  changed.
+- **Both settings live on the block document**, so they save with the newsletter, travel to the send
+  worker and the live preview through the same `renderNewsletter`, and need no migration. Optional,
+  so every newsletter written before this renders unchanged; absent entirely when neither is set,
+  rather than storing an empty object that implies a choice nobody made.
+- **The hint explains the rule rather than re-implementing it.** A browser copy of the merge logic
+  would be a second version of the thing that decides what actually goes out, free to drift from the
+  one that does.

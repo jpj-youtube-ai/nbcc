@@ -34,9 +34,14 @@ describe("mergeSubject (TASK-254)", () => {
   });
 
   it("never leaves an empty gap where a name should be", () => {
-    // The send passes firstNameOf(), which already falls back to "friend" — but if anything ever hands
-    // this a blank, "Hey, !" must not go out to a donor.
-    expect(mergeSubject("Hey, {{firstName}}!", "")).toBe("Hey, friend!");
-    expect(mergeSubject("Hey, {{firstName}}!", "   ")).toBe("Hey, friend!");
+    // The intent is unchanged: "Hey, !" must never go out. TASK-292 changed WHAT fills the gap - the
+    // hardcoded "friend" became a setting, and with that setting blank the name is removed and the
+    // punctuation tidied, which is what the charity actually asked for.
+    expect(mergeSubject("Hey, {{firstName}}!", "")).toBe("Hey!");
+    expect(mergeSubject("Hey, {{firstName}}!", "   ")).toBe("Hey!");
+  });
+
+  it("uses the charity's own word when one is set", () => {
+    expect(mergeSubject("Hey, {{firstName}}!", "", "supporter")).toBe("Hey, supporter!");
   });
 });

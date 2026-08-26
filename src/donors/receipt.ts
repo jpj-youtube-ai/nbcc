@@ -3,8 +3,8 @@ import {
   CHARITY_NAME,
   CHARITY_SHORT_NAME,
   OSCR_NUMBER,
-  REGISTRATION_TEXT,
-  REGISTRATION_HTML,
+  FOOTER_TEXT,
+  FOOTER_HTML,
 } from "../legal/registration";
 
 // Pure, DB-free Corporation Tax receipt content builder for a COMPANY donation (REQ-038 /
@@ -95,7 +95,7 @@ export function buildCorporationTaxReceipt(input: ReceiptInput): CorporationTaxR
     `${NO_GIFT_AID_STATEMENT}\n\n` +
     `Please keep this receipt to support your company's claim for Corporation Tax relief on ` +
     `qualifying charitable donations.\n\n` +
-    `${REGISTRATION_TEXT}`;
+    `${FOOTER_TEXT}`;
 
   const html =
     `<section class="ct-receipt">` +
@@ -106,7 +106,7 @@ export function buildCorporationTaxReceipt(input: ReceiptInput): CorporationTaxR
     `<p>${escapeHtml(NO_GIFT_AID_STATEMENT)}</p>` +
     `<p>Please keep this receipt to support your company's claim for Corporation Tax relief on ` +
     `qualifying charitable donations.</p>` +
-    REGISTRATION_HTML +
+    FOOTER_HTML +
     `</section>`;
 
   return { text, html };
@@ -147,13 +147,13 @@ export function buildCompanyRefundNotice(input: {
     `${title}\n\n` +
     `${CHARITY_NAME} (${CHARITY_SHORT_NAME})\n\n` +
     `${body}\n\n` +
-    `${REGISTRATION_TEXT}`;
+    `${FOOTER_TEXT}`;
   const html =
     `<section class="ct-receipt ct-receipt-refund">` +
     `<h1 style="color:#C02238;font-family:'Playfair Display',Georgia,'Times New Roman',serif;font-size:22px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em">${escapeHtml(title)}</h1>` +
     `<p><strong>${escapeHtml(CHARITY_NAME)} (${CHARITY_SHORT_NAME})</strong></p>` +
     `<p>${escapeHtml(body)}</p>` +
-    REGISTRATION_HTML +
+    FOOTER_HTML +
     `</section>`;
   return { text, html };
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CHARITY_SHORT_NAME, REGISTRATION_TEXT, REGISTRATION_HTML } from "../legal/registration";
+import { CHARITY_SHORT_NAME, FOOTER_TEXT, FOOTER_HTML } from "../legal/registration";
 
 // Pure, DB-free content builder for the post-payment donation-confirmation email (REQ-060 · TASK-098,
 // extending TASK-070). Mirrors src/donors/receipt.ts (buildCorporationTaxReceipt): no
@@ -107,11 +107,11 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
   // A warm, non-definitive closing so every receipt still leaves the donor with the mission.
   paragraphs.push(DONATION_IMPACT_LINE);
 
-  const text = paragraphs.join("\n\n") + "\n\n" + REGISTRATION_TEXT + "\n";
+  const text = paragraphs.join("\n\n") + "\n\n" + FOOTER_TEXT + "\n";
   const html =
     `<section class="donation-confirmation">` +
     paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("") +
-    REGISTRATION_HTML +
+    FOOTER_HTML +
     `</section>`;
   return { text, html };
 }
@@ -148,7 +148,7 @@ export function buildRefundConfirmation(input: RefundConfirmationInput): Donatio
       `We are grateful you thought of us, and you would be welcome back any time.`
     : `Thank you, ${fullName}. We have refunded ${amount} of your donation to ${CHARITY_SHORT_NAME} on ${date}, ` +
       `and the rest of your donation still stands. Thank you for your kindness.`;
-  const text = line + "\n\n" + REGISTRATION_TEXT + "\n";
-  const html = `<section class="refund-confirmation"><p>${escapeHtml(line)}</p>${REGISTRATION_HTML}</section>`;
+  const text = line + "\n\n" + FOOTER_TEXT + "\n";
+  const html = `<section class="refund-confirmation"><p>${escapeHtml(line)}</p>${FOOTER_HTML}</section>`;
   return { text, html };
 }

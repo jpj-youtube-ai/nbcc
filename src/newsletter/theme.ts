@@ -2,6 +2,9 @@
 // inline-hex palette + 660px cream-card-on-maroon frame of src/thank-you/letter.ts, because email
 // clients don't load the site stylesheet. Pure + DB-free — unit-tested directly.
 import { mergeName } from "./name-fallback";
+// TASK-293: the registered postal address, from the one module that owns NBCC's registration
+// details - so the site footer, this frame and the thank-you letter cannot drift apart.
+import { POSTAL_ADDRESS } from "../legal/registration";
 
 export const MAROON = "#800000";
 export const CRIMSON = "#C02238";
@@ -209,7 +212,7 @@ export function renderFrame(innerHtml: string, unsubscribeUrl?: string): string 
         <tr><td style="padding:0">${innerHtml}</td></tr>
         <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY};font-size:14px;text-align:center">
           ${footRow}
-          <div style="color:${CREAM_82};font-size:11px;margin-top:12px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.</div>
+          <div style="color:${CREAM_82};font-size:11px;margin-top:12px">Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.<br />${POSTAL_ADDRESS}</div>
           ${unsubscribeUrl ? unsubscribeRow(unsubscribeUrl) : ""}
         </td></tr>
       </table>

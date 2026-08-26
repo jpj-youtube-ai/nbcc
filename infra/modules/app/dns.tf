@@ -110,6 +110,47 @@ resource "aws_route53_record" "resend_spf" {
   records = ["v=spf1 include:amazonses.com ~all"]
 }
 
+# ---- news.nbcc.scot: the dedicated newsletter sending subdomain (TASK-296) ------
+#
+# Newsletters used to send from the apex, nbcc.scot — the same domain as donation receipts, Gift
+# Aid declarations and admin login codes. That means one campaign that upsets a spam filter can
+# damage the deliverability of mail people NEED to receive. A dedicated subdomain gives the
+# newsletter its own reputation to build and its own reputation to lose.
+#
+# Its DKIM key is distinct from the apex one, which is the point: news.nbcc.scot authenticates on
+# its own account. DMARC is inherited from the apex policy (no sp= tag there), so the tightened
+# p=quarantine applies here too without a second record.
+#
+# Values supplied by Resend when the domain was added. The subdomain is created inside the EXISTING
+# nbcc.scot hosted zone, so no delegation and no new zone — nothing about the apex changes.
+resource "aws_route53_record" "news_dkim" {
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
+  name    = "resend._domainkey.news.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 3600
+  records = ["p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDyf4vj13IJRGFP5XEpV6PzgYAbBZWM/gIEPI705o4GWR0htMlFTqn/g1IFVhCJcqxpHejGj1yzbOSPHaFhe9VavoXXfi8L4dOf3eF1rfLKvkGcPRaZ5u/u5foraR6tcrU33DRf9TsoeJ8SfqrQR7zmo8IwU66VhKqCHPFg/QGIywIDAQAB"]
+}
+
+# The Return-Path domain: bounce and complaint feedback comes back here.
+resource "aws_route53_record" "news_mx" {
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
+  name    = "send.news.${var.domain_name}"
+  type    = "MX"
+  ttl     = 3600
+  records = ["10 feedback-smtp.eu-west-1.amazonses.com"]
+}
+
+resource "aws_route53_record" "news_spf" {
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
+  name    = "send.news.${var.domain_name}"
+  type    = "TXT"
+  ttl     = 3600
+  records = ["v=spf1 include:amazonses.com ~all"]
+}
+
 # TASK-295: the click-tracking subdomain, links.nbcc.scot.
 #
 # Resend rewrites every link in a newsletter so clicks can be counted. By default those rewritten

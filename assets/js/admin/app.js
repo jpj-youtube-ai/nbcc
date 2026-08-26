@@ -1727,7 +1727,7 @@
         { name: "Image left", hint: "Image on the left, text on the right.",
           fields: [{ k: "imageUrl", label: "Image", kind: "image" }, { k: "title", label: "Title" }, { k: "body", label: "Body", kind: "textarea" }, { k: "label", label: "Link label" }, { k: "href", label: "Link", kind: "url" }] },
         { name: "Two-up cards", hint: "Two (or more) stories side by side.",
-          items: { fields: [{ k: "imageUrl", label: "Image" }, { k: "title", label: "Title" }, { k: "body", label: "Body" }, { k: "label", label: "Link label" }, { k: "href", label: "Link" }] } },
+          items: { fields: [{ k: "imageUrl", label: "Image", kind: "image" }, { k: "title", label: "Title" }, { k: "body", label: "Body", kind: "textarea" }, { k: "label", label: "Link label" }, { k: "href", label: "Link", kind: "url" }] } },
         { name: "Text only", hint: "No image; a top rule then title and body.",
           fields: [{ k: "title", label: "Title" }, { k: "body", label: "Body", kind: "textarea" }, { k: "label", label: "Link label" }, { k: "href", label: "Link", kind: "url" }] },
       ],
@@ -2242,7 +2242,75 @@
     host.appendChild(wrap);
   }
 
-  // An image field: URL input + "NBCC library" quick-pick + Upload (POSTs base64 to the endpoint).
+  // TASK-300: fit a picture inside a square bound, keeping its shape. Pure arithmetic, kept as its
+  // own function so it can be unit-tested directly (test/unit/newsletter-image-upload.test.ts).
+  function nlFitWithin(w, h, max) {
+    if (!(w > 0) || !(h > 0)) return { width: max, height: max };
+    var scale = Math.min(1, max / Math.max(w, h));
+    return { width: Math.max(1, Math.round(w * scale)), height: Math.max(1, Math.round(h * scale)) };
+  }
+
+  // A newsletter image is displayed at most 580px wide, so 1200px is already twice what any screen
+  // needs. Anything beyond that is weight nobody sees - and it was the reason uploads vanished.
+  var NL_IMAGE_MAX_PX = 1200;
+  var NL_IMAGE_QUALITY = 0.82;
+  var NL_SHRINK_ABOVE_BYTES = 1024 * 1024; // leave genuinely small pictures untouched
+
+  // Re-encode as the SAME format where it matters: a PNG turned into a JPEG loses transparency and
+  // fills it black, which would quietly wreck a logo.
+  function nlShrinkMime(mime) {
+    if (mime === "image/png") return "image/png";
+    if (mime === "image/webp") return "image/webp";
+    return "image/jpeg";
+  }
+
+  // TASK-300: shrink a photo in the browser BEFORE uploading. Phone photos are 3-12 MB; the upload
+  // cap is 2 MB, and base64 adds a third on top. Calls back with null when shrinking is not possible
+  // or not wanted, and the caller then sends the original bytes - so nothing regresses, we just stop
+  // failing on the common case. Animated GIFs are never touched: a canvas would flatten them to one
+  // frame.
+  function nlShrinkImage(f, done) {
+    var canMeasure = window.URL && window.URL.createObjectURL && doc.createElement("canvas").getContext;
+    if (!canMeasure || f.type === "image/gif") return done(null);
+    var url = window.URL.createObjectURL(f);
+    var img = new window.Image();
+    var finish = function (out) { try { window.URL.revokeObjectURL(url); } catch (e) {} done(out); };
+    img.onerror = function () { finish(null); };
+    img.onload = function () {
+      try {
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var tooWide = w > NL_IMAGE_MAX_PX || h > NL_IMAGE_MAX_PX;
+        if (!tooWide && f.size <= NL_SHRINK_ABOVE_BYTES) return finish(null); // already fine as-is
+        var box = nlFitWithin(w, h, NL_IMAGE_MAX_PX);
+        var canvas = doc.createElement("canvas");
+        canvas.width = box.width;
+        canvas.height = box.height;
+        canvas.getContext("2d").drawImage(img, 0, 0, box.width, box.height);
+        var mime = nlShrinkMime(f.type);
+        var dataUrl = canvas.toDataURL(mime, NL_IMAGE_QUALITY);
+        var comma = dataUrl.indexOf(",");
+        if (comma === -1) return finish(null);
+        // toDataURL falls back to PNG when it does not know the type, so trust the URL, not our guess.
+        var actual = dataUrl.slice(5, dataUrl.indexOf(";"));
+        finish({ mime: actual || mime, base64: dataUrl.slice(comma + 1) });
+      } catch (e) {
+        finish(null);
+      }
+    };
+    img.src = url;
+  }
+
+  // What to say when the server answered but not with something we can use. The old code read every
+  // response as JSON; a body refused by the parser comes back as HTML and threw into a chain with no
+  // catch, so the upload vanished without a word.
+  function nlUploadHttpMessage(status) {
+    if (status === 413) return "That picture is too large to upload. Try a smaller one.";
+    if (status === 400) return "That file type is not supported. Use a JPG, PNG, GIF or WebP.";
+    if (status === 403) return "You do not have permission to upload images.";
+    return "Upload failed. Please try again.";
+  }
+
+  // An image field: URL input + "NBCC library" quick-pick + Upload (shrinks, then POSTs base64).
   function nlImageField(host, block, key, label) {
     nlText(host, block.data, key, label, { type: "url", hint: "Paste a URL, choose from the NBCC library, or upload." });
     if (nlReadOnly()) return; // read mode: the disabled URL field is shown, but no library/upload tools
@@ -2250,8 +2318,8 @@
     row.className = "nl-img-tools";
 
     var lib = doc.createElement("select");
-    lib.innerHTML = '<option value="">NBCC library…</option>' +
-      NBCC_IMAGE_LIBRARY.map(function (i) { return '<option value="' + i.url + '">' + i.label + "</option>"; }).join("");
+    lib.innerHTML = "<option value=\"\">NBCC library…</option>" +
+      NBCC_IMAGE_LIBRARY.map(function (i) { return "<option value=\"" + i.url + "\">" + i.label + "</option>"; }).join("");
     lib.addEventListener("change", function () {
       if (lib.value) { block.data[key] = lib.value; nlRenderCanvas(); nlSchedulePreview(); }
     });
@@ -2260,27 +2328,65 @@
     var file = doc.createElement("input");
     file.type = "file";
     file.accept = "image/png,image/jpeg,image/webp,image/gif";
+    row.appendChild(file);
+
+    // TASK-300: the upload speaks HERE, beside the button that started it. It used to write into
+    // #newsletterMsg, which lives in the Send panel - hidden while you are writing - so every
+    // failure was invisible and the picture just never appeared.
+    var msg = doc.createElement("p");
+    msg.className = "nl-img-msg";
+    msg.setAttribute("aria-live", "polite");
+    function say(text, bad) {
+      msg.textContent = text || "";
+      if (bad) msg.classList.add("is-bad");
+      else msg.classList.remove("is-bad");
+    }
+
     file.addEventListener("change", function () {
       var f = file.files[0];
       if (!f) return;
-      var reader = new FileReader();
-      reader.onload = function () {
-        var base64 = String(reader.result).split(",")[1];
-        authFetch("/api/admin/newsletter-images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mime: f.type, dataBase64: base64, filename: f.name }),
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (j2) {
-            if (j2.url) { block.data[key] = j2.url; nlRenderCanvas(); nlSchedulePreview(); }
-            else el("newsletterMsg").textContent = j2.error || "Upload failed.";
-          });
-      };
-      reader.readAsDataURL(f);
+      say("Preparing picture…", false);
+      nlShrinkImage(f, function (shrunk) {
+        var body;
+        var post = function () {
+          say("Uploading…", false);
+          authFetch("/api/admin/newsletter-images", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+            .then(function (r) {
+              return r.json().then(
+                function (j2) { return { ok: r.ok, body: j2 }; },
+                function () { return { ok: false, body: { error: nlUploadHttpMessage(r.status) } }; }
+              );
+            })
+            .then(function (res) {
+              if (res.ok && res.body && res.body.url) {
+                block.data[key] = res.body.url;
+                nlRenderCanvas();
+                nlSchedulePreview();
+                return;
+              }
+              say((res.body && res.body.error) || nlUploadHttpMessage(0), true);
+            })
+            .catch(function () {
+              say("Could not upload that picture. Check your connection and try again.", true);
+            });
+        };
+        if (shrunk) { body = { mime: shrunk.mime, dataBase64: shrunk.base64, filename: f.name }; return post(); }
+        var reader = new FileReader();
+        reader.onerror = function () { say("That file could not be read. Try another picture.", true); };
+        reader.onload = function () {
+          body = { mime: f.type, dataBase64: String(reader.result).split(",")[1], filename: f.name };
+          post();
+        };
+        reader.readAsDataURL(f);
+      });
     });
-    row.appendChild(file);
+
     host.appendChild(row);
+    host.appendChild(msg);
   }
 
   // Repeater for the list-shaped variants (stats/waysToHelp/events, and story "two-up"). `spec` is
@@ -2313,8 +2419,12 @@
       var lg = doc.createElement("legend");
       lg.textContent = "Item " + (idx + 1);
       fs.appendChild(lg);
+      // TASK-300: honour kind here too. This loop used to call nlText for every field whatever its
+      // kind, so the two-up story style offered a bare text box where every other style offered an
+      // upload button - even though the renderer draws a per-item image.
       fields.forEach(function (f) {
-        nlText(fs, item, f.k, f.label, { hint: f.hint });
+        if (f.kind === "image") nlImageField(fs, { data: item }, f.k, f.label);
+        else nlText(fs, item, f.k, f.label, { multiline: f.kind === "textarea", type: f.kind === "url" ? "url" : undefined, hint: f.hint });
       });
       if (!readOnly) {
         var rm = doc.createElement("button");

@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-299. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed after TASK-300. Point a fresh session at this file to continue.
 
 ## State: LIVE and send-ready
 
@@ -40,6 +40,7 @@ Everything below is merged and in production. Nothing is in flight — no open P
 | 297 | **Unsubscribe: the GET asks, the POST acts** — mail-security scanners no longer unsubscribe people silently |
 | 298 | **Newsletter sends from news.nbcc.scot**, with Reply-To split out to the real inbox |
 | 299 | Click tracking for the new sender: `links.news.nbcc.scot` |
+| 300 | **Image upload actually works**: shrink in the browser, and never fail silently |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a
@@ -83,6 +84,13 @@ Nothing blocking. The system can send a newsletter safely today.
   started arriving 2026-08-20. Do NOT skip straight to reject.
 
 ## Gotchas that will bite (learned the hard way)
+
+- **A base64 upload needs a parser cap a third bigger than the file cap.** This has now bitten
+  twice - hosted documents in TASK-265, images in TASK-300. The browser sends files base64-encoded,
+  which costs four bytes for every three, so a 2 MB file is 2.7 MB on the wire. If express rejects
+  the body first it answers with an HTML page, `r.json()` throws, and an uncaught chain swallows it
+  - the upload vanishes with no message anywhere. Keep the parser limit NEXT TO the file cap
+  (`IMAGE_JSON_BODY_LIMIT` in `src/newsletter/image-validation.ts`) so they cannot drift.
 
 - **No GET in an email may change anything.** Microsoft Defender Safe Links, Proofpoint URL
   Defense, Mimecast and Barracuda fetch every link in an incoming email to sandbox it *before*

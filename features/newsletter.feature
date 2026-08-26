@@ -36,11 +36,35 @@ Feature: Admin newsletter (REQ-069)
     And I send that newsletter
     Then the newsletter response status should be 403
 
-  Scenario: a donor unsubscribes via their token link, and is then excluded
+  # TASK-297: a GET must never unsubscribe anyone. Corporate mail security - Microsoft Defender
+  # Safe Links, Proofpoint URL Defense, Mimecast, Barracuda - fetches every link in an incoming
+  # email to sandbox it BEFORE the recipient sees the message, and a click-tracking redirect leads
+  # it straight here. While the GET wrote to the database, those scanners silently unsubscribed
+  # people who never clicked anything - and nothing in the system could tell that apart from a
+  # real unsubscribe. The GET now asks; the POST acts.
+  Scenario: a mail-security scanner fetching the unsubscribe link unsubscribes nobody
+    Given a consenting donor with email "scanner.newsletter.bdd@example.com"
+    When I visit the unsubscribe link for "scanner.newsletter.bdd@example.com"
+    Then the unsubscribe response status should be 200
+    And the unsubscribe page should offer a confirm button
+    And the donor "scanner.newsletter.bdd@example.com" should have email consent "true"
+
+  Scenario: a donor who confirms on that page is unsubscribed, and is then excluded
     Given a consenting donor with email "leaver.newsletter.bdd@example.com"
     When I visit the unsubscribe link for "leaver.newsletter.bdd@example.com"
     Then the unsubscribe response status should be 200
+    When I confirm the unsubscribe for "leaver.newsletter.bdd@example.com"
+    Then the unsubscribe response status should be 200
     And the donor "leaver.newsletter.bdd@example.com" should have email consent "false"
+
+  # RFC 8058 one-click. Gmail and Yahoo POST to the List-Unsubscribe URL with no interaction and
+  # expect a 2xx - that is the whole point of the header, and it must stay instant. It is also why
+  # the confirm step costs nothing: the mail clients that matter never see it.
+  Scenario: Gmail one-click unsubscribe still takes effect with no confirmation step
+    Given a consenting donor with email "oneclick.newsletter.bdd@example.com"
+    When Gmail one-click unsubscribes "oneclick.newsletter.bdd@example.com"
+    Then the unsubscribe response status should be 200
+    And the donor "oneclick.newsletter.bdd@example.com" should have email consent "false"
 
   Scenario: an invalid unsubscribe token is rejected
     When I visit the unsubscribe link with token "garbage.token"

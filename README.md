@@ -1783,8 +1783,9 @@ footer: `renderNewsletter`/`renderFrame` take a `ctx.unsubscribeUrl`
 (`${PORTAL_BASE_URL}/unsubscribe/<token>`, an HMAC of the donor id signed with `ADMIN_SESSION_SECRET`
 — reused, not a new secret) and render a cream pill **Unsubscribe** link + the PECR opt-in reason
 line inside the maroon footer bar; the live preview passes a `#` placeholder so the button is
-visible while composing. Clicking it hits the public `GET /unsubscribe/<token>` route, which flips
-that donor's `email_consent` to `false` (idempotent) and shows a small confirmation page. Legacy
+visible while composing. Clicking it hits the public `GET /unsubscribe/<token>` route, which since
+TASK-297 **asks before it acts** — it renders a confirmation page whose button `POST`s back, and the
+`POST` is what flips that donor's `email_consent` to `false` (idempotent). Legacy
 raw-HTML rows (unframed) still get the standalone footer from `buildNewsletterHtml`. From and
 Reply-To are `NEWSLETTER_FROM_EMAIL` (see **Configuration**) — the From is sent as
 `NBCC Newsletter <address>` (`newsletterSender`, TASK-268) so the inbox shows the charity's name,
@@ -1866,14 +1867,31 @@ hides). Proven by `test/unit/newsletter-blocks.test.ts` (block renderer, all blo
 (admin UI), `test/unit/unsubscribe-token.test.ts` and the `@newsletter @db` `features/newsletter.feature`
 (including block create/preview/upload/serve scenarios).
 
-**Public unsubscribe route (REQ-069 · TASK-161).** `GET /unsubscribe/:token`
+**Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
 The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with
-`ADMIN_SESSION_SECRET`); a valid token flips that donor's `email_consent` to `false`
-(`unsubscribeDonor`, idempotent — unsubscribing twice is a no-op) and renders a small inline
-confirmation page (no new static `.html` file, so there's no Dockerfile-COPY / page-list guard to
-update). An invalid or tampered token renders the same page shape with **400** instead of writing
-anything. Covered by the `@newsletter @db` `features/newsletter.feature` unsubscribe scenarios.
+`ADMIN_SESSION_SECRET`). **The `GET` asks and the `POST` acts** — they are not the same handler:
+
+- `GET` verifies the signature and renders a confirmation page with a single `Yes, unsubscribe me`
+  button that `POST`s back to the same URL. It does **no database work at all**, deliberately.
+- `POST` performs the write — a donor token flips `email_consent` to `false` (`unsubscribeDonor`,
+  idempotent) and tombstones every list membership for that address; a subscriber token leaves one
+  audience only. This is also the RFC 8058 one-click path, so Gmail's and Yahoo's own unsubscribe
+  buttons are unaffected and still take effect with no interaction.
+
+Why the split: corporate mail security — Microsoft Defender **Safe Links**, Proofpoint URL Defense,
+Mimecast, Barracuda — fetches every link in an incoming email to sandbox it *before* the recipient
+sees the message, and click tracking (TASK-295) means that fetch follows a `links.nbcc.scot`
+redirect straight to this route. While the `GET` unsubscribed on sight, those scanners silently
+removed people who never clicked anything, and nothing in the data distinguished that from a real
+unsubscribe. The extra click costs a real reader almost nothing, and costs Gmail's one-click nothing
+at all. The wording either side lives in `src/newsletter/unsubscribe-copy.ts` (pure, DB-free), which
+pins the tense: the ask is future ("this will stop…"), the confirmation is past ("you've been…").
+
+An invalid or tampered token renders the same page shape with **400** instead of writing anything.
+Covered by `test/unit/unsubscribe-copy.test.ts` and the `@newsletter @db`
+`features/newsletter.feature` unsubscribe scenarios — including one that asserts a scanner's `GET`
+leaves consent untouched.
 
 **Thank-you letters tab (REQ-069 · TASK-163).** An eighth admin nav section (between Newsletter and
 Audit) for thanking significant givers. It has three panels: **(1) Donors to thank** reads

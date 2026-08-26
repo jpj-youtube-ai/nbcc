@@ -171,6 +171,24 @@ resource "aws_route53_record" "resend_tracking" {
   records = ["links1.resend-dns.com"]
 }
 
+# TASK-299: the click-tracking subdomain for the NEW sending domain, links.news.nbcc.scot.
+#
+# Tracking is configured PER SENDING DOMAIN in Resend, and TASK-298 moved the newsletter onto
+# news.nbcc.scot. The apex record above still serves anything sent from nbcc.scot, but it does not
+# cover the subdomain - so without this, newsletters would either lose click data entirely or fall
+# back to Resend shared tracking domain, which is the mismatched-link shape we removed in TASK-295.
+#
+# Resend fixes the parent domain in its UI, so this can only ever be a subdomain of news.nbcc.scot.
+# That is the tighter alignment anyway: From and link domain now share the same subdomain exactly.
+resource "aws_route53_record" "news_tracking" {
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
+  name    = "links.news.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 3600
+  records = ["links1.resend-dns.com"]
+}
+
 resource "aws_route53_record" "dmarc" {
   count   = local.create_zone ? 1 : 0
   zone_id = local.zone_id

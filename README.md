@@ -4364,3 +4364,21 @@ confirmation emails.
   somewhere it does not belong.
 - The plain-text parts get a real newline, not a `<br />` — worth stating because the first pass got
   that wrong.
+
+**DMARC tightened to quarantine at 25% (TASK-294).** A real send reached Hotmail's junk folder, and
+Microsoft weighs DMARC policy strength — `p=none` is the weakest possible signal, and a domain that
+never asserts anything about forgery gets treated as one.
+
+Both senders were **checked** to authenticate *and* align before changing it, so neither is affected:
+
+| Sender | SPF | DKIM |
+|---|---|---|
+| Resend (newsletters, receipts) | envelope on `send.nbcc.scot` → `include:amazonses.com` | `resend._domainkey` signs `d=nbcc.scot` |
+| Google Workspace (staff mail) | apex → `include:_spf.google.com` | `google._domainkey` present |
+
+The policy only ever acts on mail that **fails**. Genuine mail passes and is untouched.
+
+`pct=25` is a hedge against the one thing that can't be verified from the repo: the aggregate reports
+go to a mailbox this codebase can't read, so if some forgotten sender does exist, three quarters of
+its mail still lands while the reports surface it. Next steps on the documented path are
+`p=quarantine` (full) then `p=reject`, once the reports are clean.

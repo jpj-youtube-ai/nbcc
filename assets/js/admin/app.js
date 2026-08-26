@@ -2973,6 +2973,42 @@
     strip.hidden = false;
   }
 
+  // --- TASK-292: what a reader with no name against them sees ------------------------------------
+  // The hint EXPLAINS the rule rather than re-implementing it. A browser copy of
+  // src/newsletter/name-fallback.ts would be a second version of the thing that decides what
+  // actually goes out, free to drift from the one that does — and the author's own subject is on
+  // screen directly above, so echoing it back buys very little.
+  function nlSyncFallbackHint() {
+    var hint = el("nlNameFallbackHint");
+    if (!hint) return;
+    var subject = (el("newsletterSubject") && el("newsletterSubject").value) || "";
+    if (subject.indexOf("{{firstName}}") === -1) {
+      hint.textContent = "This subject does not use {{firstName}}, so everyone sees it the same way.";
+      return;
+    }
+    var fb = (el("nlNameFallback") && el("nlNameFallback").value || "").trim();
+    hint.textContent = fb
+      ? "They will see \u201C" + fb + "\u201D where the name would go."
+      : "The name is taken out neatly \u2014 \u201CHey, {{firstName}}!\u201D becomes \u201CHey!\u201D. " +
+        "Put a word here instead if your subject would not read properly without one.";
+  }
+
+  // Both settings live on the DOC, so they save with the newsletter and the server reads them at
+  // send time. No separate save, and nothing to forget.
+  function nlReadFallbacksIntoDoc() {
+    var name = (el("nlNameFallback") && el("nlNameFallback").value) || "";
+    var greeting = (el("nlGreetingFallback") && el("nlGreetingFallback").value) || "";
+    if (!name.trim() && !greeting.trim()) { delete nlDoc.merge; return; }
+    nlDoc.merge = { nameFallback: name.trim(), greetingFallback: greeting.trim() };
+  }
+
+  function nlFillFallbacksFromDoc() {
+    var m = nlDoc.merge || {};
+    if (el("nlNameFallback")) el("nlNameFallback").value = m.nameFallback || "";
+    if (el("nlGreetingFallback")) el("nlGreetingFallback").value = m.greetingFallback || "";
+    nlSyncFallbackHint();
+  }
+
   /** Which panel is on screen right now. Read from the DOM so it cannot drift from what is shown. */
   function nlLivePanel() {
     for (var i = 0; i < NL_PANELS.length; i++) {
@@ -3025,6 +3061,9 @@
           nlDoc = { blocks: [{ type: "rawHtml", variant: 0, data: { html: n.bodyHtml || "" } }] };
           nlCollapseAllOnNextRender = true;
         }
+        // TASK-292: AFTER nlDoc is assigned - these fields read from it, so filling them any earlier
+        // reads the PREVIOUS newsletter's settings (or none at all).
+        nlFillFallbacksFromDoc();
         var sent = n.status === "sent";
         nlSent = sent;
         // TASK-256: delivery truth for a SENT newsletter; a draft has no delivery to report.
@@ -4271,6 +4310,7 @@
     if (el("newsletterSubject")) {
       el("newsletterSubject").addEventListener("input", function () {
         nlSyncComposeTitle();
+        nlSyncFallbackHint();
         // A subject change can clear the "no subject" finding, so re-check - debounced, because
         // this fires on every keystroke.
         nlScheduleChecks();
@@ -4281,6 +4321,14 @@
     // "Send now" is the default, so the schedule field starts hidden and the two agree from the
     // outset rather than after the first click.
     nlSetWhen(false);
+    ["nlNameFallback", "nlGreetingFallback"].forEach(function (id) {
+      if (!el(id)) return;
+      el(id).addEventListener("input", function () {
+        nlReadFallbacksIntoDoc();
+        nlSyncFallbackHint();
+        nlSchedulePreview();
+      });
+    });
     if (el("nlCollapseAll")) {
       el("nlCollapseAll").addEventListener("click", function () { nlSetAllCollapsed(true); });
     }

@@ -636,6 +636,85 @@ describe("per-block text size control (TASK-248)", () => {
   });
 });
 
+// TASK-292: what somebody with no name against them sees. The two fields live on the block
+// document, so the risk is not that they look wrong - it is that they never reach the save and
+// every nameless reader quietly gets "friend" anyway.
+describe("name fallbacks (TASK-292)", () => {
+  const draft = {
+    id: 41,
+    subject: "Hey, {{firstName}}! It's the NBCC Newsletter",
+    status: "draft",
+    sentAt: null,
+    recipientCount: null,
+    bodyHtml: null,
+    bodyJson: { blocks: [{ type: "greeting", variant: 0, data: {} }] },
+  };
+
+  const open = async () => {
+    loginToken = tokenFor("editor");
+    // A FRESH copy each time: app.js aliases nlDoc to the fetched bodyJson, so a shared fixture
+    // would carry one test's edits into the next. The real app gets fresh JSON per request.
+    singleNewsletter = { ...draft, bodyJson: JSON.parse(JSON.stringify(draft.bodyJson)) };
+    newsletterListRows = [{ id: 41, subject: draft.subject, status: "draft", sentAt: null, recipientCount: null }];
+    await openNewsletterTab();
+    await flush();
+  };
+
+  it("carries both fallbacks into the saved document", async () => {
+    await open();
+    (el("nlNameFallback") as HTMLInputElement).value = "";
+    el("nlNameFallback")!.dispatchEvent(new Event("input", { bubbles: true }));
+    (el("nlGreetingFallback") as HTMLInputElement).value = "supporter";
+    el("nlGreetingFallback")!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flush();
+
+    (el("newsletterForm") as HTMLFormElement).dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
+    await flush();
+    await flush();
+
+    const saved = savedRequests[savedRequests.length - 1];
+    expect(saved, "expected a save to have been sent").toBeTruthy();
+    expect((saved.body.bodyJson as Record<string, unknown>).merge).toEqual({
+      nameFallback: "",
+      greetingFallback: "supporter",
+    });
+  });
+
+  // Nothing set means nothing stored — an empty merge object on every newsletter would be noise
+  // in the document and a lie about the author having made a choice.
+  it("stores no merge settings when neither field is used", async () => {
+    await open();
+    (el("nlNameFallback") as HTMLInputElement).value = "";
+    el("nlNameFallback")!.dispatchEvent(new Event("input", { bubbles: true }));
+    await flush();
+    (el("newsletterForm") as HTMLFormElement).dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
+    await flush();
+    await flush();
+    const saved = savedRequests[savedRequests.length - 1];
+    expect((saved.body.bodyJson as Record<string, unknown>).merge).toBeUndefined();
+  });
+
+  it("fills the fields from a newsletter that already has them", async () => {
+    loginToken = tokenFor("editor");
+    singleNewsletter = {
+      ...draft,
+      bodyJson: {
+        merge: { nameFallback: "there", greetingFallback: "supporter" },
+        blocks: [{ type: "greeting", variant: 0, data: {} }],
+      },
+    };
+    newsletterListRows = [{ id: 41, subject: draft.subject, status: "draft", sentAt: null, recipientCount: null }];
+    await openNewsletterTab();
+    await flush();
+    expect((el("nlNameFallback") as HTMLInputElement).value).toBe("there");
+    expect((el("nlGreetingFallback") as HTMLInputElement).value).toBe("supporter");
+  });
+});
+
 // TASK-289: blocks collapse. Ten blocks used to mean ten fully expanded forms, so finding the one
 // you wanted meant scrolling past every field of every other one.
 describe("collapsible blocks (TASK-289)", () => {

@@ -521,7 +521,26 @@
                 <div class="nl-subject">
                   <label for="newsletterSubject">Subject line</label>
                   <input type="text" id="newsletterSubject" required style="width:100%" />
-                  <p class="nl-subject-hint">This is the first thing people see in their inbox.</p>
+                  <p class="nl-subject-hint">This is the first thing people see in their inbox. Use <code>{{firstName}}</code> to greet people by name.</p>
+                </div>
+
+                <!-- TASK-292: not everyone on a list has a name against them - people added at an
+                     event, imported from a sheet, or who only ever gave an address. These two say
+                     what they see instead. Two fields rather than one because the two places need
+                     different answers: a subject reads fine with the name simply gone, but "Dear,"
+                     is not a salutation. -->
+                <div class="nl-fallbacks">
+                  <h4>If we don't know someone's name</h4>
+                  <div class="nl-fallback-row">
+                    <label for="nlNameFallback">In the subject line, use</label>
+                    <input type="text" id="nlNameFallback" maxlength="40" placeholder="leave blank to take the name out" />
+                    <span class="nl-fallback-hint" id="nlNameFallbackHint"></span>
+                  </div>
+                  <div class="nl-fallback-row">
+                    <label for="nlGreetingFallback">In &ldquo;Dear&nbsp;&hellip;&rdquo;, use</label>
+                    <input type="text" id="nlGreetingFallback" maxlength="40" placeholder="friend" />
+                    <span class="nl-fallback-hint">A greeting always needs somebody to address, so this one is never left empty.</span>
+                  </div>
                 </div>
                 <div class="nl-builder">
                   <div class="nl-left">

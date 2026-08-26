@@ -25,6 +25,8 @@ import {
 // TASK-251: the sign-off block signs in the SAME hand as the thank-you email. Imported from that
 // module rather than copied here, so the two can never drift apart — if the signature changes there,
 // the newsletter follows automatically, which is what "the same signature" has to mean.
+// TASK-292: who a salutation addresses when we have no name - never nobody.
+import { greetingName } from "./name-fallback";
 import { SCRIPT } from "../thank-you/letter";
 
 export const BLOCK_TYPES = [
@@ -53,10 +55,23 @@ export interface Block {
   size?: number; // TASK-248: optional text-size step, -2..+2. Absent/0 = the variant's own sizes.
 }
 export interface NewsletterDoc {
+  // TASK-292: optional, so every newsletter written before this renders unchanged.
+  merge?: { nameFallback: string; greetingFallback: string };
   blocks: Block[];
 }
 
 export const newsletterDocSchema = z.object({
+  // TASK-292: what a MISSING name becomes. Optional, so every newsletter written before this parses
+  // and renders unchanged. Lives in the doc rather than a column because it belongs to the writing,
+  // and jsonb needs no migration to carry it.
+  merge: z
+    .object({
+      // Blank means "remove the name and tidy the punctuation" - "Hey, {{firstName}}!" -> "Hey!".
+      nameFallback: z.string().max(40).default(""),
+      // Never blank in effect: "Dear," is not a salutation, so a blank resolves to a word.
+      greetingFallback: z.string().max(40).default(""),
+    })
+    .optional(),
   blocks: z.array(
     z.object({
       type: z.enum(BLOCK_TYPES),
@@ -181,7 +196,11 @@ function masthead(b: Block): string {
 function greeting(b: Block, ctx: RenderCtx): string {
   const heading = str(b.data, "heading");
   const lead = str(b.data, "lead");
-  const dearLine = `<p style="font-family:${BODY};color:${SLATE};font-size:16px;margin:0">${applyMerge("Dear {{firstName}},", ctx)}</p>`;
+  // TASK-292: the salutation always has somebody to address. Unlike the subject, "Dear," is not an
+  // option — so this uses greetingName, which resolves a blank setting to a word rather than to
+  // nothing. The name is escaped the same way applyMerge would have escaped it.
+  const dearName = escapeHtml(greetingName(ctx.firstName, ctx.greetingFallback ?? ""));
+  const dearLine = `<p style="font-family:${BODY};color:${SLATE};font-size:16px;margin:0">Dear ${dearName},</p>`;
 
   if (b.variant === 1) {
     const leadEl = lead
@@ -198,7 +217,7 @@ function greeting(b: Block, ctx: RenderCtx): string {
   }
 
   if (b.variant === 3) {
-    return `<div style="padding:12px 40px"><p style="font-family:${BODY};color:${SLATE};font-size:16px;margin:0">${applyMerge("Hi {{firstName}} 👋", ctx)}</p></div>`;
+    return `<div style="padding:12px 40px"><p style="font-family:${BODY};color:${SLATE};font-size:16px;margin:0">Hi ${escapeHtml(greetingName(ctx.firstName, ctx.greetingFallback ?? ""))} 👋</p></div>`;
   }
 
   // variant 0 (default): plain "Dear {{firstName}},"
@@ -872,5 +891,13 @@ export function renderBlock(block: Block, ctx: RenderCtx): string {
 }
 
 export function renderNewsletter(doc: NewsletterDoc, ctx: RenderCtx): string {
-  return renderFrame(doc.blocks.map((b) => renderBlock(b, ctx)).join(""), ctx.unsubscribeUrl);
+  // TASK-292: the fallbacks live on the DOC, so every caller gets them without having to know they
+  // exist — the send worker, the live preview and the test send all render through here. An
+  // explicit ctx value still wins, which is what lets a caller preview a different setting.
+  const merged: RenderCtx = {
+    ...ctx,
+    nameFallback: ctx.nameFallback ?? doc.merge?.nameFallback ?? "",
+    greetingFallback: ctx.greetingFallback ?? doc.merge?.greetingFallback ?? "",
+  };
+  return renderFrame(doc.blocks.map((b) => renderBlock(b, merged)).join(""), merged.unsubscribeUrl);
 }

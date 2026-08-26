@@ -108,7 +108,13 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
         email: r.email,
         from: newsletterSender(config.NEWSLETTER_FROM_EMAIL),
         replyTo: config.NEWSLETTER_FROM_EMAIL,
-        subject: mergeSubject(newsletter.subject, firstName),
+        // TASK-292: the doc's own nameFallback decides what a missing name becomes in the subject.
+        // The BODY gets it via renderNewsletter, which reads the same doc — one setting, both places.
+        subject: mergeSubject(
+          newsletter.subject,
+          firstName,
+          parsedDoc.success ? (parsedDoc.data.merge?.nameFallback ?? "") : "",
+        ),
         html,
         // TASK-275: derived from the very html we are sending, so the two can never disagree.
         text: htmlToPlainText(html),

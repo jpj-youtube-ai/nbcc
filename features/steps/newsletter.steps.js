@@ -356,12 +356,41 @@ function signUnsubscribeToken(donorId, secret) {
   return `${body}.${sig}`;
 }
 
-When("I visit the unsubscribe link for {string}", async function (email) {
+async function donorUnsubToken(email) {
   const row = await pool.query("SELECT id FROM donors WHERE email = $1", [email]);
-  const donorId = row.rows[0].id;
-  const token = signUnsubscribeToken(donorId, process.env.ADMIN_SESSION_SECRET);
+  return signUnsubscribeToken(row.rows[0].id, process.env.ADMIN_SESSION_SECRET);
+}
+
+When("I visit the unsubscribe link for {string}", async function (email) {
+  const token = await donorUnsubToken(email);
   const res = await fetch(`${BASE_URL}/unsubscribe/${token}`);
   this.unsubStatus = res.status;
+  this.unsubBody = await res.text();
+});
+
+// TASK-297: what a human does after reading the page - the same POST the browser form submits.
+When("I confirm the unsubscribe for {string}", async function (email) {
+  const token = await donorUnsubToken(email);
+  const res = await fetch(`${BASE_URL}/unsubscribe/${token}`, { method: "POST" });
+  this.unsubStatus = res.status;
+  this.unsubBody = await res.text();
+});
+
+// TASK-297: RFC 8058 one-click, exactly as Gmail and Yahoo send it - a POST with that form body
+// and no interaction of any kind. This must never gain a confirmation step.
+When("Gmail one-click unsubscribes {string}", async function (email) {
+  const token = await donorUnsubToken(email);
+  const res = await fetch(`${BASE_URL}/unsubscribe/${token}`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: "List-Unsubscribe=One-Click",
+  });
+  this.unsubStatus = res.status;
+});
+
+Then("the unsubscribe page should offer a confirm button", function () {
+  assert.match(this.unsubBody, /method="post"/i, "expected a POST form on the confirmation page");
+  assert.match(this.unsubBody, /Yes, unsubscribe me/i, "expected an explicit confirm button");
 });
 
 When("I visit the unsubscribe link with token {string}", async function (token) {
@@ -685,7 +714,8 @@ When("that audience member unsubscribes via their link", async function () {
   assert.ok(members.json.length > 0, "expected a member to unsubscribe");
   const body = `s${members.json[0].id}.${this.newsletterId}`;
   const sig = createHmac("sha256", process.env.ADMIN_SESSION_SECRET || "dev-admin-session-secret").update(body).digest("base64url");
-  const res = await fetch(`${BASE_URL}/unsubscribe/${body}.${sig}`);
+  // TASK-297: the confirm POST, which is what the member's click actually ends up sending.
+  const res = await fetch(`${BASE_URL}/unsubscribe/${body}.${sig}`, { method: "POST" });
   assert.equal(res.status, 200);
 });
 

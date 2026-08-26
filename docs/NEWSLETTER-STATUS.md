@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-289. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed after TASK-297. Point a fresh session at this file to continue.
 
 ## State: LIVE and send-ready
 
@@ -30,6 +30,14 @@ Everything below is merged and in production. Nothing is in flight — no open P
 | 287 | **The blank newsletter tab**, and every table made to fit its card |
 | 288 | **Send one newsletter to several audiences at once**, deduplicated |
 | 289 | Collapsible blocks |
+| 290 | Status doc refreshed through TASK-289 |
+| 291 | **Email preferences centre** (pick individual lists) + private vs public audiences |
+| 292 | What a reader with **no name** sees — name and greeting fallbacks |
+| 293 | **Registered postal address** in every email footer and the site footer |
+| 294 | DMARC tightened to `p=quarantine; pct=25` (**DNS applied and verified live**) |
+| 295 | Click tracking served from **links.nbcc.scot** (**DNS applied and verified live**) |
+| 296 | DNS for **news.nbcc.scot**, a dedicated newsletter sending domain (**applied and verified live**) |
+| 297 | **Unsubscribe: the GET asks, the POST acts** — mail-security scanners no longer unsubscribe people silently |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a
@@ -73,6 +81,15 @@ Nothing blocking. The system can send a newsletter safely today.
   started arriving 2026-08-20. Do NOT skip straight to reject.
 
 ## Gotchas that will bite (learned the hard way)
+
+- **No GET in an email may change anything.** Microsoft Defender Safe Links, Proofpoint URL
+  Defense, Mimecast and Barracuda fetch every link in an incoming email to sandbox it *before*
+  the recipient sees the message — and click tracking means that fetch follows the
+  `links.nbcc.scot` redirect all the way to us. `GET /unsubscribe/:token` used to unsubscribe on
+  sight, so a scanner could silently remove someone who never clicked, and the data looked
+  exactly like a real unsubscribe. Fixed in TASK-297 (GET renders a confirm form, POST writes).
+  **If you ever add another link to an email, the route behind it must be safe to fetch twice by
+  a robot.** RFC 8058 one-click is unaffected — it was always a POST.
 
 1. **Migrations must sort LAST.** `ls migrations | sort | tail`. Highest is `1785600000000`. CI can't
    catch a bad order (its DB is empty); staging/production can.

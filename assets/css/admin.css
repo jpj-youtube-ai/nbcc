@@ -459,6 +459,11 @@
 /* TASK-300: the upload speaks beside the button that started it. It used to write into the Send
    panel, which is hidden while composing, so every failure was invisible. */
 .nl-img-msg { margin: .35rem 0 0; font-size: .85rem; color: #6B655E; min-height: 1.1em; }
+/* TASK-303: the outcome column - arrival is the only green thing on it. */
+.nl-who-arrived { color: #1E6B3A; font-weight: 600; }
+.nl-who-bounced { color: #A8182C; font-weight: 600; }
+.nl-who-given-up { color: #A8182C; font-weight: 600; }
+.nl-who-sent-unconfirmed, .nl-who-waiting, .nl-who-sending { color: #6B655E; }
 .nl-img-msg.is-bad { color: #A8182C; font-weight: 600; }
 .nl-img-tools select, .nl-img-tools input[type="file"] {
   font-family: var(--font-body); font-size: .8rem; color: var(--slate);

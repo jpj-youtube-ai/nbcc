@@ -4895,13 +4895,32 @@
           host.innerHTML = '<p class="admin-empty">No per-person record for this send. Newsletters sent before the send queue existed only have totals.</p>';
           return;
         }
-        var sent = rows.filter(function (r) { return r.status === "sent"; }).length;
-        var label = { sent: "Received", failed: "Not delivered", pending: "Still to send", sending: "Sending now" };
+        // TASK-303: the server decides each outcome (src/newsletter/recipient-outcome.ts) so there is
+        // one definition of "arrived". This used to call anything we had handed over "Received",
+        // which is a claim we were never in a position to make.
+        var counts = {};
+        rows.forEach(function (r) { counts[r.outcome] = (counts[r.outcome] || 0) + 1; });
+        var ORDER = ["arrived", "sent-unconfirmed", "bounced", "waiting", "sending", "given-up"];
+        var WORDS = {
+          arrived: "arrived",
+          "sent-unconfirmed": "sent, not yet confirmed",
+          bounced: "blocked or bounced",
+          waiting: "still to send",
+          sending: "sending now",
+          "given-up": "we gave up on",
+        };
+        var parts = ORDER.filter(function (k) { return counts[k]; }).map(function (k) {
+          return "<b>" + counts[k] + "</b> " + WORDS[k];
+        });
         host.innerHTML =
-          "<p class=\"nl-who-summary\">" + sent + " of " + rows.length + " received it.</p>" +
-          '<table class="admin-table"><thead><tr><th>Email</th><th>Status</th><th>When</th><th>Problem</th></tr></thead><tbody>' +
+          '<p class="nl-who-summary">' + rows.length + " people: " + parts.join(" &middot; ") + "</p>" +
+          '<p class="nl-note">Only <b>arrived</b> means a mailbox confirmed it. "Sent, not yet confirmed" is' +
+          " normal for a while after a send - confirmations trickle in, and a young sending domain is" +
+          " often held back briefly by the receiving server.</p>" +
+          '<table class="admin-table"><thead><tr><th>Email</th><th>What happened</th><th>When</th><th>Problem</th></tr></thead><tbody>' +
           rows.map(function (r) {
-            return "<tr><td>" + H.escapeHtml(r.email) + "</td><td>" + H.escapeHtml(label[r.status] || r.status) +
+            return "<tr><td>" + H.escapeHtml(r.email) + '</td><td class="nl-who-' + H.escapeHtml(r.outcome || "") + '">' +
+              H.escapeHtml(r.outcomeLabel || r.status) +
               "</td><td>" + (r.sentAt ? H.fmtDate(r.sentAt) : "-") + "</td><td>" +
               (r.lastError ? '<span class="admin-muted">' + H.escapeHtml(r.lastError) + "</span>" : "") + "</td></tr>";
           }).join("") + "</tbody></table>";

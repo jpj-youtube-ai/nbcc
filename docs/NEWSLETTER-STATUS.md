@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-302. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed after TASK-303. Point a fresh session at this file to continue.
 
 ## State: LIVE and send-ready
 
@@ -42,6 +42,7 @@ Everything below is merged and in production. Nothing is in flight — no open P
 | 299 | Click tracking for the new sender: `links.news.nbcc.scot` |
 | 300 | **Image upload actually works**: shrink in the browser, and never fail silently |
 | 302 | **Everyone gets it once**: a standing daily ceiling, and a capacity refusal no longer drops anybody |
+| 303 | **What actually arrived**: per-person mailbox outcome, and Accepted counts people not rows |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a

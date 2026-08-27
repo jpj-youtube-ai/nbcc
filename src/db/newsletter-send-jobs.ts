@@ -294,14 +294,43 @@ export async function sentTodayCount(jobId: number): Promise<number> {
 // The per-send audit: exactly who this reached, and who did not get it and why.
 export async function listJobRecipients(
   jobId: number,
+  newsletterId: number,
   limit = 5000,
-): Promise<{ email: string; status: string; sentAt: string | null; lastError: string | null }[]> {
+): Promise<
+  {
+    email: string;
+    status: string;
+    sentAt: string | null;
+    lastError: string | null;
+    mailboxEvent: string | null;
+  }[]
+> {
+  // TASK-303: our queue row says what we HANDED OVER. The mailbox event says what actually happened
+  // to it. They are different facts and they come apart exactly when it matters, so both are
+  // returned and the caller decides. The latest terminal event wins - a bounce recorded after a
+  // delivery is the more recent truth about that address.
   const { rows } = await pool.query(
-    `SELECT email, status, sent_at, last_error FROM newsletter_send_queue
-      WHERE job_id = $1 ORDER BY email LIMIT $2`,
-    [jobId, limit],
+    `SELECT q.email, q.status, q.sent_at, q.last_error,
+            (SELECT e.event_type
+               FROM newsletter_email_events e
+              WHERE e.newsletter_id = $2
+                AND e.email = q.email
+                AND e.event_type IN ('delivered', 'bounced', 'complained')
+              ORDER BY e.occurred_at DESC
+              LIMIT 1) AS mailbox_event
+       FROM newsletter_send_queue q
+      WHERE q.job_id = $1
+      ORDER BY q.email
+      LIMIT $3`,
+    [jobId, newsletterId, limit],
   );
-  return rows.map((r) => ({ email: r.email, status: r.status, sentAt: r.sent_at, lastError: r.last_error }));
+  return rows.map((r) => ({
+    email: r.email,
+    status: r.status,
+    sentAt: r.sent_at,
+    lastError: r.last_error,
+    mailboxEvent: (r.mailbox_event as string | null) ?? null,
+  }));
 }
 
 // The final tally for a drained job, written back onto the newsletter so the history shows what

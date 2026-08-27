@@ -118,9 +118,14 @@ export interface NewsletterStats {
 // posture; the spec makes this a deliberate wall). DISTINCT addresses per type, so even a hypothetical
 // duplicate row could not inflate a rate.
 export async function getNewsletterStats(newsletterId: number): Promise<NewsletterStats> {
-  const sends = await pool.query(`SELECT count(*) AS sends FROM newsletter_sends WHERE newsletter_id = $1`, [
-    newsletterId,
-  ]);
+  // TASK-303: DISTINCT, like the event counts below it. This counted ROWS, so any address recorded
+  // twice - a tick that partially failed and was retried, say - inflated the headline figure and
+  // made a send look bigger than the number of people it actually reached. "Accepted" is a count of
+  // PEOPLE, and the two queries either side of it should not disagree about what they are counting.
+  const sends = await pool.query(
+    `SELECT count(DISTINCT email) AS sends FROM newsletter_sends WHERE newsletter_id = $1`,
+    [newsletterId],
+  );
   const events = await pool.query(
     `SELECT event_type, count(DISTINCT email) AS n,
             CASE WHEN event_type = 'bounced' THEN array_agg(DISTINCT email) END AS emails

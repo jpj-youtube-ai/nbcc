@@ -123,6 +123,7 @@ import { pacingSummary, DEFAULT_PER_MINUTE } from "../newsletter/send-pacing";
 import { parseScheduleAt, scheduleSummary } from "../newsletter/schedule";
 import { htmlToPlainText } from "../newsletter/plain-text";
 import { preflightNewsletter } from "../newsletter/preflight";
+import { recipientOutcome, OUTCOME_LABELS } from "../newsletter/recipient-outcome";
 import { runSendTick } from "../newsletter/send-worker";
 import { parseImportFile } from "../newsletter/import-parse";
 import { parseTargetListIds, foldOutcomes, type TargetOutcome } from "../newsletter/audience-targets";
@@ -1323,7 +1324,15 @@ export async function getAdminNewsletterSendRecipients(req: Request, res: Respon
   if (id === null) return;
   const job = await getJobForNewsletter(id);
   if (!job) return res.status(404).json({ error: "No send for this newsletter" });
-  return res.json(await listJobRecipients(job.id));
+  // TASK-303: the outcome is decided HERE, by the same pure rules a test covers, so the browser only
+  // renders a label and cannot invent a different definition of "arrived".
+  const rows = await listJobRecipients(job.id, id);
+  return res.json(
+    rows.map((r) => {
+      const outcome = recipientOutcome(r.status, r.mailboxEvent);
+      return { ...r, outcome, outcomeLabel: OUTCOME_LABELS[outcome] };
+    }),
+  );
 }
 
 // POST /api/admin/newsletters/test-send — send ONE copy of the posted draft to the signed-in admin's

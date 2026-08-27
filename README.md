@@ -3968,6 +3968,19 @@ here protects the `nbcc.scot` sending reputation, which also carries admin sign-
 - **Viewer accounts can open the Newsletter tab again.** Every read route required `edit`, so a Viewer
   got 403s swallowed by empty catch handlers and a tab stuck on "Loading…". Reads now accept `view`.
 
+**What actually arrived, per person (TASK-303).** The per-person view showed our queue row and
+labelled it *Received* - but handing a message to the mail service is not the same as it arriving,
+and the two come apart exactly when it matters: when the provider is refusing, when an address is
+dead, or when a receiving server is holding mail back from a young sending domain. Each recipient
+now carries two facts kept deliberately apart - what we did (sent / still to send / gave up) and
+what the mailbox said (delivered / bounced / nothing yet). `src/newsletter/recipient-outcome.ts`
+(pure) combines them, and **the mailbox wins**: a delivery event is first-hand evidence, while our
+row only records what we handed over. Only *Arrived* means a mailbox confirmed it.
+
+The same task fixed the headline: **Accepted** counted queue ROWS (`count(*)`), so a duplicated
+record inflated it and a send looked bigger than the number of people it reached - while the event
+counts beside it had always used `count(DISTINCT email)`. It counts people now.
+
 **Background sending with a gentle rollout (TASK-274).** Sending is no longer a loop inside the HTTP
 request. It is a **job with a queue**, one row per recipient, drained by a background worker.
 

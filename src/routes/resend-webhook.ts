@@ -2,7 +2,6 @@ import express, { Router, type Request, type Response } from "express";
 import { verifySvixSignature, parseResendEvent, suppressionFor } from "../newsletter/resend-events";
 import { recordResendEvent, countBounces } from "../db/newsletter-events";
 import { suppressEmail } from "../db/email-suppressions";
-import { unmatchedDisposition } from "../newsletter/webhook-retry";
 import { config } from "../config";
 
 // TASK-255: the Resend delivery webhook (email stats Phase 1 — see
@@ -48,13 +47,6 @@ async function postResendWebhook(req: Request, res: Response): Promise<Response>
 
   try {
     const outcome = await recordResendEvent(String(headers["svix-id"]), parsed);
-    // TASK-305: an unmatched event that is still RECENT is far more likely to be a race with our own
-    // bookkeeping than a foreign message, so ask Svix to deliver it again rather than answering 200
-    // and losing it for good. Older ones are genuinely not ours - receipts and login codes share this
-    // provider account - and still get the 200 that stops a retry storm.
-    if (outcome === "unmatched" && unmatchedDisposition(parsed.occurredAt, new Date()) === "retry") {
-      return res.status(409).json({ outcome: "unmatched", retry: true });
-    }
     // TASK-272: a complaint or a PERMANENT bounce takes the address out of every future send. This
     // runs even when the event matched no newsletter (outcome 'unmatched') — the address is just as
     // dead whether or not we can tie the bounce to a particular send, and a big send can outrun the

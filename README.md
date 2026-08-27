@@ -3980,12 +3980,14 @@ up to twenty seconds later. A confirmation arriving in that gap matched no send,
 retry. It was then gone for good. Fast providers confirm quickest, so Gmail, Yahoo and Outlook were
 precisely the ones being lost.
 
-Two changes. The send is now recorded **the instant it succeeds**, inside the loop, which closes the
-gap. And an unmatched event that is still recent (`UNMATCHED_RETRY_WINDOW_MS`, 5 minutes) is answered
-**409** so Svix delivers it again, rather than being shrugged off. That window is what makes the
-retry safe: donation receipts, Gift Aid confirmations and login codes share the provider account and
-legitimately match nothing, so an *old* unmatched event still gets the 200 that prevents a retry
-storm — which is why the original code answered 200 to everything.
+The fix: the send is now recorded **the instant it succeeds**, inside the loop, which closes the gap.
+
+A second change was tried and **reverted in TASK-306**: answering **409** to a *recent* unmatched
+event so Svix would retry it. It looked like cheap insurance and was not. A donation receipt raises a
+delivery event that legitimately matches no newsletter, and a 409 would have had Svix retrying every
+receipt, Gift Aid confirmation and login code for five minutes each — the exact retry storm the
+original 200-to-everything existed to prevent. **An unmatched event still gets a 200.** The in-loop
+write closes the race on its own; the retry only added risk. BDD caught it.
 
 Note `newsletter_sends` is a plain `INSERT` with **no unique index**, so writing the same person
 twice really does create two rows — the in-loop write tracks what it recorded and the end-of-batch

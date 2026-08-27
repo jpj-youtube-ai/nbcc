@@ -124,6 +124,9 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
   // Set when the provider turns us away, so the rest of this tick is abandoned rather than spent
   // collecting identical refusals. The queue is untouched; the next tick simply tries again.
   let deferred = false;
+  // TASK-305: which of this batch were written straight away, so the sweep below only has to cover
+  // the ones whose immediate write failed.
+  const recorded = new Set<string>();
 
   for (const r of batch) {
     const token =
@@ -155,6 +158,18 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
       });
       await markRecipientSent(r.id);
       accepted.push({ donorId: r.donorId, email: r.email });
+      // TASK-305: record WHO we just sent to immediately - not at the end of the batch, which could
+      // be twenty seconds away. The provider confirms delivery in under half a second, and a
+      // confirmation arriving before this row existed matched nothing and was discarded. That lost
+      // roughly half of every send's delivery events, and all of the fastest providers.
+      // Best-effort: the person HAS been sent to and marked so above; failing their send over its
+      // own bookkeeping would be backwards.
+      try {
+        await recordNewsletterSends(job.newsletterId, [{ donorId: r.donorId, email: r.email }]);
+        recorded.add(r.email);
+      } catch (err) {
+        console.error("recording a newsletter send failed:", err instanceof Error ? err.message : err);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (dispositionFor(message) === "defer") {
@@ -175,9 +190,16 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
     if (gapMs > 0 && r !== batch[batch.length - 1]) await sleep(gapMs);
   }
 
-  if (accepted.length) {
+  // TASK-305: a safety sweep for anything whose immediate write above failed. Normally empty.
+  //
+  // It MUST stay filtered by the set above: newsletter_sends is a plain INSERT with no unique
+  // index, so writing the same person twice really does create two rows - which is how the
+  // Accepted figure came to overstate a send (TASK-303 made that count DISTINCT; the missing
+  // constraint underneath is still there).
+  const missed = accepted.filter((a) => !recorded.has(a.email));
+  if (missed.length) {
     try {
-      await recordNewsletterSends(job.newsletterId, accepted);
+      await recordNewsletterSends(job.newsletterId, missed);
     } catch (err) {
       console.error("recording newsletter sends failed:", err instanceof Error ? err.message : err);
     }

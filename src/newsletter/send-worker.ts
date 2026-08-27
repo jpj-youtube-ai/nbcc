@@ -7,6 +7,9 @@ import {
   finishJobIfDrained,
   claimRecipients,
   markRecipientSent,
+  deferRecipient,
+  listGivenUpRecipients,
+  reviveRecipients,
   markRecipientFailed,
   sentTodayCount,
   jobOutcome,
@@ -20,6 +23,7 @@ import { newsletterDocSchema, renderNewsletter } from "./blocks";
 import { mergeSubject, newsletterSender, firstNameOf } from "./theme";
 import { buildNewsletterHtml } from "../donors/newsletter";
 import { tickAllowance, TICK_SECONDS } from "./send-pacing";
+import { dispositionFor } from "./send-failure";
 import { htmlToPlainText } from "./plain-text";
 
 // TASK-274: the background sender. It replaces a loop that ran inside the HTTP request, where a few
@@ -69,7 +73,15 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
   await markJobRunning(job.id);
 
   const allowance = tickAllowance(
-    { rollout: job.rollout, perMinute: job.perMinute, dailyCap: job.dailyCap, startedAt: job.startedAt ? new Date(job.startedAt) : null },
+    {
+      rollout: job.rollout,
+      perMinute: job.perMinute,
+      dailyCap: job.dailyCap,
+      // TASK-302: read fresh every tick, so raising or lowering the ceiling reaches a send that is
+      // already running - no restart, no rescheduling, no reconfiguring the job.
+      ceiling: config.NEWSLETTER_DAILY_SEND_CAP,
+      startedAt: job.startedAt ? new Date(job.startedAt) : null,
+    },
     await sentTodayCount(job.id),
     now,
   );
@@ -85,12 +97,33 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
     return;
   }
 
+  // TASK-302: before sending anything, put back anyone this job gave up on for a reason that was
+  // never about them. Until now a capacity refusal spent one of a recipient's three attempts, so
+  // three unlucky turns during a busy day dropped them from the newsletter permanently and silently.
+  // Judged by the same classifier the live send uses, so there is one rule, not two. The set empties
+  // itself: once revived and sent they are 'sent', and capacity refusals no longer count against
+  // anyone, so nothing can land back here for that reason again.
+  try {
+    const givenUp = await listGivenUpRecipients(job.id);
+    const putBack = givenUp.filter((r) => dispositionFor(r.lastError ?? "") === "defer").map((r) => r.id);
+    if (putBack.length) {
+      const revived = await reviveRecipients(putBack);
+      console.log(`newsletter send job ${job.id}: put ${revived} unreached recipients back in the queue`);
+    }
+  } catch (err) {
+    // Best-effort: a repair that fails must not stop the send it was meant to help.
+    console.error("reviving unreached recipients failed:", err instanceof Error ? err.message : err);
+  }
+
   // Pace WITHIN the tick too: claiming 20 and firing them in the same millisecond would trip the
   // provider's per-second limit exactly as the old loop did. The gap comes from the THROTTLE (60/min
   // -> one per second), not from dividing the tick by the batch size — that stretched a single
   // recipient into a full tick of sleeping, so a one-person send took 20 seconds.
   const gapMs = Math.max(0, Math.floor(60_000 / Math.max(1, job.perMinute)));
   const accepted: { donorId: number | null; email: string }[] = [];
+  // Set when the provider turns us away, so the rest of this tick is abandoned rather than spent
+  // collecting identical refusals. The queue is untouched; the next tick simply tries again.
+  let deferred = false;
 
   for (const r of batch) {
     const token =
@@ -123,9 +156,19 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
       await markRecipientSent(r.id);
       accepted.push({ donorId: r.donorId, email: r.email });
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (dispositionFor(message) === "defer") {
+        // TASK-302: the provider is full, or briefly unreachable. That says nothing about this
+        // person, so the attempt is refunded and they keep their place in the queue. Then STOP the
+        // tick: the next recipient would meet the same wall, and hammering it only spends the
+        // remaining allowance on refusals and makes us look worse to the provider.
+        await deferRecipient(r.id, message);
+        deferred = true;
+        break;
+      }
       // Back to pending for another go (up to MAX_ATTEMPTS) — a provider rejecting a burst is
       // temporary, and the old code dropped those people permanently.
-      await markRecipientFailed(r.id, err instanceof Error ? err.message : String(err), MAX_ATTEMPTS);
+      await markRecipientFailed(r.id, message, MAX_ATTEMPTS);
     }
     // No pause after the LAST one — sleeping when there is nothing left to pace just makes every
     // send finish a gap later than it needed to.
@@ -139,6 +182,9 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
       console.error("recording newsletter sends failed:", err instanceof Error ? err.message : err);
     }
   }
+  // TASK-302: a deferred tick left people in the queue by definition, so the job cannot be drained.
+  // Skipping the check keeps a provider outage from looking, for one query, like a completed send.
+  if (deferred) return;
   // When the queue empties, write the real outcome onto the newsletter. The send stamped zeroes at
   // queue time (the counts were not knowable yet); leaving them there would have the history claim
   // every send delivered nothing.

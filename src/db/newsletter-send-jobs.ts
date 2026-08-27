@@ -232,6 +232,45 @@ export async function markRecipientSent(queueId: number): Promise<void> {
 
 // A failure goes back to 'pending' for another go, up to maxAttempts — a provider rejecting a burst
 // is temporary, and the old code dropped those people permanently.
+// TASK-302: everyone this job has given up on, with the reason. Read so the reason can be judged
+// by the SAME classifier the live send uses - matching error text in SQL would be a second copy of
+// that rule, and the two would drift.
+export async function listGivenUpRecipients(
+  jobId: number,
+): Promise<{ id: number; lastError: string | null }[]> {
+  const { rows } = await pool.query(
+    `SELECT id, last_error FROM newsletter_send_queue WHERE job_id = $1 AND status = 'failed'`,
+    [jobId],
+  );
+  return rows.map((r) => ({ id: Number(r.id), lastError: (r.last_error as string | null) ?? null }));
+}
+
+// Put them back at the start of the queue with a full set of attempts. Guarded on status = 'failed'
+// so a row that has since been sent can never be resurrected into a second copy of the newsletter.
+export async function reviveRecipients(ids: number[]): Promise<number> {
+  if (!ids.length) return 0;
+  const { rowCount } = await pool.query(
+    `UPDATE newsletter_send_queue
+        SET status = 'pending', attempts = 0
+      WHERE id = ANY($1::int[]) AND status = 'failed'`,
+    [ids],
+  );
+  return rowCount ?? 0;
+}
+
+// TASK-302: the provider said "not now" - which is a fact about the provider, not the recipient.
+// Claiming the row already spent an attempt, so hand it back: status returns to pending and the
+// attempt is refunded. Without the refund, three capacity refusals would drop somebody from the
+// newsletter permanently and silently, which is precisely what this task exists to stop.
+export async function deferRecipient(queueId: number, error: string): Promise<void> {
+  await pool.query(
+    `UPDATE newsletter_send_queue
+        SET status = 'pending', attempts = GREATEST(0, attempts - 1), last_error = $2
+      WHERE id = $1`,
+    [queueId, error.slice(0, 500)],
+  );
+}
+
 export async function markRecipientFailed(queueId: number, error: string, maxAttempts: number): Promise<void> {
   await pool.query(
     `UPDATE newsletter_send_queue

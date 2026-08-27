@@ -324,7 +324,13 @@ export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
     body: JSON.stringify({ ...message, newsletter: true }),
   });
   if (!res.ok) {
-    throw new Error(`Newsletter email send responded ${res.status}`);
+    // TASK-302: carry the body. The relay wraps EVERY provider error as a 502, so without the detail
+    // a rate limit and a malformed address look identical - and the queue cannot tell "come back
+    // later" from "give up on this address". Truncated because it is stored on the queue row.
+    const detail = await res.text().catch(() => "");
+    throw new Error(
+      `Newsletter email send responded ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`,
+    );
   }
 }
 

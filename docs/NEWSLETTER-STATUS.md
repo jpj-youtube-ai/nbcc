@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-300. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed after TASK-302. Point a fresh session at this file to continue.
 
 ## State: LIVE and send-ready
 
@@ -41,6 +41,7 @@ Everything below is merged and in production. Nothing is in flight — no open P
 | 298 | **Newsletter sends from news.nbcc.scot**, with Reply-To split out to the real inbox |
 | 299 | Click tracking for the new sender: `links.news.nbcc.scot` |
 | 300 | **Image upload actually works**: shrink in the browser, and never fail silently |
+| 302 | **Everyone gets it once**: a standing daily ceiling, and a capacity refusal no longer drops anybody |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a
@@ -84,6 +85,14 @@ Nothing blocking. The system can send a newsletter safely today.
   started arriving 2026-08-20. Do NOT skip straight to reject.
 
 ## Gotchas that will bite (learned the hard way)
+
+- **The mail provider allowance is SHARED.** Donation receipts, Gift Aid confirmations, welcome
+  emails and admin login codes come out of the same daily pot as the newsletter. A newsletter that
+  spends the lot does not just delay itself - it silently costs a donor their receipt. That is what
+  `NEWSLETTER_DAILY_SEND_CAP` (default 70) exists to prevent, and why it beats `dailyCap: 0`.
+- **A retry limit must know WHY it failed.** Three strikes is right for a dead mailbox and wrong for
+  "come back later": TASK-302 found real people permanently dropped from a send because the provider
+  was full when their turn came around three times. Classify before you count.
 
 - **A base64 upload needs a parser cap a third bigger than the file cap.** This has now bitten
   twice - hosted documents in TASK-265, images in TASK-300. The browser sends files base64-encoded,

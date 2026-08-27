@@ -262,6 +262,14 @@ resource "aws_ssm_parameter" "newsletter_reply_to_email" {
   value = var.newsletter_reply_to_email
 }
 
+# TASK-302: the newsletter's daily ceiling. Held in SSM so it can be raised for a genuine campaign
+# without a code change - the value the running send reads on its very next tick.
+resource "aws_ssm_parameter" "newsletter_daily_send_cap" {
+  name  = "/${var.project}/${var.environment}/NEWSLETTER_DAILY_SEND_CAP"
+  type  = "String"
+  value = tostring(var.newsletter_daily_send_cap)
+}
+
 # From/Reply-To address for donor thank-you letters (TASK-165/REQ-069). NOT a secret (it ships in
 # the email headers), but SSM-held and injected like newsletter_from_email so it varies per
 # environment. A plain String; the value is the real giving inbox address.

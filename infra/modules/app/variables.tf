@@ -161,6 +161,14 @@ variable "newsletter_reply_to_email" {
   default     = "newsletter@nbcc.scot"
 }
 
+# TASK-302: the provider's daily allowance is shared with donation receipts and login codes, so the
+# newsletter gets a hard ceiling and the rest is left for mail that must never fail.
+variable "newsletter_daily_send_cap" {
+  description = "Most newsletter emails per day; beats every per-send option. 0 disables."
+  type        = number
+  default     = 70
+}
+
 # From/Reply-To for donor thank-you letters (TASK-165/REQ-069). Held in SSM and injected via the
 # task-def secrets list like newsletter_from_email. Override per env in infra/envs/*/main.tf if needed.
 variable "giving_from_email" {

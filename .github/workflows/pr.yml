@@ -69,6 +69,7 @@ jobs:
       # Newsletter From/Reply-To address (TASK-161): required by the schema so the app boots.
       NEWSLETTER_FROM_EMAIL: newsletter@news.nbcc.scot
       NEWSLETTER_REPLY_TO_EMAIL: newsletter@nbcc.scot
+      NEWSLETTER_DAILY_SEND_CAP: "70"
       # Thank-you From/Reply-To address (TASK-165): defaulted in the schema, set here for parity.
       GIVING_FROM_EMAIL: giving@nbcc.scot
       BASE_URL: http://localhost:3000

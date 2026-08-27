@@ -71,6 +71,9 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Newsletter Reply-To (TASK-298): non-secret String injected via valueFrom, so the exec role
       # must be able to read it.
       aws_ssm_parameter.newsletter_reply_to_email.arn,
+      # Newsletter daily ceiling (TASK-302): non-secret String injected via valueFrom, so the exec
+      # role must be able to read it.
+      aws_ssm_parameter.newsletter_daily_send_cap.arn,
       # Newsletter From address (TASK-161): non-secret String injected via valueFrom, so
       # the exec role must be able to read it.
       aws_ssm_parameter.newsletter_from_email.arn,
@@ -185,6 +188,9 @@ resource "aws_ecs_task_definition" "app" {
       # Newsletter Reply-To (TASK-298): must differ from the From — the sending subdomain cannot
       # receive. Its ARN must also appear in exec_secrets above.
       { name = "NEWSLETTER_REPLY_TO_EMAIL", valueFrom = aws_ssm_parameter.newsletter_reply_to_email.arn },
+      # TASK-302: the newsletter's daily ceiling, so a send can never eat the allowance that donation
+      # receipts and login codes depend on. Its ARN must also appear in exec_secrets above.
+      { name = "NEWSLETTER_DAILY_SEND_CAP", valueFrom = aws_ssm_parameter.newsletter_daily_send_cap.arn },
       # Thank-you From/Reply-To address (TASK-165/REQ-069): non-secret SSM String, injected via
       # valueFrom like NEWSLETTER_FROM_EMAIL — so its ARN must also appear in exec_secrets below.
       { name = "GIVING_FROM_EMAIL", valueFrom = aws_ssm_parameter.giving_from_email.arn },

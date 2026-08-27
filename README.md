@@ -3989,6 +3989,25 @@ roughly 2/second) and no retry, so a burst simply lost people.
   emits thousands of messages looks like a compromised account and is treated as one; a modest first
   day that gets delivered and opened is the evidence that earns the next day's larger allowance.
   Offered as a checkbox at send time and recommended for a first big send.
+- **A standing daily ceiling above all of it** — `NEWSLETTER_DAILY_SEND_CAP` (default **70**,
+  TASK-302). This is not a limit on the newsletter so much as a **floor under everything else**: the
+  mail provider's daily allowance is shared by donation receipts, Gift Aid confirmations, welcome
+  emails and admin login codes, so a newsletter that spends the whole allowance does not merely delay
+  itself — it silently costs a donor their receipt. The ceiling therefore beats every per-send
+  option **including `dailyCap: 0`, which has always meant "uncapped" and is the default**; a
+  ceiling that lost to the default would protect nothing. It is read fresh on every tick, so raising
+  or lowering it reaches a send that is already running — no restart, no rescheduling.
+- **"Not now" never costs a recipient their place (TASK-302).** A failed send goes back in the queue,
+  but only three times; after that the recipient is marked failed and is never written to again. That
+  is right for a dead mailbox and badly wrong for a capacity refusal — being told "you have used
+  today's allowance" three times as their turn came around dropped a real person from the newsletter
+  permanently and silently. `src/newsletter/send-failure.ts` (pure) classifies each failure as
+  `defer` or `count`: a rate limit, a quota, a 503, or a connection that never landed refunds the
+  attempt and ends the tick early (the next recipient would only meet the same wall); anything else,
+  including anything **unrecognised**, counts — deferring never gives up, so an unknown fault has to
+  fall on the side that eventually stops. Each tick also puts back anyone previously given up on for
+  a deferrable reason, judged by that same classifier so there is one rule rather than two, and
+  guarded on `status = 'failed'` so a sent recipient can never be resurrected into a second copy.
 - **Pause, resume and stop** a send in flight — previously impossible: once the loop started, closing
   the browser did not stop the server.
 - **Live progress** that survives a page reload, because the send is server-side. When the daily

@@ -1261,7 +1261,13 @@ export async function getAdminNewsletterSendJob(req: Request, res: Response): Pr
   const job = await getJobForNewsletter(id);
   if (!job) return res.status(404).json({ error: "No send for this newsletter" });
   const summary = pacingSummary(
-    { rollout: job.rollout, perMinute: job.perMinute, dailyCap: job.dailyCap, startedAt: job.startedAt ? new Date(job.startedAt) : null },
+    {
+      rollout: job.rollout,
+      perMinute: job.perMinute,
+      dailyCap: job.dailyCap,
+      ceiling: config.NEWSLETTER_DAILY_SEND_CAP, // TASK-302: the standing daily ceiling
+      startedAt: job.startedAt ? new Date(job.startedAt) : null,
+    },
     0,
     job.pending,
     new Date(),

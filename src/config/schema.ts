@@ -127,6 +127,18 @@ export const configSchema = z.object({
   // NEWSLETTER_FROM_EMAIL (SSM String → task-def). Validated as an email address. Defaulted to the
   // production address so local dev / CI boot without extra setup.
   GIVING_FROM_EMAIL: z.string().email().default("giving@nbcc.scot"),
+
+  // TASK-302: the most newsletter emails that may leave in one day, whatever a send asks for.
+  //
+  // The mail provider's daily allowance is shared by EVERYTHING we send - donation receipts, Gift
+  // Aid confirmations, welcome emails and admin login codes all come out of the same pot. A
+  // newsletter that spends the whole allowance does not merely delay itself; it silently costs a
+  // donor their receipt, which is the one email that must never fail.
+  //
+  // So this is a floor under those transactional emails rather than a limit on the newsletter, and
+  // it beats every per-send option including "uncapped" (src/newsletter/send-pacing.ts). 0 disables
+  // it. NOT a secret - a plain SSM String injected like NEWSLETTER_FROM_EMAIL.
+  NEWSLETTER_DAILY_SEND_CAP: z.coerce.number().int().min(0).default(70),
 });
 
 export type Config = z.infer<typeof configSchema>;

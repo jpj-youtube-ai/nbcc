@@ -45,14 +45,26 @@ export interface JobPacing {
   rollout: "immediate" | "gentle";
   perMinute: number;
   dailyCap: number; // 0 = uncapped; ignored entirely when rollout is 'gentle'
+  // TASK-302: a STANDING ceiling that beats both of the above, including "uncapped". The provider's
+  // daily allowance is shared with donation receipts, Gift Aid confirmations and admin login codes,
+  // so a newsletter that spends the whole day silently costs a donor their receipt. 0 = no ceiling.
+  ceiling: number;
   startedAt: Date | null;
 }
 
 // The cap that applies TODAY. A gentle rollout computes it from how long the send has been running,
 // so the allowance grows on its own without anything needing to be rescheduled.
 export function dailyCapFor(job: JobPacing, now: Date): number {
-  if (job.rollout !== "gentle") return Math.max(0, job.dailyCap);
-  return gentleDailyCap(sendDayNumber(job.startedAt ?? now, now));
+  const asked =
+    job.rollout === "gentle"
+      ? gentleDailyCap(sendDayNumber(job.startedAt ?? now, now))
+      : Math.max(0, job.dailyCap);
+  // TASK-302: the ceiling wins - and it has to beat 0, which has always meant "uncapped" and is the
+  // DEFAULT send option. A ceiling that lost to the default would protect nothing at all.
+  const ceiling = Math.max(0, job.ceiling ?? 0);
+  if (ceiling <= 0) return asked;
+  if (asked <= 0) return ceiling;
+  return Math.min(asked, ceiling);
 }
 
 // How many messages this tick may send: the throttle, further limited by whatever is left of today's

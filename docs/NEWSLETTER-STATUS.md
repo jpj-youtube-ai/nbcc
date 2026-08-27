@@ -1,10 +1,46 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-303. Point a fresh session at this file to continue.
+Written 2026-08-20, refreshed after TASK-303 on 2026-08-27. Point a fresh session at this file.
 
-## State: LIVE and send-ready
+## ⚠️ START HERE: a real send is IN FLIGHT
 
-Everything below is merged and in production. Nothing is in flight — no open PRs, clean tree.
+A newsletter went to the **Newsletter** audience (376 people) on **2026-08-27 at 10:00**. It is not
+finished. It is throttled to **70/day** and should complete around **30–31 August**.
+
+**First thing to do: open the newsletter → "Who got it" and read the counts.**
+
+- **"Still to send"** is the remaining queue. It should fall by ~70 a day.
+- **If it has NOT moved since yesterday, something is wrong** — that is the signal to investigate,
+  and the most useful single fact a fresh session can gather.
+- **"We gave up on"** should be **zero**. TASK-302 revives those automatically on each tick; anything
+  sitting there means the revive is not running.
+
+**Do not start another send until this one drains.** They share the same daily allowance.
+
+### What was actually going on (needed to read the numbers)
+
+The provider is **Resend on the free tier: 100 emails/day**, and that allowance is shared with
+donation receipts, Gift Aid confirmations, welcome emails and admin login codes.
+
+The send was configured for the gentle rollout (200 day one, doubling), which is far over that. Two
+faults followed, both fixed on 2026-08-27:
+
+1. A capacity refusal spent one of a recipient's three attempts, so people could be — and may have
+   been — **dropped permanently and silently**. Fixed in TASK-302, which also puts back anyone
+   already dropped.
+2. The **"Accepted" figure counted rows, not people**, so a duplicated record inflated it. The send
+   reported **200 accepted in a single day against a 100/day allowance**, which is exactly the shape
+   that produces. Fixed in TASK-303. **Treat any "accepted" number recorded before 2026-08-27 as
+   unreliable**; the per-person queue was always the trustworthy record.
+
+The verified chain: worker → relay → Resend. The relay calls Resend once per email, checks the reply
+and returns 502 on refusal, which makes the send throw — and the "sent" mark only happens *after*
+success. So **nobody can be marked sent without Resend accepting them**, and the queue can be trusted
+even where the headline could not.
+
+## State: LIVE, with the above send in progress
+
+Everything below is merged and in production (task revision **79**, deployed 2026-08-27).
 
 ### Shipped
 | Task | What |
@@ -41,6 +77,7 @@ Everything below is merged and in production. Nothing is in flight — no open P
 | 298 | **Newsletter sends from news.nbcc.scot**, with Reply-To split out to the real inbox |
 | 299 | Click tracking for the new sender: `links.news.nbcc.scot` |
 | 300 | **Image upload actually works**: shrink in the browser, and never fail silently |
+| 301 | Subject-line sentinel written as an escape, not a raw NUL byte, + a repo-wide guard |
 | 302 | **Everyone gets it once**: a standing daily ceiling, and a capacity refusal no longer drops anybody |
 | 303 | **What actually arrived**: per-person mailbox outcome, and Accepted counts people not rows |
 
@@ -55,11 +92,16 @@ takeover: **Write → Who → Send**, with the actions pinned to a bottom bar.
   carrying the Send button.
 - **Results** is its own destination — one click from any sent row.
 
-### Verified live (re-checked after TASK-289)
-- Production healthy (`/health` 200); every feature marker present in the served HTML/JS/CSS
-- **DNS:** exactly one apex SPF (`v=spf1 include:_spf.google.com ~all`), DMARC
-  `p=none; rua=mailto:newsletter@nbcc.scot; fo=1`, MX still `smtp.google.com` (Gmail untouched),
-  Resend DKIM present at `resend._domainkey`, `send.nbcc.scot` SPF → amazonses
+### Verified live (re-checked 2026-08-27, after TASK-303)
+- Production healthy (HTTP 200); unsubscribe rejects a bogus token (400)
+- **Sending domain is now `news.nbcc.scot`** — From `newsletter@news.nbcc.scot`, Reply-To
+  `newsletter@nbcc.scot` (the subdomain is send-only: **no MX, no A record**, so a reply addressed
+  there would bounce — these are two separate config values and must stay that way)
+- **DNS:** apex MX still `smtp.google.com` (**Gmail untouched**); DMARC now
+  `p=quarantine; pct=25; rua=mailto:newsletter@nbcc.scot; fo=1`; apex SPF
+  `v=spf1 include:_spf.google.com ~all`; Resend DKIM at `resend._domainkey` and
+  `resend._domainkey.news`; `send.news.nbcc.scot` MX + SPF → amazonses; click tracking
+  `links.nbcc.scot` (apex) and `links.news.nbcc.scot` (newsletter), both → `links1.resend-dns.com`
 - **Webhook** `POST /api/webhooks/resend` returns **401** to an unsigned request — signature
   verification is on
 - **Unsubscribe** rejects a bogus token (400)
@@ -70,7 +112,22 @@ takeover: **Write → Who → Send**, with the actions pinned to a bottom bar.
 
 ## Outstanding
 
-Nothing blocking. The system can send a newsletter safely today.
+**Decisions waiting on Jaimie** (raised 2026-08-27, neither is blocking today):
+
+- **The mail plan, before December.** The 70/day ceiling protects receipts from the *newsletter*, but
+  not from a busy donation day — 70 newsletters plus 40 donations exceeds a 100/day allowance and
+  something fails. Options, in the order recommended:
+  1. **Ask Resend for charity pricing** (quote SC047995). Costs one email; may be free.
+  2. **Amazon SES** — ~4p/month at this volume, and the natural home: they are already on AWS, and
+     Resend is itself a wrapper around SES (the DNS already points at `amazonses.com`). Needs real
+     work though — bounce/complaint handling via SNS, click tracking via configuration sets. **A
+     January job, not a Christmas one.**
+  3. Resend Pro (~$20/month) for Nov–Jan only, if the above are not ready in time.
+  Jaimie explicitly does not want any provider change until the current send has finished. Swapping
+  mid-campaign would also throw away the sending-domain reputation built on 2026-08-26.
+- **Prune the list.** 9 hard bounces in the first ~200 (4.5%) — high for a young sending domain, where
+  providers watch that number closely. They are auto-suppressed, so nothing is broken; the imported
+  spreadsheet just carries dead addresses. Worth clearing before the Christmas campaign.
 
 **Not built** (approved, deliberately deferred — none block sending):
 - **K** Segments — filtered slices ("donors who gave this year"). Needs a query builder + storage.
@@ -79,11 +136,10 @@ Nothing blocking. The system can send a newsletter safely today.
 - **Q** Preference centre — choose which emails rather than all-or-nothing.
 
 **Deferred by design:**
-- **D** Move newsletters to a `news.nbcc.scot` subdomain so a bad campaign can't damage receipts and
-  admin login codes. **Recommended.** Blocked on adding the domain in Resend first, then repointing
-  `NEWSLETTER_FROM_EMAIL`.
-- **B** Tighten DMARC `p=none` → `quarantine` → `reject`. Needs a few weeks of the reports that
-  started arriving 2026-08-20. Do NOT skip straight to reject.
+- ~~**D** Move newsletters to a `news.nbcc.scot` subdomain~~ — **DONE**, TASK-296/298/299.
+- **B** Tighten DMARC further: now `p=quarantine; pct=25` (TASK-294). Next steps are `pct=100`, then
+  eventually `p=reject`. Needs a few more weeks of clean aggregate reports first. Do NOT skip
+  straight to reject.
 
 ## Gotchas that will bite (learned the hard way)
 

@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-305 on 2026-08-27. Point a fresh session at this file.
+Written 2026-08-20, refreshed after TASK-306 on 2026-08-27. Point a fresh session at this file.
 
 ## ⚠️ START HERE: a real send is IN FLIGHT
 
@@ -88,6 +88,7 @@ Everything below is merged and in production (task revision **79**, deployed 202
 | 303 | **What actually arrived**: per-person mailbox outcome, and Accepted counts people not rows |
 | 304 | Status doc handover for the in-flight send |
 | 305 | **Delivery stats under-counted by half** - the send record was written after the confirmation arrived |
+| 306 | Reverted the unmatched-event retry from 305 - it would have stormed our own webhook |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a
@@ -133,7 +134,7 @@ takeover: **Write → Who → Send**, with the actions pinned to a bottom bar.
   3. Resend Pro (~$20/month) for Nov–Jan only, if the above are not ready in time.
   Jaimie explicitly does not want any provider change until the current send has finished. Swapping
   mid-campaign would also throw away the sending-domain reputation built on 2026-08-26.
-- **Prune the list.** 9 hard bounces in the first ~200 (4.5%) — high for a young sending domain, where
+- **Prune the list.** **13** hard bounces in the first 200 (6.5%) — per the provider export, which is
   providers watch that number closely. They are auto-suppressed, so nothing is broken; the imported
   spreadsheet just carries dead addresses. Worth clearing before the Christmas campaign.
 
@@ -150,6 +151,12 @@ takeover: **Write → Who → Send**, with the actions pinned to a bottom bar.
   straight to reject.
 
 ## Gotchas that will bite (learned the hard way)
+
+- **The auto-revive only runs while the job is LIVE.** TASK-302 puts back anyone wrongly given up
+  on, but it runs inside the send tick, and `listRunnableJobs` only returns jobs in `queued` or
+  `running`. If every remaining row went to `failed`, `finishJobIfDrained` marks the job `done` and
+  the revive never fires. **If a send shows people in "we gave up on" AND the job is finished or
+  paused, the revive cannot reach them** - that needs a deliberate requeue, which is not built.
 
 - **The mail provider allowance is SHARED.** Donation receipts, Gift Aid confirmations, welcome
   emails and admin login codes come out of the same daily pot as the newsletter. A newsletter that

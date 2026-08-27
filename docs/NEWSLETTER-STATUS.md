@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-303 on 2026-08-27. Point a fresh session at this file.
+Written 2026-08-20, refreshed after TASK-305 on 2026-08-27. Point a fresh session at this file.
 
 ## ⚠️ START HERE: a real send is IN FLIGHT
 
@@ -28,10 +28,16 @@ faults followed, both fixed on 2026-08-27:
 1. A capacity refusal spent one of a recipient's three attempts, so people could be — and may have
    been — **dropped permanently and silently**. Fixed in TASK-302, which also puts back anyone
    already dropped.
-2. The **"Accepted" figure counted rows, not people**, so a duplicated record inflated it. The send
-   reported **200 accepted in a single day against a 100/day allowance**, which is exactly the shape
-   that produces. Fixed in TASK-303. **Treat any "accepted" number recorded before 2026-08-27 as
-   unreliable**; the per-person queue was always the trustworthy record.
+2. The **"Accepted" figure counted rows, not people**. Fixed in TASK-303.
+
+**RESOLVED 2026-08-27 by a provider export** (`emails-sent-1787866411082.csv`, 200 rows): Resend
+sent **all 200**, to **200 distinct people, zero duplicates** - 158 delivered, 24 clicked, 13
+bounced, 5 delayed. So **182 arrived**. The 100/day worry was unfounded; nobody was missing.
+
+What WAS wrong was our reporting: the screen said 95 delivered and 0 clicks. The provider confirms
+delivery in under half a second, and the row recording who we sent to was written up to twenty
+seconds later, so confirmations arriving in that gap were discarded. Fixed in TASK-305. **Any
+delivery figure from before 2026-08-27 evening under-reports by roughly half.**
 
 The verified chain: worker → relay → Resend. The relay calls Resend once per email, checks the reply
 and returns 502 on refusal, which makes the send throw — and the "sent" mark only happens *after*
@@ -80,6 +86,8 @@ Everything below is merged and in production (task revision **79**, deployed 202
 | 301 | Subject-line sentinel written as an escape, not a raw NUL byte, + a repo-wide guard |
 | 302 | **Everyone gets it once**: a standing daily ceiling, and a capacity refusal no longer drops anybody |
 | 303 | **What actually arrived**: per-person mailbox outcome, and Accepted counts people not rows |
+| 304 | Status doc handover for the in-flight send |
+| 305 | **Delivery stats under-counted by half** - the send record was written after the confirmation arrived |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a

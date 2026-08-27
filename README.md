@@ -3968,6 +3968,29 @@ here protects the `nbcc.scot` sending reputation, which also carries admin sign-
 - **Viewer accounts can open the Newsletter tab again.** Every read route required `edit`, so a Viewer
   got 403s swallowed by empty catch handlers and a tab stuck on "Loading…". Reads now accept `view`.
 
+**The delivery stats under-counted by half, and a provider export showed why (TASK-305).** A real
+send reported 95 delivered and 0 clicks; Resend's own export of the same 200 emails showed **182
+arrived and 24 clicks**. Nothing was wrong with the sending — every one of the 200 went out, to 200
+distinct people, with no duplicates. The reporting was wrong.
+
+The cause is in the export's timestamps: `sent 09:00:15.013`, `delivered 09:00:15.483` — **under half
+a second**. But the row recording *who we sent to* was written once per batch, at the end of a tick,
+up to twenty seconds later. A confirmation arriving in that gap matched no send, was classed
+`unmatched`, and the webhook answered **200** — which tells Svix the event was handled and not to
+retry. It was then gone for good. Fast providers confirm quickest, so Gmail, Yahoo and Outlook were
+precisely the ones being lost.
+
+Two changes. The send is now recorded **the instant it succeeds**, inside the loop, which closes the
+gap. And an unmatched event that is still recent (`UNMATCHED_RETRY_WINDOW_MS`, 5 minutes) is answered
+**409** so Svix delivers it again, rather than being shrugged off. That window is what makes the
+retry safe: donation receipts, Gift Aid confirmations and login codes share the provider account and
+legitimately match nothing, so an *old* unmatched event still gets the 200 that prevents a retry
+storm — which is why the original code answered 200 to everything.
+
+Note `newsletter_sends` is a plain `INSERT` with **no unique index**, so writing the same person
+twice really does create two rows — the in-loop write tracks what it recorded and the end-of-batch
+sweep is filtered by it. Adding the constraint properly needs a dedupe migration first.
+
 **What actually arrived, per person (TASK-303).** The per-person view showed our queue row and
 labelled it *Received* - but handing a message to the mail service is not the same as it arriving,
 and the two come apart exactly when it matters: when the provider is refusing, when an address is

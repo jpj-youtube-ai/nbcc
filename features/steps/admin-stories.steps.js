@@ -223,9 +223,12 @@ When(
   "I DELETE the admin story as {string} with password {string}",
   async function (email, password) {
     const token = await login(email, password);
+    // TASK-311: erasure requires a reason. The scenarios that test a MISSING reason use the
+    // dedicated "erase ... with reason" step instead, so this one always supplies one.
     const res = await fetch(`${BASE_URL}/api/admin/stories/${this.adminStoryId}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "bdd cleanup" }),
     });
     this.adminStatus = res.status;
     this.adminBody = await res.json().catch(() => ({}));
@@ -238,7 +241,8 @@ When(
     const token = await login(email, password);
     const res = await fetch(`${BASE_URL}/api/admin/stories/999999999`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "bdd cleanup" }),
     });
     this.adminStatus = res.status;
     this.adminBody = await res.json().catch(() => ({}));

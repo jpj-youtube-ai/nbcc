@@ -45,8 +45,11 @@ Feature: Admin manages My Story submissions (Task C)
     Then the admin response status should be 403
     And the story still exists in the stories database
 
-  Scenario: an Editor permanently deletes a story, and it is gone for good
-    When I DELETE the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+  # TASK-311: erasure now requires the story to be archived first - the everyday tidy-up action
+  # cannot reach the irreversible one by accident.
+  Scenario: an Editor archives then permanently erases a story, and it is gone for good
+    When I archive the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I DELETE the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the admin response status should be 200
     And the story no longer exists in the stories database
     When I GET the admin story detail as "editor.admin.bdd@example.com" with password "edit-pw-123"

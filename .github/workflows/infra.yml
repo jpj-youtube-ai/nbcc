@@ -7,7 +7,7 @@ on:
       environment:
         description: Environment
         type: choice
-        options: [staging, production]
+        options: [production]
       action:
         description: plan, apply or destroy
         type: choice

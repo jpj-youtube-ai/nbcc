@@ -874,6 +874,9 @@
   bindClick("backfillInvitesBtn", backfillInvites);
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
+  if (el("storiesDiagnosticsRun")) {
+    el("storiesDiagnosticsRun").addEventListener("click", runStoriesDiagnostics);
+  }
   Array.prototype.forEach.call(doc.querySelectorAll("#storiesStatusFilter .admin-seg"), function (b) {
     b.addEventListener("click", function () {
       storiesStatusFilter = b.getAttribute("data-status") || "";
@@ -923,6 +926,38 @@
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
       });
   }
+  // TASK-309: read the storage diagnostic and lay it out plainly. Deliberately shows SIZES: an
+  // empty database sits near the Postgres minimum, so a much larger one that nothing is connected to
+  // is the strongest available sign that the original data is still there and simply orphaned.
+  function runStoriesDiagnostics() {
+    var out = el("storiesDiagnosticsOut");
+    if (!out) return;
+    out.innerHTML = '<p class="admin-loading">Checking…</p>';
+    authFetch("/api/admin/diagnostics/stories")
+      .then(j)
+      .then(function (d) {
+        var dbs = d.databasesOnInstance || [];
+        var connected = d.connectedDatabase || "(unknown)";
+        var rows = dbs
+          .map(function (db) {
+            var isConnected = db.name === connected;
+            return "<tr><td>" + H.escapeHtml(db.name) + (isConnected ? " <b>(in use)</b>" : "") +
+              "</td><td>" + H.escapeHtml(db.size || "") + "</td></tr>";
+          })
+          .join("");
+        out.innerHTML =
+          "<p>Reading from <b>" + H.escapeHtml(connected) + "</b> — it holds <b>" +
+          H.escapeHtml(String(d.storiesRowCount)) + "</b> stories.</p>" +
+          '<table class="admin-table"><thead><tr><th>Database on this server</th><th>Size</th></tr></thead><tbody>' +
+          rows + "</tbody></table>" +
+          '<p class="admin-muted">If a database you are NOT reading from is much larger, that is very' +
+          " likely where the stories are. Nothing here can change or delete anything.</p>";
+      })
+      .catch(function () {
+        out.innerHTML = '<p class="admin-empty">Could not read the storage details.</p>';
+      });
+  }
+
   function storyStatus(msg) {
     el("storyActionStatus").textContent = msg || "";
   }

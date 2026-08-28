@@ -157,6 +157,13 @@ takeover: **Write → Who → Send**, with the actions pinned to a bottom bar.
 
 ## Gotchas that will bite (learned the hard way)
 
+- **`npm run test:unit` on this machine silently runs ~290 FEWER tests than CI.** The npm registry
+  is blocked, so `exceljs` is not installed - and 13 test files fail to LOAD rather than fail
+  loudly. Vitest reports them as failed FILES while the headline test count looks healthy, so a
+  broken test can pass locally and only surface in CI. That is exactly how TASK-311 reached a red
+  PR. Writing a minimal stub at `node_modules/exceljs/index.js` (gitignored, local only) takes the
+  suite from 2460 to 2759 passing. **Check the failed-FILE count, not just the test count.**
+
 - **Sizes cannot tell you whether a table has data.** An empty Postgres database is ~7.7 MB, and
   the contact database holds four real messages at 7935 kB against an EMPTY stories database at
   7959 kB. TASK-308/309 built a diagnostic around that signal and it could not distinguish

@@ -175,27 +175,45 @@ describe("PATCH /api/admin/contact/:id (editor+ gate, records who replied)", () 
 
 describe("DELETE /api/admin/contact/:id (editor+ gate)", () => {
   it("401s with no token", async () => {
-    const res = await runDelete({ token: "" });
+    const res = await runDelete({ token: "", body: { reason: "x" } });
     expect(res.statusCode).toBe(401);
     expect(deleteEnquiryMock).not.toHaveBeenCalled();
   });
 
   it("403s a Viewer", async () => {
-    const res = await runDelete({ role: "viewer" });
+    const res = await runDelete({ role: "viewer", body: { reason: "x" } });
     expect(res.statusCode).toBe(403);
     expect(deleteEnquiryMock).not.toHaveBeenCalled();
   });
 
-  it.each(["editor", "admin"])("%s can delete an enquiry (200)", async (role) => {
+  // TASK-311: erasing a message from a real person now needs it ARCHIVED first and a reason given,
+  // exactly as a story does. The everyday action is Archive, which is reversible.
+  const archivedEnquiry = { id: 3, first_name: "A", status: "new", archived_at: "2026-08-28T10:00:00Z" };
+
+  it("409s when the enquiry has not been archived first", async () => {
+    getEnquiryMock.mockResolvedValueOnce({ id: 3, status: "new", archived_at: null });
+    const res = await runDelete({ role: "editor", body: { reason: "tidying up" } });
+    expect(res.statusCode).toBe(409);
+    expect(deleteEnquiryMock).not.toHaveBeenCalled();
+  });
+
+  it("400s without a reason, and erases nothing", async () => {
+    const res = await runDelete({ role: "editor", body: {} });
+    expect(res.statusCode).toBe(400);
+    expect(deleteEnquiryMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["editor", "admin"])("%s can erase an ARCHIVED enquiry with a reason (200)", async (role) => {
+    getEnquiryMock.mockResolvedValueOnce(archivedEnquiry);
     deleteEnquiryMock.mockResolvedValueOnce(true);
-    const res = await runDelete({ role });
+    const res = await runDelete({ role, body: { reason: "spam" } });
     expect(res.statusCode).toBe(200);
     expect(deleteEnquiryMock).toHaveBeenCalledWith(7);
   });
 
   it("404s when the enquiry does not exist", async () => {
-    deleteEnquiryMock.mockResolvedValueOnce(false);
-    const res = await runDelete({ role: "editor" });
+    getEnquiryMock.mockResolvedValueOnce(null);
+    const res = await runDelete({ role: "editor", body: { reason: "gone already" } });
     expect(res.statusCode).toBe(404);
   });
 

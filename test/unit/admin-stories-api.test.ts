@@ -8,7 +8,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // donor admin-api.test.ts mock/req/res style, but mocks ../../src/db/stories directly
 // instead of the pool, since that module is Task C's only access to story data.
 
-const { listStoriesMock, getStoryMock, updateStoryMock, deleteStoryMock, getUserAuthRowMock } = vi.hoisted(() => ({
+const { listStoriesMock, getStoryMock, updateStoryMock, deleteStoryMock, getUserAuthRowMock, recordErasureMock } = vi.hoisted(() => ({
+  recordErasureMock: vi.fn(),
   listStoriesMock: vi.fn(),
   getStoryMock: vi.fn(),
   updateStoryMock: vi.fn(),
@@ -20,6 +21,22 @@ vi.mock("../../src/db/stories", () => ({
   getStory: getStoryMock,
   updateStory: updateStoryMock,
   deleteStory: deleteStoryMock,
+  archiveStory: vi.fn(),
+  restoreStory: vi.fn(),
+}));
+// TASK-311: erasure writes a tombstone before destroying the row. Mocked so these tests exercise the
+// route's gates without a database - and so the assertion below can prove the tombstone is written.
+vi.mock("../../src/db/erasure-log", () => ({
+  recordErasure: recordErasureMock,
+  listErasures: vi.fn(),
+}));
+vi.mock("../../src/db/contact", () => ({
+  listEnquiries: vi.fn(),
+  getEnquiry: vi.fn(),
+  markReplied: vi.fn(),
+  deleteEnquiry: vi.fn(),
+  archiveEnquiry: vi.fn(),
+  restoreEnquiry: vi.fn(),
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
@@ -77,6 +94,7 @@ beforeEach(() => {
   updateStoryMock.mockReset();
   deleteStoryMock.mockReset();
   getUserAuthRowMock.mockReset();
+  recordErasureMock.mockReset();
 });
 
 describe("GET /api/admin/stories (list)", () => {
@@ -91,13 +109,27 @@ describe("GET /api/admin/stories (list)", () => {
     const res = await runList({ role: "viewer" });
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ results: [{ id: 1, status: "new" }] });
-    expect(listStoriesMock).toHaveBeenCalledWith({ status: undefined, useScope: undefined });
+    expect(listStoriesMock).toHaveBeenCalledWith({ status: undefined, useScope: undefined, view: "live" });
   });
 
   it("passes ?status= and ?use_scope= through to listStories", async () => {
     listStoriesMock.mockResolvedValueOnce([]);
     await runList({ role: "viewer", query: { status: "withdrawn", use_scope: "public" } });
-    expect(listStoriesMock).toHaveBeenCalledWith({ status: "withdrawn", useScope: "public" });
+    expect(listStoriesMock).toHaveBeenCalledWith({ status: "withdrawn", useScope: "public", view: "live" });
+  });
+
+  // TASK-311: the archive view travels separately from the workflow status - a story can be both
+  // "withdrawn" and archived, and the two filters must not be conflated.
+  it("asks for the archived view only when it is requested by name", async () => {
+    listStoriesMock.mockResolvedValueOnce([]);
+    await runList({ role: "viewer", query: { view: "archived" } });
+    expect(listStoriesMock).toHaveBeenCalledWith({ status: undefined, useScope: undefined, view: "archived" });
+  });
+
+  it("falls back to the live view when the view is nonsense, never showing archived by accident", async () => {
+    listStoriesMock.mockResolvedValueOnce([]);
+    await runList({ role: "viewer", query: { view: "everything" } });
+    expect(listStoriesMock).toHaveBeenCalledWith({ status: undefined, useScope: undefined, view: "live" });
   });
 });
 
@@ -233,32 +265,72 @@ describe("PATCH /api/admin/stories/:id (editor+ gate)", () => {
 // patchAdminDonor/patchAdminStory).
 describe("DELETE /api/admin/stories/:id (editor+ gate, permanent erasure)", () => {
   it("401s with no token", async () => {
-    const res = await runDelete({ token: "" });
+    const res = await runDelete({ token: "", body: { reason: "x" } });
     expect(res.statusCode).toBe(401);
     expect(deleteStoryMock).not.toHaveBeenCalled();
   });
 
   it("403s a Viewer", async () => {
-    const res = await runDelete({ role: "viewer" });
+    const res = await runDelete({ role: "viewer", body: { reason: "x" } });
     expect(res.statusCode).toBe(403);
     expect(deleteStoryMock).not.toHaveBeenCalled();
   });
 
-  it.each(["editor", "admin"])("%s can permanently delete a story (200)", async (role) => {
+  // TASK-311: erasure now needs the story ARCHIVED and a reason given. Three stories were erased
+  // from production and nothing could say what had gone - so neither gate is optional.
+  const archived = { id: 7, story_text: "hello", status: "new", archived_at: "2026-08-28T10:00:00Z" };
+
+  it.each(["editor", "admin"])("%s can erase an ARCHIVED story with a reason (200)", async (role) => {
+    getStoryMock.mockResolvedValueOnce(archived);
     deleteStoryMock.mockResolvedValueOnce(true);
-    const res = await runDelete({ role });
+    const res = await runDelete({ role, body: { reason: "duplicate submission" } });
     expect(res.statusCode).toBe(200);
     expect(deleteStoryMock).toHaveBeenCalledWith(7);
   });
 
+  it("writes the tombstone BEFORE destroying the row", async () => {
+    // Ordering is the point: a crash between the two must leave a record of an erasure that did not
+    // happen, which is noticed - not an erasure with no record, which is the silence being fixed.
+    const order: string[] = [];
+    getStoryMock.mockResolvedValueOnce(archived);
+    recordErasureMock.mockImplementationOnce(async () => { order.push("log"); });
+    deleteStoryMock.mockImplementationOnce(async () => { order.push("delete"); return true; });
+    await runDelete({ role: "editor", body: { reason: "consent withdrawn" } });
+    expect(order).toEqual(["log", "delete"]);
+    expect(recordErasureMock).toHaveBeenCalledWith(
+      expect.objectContaining({ recordKind: "story", recordId: 7, reason: "consent withdrawn" }),
+    );
+  });
+
+  it("409s when the story has not been archived first", async () => {
+    getStoryMock.mockResolvedValueOnce({ id: 7, status: "new", archived_at: null });
+    const res = await runDelete({ role: "editor", body: { reason: "tidying up" } });
+    expect(res.statusCode).toBe(409);
+    expect(deleteStoryMock).not.toHaveBeenCalled();
+    expect(recordErasureMock).not.toHaveBeenCalled();
+  });
+
+  it("400s without a reason, and erases nothing", async () => {
+    const res = await runDelete({ role: "editor", body: {} });
+    expect(res.statusCode).toBe(400);
+    expect(deleteStoryMock).not.toHaveBeenCalled();
+    expect(recordErasureMock).not.toHaveBeenCalled();
+  });
+
+  it("400s on a blank reason, so whitespace cannot pass for one", async () => {
+    const res = await runDelete({ role: "editor", body: { reason: "   " } });
+    expect(res.statusCode).toBe(400);
+    expect(deleteStoryMock).not.toHaveBeenCalled();
+  });
+
   it("404s when the story does not exist", async () => {
-    deleteStoryMock.mockResolvedValueOnce(false);
-    const res = await runDelete({ role: "editor" });
+    getStoryMock.mockResolvedValueOnce(null);
+    const res = await runDelete({ role: "editor", body: { reason: "gone already" } });
     expect(res.statusCode).toBe(404);
   });
 
   it("400s a non-numeric id and never calls deleteStory", async () => {
-    const res = await runDelete({ role: "editor", id: "abc" });
+    const res = await runDelete({ role: "editor", id: "abc", body: { reason: "x" } });
     expect(res.statusCode).toBe(400);
     expect(deleteStoryMock).not.toHaveBeenCalled();
   });

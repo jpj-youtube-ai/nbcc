@@ -235,6 +235,13 @@
                   <button class="admin-seg" type="button" data-status="used">Used</button>
                   <button class="admin-seg" type="button" data-status="withdrawn">Withdrawn</button>
                 </div>
+                <!-- TASK-311: archived stories are out of the way but never gone. Separate from the
+                     status filters above because archiving is orthogonal to where a story is in the
+                     review workflow. -->
+                <div class="admin-segmented" role="group" aria-label="Archived or live" id="storiesViewFilter">
+                  <button class="admin-seg is-active" type="button" data-view="live">Live</button>
+                  <button class="admin-seg" type="button" data-view="archived">Archived</button>
+                </div>
               </div>
               <div class="admin-table-wrap" id="storiesTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
 

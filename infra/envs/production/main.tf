@@ -18,7 +18,14 @@ module "app" {
 
   # Daily automated backups (snapshots + PITR), retained 5 days in AWS-managed
   # backup storage. Staging keeps the module default (7).
-  backup_retention_days = 5
+  # TASK-311: raised from 5 to 35 - the AWS maximum for automated backups. Three stories were
+  # permanently deleted and the 5-day window had already closed by the time anyone noticed, which
+  # is the whole argument: a week is not long enough to notice a quiet loss. Backup storage up to
+  # the database size is free and this database is ~18 MB, so the cost of the extra month is pennies.
+  #
+  # 35 days is a hard AWS ceiling. Anything longer (3 months, a year) needs AWS Backup with its own
+  # retention plan, which is a separate piece of work - see docs/NEWSLETTER-STATUS.md.
+  backup_retention_days = 35
 
   # HTTPS: provisions the Route53 zone, ACM cert (nbcc.scot + www), 443 listener and
   # 80->443 redirect. After the first apply, delegate the domain by pasting the

@@ -103,6 +103,82 @@ Then("the diagnostics never include story text", function () {
   assert.ok(!/story_text|storyText/.test(body), `diagnostics leaked story content: ${body}`);
 });
 
+async function storyAction(email, password, suffix, method, body) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/stories/${this.adminStoryId}${suffix}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+}
+
+When("I archive the admin story as {string} with password {string}", async function (email, password) {
+  await storyAction.call(this, email, password, "/archive", "POST");
+});
+
+When("I restore the admin story as {string} with password {string}", async function (email, password) {
+  await storyAction.call(this, email, password, "/restore", "POST");
+});
+
+When(
+  "I erase the admin story with reason {string} as {string} with password {string}",
+  async function (reason, email, password) {
+    await storyAction.call(this, email, password, "", "DELETE", { reason });
+  },
+);
+
+When(
+  "I GET the archived admin stories as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/stories?view=archived`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When("I GET the erasure log as {string} with password {string}", async function (email, password) {
+  const token = await login(email, password);
+  const res = await fetch(`${BASE_URL}/api/admin/erasures`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  this.adminStatus = res.status;
+  this.adminBody = await res.json().catch(() => ({}));
+});
+
+Then("the admin stories list does not contain the seeded story", function () {
+  const results = this.adminBody.results || [];
+  assert.ok(
+    !results.some((r) => r.id === this.adminStoryId),
+    `archived story ${this.adminStoryId} should be hidden, got ${JSON.stringify(results)}`,
+  );
+});
+
+Then("the erasure log records that story with reason {string}", function (reason) {
+  const results = this.adminBody.results || [];
+  const entry = results.find((r) => r.recordKind === "story" && r.recordId === this.adminStoryId);
+  assert.ok(entry, `no erasure entry for story ${this.adminStoryId}: ${JSON.stringify(results)}`);
+  assert.equal(entry.reason, reason);
+  assert.ok(entry.erasedBy, "an erasure must record who did it");
+});
+
+Then("the erasure log carries no personal details", function () {
+  // The whole point of the log is that it survives an erasure. If it kept the person's name, email
+  // or the story text, the erasure would not be an erasure at all.
+  const body = JSON.stringify(this.adminBody);
+  assert.ok(
+    !/story_text|storyText|first_name|firstName|"email"/.test(body),
+    `erasure log leaked personal data: ${body}`,
+  );
+});
+
 Then("the admin stories list contains the seeded story", function () {
   const results = this.adminBody.results || [];
   assert.ok(

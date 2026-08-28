@@ -1,4 +1,5 @@
 import { contactPool } from "./contact-pool";
+import { archiveCondition, type ArchiveView } from "../admin/archive-filter";
 import type { ContactEnquiry } from "../contact/schema";
 
 // The ONLY read/write path for contact enquiries. Uses contactPool exclusively — never
@@ -30,13 +31,18 @@ export async function insertEnquiry(e: ContactEnquiry): Promise<{ id: number }> 
 
 // Newest-first, optionally filtered by status. Returns the full row set (the message body is
 // small and there is no cross-submitter PII-minimisation concern as there is for stories).
-export async function listEnquiries(status?: string): Promise<ContactRow[]> {
+export async function listEnquiries(status?: string, view: ArchiveView = "live"): Promise<ContactRow[]> {
+  const conditions: string[] = [];
   const params: string[] = [];
-  let where = "";
   if (status) {
     params.push(status);
-    where = ` WHERE status = $1`;
+    conditions.push(`status = $${params.length}`);
   }
+  // TASK-311: archived enquiries stay out of the working list and appear only behind the Archived
+  // filter. Same single source of truth as the stories list.
+  const archived = archiveCondition(view);
+  if (archived) conditions.push(archived);
+  const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
   const result = await contactPool.query<ContactRow>(
     `SELECT id, first_name, last_name, email, message, status, created_at, replied_at, replied_by
      FROM contact_enquiries${where}
@@ -46,9 +52,27 @@ export async function listEnquiries(status?: string): Promise<ContactRow[]> {
   return result.rows;
 }
 
+// TASK-311: the everyday action - a message from a real person should not vanish to a stray click.
+export async function archiveEnquiry(id: number): Promise<boolean> {
+  const result = await contactPool.query(
+    `UPDATE contact_enquiries SET archived_at = now() WHERE id = $1 AND archived_at IS NULL`,
+    [id],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function restoreEnquiry(id: number): Promise<boolean> {
+  const result = await contactPool.query(
+    `UPDATE contact_enquiries SET archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL`,
+    [id],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 export async function getEnquiry(id: number): Promise<ContactRow | null> {
   const result = await contactPool.query<ContactRow>(
-    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at, replied_by
+    `SELECT id, first_name, last_name, email, message, status, created_at, replied_at, replied_by,
+            archived_at
      FROM contact_enquiries WHERE id = $1`,
     [id],
   );

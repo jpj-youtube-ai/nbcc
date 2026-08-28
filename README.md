@@ -1893,6 +1893,26 @@ hides). Proven by `test/unit/newsletter-blocks.test.ts` (block renderer, all blo
 (admin UI), `test/unit/unsubscribe-token.test.ts` and the `@newsletter @db` `features/newsletter.feature`
 (including block create/preview/upload/serve scenarios).
 
+**Stories diagnostics (TASK-308).** `GET /api/admin/diagnostics/stories` (Editor+, read-only)
+answers one question: where the My Story submissions actually are.
+
+It exists because the Stories tab showed **No stories yet** - the EMPTY state, not the error state.
+That distinction is the whole diagnosis: the query reached a database and found a `stories` table
+with no rows in it. An absent table would have errored. Schema present, data absent, which is what a
+freshly-created database looks like rather than a broken one.
+
+Every deploy runs `bootstrap:stories`, which creates that database **if missing** and builds its
+schema - normally a no-op. But if the database name or credentials ever changed, the bootstrap would
+have made a new empty one and pointed the app at it, while the original sat alongside it untouched.
+So the endpoint reports `current_database()`, the row count, the applied migrations, and **every
+database on the same server with its size**, largest first. An orphaned copy shows up as a database
+nothing is connected to that is markedly larger than empty.
+
+It is strictly SELECT-only and returns names, counts and sizes - **never story content**. The
+separate stories database exists so submissions stay behind the consent model, and a diagnostic must
+not become a way around it; a BDD scenario asserts the response carries no story text, and another
+that a Viewer gets 403.
+
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
 The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with

@@ -45,8 +45,11 @@ Feature: Admin manages My Story submissions (Task C)
     Then the admin response status should be 403
     And the story still exists in the stories database
 
-  Scenario: an Editor permanently deletes a story, and it is gone for good
-    When I DELETE the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+  # TASK-311: erasure now requires the story to be archived first - the everyday tidy-up action
+  # cannot reach the irreversible one by accident.
+  Scenario: an Editor archives then permanently erases a story, and it is gone for good
+    When I archive the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I DELETE the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the admin response status should be 200
     And the story no longer exists in the stories database
     When I GET the admin story detail as "editor.admin.bdd@example.com" with password "edit-pw-123"
@@ -70,3 +73,44 @@ Feature: Admin manages My Story submissions (Task C)
   Scenario: a Viewer cannot see the server's databases
     When I GET the stories diagnostics as "viewer.admin.bdd@example.com" with password "view-pw-123"
     Then the admin response status should be 403
+
+  # TASK-311: three stories were permanently deleted from production and nothing could say what had
+  # gone, when or why. Archiving is now the everyday action - reversible, and it hides the story from
+  # the working list without destroying it.
+  Scenario: archiving hides a story from the list but keeps it
+    When I archive the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    When I GET the admin stories list as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin stories list does not contain the seeded story
+    When I GET the archived admin stories as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin stories list contains the seeded story
+    And the story still exists in the stories database
+
+  Scenario: restoring brings it back to the working list
+    When I archive the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I restore the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    When I GET the admin stories list as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin stories list contains the seeded story
+
+  # Erasure stays possible - a charity must be able to honour a GDPR erasure request - but it is no
+  # longer reachable by accident, and it can never be silent again.
+  Scenario: erasing refuses unless the story was archived first
+    When I erase the admin story with reason "no longer needed" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 409
+    And the story still exists in the stories database
+
+  Scenario: erasing refuses without a reason
+    When I archive the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I erase the admin story with reason "" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 400
+    And the story still exists in the stories database
+
+  Scenario: an archived story can be erased, and the erasure is recorded
+    When I archive the admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I erase the admin story with reason "duplicate submission" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the story no longer exists in the stories database
+    When I GET the erasure log as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the erasure log records that story with reason "duplicate submission"
+    And the erasure log carries no personal details

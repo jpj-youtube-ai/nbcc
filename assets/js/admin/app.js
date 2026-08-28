@@ -17,6 +17,7 @@
   var currentDonorId = null; // the donor open in the detail view
   var currentStoryId = null; // the story open in the detail view
   var storiesStatusFilter = ""; // Stories view status filter ("" = all)
+  var storiesArchiveView = "live"; // TASK-311: "live" or "archived" - archived is never the default
   var currentContactId = null; // the contact enquiry open in the detail view
   var contactStatusFilter = ""; // Contact form view status filter ("" = all)
   var teamRows = []; // last-loaded Team rows, cached so "Manage access" doesn't need a single-user GET
@@ -874,6 +875,15 @@
   bindClick("backfillInvitesBtn", backfillInvites);
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
+  Array.prototype.forEach.call(doc.querySelectorAll("#storiesViewFilter .admin-seg"), function (b) {
+    b.addEventListener("click", function () {
+      storiesArchiveView = b.getAttribute("data-view") || "live";
+      Array.prototype.forEach.call(doc.querySelectorAll("#storiesViewFilter .admin-seg"), function (x) {
+        x.classList.toggle("is-active", x === b);
+      });
+      loadStories();
+    });
+  });
   if (el("storiesDiagnosticsRun")) {
     el("storiesDiagnosticsRun").addEventListener("click", runStoriesDiagnostics);
   }
@@ -916,7 +926,12 @@
   function loadStories() {
     var wrap = el("storiesTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
-    var path = "/api/admin/stories" + (storiesStatusFilter ? "?status=" + encodeURIComponent(storiesStatusFilter) : "");
+    // TASK-311: two independent filters - where a story is in the workflow, and whether it is
+    // archived. Both travel to the API; the server decides what each view means.
+    var query = [];
+    if (storiesStatusFilter) query.push("status=" + encodeURIComponent(storiesStatusFilter));
+    if (storiesArchiveView) query.push("view=" + encodeURIComponent(storiesArchiveView));
+    var path = "/api/admin/stories" + (query.length ? "?" + query.join("&") : "");
     authFetch(path)
       .then(j)
       .then(function (d) {
@@ -1039,15 +1054,24 @@
         '<button class="btn btn-primary" type="submit">Save changes</button> ' +
         '<button class="btn btn-ghost" type="button" id="withdrawStoryBtn">Withdraw</button>' +
         "</form>" +
-        // Permanent erasure (G2 item 6): visually distinct from the reversible Withdraw
-        // above (its own danger zone, a destructive btn style) and gated by an
-        // irreversible-erasure confirm() guard (see deleteStory below) — never the same
-        // click surface as the Save/Withdraw form.
-        '<div class="admin-danger-zone">' +
-        '<h3 class="admin-subhead">Delete permanently</h3>' +
-        '<p class="admin-danger-copy">This permanently erases the story and every detail the submitter gave us. There is no way to undo this, and it is different from Withdraw, which only stops the story being used.</p>' +
-        '<button class="btn btn-danger" type="button" id="deleteStoryBtn">Delete permanently</button>' +
-        "</div>";
+        // TASK-311: archiving is now the everyday way to clear a story off the working list, and it
+        // is reversible. Three stories were permanently deleted from production and nothing could say
+        // what had gone - so the irreversible action no longer sits where the routine one belongs.
+        //
+        // Erasure is still here, because a charity must be able to honour a GDPR erasure request. It
+        // appears ONLY once a story is archived, and asks for a reason that is recorded.
+        (s.archived_at
+          ? '<div class="admin-danger-zone">' +
+            '<h3 class="admin-subhead">Archived</h3>' +
+            '<p class="admin-danger-copy">This story is archived and hidden from the main list. Restore it to bring it back, or erase it permanently — erasing cannot be undone, and asks you to say why so there is a record of what was removed.</p>' +
+            '<button class="btn" type="button" id="restoreStoryBtn">Restore</button> ' +
+            '<button class="btn btn-danger" type="button" id="eraseStoryBtn">Erase permanently</button>' +
+            "</div>"
+          : '<div class="admin-danger-zone">' +
+            '<h3 class="admin-subhead">Archive</h3>' +
+            '<p class="admin-danger-copy">Archiving hides this story from the main list and keeps it safe — you can bring it back at any time. It is different from Withdraw, which only stops the story being used.</p>' +
+            '<button class="btn" type="button" id="archiveStoryBtn">Archive</button>' +
+            "</div>");
     }
     el("storyDetail").innerHTML = info + actions;
     if (canWrite) wireStoryActions(s);
@@ -1089,31 +1113,54 @@
       if (!window.confirm("Withdraw this story? It will no longer be treated as usable.")) return;
       patchStory({ status: "withdrawn" }, "Story withdrawn.", "Could not withdraw the story.");
     });
-    bindClick("deleteStoryBtn", deleteStory);
+    bindClick("archiveStoryBtn", archiveStory);
+    bindClick("restoreStoryBtn", restoreStory);
+    bindClick("eraseStoryBtn", eraseStory);
   }
-  // Permanent erasure (G2 item 6): a stronger, explicit confirm() than Withdraw's, naming the
-  // action as permanent erasure rather than a generic "are you sure", since this cannot be
+  // TASK-311: a stronger, explicit prompt than Withdraw's, naming the action as permanent erasure
+  // rather than a generic "are you sure", since this cannot be
   // undone (DELETE /api/admin/stories/:id, not a status flag). On success, returns to the
   // Stories list and refreshes it, since the detail view has nothing left to show.
-  function deleteStory() {
-    if (
-      !window.confirm(
-        "Permanently delete this story? This erases the story and the submitter's details for good. This cannot be undone.",
-      )
-    ) {
-      return;
-    }
-    authFetch("/api/admin/stories/" + currentStoryId, { method: "DELETE" })
+  // TASK-311: the everyday action. Reversible, so it asks nothing and explains where the story went.
+  function archiveStory() {
+    authFetch("/api/admin/stories/" + currentStoryId + "/archive", { method: "POST" })
       .then(function (res) {
-        if (res.ok) {
-          selectView("stories");
-        } else {
-          storyStatus("Could not delete the story.");
-        }
+        if (res.ok) selectView("stories");
+        else storyStatus("Could not archive the story.");
       })
-      .catch(function () {
-        storyStatus("Could not delete the story.");
-      });
+      .catch(function () { storyStatus("Could not archive the story."); });
+  }
+
+  function restoreStory() {
+    authFetch("/api/admin/stories/" + currentStoryId + "/restore", { method: "POST" })
+      .then(function (res) {
+        if (res.ok) selectView("stories");
+        else storyStatus("Could not restore the story.");
+      })
+      .catch(function () { storyStatus("Could not restore the story."); });
+  }
+
+  // TASK-311: permanent erasure. Kept because a charity must be able to honour a GDPR erasure
+  // request - but it asks for a reason, and the server refuses unless the story is archived first.
+  // The reason is recorded so that what was erased stays knowable after the story itself is gone.
+  function eraseStory() {
+    var reason = window.prompt(
+      "Erase this story permanently?\n\nThis cannot be undone. Say why — it is recorded so there is a" +
+        " record of what was removed, even though the story itself will be gone.\n\nReason:",
+    );
+    if (reason === null) return;
+    if (!reason.trim()) { storyStatus("A reason is needed to erase a story."); return; }
+    authFetch("/api/admin/stories/" + currentStoryId, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reason.trim() }),
+    })
+      .then(function (res) {
+        if (res.ok) selectView("stories");
+        else res.json().then(function (b) { storyStatus(b.error || "Could not erase the story."); })
+          .catch(function () { storyStatus("Could not erase the story."); });
+      })
+      .catch(function () { storyStatus("Could not erase the story."); });
   }
   bindClick("storyBack", function () {
     selectView("stories");
@@ -1216,7 +1263,9 @@
         (c.status === "replied"
           ? '<button class="btn btn-ghost" type="button" id="contactMarkNewBtn">Mark as new</button> '
           : '<button class="btn btn-ghost" type="button" id="contactMarkRepliedBtn">Mark as replied</button> ') +
-        '<button class="btn btn-danger" type="button" id="contactDeleteBtn">Delete</button>' +
+        '<button class="btn" type="button" id="contactArchiveBtn">Archive</button>' +
+        '<button class="btn" type="button" id="contactRestoreBtn" hidden>Restore</button>' +
+        '<button class="btn btn-danger" type="button" id="contactEraseBtn" hidden>Erase permanently</button>' +
         "</div>";
     }
     el("contactDetail").innerHTML = info + actions;
@@ -1254,21 +1303,54 @@
     bindClick("contactMarkNewBtn", function () {
       patchContact({ status: "new" }, "Marked as new", "Could not mark the enquiry as new.");
     });
-    bindClick("contactDeleteBtn", deleteContact);
+    // TASK-311: an archived message offers Restore and Erase; a live one offers only Archive. The
+    // permanent action is never on screen beside the everyday one.
+    bindClick("contactArchiveBtn", archiveContact);
+    bindClick("contactRestoreBtn", restoreContact);
+    bindClick("contactEraseBtn", eraseContact);
+    if (c && c.archived_at) {
+      if (el("contactArchiveBtn")) el("contactArchiveBtn").hidden = true;
+      if (el("contactRestoreBtn")) el("contactRestoreBtn").hidden = false;
+      if (el("contactEraseBtn")) el("contactEraseBtn").hidden = false;
+    }
   }
-  function deleteContact() {
-    if (!window.confirm("Delete this enquiry? This cannot be undone.")) return;
-    authFetch("/api/admin/contact/" + currentContactId, { method: "DELETE" })
+  // TASK-311: archiving is the everyday action for a message from a real person.
+  function archiveContact() {
+    authFetch("/api/admin/contact/" + currentContactId + "/archive", { method: "POST" })
       .then(function (res) {
-        if (res.ok) {
-          selectView("contact");
-        } else {
-          contactStatus("Could not delete the enquiry.");
-        }
+        if (res.ok) selectView("contact");
+        else contactStatus("Could not archive the message.");
       })
-      .catch(function () {
-        contactStatus("Could not delete the enquiry.");
-      });
+      .catch(function () { contactStatus("Could not archive the message."); });
+  }
+
+  function restoreContact() {
+    authFetch("/api/admin/contact/" + currentContactId + "/restore", { method: "POST" })
+      .then(function (res) {
+        if (res.ok) selectView("contact");
+        else contactStatus("Could not restore the message.");
+      })
+      .catch(function () { contactStatus("Could not restore the message."); });
+  }
+
+  function eraseContact() {
+    var reason = window.prompt(
+      "Erase this message permanently?\n\nThis cannot be undone. Say why — it is recorded so there is" +
+        " a record of what was removed, even though the message itself will be gone.\n\nReason:",
+    );
+    if (reason === null) return;
+    if (!reason.trim()) { contactStatus("A reason is needed to erase a message."); return; }
+    authFetch("/api/admin/contact/" + currentContactId, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: reason.trim() }),
+    })
+      .then(function (res) {
+        if (res.ok) selectView("contact");
+        else res.json().then(function (b) { contactStatus(b.error || "Could not erase the message."); })
+          .catch(function () { contactStatus("Could not erase the message."); });
+      })
+      .catch(function () { contactStatus("Could not erase the message."); });
   }
   bindClick("contactBack", function () {
     selectView("contact");

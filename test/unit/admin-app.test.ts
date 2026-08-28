@@ -248,7 +248,10 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
   // G2 item 6: permanent erasure — a distinct, danger-styled control from Withdraw, behind its
   // own confirm() guard, calling DELETE and returning to the (refreshed) Stories list.
-  it("shows a Delete permanently control distinct from Withdraw, and deletes on confirm", async () => {
+  // TASK-311: these two used to pin a Delete button that erased a story on confirm. Three stories
+  // were erased from production that way and nothing could say what had gone, so the everyday action
+  // is now Archive - reversible, and the only destructive control on a live story is gone entirely.
+  it("offers Archive on a live story, and no way to erase it from here", async () => {
     await signIn();
     (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
     await flush();
@@ -257,41 +260,38 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     await flush();
     await flush();
 
-    const deleteBtn = el("deleteStoryBtn") as HTMLButtonElement;
-    expect(deleteBtn).not.toBeNull();
-    expect(deleteBtn).not.toBe(el("withdrawStoryBtn"));
-    expect(deleteBtn.className).toContain("btn-danger");
+    const archiveBtn = el("archiveStoryBtn") as HTMLButtonElement;
+    expect(archiveBtn).not.toBeNull();
+    expect(archiveBtn).not.toBe(el("withdrawStoryBtn"));
 
+    // The whole point: nothing irreversible is reachable until the story has been archived.
+    expect(el("eraseStoryBtn")).toBeNull();
+    expect(el("deleteStoryBtn")).toBeNull();
+  });
+
+  it("archives without asking, because archiving can be undone", async () => {
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    // A confirm() here would be friction for a reversible action - and worse, it would train people
+    // to click through the dialog that DOES guard the irreversible one.
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    deleteBtn.click();
+    (el("archiveStoryBtn") as HTMLButtonElement).click();
     await flush();
     await flush();
 
-    expect(confirmSpy).toHaveBeenCalled();
-    // A confirmed delete returns to the Stories list view.
+    expect(confirmSpy).not.toHaveBeenCalled();
+    // Archiving returns to the Stories list, same as the old delete did.
     expect(el("view-stories").hidden).toBe(false);
     expect(el("view-story").hidden).toBe(true);
   });
 
-  it("does not delete when the confirm is declined", async () => {
-    await signIn();
-    (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
-    await flush();
-    await flush();
-    (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
-    await flush();
-    await flush();
-
-    vi.spyOn(window, "confirm").mockReturnValue(false);
-    (el("deleteStoryBtn") as HTMLButtonElement).click();
-    await flush();
-    await flush();
-
-    // Declined => still on the story detail view, nothing deleted.
-    expect(el("view-story").hidden).toBe(false);
-  });
-
-  it("hides the Delete permanently control for a Viewer", async () => {
+  it("hides the Archive control for a Viewer", async () => {
     loginToken = tokenFor("viewer");
     await signIn();
     (document.querySelector('.admin-nav-link[data-view="stories"]') as HTMLElement).click();
@@ -300,7 +300,10 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     (document.querySelector("#storiesTable [data-story]") as HTMLElement).click();
     await flush();
     await flush();
-    expect(el("deleteStoryBtn")).toBeNull();
+    // TASK-311: deleteStoryBtn no longer exists for ANYBODY, so asserting it is absent would pass
+    // whatever the role. The control a Viewer must not get is Archive.
+    expect(el("archiveStoryBtn")).toBeNull();
+    expect(el("eraseStoryBtn")).toBeNull();
   });
 
   // TASK-208: Business supporters tab — an Editor lists the fulfilment records (business name, band,

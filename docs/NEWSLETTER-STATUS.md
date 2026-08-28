@@ -1,6 +1,6 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-306 on 2026-08-27. Point a fresh session at this file.
+Written 2026-08-20, refreshed after TASK-311 on 2026-08-28. Point a fresh session at this file.
 
 ## ⚠️ START HERE: a real send is IN FLIGHT
 
@@ -89,6 +89,11 @@ Everything below is merged and in production (task revision **79**, deployed 202
 | 304 | Status doc handover for the in-flight send |
 | 305 | **Delivery stats under-counted by half** - the send record was written after the confirmation arrived |
 | 306 | Reverted the unmatched-event retry from 305 - it would have stormed our own webhook |
+| 307 | Status doc: corrected bounce count (13 not 9) + recorded the revive blind spot |
+| 308 | Read-only stories storage diagnostic |
+| 309 | That diagnostic behind a button rather than a terminal |
+| 310 | **Were there EVER stories here** - the id high-water mark, which answered it: 3 created, 0 remain |
+| 311 | **Archive instead of delete** on Stories + Contact, an erasure log, and 35-day backups |
 
 ### The tab as it is now
 Three destinations — **Overview · Audiences & people · All newsletters** — and composing is a
@@ -151,6 +156,19 @@ takeover: **Write → Who → Send**, with the actions pinned to a bottom bar.
   straight to reject.
 
 ## Gotchas that will bite (learned the hard way)
+
+- **`npm run test:unit` on this machine silently runs ~290 FEWER tests than CI.** The npm registry
+  is blocked, so `exceljs` is not installed - and 13 test files fail to LOAD rather than fail
+  loudly. Vitest reports them as failed FILES while the headline test count looks healthy, so a
+  broken test can pass locally and only surface in CI. That is exactly how TASK-311 reached a red
+  PR. Writing a minimal stub at `node_modules/exceljs/index.js` (gitignored, local only) takes the
+  suite from 2460 to 2759 passing. **Check the failed-FILE count, not just the test count.**
+
+- **Sizes cannot tell you whether a table has data.** An empty Postgres database is ~7.7 MB, and
+  the contact database holds four real messages at 7935 kB against an EMPTY stories database at
+  7959 kB. TASK-308/309 built a diagnostic around that signal and it could not distinguish
+  anything. The id sequence high-water mark (TASK-310) is the number that actually answers
+  "was there ever data here" - it does not go backwards when rows are deleted.
 
 - **The auto-revive only runs while the job is LIVE.** TASK-302 puts back anyone wrongly given up
   on, but it runs inside the send tick, and `listRunnableJobs` only returns jobs in `queued` or

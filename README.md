@@ -1893,6 +1893,44 @@ hides). Proven by `test/unit/newsletter-blocks.test.ts` (block renderer, all blo
 (admin UI), `test/unit/unsubscribe-token.test.ts` and the `@newsletter @db` `features/newsletter.feature`
 (including block create/preview/upload/serve scenarios).
 
+**Archive, not delete, on the public-form pages (TASK-311).** Three stories were permanently
+deleted from production and nothing in the system could say what had gone, when, or why - only that
+the table was empty. There is no automatic purge in the code, so a person pressed a button and the
+rows ceased to exist. That is too sharp an edge for the everyday action on a page of supporters
+stories and messages.
+
+**Archive** is now that everyday action, on both Stories and Contact. It sets `archived_at`, hides
+the record behind an Archived filter, and is undone in one click. Nothing is destroyed. Archived
+records persist indefinitely - which makes this a stronger protection for form submissions than any
+backup window, since it survives without needing a restore.
+
+**Erasure is still possible, and deliberately harder.** A charity must be able to honour a GDPR
+erasure request, and the Stories page exists partly to withdraw a story if consent is revoked. So
+`DELETE` remains - behind two gates:
+
+- the record must **already be archived** (409 otherwise), so the routine tidy-up cannot reach it;
+- a **reason is required** (400 otherwise).
+
+A tombstone is written to `erasure_log` **before** the row is destroyed. If the process dies between
+the two, a record of an erasure that did not happen is noticed and corrected - whereas an erasure
+with no record is precisely the silence this exists to prevent.
+
+**`erasure_log` must never hold the erased content**, or the person’s name, email, phone or town.
+Kind, id, when, who, and a typed reason - nothing else. An erasure that quietly kept a copy of the
+personal data in another table would not be an erasure; it would be a compliance failure wearing an
+audit trail’s clothes. It lives in the MAIN database on purpose: stories and contact each have their
+own, and a log kept beside them would be destroyed by the very thing it exists to outlive.
+
+Which rows a view shows is decided by `src/admin/archive-filter.ts` (pure, unit-tested) rather than
+a WHERE clause typed into each query - an archived record leaking into the working list makes the
+feature pointless, and a live one hidden from it looks exactly like the data loss being fixed.
+Anything unrecognised means the **live** view, because that is the one somebody is looking at when
+they are trying to get something done.
+
+Production backup retention also rose from **5 to 35 days** (the AWS maximum for automated backups)
+in the same task: the 5-day window had already closed by the time this was noticed, which is the
+argument. Longer than 35 days needs AWS Backup with its own retention plan - not yet built.
+
 **Stories diagnostics (TASK-308).** `GET /api/admin/diagnostics/stories` (Editor+, read-only)
 answers one question: where the My Story submissions actually are.
 

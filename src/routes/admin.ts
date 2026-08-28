@@ -35,7 +35,10 @@ import {
 import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { readStoriesDiagnostics } from "../db/stories-diagnostics";
-import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
+import { archiveStory, restoreStory } from "../db/stories";
+import { recordErasure, listErasures } from "../db/erasure-log";
+import { parseArchiveView } from "../admin/archive-filter";
+import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { touchLastLogin } from "../db/admin-users";
@@ -2280,9 +2283,60 @@ export async function getAdminStories(req: Request, res: Response): Promise<Resp
   try {
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const useScope = typeof req.query.use_scope === "string" ? req.query.use_scope : undefined;
-    return res.status(200).json({ results: await listStories({ status, useScope }) });
+    // TASK-311: archived stories are hidden unless asked for by name.
+    const view = parseArchiveView(req.query.view);
+    return res.status(200).json({ results: await listStories({ status, useScope, view }) });
   } catch (err) {
     console.error("admin stories list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// TASK-311: archiving replaced deleting as the everyday action on the two public-form pages.
+//
+// Three stories were permanently deleted from production and nothing could say what had gone, when
+// or why. Archiving is reversible and instant; erasure is not, so it now has to be deliberate:
+// the record must already be archived, and a reason must be given.
+//
+// Erasure stays possible on purpose. A charity must be able to honour a GDPR erasure request, and
+// the Stories page exists partly to withdraw a story if consent is revoked. What changes is that it
+// is no longer the button somebody reaches for by accident.
+export async function archiveAdminStory(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "stories", "edit"))) return;
+  const id = storyId(req, res);
+  if (id === null) return;
+  return res.status(200).json({ archived: await archiveStory(id) });
+}
+
+export async function restoreAdminStory(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "stories", "edit"))) return;
+  const id = storyId(req, res);
+  if (id === null) return;
+  return res.status(200).json({ restored: await restoreStory(id) });
+}
+
+export async function archiveAdminContact(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "contact", "edit"))) return;
+  const id = contactId(req, res);
+  if (id === null) return;
+  return res.status(200).json({ archived: await archiveEnquiry(id) });
+}
+
+export async function restoreAdminContact(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "contact", "edit"))) return;
+  const id = contactId(req, res);
+  if (id === null) return;
+  return res.status(200).json({ restored: await restoreEnquiry(id) });
+}
+
+// GET /api/admin/erasures - what has been permanently erased, and why. Carries no personal data by
+// design: kind, id, when, who, reason. Nothing that would make the erasure a pretence.
+export async function getAdminErasures(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "stories", "view"))) return;
+  try {
+    return res.status(200).json({ results: await listErasures() });
+  } catch (err) {
+    console.error("erasure log read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
   }
 }
@@ -2365,11 +2419,33 @@ export async function patchAdminStory(req: Request, res: Response): Promise<Resp
 // for a submitter's actual right-to-erasure request. Editor/Admin only (mirrors patchAdminStory).
 // No audit_log row (see src/db/stories.ts's comment — this feature is deliberately
 // self-contained, and an erasure request should not itself retain the erased data anywhere).
+// TASK-311: permanent erasure, and deliberately harder than it was.
+//
+// Three stories were erased from production and nothing could say what had gone, when or why. Two
+// gates now stand in front of it: the record must ALREADY be archived (so the everyday tidy-up
+// action cannot reach this by accident), and a reason must be given. A tombstone is written to
+// erasure_log BEFORE the row is destroyed - if the process dies between the two, a record of an
+// erasure that did not happen is noticed and corrected, whereas an erasure with no record is exactly
+// the silence this exists to prevent.
+//
+// Erasure itself stays available on purpose: a charity must be able to honour a GDPR erasure
+// request, and this page exists partly to withdraw a story if consent is revoked.
 export async function deleteAdminStory(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "stories", "edit"))) return;
+  const claims = await authorizeSection(req, res, "stories", "edit");
+  if (!claims) return;
   const id = storyId(req, res);
   if (id == null) return;
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+  if (!reason) {
+    return res.status(400).json({ error: "A reason is required to erase a story permanently." });
+  }
   try {
+    const story = await getStory(id);
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    if (!(story as { archived_at?: string | null }).archived_at) {
+      return res.status(409).json({ error: "Archive the story first. Erasing is permanent." });
+    }
+    await recordErasure({ recordKind: "story", recordId: id, erasedBy: claims.email, reason });
     const deleted = await deleteStory(id);
     if (!deleted) return res.status(404).json({ error: "Story not found" });
     return res.status(200).json({ deleted: true, id });
@@ -2380,6 +2456,11 @@ export async function deleteAdminStory(req: Request, res: Response): Promise<Res
 }
 
 adminRouter.get("/api/admin/stories", getAdminStories);
+adminRouter.post("/api/admin/stories/:id/archive", archiveAdminStory);
+adminRouter.post("/api/admin/stories/:id/restore", restoreAdminStory);
+adminRouter.post("/api/admin/contact/:id/archive", archiveAdminContact);
+adminRouter.post("/api/admin/contact/:id/restore", restoreAdminContact);
+adminRouter.get("/api/admin/erasures", getAdminErasures);
 adminRouter.get("/api/admin/diagnostics/stories", getAdminStoriesDiagnostics);
 adminRouter.get("/api/admin/stories/:id", getAdminStory);
 adminRouter.patch("/api/admin/stories/:id", patchAdminStory);
@@ -2449,11 +2530,24 @@ export async function patchAdminContact(req: Request, res: Response): Promise<Re
   }
 }
 
+// TASK-311: same two gates as a story erasure, for the same reason - a message from a real person
+// should not be destroyed by a stray click, and what was destroyed should remain knowable.
 export async function deleteAdminContact(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "contact", "edit"))) return;
+  const claims = await authorizeSection(req, res, "contact", "edit");
+  if (!claims) return;
   const id = contactId(req, res);
   if (id == null) return;
+  const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+  if (!reason) {
+    return res.status(400).json({ error: "A reason is required to erase a message permanently." });
+  }
   try {
+    const enquiry = await getEnquiry(id);
+    if (!enquiry) return res.status(404).json({ error: "Enquiry not found" });
+    if (!(enquiry as { archived_at?: string | null }).archived_at) {
+      return res.status(409).json({ error: "Archive the message first. Erasing is permanent." });
+    }
+    await recordErasure({ recordKind: "contact_enquiry", recordId: id, erasedBy: claims.email, reason });
     const deleted = await deleteEnquiry(id);
     if (!deleted) return res.status(404).json({ error: "Enquiry not found" });
     return res.status(200).json({ deleted: true, id });

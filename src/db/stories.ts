@@ -1,4 +1,5 @@
 import { storiesPool } from "./stories-pool";
+import { archiveCondition, type ArchiveView } from "../admin/archive-filter";
 import type { StoryRecord } from "../stories/schema";
 
 // Task B1: the ONLY write path for My Story submissions. Uses storiesPool exclusively —
@@ -78,6 +79,8 @@ export interface StoryRow extends StoryListRow {
 export interface ListStoriesFilter {
   status?: string;
   useScope?: string;
+  /** TASK-311: which of live / archived / all to show. Defaults to live - the working list. */
+  view?: ArchiveView;
 }
 
 // GET /api/admin/stories: newest-first, optionally filtered by status and/or use_scope. Deliberately
@@ -86,6 +89,11 @@ export interface ListStoriesFilter {
 export async function listStories(filter: ListStoriesFilter): Promise<StoryListRow[]> {
   const conditions: string[] = [];
   const params: string[] = [];
+  // TASK-311: archived stories are hidden from the working list by default and shown only behind the
+  // Archived filter. The condition comes from one pure, unit-tested place rather than being written
+  // out here, so the two views cannot disagree about what each of them means.
+  const archived = archiveCondition(filter.view ?? "live");
+  if (archived) conditions.push(archived);
   if (filter.status) {
     params.push(filter.status);
     conditions.push(`status = $${params.length}`);
@@ -128,6 +136,28 @@ export interface StoryPatch {
 // request, not a soft flag. Single DELETE via storiesPool, no paired audit_log row (see
 // insertStory's comment — this feature is deliberately self-contained in its own DB).
 // Returns true when a row was removed, false when the id did not exist (caller 404s).
+// TASK-311: the everyday action. Reversible, and the reason the delete below is no longer the
+// button anybody reaches for first.
+export async function archiveStory(id: number): Promise<boolean> {
+  const result = await storiesPool.query(
+    `UPDATE stories SET archived_at = now() WHERE id = $1 AND archived_at IS NULL`,
+    [id],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+export async function restoreStory(id: number): Promise<boolean> {
+  const result = await storiesPool.query(
+    `UPDATE stories SET archived_at = NULL WHERE id = $1 AND archived_at IS NOT NULL`,
+    [id],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+// Permanent, and deliberately still here: a charity must be able to honour a GDPR erasure request,
+// and this page exists partly to withdraw a story if consent is revoked. The route above it now
+// insists the story is archived first and that a reason is given, and writes an erasure_log
+// tombstone before calling this - so what is gone is knowable even though it is gone.
 export async function deleteStory(id: number): Promise<boolean> {
   const result = await storiesPool.query(`DELETE FROM stories WHERE id = $1`, [id]);
   return (result.rowCount ?? 0) > 0;

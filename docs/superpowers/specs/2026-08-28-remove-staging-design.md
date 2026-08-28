@@ -1,7 +1,7 @@
 # Remove the staging environment — design
 
 Date: 2026-08-28
-Task: TASK-311
+Task: TASK-312
 Status: approved in-session by Paul
 
 ## Why
@@ -77,7 +77,7 @@ variable lives — but the environment no longer has required reviewers.
 - `infra.yml` gains a third dispatch action: `destroy`
   (`terraform destroy -auto-approve`). Kept permanently — small and useful.
 - Dispatch it for staging **from the task branch** (`gh workflow run -r
-  task-311-remove-staging`) while `infra/envs/staging/` still exists on that
+  task-312-remove-staging`) while `infra/envs/staging/` still exists on that
   branch. Tears down: ALB + listeners + cert, ECS cluster/service/task defs,
   RDS (no final snapshot), the three security groups, staging SSM parameters,
   the `staging.nbcc.scot` Route53 records, log group.
@@ -112,7 +112,7 @@ variable lives — but the environment no longer has required reviewers.
 1. `gh api`: remove required reviewers from the `production` environment
    (before the merge, or the first auto-deploy stalls waiting for a click).
 2. Commit everything **except** the `infra/envs/staging/` deletion on
-   `task-311-remove-staging`; push. (The destroy dispatch runs the branch's
+   `task-312-remove-staging`; push. (The destroy dispatch runs the branch's
    `infra.yml` against `infra/envs/staging`, so the env root must still exist
    at that ref.)
 3. Dispatch `infra.yml` `destroy` for staging from the branch; watch to green.

@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Branch: `task-311-remove-staging`; PR title starts `[TASK-311]`; squash-merge.
+- Branch: `task-312-remove-staging`; PR title starts `[TASK-312]`; squash-merge.
 - The Throughline block in CLAUDE.md is machine-managed — never touch it.
 - Never run `terraform apply`/`destroy` locally — only via `infra.yml` dispatch (guard.js also blocks it).
 - No BDD may ever run against production (it POSTs real data). Post-deploy check is `scripts/smoke.sh` only.
@@ -36,7 +36,7 @@
 name: Deploy production
 # Merging to main deploys production directly. pr.yml (lint, build, unit, full
 # BDD against a local app + DB + Stripe stub) is the pre-merge gate; there is
-# no staging environment (removed in TASK-311). The production GitHub
+# no staging environment (removed in TASK-312). The production GitHub
 # Environment holds AWS_ROLE_ARN but has no required reviewers.
 on:
   push:
@@ -212,7 +212,7 @@ jobs:
 
 ```bash
 git add .github/workflows/deploy-prod.yml
-git commit -m "[TASK-311] deploy-prod: trigger on main push, build image, tag release"
+git commit -m "[TASK-312] deploy-prod: trigger on main push, build image, tag release"
 ```
 
 ---
@@ -247,7 +247,7 @@ git commit -m "[TASK-311] deploy-prod: trigger on main push, build image, tag re
 
 ```bash
 git add .github/workflows/infra.yml
-git commit -m "[TASK-311] infra workflow: destroy action; PR plans production only"
+git commit -m "[TASK-312] infra workflow: destroy action; PR plans production only"
 ```
 
 ---
@@ -270,7 +270,7 @@ output "task_definition_arn" { value = module.app.task_definition_arn }
 
 ```bash
 git add infra/envs/production/outputs.tf
-git commit -m "[TASK-311] prod env root: export task_definition_arn for deploys"
+git commit -m "[TASK-312] prod env root: export task_definition_arn for deploys"
 ```
 
 ---
@@ -284,7 +284,7 @@ git commit -m "[TASK-311] prod env root: export task_definition_arn for deploys"
 
 ```bash
 git rm .github/workflows/deploy-staging.yml
-git commit -m "[TASK-311] remove staging deploy workflow"
+git commit -m "[TASK-312] remove staging deploy workflow"
 ```
 
 ---
@@ -307,7 +307,7 @@ number → preflight → sync → commit → push → PR → watch green
        → report prod URL + deployed SHA
 ```
 
-  - Overview paragraph: "Merging to `main` deploys production directly (there is no staging — removed in TASK-311). The only gate is `pr.yml` green; `/ship` never merges red or pending. `/ship` never dispatches a deploy by hand — the merge push triggers `deploy-prod.yml`."
+  - Overview paragraph: "Merging to `main` deploys production directly (there is no staging — removed in TASK-312). The only gate is `pr.yml` green; `/ship` never merges red or pending. `/ship` never dispatches a deploy by hand — the merge push triggers `deploy-prod.yml`."
   - Step 9 becomes: prod infra apply — same logic, `-f environment=production`; the race note now reads: a new SSM param/secret the task-def references must exist in production before the deploy's task-def registration, so apply immediately after merge and re-run the deploy if it lost the race.
   - Step 10 becomes: watch `deploy-prod.yml` (`gh run list --workflow=deploy-prod.yml --branch main …`); docs-only merges still skip it (`paths-ignore: **/*.md`).
   - Step 11 becomes: report the production URL (`public_url` from the run) + deployed SHA. Delete the promote-command printing.
@@ -317,7 +317,7 @@ number → preflight → sync → commit → push → PR → watch green
 
 ```bash
 git add .claude/skills/ship/SKILL.md
-git commit -m "[TASK-311] /ship: merge deploys production; drop promote boundary"
+git commit -m "[TASK-312] /ship: merge deploys production; drop promote boundary"
 ```
 
 ---
@@ -332,7 +332,7 @@ git commit -m "[TASK-311] /ship: merge deploys production; drop promote boundary
   - PR-workflow preamble (the `/ship` blockquote): mirror Task 5's new description — merge deploys production; no promote command; "applies production infra if the diff touches `infra/`".
   - Step 4 of the manual workflow list: "merging to `main` deploys to staging" → "merging to `main` deploys to production".
   - **Deploy model** section: replace the build-once/promote bullets with: "Merging to `main` triggers `deploy-prod.yml`: build image by SHA (skip if in ECR), run migrations as a one-off task, update the ECS service, smoke-test, tag a release. There is no staging environment and no promotion step; `pr.yml` is the functional gate. Migrations still never run on app boot. Rollback: ECS circuit breaker + smoke gate, or `workflow_dispatch` `deploy-prod.yml` with an earlier SHA."
-  - Infra section: env-roots wording "per-env differences in `infra/envs/{staging,production}/`" → "the production root in `infra/envs/production/` (the module stays env-agnostic; staging was removed in TASK-311)". Update the table row "Make a setting differ per env" accordingly ("set it in `infra/envs/production/main.tf`"). Gotchas: drop "The `production` Environment's required-reviewer gate also gates the Infra apply" (gate removed); reword the three-places secret gotcha to production-only phrasing if it names both envs.
+  - Infra section: env-roots wording "per-env differences in `infra/envs/{staging,production}/`" → "the production root in `infra/envs/production/` (the module stays env-agnostic; staging was removed in TASK-312)". Update the table row "Make a setting differ per env" accordingly ("set it in `infra/envs/production/main.tf`"). Gotchas: drop "The `production` Environment's required-reviewer gate also gates the Infra apply" (gate removed); reword the three-places secret gotcha to production-only phrasing if it names both envs.
 - [ ] **Step 2: README.md** — update the hits found at lines ~5, 17–18, 3595, 3612–3688, 3949:
   - Intro: build-once-promote sentence → single production environment, deploy-on-merge.
   - Project structure listing: `infra/envs/` line → `production/ only`; workflows line → `pr.yml, deploy-prod.yml, infra.yml`.
@@ -342,12 +342,12 @@ git commit -m "[TASK-311] /ship: merge deploys production; drop promote boundary
   - `~3949` RDS bullet: "single-AZ in staging, multi-AZ in prod" → "multi-AZ in production".
   - Line ~3515/3538/2221 mentions: reword in place (staging no longer exists — e.g. "staging/local admins" → "local admins").
 - [ ] **Step 3: infra/README.md** — same sweep (lines 11, 50, 64–72 table, 91, 109, 139, 171–191, 237–273): one environment; env table becomes a single production column; setup instructions apply production only; the deploy-flow section describes `deploy-prod.yml` on merge; ops snippets (`terraform output`, `aws logs tail /ecs/charity-site-production`) use production; the teardown note points at `infra.yml` destroy dispatch rather than local `terraform destroy`.
-- [ ] **Step 4: Verify** — `grep -ni staging CLAUDE.md README.md infra/README.md`: remaining hits must be historical notes (task history, "removed in TASK-311") only, plus the untouched Throughline block.
+- [ ] **Step 4: Verify** — `grep -ni staging CLAUDE.md README.md infra/README.md`: remaining hits must be historical notes (task history, "removed in TASK-312") only, plus the untouched Throughline block.
 - [ ] **Step 5: Commit**
 
 ```bash
 git add CLAUDE.md README.md infra/README.md
-git commit -m "[TASK-311] docs: single production environment, deploy on merge"
+git commit -m "[TASK-312] docs: single production environment, deploy on merge"
 ```
 
 ---
@@ -369,13 +369,13 @@ Expected: `protection_rules` shows no `required_reviewers` entry.
 - [ ] **Step 2: Push the branch** (commit A = Tasks 1–6):
 
 ```bash
-git push -u origin task-311-remove-staging
+git push -u origin task-312-remove-staging
 ```
 
 - [ ] **Step 3: Apply production infra from the branch** — seeds `task_definition_arn` into prod state so the first auto-deploy can read it (only diff vs state is the new output — safe):
 
 ```bash
-gh workflow run infra.yml -r task-311-remove-staging -f environment=production -f action=apply
+gh workflow run infra.yml -r task-312-remove-staging -f environment=production -f action=apply
 gh run watch "$(gh run list --workflow=infra.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
 ```
 
@@ -384,7 +384,7 @@ Expected: apply green; plan shows `Changes to outputs` only (no resource changes
 - [ ] **Step 4: Destroy staging** (IRREVERSIBLE — staging RDS data gone, no snapshot):
 
 ```bash
-gh workflow run infra.yml -r task-311-remove-staging -f environment=staging -f action=destroy
+gh workflow run infra.yml -r task-312-remove-staging -f environment=staging -f action=destroy
 gh run watch "$(gh run list --workflow=infra.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
 ```
 
@@ -410,7 +410,7 @@ rm -rf infra/envs/staging          # clears untracked .terraform/, lock file
 
 ```bash
 git add .github/workflows/infra.yml
-git commit -m "[TASK-311] remove staging env root; infra dispatch production-only"
+git commit -m "[TASK-312] remove staging env root; infra dispatch production-only"
 git push
 ```
 
@@ -419,7 +419,7 @@ git push
 ### Task 9: Ship — PR, green, merge, watch the first auto prod deploy
 
 - [ ] **Step 1: Preflight** — `npm run lint && npm run build && npm run test:unit` (nothing in this PR touches src/, but the gate is cheap).
-- [ ] **Step 2:** Open PR `[TASK-311] Remove staging: main auto-deploys production`; `gh pr checks --watch` to green; `gh pr merge --squash --delete-branch`. (Follow `/ship`; its staging steps are already rewritten by Task 5.)
+- [ ] **Step 2:** Open PR `[TASK-312] Remove staging: main auto-deploys production`; `gh pr checks --watch` to green; `gh pr merge --squash --delete-branch`. (Follow `/ship`; its staging steps are already rewritten by Task 5.)
 - [ ] **Step 3: Watch the first production auto-deploy:**
 
 ```bash
@@ -440,7 +440,7 @@ gh api --method DELETE repos/jpj-youtube-ai/nbcc/environments/staging
 ```
 
 - [ ] **Step 2: Memory updates** (`C:\Users\paulp\.claude\projects\C--Users-paulp-Documents-nbcc\memory\`):
-  - Rewrite `aws-deployment.md`: drop the staging URL/flow; record — single production env; merge to `main` auto-deploys prod via `deploy-prod.yml` (build by SHA, migrate, deploy, smoke, release tag); prod required-reviewer gate REMOVED 2026-08-28 (TASK-311), infra applies unattended; rollback = workflow_dispatch `deploy-prod.yml` with an earlier SHA; keep the CLI-path/ECR-immutable/MSYS gotchas.
+  - Rewrite `aws-deployment.md`: drop the staging URL/flow; record — single production env; merge to `main` auto-deploys prod via `deploy-prod.yml` (build by SHA, migrate, deploy, smoke, release tag); prod required-reviewer gate REMOVED 2026-08-28 (TASK-312), infra applies unattended; rollback = workflow_dispatch `deploy-prod.yml` with an earlier SHA; keep the CLI-path/ECR-immutable/MSYS gotchas.
   - Delete `infra-apply-both-envs-before-prod-promote.md`; remove its MEMORY.md index line. Add to `aws-deployment.md`: infra-before-deploy race still exists for PROD (apply infra, then re-run deploy).
   - MEMORY.md: update the `aws-deployment` hook line ("single prod env, deploy on merge, gate removed").
 

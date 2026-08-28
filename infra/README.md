@@ -8,7 +8,7 @@ in the repo root `CLAUDE.md`. This file is the deeper walkthrough.
 
 A single containerised Express service runs on **AWS Fargate** behind an
 **Application Load Balancer**, talking to **RDS Postgres**, in a single
-**production** environment (staging was removed in TASK-311). Everything is
+**production** environment (staging was removed in TASK-312). Everything is
 Terraform.
 
 ```
@@ -158,7 +158,7 @@ creates the chicken-and-egg prerequisites:
 - the shared ECR repo (immutable tags),
 - the GitHub OIDC provider,
 - one IAM deploy role per environment, trusting `repo:<org>/<repo>:*` (the
-  staging role still exists in AWS but is unused since TASK-311).
+  staging role still exists in AWS but is unused since TASK-312).
 
 ```
 GITHUB_ORG=jpj-youtube-ai GITHUB_REPO=nbcc bash scripts/bootstrap-aws.sh
@@ -171,7 +171,7 @@ GITHUB_ORG=jpj-youtube-ai GITHUB_REPO=nbcc bash scripts/bootstrap-aws.sh
 
 Then in GitHub repo settings: create an Environment `production` and set a
 variable `AWS_ROLE_ARN` to the printed role ARN. It has **no required
-reviewers** — merging a green PR is the deploy gate (TASK-311 removed the
+reviewers** — merging a green PR is the deploy gate (TASK-312 removed the
 approval click along with staging).
 
 ## Provisioning (apply)
@@ -180,7 +180,7 @@ Infra is **never** applied on a normal push. Apply it deliberately via the
 **Infra** workflow:
 
 - GitHub → Actions → **Infra** → Run workflow → environment `production` +
-  action `apply` (a `destroy` action also exists — added in TASK-311 to tear
+  action `apply` (a `destroy` action also exists — added in TASK-312 to tear
   staging down; use with care).
 - On pull requests that touch `infra/**`, the same workflow runs `plan` so you
   review the diff.
@@ -232,7 +232,7 @@ Follow-up (separate change): once live, point the app's public URLs at the real 
 
 ## Deploy (the app, not infra)
 
-Merging to `main` deploys production (TASK-311 — no staging, no promotion):
+Merging to `main` deploys production (TASK-312 — no staging, no promotion):
 
 1. **Merge to `main`** → `deploy-prod.yml`: builds the image tagged by commit
    SHA (skipped if that SHA's image is already in ECR — build-once-by-SHA),

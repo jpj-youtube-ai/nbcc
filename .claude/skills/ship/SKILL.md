@@ -8,7 +8,7 @@ description: Use when asked to "ship" the current work, or on `/ship` — drives
 ## Overview
 
 `/ship` automates the whole PR workflow in one go. Merging to `main` deploys
-production directly (there is no staging — removed in TASK-311). The only gate
+production directly (there is no staging — removed in TASK-312). The only gate
 is `pr.yml` green; `/ship` never merges red or pending. `/ship` never
 dispatches a deploy by hand — the merge push triggers `deploy-prod.yml`.
 

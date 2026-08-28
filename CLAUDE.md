@@ -126,7 +126,7 @@ These complement, and don't replace, the required superpowers workflow above.
 > PR, watches `pr.yml` to green, self-merges, applies production infra if the
 > diff touches `infra/`, watches the production deploy, and reports the live
 > URL. Merging IS the production deploy — there is no staging (removed in
-> TASK-311). Don't hand-run the steps below when `/ship` covers them —
+> TASK-312). Don't hand-run the steps below when `/ship` covers them —
 > they document what `/ship` automates and how to fix a red gate. If `/ship`
 > doesn't appear in your session, reload Claude Code (`.claude/` changed) so the
 > committed skill is picked up.
@@ -202,7 +202,7 @@ conflicts rare and trivial, `git rebase main` often on small, single-task PRs.
   `process.env.BASE_URL`).
 - Infra: Terraform under `infra/` — edit the reusable module in
   `infra/modules/app/`; the production root is `infra/envs/production/` (the
-  module stays env-agnostic; staging was removed in TASK-311).
+  module stays env-agnostic; staging was removed in TASK-312).
   See **Infrastructure changes (Terraform)** below and `infra/README.md`.
 
 ## How to add things
@@ -274,7 +274,7 @@ npm run lint
 - Merging to `main` triggers `deploy-prod.yml`: build the image by SHA (skip if
   already in ECR), run migrations as a one-off task, update the ECS service,
   smoke-test, tag a `release-*`. There is no staging environment and no
-  promotion step (removed in TASK-311); `pr.yml` is the functional gate.
+  promotion step (removed in TASK-312); `pr.yml` is the functional gate.
 - Migrations run as a one-off `ecs run-task` *before* the service updates -
   never on app boot (that races across tasks and a bad migration blocks every
   task from starting).
@@ -285,7 +285,7 @@ npm run lint
 ## Infrastructure changes (Terraform)
 
 Infra lives in `infra/`, split into a **reusable module** and a **thin env
-root** (`infra/envs/production/` — staging was removed in TASK-311, the module
+root** (`infra/envs/production/` — staging was removed in TASK-312, the module
 stays env-agnostic). Apply through the **Infra**
 workflow (plan on PR, manual `apply` via `workflow_dispatch`) — never
 `terraform apply` shared state by hand, and never from an app deploy. Full

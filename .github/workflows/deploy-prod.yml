@@ -1,7 +1,7 @@
 name: Deploy production
 # Merging to main deploys production directly. pr.yml (lint, build, unit, full
 # BDD against a local app + DB + Stripe stub) is the pre-merge gate; there is
-# no staging environment (removed in TASK-311). The production GitHub
+# no staging environment (removed in TASK-312). The production GitHub
 # Environment holds AWS_ROLE_ARN but has no required reviewers.
 on:
   push:

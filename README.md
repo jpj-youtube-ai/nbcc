@@ -3,7 +3,7 @@
 Containerised TypeScript service on AWS Fargate, fronted by an ALB, with a
 Postgres (RDS) database and a couple of external API integrations. A single
 production environment, deployed automatically on every merge to `main`
-(staging was removed in TASK-311; `pr.yml` is the functional gate).
+(staging was removed in TASK-312; `pr.yml` is the functional gate).
 
 ## What's here
 
@@ -3593,7 +3593,7 @@ GITHUB_ORG=your-org GITHUB_REPO=charity-site ./scripts/bootstrap-aws.sh
 
 Then in GitHub repo Settings:
 - Create an Environment `production` with **no required reviewers** (merging a
-  green PR is the deploy gate — TASK-311 removed the approval click along with
+  green PR is the deploy gate — TASK-312 removed the approval click along with
   staging).
 - On the environment set a variable `AWS_ROLE_ARN` to the role ARN the script
   printed.
@@ -3664,7 +3664,7 @@ right after.
 
 1. **Open a PR** -> `pr.yml` runs lint, build, migrations, **unit + BDD**.
    This is the functional gate — there is no staging environment to catch
-   anything after merge (removed in TASK-311).
+   anything after merge (removed in TASK-312).
 2. **Merge to main** -> `deploy-prod.yml`:
    builds + pushes the image (tagged by commit SHA, to the shared ECR repo, with
    Docker layer caching via `buildx` + the GitHub Actions cache so unchanged

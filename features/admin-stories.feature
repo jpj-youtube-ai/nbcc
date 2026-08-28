@@ -55,3 +55,18 @@ Feature: Admin manages My Story submissions (Task C)
   Scenario: deleting a story that does not exist returns 404
     When I DELETE a non existent admin story as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the admin response status should be 404
+
+  # TASK-308: the Stories tab showed "No stories yet" - the EMPTY state, not an error - which means
+  # the query reached a database and found a stories table with nothing in it. That is what a
+  # freshly-bootstrapped database looks like, so the question is whether another database on the same
+  # server still holds the submissions. This reports names and sizes, never story content.
+  Scenario: an Editor can see where the stories data actually lives
+    When I GET the stories diagnostics as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 200
+    And the diagnostics name the connected database
+    And the diagnostics list the databases on the server
+    And the diagnostics never include story text
+
+  Scenario: a Viewer cannot see the server's databases
+    When I GET the stories diagnostics as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the admin response status should be 403

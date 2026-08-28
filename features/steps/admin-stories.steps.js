@@ -69,6 +69,40 @@ When(
   },
 );
 
+When(
+  "I GET the stories diagnostics as {string} with password {string}",
+  async function (email, password) {
+    const token = await login(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/diagnostics/stories`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.adminStatus = res.status;
+    this.adminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the diagnostics name the connected database", function () {
+  assert.ok(
+    typeof this.adminBody.connectedDatabase === "string" && this.adminBody.connectedDatabase.length,
+    `expected a connected database name, got ${JSON.stringify(this.adminBody)}`,
+  );
+  assert.equal(typeof this.adminBody.storiesRowCount, "number");
+});
+
+Then("the diagnostics list the databases on the server", function () {
+  const dbs = this.adminBody.databasesOnInstance || [];
+  assert.ok(Array.isArray(dbs) && dbs.length > 0, "expected at least one database listed");
+  // A size is what distinguishes an orphaned copy full of stories from an empty one.
+  assert.ok(dbs.every((d) => typeof d.name === "string" && typeof d.sizeBytes === "number"));
+});
+
+Then("the diagnostics never include story text", function () {
+  // The separate stories database exists so submissions stay behind the consent model. A diagnostic
+  // must not become a way around that, so it carries names, counts and sizes - nothing a person wrote.
+  const body = JSON.stringify(this.adminBody);
+  assert.ok(!/story_text|storyText/.test(body), `diagnostics leaked story content: ${body}`);
+});
+
 Then("the admin stories list contains the seeded story", function () {
   const results = this.adminBody.results || [];
   assert.ok(

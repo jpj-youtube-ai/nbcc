@@ -34,6 +34,7 @@ import {
 } from "../db/fulfilment";
 import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
+import { readStoriesDiagnostics } from "../db/stories-diagnostics";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
@@ -2286,6 +2287,24 @@ export async function getAdminStories(req: Request, res: Response): Promise<Resp
   }
 }
 
+// GET /api/admin/diagnostics/stories - TASK-308. Read-only: where the My Story data actually is.
+//
+// The Stories tab showed the EMPTY state, not the error state, which means the query reached a
+// database and found a stories table with no rows in it. That is what a freshly-bootstrapped
+// database looks like, so the question worth answering is whether another database on the same
+// server still holds the submissions. Sizes answer that without exposing a single story.
+//
+// Admin-level (stories:edit), never Viewer: it reports the database names on the server.
+export async function getAdminStoriesDiagnostics(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "stories", "edit"))) return;
+  try {
+    return res.status(200).json(await readStoriesDiagnostics());
+  } catch (err) {
+    console.error("stories diagnostics failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Diagnostics unavailable" });
+  }
+}
+
 // GET /api/admin/stories/:id — the full record for the detail view. Viewer+.
 export async function getAdminStory(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "stories", "view"))) return;
@@ -2361,6 +2380,7 @@ export async function deleteAdminStory(req: Request, res: Response): Promise<Res
 }
 
 adminRouter.get("/api/admin/stories", getAdminStories);
+adminRouter.get("/api/admin/diagnostics/stories", getAdminStoriesDiagnostics);
 adminRouter.get("/api/admin/stories/:id", getAdminStory);
 adminRouter.patch("/api/admin/stories/:id", patchAdminStory);
 adminRouter.delete("/api/admin/stories/:id", deleteAdminStory);

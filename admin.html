@@ -237,6 +237,19 @@
                 </div>
               </div>
               <div class="admin-table-wrap" id="storiesTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+
+              <!-- TASK-309: only worth opening when the list looks wrong. "No stories yet" is the
+                   EMPTY state, not an error, which means the table was reached and had no rows -
+                   what a freshly-created database looks like. This says which database is being
+                   read and whether a larger one is sitting unused beside it. -->
+              <details class="admin-details" id="storiesDiagnostics">
+                <summary>Where is this data stored?</summary>
+                <p class="admin-muted">Open this if stories look missing. It shows which database the
+                  site is reading, and every database on the server with its size — an unused one
+                  that is much larger is very likely the original.</p>
+                <button type="button" id="storiesDiagnosticsRun">Check storage</button>
+                <div id="storiesDiagnosticsOut" aria-live="polite"></div>
+              </details>
             </section>
 
             <!-- Story detail (reached from a stories row); Editor+ status/tags/notes actions. -->

@@ -1,19 +1,27 @@
 name: Deploy production
-# Production deploys are MANUAL ONLY: trigger this workflow yourself
-# (workflow_dispatch) with the staging-validated commit SHA to promote. It does
-# NOT auto-run on "Deploy staging" success — the production GitHub Environment's
-# required-reviewer gate still applies on top of the manual trigger.
+# Merging to main deploys production directly. pr.yml (lint, build, unit, full
+# BDD against a local app + DB + Stripe stub) is the pre-merge gate; there is
+# no staging environment (removed in TASK-312). The production GitHub
+# Environment holds AWS_ROLE_ARN but has no required reviewers.
 on:
-  # On-demand promotion of an already-staging-validated image (by commit SHA).
+  push:
+    branches: [main]
+    # Docs-only changes shouldn't rebuild/redeploy the service.
+    paths-ignore:
+      - "**/*.md"
+  # Manual redeploy / rollback of an earlier commit (image is rebuilt from that
+  # commit if its SHA tag is no longer in ECR).
   workflow_dispatch:
     inputs:
       image_sha:
-        description: "Staging-validated commit SHA to promote to production"
-        required: true
+        description: "Commit SHA to (re)deploy; defaults to the current main HEAD"
+        required: false
 
 permissions:
-  id-token: write
-  contents: read
+  id-token: write   # OIDC into AWS
+  contents: write   # push the release tag
+
+concurrency: deploy-production
 
 env:
   AWS_REGION: eu-west-2
@@ -26,12 +34,15 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production   # set required reviewers on this environment
+    environment: production   # source of AWS_ROLE_ARN; no required reviewers
     steps:
+      - name: Resolve deploy SHA
+        run: echo "DEPLOY_SHA=${{ inputs.image_sha || github.sha }}" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.image_sha || github.sha }}
-          # Full history: a promoted commit SHA isn't always reachable in a
+          # Full history: a dispatched commit SHA isn't always reachable in a
           # shallow (depth 1) fetch, which makes checkout fail to resolve it.
           fetch-depth: 0
 
@@ -43,10 +54,34 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      - name: Resolve image (same artifact staging built)
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Resolve image + skip build if already in ECR (build once by SHA)
+        id: img
         run: |
-          SHA="${{ inputs.image_sha }}"
-          echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${SHA}" >> "$GITHUB_ENV"
+          echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${DEPLOY_SHA}" >> "$GITHUB_ENV"
+          # Idempotent by design: the SHA tag is immutable, so if this commit's image is
+          # already in ECR (e.g. a re-run after a *later* step failed — a raced infra apply,
+          # a flaky migration — or a workflow_dispatch rollback), reuse it instead of
+          # rebuilding. A fresh SHA still builds.
+          if aws ecr describe-images --repository-name "${PROJECT}" --image-ids imageTag="${DEPLOY_SHA}" >/dev/null 2>&1; then
+            echo "Image ${DEPLOY_SHA} already present in ECR — reusing (build once by SHA)."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build & push image (layer-cached via GitHub Actions cache)
+        if: steps.img.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+          # Most commits change only app code, so the base/npm-install layers restore
+          # from the Actions cache instead of rebuilding — build drops from ~40s toward ~15s.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Cache Terraform providers
         uses: actions/cache@v4
@@ -66,6 +101,7 @@ jobs:
             echo "CLUSTER=$(terraform output -raw ecs_cluster)"
             echo "SERVICE=$(terraform output -raw ecs_service)"
             echo "FAMILY=$(terraform output -raw task_family)"
+            echo "TASK_DEF_ARN=$(terraform output -raw task_definition_arn)"
             echo "SUBNETS=$(terraform output -raw task_subnet_ids_csv)"
             echo "SG=$(terraform output -raw task_security_group_id)"
             echo "ALB_URL=$(terraform output -raw public_url)"
@@ -73,7 +109,10 @@ jobs:
 
       - name: Register new task definition (swap image only)
         run: |
-          CURRENT=$(aws ecs describe-task-definition --task-definition "$FAMILY" --query 'taskDefinition')
+          # Read TERRAFORM's managed task-def revision (env-bearing), NOT the family's "latest": a deploy
+          # that raced an infra apply must never strand a Terraform-set env var like the publishable key
+          # (TASK-215/216 embedded-key race). $FAMILY stays exported above for reference/back-compat.
+          CURRENT=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition')
           NEW=$(echo "$CURRENT" | jq --arg IMG "$IMAGE" '
             .containerDefinitions[0].image = $IMG
             | {family, networkMode, requiresCompatibilities, cpu, memory,
@@ -82,7 +121,7 @@ jobs:
                   --query 'taskDefinition.taskDefinitionArn' --output text)
           echo "TASK_ARN=$ARN" >> "$GITHUB_ENV"
 
-      - name: Run all DB migrations (expand phase)
+      - name: Run all DB migrations (expand phase, before deploy)
         # One Fargate task runs every DB's provisioning + migration in order, instead
         # of five separate `ecs run-task` calls. Each run-task pays ~50s of Fargate
         # cold-start regardless of how little SQL it does, so folding the five into a
@@ -121,3 +160,12 @@ jobs:
 
       - name: Smoke test production
         run: bash scripts/smoke.sh "$ALB_URL"
+
+      - name: Tag release (deployed to production)
+        # Only on the normal push path — a workflow_dispatch rollback of an old
+        # SHA shouldn't mint a fresh release tag for it.
+        if: github.event_name == 'push'
+        run: |
+          TAG="release-$(date +%Y%m%d)-${DEPLOY_SHA::7}"
+          git tag "$TAG"
+          git push origin "$TAG"

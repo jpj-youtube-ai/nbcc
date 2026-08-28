@@ -7,11 +7,11 @@ on:
       environment:
         description: Environment
         type: choice
-        options: [staging, production]
+        options: [production]
       action:
-        description: plan or apply
+        description: plan, apply or destroy
         type: choice
-        options: [plan, apply]
+        options: [plan, apply, destroy]
         default: plan
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        env: [staging, production]
+        env: [production]
     environment: ${{ matrix.env }}
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +52,8 @@ jobs:
       - working-directory: infra/envs/${{ inputs.environment }}
         run: |
           terraform init -input=false
-          if [ "${{ inputs.action }}" = "apply" ]; then
-            terraform apply -input=false -auto-approve -no-color
-          else
-            terraform plan -input=false -no-color
-          fi
+          case "${{ inputs.action }}" in
+            apply)   terraform apply   -input=false -auto-approve -no-color ;;
+            destroy) terraform destroy -input=false -auto-approve -no-color ;;
+            *)       terraform plan    -input=false -no-color ;;
+          esac

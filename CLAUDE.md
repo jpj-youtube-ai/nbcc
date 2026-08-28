@@ -34,7 +34,7 @@ wins.
 ## Architecture (one paragraph)
 
 A single containerised Express + TypeScript service runs on AWS Fargate behind
-an Application Load Balancer, in two environments (staging, production). It
+an Application Load Balancer, in a single production environment. It
 talks to RDS Postgres and a couple of external HTTP APIs. Config comes from
 environment variables (`.env` locally, SSM-injected on ECS). CI builds the
 image once, runs DB migrations as a separate task, deploys to ECS, and smoke-
@@ -123,10 +123,10 @@ These complement, and don't replace, the required superpowers workflow above.
 > This repo ships the `ship` skill (`.claude/skills/ship/`), and it is the
 > required way to land work — not an option. When a change is ready, invoke
 > `/ship`: it assigns the task number (latest in GitHub Actions **+1**), opens the
-> PR, watches `pr.yml` to green, self-merges, applies staging infra if the diff
-> touches `infra/`, watches the staging deploy, then **stops at the production
-> boundary** and hands back the manual prod-promote command (`/ship` never
-> deploys production). Don't hand-run the steps below when `/ship` covers them —
+> PR, watches `pr.yml` to green, self-merges, applies production infra if the
+> diff touches `infra/`, watches the production deploy, and reports the live
+> URL. Merging IS the production deploy — there is no staging (removed in
+> TASK-312). Don't hand-run the steps below when `/ship` covers them —
 > they document what `/ship` automates and how to fix a red gate. If `/ship`
 > doesn't appear in your session, reload Claude Code (`.claude/` changed) so the
 > committed skill is picked up.
@@ -147,7 +147,7 @@ acting as the watcher:
    squash-merge it yourself (`gh pr merge <pr> --squash --delete-branch`). Anything
    red ⇒ **do not merge**: open the failing job, fix the cause, push, and wait
    again. Never merge a red or still-pending PR, and never bypass the checks —
-   merging to `main` deploys to staging, so a red merge ships a broken build.
+   merging to `main` deploys to production, so a red merge ships a broken build.
 
 The shape is a watch loop: open → wait → (green ⇒ squash-merge) / (red ⇒ fix &
 repeat). The merge is self-service: whoever built the feature reviews it locally,
@@ -201,7 +201,8 @@ conflicts rare and trivial, `git rebase main` often on small, single-task PRs.
 - BDD: `features/*.feature` + `features/steps/*.js` (Cucumber, CommonJS, hit
   `process.env.BASE_URL`).
 - Infra: Terraform under `infra/` — edit the reusable module in
-  `infra/modules/app/`, per-env differences in `infra/envs/{staging,production}/`.
+  `infra/modules/app/`; the production root is `infra/envs/production/` (the
+  module stays env-agnostic; staging was removed in TASK-312).
   See **Infrastructure changes (Terraform)** below and `infra/README.md`.
 
 ## How to add things
@@ -217,7 +218,7 @@ conflicts rare and trivial, `git rebase main` often on small, single-task PRs.
   with the wall-clock time) can sort *before* an already-applied one — and
   node-pg-migrate aborts the whole run with "Not run migration X is preceding
   already run migration Y". **CI cannot catch this**: its database is empty, so
-  everything runs in order from zero. It fails on staging/production, where
+  everything runs in order from zero. It fails on production, where
   history exists. If yours isn't last, renumber it above the highest one
   (TASK-250 hit exactly this).
 - **A config value:** schema + `.env.example` + SSM param + task def env/secret.
@@ -252,7 +253,7 @@ restart Claude Code) so it reloads the config.
   - `github` — PRs, checks, and Actions over the GitHub MCP (OAuth on first use).
   - `postgres` — read-mostly access to the **local** dev DB via `DATABASE_URL`
     (default `localhost:5435`, matching the local port convention). **Never**
-    point it at staging/prod; those creds live in SSM.
+    point it at production; those creds live in SSM.
 
 ## Commands
 
@@ -270,29 +271,29 @@ npm run lint
 - **Never run `terraform apply` from app code or an app deploy.** Infra changes
   go through `infra.yml` (plan on PR, manual apply). App deploys only build an
   image and update the ECS service.
-- The image is built once in the staging pipeline and the *same* image (by SHA,
-  in the shared ECR repo) is promoted to production. **Promotion is manual** —
-  trigger the **Deploy production** workflow (`workflow_dispatch`) with the
-  staging-validated SHA; it does not auto-deploy on staging success. Don't
-  rebuild for prod.
+- Merging to `main` triggers `deploy-prod.yml`: build the image by SHA (skip if
+  already in ECR), run migrations as a one-off task, update the ECS service,
+  smoke-test, tag a `release-*`. There is no staging environment and no
+  promotion step (removed in TASK-312); `pr.yml` is the functional gate.
 - Migrations run as a one-off `ecs run-task` *before* the service updates -
   never on app boot (that races across tasks and a bad migration blocks every
   task from starting).
-- Rollback is the ECS circuit breaker plus the smoke/BDD gate; you don't script
-  rollback by hand.
+- Rollback is the ECS circuit breaker plus the smoke gate; for a code-level
+  rollback, dispatch `deploy-prod.yml` with an earlier `image_sha`. Don't
+  script rollback by hand.
 
 ## Infrastructure changes (Terraform)
 
-Infra lives in `infra/`, split into a **reusable module** and **thin per-env
-roots**. Change the module once and both environments inherit it; use the env
-roots *only* for per-environment differences. Apply through the **Infra**
+Infra lives in `infra/`, split into a **reusable module** and a **thin env
+root** (`infra/envs/production/` — staging was removed in TASK-312, the module
+stays env-agnostic). Apply through the **Infra**
 workflow (plan on PR, manual `apply` via `workflow_dispatch`) — never
 `terraform apply` shared state by hand, and never from an app deploy. Full
 walkthrough: `infra/README.md`.
 
 Where things live:
 
-- **`infra/modules/app/`** — edit here for anything both envs share:
+- **`infra/modules/app/`** — edit here for the shared shape of the stack:
   - `main.tf` — VPC/subnets, CloudWatch log group, the generated DB password, and
     the **SSM parameters** (the `DATABASE_URL` is assembled here, including the
     required `sslmode=no-verify`).
@@ -304,11 +305,10 @@ Where things live:
   - `variables.tf` — every knob (with defaults); `outputs.tf` — the values the
     deploy workflows read back from state (cluster, service, family, subnets, SG,
     `alb_dns_name`).
-- **`infra/envs/{staging,production}/`** — edit here ONLY for env differences.
-  `main.tf` sets the module inputs that differ (CIDRs, `desired_count`,
-  `multi_az`, `deletion_protection`, `skip_final_snapshot`); `backend.tf` is the
-  S3 state config; `outputs.tf` re-exports module outputs. Add an env by copying a
-  root.
+- **`infra/envs/production/`** — the env root. `main.tf` sets the module inputs
+  (CIDRs, `desired_count`, `multi_az`, `deletion_protection`,
+  `skip_final_snapshot`); `backend.tf` is the S3 state config; `outputs.tf`
+  re-exports module outputs. Add an env by copying the root.
 - **`scripts/bootstrap-aws.sh`** — one-time account setup (OIDC provider, per-env
   deploy roles, the state bucket, the shared ECR repo). Only re-run when those
   change.
@@ -317,14 +317,14 @@ Common change → where to make it:
 
 | Change | Edit |
 |---|---|
-| New AWS resource shared by both envs | a `.tf` in `infra/modules/app/` |
-| Tune an existing resource for all envs | that resource in `infra/modules/app/` |
-| Make a setting differ per env | add a `variable` (module `variables.tf`) + set it in each `infra/envs/*/main.tf` |
+| New AWS resource | a `.tf` in `infra/modules/app/` |
+| Tune an existing resource | that resource in `infra/modules/app/` |
+| Override a module default | add a `variable` (module `variables.tf`) + set it in `infra/envs/production/main.tf` |
 | **New secret/config the app reads** | SSM param in `main.tf` **+** the `secrets`/`environment` block in `ecs.tf` **+** that param's ARN in the `exec_secrets` IAM policy in `ecs.tf` **+** (app side) `src/config/schema.ts` and `.env.example` (golden rule 3) |
 | Open a port / change network reachability | the security groups in `alb.tf` |
-| Change DB size / version | `rds.tf` (shared); AZ/protection/snapshot are per-env knobs in the env root |
+| Change DB size / version | `rds.tf` (module); AZ/protection/snapshot are knobs in the env root |
 | Add HTTPS | a 443 listener + ACM cert in `alb.tf` (note already in the file) |
-| A value the deploy pipeline needs | add an `output` in module `outputs.tf` **and** re-export it in each env `outputs.tf` |
+| A value the deploy pipeline needs | add an `output` in module `outputs.tf` **and** re-export it in `infra/envs/production/outputs.tf` |
 
 Infra gotchas (these have already bitten):
 
@@ -333,9 +333,6 @@ Infra gotchas (these have already bitten):
   `exec_secrets` IAM policy resource list (`ecs.tf`).
 - RDS **enforces TLS** (`rds.force_ssl=1`). The `DATABASE_URL` must carry
   `sslmode` (we use `no-verify`); don't drop it. Local dev uses a plain URL.
-- The `production` Environment's required-reviewer gate **also gates the Infra
-  `apply`** (its job runs in `environment: production`), so prod infra changes
-  wait for approval too.
 - The ECS service sets `lifecycle.ignore_changes = [task_definition,
   desired_count]`: **CI owns the running image and scale, Terraform owns
   everything else.** Roll a new image via a deploy, not Terraform.

@@ -1,9 +1,9 @@
 # charity-site
 
 Containerised TypeScript service on AWS Fargate, fronted by an ALB, with a
-Postgres (RDS) database and a couple of external API integrations. Two
-environments (staging, production) with a build-once, promote-the-same-artifact
-pipeline.
+Postgres (RDS) database and a couple of external API integrations. A single
+production environment, deployed automatically on every merge to `main`
+(staging was removed in TASK-312; `pr.yml` is the functional gate).
 
 ## What's here
 
@@ -14,8 +14,8 @@ test/unit/           Vitest unit tests (DB-free)
 features/            Cucumber BDD (.feature + JS step defs)
 scripts/             bootstrap-aws.sh, branch-protection.sh (one-time) + smoke.sh
 infra/modules/app/   Reusable Terraform module (VPC, ALB, ECS, RDS, secrets)
-infra/envs/          Thin per-env roots: staging/ and production/
-.github/workflows/   pr.yml, deploy-staging.yml, deploy-prod.yml, infra.yml
+infra/envs/          Thin env root: production/
+.github/workflows/   pr.yml, deploy-prod.yml, infra.yml
 .claude/             Claude Code automation (hooks, reviewer agents, skills)
 .mcp.json            MCP servers for this repo (github, postgres)
 index.html …         Static site: Home, About, Donate, Contact (HTML pages)
@@ -2072,7 +2072,7 @@ on `supporters.html` **below the donors**. The page is now two clearly-defined `
 `.card.supporter` per partner into `#partnersList`, and unhides the section — so an empty list shows
 nothing (no bare heading). The real partner roster is seeded into `supporter_ticker` by the data-only,
 idempotent `1783709948147_seed-partners.js` migration (TASK-181; `INSERT … WHERE NOT EXISTS`), so it
-ships to staging + production; guarded by `test/unit/seed-partners-migration.test.ts`.
+ships to production; guarded by `test/unit/seed-partners-migration.test.ts`.
 **Contact form tab (2026-07-10 contact-inbox spec).** A "Contact form" admin nav section (between
 Stories and Newsletter) for the public enquiry form (`contact.html`), backed entirely by the
 **isolated `contact` database** (`src/db/contact.ts`, `contactPool` — never `src/db/pool.ts` or the
@@ -2256,7 +2256,7 @@ login, not a replacement for it.
   outside production whenever `EMAIL_SEND_URL` is a placeholder (`emailStubbed`) — which is the case
   in local dev and CI by default. Since a stubbed send never actually delivers the code, step 1's
   response includes it directly as `devCode` **only when `config.NODE_ENV !== "production"`** — so
-  staging/local admins can always complete 2FA even without live email — and this is **never** true in
+  local admins can always complete 2FA even without live email — and this is **never** true in
   production, where the code is always emailed and never echoed back. The BDD suite
   (`features/admin-2fa.feature`) relies on this to log in end to end without a real mail provider.
 - **Rate limiting.** Both endpoints are limited per email and per client IP (`createRateLimiter`,
@@ -3549,8 +3549,8 @@ anonymous), declarations (active/revoked/superseded/non-UK, retention expired + 
 across every `claim_status`/`mode`/`plan`/channel/`declaration_status`/refund/`payment_status`, claim
 batches (open/submitted/adjustment_due), dunning (active/past_due/lapsed) and audit rows. It populates
 the public supporters wall and every admin dashboard view/queue. Re-runnable: it clears its own
-`@demo.nbcc`/`DEMO`-tagged rows first (the append-only audit rows insert once). Point `DATABASE_URL` at
-staging RDS to seed there. Local-dev / demo only, never production donor data.
+`@demo.nbcc`/`DEMO`-tagged rows first (the append-only audit rows insert once).
+Local-dev / demo only, never production donor data.
 
 Or run the whole thing in containers: `docker compose up` (and
 `docker compose run --rm migrate` once to migrate).
@@ -3573,9 +3573,9 @@ from before this existed, either run the two statements in that file manually or
 by hand: `createdb stories && psql -c "CREATE ROLE stories_app LOGIN PASSWORD
 'stories'" -c 'ALTER DATABASE stories OWNER TO stories_app'`. CI creates the database
 explicitly in `pr.yml` (reusing the `app` role there — credential isolation is a
-staging/production concern, not CI's).
+production concern, not CI's).
 
-**Staging/production provisioning** (Task B2): Terraform generates the
+**Production provisioning** (Task B2): Terraform generates the
 `stories_app` credential and publishes it as the `STORIES_DATABASE_URL` SSM
 parameter (`infra/modules/app/main.tf`), wired through the task definition like
 any other secret (`infra/modules/app/ecs.tf`). It can't create the database or
@@ -3583,7 +3583,7 @@ role itself (no `postgresql` Terraform provider, private RDS), so
 `scripts/bootstrap-stories-db.mjs` does that imperatively — idempotent
 `CREATE ROLE`/`ALTER ROLE`, `CREATE DATABASE`, `GRANT` statements run outside a
 transaction (Postgres can't `CREATE DATABASE` inside one), connecting with the
-**master** `DATABASE_URL`. Both deploy workflows run it as a one-off
+**master** `DATABASE_URL`. The deploy workflow runs it as a one-off
 `ecs run-task` (`npm run bootstrap:stories`) right after the `charity` migration
 step and before `migrate:stories`, every deploy — safe because it's idempotent.
 See `infra/README.md` → "My Story: the separate `stories` database" for the full
@@ -3606,7 +3606,7 @@ Running Postgres another way, create them by hand: `createdb contact && psql -c 
 contact_app LOGIN PASSWORD 'contact'" -c 'ALTER DATABASE contact OWNER TO contact_app'`. CI creates
 the database explicitly in `pr.yml`, mirroring the `stories` setup.
 
-**Staging/production provisioning** mirrors the `stories` database exactly: Terraform generates the
+**Production provisioning** mirrors the `stories` database exactly: Terraform generates the
 `contact_app` credential and publishes it as the `CONTACT_DATABASE_URL` SSM parameter
 (`infra/modules/app/main.tf`), wired through the task definition (`infra/modules/app/ecs.tf`);
 `scripts/bootstrap-contact-db.mjs` (`npm run bootstrap:contact`) idempotently creates the role/database
@@ -3630,9 +3630,10 @@ GITHUB_ORG=your-org GITHUB_REPO=charity-site ./scripts/bootstrap-aws.sh
 ```
 
 Then in GitHub repo Settings:
-- Create Environments `staging` and `production`; add **required reviewers** to
-  `production` (this is the prod deploy approval gate).
-- On each environment set a variable `AWS_ROLE_ARN` to the role ARN the script
+- Create an Environment `production` with **no required reviewers** (merging a
+  green PR is the deploy gate — TASK-312 removed the approval click along with
+  staging).
+- On the environment set a variable `AWS_ROLE_ARN` to the role ARN the script
   printed.
 - Apply the `main` branch-protection ruleset: `./scripts/branch-protection.sh`
   (PRs only, green `test` check required, **0** required approving reviews; see
@@ -3647,40 +3648,40 @@ Then in GitHub repo Settings:
 Finally, set the real secret values (the bootstrap leaves placeholders):
 
 ```bash
-aws ssm put-parameter --name /charity-site/staging/EXTERNAL_API_ONE_KEY \
+aws ssm put-parameter --name /charity-site/production/EXTERNAL_API_ONE_KEY \
   --type SecureString --value 'real-key' --overwrite
-# ...repeat for EXTERNAL_API_TWO_KEY and for the production path.
+# ...repeat for EXTERNAL_API_TWO_KEY.
 
 # Stripe (REQ-028/REQ-029): the live secret key (SecureString) and the four
 # recurring price IDs (String); all start as REPLACE_ME placeholders.
-aws ssm put-parameter --name /charity-site/staging/STRIPE_SECRET_KEY \
+aws ssm put-parameter --name /charity-site/production/STRIPE_SECRET_KEY \
   --type SecureString --value 'sk_live_...' --overwrite
-aws ssm put-parameter --name /charity-site/staging/STRIPE_PRICE_BRONZE \
+aws ssm put-parameter --name /charity-site/production/STRIPE_PRICE_BRONZE \
   --type String --value 'price_...' --overwrite
-# ...repeat for STRIPE_PRICE_SILVER/GOLD/PLATINUM and the production path.
+# ...repeat for STRIPE_PRICE_SILVER/GOLD/PLATINUM.
 
 # Stripe webhook signing secret (REQ-036): a SecureString for verifying inbound
 # webhook signatures. The whsec_... value comes from the Stripe Dashboard webhook
-# endpoint (a separate endpoint + value per environment); starts as REPLACE_ME.
-aws ssm put-parameter --name /charity-site/staging/STRIPE_WEBHOOK_SECRET \
+# endpoint; starts as REPLACE_ME.
+aws ssm put-parameter --name /charity-site/production/STRIPE_WEBHOOK_SECRET \
   --type SecureString --value 'whsec_...' --overwrite
 
 # Contact forwarding (REQ-030): the form-service endpoint (SecureString). Starts
 # as a https://forward.example/replace-me placeholder, which keeps the forward
 # stubbed until a real URL is set.
-aws ssm put-parameter --name /charity-site/staging/CONTACT_FORWARD_URL \
+aws ssm put-parameter --name /charity-site/production/CONTACT_FORWARD_URL \
   --type SecureString --value 'https://formspree.io/f/xxxx' --overwrite
 
 # Transactional email (TASK-070): the provider send endpoint (SecureString). Starts
 # as a https://email.example/replace-me placeholder, which keeps the confirmation
 # email stubbed until a real URL is set.
-aws ssm put-parameter --name /charity-site/staging/EMAIL_SEND_URL \
+aws ssm put-parameter --name /charity-site/production/EMAIL_SEND_URL \
   --type SecureString --value 'https://api.provider.com/send' --overwrite
 
 # Declaration form base URL (TASK-075): the public site base the in-person Gift Aid
 # declaration link/QR is built on. A plain String (not a secret); starts as a
 # https://nbcc.example placeholder. Set the real public site URL.
-aws ssm put-parameter --name /charity-site/staging/DECLARATION_FORM_BASE_URL \
+aws ssm put-parameter --name /charity-site/production/DECLARATION_FORM_BASE_URL \
   --type String --value 'https://www.nbcc.org.uk' --overwrite
 ```
 
@@ -3689,52 +3690,45 @@ aws ssm put-parameter --name /charity-site/staging/DECLARATION_FORM_BASE_URL \
 Infra is **not** applied automatically on push (that's how a stray PR replaces
 your database). Apply it deliberately:
 
-- GitHub: **Actions -> Infra -> Run workflow -> environment: staging ->
-  action: apply**. Repeat for production.
-- Or locally: `cd infra/envs/staging && terraform init && terraform apply`.
+- GitHub: **Actions -> Infra -> Run workflow -> environment: production ->
+  action: apply**.
+- Or locally: `cd infra/envs/production && terraform init && terraform apply`.
 
-Apply staging first, then production. On the very first apply the ECS service
-starts with a placeholder image and is unhealthy until the first real deploy -
-so run the staging pipeline (below) right after.
+On the very first apply the ECS service starts with a placeholder image and is
+unhealthy until the first real deploy - so run the deploy pipeline (below)
+right after.
 
 ## Deploy flow
 
 1. **Open a PR** -> `pr.yml` runs lint, build, migrations, **unit + BDD**.
-2. **Merge to main** -> `deploy-staging.yml`:
+   This is the functional gate — there is no staging environment to catch
+   anything after merge (removed in TASK-312).
+2. **Merge to main** -> `deploy-prod.yml`:
    builds + pushes the image (tagged by commit SHA, to the shared ECR repo, with
    Docker layer caching via `buildx` + the GitHub Actions cache so unchanged
-   base/dependency layers are reused across deploys),
+   base/dependency layers are reused across deploys; if the SHA's image already
+   exists in ECR — a re-run — it's reused, build-once-by-SHA),
    provisions + migrates all three databases (main, `stories`, `contact`) in a
    **single** one-off `ecs run-task` — one Fargate cold-start instead of five —
-   deploys to ECS, smoke-tests `/health`,
-   runs **unit + BDD against the live staging URL**, then tags a release.
+   deploys to ECS, smoke-tests `/health`, then tags a `release-YYYYMMDD-<sha7>`.
    Terraform providers are cached (`TF_PLUGIN_CACHE_DIR` + `actions/cache`) so
-   `terraform init` doesn't re-download them each run — both deploy workflows.
-   On success it also writes a **promotion hint** to the run's job summary — the
-   validated image SHA plus the ready-to-run `deploy-prod.yml` command — so you can
-   copy the exact SHA straight into the prod promote (below).
-   The staging BDD runs `--tags "not @db and not @stub-only"`: `@db` scenarios
-   need a direct Postgres connection (staging's RDS is private), and `@stub-only`
-   scenarios are happy-path Stripe flows that only pass against the offline stub
-   in `src/clients/stripe` (they use fixture data — a preset plan's placeholder
-   `STRIPE_PRICE_*`, or the fake `sub_demo_123` — that a live Stripe test account
-   has no counterpart for). Both sets are fully covered by `pr.yml`'s BDD.
-3. **Promote to production manually** -> run `deploy-prod.yml`
-   (**Actions -> Deploy production -> Run workflow**) with the staging-validated
-   commit SHA (copy it from the staging run's job-summary promotion hint). It
-   deploys the *same image* to production and smoke-tests it.
-   Production does **not** auto-deploy on staging success; the `production`
-   environment's **required-reviewer approval** gate still applies.
+   `terraform init` doesn't re-download them each run.
+   No BDD runs against production — the suite POSTs real data (signups,
+   donations); `pr.yml` already runs it in full against a local app + DB +
+   Stripe stub.
+3. **Rollback / redeploy** -> run `deploy-prod.yml` manually
+   (**Actions -> Deploy production -> Run workflow**) with an earlier commit
+   SHA; the image is reused from ECR (or rebuilt from that commit if pruned).
 
-Rollback is automatic: the ECS deployment circuit breaker reverts to the last
-healthy task set if a deploy fails its health checks, and a failed smoke/BDD
-step fails the run so a bad image never reaches production.
+Rollback is also automatic: the ECS deployment circuit breaker reverts to the
+last healthy task set if a deploy fails its health checks, and a failed smoke
+step fails the run loudly.
 
 Deploys are tuned to finish quickly: the target group sets
 `deregistration_delay = 5` (the default 300s otherwise blocks
 `ecs wait services-stable` on the old task draining) and a 10s health-check
 interval, both in `infra/modules/app/alb.tf`. These are Terraform changes, so
-they take effect only once the **Infra** workflow applies them per environment.
+they take effect only once the **Infra** workflow applies them.
 
 ## Configuration
 
@@ -3804,7 +3798,7 @@ real value with `put-parameter` (above) when a provider is chosen.
 `DECLARATION_FORM_BASE_URL` (TASK-075) is the public site base the in-person Gift Aid
 declaration link + QR short link are built on (`declarationLinks`). **Not** a secret (it
 ships in the email/QR), but SSM-held and injected via `valueFrom` like the price IDs — a
-plain SSM `String` with its ARN in `exec_secrets` — so it varies per environment; validated
+plain SSM `String` with its ARN in `exec_secrets`; validated
 as a URL, with a valid placeholder so a fresh apply passes.
 
 `PORTAL_BASE_URL` (TASK-100) is the public site base the self-serve donor-portal magic link is
@@ -3844,7 +3838,7 @@ extra setup. `sendNewsletter`
 dedicated newsletter branch that maps those to a Resend send honouring the per-message `from`/`reply_to`
 (other payloads fall through to the fixed `MAIL_FROM`). **Ops prerequisites:** (1) the relay Worker
 must be redeployed (`cd services/email-relay && wrangler deploy`) for the newsletter branch to take
-effect — one Worker serves both staging and production; (2) `newsletter@nbcc.scot` must be a real
+effect — one Worker serves production; (2) `newsletter@nbcc.scot` must be a real
 **receiving mailbox** (Resend is send-only) for replies to land, and its domain `nbcc.scot` must stay
 verified in Resend.
 
@@ -3984,7 +3978,7 @@ decides *who gets a newsletter* sat ~110 lines away from the audiences it names.
 - Tasks run in public subnets with no NAT gateway (saves ~£25-30/mo); the
   security groups only allow inbound from the ALB. Flip to private+NAT in
   `infra/modules/app/main.tf` if you must.
-- RDS is `db.t4g.micro`, single-AZ in staging, multi-AZ in prod.
+- RDS is `db.t4g.micro`, multi-AZ in production.
 - The DB password is generated and stored in SSM, so it lands in Terraform
   state - keep the state bucket locked (the bootstrap script does). Or switch
   to `manage_master_user_password = true` (noted in `rds.tf`).

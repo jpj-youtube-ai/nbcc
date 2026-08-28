@@ -31,6 +31,17 @@ export interface StoriesDiagnostics {
   /** The database the app's stories pool is actually connected to right now. */
   connectedDatabase: string;
   storiesRowCount: number;
+  /**
+   * TASK-310: the id sequence's high-water mark - how many rows have EVER been created in this
+   * table. It does not go backwards when rows are deleted, so it is the one number that separates
+   * "no story was ever submitted here" from "stories existed and are gone".
+   *
+   * Null when the sequence cannot be read, which must not be mistaken for zero.
+   */
+  storiesEverCreated: number | null;
+  /** Lifetime insert/delete counters. Reset if the server restarts stats, so treat as corroboration. */
+  lifetimeInserts: number | null;
+  lifetimeDeletes: number | null;
   /** Migration names recorded in the stories database, newest last. */
   migrationsApplied: string[];
   /** Every database on the same server, largest first - an orphaned copy shows up here. */
@@ -38,7 +49,7 @@ export interface StoriesDiagnostics {
 }
 
 export async function readStoriesDiagnostics(): Promise<StoriesDiagnostics> {
-  const [who, count, migrations] = await Promise.all([
+  const [who, count, migrations, everCreated, churn] = await Promise.all([
     storiesPool.query<{ db: string }>(`SELECT current_database() AS db`),
     storiesPool.query<{ n: string }>(`SELECT count(*) AS n FROM stories`),
     // node-pg-migrate records what it has run. An empty stories database that has just been
@@ -47,6 +58,20 @@ export async function readStoriesDiagnostics(): Promise<StoriesDiagnostics> {
     storiesPool
       .query<{ name: string }>(`SELECT name FROM pgmigrations ORDER BY run_on ASC, id ASC`)
       .catch(() => ({ rows: [] as { name: string }[] })),
+    // TASK-310: the high-water mark. pg_sequences is read WITHOUT touching the sequence - last_value
+    // is null until the sequence has been used at least once, which is itself the answer.
+    storiesPool
+      .query<{ last_value: string | null }>(
+        `SELECT last_value FROM pg_sequences
+          WHERE schemaname = 'public' AND sequencename = 'stories_id_seq'`,
+      )
+      .catch(() => ({ rows: [] as { last_value: string | null }[] })),
+    storiesPool
+      .query<{ ins: string; del: string }>(
+        `SELECT n_tup_ins AS ins, n_tup_del AS del
+           FROM pg_stat_user_tables WHERE relname = 'stories'`,
+      )
+      .catch(() => ({ rows: [] as { ins: string; del: string }[] })),
   ]);
 
   // Listed through the MAIN pool: the app user has CREATEDB/CREATEROLE on RDS (it is what the
@@ -63,9 +88,18 @@ export async function readStoriesDiagnostics(): Promise<StoriesDiagnostics> {
     )
     .catch(() => ({ rows: [] as { name: string; size: string; size_bytes: string }[] }));
 
+  const seq = everCreated.rows[0]?.last_value;
+  const stats = churn.rows[0];
+
   return {
     connectedDatabase: who.rows[0]?.db ?? "(unknown)",
     storiesRowCount: Number(count.rows[0]?.n ?? 0),
+    // A sequence that has never been used reports null, which genuinely means "none ever created".
+    // A sequence we could not READ also gives us nothing - but that arrives as an empty result set,
+    // so the two are distinguishable and only the former becomes 0.
+    storiesEverCreated: everCreated.rows.length === 0 ? null : seq == null ? 0 : Number(seq),
+    lifetimeInserts: stats ? Number(stats.ins) : null,
+    lifetimeDeletes: stats ? Number(stats.del) : null,
     migrationsApplied: migrations.rows.map((r) => r.name),
     databasesOnInstance: databases.rows.map((r) => ({
       name: r.name,

@@ -945,9 +945,25 @@
               "</td><td>" + H.escapeHtml(db.size || "") + "</td></tr>";
           })
           .join("");
+        // TASK-310: the sentence that decides whether this is a recovery job at all. The id counter
+        // never goes backwards, so it separates "none was ever submitted" from "some were removed".
+        var ever = d.storiesEverCreated;
+        var verdict;
+        if (ever === null || ever === undefined) {
+          verdict = '<p class="admin-muted">Could not read the creation counter.</p>';
+        } else if (ever === 0) {
+          verdict =
+            "<p><b>No story has ever been submitted to this database.</b> Nothing has been deleted —" +
+            " there was never anything here to lose.</p>";
+        } else {
+          verdict =
+            "<p><b>" + H.escapeHtml(String(ever)) + " stories have been created here at some point</b>," +
+            " and " + H.escapeHtml(String(d.storiesRowCount)) + " remain. The rest were deleted, and" +
+            " are recoverable from a backup.</p>";
+        }
         out.innerHTML =
           "<p>Reading from <b>" + H.escapeHtml(connected) + "</b> — it holds <b>" +
-          H.escapeHtml(String(d.storiesRowCount)) + "</b> stories.</p>" +
+          H.escapeHtml(String(d.storiesRowCount)) + "</b> stories.</p>" + verdict +
           '<table class="admin-table"><thead><tr><th>Database on this server</th><th>Size</th></tr></thead><tbody>' +
           rows + "</tbody></table>" +
           '<p class="admin-muted">If a database you are NOT reading from is much larger, that is very' +

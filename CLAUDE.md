@@ -270,8 +270,10 @@ npm run lint
 - **Never run `terraform apply` from app code or an app deploy.** Infra changes
   go through `infra.yml` (plan on PR, manual apply). App deploys only build an
   image and update the ECS service.
-- The image is built once in the staging pipeline and the *same* image (by SHA,
-  in the shared ECR repo) is promoted to production. **Promotion is manual** —
+- **Staging was removed (TASK-312).** `deploy-prod.yml` now builds the image itself when the
+  tag is not already in ECR, and `deploy-staging.yml` no longer exists. There is no
+  pre-production environment: `pr.yml` is the only gate before production.
+- The image is tagged by commit SHA in the shared ECR repo. **Promotion is manual** —
   trigger the **Deploy production** workflow (`workflow_dispatch`) with the
   staging-validated SHA; it does not auto-deploy on staging success. Don't
   rebuild for prod.

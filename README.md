@@ -1931,6 +1931,25 @@ Production backup retention also rose from **5 to 35 days** (the AWS maximum for
 in the same task: the 5-day window had already closed by the time this was noticed, which is the
 argument. Longer than 35 days needs AWS Backup with its own retention plan - not yet built.
 
+**Staging was removed, so production builds its own image (TASK-312).** The image used to be
+built once by the staging pipeline and promoted to production by SHA - production never built
+anything, it only composed the tag and trusted the artifact was already in ECR. With staging gone
+that tag pointed at nothing, and the next production deploy would have failed on a missing image.
+
+`deploy-prod.yml` now checks ECR for the tag and builds it only if absent. Re-deploying an
+unchanged commit stays as cheap as it was, and promoting a SHA built earlier still reuses that
+exact artifact rather than rebuilding it. The build checks out **the commit being deployed**, not
+whatever `main` happens to be - promoting an older SHA has to build THAT code or the tag lies
+about what is running.
+
+`deploy-staging.yml` is deleted. Left in place it would have failed on every merge to `main`, and
+a permanently red deploy teaches everyone to ignore deploy failures - the worst habit to build.
+
+**The trade-off, stated plainly:** there is no longer a pre-production environment. `pr.yml` is
+the only gate - lint, build, migrations, unit and the full BDD suite against a real app and
+database. That is a real gate, but it cannot catch what only appears against production data and
+infrastructure. Worth restoring an environment before the Christmas donation peak.
+
 **Stories diagnostics (TASK-308).** `GET /api/admin/diagnostics/stories` (Editor+, read-only)
 answers one question: where the My Story submissions actually are.
 

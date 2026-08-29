@@ -43,10 +43,52 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      - name: Resolve image (same artifact staging built)
+      # TASK-312: staging was removed, and it was the ONLY thing that built an image. This step used
+      # to be called "Resolve image (same artifact staging built)" - it just composed a tag and
+      # trusted that the staging pipeline had already pushed it. With staging gone, that tag pointed
+      # at nothing and every production deploy would have failed on a missing image.
+      #
+      # Production now builds it if it is not already there. The existence check keeps a re-deploy of
+      # an unchanged commit as cheap as it was, and means promoting a SHA that WAS built earlier
+      # still reuses that exact artifact rather than rebuilding it.
+      - name: Resolve image
         run: |
           SHA="${{ inputs.image_sha }}"
           echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${SHA}" >> "$GITHUB_ENV"
+          echo "SHA=${SHA}" >> "$GITHUB_ENV"
+
+      - name: Is this image already built?
+        id: img
+        run: |
+          if aws ecr describe-images --repository-name "${PROJECT}" --image-ids imageTag="${SHA}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image for ${SHA} already in ECR - reusing it."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No image for ${SHA} - building it."
+          fi
+
+      # The commit being deployed, not whatever main happens to be: promoting an older SHA must build
+      # THAT code, or the tag would lie about what is running.
+      - name: Check out the commit being deployed
+        if: steps.img.outputs.exists == 'false'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.image_sha }}
+
+      - name: Set up buildx
+        if: steps.img.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image (layer-cached via GitHub Actions cache)
+        if: steps.img.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Cache Terraform providers
         uses: actions/cache@v4

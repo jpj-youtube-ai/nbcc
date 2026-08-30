@@ -1,4 +1,4 @@
-const { Given, When, Then } = require("@cucumber/cucumber");
+const { Given, When, Then, Before } = require("@cucumber/cucumber");
 const assert = require("node:assert");
 const { Client } = require("pg");
 const Stripe = require("stripe");
@@ -396,6 +396,12 @@ async function ballLogin(email, password) {
   return undefined;
 }
 
+Before({ tags: "@ball" }, async function () {
+  await withDb((db) =>
+    db.query("DELETE FROM users WHERE email LIKE '%admin.bdd@example.com'"),
+  );
+});
+
 Given(
   "a ball admin {string} with role {string} and password {string}",
   async function (email, role, password) {
@@ -426,14 +432,18 @@ When(
   },
 );
 
+// The body arrives as a Cucumber DocString (the triple-quoted block under the step). Passing
+// raw JSON through a {string} parameter does not work: Gherkin's {string} only matches
+// double-quoted text, so an unquoted {"gateOpen": true} leaves the step UNDEFINED — which
+// cucumber reports as a skip, not a failure, and quietly passes the build.
 When(
-  "I PATCH the ball admin with {string} as {string} with password {string}",
-  async function (json, email, password) {
+  "I PATCH the ball admin as {string} with password {string}:",
+  async function (email, password, docString) {
     const token = await ballLogin(email, password);
     const res = await fetch(`${BASE_URL}/api/admin/ball`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: json,
+      body: docString,
     });
     this.ballAdminStatus = res.status;
     this.ballAdminBody = await res.json().catch(() => ({}));

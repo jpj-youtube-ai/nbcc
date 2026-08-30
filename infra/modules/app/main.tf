@@ -234,6 +234,16 @@ resource "aws_ssm_parameter" "portal_base_url" {
   lifecycle { ignore_changes = [value] }
 }
 
+# Festive Ball preview gate password (TASK-313). A SecureString like the admin session key. The
+# real value is normally set by staff in the admin area (ball_settings.preview_password_hash
+# takes precedence); this is only the fallback until they do.
+resource "aws_ssm_parameter" "ball_preview_password" {
+  name  = "/${var.project}/${var.environment}/BALL_PREVIEW_PASSWORD"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
 # Admin session token signing key (TASK-105/REQ-062) — HMAC key the admin login
 # endpoint signs session tokens with. A SecureString like the Stripe secrets; the
 # real long random value is set out of band (ignore_changes keeps Terraform from
@@ -277,4 +287,12 @@ resource "aws_ssm_parameter" "giving_from_email" {
   name  = "/${var.project}/${var.environment}/GIVING_FROM_EMAIL"
   type  = "String"
   value = var.giving_from_email
+}
+
+# Festive Ball booking emails (TASK-313). Apex domain, never the newsletter subdomain.
+resource "aws_ssm_parameter" "ball_from_email" {
+  name  = "/${var.project}/${var.environment}/BALL_FROM_EMAIL"
+  type  = "String"
+  value = "events@nbcc.scot"
+  lifecycle { ignore_changes = [value] }
 }

@@ -1356,6 +1356,14 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/thank-you/sent?limit&offset` | **implemented** | REQ-069 · TASK-163 (sent-letter history, most recent first) |
 | `DELETE /api/admin/thank-you/sent/:id` | **implemented** | REQ-069 · TASK-168 (Editor+; remove a sent-letter row, audited as `thank_you.deleted`) |
 | `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
+| `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
+| `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking) |
+| `GET /api/admin/ball` | **implemented** | TASK-313 (Viewer+; settings, live availability and money raised) |
+| `PATCH /api/admin/ball` | **implemented** | TASK-313 (Editor+ **with the ball section granted**; capacity, held seats, gate, sales window, late-confirmed details. Audited as `ball.settings_updated`) |
+| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first) |
+| `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
+| `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
+| `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
 | `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
 | `GET /api/admin/contact` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; list enquiries, optional `?status=new\|replied`) |
 | `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
@@ -2036,6 +2044,219 @@ without it — it's an app endpoint).
 **Supporter ticker (REQ-003 · TASK-178).** An admin-curated list of ongoing supporters (businesses or
 people) shown scrolling under the site nav — distinct from the donor-derived Supporters page. The
 `supporter_ticker` table (additive migration; `name`, `active`, `sort_order`) is served two ways: the
+### Festive Ball 2026 ticketing (TASK-313)
+
+NBCC sells tickets for **A Night to Remember — Festive Ball 2026** (Sat 7 Nov 2026, The Park
+Hotel, Kilmarnock). The Designer Rooms organises and funds the evening; NBCC handles ticketing
+and receives every penny of ticket income.
+
+**Capacity.** 40 tables of 10 = 400 seats, all editable. A *table* purchase takes one whole,
+unbroken table; individual *seats* pool onto shared tables; held-back seats (comps, sponsor
+guests) never go on sale. Sales run down to the last individual seat, so **seats and tables run
+out at different times** — 9 free seats spread across a broken table is not a sellable table,
+and a caller asking for a table is refused while the page still sells seats. That arithmetic is
+pure and DB-free in `src/ball/capacity.ts`.
+
+**Money.** £100 a seat, £1,000 a table, no discount, integer pence throughout
+(`src/ball/pricing.ts`). Buyers may optionally cover the card fee (1.5% + 20p, rounded up) and
+add a voluntary donation. **Gift Aid applies to the donation only** — HMRC does not allow it on
+ticket sales, because the buyer receives a dinner and a show in return.
+
+**Overselling.** `claimReservation` (`src/db/ball.ts`) locks the single `ball_settings` row, so
+two people going for the last table are serialised and the loser is refused. The reservation
+only covers the gap until a `pending` booking exists; from then on the booking holds the seats,
+and Stripe's 30-minute session expiry (`checkout.session.expired` → `cancelled`) returns them if
+the buyer walks away. No sweeper to fail unattended.
+
+**One webhook, two products.** Stripe delivers every event to a single endpoint, shared with
+donations. `checkout.session.completed` is routed on `metadata.product === "ball"` *before* the
+donation handler sees it, so a ticket can never enter the Gift Aid claim pipeline. A BDD
+scenario asserts a donation checkout creates no ball booking.
+
+**Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
+`ball_bookings`, `ball_reservations`.
+
+### Changing the preview password
+
+Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`
+holds a scrypt hash (same `scrypt$salt$key` format as `users.password_hash`); the plaintext never
+reaches SQL, the audit log (which records `previewPassword: "(changed)"`) or the API response.
+NULL falls back to the `BALL_PREVIEW_PASSWORD` parameter, so nothing breaks before staff set one.
+
+The stored hash is **also the signing key for the preview cookie**, so changing the password
+invalidates every cookie issued under the old one — which is what someone changing a shared
+password expects it to do. The schema accepts `previewPassword` and deliberately has no
+`previewPasswordHash` field: a caller who could set the hash directly would be choosing the
+signing key for everybody's cookie.
+
+### The waiting list
+
+`POST /api/ball/waiting-list` (public) and `GET /api/admin/ball/waiting-list` (Viewer+). When the
+room fills, the booking form is swapped for a waiting-list form rather than a dead end — there
+will be drop-outs before November, and a place released in October is only worth something if
+somebody is waiting for it.
+
+Upserts on email, so pressing join twice updates the entry instead of creating a duplicate staff
+have to reconcile, and the response says "you're already on the list" rather than implying a
+second place was added. Ordered oldest first, because a waiting list that does not run in order
+is not a waiting list.
+
+Deliberately **not** gated on availability: if the last seat sells between the page loading and
+the form submitting, that person should still be captured rather than thrown away.
+
+The newsletter opt-in is separate, unticked, and normalised through `checkboxValue` before
+parsing — `z.coerce.boolean()` reads ANY non-empty string as true, so a stray "off" would
+silently opt someone into marketing. Entries carry the same 90-day retention as guest details:
+nobody should still be on a waiting list for a party that has happened.
+
+### The week-before reminder
+
+`POST /api/admin/ball/reminders` (Editor+ with the ball section). Staff-triggered, not scheduled:
+this app has no scheduler, and a cron misfiring at 3am against a guest list is a worse failure
+than a button someone presses.
+
+It carries the practical details **and reads back what the booker told us** — guest names,
+allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week
+out, while there is still time, rather than at the table.
+
+Idempotent by `reminder_sent_at IS NULL`, and each booking is stamped **as it sends**, not in one
+batch at the end — so a provider failure halfway through four hundred never re-emails the ones
+already done. A single bad address is recorded and skipped rather than thrown, so it cannot stop
+the other 399 reminders.
+
+### The three lists
+
+`GET /api/admin/ball/{door-list,catering,bookings}.csv` (Viewer+). Three rather than one, because
+they go to different people and that changes what may be in them:
+
+- **Door list** — alphabetical by surname for the welcome desk. Names and tables. No contact
+  details: it is printed and left on a desk all evening.
+- **Catering list** — for **The Park Hotel**. Food and access notes only. This is the one export
+  that leaves NBCC and it carries special category data, so it contains no emails, no booking
+  references and no money. The ticket page promises the venue is told nothing else; `cateringCsv`
+  keeps that promise in code, with a unit test and a BDD scenario asserting it.
+- **Bookings list** — for NBCC's own records and the accountant. Keeps the buyer email, because
+  this one stays inside the charity.
+
+`csvCell` prefixes a leading `=`, `+`, `-` or `@` with an apostrophe. Guests type these fields
+themselves, so a dietary note beginning `=` would otherwise be executed as a formula by whoever
+opens the file.
+
+The door-list and catering downloads purge expired guest rows first, so the ninety-day promise is
+kept on the exact path where stale data would otherwise escape into a file, with no scheduler to
+forget.
+
+### Guest details
+
+`GET/POST /ball/guests/:token` — the "tell us about your table" form, linked from the booking
+confirmation. **No login:** an unguessable 24-byte token on a *paid* booking is the whole
+authorisation, the same idiom as the business certificate. That is a deliberate trade — requiring
+an account to report a nut allergy means nobody reports the nut allergy — and a leaked link
+exposes one table's names, not money or an account.
+
+**A plain form POST with no JavaScript.** It arrives by email and is opened on a phone, often on
+poor signal; there is nothing to fail to load. Saving redirects (303) so a refresh cannot
+resubmit, and a partial table is the expected case, not an error — the copy says so, because
+otherwise people wait until they know all ten names and we get nothing.
+
+Dietary and access notes are **special category** data. The retention rule lives in the schema:
+`ball_guests.expires_at` defaults to 90 days after the event, matching the published ticket
+terms, and `purgeExpiredGuests()` deletes on it. `isExpired` fails CLOSED on an unreadable date —
+keeping a row too long is untidy, deleting someone's access needs early could mean they arrive
+somewhere that cannot accommodate them.
+
+### The admin Festive Ball screen
+
+Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,
+donations, Gift Aid eligible, newsletter opt-ins), the gate control, capacity and the sales
+window, the late-confirmed details, and the bookings list.
+
+The gate button says what it will DO rather than what state it is in, and confirms first, naming
+the consequence: publishing shows the ticket page to the whole internet **and** puts the ball on
+the home page. Write controls are hidden unless `canEdit("ball")`, mirroring the server rule
+(editors get view-only on this section by default).
+
+Markup lives in `admin.html`, behaviour in `assets/js/admin/app.js`, joined only by element ids —
+nothing type-checks that join, so `test/unit/ball-admin-view.test.ts` walks every id the code
+reaches for and proves the markup provides it. It also asserts the block sits INSIDE the module
+IIFE: appended after the closing `})();` it parses fine but every helper is undefined at runtime.
+
+### Nav: one Donate, not two
+
+The header lists all five pages **and** carries a persistent Donate CTA (REQ-002), so above the
+mobile breakpoint "Donate" appeared twice in one bar pointing at one place. The list item is now
+hidden at `min-width:681px` and the button carries it.
+
+It is hidden by media query rather than removed from the markup for a reason: **below 681px both
+`.nav-links` and `.nav-cta` are hidden, and the burger menu reveals only `.nav-links`** — so on a
+phone that list item is the ONLY header route to `/donate`. Deleting it would remove the donate
+link on mobile entirely. Browsers without `:has()` keep both, which is the previous behaviour, so
+it degrades safely.
+
+Known trade-off: on `/donate` itself at desktop the "you are here" marker lives on the hidden list
+item, so the current-page indicator is not shown there. Adding it to the CTA was not worth the
+bytes — see below.
+
+### The donate.html performance budget is nearly spent
+
+`test/unit/perf-budget.test.ts` caps donate.html's first paint at 255KB. After the nav rule the
+real (LF) total is **260,988 of 261,120 bytes — 132 bytes of headroom.** Anything added to
+`assets/css/styles.css` or `assets/js/main.js` from here will break it. That is why `/ball` ships
+its own CSS and JS. The budget has been raised five times already; the next change that needs room
+should either buy it back (the 105KB unminified `main.js` is the obvious candidate) or raise the
+cap as a deliberate, discussed decision rather than a reflex.
+
+**Adding an admin section is a three-file change.** The list lives in
+`src/admin/permissions.ts`, `assets/js/admin/app.js` and `features/steps/admin-permissions.steps.js`.
+They are not cosmetic duplicates: `PATCH /api/admin/users/:id/permissions` validates a COMPLETE,
+`.strict()` matrix built from the server list, so a section present on the server but missing in
+the browser bundle makes **every permissions save fail with a 400 in production**. Adding `ball`
+hit exactly that. `test/unit/admin-sections-in-sync.test.ts` now fails fast if they drift.
+
+**Admin.** A `ball` permission section. Unusually it is **view-only for the editor role by
+default** rather than joining `OPERATIONAL_EDITOR_SECTIONS`: the gate toggle publishes the
+ticket page and puts the ball on the home page, which is a launch decision rather than routine
+operational work, so edit is granted per user. There is deliberately **no ticket price field** —
+£100 is printed in a magazine that cannot be recalled, so it lives as a constant in
+`src/ball/pricing.ts` and the settings schema has no column for it.
+
+**The gate.** `/ball` and `/ball/terms` are served by `src/routes/ball.ts`, never by the static
+site router, and `_redirects` deliberately has **no** `200` rewrite onto `ball.html` — one would
+make the file directly reachable and the gate decorative. Closed, the route answers `401` with a
+standalone lock screen that shares no markup with the real page, so nothing leaks. It opens two
+ways: staff flip `gate_open`, or `gate_opens_at` passes (the safety net, so launch morning does
+not depend on someone being at a keyboard). The same switch flips the page from `noindex` to
+`index`. A correct password sets a signed, HTTP-only cookie for a fortnight.
+
+**Not-yet-confirmed details.** `arrival_time`, `included_note` and `line_up_note` are NULL until
+staff set them; `renderBallPage` then fills them server-side. Until then the page says "to be
+confirmed" rather than inventing detail about a £100 ticket. Staff text is HTML-escaped.
+
+**Confirmation email.** Sent post-commit and best-effort from the shared Stripe webhook, from
+`BALL_FROM_EMAIL` (`events@nbcc.scot`) on the **apex** domain — deliberately not
+`news.nbcc.scot`, which is the newsletter's send-only sender and must not carry transactional
+receipts. Content is built by the pure `src/ball/confirmation-email.ts`; only a booking this
+event actually moved to `paid` is confirmed, so a Stripe redelivery cannot send a second
+receipt. A failed send is logged, never thrown: the booking is already paid and a 5xx would make
+Stripe redeliver.
+
+**Home page.** `renderHomePromo` adds a banner above the hero, a feature section below it, and a
+nav link — but ONLY once the gate is open. While it is shut it returns index.html byte for byte,
+so the promotion is absent from the page source rather than hidden. This matters because the
+printed advert's QR code points at `nbcc.scot`, not `/ball`.
+
+**Config.** `BALL_BASE_URL` — the public site base the Stripe return/cancel URLs are built on.
+Required with no default: a silent localhost fallback would strand a buyer who has just paid.
+It is a **plain task-def environment value** (a module variable set in
+`infra/envs/production/main.tf`), exactly like `STRIPE_SUCCESS_URL` — deliberately NOT an SSM
+parameter. It was one first, and that was wrong: the SSM pattern (`PORTAL_BASE_URL`) ships a
+`nbcc.example` placeholder plus `ignore_changes`, so the real value depends on someone
+remembering a `put-parameter`. For a URL Stripe redirects a paying customer to, "someone
+remembers" is not a good enough guarantee. If a value is non-secret and known at commit time,
+prefer the variable: it is version-controlled, reviewed in the PR, and cannot be forgotten.
+`BALL_PREVIEW_PASSWORD` stays a SecureString — it is a secret, and staff override it from the
+admin area anyway.
+
 public `GET /api/supporters/ticker` returns the **active** names in order, and the admin
 **Supporters ticker** tab (`view-ticker` + `loadTicker` in `assets/js/admin/app.js`) does full CRUD
 over `/api/admin/ticker` — reads are Viewer+, add/edit/hide/delete are **Editor+** and each write

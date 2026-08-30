@@ -57,6 +57,7 @@ data "aws_iam_policy_document" "exec_secrets" {
       aws_ssm_parameter.admin_notification_email.arn,
       # Donor portal base URL (TASK-100): injected via valueFrom, so the exec role must read it.
       aws_ssm_parameter.portal_base_url.arn,
+      aws_ssm_parameter.ball_preview_password.arn,
       # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
       # role must be able to read it.
       aws_ssm_parameter.admin_session_secret.arn,
@@ -80,6 +81,7 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Thank-you From/Reply-To address (TASK-165): non-secret String injected via valueFrom, so
       # the exec role must be able to read it.
       aws_ssm_parameter.giving_from_email.arn,
+      aws_ssm_parameter.ball_from_email.arn,
       # Admin password bootstrap: a TRANSIENT, operator-managed SecureString (not a Terraform
       # resource and not read by the running service) that the one-off `node dist/ops/set-admin-
       # password.js` ECS task injects as the ADMIN_PASSWORD secret. Granting read here lets that
@@ -133,6 +135,8 @@ resource "aws_ecs_task_definition" "app" {
       # Stripe redirect URLs (REQ-028/REQ-029) — non-secret, so plain env values.
       { name = "STRIPE_SUCCESS_URL", value = var.stripe_success_url },
       { name = "STRIPE_CANCEL_URL", value = var.stripe_cancel_url },
+      # Festive Ball checkout base (TASK-313) — non-secret, same treatment as the Stripe URLs.
+      { name = "BALL_BASE_URL", value = var.ball_base_url },
       # Stripe PUBLISHABLE key (TASK-215) for Embedded Checkout — PUBLIC (ships to the browser), so a
       # plain env value like the redirect URLs, NOT an SSM secret and NOT in the exec_secrets policy.
       { name = "STRIPE_PUBLISHABLE_KEY", value = var.stripe_publishable_key },
@@ -173,6 +177,9 @@ resource "aws_ecs_task_definition" "app" {
       # Admin session signing key (TASK-105): a SecureString, injected like a secret — so its ARN
       # must also appear in exec_secrets above.
       { name = "ADMIN_SESSION_SECRET", valueFrom = aws_ssm_parameter.admin_session_secret.arn },
+      # Festive Ball preview gate (TASK-313): a SecureString, injected like a secret — so its
+      # ARN must also appear in exec_secrets above.
+      { name = "BALL_PREVIEW_PASSWORD", valueFrom = aws_ssm_parameter.ball_preview_password.arn },
       # My Story stories DB (TASK-B2): a SecureString, injected like a secret — so its ARN must
       # also appear in exec_secrets above. The task-def now carries BOTH DATABASE_URL (master,
       # used by scripts/bootstrap-stories-db.mjs) and STORIES_DATABASE_URL (used by the app and
@@ -194,6 +201,9 @@ resource "aws_ecs_task_definition" "app" {
       # Thank-you From/Reply-To address (TASK-165/REQ-069): non-secret SSM String, injected via
       # valueFrom like NEWSLETTER_FROM_EMAIL — so its ARN must also appear in exec_secrets below.
       { name = "GIVING_FROM_EMAIL", valueFrom = aws_ssm_parameter.giving_from_email.arn },
+      # Festive Ball booking emails (TASK-313): non-secret SSM String, injected via valueFrom —
+      # so its ARN must also appear in exec_secrets above.
+      { name = "BALL_FROM_EMAIL", valueFrom = aws_ssm_parameter.ball_from_email.arn },
     ]
 
     logConfiguration = {

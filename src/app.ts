@@ -16,6 +16,7 @@ import { newsletterImagesRouter } from "./routes/newsletter-images";
 import { IMAGE_JSON_BODY_LIMIT } from "./newsletter/image-validation";
 import { newsletterDocumentsRouter } from "./routes/newsletter-documents";
 import { tickerRouter } from "./routes/ticker";
+import { ballRouter } from "./routes/ball";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -53,6 +54,8 @@ export function createApp() {
   app.use(apiRouter);
   // Public supporter-ticker feed (TASK-178/REQ-003): GET /api/supporters/ticker.
   app.use(tickerRouter);
+  // Public Festive Ball availability feed (TASK-313): GET /api/ball/availability.
+  app.use(ballRouter);
   app.use(portalRouter);
   app.use(adminRouter);
   // Admin user management + forgot/set-password (admin-management Phase 1, Task 5).

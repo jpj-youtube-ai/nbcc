@@ -97,12 +97,25 @@ export const configSchema = z.object({
   // task-def env). Validated as a URL (mirrors STRIPE_SUCCESS_URL).
   PORTAL_BASE_URL: z.string().url(),
 
+  // Public site base the Festive Ball checkout builds its Stripe return/cancel URLs on
+  // (TASK-313), e.g. https://nbcc.scot. NOT a secret (it ships in a redirect the buyer sees),
+  // but SSM-held and injected like PORTAL_BASE_URL so it varies per environment. Deliberately
+  // REQUIRED with no default: a silent fallback to localhost would send a buyer who has just
+  // paid £1,000 to a dead address, so a missing value must fail boot instead.
+  BALL_BASE_URL: z.string().url(),
+
   // HMAC signing key for admin session tokens (TASK-105/REQ-062). The admin login endpoint signs a
   // short-lived session token with this key (crypto.createHmac), and admin routes verify it — the
   // bearer-token analogue of the donor portal's magic link. A secret — required, non-empty, NEVER
   // defaulted (a default would mask a missing key and let anyone forge a session); a placeholder
   // locally/CI, a SecureString in SSM in staging/prod. Kept long/random in real environments.
   ADMIN_SESSION_SECRET: z.string().min(1),
+
+  // Shared password for the Festive Ball preview gate (TASK-313). A SECRET: it is handed to
+  // trustees and the sponsor so they can see /ball before launch, and it must never be
+  // defaulted — an empty value would either lock the page permanently or, worse, be treated
+  // as a match. Required and non-empty, like ADMIN_SESSION_SECRET above.
+  BALL_PREVIEW_PASSWORD: z.string().min(1),
 
   // The From address for the admin newsletter (TASK-161/REQ-069). TASK-298 moved it onto
   // news.nbcc.scot, the dedicated sending subdomain (TASK-296), so a campaign that upsets a spam
@@ -127,6 +140,12 @@ export const configSchema = z.object({
   // NEWSLETTER_FROM_EMAIL (SSM String → task-def). Validated as an email address. Defaulted to the
   // production address so local dev / CI boot without extra setup.
   GIVING_FROM_EMAIL: z.string().email().default("giving@nbcc.scot"),
+
+  // From/Reply-To for Festive Ball booking emails (TASK-313). DELIBERATELY on the apex domain,
+  // not news.nbcc.scot: that subdomain is the newsletter's send-only sender, and putting
+  // transactional ticket receipts on it would mix two reputations and damage the deliverability
+  // setup TASK-293/298 built. Defaulted like the other from-addresses.
+  BALL_FROM_EMAIL: z.string().email().default("events@nbcc.scot"),
 
   // TASK-302: the most newsletter emails that may leave in one day, whatever a send asks for.
   //

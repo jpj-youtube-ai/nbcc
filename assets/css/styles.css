@@ -194,6 +194,9 @@ body.has-ticker{padding-top:var(--ticker-h)}
 .nav-links a.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%) rotate(45deg);bottom:2px;width:6px;height:6px;background:var(--crimson)}
 .nav-cta{text-decoration:none;background:var(--crimson);color:var(--cream);font-weight:600;padding:11px 24px;border-radius:var(--radius-pill);font-size:.96rem;box-shadow:var(--shadow-sm);transition:transform .15s,background .2s}
 .nav-cta:hover{background:var(--maroon);transform:translateY(-1px)}
+/* De-dupe Donate at desktop only; below 681px the CTA is hidden and this item is the sole
+   header route to /donate. See README "Nav: one Donate, not two". */
+@media(min-width:681px){.nav-links li:has(a[href="/donate"]){display:none}}
 .burger{display:none;background:none;border:0;cursor:pointer;padding:8px;border-radius:10px}
 .burger span{display:block;width:24px;height:2px;background:var(--maroon);margin:5px 0;border-radius:2px;transition:transform .25s,opacity .25s}
 

@@ -119,8 +119,36 @@ export function createSiteRouter(siteRoot: string): Router {
     : [];
 
   // `/` serves the home page (no `_redirects` rule — served automatically).
-  router.get("/", (_req, res) => {
-    res.sendFile(join(siteRoot, "index.html"));
+  //
+  // TASK-313: it also carries the Festive Ball promotion once staff open the gate. This matters
+  // more than it looks: the printed advert's QR code points at nbcc.scot, not /ball, so without
+  // this block every scan on launch morning lands somewhere with no way to buy a ticket.
+  //
+  // While the gate is shut renderHomePromo returns the file byte for byte, so the promotion is
+  // absent from the page source rather than hidden — which is what lets it ship days early. The
+  // ball modules are imported lazily so this router stays import-safe for the DB-free
+  // parseRedirects tests, and any failure falls back to the plain home page: a broken ball
+  // promo must never take the front page down with it.
+  const homeFile = join(siteRoot, "index.html");
+  router.get("/", async (_req, res) => {
+    try {
+      const [{ getSettings }, { isGateOpen }, { renderHomePromo }] = await Promise.all([
+        import("../db/ball"),
+        import("../ball/gate"),
+        import("../ball/home-promo"),
+      ]);
+      const settings = await getSettings();
+      const gateOpen = isGateOpen(settings, new Date());
+      if (!gateOpen) {
+        res.sendFile(homeFile);
+        return;
+      }
+      const template = readFileSync(homeFile, "utf8");
+      res.type("html").send(renderHomePromo(template, { gateOpen }));
+    } catch (err) {
+      console.error("home ball promo failed:", err instanceof Error ? err.message : err);
+      res.sendFile(homeFile);
+    }
   });
 
   // /supporters (REQ-035) renders the real donor list server-side instead of serving

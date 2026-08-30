@@ -1,0 +1,782 @@
+/* =================================================================
+   FESTIVE BALL 2026 — page stylesheet (TASK-313)
+
+   Loaded ONLY by /ball. Deliberately not part of assets/css/styles.css:
+   donate.html sits ~369 bytes under its enforced first-paint budget
+   (test/unit/perf-budget.test.ts), and that page is the donation money
+   path — growing the shared bundle would break it.
+
+   Everything here builds on the shared brand tokens in styles.css. The
+   only new colours are the poster's night-sky and gold, scoped to this
+   page, so the rest of the site is untouched.
+   ================================================================= */
+
+.ball-page {
+  /* The advert's palette. Deep navy rather than black: the printed poster is a
+     night sky, not a void, and a true black band would read as a broken image
+     against the site's warm cream. */
+  --night: #0B1020;
+  --night-2: #131A31;
+  --night-line: rgba(233, 210, 150, 0.22);
+  /* Two golds. The bright one is for large type and rules only; the deep one is
+     the accessible foreground for small text on cream. */
+  --gold: #E4C87A;
+  --gold-deep: #8A6A26;
+  --on-night: #F2EEE4;
+  --on-night-soft: rgba(242, 238, 228, 0.74);
+
+  /* Exponential easings — things decelerate the way real objects do. No bounce or
+     elastic: they draw attention to the animation rather than the content. */
+  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------- nav: always cream on this page ----------
+
+   BRAND RULE: the NBCC logo is the full-colour red mark, and the brand guidelines
+   require it to sit on cream. Everywhere else on the site the nav starts
+   transparent over a cream page and only paints a background once scrolled, which
+   is fine. Here the page opens on a near-black hero, so a transparent nav would
+   put the red logo on black — off-brand, and it made the dark-slate nav links
+   effectively invisible too (~1.5:1).
+
+   So this page opts out of the transparent state entirely: the bar is solid cream
+   from the first pixel, which gives the logo its correct ground and lets every
+   shared nav style (slate links, maroon burger, crimson CTA) work exactly as
+   designed. Solid rather than the shared translucent mix, because a 90% cream over
+   a black hero reads as dirty grey behind the mark. */
+
+.ball-page .nav,
+.ball-page .nav.scrolled {
+  background: var(--cream);
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--line);
+  /* No backdrop blur: the background is opaque, so it would cost a compositing
+     layer and buy nothing. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ---------- hero ---------- */
+
+.ball-hero {
+  background: var(--night);
+  /* A single soft light shaft from above, echoing the poster's stage lighting.
+     Radial rather than linear so it reads as a source, not a gradient wash. */
+  background-image: radial-gradient(
+    120% 90% at 50% -10%,
+    rgba(233, 210, 150, 0.16) 0%,
+    rgba(233, 210, 150, 0.05) 38%,
+    transparent 72%
+  );
+  color: var(--on-night);
+  /* Clear the fixed nav, exactly as the shared .hero does. Previously this was a
+     bare clamp: the transparent nav sat over the hero and hid the overlap. */
+  padding: calc(var(--nav-h) + clamp(28px, 6vw, 72px)) 0 clamp(40px, 7vw, 76px);
+  text-align: center;
+}
+
+.ball-hero .wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(20px, 3.4vw, 34px);
+}
+
+.ball-kicker {
+  margin: 0;
+  font-size: clamp(0.78rem, 1.5vw, 0.95rem);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--on-night-soft);
+  /* Light type on a dark ground reads lighter than it is; give it room. */
+  line-height: 1.75;
+  max-width: 46ch;
+}
+.ball-kicker em {
+  font-style: normal;
+  color: var(--gold);
+}
+
+/* The lockup is the artwork from the printed advert, so someone holding the
+   magazine recognises the page at a glance. It is the ONLY baked-in text on the
+   page — the poster's other lines are ~5px tall on a phone and unreadable. */
+.ball-hero h1 {
+  margin: 0;
+  width: 100%;
+}
+.ball-lockup {
+  display: block;
+  width: min(100%, 780px);
+  height: auto;
+  margin: 0 auto;
+}
+
+.ball-facts {
+  display: grid;
+  /* Three fixed columns, not auto-fit: auto-fit dropped to two at tablet width and
+     orphaned "Tickets" onto a second row, left-aligned under "When". Three across,
+     then a clean stack on phones — never 2+1. */
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 3vw, 40px);
+  margin: 0;
+  width: 100%;
+  max-width: 780px;
+  border-top: 1px solid var(--night-line);
+  border-bottom: 1px solid var(--night-line);
+  padding: clamp(18px, 2.6vw, 26px) 0;
+}
+.ball-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ball-facts dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 600;
+}
+.ball-facts dd {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ball-facts dd b {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.ball-facts dd span {
+  font-size: 0.88rem;
+  color: var(--on-night-soft);
+}
+@media (max-width: 620px) {
+  .ball-facts { grid-template-columns: 1fr; gap: 18px; text-align: center; }
+}
+
+.ball-hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+.btn-gold {
+  background: var(--gold);
+  color: #241B06;
+  border: 1px solid var(--gold);
+  font-weight: 600;
+}
+.btn-gold:hover {
+  background: #F0DCA0;
+  border-color: #F0DCA0;
+}
+.btn-ghost-gold {
+  background: transparent;
+  color: var(--on-night);
+  border: 1px solid var(--night-line);
+}
+.btn-ghost-gold:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.ball-organiser {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--on-night-soft);
+}
+.ball-organiser b {
+  color: var(--on-night);
+  font-weight: 600;
+}
+
+/* ---------- the night ---------- */
+
+.ball-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .ball-split { grid-template-columns: 1fr; }
+}
+
+.ball-split .prose h3 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.25rem;
+  margin: 28px 0 8px;
+}
+.ball-split .prose h3:first-child { margin-top: 0; }
+.ball-split .prose p { max-width: 62ch; }
+
+/* Honest placeholder for detail the venue has not confirmed. Muted, italic and
+   clearly provisional, so the page never invents information about a £100
+   ticket — and staff can replace it from the admin area once it is known. */
+.ball-tbc {
+  color: var(--slate-soft);
+  font-style: italic;
+}
+
+.ball-details {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ball-details li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.ball-details li:last-child { border-bottom: 0; }
+.ball-details .k {
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slate-soft);
+  font-weight: 600;
+}
+.ball-details .v {
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ---------- ticket form ---------- */
+
+.ball-availability {
+  font-weight: 600;
+  color: var(--crimson);
+}
+
+.ball-form {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: clamp(22px, 4vw, 40px);
+  box-shadow: var(--shadow-sm);
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.ball-choice {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+.ball-choice legend {
+  /* Visually hidden: the two options say what they are, and a "What would you
+     like?" heading above a two-card choice is the kind of restatement that adds
+     reading without adding meaning. Kept for screen readers. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ball-option {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+.ball-option input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.ball-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  height: 100%;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--white);
+  transition: border-color 160ms cubic-bezier(0.2, 0.8, 0.3, 1),
+              box-shadow 160ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.ball-option:hover .ball-option-body { border-color: var(--tan); }
+.ball-option input:checked + .ball-option-body {
+  border-color: var(--maroon);
+  box-shadow: 0 0 0 1px var(--maroon);
+}
+.ball-option input:focus-visible + .ball-option-body {
+  outline: 3px solid var(--crimson);
+  outline-offset: 2px;
+}
+.ball-option-body b {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.12rem;
+}
+.ball-price {
+  font-weight: 600;
+  color: var(--maroon);
+}
+.ball-note {
+  font-size: 0.86rem;
+  color: var(--slate-soft);
+  line-height: 1.55;
+}
+
+.ball-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 24px;
+  /* flex-end suits the quantity row, where the running total should sit on the
+     same baseline as the select. */
+  align-items: flex-end;
+}
+/* The name/email row must NOT bottom-align: the email field carries a hint line
+   underneath, so bottom-aligning drops the name label below the email label and
+   the pair reads as a mistake. Top-align the labels instead. */
+.ball-row-fields { align-items: flex-start; }
+.ball-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.ball-field-narrow { flex: 0 1 200px; }
+.ball-field > span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.ball-field small {
+  font-size: 0.8rem;
+  color: var(--slate-soft);
+  line-height: 1.5;
+}
+.ball-field input,
+.ball-field select {
+  font: inherit;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  color: inherit;
+  min-width: 0;
+}
+.ball-field input:focus-visible,
+.ball-field select:focus-visible {
+  outline: 3px solid var(--crimson);
+  outline-offset: 1px;
+  border-color: var(--maroon);
+}
+
+.ball-amount {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ball-amount span {
+  font-weight: 600;
+  color: var(--slate-soft);
+}
+.ball-amount input { flex: 1 1 auto; }
+
+.ball-total {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: var(--slate-soft);
+}
+.ball-total b {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.6rem;
+  color: var(--maroon);
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ball-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.ball-check {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 12px;
+  align-items: start;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.ball-check input {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--maroon);
+}
+.ball-check b { font-weight: 600; }
+
+.ball-donation {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ball-donation-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--tint);
+  border-radius: var(--radius);
+}
+.ball-donation-fields[hidden] { display: none; }
+
+.ball-error {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--crimson);
+  border-radius: 10px;
+  background: #FCF0F1;
+  color: #8A1626;
+  font-size: 0.92rem;
+}
+.ball-error[hidden] { display: none; }
+
+.ball-submit { align-self: flex-start; }
+.ball-submit[disabled] { opacity: 0.6; cursor: progress; }
+
+.ball-smallprint {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--slate-soft);
+  max-width: 62ch;
+}
+
+/* ---------- who you're supporting ---------- */
+
+.ball-impact {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.2rem;
+  line-height: 1.5;
+  color: var(--maroon);
+  max-width: 34ch;
+}
+
+/* ---------- practical ---------- */
+
+/* ---------- practical ----------
+
+   Rebuilt (was six equal tiles in a 3x2 grid, which read as flat and unfinished at
+   full width). The content is not six equal things: ONE of them is the exciting bit
+   and five are logistics, so the layout says so.
+
+   A 1.15fr / 1fr split puts a dark feature panel against a quiet 2x2 of admin. The
+   dark panel is the same night navy as the hero and the sponsor band, so this reads
+   as the page's third dark beat rather than a stray coloured box, and it breaks up a
+   long run of cream. Scale contrast does the rest: the feature heading is roughly
+   twice the tile headings, not a timid step up. */
+
+.ball-practical {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: clamp(18px, 2.4vw, 30px);
+  align-items: stretch;
+}
+@media (max-width: 900px) { .ball-practical { grid-template-columns: 1fr; } }
+
+/* --- the feature --- */
+
+.ball-feature {
+  position: relative;
+  overflow: hidden;
+  background: var(--night);
+  /* Same light shaft as the hero, angled from the top-left here so the two dark
+     panels feel related without being a copy. */
+  background-image: radial-gradient(
+    110% 80% at 12% -10%,
+    rgba(233, 210, 150, 0.18) 0%,
+    rgba(233, 210, 150, 0.05) 40%,
+    transparent 74%
+  );
+  color: var(--on-night);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 3.6vw, 52px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+}
+
+.ball-feature-eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* A short gold rule leading out of the eyebrow — an invitation-card device rather
+   than a decorative flourish, and it points the eye into the headline. */
+.ball-feature-eyebrow::after {
+  content: "";
+  height: 1px;
+  flex: 1 1 auto;
+  background: linear-gradient(to right, var(--gold), transparent);
+  opacity: 0.7;
+}
+
+.ball-feature h3 {
+  font-family: "Playfair Display", Georgia, serif;
+  /* The shared stylesheet colours headings crimson, which is right on cream and
+     nearly invisible on this panel (3.18:1). Inherit the panel's own foreground. */
+  color: var(--on-night);
+  font-weight: 600;
+  font-size: clamp(1.45rem, 2.9vw, 2.1rem);
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+  max-width: 20ch;
+}
+.ball-feature p {
+  margin: 0;
+  font-size: 1rem;
+  /* Light type on dark reads lighter than it is, so give it more leading than the
+     cream tiles get. */
+  line-height: 1.75;
+  color: var(--on-night-soft);
+  max-width: 46ch;
+}
+.ball-feature-note {
+  font-size: 0.86rem !important;
+  color: rgba(242, 238, 228, 0.56) !important;
+}
+
+/* --- the quiet four --- */
+
+.ball-tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(14px, 1.6vw, 20px);
+}
+@media (max-width: 560px) { .ball-tiles { grid-template-columns: 1fr; } }
+
+.ball-tiles li {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: clamp(18px, 2vw, 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  transition: transform 200ms var(--ease-quart), border-color 200ms var(--ease-quart),
+              box-shadow 200ms var(--ease-quart);
+}
+.ball-tiles li:hover {
+  transform: translateY(-3px);
+  border-color: var(--tan);
+  box-shadow: var(--shadow-sm);
+}
+.ball-tiles h3 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.05rem;
+  margin: 0;
+  color: var(--maroon);
+}
+.ball-tiles p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--slate-soft);
+}
+
+/* --- the closing ask --- */
+
+.ball-ask {
+  margin-top: clamp(22px, 2.6vw, 32px);
+  padding-top: clamp(20px, 2.4vw, 28px);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px 28px;
+}
+.ball-ask-lead {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  color: var(--slate);
+}
+.ball-ask-links {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+  font-size: 0.95rem;
+}
+.ball-ask-links a { font-weight: 600; color: var(--crimson); }
+.ball-ask-links span { color: var(--slate-soft); font-size: 0.86rem; }
+
+/* ---------- sponsor ---------- */
+
+.ball-sponsor {
+  background: var(--night);
+  color: var(--on-night);
+  padding: clamp(40px, 6vw, 72px) 0;
+  text-align: center;
+}
+.ball-sponsor .wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.ball-sponsor-name {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.6rem, 4.2vw, 2.4rem);
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+.ball-sponsor-note {
+  margin: 0;
+  max-width: 58ch;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--on-night-soft);
+}
+
+/* ---------- motion ----------
+
+   One orchestrated moment: the hero assembles on load, top to bottom, rather than
+   five things animating independently. Transform and opacity only, so it composites
+   on the GPU and never triggers layout. */
+
+@keyframes ball-rise {
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The lockup gets its own entrance — a touch of scale, so the artwork settles into
+   place rather than sliding like body copy. It is the thing people came for. */
+@keyframes ball-lockup-in {
+  from { opacity: 0; transform: scale(0.965); }
+  to   { opacity: 1; transform: none; }
+}
+
+.ball-hero .wrap > * {
+  animation: ball-rise 0.7s var(--ease-quart) both;
+}
+.ball-hero .wrap > :nth-child(1) { animation-delay: 0.05s; }
+.ball-hero .wrap > :nth-child(2) { animation: ball-lockup-in 0.9s var(--ease-expo) 0.12s both; }
+.ball-hero .wrap > :nth-child(3) { animation-delay: 0.42s; }
+.ball-hero .wrap > :nth-child(4) { animation-delay: 0.54s; }
+.ball-hero .wrap > :nth-child(5) { animation-delay: 0.64s; }
+
+/* Snow sits behind the hero content and never intercepts a click. */
+.ball-snow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+.ball-hero { position: relative; overflow: hidden; }
+.ball-hero .wrap { position: relative; z-index: 1; }
+
+/* Feedback: the option cards lift a little under the pointer. 1.5% is enough to
+   register as responsive without the card appearing to jump. */
+.ball-option-body {
+  transition:
+    border-color 180ms var(--ease-quart),
+    box-shadow 180ms var(--ease-quart),
+    transform 180ms var(--ease-quart);
+}
+.ball-option:hover .ball-option-body { transform: translateY(-2px); }
+.ball-option input:checked + .ball-option-body { transform: translateY(-2px); }
+
+.ball-submit,
+.btn-gold,
+.btn-ghost-gold {
+  transition: transform 180ms var(--ease-quart), background 200ms var(--ease-quart),
+              border-color 200ms var(--ease-quart), color 200ms var(--ease-quart);
+}
+.ball-submit:hover:not([disabled]),
+.btn-gold:hover { transform: translateY(-2px); }
+
+/* The donation panel opens by animating grid rows rather than height, so there is
+   no fixed max-height guess to get wrong when the copy changes. */
+.ball-donation-fields {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 320ms var(--ease-quart), opacity 240ms var(--ease-quart);
+  opacity: 1;
+}
+.ball-donation-fields > * { min-height: 0; }
+.ball-donation-fields[hidden] {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+/* A brief pulse when the running total changes, so the number acknowledges the
+   change instead of silently swapping. */
+@keyframes ball-total-pulse {
+  0%   { transform: none; }
+  35%  { transform: scale(1.06); }
+  100% { transform: none; }
+}
+.ball-total b {
+  display: inline-block;
+  transform-origin: left center;
+}
+.ball-total b.is-changed { animation: ball-total-pulse 420ms var(--ease-quart); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ball-hero .wrap > *,
+  .ball-total b.is-changed { animation: none !important; }
+  .ball-option-body,
+  .ball-submit,
+  .btn-gold,
+  .btn-ghost-gold,
+  .ball-donation-fields { transition: none; }
+  .ball-option:hover .ball-option-body,
+  .ball-option input:checked + .ball-option-body,
+  .ball-submit:hover:not([disabled]),
+  .btn-gold:hover,
+  .ball-tiles li:hover { transform: none; }
+  .ball-tiles li { transition: none; }
+  .ball-snow { display: none; }
+}

@@ -35,6 +35,26 @@ import {
 import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { readStoriesDiagnostics } from "../db/stories-diagnostics";
+import { ballSettingsUpdateSchema } from "../ball/settings";
+import { hashPassword } from "../admin/password";
+import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
+import { buildBallReminderEmail } from "../ball/reminder-email";
+import { sendBallReminder } from "../clients/email";
+import { availability } from "../ball/capacity";
+import { isGateOpen } from "../ball/gate";
+import {
+  getCapacityState,
+  getDashboard,
+  getSettings as getBallSettings,
+  listBookings,
+  listBookingsForExport,
+  listBookingsNeedingReminder,
+  listGuestsForExport,
+  listWaitingList,
+  markReminderSent,
+  purgeExpiredGuests,
+  updateSettings as updateBallSettings,
+} from "../db/ball";
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
 import { parseArchiveView } from "../admin/archive-filter";
@@ -2742,3 +2762,210 @@ export async function postAdminBackfillBusinessInvites(req: Request, res: Respon
 }
 
 adminRouter.post("/api/admin/business-supporters/backfill-invites", postAdminBackfillBusinessInvites);
+
+// --- Festive Ball (TASK-313) --------------------------------------------------
+//
+// The controls that let staff launch and run the ball without a developer: the gate toggle,
+// capacity, held-back seats, the sales window, and the details the venue had not confirmed
+// when the page was written. There is deliberately no ticket price here — see
+// src/ball/settings.ts.
+
+// GET /api/admin/ball — settings, live availability and the money so far. Viewer+.
+export async function getAdminBall(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    const [settings, state, dashboard] = await Promise.all([
+      getBallSettings(),
+      getCapacityState(),
+      getDashboard(),
+    ]);
+    return res.status(200).json({
+      settings,
+      gateOpen: isGateOpen(settings, new Date()),
+      availability: availability(state),
+      dashboard,
+    });
+  } catch (err) {
+    console.error("admin ball read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// PATCH /api/admin/ball — change any subset of the settings. Editor+ WITH the ball section
+// granted: the default editor role gets view only, because flipping the gate publishes the
+// page and puts the ball on the home page.
+export async function patchAdminBall(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  const parsed = ballSettingsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid settings", details: parsed.error.flatten() });
+  }
+  try {
+    // Swap the plaintext password for its hash BEFORE anything else sees the object. Everything
+    // downstream — the SQL, the audit row, the response — only ever handles the hash, so there
+    // is no path by which the password could be written down (golden rule 4).
+    const { previewPassword, ...rest } = parsed.data;
+    const write = previewPassword
+      ? { ...rest, previewPasswordHash: await hashPassword(previewPassword) }
+      : rest;
+
+    const settings = await updateBallSettings(write, actorOf(claims));
+    return res.status(200).json({
+      settings,
+      gateOpen: isGateOpen(settings, new Date()),
+      passwordChanged: Boolean(previewPassword),
+    });
+  } catch (err) {
+    console.error("admin ball update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/ball/bookings — who bought what, newest first. Viewer+.
+export async function getAdminBallBookings(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  const limit = Number(req.query.limit ?? 200);
+  const offset = Number(req.query.offset ?? 0);
+  try {
+    const results = await listBookings(
+      Number.isFinite(limit) ? limit : 200,
+      Number.isFinite(offset) ? offset : 0,
+    );
+    return res.status(200).json({ results });
+  } catch (err) {
+    console.error("admin ball bookings failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ball", getAdminBall);
+adminRouter.patch("/api/admin/ball", patchAdminBall);
+adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);
+
+// The three lists (TASK-313 plan 5). Viewer+ can read them; they are downloads of data the
+// section already shows on screen.
+//
+// Each purges expired guest rows first. That keeps the ninety-day promise in the ticket terms
+// without a scheduler to forget to run — the deletion happens on the path that would otherwise
+// be the one place stale data escapes into a file.
+function csvResponse(res: Response, filename: string, body: string): Response {
+  return res
+    .status(200)
+    .type("text/csv")
+    .set("Content-Disposition", `attachment; filename="${filename}"`)
+    .send(body);
+}
+
+export async function getAdminBallDoorList(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    await purgeExpiredGuests();
+    return csvResponse(res, "festive-ball-door-list.csv", doorListCsv(await listGuestsForExport()));
+  } catch (err) {
+    console.error("ball door list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// For the venue. Contains ONLY what they need to cater and seat people — the filtering that
+// keeps that promise lives in cateringCsv, which is unit-tested for exactly this.
+export async function getAdminBallCatering(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    await purgeExpiredGuests();
+    return csvResponse(res, "festive-ball-catering.csv", cateringCsv(await listGuestsForExport()));
+  } catch (err) {
+    console.error("ball catering list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+export async function getAdminBallBookingsCsv(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    return csvResponse(res, "festive-ball-bookings.csv", bookingsCsv(await listBookingsForExport()));
+  } catch (err) {
+    console.error("ball bookings export failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ball/door-list.csv", getAdminBallDoorList);
+adminRouter.get("/api/admin/ball/catering.csv", getAdminBallCatering);
+adminRouter.get("/api/admin/ball/bookings.csv", getAdminBallBookingsCsv);
+
+// POST /api/admin/ball/reminders — send the "a week to go" email to everyone who has paid and
+// has not had it. Editor+ WITH the ball section granted, like the other writes here.
+//
+// Staff-triggered rather than scheduled: this app has no scheduler, and a cron misfiring at 3am
+// against a guest list is a worse failure than a button someone has to press. Idempotency lives
+// in the query (reminder_sent_at IS NULL) and each booking is STAMPED AS IT SENDS, so a provider
+// failure halfway through four hundred never re-emails the ones already done.
+export async function postAdminBallReminders(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  try {
+    const [targets, settings] = await Promise.all([
+      listBookingsNeedingReminder(),
+      getBallSettings(),
+    ]);
+    const base = config.BALL_BASE_URL.replace(/\/+$/, "");
+
+    let sent = 0;
+    const failed: string[] = [];
+    for (const t of targets) {
+      const mail = buildBallReminderEmail(
+        { reference: t.reference, buyerName: t.buyerName, seats: t.seats, tableName: t.tableName },
+        t.guests,
+        {
+          arrivalTime: settings.arrivalTime,
+          includedNote: settings.includedNote,
+          guestLink: t.guestToken ? `${base}/ball/guests/${t.guestToken}` : null,
+        },
+      );
+      try {
+        await sendBallReminder({
+          email: t.buyerEmail,
+          from: config.BALL_FROM_EMAIL,
+          replyTo: config.BALL_FROM_EMAIL,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+        });
+        await markReminderSent(t.id);
+        sent += 1;
+      } catch {
+        // Not stamped, so this one is picked up next time. Recorded rather than thrown: one bad
+        // address must not stop the other 399 people getting their reminder.
+        failed.push(t.reference);
+      }
+    }
+    await recordAudit({
+      actor: actorOf(claims),
+      action: "ball.reminders_sent",
+      entity: "ball_bookings",
+      entityId: null,
+      data: { sent, failed: failed.length },
+    });
+    return res.status(200).json({ sent, failed });
+  } catch (err) {
+    console.error("ball reminders failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/ball/reminders", postAdminBallReminders);
+
+// GET /api/admin/ball/waiting-list — who is waiting, oldest first. Viewer+.
+export async function getAdminBallWaitingList(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    return res.status(200).json({ results: await listWaitingList() });
+  } catch (err) {
+    console.error("ball waiting list read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ball/waiting-list", getAdminBallWaitingList);

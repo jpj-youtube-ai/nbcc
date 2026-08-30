@@ -11,6 +11,7 @@ export const SECTIONS = [
   "subscriptions",
   "stories",
   "ticker",
+  "ball",
   "contact",
   "newsletter",
   "thank-you",
@@ -52,7 +53,12 @@ export function roleToPermissions(role: string): PermissionMap {
   }
 
   if (role === "editor") {
-    const perms: PermissionMap = { overview: "view", audit: "view", team: "none" };
+    // "ball" is deliberately view-only for editors rather than joining
+    // OPERATIONAL_EDITOR_SECTIONS: this section holds the gate toggle, and flipping that
+    // publishes the ticket page to the public and puts the ball on the home page. That is a
+    // launch decision, not routine operational work, so edit is granted per user instead of
+    // arriving by default with the role.
+    const perms: PermissionMap = { overview: "view", audit: "view", team: "none", ball: "view" };
     for (const section of OPERATIONAL_EDITOR_SECTIONS) {
       perms[section] = "edit";
     }

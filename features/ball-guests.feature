@@ -68,3 +68,23 @@ Feature: Festive Ball guest details (TASK-313)
   Scenario: exports need a login
     When I download the ball "door-list" list without a token
     Then the ball export status should be 401
+
+  Scenario: the reminder goes out once, and pressing send again reaches nobody
+    Given a ball admin "ball10.admin.bdd@example.com" with role "admin" and password "pw-ball10"
+    And a paid ball booking for 1 table with guest token "guest-tok-8"
+    When I send the ball reminders as "ball10.admin.bdd@example.com" with password "pw-ball10"
+    Then the ball reminder status should be 200
+    And the ball reminder should report 1 sent
+    When I send the ball reminders as "ball10.admin.bdd@example.com" with password "pw-ball10"
+    Then the ball reminder should report 0 sent
+
+  Scenario: an unpaid booking is never reminded
+    Given a ball admin "ball11.admin.bdd@example.com" with role "admin" and password "pw-ball11"
+    And a pending ball booking with guest token "guest-tok-9"
+    When I send the ball reminders as "ball11.admin.bdd@example.com" with password "pw-ball11"
+    Then the ball reminder should report 0 sent
+
+  Scenario: an editor cannot email four hundred people
+    Given a ball admin "ball12.admin.bdd@example.com" with role "editor" and password "pw-ball12"
+    When I send the ball reminders as "ball12.admin.bdd@example.com" with password "pw-ball12"
+    Then the ball reminder status should be 403

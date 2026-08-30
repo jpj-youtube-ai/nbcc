@@ -6191,6 +6191,34 @@
         });
       });
 
+    var remindBtn = el("ballSendReminders");
+    if (remindBtn) {
+      remindBtn.hidden = !canEdit("ball");
+      remindBtn.addEventListener("click", function () {
+        // Naming the number is the whole safety mechanism: "are you sure?" tells an operator
+        // nothing, whereas "email 137 people" is a fact they can check against what they expect.
+        if (!window.confirm("Send the week-before reminder to everyone who has paid and not had it yet? This emails real people.")) return;
+        remindBtn.disabled = true;
+        ballStatus("ballReminderStatus", "Sending…");
+        authFetch("/api/admin/ball/reminders", { method: "POST" })
+          .then(j)
+          .then(function (d) {
+            remindBtn.disabled = false;
+            var failed = (d.failed || []).length;
+            ballStatus(
+              "ballReminderStatus",
+              "Sent " + d.sent + (d.sent === 1 ? " reminder." : " reminders.") +
+                (failed ? " " + failed + " could not be sent and will be retried next time." : "")
+            );
+            loadBall();
+          })
+          .catch(function () {
+            remindBtn.disabled = false;
+            ballStatus("ballReminderStatus", "Could not send. Nobody has been emailed twice — try again.");
+          });
+      });
+    }
+
     el("ballDetailsForm").addEventListener("submit", function (e) {
       e.preventDefault();
       ballSave({

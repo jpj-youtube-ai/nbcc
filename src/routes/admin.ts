@@ -37,6 +37,8 @@ import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { readStoriesDiagnostics } from "../db/stories-diagnostics";
 import { ballSettingsUpdateSchema } from "../ball/settings";
 import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
+import { buildBallReminderEmail } from "../ball/reminder-email";
+import { sendBallReminder } from "../clients/email";
 import { availability } from "../ball/capacity";
 import { isGateOpen } from "../ball/gate";
 import {
@@ -45,7 +47,9 @@ import {
   getSettings as getBallSettings,
   listBookings,
   listBookingsForExport,
+  listBookingsNeedingReminder,
   listGuestsForExport,
+  markReminderSent,
   purgeExpiredGuests,
   updateSettings as updateBallSettings,
 } from "../db/ball";
@@ -2876,3 +2880,65 @@ export async function getAdminBallBookingsCsv(req: Request, res: Response): Prom
 adminRouter.get("/api/admin/ball/door-list.csv", getAdminBallDoorList);
 adminRouter.get("/api/admin/ball/catering.csv", getAdminBallCatering);
 adminRouter.get("/api/admin/ball/bookings.csv", getAdminBallBookingsCsv);
+
+// POST /api/admin/ball/reminders — send the "a week to go" email to everyone who has paid and
+// has not had it. Editor+ WITH the ball section granted, like the other writes here.
+//
+// Staff-triggered rather than scheduled: this app has no scheduler, and a cron misfiring at 3am
+// against a guest list is a worse failure than a button someone has to press. Idempotency lives
+// in the query (reminder_sent_at IS NULL) and each booking is STAMPED AS IT SENDS, so a provider
+// failure halfway through four hundred never re-emails the ones already done.
+export async function postAdminBallReminders(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  try {
+    const [targets, settings] = await Promise.all([
+      listBookingsNeedingReminder(),
+      getBallSettings(),
+    ]);
+    const base = config.BALL_BASE_URL.replace(/\/+$/, "");
+
+    let sent = 0;
+    const failed: string[] = [];
+    for (const t of targets) {
+      const mail = buildBallReminderEmail(
+        { reference: t.reference, buyerName: t.buyerName, seats: t.seats, tableName: t.tableName },
+        t.guests,
+        {
+          arrivalTime: settings.arrivalTime,
+          includedNote: settings.includedNote,
+          guestLink: t.guestToken ? `${base}/ball/guests/${t.guestToken}` : null,
+        },
+      );
+      try {
+        await sendBallReminder({
+          email: t.buyerEmail,
+          from: config.BALL_FROM_EMAIL,
+          replyTo: config.BALL_FROM_EMAIL,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+        });
+        await markReminderSent(t.id);
+        sent += 1;
+      } catch {
+        // Not stamped, so this one is picked up next time. Recorded rather than thrown: one bad
+        // address must not stop the other 399 people getting their reminder.
+        failed.push(t.reference);
+      }
+    }
+    await recordAudit({
+      actor: actorOf(claims),
+      action: "ball.reminders_sent",
+      entity: "ball_bookings",
+      entityId: null,
+      data: { sent, failed: failed.length },
+    });
+    return res.status(200).json({ sent, failed });
+  } catch (err) {
+    console.error("ball reminders failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/ball/reminders", postAdminBallReminders);

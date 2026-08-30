@@ -578,3 +578,26 @@ Then("the ball export should not contain a booking reference", function () {
     "the venue's list must carry no booking references",
   );
 });
+
+// --- reminders --------------------------------------------------------------
+
+When(
+  "I send the ball reminders as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/reminders`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballReminderStatus = res.status;
+    this.ballReminderBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the ball reminder status should be {int}", function (expected) {
+  assert.strictEqual(this.ballReminderStatus, expected);
+});
+
+Then("the ball reminder should report {int} sent", function (n) {
+  assert.strictEqual(this.ballReminderBody.sent, n);
+});

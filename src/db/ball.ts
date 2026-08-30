@@ -552,3 +552,56 @@ export async function listBookingsForExport(): Promise<ExportBooking[]> {
     createdAt: new Date(r.created_at).toISOString(),
   }));
 }
+
+// --- reminders (plan 5) ------------------------------------------------------
+
+export interface ReminderTarget {
+  id: number;
+  reference: string;
+  buyerName: string;
+  buyerEmail: string;
+  seats: number;
+  tableName: string | null;
+  guestToken: string | null;
+  guests: GuestRow[];
+}
+
+// Everyone who has PAID and has not already been reminded. The WHERE clause is the whole
+// idempotency story: pressing send twice finds nobody the second time.
+export async function listBookingsNeedingReminder(): Promise<ReminderTarget[]> {
+  const res = await pool.query(
+    `SELECT id, reference, buyer_name, buyer_email, seats, table_name, guest_token
+       FROM ball_bookings
+      WHERE status = 'paid' AND reminder_sent_at IS NULL AND buyer_email <> ''
+      ORDER BY id ASC`,
+  );
+  const targets: ReminderTarget[] = [];
+  for (const r of res.rows) {
+    const guests = await pool.query(
+      `SELECT full_name, dietary, access_needs FROM ball_guests
+        WHERE booking_id = $1 ORDER BY id ASC`,
+      [r.id],
+    );
+    targets.push({
+      id: r.id,
+      reference: r.reference,
+      buyerName: r.buyer_name,
+      buyerEmail: r.buyer_email,
+      seats: r.seats,
+      tableName: r.table_name,
+      guestToken: r.guest_token,
+      guests: guests.rows.map((g) => ({
+        fullName: g.full_name,
+        dietary: g.dietary,
+        accessNeeds: g.access_needs,
+      })),
+    });
+  }
+  return targets;
+}
+
+// Stamped per booking as each send succeeds, NOT in one batch at the end: if the provider fails
+// halfway through four hundred, the ones already emailed must not be emailed again on retry.
+export async function markReminderSent(bookingId: number): Promise<void> {
+  await pool.query("UPDATE ball_bookings SET reminder_sent_at = now() WHERE id = $1", [bookingId]);
+}

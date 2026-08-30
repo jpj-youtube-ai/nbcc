@@ -2076,6 +2076,21 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+### The week-before reminder
+
+`POST /api/admin/ball/reminders` (Editor+ with the ball section). Staff-triggered, not scheduled:
+this app has no scheduler, and a cron misfiring at 3am against a guest list is a worse failure
+than a button someone presses.
+
+It carries the practical details **and reads back what the booker told us** — guest names,
+allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week
+out, while there is still time, rather than at the table.
+
+Idempotent by `reminder_sent_at IS NULL`, and each booking is stamped **as it sends**, not in one
+batch at the end — so a provider failure halfway through four hundred never re-emails the ones
+already done. A single bad address is recorded and skipped rather than thrown, so it cannot stop
+the other 399 reminders.
+
 ### The three lists
 
 `GET /api/admin/ball/{door-list,catering,bookings}.csv` (Viewer+). Three rather than one, because

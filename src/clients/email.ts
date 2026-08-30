@@ -494,3 +494,19 @@ export async function sendBallConfirmation(message: BallConfirmationMessage): Pr
     throw new Error(`Ball confirmation email send responded ${res.status}`);
   }
 }
+
+// The Festive Ball "a week to go" reminder (TASK-313 plan 5). Same shape and same relay
+// passthrough as the booking confirmation; separate function so the two can be told apart in
+// logs and so a change to one never silently alters the other.
+export async function sendBallReminder(message: BallConfirmationMessage): Promise<void> {
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ ...message, thankYou: true }),
+  });
+  if (!res.ok) {
+    throw new Error(`Ball reminder email send responded ${res.status}`);
+  }
+}

@@ -11,6 +11,8 @@ import {
   type ClaimStatus,
 } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation, insertClaimAdjustment } from "./donations";
+import { bookingFromSession, isBallSession } from "../ball/booking";
+import { markBookingExpired, markBookingPaid } from "./ball";
 import { ensureFulfilmentRecord, markFulfilmentInvited } from "./fulfilment";
 import { fulfilmentBandFor, type SupporterBand } from "../donors/fulfilment";
 import { buildBusinessSupporterInviteEmail } from "../business/invite-email";
@@ -430,8 +432,24 @@ export async function sendConfirmation(email: DonationConfirmationEmail | null):
 
 async function dispatch(client: PoolClient, event: Stripe.Event): Promise<DispatchResult> {
   switch (event.type) {
-    case "checkout.session.completed":
+    case "checkout.session.completed": {
+      // Festive Ball ticket purchases (TASK-313) share this ONE webhook endpoint with
+      // donations, because Stripe delivers every event to a single URL. Route them away
+      // BEFORE the donation handler: a ticket is a payment for a dinner and a show, NOT a
+      // gift, so recording one as a donation would put un-Gift-Aidable money into the claim
+      // pipeline. A donation session never carries product=ball, so this cannot catch one.
+      const ballBooking = bookingFromSession(event.data.object);
+      if (ballBooking) {
+        return { action: await markBookingPaid(client, ballBooking), email: null };
+      }
       return handleCheckoutCompleted(client, event);
+    }
+    // An abandoned ball checkout: Stripe expired the session, so release the seats the
+    // pending booking was holding. Donations do not use this event at all.
+    case "checkout.session.expired": {
+      if (!isBallSession(event.data.object.metadata)) return { action: "ignored", email: null };
+      return { action: await markBookingExpired(client, event.data.object.id), email: null };
+    }
     case "invoice.paid":
     case "invoice.payment_succeeded": {
       // A successful invoice both records the recurring donation AND recovers any dunning on the

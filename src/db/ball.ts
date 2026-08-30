@@ -8,6 +8,7 @@ import {
   type Availability,
   type Order,
 } from "../ball/capacity";
+import type { BallBookingWrite } from "../ball/booking";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
 // only SQL lives here, mirroring how src/db/ticker.ts pairs with src/ticker/model.ts.
@@ -140,4 +141,100 @@ export async function claimReservation(
 
 export async function releaseReservation(token: string): Promise<void> {
   await pool.query(`DELETE FROM ball_reservations WHERE token = $1`, [token]);
+}
+
+// --- bookings ---------------------------------------------------------------
+//
+// A booking is written as 'pending' the moment the Stripe session is created, and it is the
+// pending row — not the short reservation — that holds the seats from then on. That ordering
+// matters: the 15-minute reservation only has to cover the gap between "choose" and "session
+// created", after which the booking itself is the record of intent. Stripe's own 30-minute
+// session expiry then closes the loop, via checkout.session.expired -> cancelled, so an
+// abandoned checkout gives its seats back without a sweeper.
+
+export async function createPendingBooking(booking: BallBookingWrite): Promise<void> {
+  await pool.query(
+    `INSERT INTO ball_bookings
+       (reference, kind, quantity, seats, buyer_name, buyer_email,
+        tickets_pence, donation_pence, fee_cover_pence, total_pence,
+        gift_aid, newsletter_opt_in, stripe_session_id, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending')
+     ON CONFLICT (stripe_session_id) DO NOTHING`,
+    [
+      booking.reference,
+      booking.kind,
+      booking.quantity,
+      booking.seats,
+      booking.buyerName,
+      booking.buyerEmail,
+      booking.ticketsPence,
+      booking.donationPence,
+      booking.feeCoverPence,
+      booking.totalPence,
+      booking.giftAid,
+      booking.newsletterOptIn,
+      booking.stripeSessionId,
+    ],
+  );
+}
+
+// Flip a booking to paid, on the webhook's transaction so it commits with the event-id claim.
+// Also backfills the buyer email, which Stripe only knows for certain once payment completes.
+// Returns the action label the webhook dispatcher reports.
+export async function markBookingPaid(
+  client: Querier,
+  booking: BallBookingWrite,
+): Promise<string> {
+  const res = await client.query(
+    `UPDATE ball_bookings
+        SET status = 'paid',
+            paid_at = now(),
+            buyer_email = COALESCE(NULLIF($2, ''), buyer_email)
+      WHERE stripe_session_id = $1 AND status = 'pending'`,
+    [booking.stripeSessionId, booking.buyerEmail],
+  );
+  if (res.rowCount && res.rowCount > 0) return "ball.paid";
+
+  // No pending row: either Stripe redelivered after we already recorded it (harmless), or the
+  // session was created outside this app. Insert defensively so a real payment is never lost.
+  const existing = await client.query(
+    `SELECT status FROM ball_bookings WHERE stripe_session_id = $1`,
+    [booking.stripeSessionId],
+  );
+  if (existing.rowCount && existing.rowCount > 0) return "ball.already_paid";
+
+  await client.query(
+    `INSERT INTO ball_bookings
+       (reference, kind, quantity, seats, buyer_name, buyer_email,
+        tickets_pence, donation_pence, fee_cover_pence, total_pence,
+        gift_aid, newsletter_opt_in, stripe_session_id, status, paid_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'paid',now())
+     ON CONFLICT (stripe_session_id) DO NOTHING`,
+    [
+      booking.reference,
+      booking.kind,
+      booking.quantity,
+      booking.seats,
+      booking.buyerName,
+      booking.buyerEmail,
+      booking.ticketsPence,
+      booking.donationPence,
+      booking.feeCoverPence,
+      booking.totalPence,
+      booking.giftAid,
+      booking.newsletterOptIn,
+      booking.stripeSessionId,
+    ],
+  );
+  return "ball.paid_recovered";
+}
+
+// An abandoned checkout: Stripe expired the session, so give the seats back.
+export async function markBookingExpired(client: Querier, sessionId: string): Promise<string> {
+  const res = await client.query(
+    `UPDATE ball_bookings SET status = 'cancelled'
+      WHERE stripe_session_id = $1 AND status = 'pending'`,
+    [sessionId],
+  );
+  return res.rowCount && res.rowCount > 0 ? "ball.expired" : "ball.expired_noop";
 }

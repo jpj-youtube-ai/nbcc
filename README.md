@@ -1356,6 +1356,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/thank-you/sent?limit&offset` | **implemented** | REQ-069 · TASK-163 (sent-letter history, most recent first) |
 | `DELETE /api/admin/thank-you/sent/:id` | **implemented** | REQ-069 · TASK-168 (Editor+; remove a sent-letter row, audited as `thank_you.deleted`) |
 | `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
+| `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
+| `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking) |
 | `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
 | `GET /api/admin/contact` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; list enquiries, optional `?status=new\|replied`) |
 | `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
@@ -2036,6 +2038,41 @@ without it — it's an app endpoint).
 **Supporter ticker (REQ-003 · TASK-178).** An admin-curated list of ongoing supporters (businesses or
 people) shown scrolling under the site nav — distinct from the donor-derived Supporters page. The
 `supporter_ticker` table (additive migration; `name`, `active`, `sort_order`) is served two ways: the
+### Festive Ball 2026 ticketing (TASK-313)
+
+NBCC sells tickets for **A Night to Remember — Festive Ball 2026** (Sat 7 Nov 2026, The Park
+Hotel, Kilmarnock). The Designer Rooms organises and funds the evening; NBCC handles ticketing
+and receives every penny of ticket income.
+
+**Capacity.** 40 tables of 10 = 400 seats, all editable. A *table* purchase takes one whole,
+unbroken table; individual *seats* pool onto shared tables; held-back seats (comps, sponsor
+guests) never go on sale. Sales run down to the last individual seat, so **seats and tables run
+out at different times** — 9 free seats spread across a broken table is not a sellable table,
+and a caller asking for a table is refused while the page still sells seats. That arithmetic is
+pure and DB-free in `src/ball/capacity.ts`.
+
+**Money.** £100 a seat, £1,000 a table, no discount, integer pence throughout
+(`src/ball/pricing.ts`). Buyers may optionally cover the card fee (1.5% + 20p, rounded up) and
+add a voluntary donation. **Gift Aid applies to the donation only** — HMRC does not allow it on
+ticket sales, because the buyer receives a dinner and a show in return.
+
+**Overselling.** `claimReservation` (`src/db/ball.ts`) locks the single `ball_settings` row, so
+two people going for the last table are serialised and the loser is refused. The reservation
+only covers the gap until a `pending` booking exists; from then on the booking holds the seats,
+and Stripe's 30-minute session expiry (`checkout.session.expired` → `cancelled`) returns them if
+the buyer walks away. No sweeper to fail unattended.
+
+**One webhook, two products.** Stripe delivers every event to a single endpoint, shared with
+donations. `checkout.session.completed` is routed on `metadata.product === "ball"` *before* the
+donation handler sees it, so a ticket can never enter the Gift Aid claim pipeline. A BDD
+scenario asserts a donation checkout creates no ball booking.
+
+**Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
+`ball_bookings`, `ball_reservations`.
+
+**Config.** `BALL_BASE_URL` — the public site base the Stripe return/cancel URLs are built on.
+Required with no default: a silent localhost fallback would strand a buyer who has just paid.
+
 public `GET /api/supporters/ticker` returns the **active** names in order, and the admin
 **Supporters ticker** tab (`view-ticker` + `loadTicker` in `assets/js/admin/app.js`) does full CRUD
 over `/api/admin/ticker` — reads are Viewer+, add/edit/hide/delete are **Editor+** and each write

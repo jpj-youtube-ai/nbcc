@@ -29,6 +29,7 @@ const validEnv = (): Record<string, string> => ({
   DECLARATION_FORM_BASE_URL: "https://nbcc.example",
   ADMIN_NOTIFICATION_EMAIL: "admin@nbcc.example",
   PORTAL_BASE_URL: "https://nbcc.example",
+  BALL_BASE_URL: "https://nbcc.example",
   ADMIN_SESSION_SECRET: "test-admin-session-secret",
 });
 
@@ -102,6 +103,16 @@ describe("config schema — contact forwarding key (REQ-030)", () => {
     void ADMIN_NOTIFICATION_EMAIL;
     expect(configSchema.safeParse(without).success).toBe(false); // required
     expect(configSchema.safeParse({ ...validEnv(), ADMIN_NOTIFICATION_EMAIL: "not-an-email" }).success).toBe(false);
+  });
+
+  it("requires BALL_BASE_URL and validates it as a URL (TASK-313)", () => {
+    // Deliberately required with no default: a silent localhost fallback would send a buyer
+    // who has just paid £1,000 to a dead address after checkout.
+    const { BALL_BASE_URL, ...without } = validEnv();
+    void BALL_BASE_URL;
+    expect(configSchema.safeParse(without).success).toBe(false);
+    expect(configSchema.safeParse({ ...validEnv(), BALL_BASE_URL: "not-a-url" }).success).toBe(false);
+    expect(configSchema.safeParse(validEnv()).success).toBe(true);
   });
 
   it("requires PORTAL_BASE_URL and validates it as a URL (TASK-100)", () => {

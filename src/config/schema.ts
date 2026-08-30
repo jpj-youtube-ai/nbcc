@@ -97,6 +97,13 @@ export const configSchema = z.object({
   // task-def env). Validated as a URL (mirrors STRIPE_SUCCESS_URL).
   PORTAL_BASE_URL: z.string().url(),
 
+  // Public site base the Festive Ball checkout builds its Stripe return/cancel URLs on
+  // (TASK-313), e.g. https://nbcc.scot. NOT a secret (it ships in a redirect the buyer sees),
+  // but SSM-held and injected like PORTAL_BASE_URL so it varies per environment. Deliberately
+  // REQUIRED with no default: a silent fallback to localhost would send a buyer who has just
+  // paid £1,000 to a dead address, so a missing value must fail boot instead.
+  BALL_BASE_URL: z.string().url(),
+
   // HMAC signing key for admin session tokens (TASK-105/REQ-062). The admin login endpoint signs a
   // short-lived session token with this key (crypto.createHmac), and admin routes verify it — the
   // bearer-token analogue of the donor portal's magic link. A secret — required, non-empty, NEVER

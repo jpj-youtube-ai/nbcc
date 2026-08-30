@@ -22,6 +22,7 @@ const base = {
   DECLARATION_FORM_BASE_URL: "https://x.example/d",
   ADMIN_NOTIFICATION_EMAIL: "ops@nbcc.scot",
   PORTAL_BASE_URL: "https://x.example",
+  BALL_BASE_URL: "https://x.example",
   ADMIN_SESSION_SECRET: "s",
 };
 

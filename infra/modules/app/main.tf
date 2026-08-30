@@ -234,6 +234,17 @@ resource "aws_ssm_parameter" "portal_base_url" {
   lifecycle { ignore_changes = [value] }
 }
 
+# Festive Ball checkout base URL (TASK-313). NOT a secret (it ships in the Stripe redirect the
+# buyer follows), but SSM-held and injected like PORTAL_BASE_URL so it varies per environment.
+# A plain String; the placeholder is a valid URL so app validation passes on a fresh apply. Set
+# the real public site URL with put-parameter (see README).
+resource "aws_ssm_parameter" "ball_base_url" {
+  name  = "/${var.project}/${var.environment}/BALL_BASE_URL"
+  type  = "String"
+  value = "https://nbcc.example"
+  lifecycle { ignore_changes = [value] }
+}
+
 # Admin session token signing key (TASK-105/REQ-062) — HMAC key the admin login
 # endpoint signs session tokens with. A SecureString like the Stripe secrets; the
 # real long random value is set out of band (ignore_changes keeps Terraform from

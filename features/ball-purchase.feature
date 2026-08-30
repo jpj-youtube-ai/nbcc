@@ -36,3 +36,41 @@ Feature: Festive Ball purchases through the shared Stripe webhook (TASK-313)
     Then no ball booking should have been created
     When I request the ball availability
     Then the ball availability should show 400 seats remaining
+
+  Scenario: buying two seats starts a checkout and holds the seats
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    When I start a ball checkout for 2 seats
+    Then the ball response status should be 201
+    And the ball checkout should return a booking reference
+    And the ball checkout total should be 20000 pence
+    When I request the ball availability
+    Then the ball availability should show 398 seats remaining
+
+  Scenario: covering the card fee and adding a Gift Aided donation is charged correctly
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    When I start a ball checkout for 1 seat with a 2500 donation covering the fee
+    Then the ball response status should be 201
+    And the ball checkout total should be 12708 pence
+
+  Scenario: nine seats at once is allowed, ten is not
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    When I start a ball checkout for 10 seats
+    Then the ball response status should be 400
+
+  Scenario: a table is refused when no unbroken table is left, though seats remain
+    Given the ball is reset to 1 tables of 10 with 1 held back
+    When I start a ball checkout for 1 table
+    Then the ball response status should be 409
+    When I start a ball checkout for 2 seats
+    Then the ball response status should be 201
+
+  Scenario: no checkout starts once sales are closed
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    And ball sales are closed by hand
+    When I start a ball checkout for 1 seat
+    Then the ball response status should be 409
+
+  Scenario: Gift Aid cannot be claimed without a donation
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    When I start a ball checkout for 1 seat claiming Gift Aid with no donation
+    Then the ball response status should be 400

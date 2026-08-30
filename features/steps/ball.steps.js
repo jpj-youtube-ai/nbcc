@@ -188,3 +188,50 @@ Then("no ball booking should have been created", async function () {
   const rows = await withDb((db) => db.query("SELECT count(*)::int AS n FROM ball_bookings"));
   assert.strictEqual(rows.rows[0].n, 0, "a donation must never create a ball booking");
 });
+
+// --- checkout endpoint ------------------------------------------------------
+
+async function startCheckout(ctx, body) {
+  const res = await fetch(`${BASE_URL}/api/ball/checkout-session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      buyerName: "BDD Buyer",
+      buyerEmail: "checkout.ball.bdd@example.com",
+      ...body,
+    }),
+  });
+  ctx.ballStatus = res.status;
+  ctx.ballCheckout = await res.json().catch(() => ({}));
+}
+
+When("I start a ball checkout for {int} seats", async function (n) {
+  await startCheckout(this, { kind: "seat", quantity: n });
+});
+
+When("I start a ball checkout for {int} seat", async function (n) {
+  await startCheckout(this, { kind: "seat", quantity: n });
+});
+
+When("I start a ball checkout for {int} table", async function (n) {
+  await startCheckout(this, { kind: "table", quantity: n });
+});
+
+When(
+  "I start a ball checkout for {int} seat with a {int} donation covering the fee",
+  async function (n, donationPence) {
+    await startCheckout(this, { kind: "seat", quantity: n, donationPence, coverFee: true });
+  },
+);
+
+When("I start a ball checkout for {int} seat claiming Gift Aid with no donation", async function (n) {
+  await startCheckout(this, { kind: "seat", quantity: n, giftAid: true, donationPence: 0 });
+});
+
+Then("the ball checkout should return a booking reference", function () {
+  assert.match(String(this.ballCheckout.reference), /^BALL-[A-Z2-9]{6}$/);
+});
+
+Then("the ball checkout total should be {int} pence", function (pence) {
+  assert.strictEqual(this.ballCheckout.totalPence, pence);
+});

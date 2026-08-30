@@ -298,3 +298,11 @@ resource "aws_ssm_parameter" "giving_from_email" {
   type  = "String"
   value = var.giving_from_email
 }
+
+# Festive Ball booking emails (TASK-313). Apex domain, never the newsletter subdomain.
+resource "aws_ssm_parameter" "ball_from_email" {
+  name  = "/${var.project}/${var.environment}/BALL_FROM_EMAIL"
+  type  = "String"
+  value = "events@nbcc.scot"
+  lifecycle { ignore_changes = [value] }
+}

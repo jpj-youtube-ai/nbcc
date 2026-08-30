@@ -11,7 +11,9 @@ import {
   type ClaimStatus,
 } from "./donations-model";
 import { insertAudit, insertDonation, insertDonorAndDonation, insertClaimAdjustment } from "./donations";
-import { bookingFromSession, isBallSession } from "../ball/booking";
+import { bookingFromSession, isBallSession, type BallBookingWrite } from "../ball/booking";
+import { buildBallConfirmationEmail } from "../ball/confirmation-email";
+import { sendBallConfirmation } from "../clients/email";
 import { markBookingExpired, markBookingPaid } from "./ball";
 import { ensureFulfilmentRecord, markFulfilmentInvited } from "./fulfilment";
 import { fulfilmentBandFor, type SupporterBand } from "../donors/fulfilment";
@@ -81,7 +83,7 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
       await client.query("COMMIT");
       return { processed: false, action: "duplicate" };
     }
-    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite } =
+    const { action, email, declaration, receipt, lapse, refundNotice, refundConfirmation, businessInvite, ballConfirmation } =
       await dispatch(client, event);
     await client.query("COMMIT");
     // Send the single donation-confirmation email (TASK-070) only AFTER the donor +
@@ -109,6 +111,10 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
     // gave us an email — so it sends once per new supporter. A failed/late send must never fail the
     // webhook (the record + its token are already durably committed).
     await sendBusinessInvite(businessInvite ?? null);
+    // Festive Ball booking confirmation (TASK-313): post-commit and best-effort, like every
+    // other send here. A slow or failing email provider must never roll back a paid booking —
+    // the seat is already durably recorded and the buyer's money is already taken.
+    await sendBallConfirmationEmail(ballConfirmation ?? null);
     return { processed: true, action };
   } catch (err) {
     await client.query("ROLLBACK");
@@ -124,6 +130,9 @@ export async function processWebhookEvent(event: Stripe.Event): Promise<WebhookR
 interface DispatchResult {
   action: string;
   email: DonationConfirmationEmail | null;
+  // The Festive Ball booking to confirm post-commit (TASK-313), or null/absent when this event
+  // was not a newly-paid ball purchase.
+  ballConfirmation?: BallBookingWrite | null;
   // The in-person declaration email to send + stamp post-commit (TASK-075), or null when
   // there is nothing to confirm (non-card-present, or no receipt_email to send to).
   declaration?: DeclarationSend | null;
@@ -440,7 +449,14 @@ async function dispatch(client: PoolClient, event: Stripe.Event): Promise<Dispat
       // pipeline. A donation session never carries product=ball, so this cannot catch one.
       const ballBooking = bookingFromSession(event.data.object);
       if (ballBooking) {
-        return { action: await markBookingPaid(client, ballBooking), email: null };
+        const action = await markBookingPaid(client, ballBooking);
+        // Only confirm a booking this event actually moved to paid. A Stripe redelivery
+        // ("ball.already_paid") must not send the buyer a second receipt.
+        return {
+          action,
+          email: null,
+          ballConfirmation: action === "ball.already_paid" ? null : ballBooking,
+        };
       }
       return handleCheckoutCompleted(client, event);
     }
@@ -1066,4 +1082,33 @@ async function handleDunning(client: PoolClient, event: Stripe.Event): Promise<D
       }
     : null;
   return { action, email: null, lapse };
+}
+
+// Post-commit, best-effort send of the Festive Ball booking confirmation (TASK-313). Reads the
+// event details fresh so a start time confirmed five minutes ago reaches the next buyer. A
+// failure is swallowed: the booking is committed and paid, and losing the receipt must not
+// turn into a 5xx that makes Stripe redeliver and re-process the event.
+async function sendBallConfirmationEmail(booking: BallBookingWrite | null): Promise<void> {
+  if (!booking || !booking.buyerEmail) return;
+  try {
+    const { getSettings } = await import("./ball");
+    const settings = await getSettings();
+    const mail = buildBallConfirmationEmail(booking, {
+      arrivalTime: settings.arrivalTime,
+      includedNote: settings.includedNote,
+    });
+    await sendBallConfirmation({
+      email: booking.buyerEmail,
+      from: config.BALL_FROM_EMAIL,
+      replyTo: config.BALL_FROM_EMAIL,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+  } catch (err) {
+    console.error(
+      "ball confirmation email failed:",
+      err instanceof Error ? err.message : err,
+    );
+  }
 }

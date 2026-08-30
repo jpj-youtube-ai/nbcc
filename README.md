@@ -2085,6 +2085,19 @@ not depend on someone being at a keyboard). The same switch flips the page from 
 staff set them; `renderBallPage` then fills them server-side. Until then the page says "to be
 confirmed" rather than inventing detail about a £100 ticket. Staff text is HTML-escaped.
 
+**Confirmation email.** Sent post-commit and best-effort from the shared Stripe webhook, from
+`BALL_FROM_EMAIL` (`events@nbcc.scot`) on the **apex** domain — deliberately not
+`news.nbcc.scot`, which is the newsletter's send-only sender and must not carry transactional
+receipts. Content is built by the pure `src/ball/confirmation-email.ts`; only a booking this
+event actually moved to `paid` is confirmed, so a Stripe redelivery cannot send a second
+receipt. A failed send is logged, never thrown: the booking is already paid and a 5xx would make
+Stripe redeliver.
+
+**Home page.** `renderHomePromo` adds a banner above the hero, a feature section below it, and a
+nav link — but ONLY once the gate is open. While it is shut it returns index.html byte for byte,
+so the promotion is absent from the page source rather than hidden. This matters because the
+printed advert's QR code points at `nbcc.scot`, not `/ball`.
+
 **Config.** `BALL_BASE_URL` — the public site base the Stripe return/cancel URLs are built on.
 Required with no default: a silent localhost fallback would strand a buyer who has just paid.
 `BALL_PREVIEW_PASSWORD` — the shared preview password; a SecureString, required, never defaulted.

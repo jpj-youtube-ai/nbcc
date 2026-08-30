@@ -464,3 +464,33 @@ export async function sendBusinessSupporterReminder(message: BusinessSupporterRe
     throw new Error(`Business supporter reminder email send responded ${res.status}`);
   }
 }
+
+// The Festive Ball booking confirmation (TASK-313). Someone has just paid up to £1,000, so this
+// is the receipt they hold until November. Content is built by the pure
+// src/ball/confirmation-email.ts and passed in; From + Reply-To are config.BALL_FROM_EMAIL
+// (events@nbcc.scot) — the APEX domain, deliberately NOT news.nbcc.scot, which is the
+// newsletter's send-only sender and must not carry transactional receipts. Rides the same
+// `thankYou: true` passthrough as sendThankYou / sendBusinessSupporterInvite, so the relay
+// forwards our content verbatim with no Worker change. Same stub seam: a placeholder
+// EMAIL_SEND_URL means no network outside production.
+export interface BallConfirmationMessage {
+  email: string; // the buyer
+  from: string; // config.BALL_FROM_EMAIL
+  replyTo: string; // same as from — a reply must reach a real inbox
+  subject: string;
+  html: string;
+  text: string;
+}
+
+export async function sendBallConfirmation(message: BallConfirmationMessage): Promise<void> {
+  if (useStub) return;
+
+  const res = await fetch(config.EMAIL_SEND_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ ...message, thankYou: true }),
+  });
+  if (!res.ok) {
+    throw new Error(`Ball confirmation email send responded ${res.status}`);
+  }
+}

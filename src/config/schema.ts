@@ -141,6 +141,12 @@ export const configSchema = z.object({
   // production address so local dev / CI boot without extra setup.
   GIVING_FROM_EMAIL: z.string().email().default("giving@nbcc.scot"),
 
+  // From/Reply-To for Festive Ball booking emails (TASK-313). DELIBERATELY on the apex domain,
+  // not news.nbcc.scot: that subdomain is the newsletter's send-only sender, and putting
+  // transactional ticket receipts on it would mix two reputations and damage the deliverability
+  // setup TASK-293/298 built. Defaulted like the other from-addresses.
+  BALL_FROM_EMAIL: z.string().email().default("events@nbcc.scot"),
+
   // TASK-302: the most newsletter emails that may leave in one day, whatever a send asks for.
   //
   // The mail provider's daily allowance is shared by EVERYTHING we send - donation receipts, Gift

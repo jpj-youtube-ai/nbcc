@@ -29,7 +29,8 @@ import { renderBallPage } from "../ball/page";
 import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
-import { getBookingByGuestToken, getPreviewPasswordHash, joinWaitingList, saveGuests } from "../db/ball";
+import { renderBallThankYou } from "../ball/thank-you-page";
+import { getBookingByGuestToken, getBookingBySessionId, getPreviewPasswordHash, joinWaitingList, saveGuests } from "../db/ball";
 import { verifyPassword } from "../admin/password";
 import { checkboxValue, waitingListSchema } from "../ball/waiting-list";
 
@@ -411,4 +412,20 @@ ballRouter.post("/api/ball/waiting-list", async (req, res) => {
     console.error("ball waiting list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Could not add you to the list. Please try again." });
   }
+});
+
+// Where Stripe returns a buyer the instant payment succeeds. Deliberately NOT behind the launch
+// gate: someone who has just handed over £1,000 must see confirmation whatever the public page
+// is doing. A missing or unknown session id still renders a success page — Stripe only redirects
+// here on success, and telling a paying customer "something went wrong" because our own lookup
+// came up short would be both wrong and alarming.
+ballRouter.get("/ball/thank-you", async (req, res) => {
+  const sessionId = typeof req.query.session_id === "string" ? req.query.session_id : "";
+  let booking = null;
+  try {
+    if (sessionId) booking = await getBookingBySessionId(sessionId);
+  } catch (err) {
+    console.error("ball thank-you lookup failed:", err instanceof Error ? err.message : err);
+  }
+  res.type("html").send(renderBallThankYou(booking));
 });

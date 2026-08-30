@@ -24,6 +24,12 @@
   --gold-deep: #8A6A26;
   --on-night: #F2EEE4;
   --on-night-soft: rgba(242, 238, 228, 0.74);
+
+  /* Exponential easings — things decelerate the way real objects do. No bounce or
+     elastic: they draw attention to the animation rather than the content. */
+  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* ---------- nav: always cream on this page ----------
@@ -109,7 +115,10 @@
 
 .ball-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  /* Three fixed columns, not auto-fit: auto-fit dropped to two at tablet width and
+     orphaned "Tickets" onto a second row, left-aligned under "When". Three across,
+     then a clean stack on phones — never 2+1. */
+  grid-template-columns: repeat(3, 1fr);
   gap: clamp(16px, 3vw, 40px);
   margin: 0;
   width: 100%;
@@ -145,6 +154,9 @@
 .ball-facts dd span {
   font-size: 0.88rem;
   color: var(--on-night-soft);
+}
+@media (max-width: 620px) {
+  .ball-facts { grid-template-columns: 1fr; gap: 18px; text-align: center; }
 }
 
 .ball-hero-cta {
@@ -473,22 +485,40 @@
 
 /* ---------- practical ---------- */
 
+/* Six items, so a fixed 3-up reads as two complete rows. auto-fit was giving four
+   columns at desktop and leaving a ragged pair on the second row, which is what
+   made this section look unfinished. A hairline above each item creates a shelf
+   rhythm so the six read as equals without wrapping any of them in a card. */
 .ball-practical {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: clamp(22px, 3.4vw, 40px);
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(24px, 3vw, 38px) clamp(28px, 3.4vw, 48px);
+}
+@media (max-width: 900px) { .ball-practical { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .ball-practical { grid-template-columns: 1fr; } }
+
+.ball-practical li {
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .ball-practical h3 {
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 1.1rem;
-  margin: 0 0 6px;
+  font-size: 1.08rem;
+  margin: 0;
 }
 .ball-practical p {
   margin: 0;
   font-size: 0.94rem;
   line-height: 1.65;
   color: var(--slate-soft);
-  max-width: 44ch;
+  /* No max-width: the grid column already sets the measure, and a 44ch cap made
+     the short items break at a different width from the long ones. */
 }
 
 /* ---------- sponsor ---------- */
@@ -520,8 +550,107 @@
   color: var(--on-night-soft);
 }
 
-/* ---------- motion ---------- */
+/* ---------- motion ----------
+
+   One orchestrated moment: the hero assembles on load, top to bottom, rather than
+   five things animating independently. Transform and opacity only, so it composites
+   on the GPU and never triggers layout. */
+
+@keyframes ball-rise {
+  from { opacity: 0; transform: translate3d(0, 20px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The lockup gets its own entrance — a touch of scale, so the artwork settles into
+   place rather than sliding like body copy. It is the thing people came for. */
+@keyframes ball-lockup-in {
+  from { opacity: 0; transform: scale(0.965); }
+  to   { opacity: 1; transform: none; }
+}
+
+.ball-hero .wrap > * {
+  animation: ball-rise 0.7s var(--ease-quart) both;
+}
+.ball-hero .wrap > :nth-child(1) { animation-delay: 0.05s; }
+.ball-hero .wrap > :nth-child(2) { animation: ball-lockup-in 0.9s var(--ease-expo) 0.12s both; }
+.ball-hero .wrap > :nth-child(3) { animation-delay: 0.42s; }
+.ball-hero .wrap > :nth-child(4) { animation-delay: 0.54s; }
+.ball-hero .wrap > :nth-child(5) { animation-delay: 0.64s; }
+
+/* Snow sits behind the hero content and never intercepts a click. */
+.ball-snow {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+.ball-hero { position: relative; overflow: hidden; }
+.ball-hero .wrap { position: relative; z-index: 1; }
+
+/* Feedback: the option cards lift a little under the pointer. 1.5% is enough to
+   register as responsive without the card appearing to jump. */
+.ball-option-body {
+  transition:
+    border-color 180ms var(--ease-quart),
+    box-shadow 180ms var(--ease-quart),
+    transform 180ms var(--ease-quart);
+}
+.ball-option:hover .ball-option-body { transform: translateY(-2px); }
+.ball-option input:checked + .ball-option-body { transform: translateY(-2px); }
+
+.ball-submit,
+.btn-gold,
+.btn-ghost-gold {
+  transition: transform 180ms var(--ease-quart), background 200ms var(--ease-quart),
+              border-color 200ms var(--ease-quart), color 200ms var(--ease-quart);
+}
+.ball-submit:hover:not([disabled]),
+.btn-gold:hover { transform: translateY(-2px); }
+
+/* The donation panel opens by animating grid rows rather than height, so there is
+   no fixed max-height guess to get wrong when the copy changes. */
+.ball-donation-fields {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 320ms var(--ease-quart), opacity 240ms var(--ease-quart);
+  opacity: 1;
+}
+.ball-donation-fields > * { min-height: 0; }
+.ball-donation-fields[hidden] {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+/* A brief pulse when the running total changes, so the number acknowledges the
+   change instead of silently swapping. */
+@keyframes ball-total-pulse {
+  0%   { transform: none; }
+  35%  { transform: scale(1.06); }
+  100% { transform: none; }
+}
+.ball-total b {
+  display: inline-block;
+  transform-origin: left center;
+}
+.ball-total b.is-changed { animation: ball-total-pulse 420ms var(--ease-quart); }
 
 @media (prefers-reduced-motion: reduce) {
-  .ball-option-body { transition: none; }
+  .ball-hero .wrap > *,
+  .ball-total b.is-changed { animation: none !important; }
+  .ball-option-body,
+  .ball-submit,
+  .btn-gold,
+  .btn-ghost-gold,
+  .ball-donation-fields { transition: none; }
+  .ball-option:hover .ball-option-body,
+  .ball-option input:checked + .ball-option-body,
+  .ball-submit:hover:not([disabled]),
+  .btn-gold:hover { transform: none; }
+  .ball-snow { display: none; }
 }

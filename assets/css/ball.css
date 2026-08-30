@@ -1,0 +1,512 @@
+/* =================================================================
+   FESTIVE BALL 2026 — page stylesheet (TASK-313)
+
+   Loaded ONLY by /ball. Deliberately not part of assets/css/styles.css:
+   donate.html sits ~369 bytes under its enforced first-paint budget
+   (test/unit/perf-budget.test.ts), and that page is the donation money
+   path — growing the shared bundle would break it.
+
+   Everything here builds on the shared brand tokens in styles.css. The
+   only new colours are the poster's night-sky and gold, scoped to this
+   page, so the rest of the site is untouched.
+   ================================================================= */
+
+.ball-page {
+  /* The advert's palette. Deep navy rather than black: the printed poster is a
+     night sky, not a void, and a true black band would read as a broken image
+     against the site's warm cream. */
+  --night: #0B1020;
+  --night-2: #131A31;
+  --night-line: rgba(233, 210, 150, 0.22);
+  /* Two golds. The bright one is for large type and rules only; the deep one is
+     the accessible foreground for small text on cream. */
+  --gold: #E4C87A;
+  --gold-deep: #8A6A26;
+  --on-night: #F2EEE4;
+  --on-night-soft: rgba(242, 238, 228, 0.74);
+}
+
+/* ---------- nav over the dark hero ----------
+
+   The shared stylesheet sets .nav-links a to var(--slate) (#333). That is right
+   over cream, but it lands at roughly 1.5:1 against this page's night-sky hero —
+   effectively invisible. Light the links while the nav is still transparent; the
+   moment it gains .scrolled it paints its own cream background, so hand straight
+   back to the shared styles rather than fighting them. */
+
+.ball-page .nav:not(.scrolled) .nav-links a { color: var(--on-night); }
+.ball-page .nav:not(.scrolled) .nav-links a:hover,
+.ball-page .nav:not(.scrolled) .nav-links a:focus-visible { color: var(--gold); }
+.ball-page .nav:not(.scrolled) .burger span { background: var(--on-night); }
+
+/* The mobile menu drops down over the hero, so it needs the cream panel the
+   shared styles give it — leave that alone and only fix the closed state. */
+@media (max-width: 900px) {
+  .ball-page .nav.open:not(.scrolled) .nav-links a { color: var(--slate); }
+}
+
+/* ---------- hero ---------- */
+
+.ball-hero {
+  background: var(--night);
+  /* A single soft light shaft from above, echoing the poster's stage lighting.
+     Radial rather than linear so it reads as a source, not a gradient wash. */
+  background-image: radial-gradient(
+    120% 90% at 50% -10%,
+    rgba(233, 210, 150, 0.16) 0%,
+    rgba(233, 210, 150, 0.05) 38%,
+    transparent 72%
+  );
+  color: var(--on-night);
+  padding: clamp(48px, 9vw, 104px) 0 clamp(40px, 7vw, 76px);
+  text-align: center;
+}
+
+.ball-hero .wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(20px, 3.4vw, 34px);
+}
+
+.ball-kicker {
+  margin: 0;
+  font-size: clamp(0.78rem, 1.5vw, 0.95rem);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--on-night-soft);
+  /* Light type on a dark ground reads lighter than it is; give it room. */
+  line-height: 1.75;
+  max-width: 46ch;
+}
+.ball-kicker em {
+  font-style: normal;
+  color: var(--gold);
+}
+
+/* The lockup is the artwork from the printed advert, so someone holding the
+   magazine recognises the page at a glance. It is the ONLY baked-in text on the
+   page — the poster's other lines are ~5px tall on a phone and unreadable. */
+.ball-hero h1 {
+  margin: 0;
+  width: 100%;
+}
+.ball-lockup {
+  display: block;
+  width: min(100%, 780px);
+  height: auto;
+  margin: 0 auto;
+}
+
+.ball-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: clamp(16px, 3vw, 40px);
+  margin: 0;
+  width: 100%;
+  max-width: 780px;
+  border-top: 1px solid var(--night-line);
+  border-bottom: 1px solid var(--night-line);
+  padding: clamp(18px, 2.6vw, 26px) 0;
+}
+.ball-facts > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ball-facts dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 600;
+}
+.ball-facts dd {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ball-facts dd b {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+  font-weight: 600;
+  line-height: 1.25;
+}
+.ball-facts dd span {
+  font-size: 0.88rem;
+  color: var(--on-night-soft);
+}
+
+.ball-hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+}
+
+.btn-gold {
+  background: var(--gold);
+  color: #241B06;
+  border: 1px solid var(--gold);
+  font-weight: 600;
+}
+.btn-gold:hover {
+  background: #F0DCA0;
+  border-color: #F0DCA0;
+}
+.btn-ghost-gold {
+  background: transparent;
+  color: var(--on-night);
+  border: 1px solid var(--night-line);
+}
+.btn-ghost-gold:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.ball-organiser {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--on-night-soft);
+}
+.ball-organiser b {
+  color: var(--on-night);
+  font-weight: 600;
+}
+
+/* ---------- the night ---------- */
+
+.ball-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: clamp(28px, 5vw, 64px);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .ball-split { grid-template-columns: 1fr; }
+}
+
+.ball-split .prose h3 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.25rem;
+  margin: 28px 0 8px;
+}
+.ball-split .prose h3:first-child { margin-top: 0; }
+.ball-split .prose p { max-width: 62ch; }
+
+/* Honest placeholder for detail the venue has not confirmed. Muted, italic and
+   clearly provisional, so the page never invents information about a £100
+   ticket — and staff can replace it from the admin area once it is known. */
+.ball-tbc {
+  color: var(--slate-soft);
+  font-style: italic;
+}
+
+.ball-details {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.ball-details li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.ball-details li:last-child { border-bottom: 0; }
+.ball-details .k {
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slate-soft);
+  font-weight: 600;
+}
+.ball-details .v {
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ---------- ticket form ---------- */
+
+.ball-availability {
+  font-weight: 600;
+  color: var(--crimson);
+}
+
+.ball-form {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: clamp(22px, 4vw, 40px);
+  box-shadow: var(--shadow-sm);
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+.ball-choice {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+.ball-choice legend {
+  /* Visually hidden: the two options say what they are, and a "What would you
+     like?" heading above a two-card choice is the kind of restatement that adds
+     reading without adding meaning. Kept for screen readers. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ball-option {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+.ball-option input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+.ball-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  height: 100%;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--white);
+  transition: border-color 160ms cubic-bezier(0.2, 0.8, 0.3, 1),
+              box-shadow 160ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+.ball-option:hover .ball-option-body { border-color: var(--tan); }
+.ball-option input:checked + .ball-option-body {
+  border-color: var(--maroon);
+  box-shadow: 0 0 0 1px var(--maroon);
+}
+.ball-option input:focus-visible + .ball-option-body {
+  outline: 3px solid var(--crimson);
+  outline-offset: 2px;
+}
+.ball-option-body b {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.12rem;
+}
+.ball-price {
+  font-weight: 600;
+  color: var(--maroon);
+}
+.ball-note {
+  font-size: 0.86rem;
+  color: var(--slate-soft);
+  line-height: 1.55;
+}
+
+.ball-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 24px;
+  align-items: flex-end;
+}
+.ball-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.ball-field-narrow { flex: 0 1 200px; }
+.ball-field > span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.ball-field small {
+  font-size: 0.8rem;
+  color: var(--slate-soft);
+  line-height: 1.5;
+}
+.ball-field input,
+.ball-field select {
+  font: inherit;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  color: inherit;
+  min-width: 0;
+}
+.ball-field input:focus-visible,
+.ball-field select:focus-visible {
+  outline: 3px solid var(--crimson);
+  outline-offset: 1px;
+  border-color: var(--maroon);
+}
+
+.ball-amount {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ball-amount span {
+  font-weight: 600;
+  color: var(--slate-soft);
+}
+.ball-amount input { flex: 1 1 auto; }
+
+.ball-total {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  color: var(--slate-soft);
+}
+.ball-total b {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.6rem;
+  color: var(--maroon);
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ball-extras {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.ball-check {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 12px;
+  align-items: start;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.ball-check input {
+  width: 20px;
+  height: 20px;
+  margin: 1px 0 0;
+  accent-color: var(--maroon);
+}
+.ball-check b { font-weight: 600; }
+
+.ball-donation {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ball-donation-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--tint);
+  border-radius: var(--radius);
+}
+.ball-donation-fields[hidden] { display: none; }
+
+.ball-error {
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--crimson);
+  border-radius: 10px;
+  background: #FCF0F1;
+  color: #8A1626;
+  font-size: 0.92rem;
+}
+.ball-error[hidden] { display: none; }
+
+.ball-submit { align-self: flex-start; }
+.ball-submit[disabled] { opacity: 0.6; cursor: progress; }
+
+.ball-smallprint {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--slate-soft);
+  max-width: 62ch;
+}
+
+/* ---------- who you're supporting ---------- */
+
+.ball-impact {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.2rem;
+  line-height: 1.5;
+  color: var(--maroon);
+  max-width: 34ch;
+}
+
+/* ---------- practical ---------- */
+
+.ball-practical {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: clamp(22px, 3.4vw, 40px);
+}
+.ball-practical h3 {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.1rem;
+  margin: 0 0 6px;
+}
+.ball-practical p {
+  margin: 0;
+  font-size: 0.94rem;
+  line-height: 1.65;
+  color: var(--slate-soft);
+  max-width: 44ch;
+}
+
+/* ---------- sponsor ---------- */
+
+.ball-sponsor {
+  background: var(--night);
+  color: var(--on-night);
+  padding: clamp(40px, 6vw, 72px) 0;
+  text-align: center;
+}
+.ball-sponsor .wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.ball-sponsor-name {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.6rem, 4.2vw, 2.4rem);
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+.ball-sponsor-note {
+  margin: 0;
+  max-width: 58ch;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--on-night-soft);
+}
+
+/* ---------- motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .ball-option-body { transition: none; }
+}

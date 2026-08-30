@@ -49,6 +49,7 @@ import {
   listBookingsForExport,
   listBookingsNeedingReminder,
   listGuestsForExport,
+  listWaitingList,
   markReminderSent,
   purgeExpiredGuests,
   updateSettings as updateBallSettings,
@@ -2942,3 +2943,16 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
 }
 
 adminRouter.post("/api/admin/ball/reminders", postAdminBallReminders);
+
+// GET /api/admin/ball/waiting-list — who is waiting, oldest first. Viewer+.
+export async function getAdminBallWaitingList(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    return res.status(200).json({ results: await listWaitingList() });
+  } catch (err) {
+    console.error("ball waiting list read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ball/waiting-list", getAdminBallWaitingList);

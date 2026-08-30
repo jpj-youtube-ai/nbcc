@@ -2076,6 +2076,26 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+### The waiting list
+
+`POST /api/ball/waiting-list` (public) and `GET /api/admin/ball/waiting-list` (Viewer+). When the
+room fills, the booking form is swapped for a waiting-list form rather than a dead end — there
+will be drop-outs before November, and a place released in October is only worth something if
+somebody is waiting for it.
+
+Upserts on email, so pressing join twice updates the entry instead of creating a duplicate staff
+have to reconcile, and the response says "you're already on the list" rather than implying a
+second place was added. Ordered oldest first, because a waiting list that does not run in order
+is not a waiting list.
+
+Deliberately **not** gated on availability: if the last seat sells between the page loading and
+the form submitting, that person should still be captured rather than thrown away.
+
+The newsletter opt-in is separate, unticked, and normalised through `checkboxValue` before
+parsing — `z.coerce.boolean()` reads ANY non-empty string as true, so a stray "off" would
+silently opt someone into marketing. Entries carry the same 90-day retention as guest details:
+nobody should still be on a waiting list for a party that has happened.
+
 ### The week-before reminder
 
 `POST /api/admin/ball/reminders` (Editor+ with the ball section). Staff-triggered, not scheduled:

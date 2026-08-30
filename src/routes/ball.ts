@@ -29,7 +29,8 @@ import { renderBallPage } from "../ball/page";
 import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
-import { getBookingByGuestToken, saveGuests } from "../db/ball";
+import { getBookingByGuestToken, joinWaitingList, saveGuests } from "../db/ball";
+import { checkboxValue, waitingListSchema } from "../ball/waiting-list";
 
 // TASK-313: the public, read-only availability feed for the Festive Ball page.
 // Deliberately returns ONLY counts — never a buyer name, email or booking reference — because
@@ -363,3 +364,35 @@ ballRouter.post(
 export function newGuestToken(): string {
   return makeGuestToken(randomBytes(24));
 }
+
+// POST /api/ball/waiting-list — join the list when the ball is full. Public and unauthenticated,
+// like the checkout. Deliberately NOT gated on availability: a race where the last seat sells
+// between the page loading and the form submitting should still capture the person, not throw
+// them away.
+ballRouter.post("/api/ball/waiting-list", async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const parsed = waitingListSchema.safeParse({
+    name: body.name,
+    email: body.email,
+    seatsWanted: body.seatsWanted ?? 1,
+    note: body.note ?? "",
+    // Normalise the checkbox first: z.coerce.boolean() reads ANY non-empty string as true, so
+    // an "off" value would silently opt someone into marketing.
+    newsletterOptIn: checkboxValue(body.newsletterOptIn),
+  });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Please check your name and email address." });
+  }
+  try {
+    const { added } = await joinWaitingList(parsed.data);
+    return res.status(added ? 201 : 200).json({
+      added,
+      message: added
+        ? "You're on the list. We'll email you if a place comes up."
+        : "You're already on the list — we've updated your details.",
+    });
+  } catch (err) {
+    console.error("ball waiting list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Could not add you to the list. Please try again." });
+  }
+});

@@ -13,6 +13,7 @@ import type { BallSettingsUpdate } from "../ball/settings";
 import { retentionDate, type GuestInput } from "../ball/guests";
 import type { GuestPageBooking, GuestRow } from "../ball/guest-page";
 import type { ExportBooking, ExportGuest } from "../ball/exports";
+import type { WaitingListEntry } from "../ball/waiting-list";
 import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
@@ -604,4 +605,54 @@ export async function listBookingsNeedingReminder(): Promise<ReminderTarget[]> {
 // halfway through four hundred, the ones already emailed must not be emailed again on retry.
 export async function markReminderSent(bookingId: number): Promise<void> {
   await pool.query("UPDATE ball_bookings SET reminder_sent_at = now() WHERE id = $1", [bookingId]);
+}
+
+// --- waiting list (plan 5) ---------------------------------------------------
+
+// Upsert on email: pressing join twice updates the entry rather than creating a duplicate, so
+// staff never have to work out which of two rows is current. Returns false if the address was
+// already there, so the page can say "you're already on the list" rather than implying a second
+// place was added.
+export async function joinWaitingList(entry: WaitingListEntry): Promise<{ added: boolean }> {
+  const res = await pool.query(
+    `INSERT INTO ball_waiting_list (name, email, seats_wanted, note, newsletter_opt_in)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (email) DO UPDATE
+       SET name = EXCLUDED.name,
+           seats_wanted = EXCLUDED.seats_wanted,
+           note = EXCLUDED.note,
+           newsletter_opt_in = ball_waiting_list.newsletter_opt_in OR EXCLUDED.newsletter_opt_in
+     RETURNING (xmax = 0) AS inserted`,
+    [entry.name, entry.email, entry.seatsWanted, entry.note, entry.newsletterOptIn],
+  );
+  return { added: Boolean(res.rows[0]?.inserted) };
+}
+
+export interface WaitingListRow {
+  id: number;
+  name: string;
+  email: string;
+  seatsWanted: number;
+  note: string | null;
+  newsletterOptIn: boolean;
+  offeredAt: string | null;
+  createdAt: string;
+}
+
+// Oldest first: a waiting list that does not run in order is not a waiting list.
+export async function listWaitingList(): Promise<WaitingListRow[]> {
+  const res = await pool.query(
+    `SELECT id, name, email, seats_wanted, note, newsletter_opt_in, offered_at, created_at
+       FROM ball_waiting_list ORDER BY created_at ASC, id ASC`,
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    seatsWanted: r.seats_wanted,
+    note: r.note,
+    newsletterOptIn: r.newsletter_opt_in,
+    offeredAt: r.offered_at,
+    createdAt: new Date(r.created_at).toISOString(),
+  }));
 }

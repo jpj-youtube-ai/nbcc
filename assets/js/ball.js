@@ -29,6 +29,7 @@
   var errorBox = document.getElementById("ballError");
   var submit = document.getElementById("ballSubmit");
   var availability = document.querySelector('[data-region="availability"]');
+  var waitingForm = document.getElementById("ballWaitingForm");
 
   function kind() {
     var checked = form.querySelector('input[name="kind"]:checked');
@@ -122,10 +123,17 @@
         if (!data) return;
         if (!data.salesOpen) {
           availability.textContent = data.soldOut
-            ? "The ball is now sold out. Email events@nbcc.scot to join the waiting list."
+            ? "The ball is sold out."
             : "Ticket sales are now closed.";
           availability.hidden = false;
-          if (submit) submit.disabled = true;
+          // Sold out is not a dead end: swap the booking form for the waiting list, because a
+          // place released in October is only worth something if someone is waiting for it.
+          if (data.soldOut && waitingForm) {
+            form.hidden = true;
+            waitingForm.hidden = false;
+          } else if (submit) {
+            submit.disabled = true;
+          }
           return;
         }
         // Only surface scarcity when it is real and close. Showing "392 of 400 left"
@@ -318,6 +326,55 @@
     window.addEventListener("resize", function () {
       window.clearTimeout(resizeTimer);
       resizeTimer = window.setTimeout(size, 200);
+    });
+  }
+
+  if (waitingForm) {
+    waitingForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      var errorNode = document.getElementById("ballWaitingError");
+      var doneNode = document.getElementById("ballWaitingDone");
+      var btn = document.getElementById("ballWaitingSubmit");
+      errorNode.hidden = true;
+      doneNode.hidden = true;
+
+      var name = (waitingForm.elements.name.value || "").trim();
+      var email = (waitingForm.elements.email.value || "").trim();
+      if (!name || !email || email.indexOf("@") === -1) {
+        errorNode.textContent = "Please give us your name and an email address we can reach you on.";
+        errorNode.hidden = false;
+        return;
+      }
+
+      btn.disabled = true;
+      fetch("/api/ball/waiting-list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name,
+          email: email,
+          seatsWanted: waitingForm.elements.seatsWanted.value,
+          note: waitingForm.elements.note.value,
+          newsletterOptIn: waitingForm.elements.newsletterOptIn.checked ? "on" : "",
+        }),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (result) {
+          btn.disabled = false;
+          if (!result.ok) {
+            errorNode.textContent = result.data.error || "Could not add you. Please try again.";
+            errorNode.hidden = false;
+            return;
+          }
+          doneNode.textContent = result.data.message;
+          doneNode.hidden = false;
+          btn.hidden = true;
+        })
+        .catch(function () {
+          btn.disabled = false;
+          errorNode.textContent = "We couldn't reach the server. Please try again, or email events@nbcc.scot.";
+          errorNode.hidden = false;
+        });
     });
   }
 

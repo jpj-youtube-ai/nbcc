@@ -249,6 +249,58 @@
               invoice? Email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a>.
             </p>
           </form>
+
+          <!-- Shown only when the room is full (ball.js swaps them). Kept in the markup rather
+               than built in script so it still exists for anyone without JavaScript. -->
+          <form class="ball-form ball-waiting" id="ballWaitingForm" hidden>
+            <h3>Join the waiting list</h3>
+            <p>
+              The ball is full, but people's plans change and places do come back. Leave your
+              details and we'll email you first if one does. No payment now, and no obligation.
+            </p>
+
+            <div class="ball-row ball-row-fields">
+              <label class="ball-field">
+                <span>Your name</span>
+                <input type="text" name="name" autocomplete="name" required maxlength="120" />
+              </label>
+              <label class="ball-field">
+                <span>Your email</span>
+                <input type="email" name="email" autocomplete="email" required maxlength="254" />
+              </label>
+            </div>
+
+            <div class="ball-row">
+              <label class="ball-field ball-field-narrow">
+                <span>How many places?</span>
+                <select name="seatsWanted">
+                  <option value="1">1</option><option value="2">2</option>
+                  <option value="3">3</option><option value="4">4</option>
+                  <option value="5">5</option><option value="6">6</option>
+                  <option value="7">7</option><option value="8">8</option>
+                  <option value="9">9</option>
+                </select>
+              </label>
+              <label class="ball-field">
+                <span>Anything we should know? (optional)</span>
+                <input type="text" name="note" maxlength="500" placeholder="e.g. happy to split a table" />
+              </label>
+            </div>
+
+            <label class="ball-check">
+              <input type="checkbox" name="newsletterOptIn" />
+              <span>Keep me posted about NBCC's work through the year. You can unsubscribe any time.</span>
+            </label>
+
+            <p class="ball-error" id="ballWaitingError" role="alert" hidden></p>
+            <p class="ball-saved" id="ballWaitingDone" role="status" hidden></p>
+
+            <button class="btn btn-primary" type="submit" id="ballWaitingSubmit">Add me to the waiting list</button>
+            <p class="ball-smallprint">
+              We'll only use these details to contact you about a place at this event, and we'll
+              delete them after the ball.
+            </p>
+          </form>
         </div>
       </section>
 

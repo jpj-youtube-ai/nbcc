@@ -601,3 +601,67 @@ Then("the ball reminder status should be {int}", function (expected) {
 Then("the ball reminder should report {int} sent", function (n) {
   assert.strictEqual(this.ballReminderBody.sent, n);
 });
+
+// --- waiting list -----------------------------------------------------------
+
+Given("the ball waiting list is empty", async function () {
+  await withDb((db) => db.query("DELETE FROM ball_waiting_list"));
+});
+
+When(
+  "I join the ball waiting list as {string} with email {string}",
+  async function (name, email) {
+    const res = await fetch(`${BASE_URL}/api/ball/waiting-list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, seatsWanted: 2 }),
+    });
+    this.waitingStatus = res.status;
+    this.waitingBody = await res.json().catch(() => ({}));
+  },
+);
+
+When(
+  "I read the ball waiting list as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/waiting-list`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.waitingStatus = res.status;
+    this.waitingBody = await res.json().catch(() => ({}));
+  },
+);
+
+When("I read the ball waiting list without a token", async function () {
+  const res = await fetch(`${BASE_URL}/api/admin/ball/waiting-list`);
+  this.waitingStatus = res.status;
+  this.waitingBody = await res.json().catch(() => ({}));
+});
+
+Then("the waiting list response status should be {int}", function (expected) {
+  assert.strictEqual(this.waitingStatus, expected);
+});
+
+Then("the waiting list should say I am on it", function () {
+  assert.strictEqual(this.waitingBody.added, true);
+  assert.match(this.waitingBody.message, /on the list/i);
+});
+
+Then("the waiting list should say I am already on it", function () {
+  assert.strictEqual(this.waitingBody.added, false);
+  assert.match(this.waitingBody.message, /already on the list/i);
+});
+
+Then("the ball waiting list should hold {int} person", async function (n) {
+  const rows = await withDb((db) => db.query("SELECT count(*)::int AS n FROM ball_waiting_list"));
+  assert.strictEqual(rows.rows[0].n, n);
+});
+
+Then("the ball waiting list should hold {int} people", function (n) {
+  assert.strictEqual((this.waitingBody.results || []).length, n);
+});
+
+Then("the first person waiting should be {string}", function (name) {
+  assert.strictEqual(this.waitingBody.results[0].name, name);
+});

@@ -2076,6 +2076,13 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+**Adding an admin section is a three-file change.** The list lives in
+`src/admin/permissions.ts`, `assets/js/admin/app.js` and `features/steps/admin-permissions.steps.js`.
+They are not cosmetic duplicates: `PATCH /api/admin/users/:id/permissions` validates a COMPLETE,
+`.strict()` matrix built from the server list, so a section present on the server but missing in
+the browser bundle makes **every permissions save fail with a 400 in production**. Adding `ball`
+hit exactly that. `test/unit/admin-sections-in-sync.test.ts` now fails fast if they drift.
+
 **Admin.** A `ball` permission section. Unusually it is **view-only for the editor role by
 default** rather than joining `OPERATIONAL_EDITOR_SECTIONS`: the gate toggle publishes the
 ticket page and puts the ball on the home page, which is a launch decision rather than routine

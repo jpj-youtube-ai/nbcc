@@ -27,9 +27,12 @@
   // A small client-side mirror of src/admin/permissions.ts. The server is the real gate on every
   // route (authorizeSection) - this only drives nav filtering and write-control visibility, plus the
   // Team matrix editor's presets/pre-fill, all of which are UX conveniences, not security.
+  // KEEP IN SYNC with SECTIONS in src/admin/permissions.ts. The permissions PATCH validates a
+  // COMPLETE, .strict() matrix built from the server's list, so a section missing here makes
+  // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "contact", "newsletter", "thank-you", "audit", "team",
+    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "team",
   ];
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",

@@ -1358,6 +1358,9 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
 | `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
 | `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking) |
+| `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
+| `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
+| `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
 | `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
 | `GET /api/admin/contact` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; list enquiries, optional `?status=new\|replied`) |
 | `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
@@ -2070,8 +2073,21 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+**The gate.** `/ball` and `/ball/terms` are served by `src/routes/ball.ts`, never by the static
+site router, and `_redirects` deliberately has **no** `200` rewrite onto `ball.html` — one would
+make the file directly reachable and the gate decorative. Closed, the route answers `401` with a
+standalone lock screen that shares no markup with the real page, so nothing leaks. It opens two
+ways: staff flip `gate_open`, or `gate_opens_at` passes (the safety net, so launch morning does
+not depend on someone being at a keyboard). The same switch flips the page from `noindex` to
+`index`. A correct password sets a signed, HTTP-only cookie for a fortnight.
+
+**Not-yet-confirmed details.** `arrival_time`, `included_note` and `line_up_note` are NULL until
+staff set them; `renderBallPage` then fills them server-side. Until then the page says "to be
+confirmed" rather than inventing detail about a £100 ticket. Staff text is HTML-escaped.
+
 **Config.** `BALL_BASE_URL` — the public site base the Stripe return/cancel URLs are built on.
 Required with no default: a silent localhost fallback would strand a buyer who has just paid.
+`BALL_PREVIEW_PASSWORD` — the shared preview password; a SecureString, required, never defaulted.
 
 public `GET /api/supporters/ticker` returns the **active** names in order, and the admin
 **Supporters ticker** tab (`view-ticker` + `loadTicker` in `assets/js/admin/app.js`) does full CRUD

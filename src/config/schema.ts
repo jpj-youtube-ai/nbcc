@@ -111,6 +111,12 @@ export const configSchema = z.object({
   // locally/CI, a SecureString in SSM in staging/prod. Kept long/random in real environments.
   ADMIN_SESSION_SECRET: z.string().min(1),
 
+  // Shared password for the Festive Ball preview gate (TASK-313). A SECRET: it is handed to
+  // trustees and the sponsor so they can see /ball before launch, and it must never be
+  // defaulted — an empty value would either lock the page permanently or, worse, be treated
+  // as a match. Required and non-empty, like ADMIN_SESSION_SECRET above.
+  BALL_PREVIEW_PASSWORD: z.string().min(1),
+
   // The From address for the admin newsletter (TASK-161/REQ-069). TASK-298 moved it onto
   // news.nbcc.scot, the dedicated sending subdomain (TASK-296), so a campaign that upsets a spam
   // filter builds and risks its OWN reputation instead of the apex's — the apex carries donation

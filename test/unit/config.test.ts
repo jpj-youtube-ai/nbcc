@@ -30,6 +30,7 @@ const validEnv = (): Record<string, string> => ({
   ADMIN_NOTIFICATION_EMAIL: "admin@nbcc.example",
   PORTAL_BASE_URL: "https://nbcc.example",
   BALL_BASE_URL: "https://nbcc.example",
+  BALL_PREVIEW_PASSWORD: "preview-pw",
   ADMIN_SESSION_SECRET: "test-admin-session-secret",
 });
 

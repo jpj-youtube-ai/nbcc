@@ -21,6 +21,11 @@ export interface BallSettings {
   gateOpensAt: string | null;
   salesCloseAt: string | null;
   salesClosed: boolean;
+  // Details that were not confirmed when the page was written (TASK-313). NULL until staff
+  // set them; the page then keeps its honest "to be confirmed" wording.
+  arrivalTime: string | null;
+  includedNote: string | null;
+  lineUpNote: string | null;
 }
 
 interface SettingsRow {
@@ -31,10 +36,14 @@ interface SettingsRow {
   gate_opens_at: string | null;
   sales_close_at: string | null;
   sales_closed: boolean;
+  arrival_time: string | null;
+  included_note: string | null;
+  line_up_note: string | null;
 }
 
 const SETTINGS_SQL = `SELECT total_tables, seats_per_table, held_seats, gate_open,
-                             gate_opens_at, sales_close_at, sales_closed
+                             gate_opens_at, sales_close_at, sales_closed,
+                             arrival_time, included_note, line_up_note
                         FROM ball_settings WHERE id = 1`;
 
 // Sold seats, split by how they were bought. 'pending' counts as well as 'paid': a booking
@@ -59,6 +68,9 @@ function toSettings(r: SettingsRow): BallSettings {
     gateOpensAt: r.gate_opens_at,
     salesCloseAt: r.sales_close_at,
     salesClosed: r.sales_closed,
+    arrivalTime: r.arrival_time,
+    includedNote: r.included_note,
+    lineUpNote: r.line_up_note,
   };
 }
 

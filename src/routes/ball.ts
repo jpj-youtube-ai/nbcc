@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
-import { Router } from "express";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import express, { Router } from "express";
 import { config } from "../config";
 import { stripe, stripeConfigured } from "../clients/stripe";
 import { canFulfil, seatsFor } from "../ball/capacity";
@@ -11,8 +13,20 @@ import {
   createPendingBooking,
   getAvailability,
   getCapacityState,
+  getSettings,
   releaseReservation,
 } from "../db/ball";
+import {
+  GATE_COOKIE,
+  GATE_TTL_MS,
+  isGateOpen,
+  passwordMatches,
+  readCookie,
+  signGateToken,
+  verifyGateToken,
+} from "../ball/gate";
+import { renderBallPage } from "../ball/page";
+import { renderBallLockPage } from "../ball/lock-page";
 
 // TASK-313: the public, read-only availability feed for the Festive Ball page.
 // Deliberately returns ONLY counts — never a buyer name, email or booking reference — because
@@ -144,3 +158,104 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
 // Exported for the BDD stub-mode assertion: with no live Stripe key the client is a stub, so
 // the endpoint still returns a well-formed session and the whole flow is exercised offline.
 export const ballCheckoutUsesLiveStripe = (): boolean => stripeConfigured;
+
+// --- the page and its gate ---------------------------------------------------
+//
+// /ball is served by THIS router, never by the static site router, and there is deliberately
+// no `_redirects` rule mapping /ball to ball.html: if there were, the file would be reachable
+// directly and the gate would be decorative.
+
+const SITE_ROOT = resolve(__dirname, "../..");
+
+// Is this request allowed to see the page? Either the gate is open to everyone, or the caller
+// is carrying a preview cookie they got by typing the password.
+async function canView(req: express.Request): Promise<{ allowed: boolean; gateOpen: boolean }> {
+  const settings = await getSettings();
+  const gateOpen = isGateOpen(settings, new Date());
+  if (gateOpen) return { allowed: true, gateOpen };
+  const cookie = readCookie(req.headers.cookie, GATE_COOKIE);
+  const allowed = cookie
+    ? verifyGateToken(cookie, config.BALL_PREVIEW_PASSWORD, new Date())
+    : false;
+  return { allowed, gateOpen };
+}
+
+function servePage(res: express.Response, gateOpen: boolean, settings: {
+  arrivalTime: string | null;
+  includedNote: string | null;
+  lineUpNote: string | null;
+}): void {
+  const file = join(SITE_ROOT, "ball.html");
+  if (!existsSync(file)) {
+    res.status(404).send("Not found");
+    return;
+  }
+  const template = readFileSync(file, "utf8");
+  res.type("html").send(renderBallPage(template, { settings, gateOpen }));
+}
+
+ballRouter.get("/ball", async (req, res, next) => {
+  try {
+    const settings = await getSettings();
+    const gateOpen = isGateOpen(settings, new Date());
+    if (!gateOpen) {
+      const cookie = readCookie(req.headers.cookie, GATE_COOKIE);
+      const unlocked = cookie
+        ? verifyGateToken(cookie, config.BALL_PREVIEW_PASSWORD, new Date())
+        : false;
+      if (!unlocked) {
+        // 401, not 200: this is an unauthenticated response, and it also stops any crawler
+        // or link preview treating the lock screen as the page's content.
+        res.status(401).type("html").send(renderBallLockPage());
+        return;
+      }
+    }
+    servePage(res, gateOpen, settings);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The password post. Rate limiting is deliberately not added here: the gate protects an
+// unfinished marketing page, not money or personal data, and the shared password is handed
+// out freely to trustees and the sponsor.
+ballRouter.post(
+  "/ball/unlock",
+  express.urlencoded({ extended: false }),
+  (req, res) => {
+    const attempt = typeof req.body?.password === "string" ? req.body.password : "";
+    if (!passwordMatches(config.BALL_PREVIEW_PASSWORD, attempt)) {
+      res.status(401).type("html").send(renderBallLockPage({ error: true }));
+      return;
+    }
+    res.cookie(GATE_COOKIE, signGateToken(config.BALL_PREVIEW_PASSWORD, new Date()), {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: GATE_TTL_MS,
+      // Secure in production only, so local http development still works.
+      secure: config.NODE_ENV === "production",
+      path: "/",
+    });
+    res.redirect(303, "/ball");
+  },
+);
+
+// The ticket terms. Gated alongside the page: while /ball is private there is nothing to
+// agree to, and a public terms page would leak the event before the magazine lands.
+ballRouter.get("/ball/terms", async (req, res, next) => {
+  try {
+    const { allowed } = await canView(req);
+    if (!allowed) {
+      res.status(401).type("html").send(renderBallLockPage());
+      return;
+    }
+    const file = join(SITE_ROOT, "ball-terms.html");
+    if (!existsSync(file)) {
+      res.status(404).send("Not found");
+      return;
+    }
+    res.sendFile(file);
+  } catch (err) {
+    next(err);
+  }
+});

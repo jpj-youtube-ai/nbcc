@@ -235,3 +235,120 @@ Then("the ball checkout should return a booking reference", function () {
 Then("the ball checkout total should be {int} pence", function (pence) {
   assert.strictEqual(this.ballCheckout.totalPence, pence);
 });
+
+// --- the password gate ------------------------------------------------------
+
+const PREVIEW_PASSWORD = process.env.BALL_PREVIEW_PASSWORD || "bdd-ball-preview";
+
+async function setGate(sql, params) {
+  await withDb((db) => db.query(sql, params));
+}
+
+Given("the ball gate is closed", async function () {
+  this.ballCookie = null;
+  await setGate("UPDATE ball_settings SET gate_open = false, gate_opens_at = NULL WHERE id = 1");
+});
+
+Given("the ball gate is open", async function () {
+  this.ballCookie = null;
+  await setGate("UPDATE ball_settings SET gate_open = true, gate_opens_at = NULL WHERE id = 1");
+});
+
+Given("the ball gate is closed but scheduled to open in the past", async function () {
+  this.ballCookie = null;
+  await setGate(
+    "UPDATE ball_settings SET gate_open = false, gate_opens_at = now() - interval '1 hour' WHERE id = 1",
+  );
+});
+
+Given("the ball gate is closed but scheduled to open in the future", async function () {
+  this.ballCookie = null;
+  await setGate(
+    "UPDATE ball_settings SET gate_open = false, gate_opens_at = now() + interval '7 days' WHERE id = 1",
+  );
+});
+
+Given("the ball arrival time is set to {string}", async function (value) {
+  await setGate("UPDATE ball_settings SET arrival_time = $1 WHERE id = 1", [value]);
+});
+
+async function getBall(ctx, path) {
+  const headers = {};
+  if (ctx.ballCookie) headers.Cookie = ctx.ballCookie;
+  const res = await fetch(`${BASE_URL}${path}`, { headers, redirect: "manual" });
+  ctx.ballPageStatus = res.status;
+  ctx.ballPageBody = await res.text();
+}
+
+When("I request the ball page", async function () {
+  await getBall(this, "/ball");
+});
+
+When("I request {string}", async function (path) {
+  await getBall(this, path);
+});
+
+When("I unlock the ball page with {string}", async function (password) {
+  const res = await fetch(`${BASE_URL}/ball/unlock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ password }).toString(),
+    redirect: "manual",
+  });
+  this.ballPageStatus = res.status;
+  this.ballPageBody = await res.text();
+  const setCookie = res.headers.get("set-cookie");
+  if (setCookie) {
+    this.ballCookie = setCookie.split(";")[0];
+    await getBall(this, "/ball");
+  }
+});
+
+When("I unlock the ball page with the real password", async function () {
+  const res = await fetch(`${BASE_URL}/ball/unlock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ password: PREVIEW_PASSWORD }).toString(),
+    redirect: "manual",
+  });
+  const setCookie = res.headers.get("set-cookie");
+  assert.ok(setCookie, "unlocking with the real password should set a cookie");
+  this.ballCookie = setCookie.split(";")[0];
+  await getBall(this, "/ball");
+});
+
+Then("the ball page status should be {int}", function (expected) {
+  assert.strictEqual(this.ballPageStatus, expected);
+});
+
+Then("the ball page should ask for a password", function () {
+  assert.match(this.ballPageBody, /name="password"/);
+});
+
+Then("the ball page should not reveal the event", function () {
+  const body = this.ballPageBody;
+  for (const secret of ["Michelle McManus", "Clanadonia", "The Park Hotel", "Book tickets"]) {
+    assert.ok(!body.includes(secret), `the locked page leaked "${secret}"`);
+  }
+});
+
+Then("the ball page should show the event", function () {
+  assert.ok(this.ballPageBody.includes("Michelle McManus"), "expected the real page");
+});
+
+Then("the ball page should be hidden from search engines", function () {
+  assert.match(this.ballPageBody, /content="noindex, nofollow"/);
+});
+
+Then("the ball page should be visible to search engines", function () {
+  assert.match(this.ballPageBody, /content="index, follow"/);
+  assert.ok(!this.ballPageBody.includes("noindex"), "an open page must not still say noindex");
+});
+
+Then("the ball page should contain {string}", function (text) {
+  assert.ok(this.ballPageBody.includes(text), `expected the page to contain "${text}"`);
+});
+
+Then("the ball page should not contain {string}", function (text) {
+  assert.ok(!this.ballPageBody.includes(text), `expected the page NOT to contain "${text}"`);
+});

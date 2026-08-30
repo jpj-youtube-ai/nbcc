@@ -23,6 +23,7 @@ const base = {
   ADMIN_NOTIFICATION_EMAIL: "ops@nbcc.scot",
   PORTAL_BASE_URL: "https://x.example",
   BALL_BASE_URL: "https://x.example",
+  BALL_PREVIEW_PASSWORD: "preview-pw",
   ADMIN_SESSION_SECRET: "s",
 };
 

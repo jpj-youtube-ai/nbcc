@@ -249,6 +249,15 @@ resource "aws_ssm_parameter" "ball_base_url" {
 # endpoint signs session tokens with. A SecureString like the Stripe secrets; the
 # real long random value is set out of band (ignore_changes keeps Terraform from
 # overwriting it).
+# Festive Ball preview gate password (TASK-313). A SecureString like the admin session key;
+# the real value is set out of band (ignore_changes keeps Terraform from overwriting it).
+resource "aws_ssm_parameter" "ball_preview_password" {
+  name  = "/${var.project}/${var.environment}/BALL_PREVIEW_PASSWORD"
+  type  = "SecureString"
+  value = "REPLACE_ME"
+  lifecycle { ignore_changes = [value] }
+}
+
 resource "aws_ssm_parameter" "admin_session_secret" {
   name  = "/${var.project}/${var.environment}/ADMIN_SESSION_SECRET"
   type  = "SecureString"

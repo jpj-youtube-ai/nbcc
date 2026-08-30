@@ -58,6 +58,7 @@ data "aws_iam_policy_document" "exec_secrets" {
       # Donor portal base URL (TASK-100): injected via valueFrom, so the exec role must read it.
       aws_ssm_parameter.portal_base_url.arn,
       aws_ssm_parameter.ball_base_url.arn,
+      aws_ssm_parameter.ball_preview_password.arn,
       # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
       # role must be able to read it.
       aws_ssm_parameter.admin_session_secret.arn,
@@ -177,6 +178,9 @@ resource "aws_ecs_task_definition" "app" {
       # Admin session signing key (TASK-105): a SecureString, injected like a secret — so its ARN
       # must also appear in exec_secrets above.
       { name = "ADMIN_SESSION_SECRET", valueFrom = aws_ssm_parameter.admin_session_secret.arn },
+      # Festive Ball preview gate (TASK-313): a SecureString, injected like a secret — so its
+      # ARN must also appear in exec_secrets above.
+      { name = "BALL_PREVIEW_PASSWORD", valueFrom = aws_ssm_parameter.ball_preview_password.arn },
       # My Story stories DB (TASK-B2): a SecureString, injected like a secret — so its ARN must
       # also appear in exec_secrets above. The task-def now carries BOTH DATABASE_URL (master,
       # used by scripts/bootstrap-stories-db.mjs) and STORIES_DATABASE_URL (used by the app and

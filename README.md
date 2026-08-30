@@ -2076,6 +2076,28 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+### The three lists
+
+`GET /api/admin/ball/{door-list,catering,bookings}.csv` (Viewer+). Three rather than one, because
+they go to different people and that changes what may be in them:
+
+- **Door list** — alphabetical by surname for the welcome desk. Names and tables. No contact
+  details: it is printed and left on a desk all evening.
+- **Catering list** — for **The Park Hotel**. Food and access notes only. This is the one export
+  that leaves NBCC and it carries special category data, so it contains no emails, no booking
+  references and no money. The ticket page promises the venue is told nothing else; `cateringCsv`
+  keeps that promise in code, with a unit test and a BDD scenario asserting it.
+- **Bookings list** — for NBCC's own records and the accountant. Keeps the buyer email, because
+  this one stays inside the charity.
+
+`csvCell` prefixes a leading `=`, `+`, `-` or `@` with an apostrophe. Guests type these fields
+themselves, so a dietary note beginning `=` would otherwise be executed as a formula by whoever
+opens the file.
+
+The door-list and catering downloads purge expired guest rows first, so the ninety-day promise is
+kept on the exact path where stale data would otherwise escape into a file, with no scheduler to
+forget.
+
 ### Guest details
 
 `GET/POST /ball/guests/:token` — the "tell us about your table" form, linked from the booking

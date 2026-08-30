@@ -12,6 +12,7 @@ import type { BallBookingWrite } from "../ball/booking";
 import type { BallSettingsUpdate } from "../ball/settings";
 import { retentionDate, type GuestInput } from "../ball/guests";
 import type { GuestPageBooking, GuestRow } from "../ball/guest-page";
+import type { ExportBooking, ExportGuest } from "../ball/exports";
 import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
@@ -502,4 +503,52 @@ export async function ensureGuestToken(sessionId: string, token: string): Promis
 export async function purgeExpiredGuests(): Promise<number> {
   const res = await pool.query("DELETE FROM ball_guests WHERE expires_at <= now()");
   return res.rowCount ?? 0;
+}
+
+// --- exports (plan 5) --------------------------------------------------------
+
+// Every named guest on a PAID booking, with the table they sit at. Pending and cancelled
+// bookings are excluded: nobody unpaid is coming, and printing them would send the welcome desk
+// looking for people who are not there.
+export async function listGuestsForExport(): Promise<ExportGuest[]> {
+  const res = await pool.query(
+    `SELECT g.full_name, g.dietary, g.access_needs, b.table_name, b.reference
+       FROM ball_guests g
+       JOIN ball_bookings b ON b.id = g.booking_id
+      WHERE b.status = 'paid'`,
+  );
+  return res.rows.map((r) => ({
+    fullName: r.full_name,
+    dietary: r.dietary,
+    accessNeeds: r.access_needs,
+    tableName: r.table_name,
+    reference: r.reference,
+  }));
+}
+
+export async function listBookingsForExport(): Promise<ExportBooking[]> {
+  const res = await pool.query(
+    `SELECT reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence,
+            donation_pence, fee_cover_pence, total_pence, gift_aid, newsletter_opt_in,
+            status, table_name, created_at
+       FROM ball_bookings
+      ORDER BY created_at ASC`,
+  );
+  return res.rows.map((r) => ({
+    reference: r.reference,
+    kind: r.kind,
+    quantity: r.quantity,
+    seats: r.seats,
+    buyerName: r.buyer_name,
+    buyerEmail: r.buyer_email,
+    ticketsPence: r.tickets_pence,
+    donationPence: r.donation_pence,
+    feeCoverPence: r.fee_cover_pence,
+    totalPence: r.total_pence,
+    giftAid: r.gift_aid,
+    newsletterOptIn: r.newsletter_opt_in,
+    status: r.status,
+    tableName: r.table_name,
+    createdAt: new Date(r.created_at).toISOString(),
+  }));
 }

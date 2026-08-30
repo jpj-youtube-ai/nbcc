@@ -539,3 +539,42 @@ Then("the guest page should show {string}", function (text) {
 Then("the guest page should not reveal any booking", function () {
   assert.ok(!/BALL-[A-Z2-9]{6}/.test(this.guestBody), "the not-found page must not leak a reference");
 });
+
+// --- exports ----------------------------------------------------------------
+
+When(
+  "I download the ball {string} list as {string} with password {string}",
+  async function (which, email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/${which}.csv`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballExportStatus = res.status;
+    this.ballExportBody = await res.text();
+  },
+);
+
+When("I download the ball {string} list without a token", async function (which) {
+  const res = await fetch(`${BASE_URL}/api/admin/ball/${which}.csv`);
+  this.ballExportStatus = res.status;
+  this.ballExportBody = await res.text();
+});
+
+Then("the ball export status should be {int}", function (expected) {
+  assert.strictEqual(this.ballExportStatus, expected);
+});
+
+Then("the ball export should contain {string}", function (text) {
+  assert.ok(this.ballExportBody.includes(text), `expected the export to contain "${text}"`);
+});
+
+Then("the ball export should not contain an email address", function () {
+  assert.ok(!this.ballExportBody.includes("@"), "this export must carry no email addresses");
+});
+
+Then("the ball export should not contain a booking reference", function () {
+  assert.ok(
+    !/BALL-[A-Z2-9]{6}/.test(this.ballExportBody),
+    "the venue's list must carry no booking references",
+  );
+});

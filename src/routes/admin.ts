@@ -36,6 +36,7 @@ import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { readStoriesDiagnostics } from "../db/stories-diagnostics";
 import { ballSettingsUpdateSchema } from "../ball/settings";
+import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
 import { availability } from "../ball/capacity";
 import { isGateOpen } from "../ball/gate";
 import {
@@ -43,6 +44,9 @@ import {
   getDashboard,
   getSettings as getBallSettings,
   listBookings,
+  listBookingsForExport,
+  listGuestsForExport,
+  purgeExpiredGuests,
   updateSettings as updateBallSettings,
 } from "../db/ball";
 import { archiveStory, restoreStory } from "../db/stories";
@@ -2820,3 +2824,55 @@ export async function getAdminBallBookings(req: Request, res: Response): Promise
 adminRouter.get("/api/admin/ball", getAdminBall);
 adminRouter.patch("/api/admin/ball", patchAdminBall);
 adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);
+
+// The three lists (TASK-313 plan 5). Viewer+ can read them; they are downloads of data the
+// section already shows on screen.
+//
+// Each purges expired guest rows first. That keeps the ninety-day promise in the ticket terms
+// without a scheduler to forget to run — the deletion happens on the path that would otherwise
+// be the one place stale data escapes into a file.
+function csvResponse(res: Response, filename: string, body: string): Response {
+  return res
+    .status(200)
+    .type("text/csv")
+    .set("Content-Disposition", `attachment; filename="${filename}"`)
+    .send(body);
+}
+
+export async function getAdminBallDoorList(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    await purgeExpiredGuests();
+    return csvResponse(res, "festive-ball-door-list.csv", doorListCsv(await listGuestsForExport()));
+  } catch (err) {
+    console.error("ball door list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// For the venue. Contains ONLY what they need to cater and seat people — the filtering that
+// keeps that promise lives in cateringCsv, which is unit-tested for exactly this.
+export async function getAdminBallCatering(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    await purgeExpiredGuests();
+    return csvResponse(res, "festive-ball-catering.csv", cateringCsv(await listGuestsForExport()));
+  } catch (err) {
+    console.error("ball catering list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+export async function getAdminBallBookingsCsv(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    return csvResponse(res, "festive-ball-bookings.csv", bookingsCsv(await listBookingsForExport()));
+  } catch (err) {
+    console.error("ball bookings export failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ball/door-list.csv", getAdminBallDoorList);
+adminRouter.get("/api/admin/ball/catering.csv", getAdminBallCatering);
+adminRouter.get("/api/admin/ball/bookings.csv", getAdminBallBookingsCsv);

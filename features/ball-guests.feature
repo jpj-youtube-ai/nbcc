@@ -44,3 +44,27 @@ Feature: Festive Ball guest details (TASK-313)
     And a paid ball booking for 1 table with guest token "guest-tok-5"
     When I open the guest link "guest-tok-5"
     Then the guest page status should be 200
+
+  Scenario: the catering list for the venue carries nothing beyond what they need
+    Given a ball admin "ball8.admin.bdd@example.com" with role "admin" and password "pw-ball8"
+    And a paid ball booking for 1 table with guest token "guest-tok-6"
+    When I save a guest "Ayesha Khan" with dietary "Coeliac" on "guest-tok-6"
+    And I download the ball "catering" list as "ball8.admin.bdd@example.com" with password "pw-ball8"
+    Then the ball export status should be 200
+    And the ball export should contain "Coeliac"
+    And the ball export should not contain an email address
+    And the ball export should not contain a booking reference
+
+  Scenario: the door list names everyone and keeps contact details off it
+    Given a ball admin "ball9.admin.bdd@example.com" with role "admin" and password "pw-ball9"
+    And a paid ball booking for 1 table with guest token "guest-tok-7"
+    When I save guests "Jo Smith,Pat Brown" on "guest-tok-7"
+    And I download the ball "door-list" list as "ball9.admin.bdd@example.com" with password "pw-ball9"
+    Then the ball export status should be 200
+    And the ball export should contain "Jo Smith"
+    And the ball export should contain "Pat Brown"
+    And the ball export should not contain an email address
+
+  Scenario: exports need a login
+    When I download the ball "door-list" list without a token
+    Then the ball export status should be 401

@@ -6167,6 +6167,30 @@
       }, "ballCapacityStatus");
     });
 
+    // The API is bearer-authenticated, so a plain href would 401. Fetch with the token, then
+    // hand the browser a blob to save.
+    [["ballDoorList", "door-list"], ["ballCatering", "catering"], ["ballBookingsCsv", "bookings"]]
+      .forEach(function (pair) {
+        var node = el(pair[0]);
+        if (!node) return;
+        node.addEventListener("click", function (e) {
+          e.preventDefault();
+          authFetch("/api/admin/ball/" + pair[1] + ".csv")
+            .then(function (r) { return r.ok ? r.blob() : Promise.reject(new Error("failed")); })
+            .then(function (blob) {
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement("a");
+              a.href = url;
+              a.download = "festive-ball-" + pair[1] + ".csv";
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            })
+            .catch(function () { window.alert("Could not download that list. Try again."); });
+        });
+      });
+
     el("ballDetailsForm").addEventListener("submit", function (e) {
       e.preventDefault();
       ballSave({

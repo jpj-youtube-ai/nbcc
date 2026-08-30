@@ -58,3 +58,23 @@ Feature: The Festive Ball password gate (TASK-313)
     When I request the ball page
     Then the ball page should contain "7pm for 7.30pm"
     And the ball page should not contain "Start time to be confirmed"
+
+  Scenario: the home page says nothing about the ball while the gate is shut
+    Given the ball gate is closed
+    When I request "/"
+    Then the ball page status should be 200
+    And the ball page should not contain "Festive Ball"
+    And the ball page should not contain "ball-banner"
+
+  Scenario: opening the gate puts the ball on the home page too
+    Given the ball gate is open
+    When I request "/"
+    Then the ball page status should be 200
+    And the ball page should contain "ball-banner"
+    And the ball page should contain "Tickets now on sale"
+    And the ball page should contain "Festive Ball"
+
+  Scenario: the home page keeps its own donate call to action
+    Given the ball gate is open
+    When I request "/"
+    Then the ball page should contain "Donate now"

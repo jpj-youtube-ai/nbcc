@@ -2076,6 +2076,22 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+### The admin Festive Ball screen
+
+Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,
+donations, Gift Aid eligible, newsletter opt-ins), the gate control, capacity and the sales
+window, the late-confirmed details, and the bookings list.
+
+The gate button says what it will DO rather than what state it is in, and confirms first, naming
+the consequence: publishing shows the ticket page to the whole internet **and** puts the ball on
+the home page. Write controls are hidden unless `canEdit("ball")`, mirroring the server rule
+(editors get view-only on this section by default).
+
+Markup lives in `admin.html`, behaviour in `assets/js/admin/app.js`, joined only by element ids —
+nothing type-checks that join, so `test/unit/ball-admin-view.test.ts` walks every id the code
+reaches for and proves the markup provides it. It also asserts the block sits INSIDE the module
+IIFE: appended after the closing `})();` it parses fine but every helper is undefined at runtime.
+
 ### Nav: one Donate, not two
 
 The header lists all five pages **and** carries a persistent Donate CTA (REQ-002), so above the

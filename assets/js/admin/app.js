@@ -341,6 +341,7 @@
     else if (name === "newsletter") loadNewsletters();
     else if (name === "thank-you") loadThankYou();
     else if (name === "ticker") loadTicker();
+    else if (name === "ball") loadBall();
     else if (name === "audit") loadAudit();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
@@ -6009,5 +6010,170 @@
   else {
     clearToken();
     showLogin();
+  }
+
+  // --- Festive Ball (TASK-313) ------------------------------------------------
+  //
+  // The launch controls. The gate is the important one: flipping it publishes the ticket page
+  // AND the home-page promotion in one move, so it gets a confirm and says in words what will
+  // happen rather than relying on the operator knowing.
+  var ballWired = false;
+  var ballSettings = null;
+
+  function ballStatus(id, msg) {
+    var n = el(id);
+    if (n) n.textContent = msg || "";
+  }
+
+  // <input type="datetime-local"> wants local wall-clock with no zone; the API speaks ISO.
+  function toLocalInput(iso) {
+    if (!iso) return "";
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var pad = function (n) { return String(n).padStart(2, "0"); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+  function fromLocalInput(value) {
+    if (!value) return null;
+    var d = new Date(value);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  }
+
+  function ballBookingsTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No bookings yet.</p>';
+    var body = rows.map(function (b) {
+      var what = b.kind === "table"
+        ? b.quantity + (b.quantity === 1 ? " table" : " tables")
+        : b.quantity + (b.quantity === 1 ? " ticket" : " tickets");
+      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+        "<br /><small>" + H.escapeHtml(b.buyerEmail) + "</small></td><td>" + what +
+        '</td><td class="admin-num">' + H.formatPence(b.totalPence) +
+        '</td><td class="admin-num">' + (b.donationPence ? H.formatPence(b.donationPence) + (b.giftAid ? " (GA)" : "") : "—") +
+        "</td><td>" + H.escapeHtml(b.status) + "</td><td>" + (b.newsletterOptIn ? "Yes" : "—") + "</td></tr>";
+    }).join("");
+    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who</th><th>Bought</th>' +
+      "<th>Paid</th><th>Donation</th><th>Status</th><th>Newsletter</th></tr></thead><tbody>" +
+      body + "</tbody></table>";
+  }
+
+  function ballRender(d) {
+    ballSettings = d.settings;
+    var a = d.availability || {};
+    var s = d.dashboard || {};
+
+    el("ballStats").innerHTML =
+      statCard(s.seatsSold || 0, "Seats sold") +
+      statCard(a.seatsRemaining || 0, "Seats left") +
+      statCard(a.tablesRemaining || 0, "Whole tables left") +
+      statCard(H.formatPence(s.totalPence || 0), "Taken") +
+      statCard(H.formatPence(s.donationsPence || 0), "Donations") +
+      statCard(H.formatPence(s.giftAidablePence || 0), "Gift Aid eligible") +
+      statCard(s.newsletterOptIns || 0, "Newsletter opt-ins");
+
+    // Say what IS, then the button says what it will DO.
+    el("ballGateState").textContent = d.gateOpen
+      ? "The ticket page is PUBLIC and the ball is promoted on the home page."
+      : "The ticket page is private. Only people with the preview password can see it, and the home page says nothing about the ball.";
+    var btn = el("ballGateToggle");
+    btn.textContent = d.gateOpen ? "Make it private again" : "Publish the ball page";
+    btn.disabled = !canEdit("ball");
+
+    el("ballGateOpensAt").value = toLocalInput(ballSettings.gateOpensAt);
+    el("ballTotalTables").value = ballSettings.totalTables;
+    el("ballSeatsPerTable").value = ballSettings.seatsPerTable;
+    el("ballHeldSeats").value = ballSettings.heldSeats;
+    el("ballSalesCloseAt").value = toLocalInput(ballSettings.salesCloseAt);
+    el("ballSalesClosed").checked = !!ballSettings.salesClosed;
+    el("ballArrivalTime").value = ballSettings.arrivalTime || "";
+    el("ballIncludedNote").value = ballSettings.includedNote || "";
+    el("ballLineUpNote").value = ballSettings.lineUpNote || "";
+
+    // Editors get view-only on this section by default (the gate publishes a page), so mirror
+    // the server rule in the UI rather than letting someone fill a form that will 403.
+    var canWrite = canEdit("ball");
+    ["ballGateSchedule", "ballCapacitySave", "ballDetailsSave"].forEach(function (id) {
+      var n = el(id);
+      if (n) n.hidden = !canWrite;
+    });
+  }
+
+  function ballSave(patch, statusId, done) {
+    ballStatus(statusId, "Saving…");
+    authFetch("/api/admin/ball", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+      .then(j)
+      .then(function () {
+        ballStatus(statusId, "Saved.");
+        loadBall();
+        if (done) done();
+      })
+      .catch(function () {
+        ballStatus(statusId, "Could not save. Your changes have not been applied.");
+      });
+  }
+
+  function loadBall() {
+    ballWire();
+    el("ballBookings").innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/ball")
+      .then(j)
+      .then(ballRender)
+      .catch(function () {
+        el("ballGateState").textContent = "Could not load the ball settings.";
+      });
+    authFetch("/api/admin/ball/bookings")
+      .then(j)
+      .then(function (d) {
+        el("ballBookings").innerHTML = ballBookingsTable(d.results || []);
+      })
+      .catch(function () {
+        el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
+      });
+  }
+
+  function ballWire() {
+    if (ballWired) return;
+    ballWired = true;
+
+    el("ballGateForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!ballSettings) return;
+      var opening = !el("ballGateToggle").textContent.startsWith("Make");
+      // Publishing is visible to the whole internet and un-ringable once someone has seen it,
+      // so name the consequence rather than asking "are you sure?".
+      var message = opening
+        ? "This publishes the ticket page at nbcc.scot/ball and puts the ball on the home page, for everyone. Continue?"
+        : "This hides the ticket page again and removes the ball from the home page. Anyone mid-booking will lose it. Continue?";
+      if (!window.confirm(message)) return;
+      ballSave({ gateOpen: opening }, "ballGateStatus");
+    });
+
+    el("ballGateSchedule").addEventListener("click", function () {
+      ballSave({ gateOpensAt: fromLocalInput(el("ballGateOpensAt").value) }, "ballGateStatus");
+    });
+
+    el("ballCapacityForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      ballSave({
+        totalTables: Number(el("ballTotalTables").value),
+        seatsPerTable: Number(el("ballSeatsPerTable").value),
+        heldSeats: Number(el("ballHeldSeats").value),
+        salesCloseAt: fromLocalInput(el("ballSalesCloseAt").value),
+        salesClosed: el("ballSalesClosed").checked,
+      }, "ballCapacityStatus");
+    });
+
+    el("ballDetailsForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      ballSave({
+        arrivalTime: el("ballArrivalTime").value,
+        includedNote: el("ballIncludedNote").value,
+        lineUpNote: el("ballLineUpNote").value,
+      }, "ballDetailsStatus");
+    });
   }
 })();

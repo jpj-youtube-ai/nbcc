@@ -87,6 +87,7 @@
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
               <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
               <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
@@ -992,6 +993,67 @@
               </form>
               <p class="ty-status" id="tickerStatus" role="status" aria-live="polite"></p>
               <div class="admin-table-wrap" id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Festive Ball 2026 (TASK-313). The launch controls: the gate that publishes the
+                 ticket page and the home-page promotion, capacity, the sales window, and the
+                 details the venue confirmed after the page was written. There is deliberately NO
+                 ticket price field: £100 is printed in a magazine that cannot be recalled. -->
+            <section class="admin-view" id="view-ball" aria-labelledby="ball-heading" hidden>
+              <h2 id="ball-heading">Festive Ball</h2>
+              <p class="admin-view-intro">A Night to Remember, Saturday 7 November 2026 at The Park Hotel, Kilmarnock. Tickets are &pound;100 and a table of ten is &pound;1,000; those prices are fixed in the code because they are printed in the advert. Everything here takes effect on the public page immediately.</p>
+
+              <div class="admin-stats" id="ballStats" aria-live="polite"></div>
+
+              <h3 class="admin-subhead">Is the page public?</h3>
+              <p class="admin-note" id="ballGateState" aria-live="polite">Checking…</p>
+              <form id="ballGateForm" class="ty-controls" autocomplete="off">
+                <button class="btn btn-primary" type="submit" id="ballGateToggle">Loading…</button>
+                <label class="ty-inline">or open it automatically at
+                  <input id="ballGateOpensAt" type="datetime-local" />
+                </label>
+                <button class="btn btn-ghost" type="button" id="ballGateSchedule">Save schedule</button>
+              </form>
+              <p class="ty-status" id="ballGateStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="admin-subhead">Capacity and sales</h3>
+              <form id="ballCapacityForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Tables
+                  <input id="ballTotalTables" type="number" min="1" max="200" step="1" style="width:90px" />
+                </label>
+                <label class="ty-inline">Seats per table
+                  <input id="ballSeatsPerTable" type="number" min="1" max="20" step="1" style="width:90px" />
+                </label>
+                <label class="ty-inline">Held back
+                  <input id="ballHeldSeats" type="number" min="0" max="2000" step="1" style="width:90px" />
+                </label>
+                <label class="ty-inline">Sales close
+                  <input id="ballSalesCloseAt" type="datetime-local" />
+                </label>
+                <label class="ty-inline"><input id="ballSalesClosed" type="checkbox" /> Close sales now</label>
+                <button class="btn btn-primary" type="submit" id="ballCapacitySave">Save</button>
+              </form>
+              <p class="admin-note">Seats held back never go on sale — use it for comps, the sponsor&rsquo;s guests and the top table. Individual tickets share tables, so a table only stays sellable while nobody has been seated at it.</p>
+              <p class="ty-status" id="ballCapacityStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="admin-subhead">Details the venue confirms later</h3>
+              <p class="admin-note">Leave these empty and the page says &ldquo;to be confirmed&rdquo; rather than guessing. Fill one in and it appears on the ticket page and in every booking email from then on.</p>
+              <form id="ballDetailsForm" class="ty-controls admin-stack" autocomplete="off">
+                <label class="ty-inline">Arrival time
+                  <input id="ballArrivalTime" type="text" maxlength="120" placeholder="e.g. 7pm for 7.30pm" style="width:240px" />
+                </label>
+                <label class="ty-inline">What else is included
+                  <input id="ballIncludedNote" type="text" maxlength="1000" placeholder="e.g. Arrival drink and a three-course dinner." style="width:420px" />
+                </label>
+                <label class="ty-inline">Line-up note
+                  <input id="ballLineUpNote" type="text" maxlength="1000" placeholder="e.g. Special guest announced soon." style="width:420px" />
+                </label>
+                <button class="btn btn-primary" type="submit" id="ballDetailsSave">Save details</button>
+              </form>
+              <p class="ty-status" id="ballDetailsStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="admin-subhead">Bookings</h3>
+              <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Audit trail (append-only governance log). -->

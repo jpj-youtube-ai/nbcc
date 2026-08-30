@@ -72,6 +72,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "fulfilments",
       "stories",
       "ticker",
+      "ball",
       "contact",
       "newsletter",
       "thank-you",

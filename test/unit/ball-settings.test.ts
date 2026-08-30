@@ -69,3 +69,25 @@ describe("ballSettingsUpdateSchema", () => {
     if (r.success) expect("seatPricePence" in r.data).toBe(false);
   });
 });
+
+describe("the preview password", () => {
+  it("is accepted at 8 characters or more", () => {
+    expect(parse({ previewPassword: "sleighbells" }).success).toBe(true);
+  });
+
+  it("is refused below 8, and refused empty", () => {
+    expect(parse({ previewPassword: "short" }).success).toBe(false);
+    expect(parse({ previewPassword: "" }).success).toBe(false);
+  });
+
+  it("is capped so a paste cannot be used to stuff the column", () => {
+    expect(parse({ previewPassword: "x".repeat(201) }).success).toBe(false);
+  });
+
+  it("has no hash field — the ROUTE hashes it, and the plaintext stops there", () => {
+    // If the schema accepted a hash, a caller could set one directly and choose the signing key
+    // for everyone's preview cookie.
+    const r = parse({ previewPasswordHash: "scrypt$aa$bb" });
+    expect(r.success).toBe(false); // nothing else in the object, so "nothing to update"
+  });
+});

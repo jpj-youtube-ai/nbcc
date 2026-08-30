@@ -47,6 +47,13 @@ export const ballSettingsUpdateSchema = z
     salesCloseAt: nullableDate.optional(),
     salesClosed: z.boolean().optional(),
 
+    // A new preview-gate password. Sent as plaintext over HTTPS and hashed by the route before
+    // it reaches SQL — the plaintext never touches the database, the logs or the audit trail.
+    // Eight characters is a floor, not a policy: this guards an unfinished marketing page that
+    // staff hand round by text, and demanding a symbol and a digit would only mean it gets
+    // written on a Post-it.
+    previewPassword: z.string().min(8, "use at least 8 characters").max(200).optional(),
+
     // Details that were not confirmed when the page was written.
     arrivalTime: nullableText(120).optional(),
     includedNote: nullableText(1000).optional(),

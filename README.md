@@ -2076,6 +2076,19 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+### Changing the preview password
+
+Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`
+holds a scrypt hash (same `scrypt$salt$key` format as `users.password_hash`); the plaintext never
+reaches SQL, the audit log (which records `previewPassword: "(changed)"`) or the API response.
+NULL falls back to the `BALL_PREVIEW_PASSWORD` parameter, so nothing breaks before staff set one.
+
+The stored hash is **also the signing key for the preview cookie**, so changing the password
+invalidates every cookie issued under the old one — which is what someone changing a shared
+password expects it to do. The schema accepts `previewPassword` and deliberately has no
+`previewPasswordHash` field: a caller who could set the hash directly would be choosing the
+signing key for everybody's cookie.
+
 ### The waiting list
 
 `POST /api/ball/waiting-list` (public) and `GET /api/admin/ball/waiting-list` (Viewer+). When the

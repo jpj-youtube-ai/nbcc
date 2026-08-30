@@ -36,6 +36,7 @@ import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { readStoriesDiagnostics } from "../db/stories-diagnostics";
 import { ballSettingsUpdateSchema } from "../ball/settings";
+import { hashPassword } from "../admin/password";
 import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
 import { buildBallReminderEmail } from "../ball/reminder-email";
 import { sendBallReminder } from "../clients/email";
@@ -2801,8 +2802,20 @@ export async function patchAdminBall(req: Request, res: Response): Promise<Respo
     return res.status(400).json({ error: "Invalid settings", details: parsed.error.flatten() });
   }
   try {
-    const settings = await updateBallSettings(parsed.data, actorOf(claims));
-    return res.status(200).json({ settings, gateOpen: isGateOpen(settings, new Date()) });
+    // Swap the plaintext password for its hash BEFORE anything else sees the object. Everything
+    // downstream — the SQL, the audit row, the response — only ever handles the hash, so there
+    // is no path by which the password could be written down (golden rule 4).
+    const { previewPassword, ...rest } = parsed.data;
+    const write = previewPassword
+      ? { ...rest, previewPasswordHash: await hashPassword(previewPassword) }
+      : rest;
+
+    const settings = await updateBallSettings(write, actorOf(claims));
+    return res.status(200).json({
+      settings,
+      gateOpen: isGateOpen(settings, new Date()),
+      passwordChanged: Boolean(previewPassword),
+    });
   } catch (err) {
     console.error("admin ball update failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

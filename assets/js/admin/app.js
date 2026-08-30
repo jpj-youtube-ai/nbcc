@@ -6156,6 +6156,25 @@
       ballSave({ gateOpensAt: fromLocalInput(el("ballGateOpensAt").value) }, "ballGateStatus");
     });
 
+    el("ballPasswordForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var input = el("ballPreviewPassword");
+      var value = (input.value || "").trim();
+      if (value.length < 8) {
+        ballStatus("ballPasswordStatus", "Use at least 8 characters.");
+        return;
+      }
+      ballSave({ previewPassword: value }, "ballPasswordStatus", function () {
+        // Clear it from the field the moment it is saved — no reason to leave a password
+        // sitting on screen in a shared office, or in the browser's form history.
+        input.value = "";
+        ballStatus(
+          "ballPasswordStatus",
+          "Password changed. Anyone using the old one will be asked again."
+        );
+      });
+    });
+
     el("ballCapacityForm").addEventListener("submit", function (e) {
       e.preventDefault();
       ballSave({

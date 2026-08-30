@@ -1016,6 +1016,16 @@
               </form>
               <p class="ty-status" id="ballGateStatus" role="status" aria-live="polite"></p>
 
+              <h3 class="admin-subhead">Preview password</h3>
+              <p class="admin-note">What you give trustees and the sponsor so they can see the page before it's public. Changing it signs out anyone using the old one, which is usually the point. You never need to touch AWS for this.</p>
+              <form id="ballPasswordForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">New password
+                  <input id="ballPreviewPassword" type="text" minlength="8" maxlength="200" autocomplete="new-password" placeholder="at least 8 characters" style="width:240px" />
+                </label>
+                <button class="btn btn-primary" type="submit" id="ballPasswordSave">Set password</button>
+              </form>
+              <p class="ty-status" id="ballPasswordStatus" role="status" aria-live="polite"></p>
+
               <h3 class="admin-subhead">Capacity and sales</h3>
               <form id="ballCapacityForm" class="ty-controls" autocomplete="off">
                 <label class="ty-inline">Tables

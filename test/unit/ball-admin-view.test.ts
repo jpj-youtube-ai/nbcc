@@ -66,3 +66,24 @@ describe("the admin Festive Ball screen is wired to its markup", () => {
     expect(ballBlock()).toContain('canEdit("ball")');
   });
 });
+
+describe("the preview password can be changed without touching AWS", () => {
+  it("the admin screen offers a field for it", () => {
+    expect(ADMIN_HTML).toContain('id="ballPreviewPassword"');
+    expect(ADMIN_HTML).toContain('id="ballPasswordForm"');
+  });
+
+  it("says plainly what changing it does", () => {
+    expect(ADMIN_HTML).toMatch(/signs out anyone using the old one/i);
+  });
+
+  it("clears the field after saving, so a password is not left on screen", () => {
+    expect(ballBlock()).toMatch(/input\.value = ""/);
+  });
+
+  it("sends the plaintext and never a hash — hashing is the server's job", () => {
+    const block = ballBlock();
+    expect(block).toContain("previewPassword:");
+    expect(block).not.toMatch(/previewPasswordHash/);
+  });
+});

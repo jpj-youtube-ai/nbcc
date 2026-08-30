@@ -34,6 +34,13 @@ export interface BallSettings {
   lineUpNote: string | null;
 }
 
+// What updateSettings actually writes. previewPassword (plaintext) is REPLACED by
+// previewPasswordHash before it gets here, so there is no code path that could put the
+// plaintext into SQL even by mistake.
+export type BallSettingsWrite = Omit<BallSettingsUpdate, "previewPassword"> & {
+  previewPasswordHash?: string;
+};
+
 interface SettingsRow {
   total_tables: number;
   seats_per_table: number;
@@ -262,7 +269,8 @@ export async function markBookingExpired(client: Querier, sessionId: string): Pr
 // Map the validated update onto columns. Explicit rather than generated from the object keys,
 // so a field can never reach SQL just because it appeared in a request body — the ticket price
 // has no column here and no way to acquire one.
-const SETTING_COLUMNS: Record<keyof BallSettingsUpdate, string> = {
+const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
+  previewPasswordHash: "preview_password_hash",
   totalTables: "total_tables",
   seatsPerTable: "seats_per_table",
   heldSeats: "held_seats",
@@ -279,7 +287,7 @@ const SETTING_COLUMNS: Record<keyof BallSettingsUpdate, string> = {
 // a page to the public and the capacity decides whether the room oversells, so both belong in
 // the audit log next to the donation writes.
 export async function updateSettings(
-  update: BallSettingsUpdate,
+  update: BallSettingsWrite,
   actor: string,
 ): Promise<BallSettings> {
   const entries = Object.entries(update).filter(([key]) => key in SETTING_COLUMNS);
@@ -289,7 +297,7 @@ export async function updateSettings(
   const values: unknown[] = [];
   for (const [key, value] of entries) {
     values.push(value);
-    sets.push(`${SETTING_COLUMNS[key as keyof BallSettingsUpdate]} = $${values.length}`);
+    sets.push(`${SETTING_COLUMNS[key as keyof BallSettingsWrite]} = $${values.length}`);
   }
   sets.push("updated_at = now()");
 
@@ -307,7 +315,14 @@ export async function updateSettings(
       action: "ball.settings_updated",
       entity: "ball_settings",
       entityId: 1,
-      data: update as Record<string, unknown>,
+      // Never let the hash (or anything derived from the password) into the audit log. Record
+      // only that it changed — which is the useful fact anyway: who changed it and when.
+      data: {
+        ...Object.fromEntries(
+          Object.entries(update).filter(([k]) => k !== "previewPasswordHash"),
+        ),
+        ...(update.previewPasswordHash ? { previewPassword: "(changed)" } : {}),
+      },
     });
     await client.query("COMMIT");
     return toSettings(res.rows[0]);
@@ -655,4 +670,14 @@ export async function listWaitingList(): Promise<WaitingListRow[]> {
     offeredAt: r.offered_at,
     createdAt: new Date(r.created_at).toISOString(),
   }));
+}
+
+// The preview gate's secret: the staff-set hash if there is one, otherwise the config value.
+// Kept OUT of BallSettings deliberately — that object is serialised straight to the admin API,
+// and a hash has no business travelling to a browser.
+export async function getPreviewPasswordHash(): Promise<string | null> {
+  const res = await pool.query<{ preview_password_hash: string | null }>(
+    "SELECT preview_password_hash FROM ball_settings WHERE id = 1",
+  );
+  return res.rows[0]?.preview_password_hash ?? null;
 }

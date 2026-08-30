@@ -29,7 +29,8 @@ import { renderBallPage } from "../ball/page";
 import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
-import { getBookingByGuestToken, joinWaitingList, saveGuests } from "../db/ball";
+import { getBookingByGuestToken, getPreviewPasswordHash, joinWaitingList, saveGuests } from "../db/ball";
+import { verifyPassword } from "../admin/password";
 import { checkboxValue, waitingListSchema } from "../ball/waiting-list";
 
 // TASK-313: the public, read-only availability feed for the Festive Ball page.
@@ -171,6 +172,22 @@ export const ballCheckoutUsesLiveStripe = (): boolean => stripeConfigured;
 
 const SITE_ROOT = resolve(__dirname, "../..");
 
+// The gate's secret. Once staff set a password in the admin area we use its hash — for BOTH
+// checking the password and signing the preview cookie. Signing with the hash means changing the
+// password immediately invalidates every cookie issued under the old one, which is exactly what
+// someone changing a shared password expects: it should lock out whoever they changed it because
+// of. Falls back to the config value until a password has been set, so nothing breaks in between.
+async function previewSecret(): Promise<{ hash: string | null; signingKey: string }> {
+  const hash = await getPreviewPasswordHash();
+  return { hash, signingKey: hash ?? config.BALL_PREVIEW_PASSWORD };
+}
+
+async function previewPasswordAccepted(attempt: string): Promise<string | null> {
+  const { hash, signingKey } = await previewSecret();
+  const ok = hash ? await verifyPassword(attempt, hash) : passwordMatches(config.BALL_PREVIEW_PASSWORD, attempt);
+  return ok ? signingKey : null;
+}
+
 // Is this request allowed to see the page? Either the gate is open to everyone, or the caller
 // is carrying a preview cookie they got by typing the password.
 async function canView(req: express.Request): Promise<{ allowed: boolean; gateOpen: boolean }> {
@@ -178,9 +195,8 @@ async function canView(req: express.Request): Promise<{ allowed: boolean; gateOp
   const gateOpen = isGateOpen(settings, new Date());
   if (gateOpen) return { allowed: true, gateOpen };
   const cookie = readCookie(req.headers.cookie, GATE_COOKIE);
-  const allowed = cookie
-    ? verifyGateToken(cookie, config.BALL_PREVIEW_PASSWORD, new Date())
-    : false;
+  const { signingKey } = await previewSecret();
+  const allowed = cookie ? verifyGateToken(cookie, signingKey, new Date()) : false;
   return { allowed, gateOpen };
 }
 
@@ -204,9 +220,8 @@ ballRouter.get("/ball", async (req, res, next) => {
     const gateOpen = isGateOpen(settings, new Date());
     if (!gateOpen) {
       const cookie = readCookie(req.headers.cookie, GATE_COOKIE);
-      const unlocked = cookie
-        ? verifyGateToken(cookie, config.BALL_PREVIEW_PASSWORD, new Date())
-        : false;
+      const { signingKey } = await previewSecret();
+      const unlocked = cookie ? verifyGateToken(cookie, signingKey, new Date()) : false;
       if (!unlocked) {
         // 401, not 200: this is an unauthenticated response, and it also stops any crawler
         // or link preview treating the lock screen as the page's content.
@@ -226,13 +241,14 @@ ballRouter.get("/ball", async (req, res, next) => {
 ballRouter.post(
   "/ball/unlock",
   express.urlencoded({ extended: false }),
-  (req, res) => {
+  async (req, res) => {
     const attempt = typeof req.body?.password === "string" ? req.body.password : "";
-    if (!passwordMatches(config.BALL_PREVIEW_PASSWORD, attempt)) {
+    const signingKey = await previewPasswordAccepted(attempt);
+    if (!signingKey) {
       res.status(401).type("html").send(renderBallLockPage({ error: true }));
       return;
     }
-    res.cookie(GATE_COOKIE, signGateToken(config.BALL_PREVIEW_PASSWORD, new Date()), {
+    res.cookie(GATE_COOKIE, signGateToken(signingKey, new Date()), {
       httpOnly: true,
       sameSite: "lax",
       maxAge: GATE_TTL_MS,

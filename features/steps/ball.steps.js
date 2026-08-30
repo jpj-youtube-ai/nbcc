@@ -665,3 +665,14 @@ Then("the ball waiting list should hold {int} people", function (n) {
 Then("the first person waiting should be {string}", function (name) {
   assert.strictEqual(this.waitingBody.results[0].name, name);
 });
+
+Then("the ball admin response should not contain {string}", function (text) {
+  const body = JSON.stringify(this.ballAdminBody);
+  assert.ok(!body.includes(text), `the admin API echoed back "${text}"`);
+});
+
+Then("the ball admin response should not contain a password hash", function () {
+  const body = JSON.stringify(this.ballAdminBody);
+  assert.ok(!body.includes("scrypt$"), "a password hash must never reach the browser");
+  assert.ok(!/previewPasswordHash/.test(body), "the hash field must not be serialised");
+});

@@ -485,41 +485,165 @@
 
 /* ---------- practical ---------- */
 
-/* Six items, so a fixed 3-up reads as two complete rows. auto-fit was giving four
-   columns at desktop and leaving a ragged pair on the second row, which is what
-   made this section look unfinished. A hairline above each item creates a shelf
-   rhythm so the six read as equals without wrapping any of them in a card. */
+/* ---------- practical ----------
+
+   Rebuilt (was six equal tiles in a 3x2 grid, which read as flat and unfinished at
+   full width). The content is not six equal things: ONE of them is the exciting bit
+   and five are logistics, so the layout says so.
+
+   A 1.15fr / 1fr split puts a dark feature panel against a quiet 2x2 of admin. The
+   dark panel is the same night navy as the hero and the sponsor band, so this reads
+   as the page's third dark beat rather than a stray coloured box, and it breaks up a
+   long run of cream. Scale contrast does the rest: the feature heading is roughly
+   twice the tile headings, not a timid step up. */
+
 .ball-practical {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: clamp(18px, 2.4vw, 30px);
+  align-items: stretch;
+}
+@media (max-width: 900px) { .ball-practical { grid-template-columns: 1fr; } }
+
+/* --- the feature --- */
+
+.ball-feature {
+  position: relative;
+  overflow: hidden;
+  background: var(--night);
+  /* Same light shaft as the hero, angled from the top-left here so the two dark
+     panels feel related without being a copy. */
+  background-image: radial-gradient(
+    110% 80% at 12% -10%,
+    rgba(233, 210, 150, 0.18) 0%,
+    rgba(233, 210, 150, 0.05) 40%,
+    transparent 74%
+  );
+  color: var(--on-night);
+  border-radius: var(--radius-lg);
+  padding: clamp(28px, 3.6vw, 52px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+}
+
+.ball-feature-eyebrow {
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+/* A short gold rule leading out of the eyebrow — an invitation-card device rather
+   than a decorative flourish, and it points the eye into the headline. */
+.ball-feature-eyebrow::after {
+  content: "";
+  height: 1px;
+  flex: 1 1 auto;
+  background: linear-gradient(to right, var(--gold), transparent);
+  opacity: 0.7;
+}
+
+.ball-feature h3 {
+  font-family: "Playfair Display", Georgia, serif;
+  /* The shared stylesheet colours headings crimson, which is right on cream and
+     nearly invisible on this panel (3.18:1). Inherit the panel's own foreground. */
+  color: var(--on-night);
+  font-weight: 600;
+  font-size: clamp(1.45rem, 2.9vw, 2.1rem);
+  line-height: 1.16;
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+  max-width: 20ch;
+}
+.ball-feature p {
+  margin: 0;
+  font-size: 1rem;
+  /* Light type on dark reads lighter than it is, so give it more leading than the
+     cream tiles get. */
+  line-height: 1.75;
+  color: var(--on-night-soft);
+  max-width: 46ch;
+}
+.ball-feature-note {
+  font-size: 0.86rem !important;
+  color: rgba(242, 238, 228, 0.56) !important;
+}
+
+/* --- the quiet four --- */
+
+.ball-tiles {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: clamp(24px, 3vw, 38px) clamp(28px, 3.4vw, 48px);
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(14px, 1.6vw, 20px);
 }
-@media (max-width: 900px) { .ball-practical { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .ball-practical { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .ball-tiles { grid-template-columns: 1fr; } }
 
-.ball-practical li {
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
+.ball-tiles li {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: clamp(18px, 2vw, 24px);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
+  transition: transform 200ms var(--ease-quart), border-color 200ms var(--ease-quart),
+              box-shadow 200ms var(--ease-quart);
 }
-.ball-practical h3 {
+.ball-tiles li:hover {
+  transform: translateY(-3px);
+  border-color: var(--tan);
+  box-shadow: var(--shadow-sm);
+}
+.ball-tiles h3 {
   font-family: "Playfair Display", Georgia, serif;
-  font-size: 1.08rem;
+  font-size: 1.05rem;
   margin: 0;
+  color: var(--maroon);
 }
-.ball-practical p {
+.ball-tiles p {
   margin: 0;
-  font-size: 0.94rem;
-  line-height: 1.65;
+  font-size: 0.9rem;
+  line-height: 1.6;
   color: var(--slate-soft);
-  /* No max-width: the grid column already sets the measure, and a 44ch cap made
-     the short items break at a different width from the long ones. */
 }
+
+/* --- the closing ask --- */
+
+.ball-ask {
+  margin-top: clamp(22px, 2.6vw, 32px);
+  padding-top: clamp(20px, 2.4vw, 28px);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px 28px;
+}
+.ball-ask-lead {
+  margin: 0;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.05rem, 2vw, 1.3rem);
+  color: var(--slate);
+}
+.ball-ask-links {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 20px;
+  font-size: 0.95rem;
+}
+.ball-ask-links a { font-weight: 600; color: var(--crimson); }
+.ball-ask-links span { color: var(--slate-soft); font-size: 0.86rem; }
 
 /* ---------- sponsor ---------- */
 
@@ -651,6 +775,8 @@
   .ball-option:hover .ball-option-body,
   .ball-option input:checked + .ball-option-body,
   .ball-submit:hover:not([disabled]),
-  .btn-gold:hover { transform: none; }
+  .btn-gold:hover,
+  .ball-tiles li:hover { transform: none; }
+  .ball-tiles li { transition: none; }
   .ball-snow { display: none; }
 }

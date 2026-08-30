@@ -26,23 +26,30 @@
   --on-night-soft: rgba(242, 238, 228, 0.74);
 }
 
-/* ---------- nav over the dark hero ----------
+/* ---------- nav: always cream on this page ----------
 
-   The shared stylesheet sets .nav-links a to var(--slate) (#333). That is right
-   over cream, but it lands at roughly 1.5:1 against this page's night-sky hero —
-   effectively invisible. Light the links while the nav is still transparent; the
-   moment it gains .scrolled it paints its own cream background, so hand straight
-   back to the shared styles rather than fighting them. */
+   BRAND RULE: the NBCC logo is the full-colour red mark, and the brand guidelines
+   require it to sit on cream. Everywhere else on the site the nav starts
+   transparent over a cream page and only paints a background once scrolled, which
+   is fine. Here the page opens on a near-black hero, so a transparent nav would
+   put the red logo on black — off-brand, and it made the dark-slate nav links
+   effectively invisible too (~1.5:1).
 
-.ball-page .nav:not(.scrolled) .nav-links a { color: var(--on-night); }
-.ball-page .nav:not(.scrolled) .nav-links a:hover,
-.ball-page .nav:not(.scrolled) .nav-links a:focus-visible { color: var(--gold); }
-.ball-page .nav:not(.scrolled) .burger span { background: var(--on-night); }
+   So this page opts out of the transparent state entirely: the bar is solid cream
+   from the first pixel, which gives the logo its correct ground and lets every
+   shared nav style (slate links, maroon burger, crimson CTA) work exactly as
+   designed. Solid rather than the shared translucent mix, because a 90% cream over
+   a black hero reads as dirty grey behind the mark. */
 
-/* The mobile menu drops down over the hero, so it needs the cream panel the
-   shared styles give it — leave that alone and only fix the closed state. */
-@media (max-width: 900px) {
-  .ball-page .nav.open:not(.scrolled) .nav-links a { color: var(--slate); }
+.ball-page .nav,
+.ball-page .nav.scrolled {
+  background: var(--cream);
+  box-shadow: var(--shadow-sm);
+  border-bottom: 1px solid var(--line);
+  /* No backdrop blur: the background is opaque, so it would cost a compositing
+     layer and buy nothing. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 /* ---------- hero ---------- */
@@ -58,7 +65,9 @@
     transparent 72%
   );
   color: var(--on-night);
-  padding: clamp(48px, 9vw, 104px) 0 clamp(40px, 7vw, 76px);
+  /* Clear the fixed nav, exactly as the shared .hero does. Previously this was a
+     bare clamp: the transparent nav sat over the hero and hid the overlap. */
+  padding: calc(var(--nav-h) + clamp(28px, 6vw, 72px)) 0 clamp(40px, 7vw, 76px);
   text-align: center;
 }
 
@@ -324,8 +333,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: 18px 24px;
+  /* flex-end suits the quantity row, where the running total should sit on the
+     same baseline as the select. */
   align-items: flex-end;
 }
+/* The name/email row must NOT bottom-align: the email field carries a hint line
+   underneath, so bottom-aligning drops the name label below the email label and
+   the pair reads as a mistake. Top-align the labels instead. */
+.ball-row-fields { align-items: flex-start; }
 .ball-field {
   display: flex;
   flex-direction: column;

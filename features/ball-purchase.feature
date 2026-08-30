@@ -74,3 +74,16 @@ Feature: Festive Ball purchases through the shared Stripe webhook (TASK-313)
     Given the ball is reset to 40 tables of 10 with 0 held back
     When I start a ball checkout for 1 seat claiming Gift Aid with no donation
     Then the ball response status should be 400
+
+  Scenario: the page Stripe returns a buyer to actually exists
+    # The checkout's success_url pointed at /ball/thank-you from the start and nothing served
+    # it, so a real payment ended on a 404. Assert the destination RESOLVES, not just that the
+    # URL is built correctly.
+    When I request "/ball/thank-you"
+    Then the ball page status should be 200
+    And the ball page should contain "You're coming to the Festive Ball"
+
+  Scenario: the thank-you page is not behind the launch gate
+    Given the ball gate is closed
+    When I request "/ball/thank-you"
+    Then the ball page status should be 200

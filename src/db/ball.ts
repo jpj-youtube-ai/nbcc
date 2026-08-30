@@ -14,6 +14,7 @@ import { retentionDate, type GuestInput } from "../ball/guests";
 import type { GuestPageBooking, GuestRow } from "../ball/guest-page";
 import type { ExportBooking, ExportGuest } from "../ball/exports";
 import type { WaitingListEntry } from "../ball/waiting-list";
+import type { ThankYouBooking } from "../ball/thank-you-page";
 import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
@@ -680,4 +681,27 @@ export async function getPreviewPasswordHash(): Promise<string | null> {
     "SELECT preview_password_hash FROM ball_settings WHERE id = 1",
   );
   return res.rows[0]?.preview_password_hash ?? null;
+}
+
+// The booking behind a Stripe session, for the post-payment page. Any status is fine: Stripe
+// only redirects on success, so a row still 'pending' just means the webhook has not landed in
+// the second since. Returns null for an unknown id rather than throwing — the page then shows a
+// generic "your payment went through" instead of an error.
+export async function getBookingBySessionId(sessionId: string): Promise<ThankYouBooking | null> {
+  const res = await pool.query(
+    `SELECT reference, kind, quantity, seats, buyer_email, total_pence, guest_token
+       FROM ball_bookings WHERE stripe_session_id = $1`,
+    [sessionId],
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+  return {
+    reference: r.reference,
+    kind: r.kind === "table" ? "table" : "seat",
+    quantity: r.quantity,
+    seats: r.seats,
+    buyerEmail: r.buyer_email,
+    totalPence: r.total_pence,
+    guestToken: r.guest_token,
+  };
 }

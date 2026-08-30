@@ -2146,6 +2146,20 @@ The door-list and catering downloads purge expired guest rows first, so the nine
 kept on the exact path where stale data would otherwise escape into a file, with no scheduler to
 forget.
 
+### After payment
+
+`GET /ball/thank-you` — where Stripe returns the buyer the instant payment succeeds.
+
+It shipped in TASK-313 with the checkout pointing at it and **nothing serving it**: a real
+payment took the money, recorded the booking and sent the receipt, then landed the buyer on a
+404. Every test asserted the success URL was BUILT correctly; none asserted it RESOLVED. There is
+now a BDD scenario that requests the path and expects 200.
+
+Two rules follow from when the page is seen. It is **not behind the launch gate** — someone who
+has just paid must see confirmation whatever the public page is doing. And it **never reads as a
+failure**: Stripe only redirects here on success, so an unknown session id (the webhook can lag
+the redirect by a second) still renders "your payment went through", not an error.
+
 ### Guest details
 
 `GET/POST /ball/guests/:token` — the "tell us about your table" form, linked from the booking

@@ -10,6 +10,8 @@ import {
 } from "../ball/capacity";
 import type { BallBookingWrite } from "../ball/booking";
 import type { BallSettingsUpdate } from "../ball/settings";
+import { retentionDate, type GuestInput } from "../ball/guests";
+import type { GuestPageBooking, GuestRow } from "../ball/guest-page";
 import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
@@ -400,4 +402,104 @@ export async function getDashboard(): Promise<BallDashboard> {
     giftAidablePence: Number(r.gift_aidable_pence),
     newsletterOptIns: Number(r.newsletter_opt_ins),
   };
+}
+
+// --- guest details (plan 5) --------------------------------------------------
+
+export interface BookingByToken {
+  id: number;
+  booking: GuestPageBooking;
+  guests: GuestRow[];
+}
+
+// Resolve the emailed link. Only a PAID booking is addressable: a pending one may never be paid,
+// and a cancelled one has no table to describe.
+export async function getBookingByGuestToken(token: string): Promise<BookingByToken | null> {
+  const res = await pool.query(
+    `SELECT id, reference, kind, quantity, seats, buyer_name, table_name
+       FROM ball_bookings
+      WHERE guest_token = $1 AND status = 'paid'`,
+    [token],
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+
+  const guests = await pool.query(
+    `SELECT full_name, dietary, access_needs FROM ball_guests
+      WHERE booking_id = $1 ORDER BY id ASC`,
+    [r.id],
+  );
+  return {
+    id: r.id,
+    booking: {
+      reference: r.reference,
+      kind: r.kind === "table" ? "table" : "seat",
+      quantity: r.quantity,
+      seats: r.seats,
+      buyerName: r.buyer_name,
+      tableName: r.table_name,
+    },
+    guests: guests.rows.map((g) => ({
+      fullName: g.full_name,
+      dietary: g.dietary,
+      accessNeeds: g.access_needs,
+    })),
+  };
+}
+
+// Replace the whole guest list in one transaction. Delete-then-insert rather than diffing:
+// the form always submits the complete table, so a partial write would leave a door list that
+// half matches what the booker just saw — worse than either state alone.
+export interface GuestWrite {
+  tableName: string | null;
+  guests: GuestInput[];
+}
+
+// Takes the data shape rather than the schema's branded type: guestSubmissionSchema requires at
+// least one guest (right for the JSON API), but clearing a table from the form is a legitimate
+// thing for a booker fixing a mistake, so the writer accepts an empty list.
+export async function saveGuests(bookingId: number, submission: GuestWrite): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("UPDATE ball_bookings SET table_name = $2 WHERE id = $1", [
+      bookingId,
+      submission.tableName,
+    ]);
+    await client.query("DELETE FROM ball_guests WHERE booking_id = $1", [bookingId]);
+    const expires = retentionDate().toISOString();
+    for (const g of submission.guests) {
+      await client.query(
+        `INSERT INTO ball_guests (booking_id, full_name, dietary, access_needs, expires_at)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [bookingId, g.fullName, g.dietary, g.accessNeeds, expires],
+      );
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Mint the link token when a booking is paid. Idempotent: an existing token is kept, so a
+// Stripe redelivery cannot invalidate a link already sitting in someone's inbox.
+export async function ensureGuestToken(sessionId: string, token: string): Promise<string | null> {
+  const res = await pool.query<{ guest_token: string }>(
+    `UPDATE ball_bookings SET guest_token = COALESCE(guest_token, $2)
+      WHERE stripe_session_id = $1 AND status = 'paid'
+      RETURNING guest_token`,
+    [sessionId, token],
+  );
+  return res.rows[0]?.guest_token ?? null;
+}
+
+// Delete guest details past their retention date. Called from the admin read so it runs
+// naturally without a scheduler; the ninety-day promise in the ticket terms is kept by the
+// row's own expires_at rather than by anyone remembering.
+export async function purgeExpiredGuests(): Promise<number> {
+  const res = await pool.query("DELETE FROM ball_guests WHERE expires_at <= now()");
+  return res.rowCount ?? 0;
 }

@@ -14,6 +14,8 @@ import { FOOTER_HTML, FOOTER_TEXT } from "../legal/registration";
 export interface BallEventDetails {
   arrivalTime: string | null;
   includedNote: string | null;
+  /** Absolute link to the "tell us about your table" form, when a token has been minted. */
+  guestLink?: string | null;
 }
 
 export interface BallConfirmationEmail {
@@ -96,7 +98,11 @@ export function buildBallConfirmationEmail(
   <p style="margin:0 0 6px;color:#333333;">Dress to impress. This is an over 18s event.</p>
   <p style="margin:0 0 16px;color:#333333;">Your ticket includes entry, a meal and the evening's entertainment.${included}</p>
 
-  <p style="margin:0 0 16px;color:#333333;">Nearer the time we'll ask for your guests' names and any dietary or access requirements, so the venue can look after everyone properly.</p>
+  ${details.guestLink
+    ? `<h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">Tell us about your table</h2>
+  <p style="margin:0 0 8px;color:#333333;">Let us know who's coming and anything they can't eat, so the venue can look after everyone properly. You can save what you know and come back to it.</p>
+  <p style="margin:0 0 16px;"><a href="${escapeHtml(details.guestLink)}" style="color:#800000;font-weight:600;">Add your guests</a></p>`
+    : `<p style="margin:0 0 16px;color:#333333;">Nearer the time we'll ask for your guests' names and any dietary or access requirements, so the venue can look after everyone properly.</p>`}
 
   <h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">If your plans change</h2>
   <p style="margin:0 0 16px;color:#333333;">Tickets are non-refundable, but they are transferable — just tell us the new guest's name and we'll update the door list. If the event is cancelled and not rescheduled, you'll be refunded in full.</p>
@@ -131,8 +137,13 @@ Your ticket includes entry, a meal and the evening's entertainment.${
       : " The menu and drinks are still being finalised with the venue; we'll email you as soon as they're confirmed."
   }
 
-Nearer the time we'll ask for your guests' names and any dietary or access
-requirements, so the venue can look after everyone properly.
+${details.guestLink
+    ? `TELL US ABOUT YOUR TABLE
+Let us know who's coming and anything they can't eat, so the venue
+can look after everyone properly. Save what you know and come back to it:
+${details.guestLink}`
+    : `Nearer the time we'll ask for your guests' names and any dietary or access
+requirements, so the venue can look after everyone properly.`}
 
 IF YOUR PLANS CHANGE
 Tickets are non-refundable, but they are transferable — just tell us the new

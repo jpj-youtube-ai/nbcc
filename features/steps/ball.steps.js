@@ -457,3 +457,85 @@ Then("the ball admin status should be {int}", function (expected) {
 Then("the ball admin should report {int} seats remaining", function (n) {
   assert.strictEqual(this.ballAdminBody.availability.seatsRemaining, n);
 });
+
+// --- guest details ----------------------------------------------------------
+
+async function seedBooking(token, status, kind, quantity, seats) {
+  await withDb((db) =>
+    db.query(
+      `INSERT INTO ball_bookings
+         (reference, kind, quantity, seats, buyer_name, buyer_email,
+          tickets_pence, donation_pence, fee_cover_pence, total_pence,
+          stripe_session_id, status, guest_token)
+       VALUES ($1,$2,$3,$4,'Guest Buyer','guest.ball.bdd@example.com',
+               $5,0,0,$5,$6,$7,$8)`,
+      [
+        "BALL-" + token.slice(-6).toUpperCase(),
+        kind, quantity, seats,
+        kind === "table" ? quantity * 100000 : quantity * 10000,
+        "cs_guest_" + token,
+        status,
+        token,
+      ],
+    ),
+  );
+}
+
+Given("a paid ball booking for {int} table with guest token {string}", async function (n, token) {
+  await withDb((db) => db.query("DELETE FROM ball_bookings WHERE guest_token = $1", [token]));
+  await seedBooking(token, "paid", "table", n, n * 10);
+});
+
+Given("a pending ball booking with guest token {string}", async function (token) {
+  await withDb((db) => db.query("DELETE FROM ball_bookings WHERE guest_token = $1", [token]));
+  await seedBooking(token, "pending", "table", 1, 10);
+});
+
+When("I open the guest link {string}", async function (token) {
+  const res = await fetch(`${BASE_URL}/ball/guests/${token}`);
+  this.guestStatus = res.status;
+  this.guestBody = await res.text();
+});
+
+async function postGuests(ctx, token, form) {
+  const res = await fetch(`${BASE_URL}/ball/guests/${token}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(form).toString(),
+    redirect: "follow",
+  });
+  ctx.guestStatus = res.status;
+  ctx.guestBody = await res.text();
+}
+
+When("I save guests {string} on {string}", async function (names, token) {
+  const form = {};
+  names.split(",").forEach(function (name, i) { form["fullName" + (i + 1)] = name.trim(); });
+  await postGuests(this, token, form);
+});
+
+When("I save a guest {string} with dietary {string} on {string}", async function (name, diet, token) {
+  await postGuests(this, token, { fullName1: name, dietary1: diet });
+});
+
+Then("the guest page status should be {int}", function (expected) {
+  assert.strictEqual(this.guestStatus, expected);
+});
+
+Then("the guest page should have {int} guest name fields", function (n) {
+  const count = (this.guestBody.match(/name="fullName\d+"/g) || []).length;
+  assert.strictEqual(count, n);
+});
+
+Then("the guest page should work without JavaScript", function () {
+  assert.match(this.guestBody, /method="post"/);
+  assert.ok(!this.guestBody.includes("<script"), "the guest form must not depend on JavaScript");
+});
+
+Then("the guest page should show {string}", function (text) {
+  assert.ok(this.guestBody.includes(text), `expected the page to show "${text}"`);
+});
+
+Then("the guest page should not reveal any booking", function () {
+  assert.ok(!/BALL-[A-Z2-9]{6}/.test(this.guestBody), "the not-found page must not leak a reference");
+});

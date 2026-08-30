@@ -27,6 +27,9 @@ import {
 } from "../ball/gate";
 import { renderBallPage } from "../ball/page";
 import { renderBallLockPage } from "../ball/lock-page";
+import { guestSubmissionSchema, makeGuestToken } from "../ball/guests";
+import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
+import { getBookingByGuestToken, saveGuests } from "../db/ball";
 
 // TASK-313: the public, read-only availability feed for the Festive Ball page.
 // Deliberately returns ONLY counts — never a buyer name, email or booking reference — because
@@ -259,3 +262,104 @@ ballRouter.get("/ball/terms", async (req, res, next) => {
     next(err);
   }
 });
+
+// --- guest details (plan 5) --------------------------------------------------
+//
+// Reached from a link in the booking email, on a phone, with no login. The token is the whole
+// authorisation: 24 random bytes on a paid booking. That is a deliberate trade — requiring an
+// account to report a nut allergy means nobody reports the nut allergy — and the blast radius
+// of a leaked link is one table's names, not money or an account.
+//
+// NOT gated behind the launch gate: someone who has paid must be able to complete their table
+// whatever the public page is doing.
+
+// The form posts flat fields (fullName1, dietary1, …) because it is a plain HTML form with no
+// JavaScript to build a nested body. Fold them back into the shape the schema expects, dropping
+// any row the booker left entirely blank — a half-filled table is the expected case, not an error.
+function guestsFromForm(body: Record<string, unknown>, seats: number) {
+  const rows = [];
+  for (let n = 1; n <= seats; n += 1) {
+    const fullName = typeof body[`fullName${n}`] === "string" ? String(body[`fullName${n}`]).trim() : "";
+    if (!fullName) continue;
+    rows.push({
+      fullName,
+      dietary: typeof body[`dietary${n}`] === "string" ? String(body[`dietary${n}`]) : "",
+      accessNeeds: typeof body[`accessNeeds${n}`] === "string" ? String(body[`accessNeeds${n}`]) : "",
+    });
+  }
+  return rows;
+}
+
+ballRouter.get("/ball/guests/:token", async (req, res, next) => {
+  try {
+    const found = await getBookingByGuestToken(req.params.token);
+    if (!found) {
+      res.status(404).type("html").send(renderGuestNotFound());
+      return;
+    }
+    res.type("html").send(
+      renderGuestPage({
+        booking: found.booking,
+        guests: found.guests,
+        token: req.params.token,
+        saved: req.query.saved === "1",
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+});
+
+ballRouter.post(
+  "/ball/guests/:token",
+  express.urlencoded({ extended: false }),
+  async (req, res, next) => {
+    try {
+      const found = await getBookingByGuestToken(req.params.token);
+      if (!found) {
+        res.status(404).type("html").send(renderGuestNotFound());
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const guests = guestsFromForm(body, found.booking.seats);
+
+      // Clearing the table entirely is a legitimate action (a booker fixing a mistake), so an
+      // empty list saves rather than erroring — the schema's min(1) guards the API, not this form.
+      if (guests.length === 0) {
+        await saveGuests(found.id, { tableName: null, guests: [] });
+        res.redirect(303, `/ball/guests/${encodeURIComponent(req.params.token)}?saved=1`);
+        return;
+      }
+
+      const parsed = guestSubmissionSchema.safeParse({
+        tableName: typeof body.tableName === "string" ? body.tableName : "",
+        guests,
+      });
+      if (!parsed.success) {
+        res.status(400).type("html").send(
+          renderGuestPage({
+            booking: found.booking,
+            guests: found.guests,
+            token: req.params.token,
+            error:
+              "We couldn't save that. Check that every guest you've listed has a name, and that " +
+              "the notes aren't too long.",
+          }),
+        );
+        return;
+      }
+
+      await saveGuests(found.id, parsed.data);
+      // Redirect after post, so a refresh does not resubmit the table.
+      res.redirect(303, `/ball/guests/${encodeURIComponent(req.params.token)}?saved=1`);
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+// Exported for the webhook: minted when a booking is paid so the confirmation email can carry
+// the link.
+export function newGuestToken(): string {
+  return makeGuestToken(randomBytes(24));
+}

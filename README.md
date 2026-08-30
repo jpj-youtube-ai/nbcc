@@ -2076,6 +2076,25 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+### Guest details
+
+`GET/POST /ball/guests/:token` — the "tell us about your table" form, linked from the booking
+confirmation. **No login:** an unguessable 24-byte token on a *paid* booking is the whole
+authorisation, the same idiom as the business certificate. That is a deliberate trade — requiring
+an account to report a nut allergy means nobody reports the nut allergy — and a leaked link
+exposes one table's names, not money or an account.
+
+**A plain form POST with no JavaScript.** It arrives by email and is opened on a phone, often on
+poor signal; there is nothing to fail to load. Saving redirects (303) so a refresh cannot
+resubmit, and a partial table is the expected case, not an error — the copy says so, because
+otherwise people wait until they know all ten names and we get nothing.
+
+Dietary and access notes are **special category** data. The retention rule lives in the schema:
+`ball_guests.expires_at` defaults to 90 days after the event, matching the published ticket
+terms, and `purgeExpiredGuests()` deletes on it. `isExpired` fails CLOSED on an unreadable date —
+keeping a row too long is untidy, deleting someone's access needs early could mean they arrive
+somewhere that cannot accommodate them.
+
 ### The admin Festive Ball screen
 
 Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,

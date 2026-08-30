@@ -129,3 +129,48 @@ describe("buildBallConfirmationEmail", () => {
     expect(mail.text).not.toContain("<");
   });
 });
+
+describe("the guest details link", () => {
+  const base = {
+    reference: "BALL-ABC234",
+    kind: "table" as const,
+    quantity: 1,
+    seats: 10,
+    buyerName: "Jo Smith",
+    buyerEmail: "jo@example.com",
+    ticketsPence: 100_000,
+    donationPence: 0,
+    feeCoverPence: 0,
+    totalPence: 100_000,
+    giftAid: false,
+    newsletterOptIn: false,
+    stripeSessionId: "cs_1",
+  };
+
+  it("invites the booker to add their table when a link exists", () => {
+    const mail = buildBallConfirmationEmail(base, {
+      arrivalTime: null,
+      includedNote: null,
+      guestLink: "https://nbcc.scot/ball/guests/tok123",
+    });
+    expect(mail.html).toContain("https://nbcc.scot/ball/guests/tok123");
+    expect(mail.html).toMatch(/Add your guests/);
+    expect(mail.text).toContain("https://nbcc.scot/ball/guests/tok123");
+  });
+
+  it("falls back to a promise to ask later when there is no link", () => {
+    const mail = buildBallConfirmationEmail(base, { arrivalTime: null, includedNote: null });
+    expect(mail.html).toMatch(/Nearer the time we'll ask/);
+    expect(mail.html).not.toMatch(/Add your guests/);
+  });
+
+  it("says why we are asking, not just that we are", () => {
+    const mail = buildBallConfirmationEmail(base, {
+      arrivalTime: null,
+      includedNote: null,
+      guestLink: "https://nbcc.scot/ball/guests/t",
+    });
+    expect(mail.html).toMatch(/so the venue can look after everyone properly/i);
+    expect(mail.html).toMatch(/save what you know and come back/i);
+  });
+});

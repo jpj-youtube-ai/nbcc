@@ -1091,11 +1091,16 @@ async function handleDunning(client: PoolClient, event: Stripe.Event): Promise<D
 async function sendBallConfirmationEmail(booking: BallBookingWrite | null): Promise<void> {
   if (!booking || !booking.buyerEmail) return;
   try {
-    const { getSettings } = await import("./ball");
+    const { getSettings, ensureGuestToken } = await import("./ball");
+    const { newGuestToken } = await import("../routes/ball");
     const settings = await getSettings();
+    // Mint the guest-details token now so the confirmation can carry the link. Idempotent, so a
+    // Stripe redelivery never invalidates a link already sitting in someone's inbox.
+    const token = await ensureGuestToken(booking.stripeSessionId, newGuestToken());
     const mail = buildBallConfirmationEmail(booking, {
       arrivalTime: settings.arrivalTime,
       includedNote: settings.includedNote,
+      guestLink: token ? `${config.BALL_BASE_URL.replace(/\/+$/, "")}/ball/guests/${token}` : null,
     });
     await sendBallConfirmation({
       email: booking.buyerEmail,

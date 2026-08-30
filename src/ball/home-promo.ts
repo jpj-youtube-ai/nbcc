@@ -71,7 +71,7 @@ const FEATURE = `      <section class="ball-home-feature" aria-labelledby="ball-
               Saturday 7 November 2026 at The Park Hotel, Kilmarnock. Dinner, live music and a
               charity auction, hosted by Michelle McManus. Tickets are &pound;100, tables of ten
               &pound;1,000, and because The Designer Rooms is covering the cost of the evening,
-              every penny goes to NBCC.
+              your ticket funds NBCC's work.
             </p>
             <a class="btn" href="/ball">Book tickets</a>
           </div>

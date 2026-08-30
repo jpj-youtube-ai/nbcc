@@ -103,7 +103,7 @@ export function buildBallConfirmationEmail(
 
   <p style="margin:0 0 20px;color:#333333;">Any questions, just reply to this email or call 01292 811 015, Monday to Friday.</p>
 
-  <p style="margin:0 0 20px;color:#6F6A66;font-size:14px;">The ball is organised and sponsored by The Designer Rooms, who are covering the full cost of the evening — so every penny of your ticket goes to NBCC.</p>
+  <p style="margin:0 0 20px;color:#6F6A66;font-size:14px;">The ball is organised and sponsored by The Designer Rooms, who are covering the full cost of the evening, so your ticket funds NBCC's work rather than the party.</p>
 
   <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E9DFD2;color:#6F6A66;font-size:12px;line-height:1.6;">
     ${FOOTER_HTML}
@@ -145,7 +145,7 @@ entertainment in return. It can be claimed on a donation.
 Any questions, just reply to this email or call 01292 811 015, Monday to Friday.
 
 The ball is organised and sponsored by The Designer Rooms, who are covering the
-full cost of the evening — so every penny of your ticket goes to NBCC.
+full cost of the evening, so your ticket funds NBCC's work rather than the party.
 
 ${FOOTER_TEXT}`;
 

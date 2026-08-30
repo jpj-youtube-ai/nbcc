@@ -234,23 +234,9 @@ resource "aws_ssm_parameter" "portal_base_url" {
   lifecycle { ignore_changes = [value] }
 }
 
-# Festive Ball checkout base URL (TASK-313). NOT a secret (it ships in the Stripe redirect the
-# buyer follows), but SSM-held and injected like PORTAL_BASE_URL so it varies per environment.
-# A plain String; the placeholder is a valid URL so app validation passes on a fresh apply. Set
-# the real public site URL with put-parameter (see README).
-resource "aws_ssm_parameter" "ball_base_url" {
-  name  = "/${var.project}/${var.environment}/BALL_BASE_URL"
-  type  = "String"
-  value = "https://nbcc.example"
-  lifecycle { ignore_changes = [value] }
-}
-
-# Admin session token signing key (TASK-105/REQ-062) — HMAC key the admin login
-# endpoint signs session tokens with. A SecureString like the Stripe secrets; the
-# real long random value is set out of band (ignore_changes keeps Terraform from
-# overwriting it).
-# Festive Ball preview gate password (TASK-313). A SecureString like the admin session key;
-# the real value is set out of band (ignore_changes keeps Terraform from overwriting it).
+# Festive Ball preview gate password (TASK-313). A SecureString like the admin session key. The
+# real value is normally set by staff in the admin area (ball_settings.preview_password_hash
+# takes precedence); this is only the fallback until they do.
 resource "aws_ssm_parameter" "ball_preview_password" {
   name  = "/${var.project}/${var.environment}/BALL_PREVIEW_PASSWORD"
   type  = "SecureString"
@@ -258,6 +244,10 @@ resource "aws_ssm_parameter" "ball_preview_password" {
   lifecycle { ignore_changes = [value] }
 }
 
+# Admin session token signing key (TASK-105/REQ-062) — HMAC key the admin login
+# endpoint signs session tokens with. A SecureString like the Stripe secrets; the
+# real long random value is set out of band (ignore_changes keeps Terraform from
+# overwriting it).
 resource "aws_ssm_parameter" "admin_session_secret" {
   name  = "/${var.project}/${var.environment}/ADMIN_SESSION_SECRET"
   type  = "SecureString"

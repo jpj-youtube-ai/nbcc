@@ -68,6 +68,16 @@ variable "stripe_cancel_url" {
   default = "https://www.example.org/donate"
 }
 
+# Festive Ball checkout base URL (TASK-313) — non-secret (it ships in the Stripe redirect the
+# buyer follows), so a plain task-def environment value like the Stripe redirect URLs above,
+# NOT an SSM parameter. That is deliberate: an SSM placeholder would need someone to remember a
+# put-parameter, and forgetting it sends a buyer who has just paid to a domain that does not
+# exist. Set per env in infra/envs/*/main.tf, where it is version-controlled and reviewable.
+variable "ball_base_url" {
+  type    = string
+  default = "https://www.example.org"
+}
+
 # Stripe PUBLISHABLE key (TASK-215) for Embedded Checkout — the `pk_test_…`/`pk_live_…` the browser
 # needs to construct Stripe.js. PUBLIC, not a secret (it ships to every donor's browser), so it is a
 # plain task-def environment value (like the redirect URLs), NOT an SSM SecureString and NOT in the

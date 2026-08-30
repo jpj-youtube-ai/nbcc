@@ -57,7 +57,6 @@ data "aws_iam_policy_document" "exec_secrets" {
       aws_ssm_parameter.admin_notification_email.arn,
       # Donor portal base URL (TASK-100): injected via valueFrom, so the exec role must read it.
       aws_ssm_parameter.portal_base_url.arn,
-      aws_ssm_parameter.ball_base_url.arn,
       aws_ssm_parameter.ball_preview_password.arn,
       # Admin session signing key (TASK-105): a SecureString injected via valueFrom, so the exec
       # role must be able to read it.
@@ -136,6 +135,8 @@ resource "aws_ecs_task_definition" "app" {
       # Stripe redirect URLs (REQ-028/REQ-029) — non-secret, so plain env values.
       { name = "STRIPE_SUCCESS_URL", value = var.stripe_success_url },
       { name = "STRIPE_CANCEL_URL", value = var.stripe_cancel_url },
+      # Festive Ball checkout base (TASK-313) — non-secret, same treatment as the Stripe URLs.
+      { name = "BALL_BASE_URL", value = var.ball_base_url },
       # Stripe PUBLISHABLE key (TASK-215) for Embedded Checkout — PUBLIC (ships to the browser), so a
       # plain env value like the redirect URLs, NOT an SSM secret and NOT in the exec_secrets policy.
       { name = "STRIPE_PUBLISHABLE_KEY", value = var.stripe_publishable_key },
@@ -173,9 +174,6 @@ resource "aws_ecs_task_definition" "app" {
       # Donor portal base URL (TASK-100): non-secret SSM String, injected via valueFrom — so its
       # ARN must also appear in exec_secrets below.
       { name = "PORTAL_BASE_URL", valueFrom = aws_ssm_parameter.portal_base_url.arn },
-      # Festive Ball checkout base URL (TASK-313): non-secret SSM String, injected via valueFrom
-      # like PORTAL_BASE_URL — so its ARN must also appear in exec_secrets below.
-      { name = "BALL_BASE_URL", valueFrom = aws_ssm_parameter.ball_base_url.arn },
       # Admin session signing key (TASK-105): a SecureString, injected like a secret — so its ARN
       # must also appear in exec_secrets above.
       { name = "ADMIN_SESSION_SECRET", valueFrom = aws_ssm_parameter.admin_session_secret.arn },

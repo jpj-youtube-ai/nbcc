@@ -2247,7 +2247,15 @@ printed advert's QR code points at `nbcc.scot`, not `/ball`.
 
 **Config.** `BALL_BASE_URL` — the public site base the Stripe return/cancel URLs are built on.
 Required with no default: a silent localhost fallback would strand a buyer who has just paid.
-`BALL_PREVIEW_PASSWORD` — the shared preview password; a SecureString, required, never defaulted.
+It is a **plain task-def environment value** (a module variable set in
+`infra/envs/production/main.tf`), exactly like `STRIPE_SUCCESS_URL` — deliberately NOT an SSM
+parameter. It was one first, and that was wrong: the SSM pattern (`PORTAL_BASE_URL`) ships a
+`nbcc.example` placeholder plus `ignore_changes`, so the real value depends on someone
+remembering a `put-parameter`. For a URL Stripe redirects a paying customer to, "someone
+remembers" is not a good enough guarantee. If a value is non-secret and known at commit time,
+prefer the variable: it is version-controlled, reviewed in the PR, and cannot be forgotten.
+`BALL_PREVIEW_PASSWORD` stays a SecureString — it is a secret, and staff override it from the
+admin area anyway.
 
 public `GET /api/supporters/ticker` returns the **active** names in order, and the admin
 **Supporters ticker** tab (`view-ticker` + `loadTicker` in `assets/js/admin/app.js`) does full CRUD

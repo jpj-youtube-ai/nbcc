@@ -2076,6 +2076,31 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+### Nav: one Donate, not two
+
+The header lists all five pages **and** carries a persistent Donate CTA (REQ-002), so above the
+mobile breakpoint "Donate" appeared twice in one bar pointing at one place. The list item is now
+hidden at `min-width:681px` and the button carries it.
+
+It is hidden by media query rather than removed from the markup for a reason: **below 681px both
+`.nav-links` and `.nav-cta` are hidden, and the burger menu reveals only `.nav-links`** — so on a
+phone that list item is the ONLY header route to `/donate`. Deleting it would remove the donate
+link on mobile entirely. Browsers without `:has()` keep both, which is the previous behaviour, so
+it degrades safely.
+
+Known trade-off: on `/donate` itself at desktop the "you are here" marker lives on the hidden list
+item, so the current-page indicator is not shown there. Adding it to the CTA was not worth the
+bytes — see below.
+
+### The donate.html performance budget is nearly spent
+
+`test/unit/perf-budget.test.ts` caps donate.html's first paint at 255KB. After the nav rule the
+real (LF) total is **260,988 of 261,120 bytes — 132 bytes of headroom.** Anything added to
+`assets/css/styles.css` or `assets/js/main.js` from here will break it. That is why `/ball` ships
+its own CSS and JS. The budget has been raised five times already; the next change that needs room
+should either buy it back (the 105KB unminified `main.js` is the obvious candidate) or raise the
+cap as a deliberate, discussed decision rather than a reflex.
+
 **Adding an admin section is a three-file change.** The list lives in
 `src/admin/permissions.ts`, `assets/js/admin/app.js` and `features/steps/admin-permissions.steps.js`.
 They are not cosmetic duplicates: `PATCH /api/admin/users/:id/permissions` validates a COMPLETE,

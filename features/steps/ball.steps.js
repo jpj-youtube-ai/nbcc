@@ -336,13 +336,23 @@ Then("the ball page should show the event", function () {
   assert.ok(this.ballPageBody.includes("Michelle McManus"), "expected the real page");
 });
 
+// Assert against the robots META TAG, not the whole document. A plain string search for
+// "noindex" also matches the explanatory HTML comment in ball.html, which fails the scenario
+// while the actual directive is correct — a test bug that looks exactly like a product bug.
+function robotsTag(body) {
+  const match = /<meta[^>]*name="robots"[^>]*>/i.exec(body);
+  assert.ok(match, "expected a robots meta tag on the page");
+  return match[0];
+}
+
 Then("the ball page should be hidden from search engines", function () {
-  assert.match(this.ballPageBody, /content="noindex, nofollow"/);
+  assert.match(robotsTag(this.ballPageBody), /content="noindex, nofollow"/);
 });
 
 Then("the ball page should be visible to search engines", function () {
-  assert.match(this.ballPageBody, /content="index, follow"/);
-  assert.ok(!this.ballPageBody.includes("noindex"), "an open page must not still say noindex");
+  const tag = robotsTag(this.ballPageBody);
+  assert.match(tag, /content="index, follow"/);
+  assert.ok(!tag.includes("noindex"), "the robots directive must not still say noindex");
 });
 
 Then("the ball page should contain {string}", function (text) {

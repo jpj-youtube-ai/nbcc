@@ -1358,6 +1358,9 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
 | `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
 | `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking) |
+| `GET /api/admin/ball` | **implemented** | TASK-313 (Viewer+; settings, live availability and money raised) |
+| `PATCH /api/admin/ball` | **implemented** | TASK-313 (Editor+ **with the ball section granted**; capacity, held seats, gate, sales window, late-confirmed details. Audited as `ball.settings_updated`) |
+| `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first) |
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
@@ -2072,6 +2075,13 @@ scenario asserts a donation checkout creates no ball booking.
 
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
+
+**Admin.** A `ball` permission section. Unusually it is **view-only for the editor role by
+default** rather than joining `OPERATIONAL_EDITOR_SECTIONS`: the gate toggle publishes the
+ticket page and puts the ball on the home page, which is a launch decision rather than routine
+operational work, so edit is granted per user. There is deliberately **no ticket price field** —
+£100 is printed in a magazine that cannot be recalled, so it lives as a constant in
+`src/ball/pricing.ts` and the settings schema has no column for it.
 
 **The gate.** `/ball` and `/ball/terms` are served by `src/routes/ball.ts`, never by the static
 site router, and `_redirects` deliberately has **no** `200` rewrite onto `ball.html` — one would

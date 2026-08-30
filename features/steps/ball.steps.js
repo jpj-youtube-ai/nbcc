@@ -2,6 +2,7 @@ const { Given, When, Then } = require("@cucumber/cucumber");
 const assert = require("node:assert");
 const { Client } = require("pg");
 const Stripe = require("stripe");
+const { randomBytes, scryptSync } = require("node:crypto");
 
 // Signed-webhook helpers, mirroring features/steps/donation-journey.steps.js: the app verifies
 // against STRIPE_WEBHOOK_SECRET and generateTestHeaderString is pure HMAC, so the whole path
@@ -361,4 +362,88 @@ Then("the ball page should contain {string}", function (text) {
 
 Then("the ball page should not contain {string}", function (text) {
   assert.ok(!this.ballPageBody.includes(text), `expected the page NOT to contain "${text}"`);
+});
+
+// --- admin ------------------------------------------------------------------
+//
+// Seeds a staff user with a scrypt hash in the same format as src/admin/password.ts, logs in
+// through the real endpoint (completing the mandatory email 2FA, which returns devCode while
+// the email client is stubbed), then calls the role-gated ball endpoints.
+
+function hashBallPassword(password) {
+  const salt = randomBytes(16);
+  const key = scryptSync(password, salt, 64);
+  return `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
+}
+
+async function ballLogin(email, password) {
+  const res = await fetch(`${BASE_URL}/api/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (body.token) return body.token;
+  if (body.step === "2fa" && body.devCode) {
+    const res2 = await fetch(`${BASE_URL}/api/admin/login/2fa`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, code: body.devCode }),
+    });
+    const body2 = await res2.json().catch(() => ({}));
+    return body2.token;
+  }
+  return undefined;
+}
+
+Given(
+  "a ball admin {string} with role {string} and password {string}",
+  async function (email, role, password) {
+    await withDb((db) =>
+      db.query(
+        "INSERT INTO users (email, full_name, role, password_hash) VALUES ($1, 'Ball Staff', $2, $3)",
+        [email, role, hashBallPassword(password)],
+      ),
+    );
+  },
+);
+
+When("I GET the ball admin without a token", async function () {
+  const res = await fetch(`${BASE_URL}/api/admin/ball`);
+  this.ballAdminStatus = res.status;
+  this.ballAdminBody = await res.json().catch(() => ({}));
+});
+
+When(
+  "I GET the ball admin as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballAdminStatus = res.status;
+    this.ballAdminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When(
+  "I PATCH the ball admin with {string} as {string} with password {string}",
+  async function (json, email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: json,
+    });
+    this.ballAdminStatus = res.status;
+    this.ballAdminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the ball admin status should be {int}", function (expected) {
+  assert.strictEqual(this.ballAdminStatus, expected);
+});
+
+Then("the ball admin should report {int} seats remaining", function (n) {
+  assert.strictEqual(this.ballAdminBody.availability.seatsRemaining, n);
 });

@@ -9,6 +9,8 @@ import {
   type Order,
 } from "../ball/capacity";
 import type { BallBookingWrite } from "../ball/booking";
+import type { BallSettingsUpdate } from "../ball/settings";
+import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
 // only SQL lives here, mirroring how src/db/ticker.ts pairs with src/ticker/model.ts.
@@ -249,4 +251,153 @@ export async function markBookingExpired(client: Querier, sessionId: string): Pr
     [sessionId],
   );
   return res.rowCount && res.rowCount > 0 ? "ball.expired" : "ball.expired_noop";
+}
+
+// --- admin -------------------------------------------------------------------
+
+// Map the validated update onto columns. Explicit rather than generated from the object keys,
+// so a field can never reach SQL just because it appeared in a request body — the ticket price
+// has no column here and no way to acquire one.
+const SETTING_COLUMNS: Record<keyof BallSettingsUpdate, string> = {
+  totalTables: "total_tables",
+  seatsPerTable: "seats_per_table",
+  heldSeats: "held_seats",
+  gateOpen: "gate_open",
+  gateOpensAt: "gate_opens_at",
+  salesCloseAt: "sales_close_at",
+  salesClosed: "sales_closed",
+  arrivalTime: "arrival_time",
+  includedNote: "included_note",
+  lineUpNote: "line_up_note",
+};
+
+// Save settings and record WHO changed WHAT in the same transaction. The gate toggle publishes
+// a page to the public and the capacity decides whether the room oversells, so both belong in
+// the audit log next to the donation writes.
+export async function updateSettings(
+  update: BallSettingsUpdate,
+  actor: string,
+): Promise<BallSettings> {
+  const entries = Object.entries(update).filter(([key]) => key in SETTING_COLUMNS);
+  if (entries.length === 0) return getSettings();
+
+  const sets: string[] = [];
+  const values: unknown[] = [];
+  for (const [key, value] of entries) {
+    values.push(value);
+    sets.push(`${SETTING_COLUMNS[key as keyof BallSettingsUpdate]} = $${values.length}`);
+  }
+  sets.push("updated_at = now()");
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const res = await client.query<SettingsRow>(
+      `UPDATE ball_settings SET ${sets.join(", ")} WHERE id = 1 RETURNING
+         total_tables, seats_per_table, held_seats, gate_open, gate_opens_at,
+         sales_close_at, sales_closed, arrival_time, included_note, line_up_note`,
+      values,
+    );
+    await insertAudit(client, {
+      actor,
+      action: "ball.settings_updated",
+      entity: "ball_settings",
+      entityId: 1,
+      data: update as Record<string, unknown>,
+    });
+    await client.query("COMMIT");
+    return toSettings(res.rows[0]);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+export interface BallBookingRow {
+  id: number;
+  reference: string;
+  kind: string;
+  quantity: number;
+  seats: number;
+  buyerName: string;
+  buyerEmail: string;
+  totalPence: number;
+  donationPence: number;
+  giftAid: boolean;
+  newsletterOptIn: boolean;
+  status: string;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+export async function listBookings(limit = 200, offset = 0): Promise<BallBookingRow[]> {
+  const res = await pool.query(
+    `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
+            total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
+            created_at, paid_at
+       FROM ball_bookings
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2`,
+    [Math.min(Math.max(limit, 1), 500), Math.max(offset, 0)],
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    reference: r.reference,
+    kind: r.kind,
+    quantity: r.quantity,
+    seats: r.seats,
+    buyerName: r.buyer_name,
+    buyerEmail: r.buyer_email,
+    totalPence: r.total_pence,
+    donationPence: r.donation_pence,
+    giftAid: r.gift_aid,
+    newsletterOptIn: r.newsletter_opt_in,
+    status: r.status,
+    createdAt: r.created_at,
+    paidAt: r.paid_at,
+  }));
+}
+
+export interface BallDashboard {
+  seatsSold: number;
+  tablesSold: number;
+  bookings: number;
+  ticketsPence: number;
+  donationsPence: number;
+  feeCoverPence: number;
+  totalPence: number;
+  giftAidablePence: number;
+  newsletterOptIns: number;
+}
+
+// Only PAID bookings count towards the money. A pending row is holding a seat, not banked
+// income, and showing it as raised would overstate the total to the trustees.
+export async function getDashboard(): Promise<BallDashboard> {
+  const res = await pool.query(
+    `SELECT
+       COALESCE(SUM(seats), 0)                                          AS seats_sold,
+       COALESCE(SUM(quantity) FILTER (WHERE kind = 'table'), 0)         AS tables_sold,
+       COUNT(*)                                                         AS bookings,
+       COALESCE(SUM(tickets_pence), 0)                                  AS tickets_pence,
+       COALESCE(SUM(donation_pence), 0)                                 AS donations_pence,
+       COALESCE(SUM(fee_cover_pence), 0)                                AS fee_cover_pence,
+       COALESCE(SUM(total_pence), 0)                                    AS total_pence,
+       COALESCE(SUM(donation_pence) FILTER (WHERE gift_aid), 0)         AS gift_aidable_pence,
+       COUNT(*) FILTER (WHERE newsletter_opt_in)                        AS newsletter_opt_ins
+     FROM ball_bookings WHERE status = 'paid'`,
+  );
+  const r = res.rows[0];
+  return {
+    seatsSold: Number(r.seats_sold),
+    tablesSold: Number(r.tables_sold),
+    bookings: Number(r.bookings),
+    ticketsPence: Number(r.tickets_pence),
+    donationsPence: Number(r.donations_pence),
+    feeCoverPence: Number(r.fee_cover_pence),
+    totalPence: Number(r.total_pence),
+    giftAidablePence: Number(r.gift_aidable_pence),
+    newsletterOptIns: Number(r.newsletter_opt_ins),
+  };
 }

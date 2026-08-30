@@ -35,6 +35,16 @@ import {
 import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { readStoriesDiagnostics } from "../db/stories-diagnostics";
+import { ballSettingsUpdateSchema } from "../ball/settings";
+import { availability } from "../ball/capacity";
+import { isGateOpen } from "../ball/gate";
+import {
+  getCapacityState,
+  getDashboard,
+  getSettings as getBallSettings,
+  listBookings,
+  updateSettings as updateBallSettings,
+} from "../db/ball";
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
 import { parseArchiveView } from "../admin/archive-filter";
@@ -2742,3 +2752,71 @@ export async function postAdminBackfillBusinessInvites(req: Request, res: Respon
 }
 
 adminRouter.post("/api/admin/business-supporters/backfill-invites", postAdminBackfillBusinessInvites);
+
+// --- Festive Ball (TASK-313) --------------------------------------------------
+//
+// The controls that let staff launch and run the ball without a developer: the gate toggle,
+// capacity, held-back seats, the sales window, and the details the venue had not confirmed
+// when the page was written. There is deliberately no ticket price here — see
+// src/ball/settings.ts.
+
+// GET /api/admin/ball — settings, live availability and the money so far. Viewer+.
+export async function getAdminBall(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    const [settings, state, dashboard] = await Promise.all([
+      getBallSettings(),
+      getCapacityState(),
+      getDashboard(),
+    ]);
+    return res.status(200).json({
+      settings,
+      gateOpen: isGateOpen(settings, new Date()),
+      availability: availability(state),
+      dashboard,
+    });
+  } catch (err) {
+    console.error("admin ball read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// PATCH /api/admin/ball — change any subset of the settings. Editor+ WITH the ball section
+// granted: the default editor role gets view only, because flipping the gate publishes the
+// page and puts the ball on the home page.
+export async function patchAdminBall(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  const parsed = ballSettingsUpdateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid settings", details: parsed.error.flatten() });
+  }
+  try {
+    const settings = await updateBallSettings(parsed.data, actorOf(claims));
+    return res.status(200).json({ settings, gateOpen: isGateOpen(settings, new Date()) });
+  } catch (err) {
+    console.error("admin ball update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/ball/bookings — who bought what, newest first. Viewer+.
+export async function getAdminBallBookings(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  const limit = Number(req.query.limit ?? 200);
+  const offset = Number(req.query.offset ?? 0);
+  try {
+    const results = await listBookings(
+      Number.isFinite(limit) ? limit : 200,
+      Number.isFinite(offset) ? offset : 0,
+    );
+    return res.status(200).json({ results });
+  } catch (err) {
+    console.error("admin ball bookings failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ball", getAdminBall);
+adminRouter.patch("/api/admin/ball", patchAdminBall);
+adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);

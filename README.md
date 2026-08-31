@@ -2196,6 +2196,37 @@ The forms use `autocomplete="given-name"` / `"family-name"`. `autocomplete="name
 half-name box makes a browser offer the whole name for the first field, which is worse than no
 autofill at all.
 
+### Paying without leaving the site (TASK-319)
+
+Buyers pay in a modal on nbcc.scot, the same way donors have since TASK-215. The page a
+stranger reaches from a printed advert is not the place to bounce them to a different domain
+at the moment they are deciding whether to trust it.
+
+The server side already supported this — `ui_mode: "embedded_page"` returns a `client_secret`
+instead of a URL, and `/api/ball/checkout-session` returns it alongside the public
+`STRIPE_PUBLISHABLE_KEY` when the request asks for `uiMode: "embedded"`. Only the page still
+redirected.
+
+**It is deliberately NOT wired into `main.js`'s donate controller.** That controller keeps its
+mounted instance in a closure variable `ball.js` cannot reach, so sharing its element ids would
+mean the Close button hid the modal without destroying the Stripe iframe, and the next attempt
+mounted a second one into the same node. `/ball` therefore has its own ids
+(`ballCheckoutModal`, `ballCheckout`, `ballCheckoutClose`) and its own controller, while
+**reusing the shared `.give-embedded-*` styles and the same `stripe-js-sdk` script id**, so it
+adds no CSS and Stripe.js is fetched at most once. `initEmbeddedCheckout` in `main.js` keys off
+`#embeddedCheckout` and so no-ops on this page.
+
+Stripe.js is injected when the page becomes interactive, not on submit — waiting until the
+button is pressed adds a network round trip at the most impatient moment.
+
+Three paths, all verified in a browser against stubbed network and Stripe:
+
+| Situation | What happens |
+|---|---|
+| Normal | `uiMode: "embedded"`, modal opens, Stripe mounts; Close destroys the instance and clears the mount |
+| Stripe.js blocked or the mount is missing | Straight to the hosted redirect, never tries embedded, modal stays shut |
+| A real refusal (sold out, validation, sales closed) | Shows the actual reason and **does not** retry as a hosted redirect, which would fail again and read as a broken button |
+
 ### Changing the preview password
 
 Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`

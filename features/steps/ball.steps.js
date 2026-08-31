@@ -221,6 +221,21 @@ When("I start a ball checkout for {int} seats", async function (n) {
   await startCheckout(this, { kind: "seat", quantity: n });
 });
 
+When("I start an inline ball checkout for {int} seat", async function (n) {
+  await startCheckout(this, { kind: "seat", quantity: n, uiMode: "embedded" });
+});
+
+Then("the ball checkout should return an inline client secret and publishable key", function () {
+  assert.ok(
+    String(this.ballCheckout.clientSecret || "").startsWith("cs_"),
+    `expected a cs_ client secret, got ${JSON.stringify(this.ballCheckout.clientSecret)}`,
+  );
+  assert.ok(
+    String(this.ballCheckout.publishableKey || "").startsWith("pk_"),
+    `expected a pk_ publishable key, got ${JSON.stringify(this.ballCheckout.publishableKey)}`,
+  );
+});
+
 When("I start a ball checkout for {int} seat", async function (n) {
   await startCheckout(this, { kind: "seat", quantity: n });
 });

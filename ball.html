@@ -521,5 +521,30 @@
         </div>
       </div>
     </footer>
+    <!-- Inline payment (TASK-319). Same shared .give-embedded-* styling as the donate page,
+         with its own IDs so the donate controller in main.js leaves it alone. -->
+    <div
+      class="give-embedded-modal"
+      id="ballCheckoutModal"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Complete your booking"
+      hidden
+      aria-hidden="true"
+    >
+      <div class="give-embedded-panel">
+        <div class="give-embedded-bar">
+          <button
+            class="give-embedded-close"
+            id="ballCheckoutClose"
+            type="button"
+            aria-label="Close and return to your booking"
+          >
+            Close
+          </button>
+        </div>
+        <div class="give-embedded-mount" id="ballCheckout"></div>
+      </div>
+    </div>
   </body>
 </html>

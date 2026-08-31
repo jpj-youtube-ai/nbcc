@@ -165,3 +165,47 @@ describe("both forms ask for a first name and a surname (TASK-318)", () => {
     expect(ballHtml).not.toContain('autocomplete="name"');
   });
 });
+
+describe("paying without leaving the site (TASK-319)", () => {
+  // The page a stranger reaches from a printed advert is not the place to bounce someone to
+  // a different domain at the moment they are deciding whether to trust it. Buyers pay in a
+  // modal on nbcc.scot, the way donors already do.
+  // Sliced rather than regex-matched: the opening tag spans several lines and the modal
+  // nests three divs, which makes a "find the closing tag" pattern quietly capture the
+  // wrong span.
+  const modalStart = ballHtml.indexOf('id="ballCheckoutModal"');
+  const modal = ballHtml.slice(Math.max(0, modalStart - 200), modalStart + 700);
+
+  it("carries a mount for Stripe's inline checkout", () => {
+    expect(modal).not.toBe("");
+    expect(modal).toContain('id="ballCheckout"');
+  });
+
+  it("is a proper dialog, closed until a payment starts", () => {
+    expect(modal).toContain('role="dialog"');
+    expect(modal).toContain('aria-modal="true"');
+    // Closed until a payment actually starts, for CSS and for assistive tech alike.
+    // The leading space distinguishes the standalone attribute from aria-hidden, where
+    // the character before "hidden" is a dash.
+    expect(modal).toContain(" hidden");
+    expect(modal).toContain('aria-hidden="true"');
+  });
+
+  it("gives a way back out", () => {
+    expect(modal).toContain('id="ballCheckoutClose"');
+  });
+
+  // main.js's donate-page controller keys off #embeddedCheckout and keeps its mounted
+  // instance in a variable ball.js cannot see. Sharing those ids would mean a Close press
+  // hid the modal without destroying the iframe, and the next attempt mounted twice.
+  it("does not reuse the donate page's element ids", () => {
+    expect(ballHtml).not.toContain('id="embeddedCheckout"');
+    expect(ballHtml).not.toContain('id="embeddedCheckoutModal"');
+  });
+
+  // It reuses the shared .give-embedded-* styles, so this costs no extra CSS.
+  it("reuses the shared modal styling rather than shipping its own", () => {
+    expect(modal).toContain("give-embedded-modal");
+    expect(modal).toContain("give-embedded-mount");
+  });
+});

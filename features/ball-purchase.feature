@@ -46,6 +46,16 @@ Feature: Festive Ball purchases through the shared Stripe webhook (TASK-313)
     When I request the ball availability
     Then the ball availability should show 398 seats remaining
 
+  Scenario: paying inline returns a client secret instead of a redirect
+    # uiMode "embedded" keeps the buyer on nbcc.scot: the endpoint returns a clientSecret and the
+    # PUBLIC publishable key the browser needs to build Stripe.js, rather than a URL to send them
+    # to. The hosted redirect stays as the fallback for a blocked or broken Stripe.js, so a buyer
+    # is never left with a button that does nothing.
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    When I start an inline ball checkout for 1 seat
+    Then the ball response status should be 201
+    And the ball checkout should return an inline client secret and publishable key
+
   Scenario: covering the card fee and adding a Gift Aided donation is charged correctly
     Given the ball is reset to 40 tables of 10 with 0 held back
     When I start a ball checkout for 1 seat with a 2500 donation covering the fee

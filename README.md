@@ -2301,6 +2301,37 @@ announces an event The Designer Rooms has not announced yet. It **fails closed**
 forged, expired or unverifiable cookie all mean no, including when the database read for the
 password hash throws.
 
+### Holding seats for someone, by name (TASK-324)
+
+**Admin → Festive Ball → Seats held back.** Give a name, how many seats or tables, and
+optionally a date to hold until. Editor+ **with the ball section granted** — this consumes
+capacity exactly as a purchase does.
+
+It replaces trusting a bare "held back" number. That number recorded nothing about who the
+seats were for or until when, so in practice it only ever went up: nobody reduces what nobody
+can account for, and by November the room is short of seats no one can explain. The commonest
+real case is a company waiting on an invoice — their tables have to be off sale while it is
+settled, and back on sale if it never is.
+
+**Expiry is a WHERE clause, not a job.** Nothing has to run for the seats to come back, so a
+hold cannot outlive its deadline because a sweeper failed at 3am in November. Leave the date
+empty and it holds until someone releases it.
+
+**Placing a hold takes the same lock the checkout takes** (`SELECT … FOR UPDATE` on the
+settings row) and re-checks availability having taken it, so a hold and a purchase can never
+both be granted the last table. It is judged on **seats** whichever kind is asked for, so
+holding four tables when 30 seats remain is refused.
+
+`held_seats` on `ball_settings` still works and is still counted. Total held = that number plus
+every active row in `ball_holds`, which is what makes this purely additive: nothing in the pure
+capacity model changed, so seats-left, whether a table is still unbroken, and whether an order
+can be met all needed no edit. The old number can be retired once the holds it stood for have
+been written down properly.
+
+Releasing sets `released_at` rather than deleting: what was held, for whom, and who let it go is
+the point of writing it down. Both actions are audited (`ball.hold_created`,
+`ball.hold_released`).
+
 ### Cancelling a booking (TASK-323)
 
 **Admin → Festive Ball → bookings → Cancel.** Editor+ **with the ball section granted** — the

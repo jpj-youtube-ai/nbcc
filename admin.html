@@ -1046,6 +1046,33 @@
               <p class="admin-note">Seats held back never go on sale — use it for comps, the sponsor&rsquo;s guests and the top table. Individual tickets share tables, so a table only stays sellable while nobody has been seated at it.</p>
               <p class="ty-status" id="ballCapacityStatus" role="status" aria-live="polite"></p>
 
+              <h3 class="admin-subhead">Seats held back</h3>
+              <p class="admin-note">Take seats or tables off sale for someone by name &mdash; a company waiting on an invoice, the sponsor&rsquo;s guests, the top table. Give it a date and the seats go back on sale by themselves if nothing comes of it, so a forgotten hold cannot quietly shrink the room.</p>
+              <form id="ballHoldForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">For
+                  <input id="ballHoldName" type="text" maxlength="200" placeholder="e.g. Ayrshire Bakery (invoice 1042)" style="width:260px" required />
+                </label>
+                <label class="ty-inline">How many
+                  <input id="ballHoldQuantity" type="number" min="1" max="400" step="1" value="1" style="width:80px" />
+                </label>
+                <label class="ty-inline">of
+                  <select id="ballHoldKind">
+                    <option value="table">tables</option>
+                    <option value="seat">seats</option>
+                  </select>
+                </label>
+                <label class="ty-inline">Hold until
+                  <input id="ballHoldExpires" type="datetime-local" />
+                </label>
+                <label class="ty-inline">Note
+                  <input id="ballHoldNote" type="text" maxlength="500" style="width:200px" />
+                </label>
+                <button class="btn btn-primary" type="submit" id="ballHoldSave">Hold</button>
+              </form>
+              <p class="admin-note">Leave &ldquo;hold until&rdquo; empty to hold the seats until someone releases them by hand.</p>
+              <p class="ty-status" id="ballHoldStatus" role="status" aria-live="polite"></p>
+              <div id="ballHolds"></div>
+
               <h3 class="admin-subhead">Card fee</h3>
               <p class="admin-note">What Stripe charges NBCC. The ticket page offers buyers the chance to cover it, so this must be the rate you are <em>actually</em> on &mdash; check it against a real payment in the Stripe dashboard, not a price list. Stripe charges this <b>once per booking</b>, not per ticket.</p>
               <form id="ballFeeForm" class="ty-controls" autocomplete="off">

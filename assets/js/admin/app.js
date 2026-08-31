@@ -6049,6 +6049,56 @@
       H.escapeHtml(b.reference) + '">Cancel</button>';
   }
 
+  // TASK-324: seats held back for a named party, with a deadline. Replaces trusting a bare
+  // number nobody can account for by November.
+  function ballHoldsTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">Nothing is held back.</p>';
+    var body = rows.map(function (h) {
+      var what = h.quantity + " " + (h.kind === "table"
+        ? (h.quantity === 1 ? "table" : "tables")
+        : (h.quantity === 1 ? "seat" : "seats"));
+      var until = h.expiresAt
+        ? H.escapeHtml(new Date(h.expiresAt).toLocaleString("en-GB"))
+        : "<em>until released</em>";
+      var release = canEdit("ball")
+        ? '<button type="button" class="btn btn-small" data-release-hold="' + h.id + '">Release</button>'
+        : "";
+      return "<tr><td>" + H.escapeHtml(h.name) + (h.note ? "<br /><small>" + H.escapeHtml(h.note) + "</small>" : "") +
+        "</td><td>" + what + " (" + h.seats + " seats)</td><td>" + until +
+        "</td><td>" + H.escapeHtml(h.createdBy) + "</td><td>" + release + "</td></tr>";
+    }).join("");
+    return '<table class="admin-table"><thead><tr><th>For</th><th>Held</th><th>Until</th>' +
+      "<th>Placed by</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
+  }
+
+  function loadBallHolds() {
+    authFetch("/api/admin/ball/holds")
+      .then(j)
+      .then(function (d) {
+        el("ballHolds").innerHTML = ballHoldsTable(d.results || []);
+        el("ballHolds").addEventListener("click", onReleaseHoldClick);
+      })
+      .catch(function () {
+        el("ballHolds").innerHTML = '<p class="admin-empty">Could not load holds.</p>';
+      });
+  }
+
+  function onReleaseHoldClick(e) {
+    var btn = e.target && e.target.closest && e.target.closest("[data-release-hold]");
+    if (!btn) return;
+    if (!window.confirm("Release these seats back on sale?")) return;
+    btn.disabled = true;
+    authFetch("/api/admin/ball/holds/" + encodeURIComponent(btn.getAttribute("data-release-hold")), {
+      method: "DELETE",
+    })
+      .then(j)
+      .then(function () { loadBall(); })
+      .catch(function () {
+        btn.disabled = false;
+        ballStatus("ballHoldStatus", "Could not release those seats.");
+      });
+  }
+
   function ballBookingsTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No bookings yet.</p>';
     var body = rows.map(function (b) {
@@ -6106,7 +6156,7 @@
     // Editors get view-only on this section by default (the gate publishes a page), so mirror
     // the server rule in the UI rather than letting someone fill a form that will 403.
     var canWrite = canEdit("ball");
-    ["ballGateSchedule", "ballCapacitySave", "ballFeeSave", "ballDetailsSave"].forEach(function (id) {
+    ["ballGateSchedule", "ballCapacitySave", "ballFeeSave", "ballHoldSave", "ballDetailsSave"].forEach(function (id) {
       var n = el(id);
       if (n) n.hidden = !canWrite;
     });
@@ -6150,6 +6200,7 @@
   function loadBall() {
     ballWire();
     el("ballBookings").innerHTML = '<p class="admin-loading">Loading…</p>';
+    loadBallHolds();
     authFetch("/api/admin/ball")
       .then(j)
       .then(ballRender)
@@ -6234,6 +6285,36 @@
           "Password changed. Anyone using the old one will be asked again."
         );
       });
+    });
+
+    el("ballHoldForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var name = el("ballHoldName").value.trim();
+      if (!name) { ballStatus("ballHoldStatus", "Say who the seats are for."); return; }
+      var local = el("ballHoldExpires").value;
+      ballStatus("ballHoldStatus", "Holding…");
+      authFetch("/api/admin/ball/holds", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name,
+          kind: el("ballHoldKind").value,
+          quantity: Number(el("ballHoldQuantity").value),
+          note: el("ballHoldNote").value,
+          expiresAt: local ? fromLocalInput(local) : null,
+        }),
+      })
+        .then(j)
+        .then(function () {
+          ballStatus("ballHoldStatus", "Held.");
+          el("ballHoldName").value = "";
+          el("ballHoldNote").value = "";
+          el("ballHoldExpires").value = "";
+          loadBall();
+        })
+        .catch(function () {
+          ballStatus("ballHoldStatus", "Could not hold those seats — there may not be enough left.");
+        });
     });
 
     el("ballFeeForm").addEventListener("submit", function (e) {

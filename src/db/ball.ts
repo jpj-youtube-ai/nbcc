@@ -82,6 +82,15 @@ const SOLD_SQL = `SELECT
 const RESERVED_SQL = `SELECT COALESCE(SUM(seats), 0) AS reserved_seats
                         FROM ball_reservations WHERE expires_at > now()`;
 
+// Named holds that are still standing (TASK-324). Same idea as the reservations read above:
+// expiry is a clause, not a job, so a hold cannot outlive its deadline because a sweeper
+// failed. Folded into heldSeats below, which means every downstream calculation — seats left,
+// whether a whole table is still unbroken, whether an order can be met — needs no change.
+const HOLDS_SQL = `SELECT COALESCE(SUM(seats), 0) AS held_seats
+                     FROM ball_holds
+                    WHERE released_at IS NULL
+                      AND (expires_at IS NULL OR expires_at > now())`;
+
 function toSettings(r: SettingsRow): BallSettings {
   return {
     totalTables: r.total_tables,
@@ -107,11 +116,15 @@ async function readCapacityState(db: Querier): Promise<CapacityState> {
   const s = await db.query<SettingsRow>(SETTINGS_SQL);
   const sold = await db.query<{ tables_sold: string; loose_seats_sold: string }>(SOLD_SQL);
   const held = await db.query<{ reserved_seats: string }>(RESERVED_SQL);
+  const named = await db.query<{ held_seats: string }>(HOLDS_SQL);
   const r = s.rows[0];
   return {
     totalTables: r.total_tables,
     seatsPerTable: r.seats_per_table,
-    heldSeats: r.held_seats,
+    // The blunt settings number PLUS every active named hold. Keeping both means TASK-324 is
+    // purely additive: the old field still works, and it can be retired once the holds it
+    // stood for have been written down properly.
+    heldSeats: r.held_seats + Number(named.rows[0].held_seats),
     // SUM() comes back as a string from pg for bigint-ish results; coerce explicitly.
     tablesSold: Number(sold.rows[0].tables_sold),
     looseSeatsSold: Number(sold.rows[0].loose_seats_sold),
@@ -382,6 +395,126 @@ export async function cancelBooking(
     });
     await client.query("COMMIT");
     return { ok: true, seats: row.seats, wasStatus: row.status };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// --- named holds (TASK-324) --------------------------------------------------
+
+export interface BallHold {
+  id: number;
+  name: string;
+  kind: "seat" | "table";
+  quantity: number;
+  seats: number;
+  note: string | null;
+  expiresAt: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+// Everything still standing, soonest to expire first, so the ones about to hand seats back are
+// the ones staff see at the top. Holds with no deadline sort last: they are the ones that need
+// a decision, not a reminder.
+export async function listActiveHolds(): Promise<BallHold[]> {
+  const res = await pool.query(
+    `SELECT id, name, kind, quantity, seats, note, expires_at, created_by, created_at
+       FROM ball_holds
+      WHERE released_at IS NULL
+        AND (expires_at IS NULL OR expires_at > now())
+      ORDER BY expires_at ASC NULLS LAST, created_at ASC`,
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    kind: r.kind,
+    quantity: r.quantity,
+    seats: r.seats,
+    note: r.note,
+    expiresAt: r.expires_at,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+  }));
+}
+
+// Place a hold, inside the SAME lock the checkout uses.
+//
+// Without the lock, a hold and a purchase can each be told there is room for the last table
+// and both be granted it. This is the one write besides checkout that consumes capacity, so it
+// queues behind the same settings row and re-checks availability having taken it.
+export async function createHold(
+  hold: { name: string; kind: "seat" | "table"; quantity: number; seats: number; note: string | null; expiresAt: string | null },
+  actor: string,
+): Promise<{ ok: true; id: number } | { ok: false; reason: "no_room" }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT id FROM ball_settings WHERE id = 1 FOR UPDATE");
+    const state = await readCapacityState(client);
+    // Judged on SEATS, whichever kind was asked for: holding four tables when only 30 seats
+    // are left has to fail, and it is the seat count that says so.
+    if (availability(state).seatsRemaining < hold.seats) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "no_room" };
+    }
+    const res = await client.query<{ id: number }>(
+      `INSERT INTO ball_holds (name, kind, quantity, seats, note, expires_at, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [hold.name, hold.kind, hold.quantity, hold.seats, hold.note, hold.expiresAt, actor],
+    );
+    await insertAudit(client, {
+      actor,
+      action: "ball.hold_created",
+      entity: "ball_hold",
+      entityId: res.rows[0].id,
+      data: { ...hold },
+    });
+    await client.query("COMMIT");
+    return { ok: true, id: res.rows[0].id };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Hand the seats back early. Released rather than deleted: what was held, for whom, and who
+// let it go is the whole point of writing it down.
+export async function releaseHold(
+  id: number,
+  actor: string,
+): Promise<{ ok: true; seats: number } | { ok: false; reason: "not_found" | "already_released" }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query<{ id: number; seats: number; released_at: string | null }>(
+      `SELECT id, seats, released_at FROM ball_holds WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    const row = found.rows[0];
+    if (!row) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "not_found" };
+    }
+    if (row.released_at !== null) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "already_released" };
+    }
+    await client.query(`UPDATE ball_holds SET released_at = now() WHERE id = $1`, [id]);
+    await insertAudit(client, {
+      actor,
+      action: "ball.hold_released",
+      entity: "ball_hold",
+      entityId: id,
+      data: { seatsReturned: row.seats },
+    });
+    await client.query("COMMIT");
+    return { ok: true, seats: row.seats };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

@@ -78,6 +78,10 @@ jobs:
           context: .
           push: true
           tags: ${{ env.IMAGE }}
+          # Stamps the commit into the image so /health can report which build is running and
+          # the smoke test can prove the deploy actually took (TASK-332).
+          build-args: |
+            GIT_SHA=${{ env.DEPLOY_SHA }}
           # Most commits change only app code, so the base/npm-install layers restore
           # from the Actions cache instead of rebuilding — build drops from ~40s toward ~15s.
           cache-from: type=gha
@@ -159,7 +163,7 @@ jobs:
           exit 1
 
       - name: Smoke test production
-        run: bash scripts/smoke.sh "$ALB_URL"
+        run: bash scripts/smoke.sh "$ALB_URL" "$DEPLOY_SHA"
 
       - name: Tag release (deployed to production)
         # Only on the normal push path — a workflow_dispatch rollback of an old

@@ -20,6 +20,14 @@ Then("the response status should be {int}", function (expected) {
   assert.equal(this.statusCode, expected);
 });
 
+Then("the response field {string} should be present", function (field) {
+  const value = this.body?.[field];
+  assert.ok(
+    typeof value === "string" && value.length > 0,
+    `expected /health to report a non-empty "${field}", got ${JSON.stringify(value)}`,
+  );
+});
+
 Then("the response field {string} should be {string}", function (field, value) {
   assert.equal(this.body[field], value);
 });

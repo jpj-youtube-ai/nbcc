@@ -2076,6 +2076,28 @@ scenario asserts a donation checkout creates no ball booking.
 **Tables.** `ball_settings` (singleton: capacity, held seats, the password gate, sales window),
 `ball_bookings`, `ball_reservations`.
 
+**The hero lockup (TASK-315).** The `<h1>` on `/ball` is the designer's own "A Night to
+Remember / Festive Ball 2026" artwork at `assets/img/ball-lockup.svg` — vector, so it stays
+sharp on any screen and matches the printed advert exactly. It replaced a JPEG/WebP crop of the
+poster (`ball-lockup.{jpg,webp}` and the `-sm` variants, all deleted). Two things about the
+file are deliberate:
+
+- **The gold foil is defined once.** The supplied SVG embedded the same 13 KB PNG texture eight
+  times, once per letter of REMEMBER, each clipped to its letter — 105 KB of a 146 KB file. It
+  now sits in `<defs>` as `#antr-foil` with eight `<use>` references, taking the asset to 54 KB.
+  The rendered pixels are unchanged (verified by rasterising before and after and diffing:
+  0 of 2,205,000 subpixels differ).
+- **The `viewBox` is retargeted, not the artwork.** The original box was ~30% transparent
+  padding, so it is cropped to the content plus a small margin (`235 214 1306 491`). Nothing in
+  the drawing was edited.
+
+It is the one `<img>` on the site that is **not** `loading="lazy"`: it is the largest element
+above the fold and the LCP candidate, so it carries `fetchpriority="high"` instead. The
+perf-budget test only enforces lazy loading on `index/about/donate/contact`, so this does not
+weaken that guard. The same file is reused (lazily) in the home-page promo band injected by
+`src/ball/home-promo.ts`, where the surrounding band is already the same navy the artwork was
+cut out of.
+
 ### Changing the preview password
 
 Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`

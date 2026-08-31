@@ -37,7 +37,7 @@ const PROMO_STYLES = `<style>
   .ball-home-feature .wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
     gap:clamp(24px,4vw,56px);align-items:center}
   @media(max-width:820px){.ball-home-feature .wrap{grid-template-columns:1fr}}
-  .ball-home-feature img{display:block;width:100%;height:auto;border-radius:12px}
+  .ball-home-feature img{display:block;width:100%;height:auto}
   .ball-home-copy{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
   .ball-home-copy .eyebrow{color:#E4C87A}
   .ball-home-copy h2{font-family:"Playfair Display",Georgia,serif;font-weight:600;margin:0;
@@ -59,10 +59,7 @@ const BANNER = `      <a class="ball-banner" href="/ball">
 const FEATURE = `      <section class="ball-home-feature" aria-labelledby="ball-home-heading">
         <div class="wrap">
           <a href="/ball" aria-hidden="true" tabindex="-1">
-            <picture>
-              <source srcset="/assets/img/ball-lockup.webp" type="image/webp" />
-              <img src="/assets/img/ball-lockup.jpg" alt="" width="1400" height="471" loading="lazy" decoding="async" />
-            </picture>
+            <img src="/assets/img/ball-lockup.svg" alt="" width="1306" height="491" loading="lazy" decoding="async" />
           </a>
           <div class="ball-home-copy">
             <span class="eyebrow">An evening in aid of NBCC</span>

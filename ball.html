@@ -76,18 +76,19 @@
           <p class="ball-kicker">An elegant evening. Amazing entertainment. <em>Changing lives.</em></p>
 
           <h1 id="ball-hero-heading">
-            <picture>
-              <source srcset="/assets/img/ball-lockup.webp" type="image/webp" />
-              <img
-                class="ball-lockup"
-                src="/assets/img/ball-lockup.jpg"
-                alt="A Night to Remember, Festive Ball 2026"
-                width="1400"
-                height="471"
-                loading="lazy"
-                decoding="async"
-              />
-            </picture>
+            <!-- Vector, not a crop of the poster: it is the designer's own artwork, so it stays
+                 sharp on a 4K screen and weighs less than the raster it replaces. Loaded eagerly
+                 with high priority because it IS the <h1> — lazy-loading the largest element
+                 above the fold delays the only thing worth painting first. -->
+            <img
+              class="ball-lockup"
+              src="/assets/img/ball-lockup.svg"
+              alt="A Night to Remember, Festive Ball 2026"
+              width="1306"
+              height="491"
+              fetchpriority="high"
+              decoding="async"
+            />
           </h1>
 
           <dl class="ball-facts">

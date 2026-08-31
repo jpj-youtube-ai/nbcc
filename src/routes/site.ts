@@ -125,13 +125,19 @@ export function renderSupportersPage(
 //
 // Fails to "shut": if we cannot tell, the link is absent, which is the safe way to be wrong
 // about an event that has not been announced.
-async function ballIsPublished(): Promise<boolean> {
+async function ballIsPublished(cookieHeader: string | undefined): Promise<boolean> {
   try {
-    const [{ getSettings }, { isGateOpen }] = await Promise.all([
+    const [{ getSettings }, { isGateOpen }, { holdsPreviewCookie }] = await Promise.all([
       import("../db/ball"),
       import("../ball/gate"),
+      import("../ball/preview-access"),
     ]);
-    return isGateOpen(await getSettings(), new Date());
+    if (isGateOpen(await getSettings(), new Date())) return true;
+    // Staff previewing before launch see the nav item too (TASK-330). Without this the
+    // preview was inconsistent with itself: the home page showed the promotion band to a
+    // cookie holder while the nav on every page pretended the ball did not exist, so the one
+    // thing staff were checking could not be reached from the page they were checking it on.
+    return holdsPreviewCookie(cookieHeader);
   } catch {
     return false;
   }
@@ -200,7 +206,7 @@ export function createSiteRouter(siteRoot: string): Router {
   // import-safe for the pure parseRedirects tests (no config/pool at module load). If
   // the DB read fails, fall back to the static supporters.html so the page still renders.
   const supportersFile = join(siteRoot, "supporters.html");
-  router.get("/supporters", async (_req, res, next) => {
+  router.get("/supporters", async (req, res, next) => {
     try {
       const { listPublicSupporters } = await import("../db/donations");
       const tiers = await listPublicSupporters();
@@ -210,7 +216,7 @@ export function createSiteRouter(siteRoot: string): Router {
       // `_redirects` loop below and needs the nav item adding here too (TASK-326). This is
       // also the page where getting the anchor wrong shows: its own nav item carries
       // class="active", so matching the link rather than the list finds the FOOTER first.
-      if (await ballIsPublished()) {
+      if (await ballIsPublished(req.headers.cookie)) {
         const { addBallNavLink } = await import("../ball/nav-link");
         html = addBallNavLink(html);
       }
@@ -240,7 +246,7 @@ export function createSiteRouter(siteRoot: string): Router {
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).
   for (const rule of rules) {
-    router.get(rule.from, async (_req, res) => {
+    router.get(rule.from, async (req, res) => {
       if (rule.status.startsWith("301")) {
         res.redirect(301, rule.to);
         return;
@@ -248,7 +254,7 @@ export function createSiteRouter(siteRoot: string): Router {
       const file = join(siteRoot, rule.to.replace(/^\//, ""));
       // While the ball is unpublished this is byte-for-byte the old behaviour: the file is
       // sent as-is and nothing on any page mentions it.
-      if (!file.endsWith(".html") || !(await ballIsPublished())) {
+      if (!file.endsWith(".html") || !(await ballIsPublished(req.headers.cookie))) {
         res.sendFile(file);
         return;
       }

@@ -79,7 +79,8 @@ describe("ball surfaces make no money claim that card fees contradict", () => {
 
   it("still keeps the claim that IS true: the sponsor is paying for the evening", () => {
     const page = read("ball.html");
-    expect(page).toMatch(/covering the full cost of the evening/i);
+    // Whitespace-tolerant: this asserts a claim, not where the line happens to wrap.
+    expect(page).toMatch(/covering the full\s+cost of the evening/i);
     expect(page).toMatch(/funds NBCC's work/i);
   });
 

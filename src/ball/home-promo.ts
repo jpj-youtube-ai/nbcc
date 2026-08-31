@@ -52,6 +52,17 @@ const PROMO_STYLES = `<style>
   .ball-home-copy p{margin:0;color:rgba(242,238,228,.78);line-height:1.7;max-width:46ch}
   .ball-home-copy .btn{background:#E4C87A;color:#241B06;border:1px solid #E4C87A;font-weight:600}
   .ball-home-copy .btn:hover{background:#F0DCA0;border-color:#F0DCA0}
+  /* The sponsor's mark on the home band, larger than the hero's: this is the first thing a
+     scanner sees and the credit is worth reading. translateX corrects the wordmark's own
+     off-centre ink (the swoosh trails right with almost none in it). */
+  .ball-home-credit{display:flex;flex-direction:column;gap:8px;align-items:flex-start;
+    margin:22px 0 0;padding-top:18px;border-top:1px solid rgba(233,210,150,.22)}
+  .ball-home-credit span{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
+    color:rgba(242,238,228,.7)}
+  .ball-home-credit a{display:block;width:250px;max-width:100%}
+  .ball-home-credit img{display:block;width:100%;height:auto;opacity:.92;
+    transform:translateX(3.1%)}
+  .ball-home-credit a:hover img{opacity:1}
 </style>`;
 
 const BANNER = `      <a class="ball-banner" href="/ball">
@@ -79,6 +90,13 @@ const FEATURE = `      <section class="ball-home-feature" aria-labelledby="ball-
               ticket funds NBCC's work.
             </p>
             <a class="btn" href="/ball">Book tickets</a>
+            <p class="ball-home-credit">
+              <span>Organised and sponsored by</span>
+              <a href="https://thedesignerrooms.com/" target="_blank" rel="noopener">
+                <img src="/assets/img/the-designer-rooms-cream.png" alt="The Designer Rooms"
+                  width="486" height="63" loading="lazy" decoding="async" />
+              </a>
+            </p>
           </div>
         </div>
       </section>

@@ -2210,9 +2210,13 @@ web pages, and a flat "7th November" in emails, meta tags and the Stripe line it
 which can carry markup. `.ord` is sized and lifted by hand because the browser default `<sup>`
 pushes the line box open, which shows as an uneven gap above any line containing a date.
 
-Michelle McManus has her own credit (`.ball-host`) rather than a clause inside a paragraph
+Michelle McManus has a card of her own (`.ball-host`) rather than a clause inside a paragraph
 about the line-up: a named host is a reason to buy a ticket, and set as running text she read
-as a detail. The venue's short form drops "Rugby Park" — it stays in the full address in the
+as a detail. It borrows the SHAPE of the practical-bits panel opposite (same radius and padding
+rhythm) so the two read as a pair, but takes the page's night palette instead of the cream
+card (TASK-328). A dark block in a column of cream prose is the strongest pull available on
+that section, which is what a headline booking should have, and it echoes the hero and the
+sponsor band rather than introducing a new colour. The venue's short form drops "Rugby Park" — it stays in the full address in the
 emails, terms and getting-there copy, where somebody actually needs it to find the place.
 
 **Motion.** The hero entrance runs at 1.15s (lockup 1.5s) with a wider stagger, and this page's

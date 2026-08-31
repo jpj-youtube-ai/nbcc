@@ -216,27 +216,42 @@
   letter-spacing: 0.02em;
 }
 
-/* The host, given her own credit rather than a clause inside a paragraph about the line-up.
-   A named host is a reason to buy a ticket; set as running text she reads as a detail. Small
-   letterspaced label above, name large in the display face, the way a bill is set. */
+/* The host, given a card of her own rather than a clause inside a paragraph about the line-up.
+   A named host is a reason to buy a ticket; set as running text she read as a detail.
+   
+   It borrows the SHAPE of the practical-bits panel opposite (same radius, same padding rhythm)
+   so the two read as a pair, but takes the page's night palette instead of the cream card. A
+   dark block in a column of cream prose is the strongest pull available on this section, which
+   is what a headline booking should have, and it echoes the hero and the sponsor band rather
+   than introducing a new colour. */
 .ball-host {
-  margin: 0 0 18px;
+  margin: 0 0 20px;
+  padding: clamp(18px, 3vw, 24px);
+  background: var(--night);
+  background-image: radial-gradient(
+    120% 100% at 50% -20%,
+    rgba(233, 210, 150, 0.18) 0%,
+    rgba(233, 210, 150, 0.05) 45%,
+    transparent 78%
+  );
+  border: 1px solid var(--night-line);
+  border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .ball-host-label {
-  font-size: 0.74rem;
-  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--gold-deep);
+  color: var(--on-night-soft);
 }
 .ball-host-name {
   font-family: "Playfair Display", Georgia, serif;
   font-weight: 600;
-  font-size: clamp(1.5rem, 3.4vw, 2.1rem);
-  line-height: 1.1;
-  color: var(--maroon);
+  font-size: clamp(1.6rem, 3.6vw, 2.3rem);
+  line-height: 1.15;
+  color: var(--gold);
 }
 
 /* ---------- the night ---------- */

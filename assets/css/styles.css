@@ -194,6 +194,19 @@ body.has-ticker{padding-top:var(--ticker-h)}
 .nav-links a.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%) rotate(45deg);bottom:2px;width:6px;height:6px;background:var(--crimson)}
 .nav-cta{text-decoration:none;background:var(--crimson);color:var(--cream);font-weight:600;padding:11px 24px;border-radius:var(--radius-pill);font-size:.96rem;box-shadow:var(--shadow-sm);transition:transform .15s,background .2s}
 .nav-cta:hover{background:var(--maroon);transform:translateY(-1px)}
+/* A hairline between nav items. The links sit close together and, once "Festive Ball" is
+   added at launch, five words of similar length run into one another. Only above the burger
+   breakpoint: in the open mobile menu the items are stacked, where a vertical rule would make
+   no sense. `li + li` is a DOM relationship, so a hidden item (Donate, below) does not leave a
+   stray divider behind — the rule simply falls to the next item that renders. */
+@media(min-width:681px){
+  .nav-links li + li{position:relative}
+  .nav-links li + li::before{
+    content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);
+    width:1px;height:14px;background:var(--line)
+  }
+}
+
 /* De-dupe Donate at desktop only; below 681px the CTA is hidden and this item is the sole
    header route to /donate. See README "Nav: one Donate, not two". */
 @media(min-width:681px){.nav-links li:has(a[href="/donate"]){display:none}}

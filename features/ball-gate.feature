@@ -93,6 +93,17 @@ Feature: The Festive Ball password gate (TASK-313)
     When I request "/contact"
     Then the nav should offer the Festive Ball
 
+  Scenario: a staff preview shows the ball in the nav too, not just on the home page
+    # Without this the preview contradicted itself: a cookie holder saw the promotion band on
+    # the home page while the nav on every page pretended the ball did not exist, so the thing
+    # they were checking could not be reached from the page they were checking it on.
+    Given the ball gate is closed
+    When I unlock the ball page with the real password
+    And I request "/"
+    Then the nav should offer the Festive Ball
+    When I request "/about-us"
+    Then the nav should offer the Festive Ball
+
   Scenario: staff preview the launch-morning home page without publishing it
     # "How do we see what the home page looks like before it goes live?" Anyone holding a
     # preview cookie -- which you only get by typing the ball password -- sees the promotion

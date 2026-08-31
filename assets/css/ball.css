@@ -17,7 +17,11 @@
      against the site's warm cream. */
   --night: #0B1020;
   --night-2: #131A31;
-  --night-line: rgba(233, 210, 150, 0.22);
+  /* Rules and borders on the night ground. Raised from 0.22 to 0.42: on a bright screen a
+     22% gold hairline over near-black is close to invisible, and the fact-row rules in the
+     hero simply were not there. This is the value every dark-ground border on the page uses,
+     so one change fixes all of them. */
+  --night-line: rgba(233, 210, 150, 0.42);
   /* Two golds. The bright one is for large type and rules only; the deep one is
      the accessible foreground for small text on cream. */
   --gold: #E4C87A;
@@ -180,13 +184,52 @@
   border-color: #F0DCA0;
 }
 .btn-ghost-gold {
-  background: transparent;
+  /* An outline button on a near-black ground needs more than a faint hairline or it reads as
+     plain text. A gold border at full strength plus a barely-there fill gives it an edge and a
+     surface, so it is obviously pressable next to the solid gold primary without competing
+     with it. */
+  background: rgba(233, 210, 150, 0.06);
   color: var(--on-night);
-  border: 1px solid var(--night-line);
+  border: 1px solid rgba(233, 210, 150, 0.55);
 }
 .btn-ghost-gold:hover {
+  background: rgba(233, 210, 150, 0.13);
   border-color: var(--gold);
   color: var(--gold);
+}
+
+/* The sponsor's mark in the hero (TASK-330). They organise AND pay for the evening, and the
+   credit at the foot of the page is a long way from where that fact is worth knowing. Sized
+   well under the ball's own lockup above it: a guest's mark, given room, not given the stage.
+   Same optical nudge as the standing credit. */
+.ball-credit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 0 0 4px;
+}
+.ball-credit-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--on-night-soft);
+}
+.ball-credit a {
+  display: block;
+  width: 210px;
+  max-width: 100%;
+}
+.ball-credit img {
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0.92;
+  transform: translateX(3.1%);
+  transition: opacity 0.2s var(--ease-quart);
+}
+.ball-credit a:hover img {
+  opacity: 1;
 }
 
 .ball-organiser {
@@ -605,6 +648,11 @@
   display: block;
   width: min(100%, 320px);
   height: auto;
+  /* Optically centred, not geometrically. The swoosh trails right with almost no ink in it,
+     so centring the BOX leaves the lettering visibly left of centre — measured at 15px of 486,
+     or 3.1% of the width. A percentage transform holds that correction at any size, and
+     transform does not disturb the layout around it. */
+  transform: translateX(3.1%);
   /* It is a guest's mark on our page: present and legible, never louder than the ball's own
      lockup a few sections above. */
   opacity: 0.92;
@@ -636,6 +684,16 @@
   display: block;
   width: min(100%, 240px);
   height: auto;
+}
+
+/* The booking section needs to look like somewhere you have ARRIVED, not more of the page.
+   The shared .tint is a gradient from #F8F5EE to #F3EEE3 — five units of difference, which is
+   invisible on most screens and was invisible here. A flat, deeper ground plus a defined top
+   edge makes the section start somewhere. */
+.ball-page .section.tint {
+  background: #EFE7D8;
+  border-top: 1px solid rgba(138, 106, 38, 0.16);
+  border-bottom: 1px solid rgba(138, 106, 38, 0.16);
 }
 
 /* ---------- who you're supporting ---------- */

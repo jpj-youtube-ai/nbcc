@@ -2186,6 +2186,38 @@ wordmark next to the same words set in our own face reads as a mistake. It sits 
 lifting on hover — present and legible, never louder than the ball's own lockup a few sections
 above. It is a guest's mark on NBCC's page.
 
+### Third staff review: legibility on the dark ground (TASK-330)
+
+Most of this round was one root cause wearing several hats: **things on the night-sky ground
+were too faint to see.** `--night-line` was a 22% gold hairline over near-black, which on a
+bright screen is not there at all. It is now 42%, and because every dark-ground border on the
+page uses that token, one change fixed the hero's fact rules, the panel edges and the rest.
+
+The same problem had made `.btn-ghost-gold` unreadable as a *button* — an outline at 22% next
+to a solid gold primary reads as plain text. It now has a full-strength gold edge and a
+barely-there fill, so it is obviously pressable without competing.
+
+Other fixes:
+
+- **The booking section now looks like a section.** The shared `.tint` is a gradient from
+  `#F8F5EE` to `#F3EEE3` — five units, invisible in practice. `/ball` uses a flat, deeper
+  ground with defined top and bottom edges.
+- **"Continue to payment" had two arrows.** `.btn::after` in the shared stylesheet already
+  draws one; the markup added a second by hand. Worth knowing before adding any button here.
+- **The sponsor's wordmark is optically centred, not geometrically.** Its swoosh trails right
+  carrying almost no ink, so centring the box leaves the lettering visibly left — measured at
+  15px of 486, or 3.1%. A percentage `translateX` holds that at any size.
+- **Nav items have a hairline between them**, above the burger breakpoint only. `li + li` is a
+  DOM relationship, so the hidden Donate item leaves no stray divider.
+- **The sponsor's mark now appears in the hero and on the home band**, not only at the foot.
+  Both put the width on a **block-level** `<a>`: on an inline one, `width: min(100%, …)` on the
+  image has no definite containing block and the mark silently collapsed (to 82px of 210).
+
+**The preview now shows the nav item.** `ballIsPublished` checked only the gate, so a cookie
+holder saw the promotion band on the home page while every nav pretended the ball did not
+exist — the thing staff were checking could not be reached from the page they were checking it
+on.
+
 ### Ball copy house rules (TASK-325)
 
 Two rules the rest of the site already followed and the ball surfaces did not. Both are

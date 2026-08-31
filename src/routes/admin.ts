@@ -41,12 +41,16 @@ import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
 import { buildBallReminderEmail } from "../ball/reminder-email";
 import { sendBallReminder } from "../clients/email";
 import { availability } from "../ball/capacity";
+import { holdCreateSchema, seatsForHold } from "../ball/holds";
 import { isGateOpen } from "../ball/gate";
 import {
   getCapacityState,
   getDashboard,
   getSettings as getBallSettings,
   cancelBooking,
+  createHold,
+  listActiveHolds,
+  releaseHold,
   listBookings,
   listBookingsForExport,
   listBookingsNeedingReminder,
@@ -2871,10 +2875,69 @@ export async function postAdminBallCancelBooking(
   }
 }
 
+// GET /api/admin/ball/holds — what is currently held back and for whom. Viewer+.
+export async function getAdminBallHolds(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    return res.status(200).json({ results: await listActiveHolds() });
+  } catch (err) {
+    console.error("admin ball holds failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/ball/holds — take seats or tables off sale for a named party. Editor+ WITH
+// the ball section: this consumes capacity exactly as a purchase does.
+export async function postAdminBallHold(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  const parsed = holdCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Check the hold", details: parsed.error.issues });
+  }
+  const h = parsed.data;
+  try {
+    const outcome = await createHold(
+      { ...h, seats: seatsForHold(h.kind, h.quantity) },
+      claims.email,
+    );
+    if (!outcome.ok) {
+      return res.status(409).json({ error: "There are not enough seats left to hold that many." });
+    }
+    return res.status(201).json({ id: outcome.id, seats: seatsForHold(h.kind, h.quantity) });
+  } catch (err) {
+    console.error("admin ball hold create failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// DELETE /api/admin/ball/holds/:id — hand the seats back early. Editor+ WITH the ball section.
+export async function deleteAdminBallHold(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: "Which hold?" });
+  try {
+    const outcome = await releaseHold(id, claims.email);
+    if (!outcome.ok) {
+      return outcome.reason === "not_found"
+        ? res.status(404).json({ error: "No such hold." })
+        : res.status(409).json({ error: "Those seats have already been released." });
+    }
+    return res.status(200).json({ released: id, seatsReturned: outcome.seats });
+  } catch (err) {
+    console.error("admin ball hold release failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/ball", getAdminBall);
 adminRouter.patch("/api/admin/ball", patchAdminBall);
 adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);
 adminRouter.post("/api/admin/ball/bookings/:reference/cancel", postAdminBallCancelBooking);
+adminRouter.get("/api/admin/ball/holds", getAdminBallHolds);
+adminRouter.post("/api/admin/ball/holds", postAdminBallHold);
+adminRouter.delete("/api/admin/ball/holds/:id", deleteAdminBallHold);
 
 // The three lists (TASK-313 plan 5). Viewer+ can read them; they are downloads of data the
 // section already shows on screen.

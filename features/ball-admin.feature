@@ -91,6 +91,57 @@ Feature: Festive Ball admin controls (TASK-313)
     When I request the ball availability
     Then the ball availability should show 398 seats remaining
 
+  Scenario: holding tables for a company takes them off sale, by name
+    # The whole point of TASK-324: the seats are reserved AND the reason is written down, so in
+    # November somebody can tell what the held-back number is actually covering.
+    Given a ball admin "ball23.admin.bdd@example.com" with role "admin" and password "pw-ball23"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    When I hold 2 "table" for "Ayrshire Bakery (invoice 1042)" as "ball23.admin.bdd@example.com" with password "pw-ball23"
+    Then the ball admin status should be 201
+    And the hold list should name "Ayrshire Bakery (invoice 1042)"
+    When I request the ball availability
+    Then the ball availability should show 380 seats remaining
+    And the ball availability should show 38 tables remaining
+
+  Scenario: releasing a hold puts the seats straight back on sale
+    Given a ball admin "ball24.admin.bdd@example.com" with role "admin" and password "pw-ball24"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    When I hold 3 "seat" for "Sponsor guests" as "ball24.admin.bdd@example.com" with password "pw-ball24"
+    Then the ball admin status should be 201
+    When I request the ball availability
+    Then the ball availability should show 397 seats remaining
+    When I release that hold as "ball24.admin.bdd@example.com" with password "pw-ball24"
+    Then the ball admin status should be 200
+    When I request the ball availability
+    Then the ball availability should show 400 seats remaining
+
+  Scenario: a hold cannot be released twice
+    Given a ball admin "ball25.admin.bdd@example.com" with role "admin" and password "pw-ball25"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    When I hold 1 "seat" for "Top table" as "ball25.admin.bdd@example.com" with password "pw-ball25"
+    And I release that hold as "ball25.admin.bdd@example.com" with password "pw-ball25"
+    Then the ball admin status should be 200
+    When I release that hold as "ball25.admin.bdd@example.com" with password "pw-ball25"
+    Then the ball admin status should be 409
+
+  Scenario: a hold bigger than the room left is refused
+    # Judged on SEATS whichever kind is asked for, and inside the same lock the checkout uses,
+    # so a hold and a purchase can never both be granted the last table.
+    Given a ball admin "ball26.admin.bdd@example.com" with role "admin" and password "pw-ball26"
+    And the ball is reset to 2 tables of 10 with 0 held back
+    When I hold 3 "table" for "Too big" as "ball26.admin.bdd@example.com" with password "pw-ball26"
+    Then the ball admin status should be 409
+    When I request the ball availability
+    Then the ball availability should show 20 seats remaining
+
+  Scenario: a viewer cannot take seats off sale
+    Given a ball admin "ball27.admin.bdd@example.com" with role "viewer" and password "pw-ball27"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    When I hold 1 "table" for "Sneaky" as "ball27.admin.bdd@example.com" with password "pw-ball27"
+    Then the ball admin status should be 403
+    When I request the ball availability
+    Then the ball availability should show 400 seats remaining
+
   Scenario: publishing a confirmed arrival time reaches the page
     Given a ball admin "ball4.admin.bdd@example.com" with role "admin" and password "pw-ball4"
     And the ball gate is open

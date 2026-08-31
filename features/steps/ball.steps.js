@@ -48,6 +48,8 @@ Given(
     await withDb(async (db) => {
       await db.query("DELETE FROM ball_reservations");
       await db.query("DELETE FROM ball_bookings");
+      // TASK-324: a hold left standing silently shrinks the room for every later scenario.
+      await db.query("DELETE FROM ball_holds");
       await db.query(
         `UPDATE ball_settings
             SET total_tables = $1, seats_per_table = $2, held_seats = $3,
@@ -524,6 +526,47 @@ When(
     this.ballAdminBody = await res.json().catch(() => ({}));
   },
 );
+
+// TASK-324: named holds.
+When(
+  "I hold {int} {string} for {string} as {string} with password {string}",
+  async function (quantity, kind, name, email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/holds`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, kind, quantity }),
+    });
+    this.ballLastToken = token;
+    this.ballAdminStatus = res.status;
+    this.ballAdminBody = await res.json().catch(() => ({}));
+    if (res.status === 201) this.ballHoldId = this.ballAdminBody.id;
+  },
+);
+
+When(
+  "I release that hold as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/holds/${this.ballHoldId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballAdminStatus = res.status;
+    this.ballAdminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the hold list should name {string}", async function (name) {
+  const res = await fetch(`${BASE_URL}/api/admin/ball/holds`, {
+    headers: { Authorization: `Bearer ${this.ballLastToken}` },
+  });
+  const body = await res.json().catch(() => ({}));
+  assert.ok(
+    (body.results || []).some((h) => h.name === name),
+    `expected a hold for "${name}", got ${JSON.stringify(body.results)}`,
+  );
+});
 
 Then("the cancellation should report {int} seats returned", function (n) {
   assert.strictEqual(this.ballAdminBody.seatsReturned, n);

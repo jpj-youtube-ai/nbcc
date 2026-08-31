@@ -66,6 +66,28 @@ Feature: The Festive Ball password gate (TASK-313)
     And the ball page should not contain "Festive Ball"
     And the ball page should not contain "ball-banner"
 
+  Scenario: staff preview the launch-morning home page without publishing it
+    # "How do we see what the home page looks like before it goes live?" Anyone holding a
+    # preview cookie -- which you only get by typing the ball password -- sees the promotion
+    # band while the gate is still shut. The scenario above proves it stays absent for
+    # everyone else.
+    Given the ball gate is closed
+    When I unlock the ball page with the real password
+    And I request "/"
+    Then the ball page status should be 200
+    And the ball page should contain "ball-banner"
+    And the ball page should contain "Festive Ball"
+    And the ball page should not be cached by anything shared
+
+  Scenario: a forged preview cookie reveals nothing
+    # The promotion must turn on for a cookie we actually signed, not for the presence of a
+    # cookie by that name.
+    Given the ball gate is closed
+    When I request "/" carrying a forged preview cookie
+    Then the ball page status should be 200
+    And the ball page should not contain "Festive Ball"
+    And the ball page should not contain "ball-banner"
+
   Scenario: opening the gate puts the ball on the home page too
     Given the ball gate is open
     When I request "/"

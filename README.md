@@ -2227,6 +2227,27 @@ Three paths, all verified in a browser against stubbed network and Stripe:
 | Stripe.js blocked or the mount is missing | Straight to the hosted redirect, never tries embedded, modal stays shut |
 | A real refusal (sold out, validation, sales closed) | Shows the actual reason and **does not** retry as a hosted redirect, which would fail again and read as a broken button |
 
+### Previewing the launch-morning home page (TASK-320)
+
+Staff asked how to see what the front page will look like on launch morning without launching
+it. **Unlock `/ball` with the password, then visit `/` — the promotion band appears for you and
+nobody else.** The cookie lasts a fortnight and changing the password invalidates it.
+
+For everyone without that cookie the home page is served as the file, byte for byte, so the
+ball is absent from the page **source** rather than hidden inside it.
+
+The preview response carries `Cache-Control: private, no-store` and `Vary: Cookie`. There is no
+CDN in front of the ALB today, but the entire point of the gate is that this page must not
+reach anyone who has not typed the password, and a shared cache is exactly how that would
+happen by accident.
+
+"May this request see the ball?" now lives in **one** place, `src/ball/preview-access.ts`
+(`holdsPreviewCookie`), used by both `/ball` and `/`. It was previously a private helper inside
+the ball router; two copies of a question like this drift, and the copy that drifts leniently
+announces an event The Designer Rooms has not announced yet. It **fails closed** — a missing,
+forged, expired or unverifiable cookie all mean no, including when the database read for the
+password hash throws.
+
 ### Changing the preview password
 
 Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`

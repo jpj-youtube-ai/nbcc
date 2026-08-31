@@ -14,6 +14,14 @@ import type { BallSettings } from "../db/ball";
 
 export type BallPageSettings = Pick<BallSettings, "arrivalTime" | "includedNote" | "lineUpNote">;
 
+// The one copy of this sentence. ball.html carries it as the fallback shown before the venue
+// confirms a menu; this constant is what the menu note gets appended to afterwards. Two hand
+// copies would drift, and the page would then say different things depending on whether a note
+// happened to be set. test/unit/ball-page.test.ts pins them together.
+export const TICKET_INCLUDES =
+  "Entry to the ball, a three-course meal, a drink on arrival, and entertainment " +
+  "through the evening. Further drinks are not included.";
+
 export interface BallPageInput {
   settings: BallPageSettings;
   gateOpen: boolean;
@@ -62,11 +70,15 @@ export function renderBallPage(template: string, input: BallPageInput): string {
     html = fillRegion(html, "arrival-2", arrival);
   }
 
-  // The confirmed inclusions (entry, a meal, the entertainment) are fixed copy; the menu detail
-  // is APPENDED to them once the venue confirms, never substituted for them.
+  // The confirmed inclusions are fixed copy; the menu detail is APPENDED once the venue
+  // confirms it, never substituted for them.
+  //
+  // "Further drinks are not included" is doing real work. A drink on arrival reads to plenty of
+  // people as "drinks are provided", and the difference is discovered at the bar on the night
+  // — which is both an unhappy guest and, in an advert for a £100 ticket, a claim we could not
+  // stand behind. Better said plainly here than argued about in November.
   if (settings.includedNote) {
-    const base = "Entry to the ball, a meal, and the full evening's entertainment.";
-    html = fillRegion(html, "included", base + " " + escapeHtml(settings.includedNote));
+    html = fillRegion(html, "included", TICKET_INCLUDES + " " + escapeHtml(settings.includedNote));
   }
 
   if (settings.lineUpNote) {

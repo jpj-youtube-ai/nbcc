@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderBallPage } from "../../src/ball/page";
+import { renderBallPage, TICKET_INCLUDES } from "../../src/ball/page";
 
 const TEMPLATE = `<html><head>
 <meta name="robots" content="noindex, nofollow" data-region="robots" />
@@ -45,7 +45,10 @@ describe("renderBallPage", () => {
       settings: { ...BLANK, includedNote: "Arrival drink and a three-course dinner." },
       gateOpen: true,
     });
-    expect(html).toContain("Entry to the ball, a meal, and the full evening's entertainment.");
+    // The sentence now names the three courses and the arrival drink, and says further drinks
+    // are not included (TASK-333). Asserted against the exported constant rather than a second
+    // hand copy of it, which is the drift this pair of tests exists to prevent.
+    expect(html).toContain(TICKET_INCLUDES);
     expect(html).toContain("Arrival drink and a three-course dinner.");
   });
 

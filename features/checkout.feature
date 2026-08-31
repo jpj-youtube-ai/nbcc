@@ -25,6 +25,38 @@ Feature: Checkout session endpoint (REQ-029)
     And the response field "publishableKey" should start with "pk_"
 
   @stub-only
+  Scenario: covering the card fee is stamped separately from the gift (TASK-321)
+    # The fee cover is NOT a donation. Stripe's amount_total is the sum of every line item, so
+    # the webhook subtracts this stamped figure back out — without it, Gift Aid would be claimed
+    # on the fee and a £30 gift could breach the GASDS £30 ceiling.
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 5000, "giftAid": true, "coverFee": true, "email": "donor@example.com" }
+      """
+    Then the response status should be 200
+    And the session metadata field "feeCoverPence" should be "80"
+
+  @stub-only
+  Scenario: a gift with no fee cover stamps zero, exactly as before (TASK-321)
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "once", "plan": null, "amount": 5000, "giftAid": true, "email": "donor@example.com" }
+      """
+    Then the response status should be 200
+    And the session metadata field "feeCoverPence" should be "0"
+
+  @stub-only
+  Scenario: a monthly gift never carries a fee cover (TASK-321)
+    # A recurring fee cover would have to be split back out of every renewal invoice and every
+    # later claim, so it is refused here rather than offered and got wrong twelve times a year.
+    When I POST "/api/checkout-session" with JSON:
+      """
+      { "mode": "monthly", "plan": null, "amount": 1000, "giftAid": true, "coverFee": true, "email": "donor@example.com", "ageConfirmed": true }
+      """
+    Then the response status should be 200
+    And the session metadata field "feeCoverPence" should be "0"
+
+  @stub-only
   Scenario: a valid monthly Gift Aid donation returns a session reflecting the opt-in
     # giftAid=true binds the verbatim HMRC wording onto the session metadata (TASK-053);
     # the offline stub reflects the opt-in in its preview URL, so this is asserted

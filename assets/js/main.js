@@ -341,6 +341,15 @@
       // rule collapses the flex row). No-op if the field is absent.
       var ageField = doc.getElementById("ageConfirmField");
       if (ageField) ageField.hidden = mode !== "monthly";
+      // TASK-321: one-off gifts only. A monthly fee cover would have to be split back out of
+      // every renewal invoice and every later claim. Unticked on the way out so a choice made
+      // for a one-off cannot survive a switch to monthly.
+      var feeField = doc.getElementById("coverFeeField");
+      if (feeField) {
+        feeField.hidden = mode !== "once";
+        var feeBox = doc.getElementById("coverFee");
+        if (feeBox && mode !== "once") feeBox.checked = false;
+      }
       // Declaration scope (REQ-044): re-sync the scope default to the new mode (unless
       // the donor has already picked one).
       syncDeclScope(doc, mode);
@@ -814,11 +823,14 @@
     }
 
     var giftAidEl = doc.getElementById("giftAid");
+    var coverFeeEl = doc.getElementById("coverFee");
     var payload = {
       mode: button.getAttribute("data-mode") || null,
       plan: button.getAttribute("data-plan") || null,
       amount: amount || null,
       giftAid: !!(giftAidEl && giftAidEl.checked),
+      // TASK-321: says only whether the donor offered; the server decides the figure.
+      coverFee: !!(coverFeeEl && coverFeeEl.checked && !coverFeeEl.closest(".give-question").hidden),
     };
 
     // Donor-type routing (REQ-038): once initDonorType has wired the control
@@ -1513,6 +1525,11 @@
     // Non-definitive impact copy only (Code of Fundraising Practice): "could help ...",
     // never "£X provides Y". Keyed by give mode + amount (pence); custom amounts use a
     // generic line. The visible default in donate.html covers the no-JS case.
+    // NBCC's Stripe charity rate in basis points, matching src/ball/pricing.ts (120 = 1.20%).
+    // Guarded against drift by test/unit/donate-fee-cover.test.ts.
+    var CARD_FEE_BP = 120;
+    var CARD_FEE_FIXED_PENCE = 20;
+
     var IMPACT = {
       monthly: {
         1000: "could help build towards the comfort and thoughtful gifts that make someone feel remembered.",
@@ -1562,6 +1579,11 @@
         setText("giftAidFrom", amountStr);
         setText("giftAidTo", fmtGBP(pence * 1.25));
         setText("giftAidPlus", "+" + fmtGBP(pence * 0.25));
+      }
+      // TASK-321: mirrors stripeFeePence (src/ball/pricing.ts), round UP included. Display
+      // only — the server prices the actual charge, and Stripe itemises it before confirming.
+      if (pence) {
+        setText("coverFeeAmount", fmtGBP(Math.ceil((pence * CARD_FEE_BP) / 10000) + CARD_FEE_FIXED_PENCE));
       }
       updateSupporterOptin();
     }

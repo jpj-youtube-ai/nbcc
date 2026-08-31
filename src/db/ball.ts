@@ -119,6 +119,18 @@ async function readCapacityState(db: Querier): Promise<CapacityState> {
   };
 }
 
+// The card rate NBCC is charged, for anywhere that needs to quote it. It lives on
+// ball_settings because that is where it was first needed (TASK-317), but it is a fact about
+// the STRIPE ACCOUNT, not about the ball — the donate page is charged the same rate and reads
+// it from here (TASK-321) rather than keeping a second copy that would drift.
+export async function getCardFeeRate(): Promise<CardFeeRate> {
+  const settings = await getSettings();
+  return {
+    percentBp: settings.cardFeePercentBp,
+    fixedPence: settings.cardFeeFixedPence,
+  };
+}
+
 export async function getSettings(): Promise<BallSettings> {
   const res = await pool.query<SettingsRow>(SETTINGS_SQL);
   return toSettings(res.rows[0]);

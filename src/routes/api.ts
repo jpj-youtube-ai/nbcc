@@ -16,6 +16,7 @@ import { containsBlockedWord } from "../donors/display-name-filter";
 import { getGiftAidDeclarationContext, completeDeclaration, GiftAidCompletionError } from "../db/donations";
 import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render";
 import { config } from "../config";
+import { stripeFeePence, DEFAULT_CARD_FEE, type CardFeeRate } from "../ball/pricing";
 import { storySubmissionSchema, buildStoryRecord } from "../stories/schema";
 import { insertStory } from "../db/stories";
 import { contactEnquirySchema } from "../contact/schema";
@@ -44,6 +45,10 @@ const checkoutBodySchema = z
     plan: z.enum(PLANS).nullable(),
     amount: z.number().int().positive().nullable(),
     giftAid: z.boolean(),
+    // TASK-321: the donor offering to cover Stripe's fee. A separate, voluntary amount that is
+    // NOT part of the gift — it is excluded from amount_pence, from the Gift Aid claim and from
+    // the GASDS £30 test. Defaulted false so the no-JS base contract is unchanged.
+    coverFee: z.boolean().default(false),
     // TASK-215: which Stripe Checkout UI to open. "hosted" (the DEFAULT when absent) keeps the
     // existing behaviour byte-for-byte — Stripe returns a redirect { url } and the donor completes
     // payment on checkout.stripe.com; it is the no-JS fallback and safety net. "embedded" returns a
@@ -221,18 +226,38 @@ export function embeddedRequested(body: CheckoutBody): boolean {
   return body.uiMode === "embedded" && Boolean(config.STRIPE_PUBLISHABLE_KEY);
 }
 
+// How much this donor is offering towards Stripe's fee, in pence — 0 unless they asked.
+//
+// ONE-OFF ONLY, deliberately. A monthly gift is charged again every month, so a recurring fee
+// cover would have to be split back out of every renewal invoice and every subsequent Gift Aid
+// claim. That is a separate piece of work; offering it here and getting it wrong would corrupt
+// a claim twelve times a year rather than once.
+export function donationFeeCoverPence(body: CheckoutBody, cardFee: CardFeeRate): number {
+  if (!body.coverFee || body.mode !== "once" || !body.amount) return 0;
+  return stripeFeePence(body.amount, cardFee);
+}
+
 // Assemble the Stripe Checkout session parameters from a validated body.
+//
+// cardFee is passed IN rather than read here so this stays a pure, DB-free function the unit
+// tests can drive (it is the single place the session's shape is decided).
 export function buildSessionParams(
   body: CheckoutBody,
+  cardFee: CardFeeRate = DEFAULT_CARD_FEE,
 ): StripeNS.Checkout.SessionCreateParams {
   // Capture the Gift Aid declaration (and the gift context) on the session so the
   // 25% claim can be reconciled later. NOTE: durable storage of the declaration
   // (a Stripe webhook writing to the DB) is out of scope here — this only records
   // intent on the session metadata.
+  const feeCoverPence = donationFeeCoverPence(body, cardFee);
   const metadata: Record<string, string> = {
     mode: body.mode,
     plan: body.plan ?? "",
     giftAid: String(body.giftAid),
+    // TASK-321: stamped so the webhook can subtract it back out of Stripe's amount_total,
+    // which is the sum of EVERY line item. Without this the fee cover would be recorded as
+    // part of the gift and Gift Aid would be claimed on it.
+    feeCoverPence: String(feeCoverPence),
     // Stamp the donor type + optional business name alongside giftAid (REQ-038), so
     // the single Stripe webhook can persist them onto the donor record (REQ-036).
     donorType: body.donorType,
@@ -368,22 +393,35 @@ export function buildSessionParams(
   // all one-off gifts roll up under that product in Stripe; otherwise name an
   // inline product. Either way the amount stays the donor's entered value.
   const donationProduct = config.STRIPE_DONATION_PRODUCT;
-  return {
-    ...base,
-    mode: "payment",
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "gbp",
-          unit_amount: body.amount as number,
-          ...(donationProduct
-            ? { product: donationProduct }
-            : { product_data: { name: "Donation to NBCC" } }),
+  const lineItems: StripeNS.Checkout.SessionCreateParams.LineItem[] = [
+    {
+      quantity: 1,
+      price_data: {
+        currency: "gbp",
+        unit_amount: body.amount as number,
+        ...(donationProduct
+          ? { product: donationProduct }
+          : { product_data: { name: "Donation to NBCC" } }),
+      },
+    },
+  ];
+  // Its OWN line, and deliberately NOT rolled under the donation product: the donor sees on
+  // Stripe's page exactly what each part of the charge is, and NBCC's Stripe reporting keeps
+  // gifts and fee contributions apart rather than inflating donation totals.
+  if (feeCoverPence > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency: "gbp",
+        unit_amount: feeCoverPence,
+        product_data: {
+          name: "Covering the card fee",
+          description: "So your full gift reaches NBCC",
         },
       },
-    ],
-  };
+    });
+  }
+  return { ...base, mode: "payment", line_items: lineItems };
 }
 
 export async function postCheckoutSession(req: Request, res: Response): Promise<Response> {
@@ -396,7 +434,16 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
   }
 
   try {
-    const params = buildSessionParams(parsed.data);
+    // The rate NBCC is actually charged, from the one place it is stored (TASK-317/321).
+    // A failure to read it must not take the donate page down, so fall back to the default.
+    let cardFee = DEFAULT_CARD_FEE;
+    try {
+      const { getCardFeeRate } = await import("../db/ball");
+      cardFee = await getCardFeeRate();
+    } catch (err) {
+      console.error("card fee rate read failed, using default:", err instanceof Error ? err.message : err);
+    }
+    const params = buildSessionParams(parsed.data, cardFee);
     const session = await stripe.checkout.sessions.create(params);
     // Embedded (inline) returns a { clientSecret } the browser mounts on nbcc.scot, plus the PUBLIC
     // publishable key it needs to construct Stripe.js (TASK-215) — but ONLY when a key is configured

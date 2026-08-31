@@ -20,6 +20,17 @@ When("I POST {string} with JSON:", async function (path, docString) {
   }
 });
 
+// TASK-321: the stub echo returns the session's stamped metadata, so a scenario can assert
+// what the WEBHOOK will later read — which is what decides the recorded gift and its Gift Aid.
+Then("the session metadata field {string} should be {string}", function (field, value) {
+  const md = (this.body && this.body.metadata) || {};
+  assert.strictEqual(
+    String(md[field]),
+    value,
+    `expected session metadata "${field}" to be "${value}", got "${md[field]}"`,
+  );
+});
+
 Then("the response field {string} should start with {string}", function (field, prefix) {
   const value = this.body[field];
   assert.ok(

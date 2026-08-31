@@ -9,6 +9,7 @@ import { makeReference, purchaseSchema } from "../ball/booking";
 import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
+import { addBallNavLink } from "../ball/nav-link";
 import {
   claimReservation,
   createPendingBooking,
@@ -212,7 +213,16 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
     return;
   }
   const template = readFileSync(file, "utf8");
-  res.type("html").send(renderBallPage(template, { settings, gateOpen }));
+  // TASK-334: the ball page is served here rather than by the shared static handler in
+  // site.ts, which is the handler that adds the Festive Ball nav item to every other page.
+  // So the ball page was the ONE page whose nav never carried it — not "not yet", but never,
+  // published or not. Staff spotted it on the preview, where the bar offered no way back to
+  // the page they were standing on.
+  //
+  // No publication check here, unlike site.ts: reaching this line already means the gate is
+  // open OR the request carried a valid preview cookie, so the ball is reachable for THIS
+  // request by definition. Re-testing it could only ever disagree with the page being sent.
+  res.type("html").send(addBallNavLink(renderBallPage(template, { settings, gateOpen })));
 }
 
 ballRouter.get("/ball", async (req, res, next) => {

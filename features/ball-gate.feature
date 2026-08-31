@@ -31,6 +31,19 @@ Feature: The Festive Ball password gate (TASK-313)
     And the ball page should show the event
     And the ball page should be visible to search engines
 
+  # TASK-334: the ball page is served by its own route, not the shared static handler that adds
+  # the nav item everywhere else, so it was the one page in the site whose bar never offered it.
+  Scenario: the ball page's own nav carries the Festive Ball item
+    Given the ball gate is open
+    When I request the ball page
+    Then the ball page nav should link to the ball
+
+  Scenario: a preview visitor gets the nav item too, so the preview matches the real thing
+    Given the ball gate is closed
+    When I unlock the ball page with the real password
+    Then the ball page status should be 200
+    And the ball page nav should link to the ball
+
   Scenario: a scheduled unlock opens the gate on its own
     Given the ball gate is closed but scheduled to open in the past
     When I request the ball page

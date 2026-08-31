@@ -130,8 +130,12 @@
   margin: 0;
   width: 100%;
   max-width: 780px;
-  border-top: 1px solid var(--night-line);
-  border-bottom: 1px solid var(--night-line);
+  /* 3px, not a hairline. Raising the OPACITY (0.22 to 0.42) was the previous attempt and it
+     did not land: on the hero's dark ground a 1px gold rule reads as an artefact of the
+     screen rather than a drawn line, however bright it is. Width is what makes it read as
+     deliberate. */
+  border-top: 3px solid var(--night-line);
+  border-bottom: 3px solid var(--night-line);
   padding: clamp(18px, 2.6vw, 26px) 0;
 }
 .ball-facts > div {
@@ -640,13 +644,24 @@
 .ball-sponsor-name {
   margin: 0 0 18px;
 }
+/* TASK-334: block with a DEFINITE width, centred by auto margins — the same shape .ball-credit
+   above already uses, and for the same reason.
+
+   As an inline-block wrapping a `width: min(100%, 320px)` image, this anchor shrank to fit the
+   image's INTRINSIC 486px (percentages count as auto while a shrink-to-fit width is being
+   resolved, so the cap could not participate). The image then painted at 320px, flush left
+   inside a 486px box, leaving it ~83px left of centre in a band that centres everything else.
+   Read as "the logo is not centred", which is exactly what it was. */
 .ball-sponsor-name a {
-  display: inline-block;
+  display: block;
+  width: 320px;
+  max-width: 100%;
+  margin-inline: auto;
   text-decoration: none;
 }
 .ball-sponsor-name img {
   display: block;
-  width: min(100%, 320px);
+  width: 100%;
   height: auto;
   /* Optically centred, not geometrically. The swoosh trails right with almost no ink in it,
      so centring the BOX leaves the lettering visibly left of centre — measured at 15px of 486,

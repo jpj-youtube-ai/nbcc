@@ -203,7 +203,7 @@ body.has-ticker{padding-top:var(--ticker-h)}
   .nav-links li + li{position:relative}
   .nav-links li + li::before{
     content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);
-    width:1px;height:14px;background:var(--line)
+    width:3px;height:14px;background:var(--line);border-radius:2px
   }
 }
 

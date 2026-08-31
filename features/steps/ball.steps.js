@@ -421,6 +421,20 @@ Then("the ball page should not contain {string}", function (text) {
   assert.ok(!this.ballPageBody.includes(text), `expected the page NOT to contain "${text}"`);
 });
 
+// TASK-334: scoped to the nav LIST, never the whole page. "Festive Ball" appears five times in
+// ball.html already (title, hero, terms link…), so a whole-page search for it passes just as
+// happily with the nav item missing — which is precisely the state staff reported.
+Then("the ball page nav should link to the ball", function () {
+  const start = this.ballPageBody.indexOf('class="nav-links"');
+  assert.ok(start !== -1, "expected the ball page to have a main nav");
+  const end = this.ballPageBody.indexOf("</ul>", start);
+  const nav = this.ballPageBody.slice(start, end);
+  assert.ok(
+    nav.includes('href="/ball"'),
+    "expected the main nav to carry the Festive Ball item, like every other page",
+  );
+});
+
 // --- admin ------------------------------------------------------------------
 //
 // Seeds a staff user with a scrypt hash in the same format as src/admin/password.ts, logs in

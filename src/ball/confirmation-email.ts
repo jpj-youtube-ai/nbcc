@@ -52,7 +52,7 @@ export function buildBallConfirmationEmail(
     : "From 7pm, to be confirmed. We'll email you";
   const included = details.includedNote
     ? ` ${escapeHtml(details.includedNote)}`
-    : " The menu and drinks are still being finalised with the venue; we'll email you as soon as they're confirmed.";
+    : " The menu and the running order are still being finalised with the venue; we'll email you as soon as they're confirmed.";
 
   // Only show a money line that exists. A "Donation: £0.00" row is noise on a receipt.
   const rows: Array<[string, string]> = [["Tickets", money(booking.ticketsPence)]];
@@ -134,7 +134,7 @@ Dress to impress. This is an over 18s event.
 Your ticket includes entry, a meal and the evening's entertainment.${
     details.includedNote
       ? " " + details.includedNote
-      : " The menu and drinks are still being finalised with the venue; we'll email you as soon as they're confirmed."
+      : " The menu and the running order are still being finalised with the venue; we'll email you as soon as they're confirmed."
   }
 
 ${details.guestLink

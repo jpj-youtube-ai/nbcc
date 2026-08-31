@@ -575,12 +575,52 @@
   color: #F0DCA0;
   text-decoration-color: currentColor;
 }
-/* The standing credit is set large; an underline at that size reads as a mistake. */
+/* The credit is now their own wordmark, so there is no text to underline. The supplied file
+   is black line art on solid white with no transparency, which would have shown as a white
+   slab on this band; assets/img/the-designer-rooms-cream.png is the same artwork with the
+   paper knocked out and the strokes painted cream. See the README for how it was derived. */
+.ball-sponsor-name {
+  margin: 0 0 18px;
+}
 .ball-sponsor-name a {
+  display: inline-block;
   text-decoration: none;
 }
-.ball-sponsor-name a:hover {
-  text-decoration: underline;
+.ball-sponsor-name img {
+  display: block;
+  width: min(100%, 320px);
+  height: auto;
+  /* It is a guest's mark on our page: present and legible, never louder than the ball's own
+     lockup a few sections above. */
+  opacity: 0.92;
+  transition: opacity 0.2s var(--ease-quart);
+}
+.ball-sponsor-name a:hover img {
+  opacity: 1;
+}
+
+/* The sponsor credit on the thank-you page. Quiet: the buyer has just paid and the page's job
+   is to reassure them, so this sits at the foot as a thank-you rather than an advert. Dark
+   version of the wordmark, because this page is cream. */
+.ball-ty-sponsor {
+  margin: 34px 0 0;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ball-ty-sponsor span {
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--slate-soft);
+}
+.ball-ty-sponsor img {
+  display: block;
+  width: min(100%, 240px);
+  height: auto;
 }
 
 /* ---------- who you're supporting ---------- */

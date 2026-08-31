@@ -203,7 +203,7 @@ describe("contact capture behaviour (jsdom)", () => {
       mode: "monthly",
       plan: "gold",
       amount: 5000,
-      giftAid: false,
+      giftAid: false, coverFee: false,
       fullName: "Ada Lovelace",
       email: "ada@example.com",
       emailConsent: true,
@@ -248,6 +248,6 @@ describe("contact capture behaviour (jsdom)", () => {
     document.body.innerHTML = `<main>${cardHtml}</main>`;
     initCheckout(document, window);
     startCheckout(monthlyTier(1), window);
-    expect(lastPayload()).toEqual({ mode: "monthly", plan: "silver", amount: 2500, giftAid: false });
+    expect(lastPayload()).toEqual({ mode: "monthly", plan: "silver", amount: 2500, giftAid: false, coverFee: false });
   });
 });

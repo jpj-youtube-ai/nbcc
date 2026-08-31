@@ -33,6 +33,10 @@ export const donationInputSchema = z
     mode: z.enum(MODES),
     plan: z.enum(PLANS).nullable().default(null),
     amountPence: z.number().int().positive(),
+    // TASK-321: a voluntary contribution towards Stripe's card fee. NOT part of the gift —
+    // deliberately its own field so it can never be swept into amount_pence, which is what
+    // the Gift Aid claim sums and what the GASDS £30 ceiling is judged against.
+    feeCoverPence: z.number().int().nonnegative().default(0),
     currency: z.string().min(1).default("GBP"),
     giftAid: z.boolean().default(false),
     // GASDS eligibility (REQ-058/TASK-078): set by cardPresentDonationInput for a small,
@@ -86,6 +90,7 @@ export interface DonationRow {
   mode: (typeof MODES)[number];
   plan: string | null;
   amount_pence: number;
+  fee_cover_pence: number;
   currency: string;
   gift_aid: boolean;
   gasds_eligible: boolean;
@@ -131,6 +136,7 @@ export function buildDonationRow(input: DonationInput, donorId: number): Donatio
     mode: input.mode,
     plan: input.plan,
     amount_pence: input.amountPence,
+    fee_cover_pence: input.feeCoverPence,
     currency: input.currency.toUpperCase(),
     gift_aid: giftAid,
     // A company gift is never GASDS-eligible (nor Gift-Aid claimable); otherwise carry the

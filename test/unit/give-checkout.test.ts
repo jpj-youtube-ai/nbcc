@@ -105,18 +105,18 @@ describe("startCheckout behaviour (jsdom)", () => {
   it("a selected once tier assembles the once payload in preview", () => {
     startCheckout(onceTier(0), window); // £10
     expect(alerts).toHaveLength(1);
-    expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 1000, giftAid: false });
+    expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 1000, giftAid: false, coverFee: false });
   });
 
   it("includes giftAid:true when the Gift Aid box is checked (REQ-023)", () => {
     (document.getElementById("giftAid") as HTMLInputElement).checked = true;
     startCheckout(onceTier(1), window); // £25
-    expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 2500, giftAid: true });
+    expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 2500, giftAid: true, coverFee: false });
   });
 
   it("a selected monthly tier assembles the monthly payload with its plan", () => {
     startCheckout(monthlyTier(2), window); // gold £50
-    expect(lastPayload()).toEqual({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false });
+    expect(lastPayload()).toEqual({ mode: "monthly", plan: "gold", amount: 5000, giftAid: false, coverFee: false });
   });
 
   it("the custom-amount control builds the amount (pence) from the entered value", () => {
@@ -125,12 +125,12 @@ describe("startCheckout behaviour (jsdom)", () => {
     // (the per-amount button was removed); the assembled payload shape is unchanged.
     const custom = document.querySelector("#tiersOnce .give-tier-custom") as HTMLElement;
     startCheckout(custom, window);
-    expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 3000, giftAid: false });
+    expect(lastPayload()).toEqual({ mode: "once", plan: null, amount: 3000, giftAid: false, coverFee: false });
   });
 
   it("startCheckout returns the assembled payload", () => {
     const payload = startCheckout(monthlyTier(0), window); // bronze £10
-    expect(payload).toEqual({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false });
+    expect(payload).toEqual({ mode: "monthly", plan: "bronze", amount: 1000, giftAid: false, coverFee: false });
   });
 });
 
@@ -174,7 +174,7 @@ describe("startCheckout embedded checkout (jsdom, TASK-215)", () => {
     // The wire body carries uiMode:"embedded"; the RETURNED payload stays the clean REQ-028 contract.
     expect(sentBody!.uiMode).toBe("embedded");
     expect(sentBody!.amount).toBe(5000);
-    expect(payload).toEqual({ mode: "once", plan: null, amount: 5000, giftAid: false });
+    expect(payload).toEqual({ mode: "once", plan: null, amount: 5000, giftAid: false, coverFee: false });
     expect(pkUsed).toBe("pk_test_123");
     expect(mountedInto).toBe(document.getElementById("embeddedCheckout"));
     expect((document.getElementById("embeddedCheckoutModal") as HTMLElement).hidden).toBe(false);

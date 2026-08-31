@@ -198,6 +198,7 @@ describe("donor type behaviour (jsdom)", () => {
       plan: "gold",
       amount: 5000,
       giftAid: false,
+      coverFee: false,
       donorType: "individual",
     });
   });
@@ -215,6 +216,7 @@ describe("donor type behaviour (jsdom)", () => {
       plan: null,
       amount: 1000,
       giftAid: false,
+      coverFee: false,
       donorType: "company",
       businessName: "Acme Ltd",
     });
@@ -248,6 +250,7 @@ describe("donor type behaviour (jsdom)", () => {
       plan: "bronze",
       amount: 1000,
       giftAid: false,
+      coverFee: false,
       donorType: "individual",
     });
   });

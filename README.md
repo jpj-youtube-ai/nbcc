@@ -2044,6 +2044,40 @@ without it — it's an app endpoint).
 **Supporter ticker (REQ-003 · TASK-178).** An admin-curated list of ongoing supporters (businesses or
 people) shown scrolling under the site nav — distinct from the donor-derived Supporters page. The
 `supporter_ticker` table (additive migration; `name`, `active`, `sort_order`) is served two ways: the
+### Covering the card fee on a donation (TASK-321)
+
+Donors may offer to cover Stripe's fee, the way ticket buyers already can. Two things about it
+are load-bearing:
+
+**The fee cover is not a gift, and the code never lets it become one.** It is its own column
+(`donations.fee_cover_pence`) and its own Stripe line item, and it is excluded from
+`amount_pence`. That matters because:
+
+- **Gift Aid** is claimed on `amount_pence`. Sweeping a fee cover into it would claim tax relief
+  on money we are not treating as a gift.
+- **GASDS** is judged per donation against a £30 ceiling. A £30 gift with 56p on top must stay a
+  £30 gift, or it silently drops out of the small-donations scheme.
+
+The trap is that the webhook records the amount from Stripe's **`amount_total`, which is the sum
+of every line item** — so a fee-cover line inflates the recorded donation *by default*. The
+checkout stamps `feeCoverPence` on the session metadata and the webhook subtracts it back out.
+`donate-fee-cover.test.ts` pins that, and the assertion was confirmed to fail without the
+subtraction (£50 recorded as £50.80; a £30 gift as £30.56).
+
+**One-off gifts only.** A monthly gift is charged again every month, so a recurring fee cover
+would have to be split back out of every renewal invoice and every later Gift Aid claim. It is
+refused server-side for `mode: "monthly"` regardless of what the browser sends, and the control
+hides and unticks itself when the donor switches to monthly. Adding it for monthly is a separate
+piece of work.
+
+The rate comes from `getCardFeeRate()` — the same `ball_settings` row the ball uses. That row is
+named for the ball because that is where it was first needed, but the rate is a fact about the
+**Stripe account**, and the donate page is charged the same; one source beats two that drift. A
+failure to read it falls back to `DEFAULT_CARD_FEE` rather than taking the donate page down.
+`main.js` also hard-codes the rate so the amount can update live as the donor changes their gift;
+that is display only (the server prices the charge, and Stripe itemises it before the donor
+confirms), and a test asserts it still matches the server default.
+
 ### Festive Ball 2026 ticketing (TASK-313)
 
 NBCC sells tickets for **A Night to Remember — Festive Ball 2026** (Sat 7 Nov 2026, The Park

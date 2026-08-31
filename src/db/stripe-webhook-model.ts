@@ -35,6 +35,18 @@ const asString = (v: string | { id: string } | null | undefined): string | null 
 // (gift_aid boolean from metadata); the declaration relationship is captured later
 // (REQ-040/043), so declaration_id is null and buildDonationRow derives the
 // claim_status accordingly (a flagged-but-undeclared gift is not yet claimable).
+// What the donor offered towards the card fee, off the session metadata.
+//
+// Fails to ZERO on anything unreadable — absent, blank, negative, not a number. A wrong zero
+// records a slightly larger gift and over-claims a few pence of Gift Aid; a wrong LARGE value
+// would subtract real donation money out of the record and under-report the gift. Neither is
+// good, but only one of them loses the donor's money, so that is the one made impossible.
+export function feeCoverFromMetadata(metadata: Stripe.Metadata | null | undefined): number {
+  const raw = Number(metadata?.feeCoverPence);
+  if (!Number.isFinite(raw) || !Number.isInteger(raw) || raw < 0) return 0;
+  return raw;
+}
+
 export function donationFromCheckoutSession(session: Stripe.Checkout.Session): DonationWrite {
   const md = session.metadata ?? {};
   const mode = md.mode === "monthly" ? "monthly" : "once";
@@ -50,7 +62,12 @@ export function donationFromCheckoutSession(session: Stripe.Checkout.Session): D
     donorType,
     mode,
     plan: md.plan ? md.plan : null,
-    amountPence: session.amount_total ?? 0,
+    // Stripe's amount_total is the sum of EVERY line item, so a fee cover has to come back
+    // out (TASK-321). Getting this wrong would claim Gift Aid on money that is not a gift,
+    // and could push a £30 donation out of the GASDS small-donations ceiling. Zero for every
+    // session without a fee cover, so this is byte-for-byte the old behaviour there.
+    amountPence: (session.amount_total ?? 0) - feeCoverFromMetadata(session.metadata),
+    feeCoverPence: feeCoverFromMetadata(session.metadata),
     currency: (session.currency ?? "gbp").toUpperCase(),
     giftAid: giftAidFromMetadata(session.metadata),
     // Settlement state (REQ-065/TASK-090): Stripe reports payment_status='unpaid' while a BACS

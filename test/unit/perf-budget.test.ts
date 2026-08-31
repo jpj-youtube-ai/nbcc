@@ -26,7 +26,14 @@ const BUDGET = {
   // the form renderer/submit in the shared main.js plus its band styles in the shared styles.css
   // (~2KB uncompressed of highly repetitive markup strings and class-token CSS, i.e. the best case
   // for gzip — negligible on the wire).
-  maxTransferKB: 255,
+  // Raised 255 -> 258 (TASK-321, the card-fee option on the donate page): ~1.9KB of markup for
+  // the offer plus its live-amount and one-off-only handling in the shared main.js. This one is
+  // worth naming honestly rather than waving through: donate.html was already sitting ~130 bytes
+  // under the old ceiling, so the page has no slack left and the next addition will breach it
+  // again. These are UNCOMPRESSED bytes and the added text is comments and repeated class tokens,
+  // i.e. the best case for gzip, so the real transfer cost is a fraction of this — but the right
+  // fix is a weight review of donate.html, deferred by NBCC until after 7 November.
+  maxTransferKB: 258,
   maxRequests: 15,
   maxFontFiles: 2,
 };

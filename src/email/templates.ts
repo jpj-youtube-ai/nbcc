@@ -179,20 +179,7 @@ export function buildKindEmail(kind: EmailKind, p: Record<string, unknown>): Bui
   }
 }
 
-// Contact enquiry (src/clients/contact.ts) → an email to the NBCC inbox, Reply-To the enquirer.
-// The relay kept this one deliberately plain (its legacy `page` wrapper, not the branded shell) —
-// it is internal operational mail, and that stays true here.
-export function buildContactEmail(p: {
-  firstName?: string;
-  lastName?: string;
-  email: string;
-  message: string;
-}): BuiltEmail {
-  const name = `${p.firstName ?? ""} ${p.lastName ?? ""}`.trim() || "Website visitor";
-  return {
-    subject: `Website enquiry from ${name}`,
-    html: `<!doctype html><html><body style="font-family:system-ui,Segoe UI,Arial,sans-serif;color:#1a1a1a;line-height:1.5"><p><strong>${esc(name)}</strong> &lt;${esc(p.email)}&gt; wrote:</p>
-       <blockquote style="border-left:3px solid #ddd;padding-left:12px;color:#333;white-space:pre-wrap">${esc(p.message)}</blockquote><hr style="border:none;border-top:1px solid #eee;margin:24px 0"><p style="font-size:12px;color:#888">Night Before Christmas Campaign · nbcc.scot</p></body></html>`,
-    text: `${name} <${p.email}> wrote:\n\n${p.message}\n\nNight Before Christmas Campaign · nbcc.scot`,
-  };
-}
+// No contact-enquiry template on purpose: the old relay's /contact branch forwarded enquiries by
+// email, but that path was retired by the 2026-07-10 contact-inbox spec — POST /api/contact
+// STORES enquiries in the contact database and the admin tab reads them there. The dead
+// forwarding client (src/clients/contact.ts) went with the Resend→SES migration.

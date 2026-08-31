@@ -90,7 +90,7 @@ describe("config schema — email keys (Resend→SES migration)", () => {
     const parsed = configSchema.safeParse(validEnv());
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.EMAIL_PROVIDER).toBe("stub");
-    expect(configSchema.safeParse({ ...validEnv(), EMAIL_PROVIDER: "resend" }).success).toBe(false);
+    expect(configSchema.safeParse({ ...validEnv(), EMAIL_PROVIDER: "not-a-provider" }).success).toBe(false);
     expect(configSchema.safeParse({ ...validEnv(), EMAIL_PROVIDER: "ses" }).success).toBe(true);
   });
 
@@ -98,18 +98,16 @@ describe("config schema — email keys (Resend→SES migration)", () => {
     const parsed = configSchema.safeParse(validEnv());
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.SES_REGION).toBe("eu-west-1");
+      expect(parsed.data.SES_REGION).toBe("eu-west-2");
       expect(parsed.data.MAIL_FROM).toBe("noreply@nbcc.scot");
-      expect(parsed.data.CONTACT_TO_EMAIL).toBe("giving@nbcc.scot");
       expect(parsed.data.SES_WEBHOOK_TOKEN).toBe(""); // blank ⇒ the webhook answers 503
       expect(parsed.data.SES_NEWSLETTER_CONFIGURATION_SET).toBe("");
       expect(parsed.data.SES_TRANSACTIONAL_CONFIGURATION_SET).toBe("");
     }
   });
 
-  it("validates MAIL_FROM and CONTACT_TO_EMAIL as email addresses", () => {
+  it("validates MAIL_FROM as an email address", () => {
     expect(configSchema.safeParse({ ...validEnv(), MAIL_FROM: "not-an-email" }).success).toBe(false);
-    expect(configSchema.safeParse({ ...validEnv(), CONTACT_TO_EMAIL: "not-an-email" }).success).toBe(false);
   });
 
   it("requires ADMIN_NOTIFICATION_EMAIL and validates it as an email (TASK-092)", () => {

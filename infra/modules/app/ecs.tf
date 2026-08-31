@@ -38,17 +38,13 @@ data "aws_iam_policy_document" "exec_secrets" {
       # all injected via valueFrom, so the exec role must be able to read them.
       aws_ssm_parameter.stripe_secret_key.arn,
       aws_ssm_parameter.stripe_webhook_secret.arn,
-      aws_ssm_parameter.resend_webhook_secret.arn,
+      # SES delivery-webhook token (Resend→SES migration): the shared secret in the SNS
+      # subscription path, injected via valueFrom, so the exec role must be able to read it.
+      aws_ssm_parameter.ses_webhook_token.arn,
       aws_ssm_parameter.stripe_price_bronze.arn,
       aws_ssm_parameter.stripe_price_silver.arn,
       aws_ssm_parameter.stripe_price_gold.arn,
       aws_ssm_parameter.stripe_price_platinum.arn,
-      # Contact forwarding endpoint (REQ-030): injected via valueFrom, so the exec
-      # role must be able to read it.
-      aws_ssm_parameter.contact_forward_url.arn,
-      # Transactional email send endpoint (TASK-070): injected via valueFrom, so the
-      # exec role must be able to read it.
-      aws_ssm_parameter.email_send_url.arn,
       # Declaration form base URL (TASK-075): injected via valueFrom, so the exec role
       # must be able to read it.
       aws_ssm_parameter.declaration_form_base_url.arn,
@@ -101,11 +97,33 @@ resource "aws_iam_role_policy" "exec_secrets" {
   policy = data.aws_iam_policy_document.exec_secrets.json
 }
 
-# Task role: the app's OWN runtime AWS permissions. Empty for now - add
-# statements only if the app calls AWS APIs (e.g. S3). Keep least-privilege.
+# Task role: the app's OWN runtime AWS permissions. Keep least-privilege.
 resource "aws_iam_role" "task" {
   name               = "${local.name}-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+# SES sending (Resend→SES migration): the app calls the SESv2 SendEmail API directly
+# (src/clients/ses.ts) with these task-role credentials — no provider API key anywhere. Scoped
+# to exactly the two verified identities and the two configuration sets in ses.tf; gated like
+# them on apex mode (only the env that owns the domain can send as it).
+data "aws_iam_policy_document" "task_ses" {
+  count = local.create_zone ? 1 : 0
+  statement {
+    actions = ["ses:SendEmail"]
+    resources = [
+      aws_sesv2_email_identity.apex[0].arn,
+      aws_sesv2_email_identity.news[0].arn,
+      aws_sesv2_configuration_set.newsletter[0].arn,
+      aws_sesv2_configuration_set.transactional[0].arn,
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "task_ses" {
+  count  = local.create_zone ? 1 : 0
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.task_ses[0].json
 }
 
 # --- ECS ----------------------------------------------------------------------
@@ -142,6 +160,15 @@ resource "aws_ecs_task_definition" "app" {
       { name = "STRIPE_PUBLISHABLE_KEY", value = var.stripe_publishable_key },
       # Optional Stripe donation product id for one-off gifts — non-secret, empty by default.
       { name = "STRIPE_DONATION_PRODUCT", value = var.stripe_donation_product },
+      # --- Amazon SES (Resend→SES migration) — all non-secret, so plain env values. ---
+      # "ses" turns real sending on wherever the identities exist; anywhere else stays on the
+      # schema's "stub" default semantics (and production never stubs regardless).
+      { name = "EMAIL_PROVIDER", value = local.create_zone ? "ses" : "stub" },
+      { name = "SES_REGION", value = var.region },
+      { name = "SES_NEWSLETTER_CONFIGURATION_SET", value = local.create_zone ? aws_sesv2_configuration_set.newsletter[0].configuration_set_name : "" },
+      { name = "SES_TRANSACTIONAL_CONFIGURATION_SET", value = local.create_zone ? aws_sesv2_configuration_set.transactional[0].configuration_set_name : "" },
+      # From address for app-branded transactional email (the relay's old MAIL_FROM role).
+      { name = "MAIL_FROM", value = var.mail_from },
     ]
 
     # ECS resolves these from SSM at task start and injects them as env vars, so
@@ -156,15 +183,13 @@ resource "aws_ecs_task_definition" "app" {
       # the exec_secrets policy below or the task fails to start.
       { name = "STRIPE_SECRET_KEY", valueFrom = aws_ssm_parameter.stripe_secret_key.arn },
       { name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.stripe_webhook_secret.arn },
-      { name = "RESEND_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.resend_webhook_secret.arn },
+      # SES delivery-webhook token (Resend→SES migration): a SecureString, injected like a
+      # secret — its ARN must also appear in exec_secrets above.
+      { name = "SES_WEBHOOK_TOKEN", valueFrom = aws_ssm_parameter.ses_webhook_token.arn },
       { name = "STRIPE_PRICE_BRONZE", valueFrom = aws_ssm_parameter.stripe_price_bronze.arn },
       { name = "STRIPE_PRICE_SILVER", valueFrom = aws_ssm_parameter.stripe_price_silver.arn },
       { name = "STRIPE_PRICE_GOLD", valueFrom = aws_ssm_parameter.stripe_price_gold.arn },
       { name = "STRIPE_PRICE_PLATINUM", valueFrom = aws_ssm_parameter.stripe_price_platinum.arn },
-      # Contact forwarding endpoint (REQ-030): a SecureString, injected like a secret.
-      { name = "CONTACT_FORWARD_URL", valueFrom = aws_ssm_parameter.contact_forward_url.arn },
-      # Transactional email send endpoint (TASK-070): a SecureString, injected like a secret.
-      { name = "EMAIL_SEND_URL", valueFrom = aws_ssm_parameter.email_send_url.arn },
       # Declaration form base URL (TASK-075): non-secret SSM String, injected via valueFrom
       # like the price IDs — so its ARN must also appear in exec_secrets below.
       { name = "DECLARATION_FORM_BASE_URL", valueFrom = aws_ssm_parameter.declaration_form_base_url.arn },

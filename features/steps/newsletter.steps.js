@@ -571,48 +571,61 @@ Then("the test-send subject should not contain {string}", function (unexpected) 
   );
 });
 
-// --- TASK-255: the Resend delivery webhook + stats --------------------------------------------------
-// Events are signed EXACTLY as Svix/Resend signs them (HMAC-SHA256 over `${id}.${ts}.${body}` with the
-// base64 secret key), against the same RESEND_WEBHOOK_SECRET the app reads — the default matches
-// .env.example and pr.yml, so this passes locally and in CI without setup.
-const RESEND_SECRET =
-  process.env.RESEND_WEBHOOK_SECRET || "whsec_Y2ktdGVzdC1rZXktZm9yLXJlc2VuZC13ZWJob29rcw==";
+// --- TASK-255 lineage: the SES delivery webhook + stats (Resend→SES migration) ---------------------
+// SES publishes events to SNS, which POSTs a Notification envelope to /api/webhooks/ses/<token>.
+// The token in the path is the trust boundary; the default below matches .env.example and pr.yml,
+// so this passes locally and in CI without setup.
+const SES_WEBHOOK_TOKEN = process.env.SES_WEBHOOK_TOKEN || "ci-ses-webhook-token";
 
-function svixHeadersFor(id, body, secret) {
-  const ts = Math.floor(Date.now() / 1000);
-  const key = Buffer.from(secret.slice("whsec_".length), "base64");
-  const sig = createHmac("sha256", key).update(`${id}.${ts}.${body}`).digest("base64");
-  return { "svix-id": id, "svix-timestamp": String(ts), "svix-signature": `v1,${sig}` };
+// Wrap one SES event in the SNS Notification envelope, exactly as SNS delivers it (the SES event
+// JSON rides as a STRING in Message; MessageId is what makes ingestion idempotent).
+function snsEnvelope(messageId, sesEvent) {
+  return JSON.stringify({
+    Type: "Notification",
+    MessageId: messageId,
+    TopicArn: "arn:aws:sns:eu-west-1:000000000000:bdd-ses-events",
+    Message: JSON.stringify(sesEvent),
+    Timestamp: new Date().toISOString(),
+  });
 }
 
-async function postResendEvent(headers, body) {
-  const res = await fetch(`${BASE_URL}/api/webhooks/resend`, {
+function sesEventFor(eventType, email, extra = {}) {
+  return {
+    eventType,
+    mail: { timestamp: new Date().toISOString(), destination: [email] },
+    ...extra,
+  };
+}
+
+async function postSesEvent(body, token = SES_WEBHOOK_TOKEN) {
+  // SNS posts its JSON with Content-Type text/plain — the route accepts any type raw.
+  const res = await fetch(`${BASE_URL}/api/webhooks/ses/${token}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
+    headers: { "Content-Type": "text/plain; charset=UTF-8" },
     body,
   });
   const json = await res.json().catch(() => ({}));
   return { status: res.status, json };
 }
 
-When("Resend reports a signed {string} event for {string}", async function (type, email) {
-  const body = JSON.stringify({ type, created_at: new Date().toISOString(), data: { to: [email] } });
-  // Unique per run so re-runs against a lived-in local DB never collide on the svix id.
-  this.lastSvix = { id: `msg_bdd_${type}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, body };
-  const r = await postResendEvent(svixHeadersFor(this.lastSvix.id, body, RESEND_SECRET), body);
+When("SES reports a {string} event for {string}", async function (eventType, email) {
+  const event = sesEventFor(eventType, email, { [eventType.toLowerCase()]: { timestamp: new Date().toISOString() } });
+  // Unique per run so re-runs against a lived-in local DB never collide on the message id.
+  this.lastSns = { id: `sns_bdd_${eventType}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, event };
+  const r = await postSesEvent(snsEnvelope(this.lastSns.id, event));
   this.whStatus = r.status;
   this.whBody = r.json;
 });
 
-When("Resend retries the last event", async function () {
-  const r = await postResendEvent(svixHeadersFor(this.lastSvix.id, this.lastSvix.body, RESEND_SECRET), this.lastSvix.body);
+When("SES retries the last event", async function () {
+  const r = await postSesEvent(snsEnvelope(this.lastSns.id, this.lastSns.event));
   this.whStatus = r.status;
   this.whBody = r.json;
 });
 
-When("Resend reports an UNSIGNED {string} event for {string}", async function (type, email) {
-  const body = JSON.stringify({ type, created_at: new Date().toISOString(), data: { to: [email] } });
-  const r = await postResendEvent({}, body);
+When("SES reports a {string} event for {string} with the wrong token", async function (eventType, email) {
+  const event = sesEventFor(eventType, email);
+  const r = await postSesEvent(snsEnvelope(`sns_bdd_bad_${Date.now()}`, event), "not-the-token");
   this.whStatus = r.status;
   this.whBody = r.json;
 });
@@ -650,15 +663,11 @@ Then("the bounced addresses should include {string}", function (email) {
   );
 });
 
-// TASK-257: engagement events ride the same signed webhook; a click names its destination link.
-When("Resend reports a signed click on {string} by {string}", async function (link, email) {
-  const body = JSON.stringify({
-    type: "email.clicked",
-    created_at: new Date().toISOString(),
-    data: { to: [email], click: { link } },
-  });
-  this.lastSvix = { id: `msg_bdd_click_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, body };
-  const r = await postResendEvent(svixHeadersFor(this.lastSvix.id, body, RESEND_SECRET), body);
+// TASK-257: engagement events ride the same webhook; a click names its destination link.
+When("SES reports a click on {string} by {string}", async function (link, email) {
+  const event = sesEventFor("Click", email, { click: { timestamp: new Date().toISOString(), link } });
+  this.lastSns = { id: `sns_bdd_click_${Date.now()}_${Math.floor(Math.random() * 1e6)}`, event };
+  const r = await postSesEvent(snsEnvelope(this.lastSns.id, event));
   this.whStatus = r.status;
   this.whBody = r.json;
 });

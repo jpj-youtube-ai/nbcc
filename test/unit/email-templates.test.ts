@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildKindEmail, buildContactEmail, type EmailKind } from "../../src/email/templates";
+import { buildKindEmail, type EmailKind } from "../../src/email/templates";
 import { buildSesSendRequest, sesEndpoint } from "../../src/clients/ses-request";
 
 // The branded transactional templates, ported into the app from the retired email-relay Worker
@@ -72,25 +72,6 @@ describe("buildKindEmail bodies", () => {
     const built = buildKindEmail("adminInvite", { fullName: "Ada", link: "https://x" });
     expect(built.html).toContain("nbcc-logo.png");
     expect(built.html).toContain("#800000"); // the maroon page
-  });
-});
-
-describe("buildContactEmail", () => {
-  it("names the enquirer in the subject and quotes the message", () => {
-    const built = buildContactEmail({ firstName: "Rowan", lastName: "Kerr", email: "r@example.com", message: "Hello there" });
-    expect(built.subject).toBe("Website enquiry from Rowan Kerr");
-    expect(built.html).toContain("Hello there");
-    expect(built.text).toContain("r@example.com");
-  });
-
-  it("falls back to 'Website visitor' when no name is given", () => {
-    const built = buildContactEmail({ email: "r@example.com", message: "hi" });
-    expect(built.subject).toBe("Website enquiry from Website visitor");
-  });
-
-  it("escapes HTML in the quoted message", () => {
-    const built = buildContactEmail({ email: "r@example.com", message: "<img src=x onerror=1>" });
-    expect(built.html).not.toContain("<img");
   });
 });
 

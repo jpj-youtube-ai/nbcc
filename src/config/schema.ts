@@ -146,8 +146,8 @@ export const configSchema = z.object({
   EMAIL_PROVIDER: z.enum(["stub", "ses"]).default("stub"),
 
   // The AWS region the SES identities live in. Injected as plain env on ECS (matches the
-  // stack's own region); the default keeps local/CI boot working.
-  SES_REGION: z.string().min(1).default("eu-west-1"),
+  // stack's own region — eu-west-2); the default keeps local/CI boot working.
+  SES_REGION: z.string().min(1).default("eu-west-2"),
 
   // SES configuration sets: they route delivery/bounce/complaint events to the SNS topic behind
   // POST /api/webhooks/ses. Two sets on purpose — the NEWSLETTER one has click tracking (links
@@ -161,10 +161,6 @@ export const configSchema = z.object({
   // portal links…) — the role the relay Worker's MAIL_FROM var used to play. NOT a secret;
   // defaulted to the production address like the other from-addresses.
   MAIL_FROM: z.string().email().default("noreply@nbcc.scot"),
-
-  // Where a website contact enquiry is delivered (replaces the relay's CONTACT_TO Worker var —
-  // the enquiry is now a normal SES send with Reply-To set to the enquirer).
-  CONTACT_TO_EMAIL: z.string().email().default("giving@nbcc.scot"),
 
   // Shared token in the SES/SNS webhook path (/api/webhooks/ses/<token>) — the trust boundary
   // for delivery facts, the role the Svix signing secret used to play. DEFAULTED to empty like

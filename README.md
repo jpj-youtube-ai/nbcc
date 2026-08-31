@@ -1998,18 +1998,17 @@ letter fields, `sentBy` is taken from the authed admin (never the client), and t
 send is logged, not fatal, so the letter is still recorded. `signedByRole` and `letterDate` are
 `letterDate` is presentation-only (not stored — the print page below uses the row's `sent_at`);
 `signedByRole` **is** stored (TASK-165, additive `signed_by_role` column) so a re-opened letter keeps
-the signatory's title. The email is routed by the relay's dedicated `thankYou` branch
-(`services/email-relay/src/index.js`), which honours the message's own subject + repliable
-`from`/`replyTo`. The UI (`admin.html` view `view-thank-you` + the `ty-*` styles in
-`assets/css/admin.css` + `assets/js/admin/app.js` `loadThankYou`) shows **Send** only to Editor/Admin
-(the server enforces regardless). Proven by `test/unit/thank-you-letter.test.ts`,
-`test/unit/email-relay-build.test.ts` and the `@thankyou @db` `features/thank-you.feature`
-send/history/role scenarios.
+the signatory's title. The email is sent verbatim via Amazon SES
+(`src/clients/ses.ts` — the Resend→SES migration retired the relay Worker), honouring the message's
+own subject + repliable `from`/`replyTo`. The UI (`admin.html` view `view-thank-you` + the `ty-*`
+styles in `assets/css/admin.css` + `assets/js/admin/app.js` `loadThankYou`) shows **Send** only to
+Editor/Admin (the server enforces regardless). Proven by `test/unit/thank-you-letter.test.ts` and
+the `@thankyou @db` `features/thank-you.feature` send/history/role scenarios.
 
 **Thank-you from-address, deliverability + printable-letter page (REQ-069 · TASK-165).** Three
 follow-ons to the tab above. **(a)** Thank-yous now send From **and** Reply-To
 **`GIVING_FROM_EMAIL`** (`giving@nbcc.scot` — a repliable giving inbox, not a `noreply`; see
-**Configuration**), authenticating on the verified `nbcc.scot` Resend domain. **(b)** The email now
+**Configuration**), authenticating on the verified `nbcc.scot` sending identity. **(b)** The email now
 carries a **plain-text alternative** (`buildThankYouEmailText`) alongside the HTML — HTML-only mail
 scores as more spam-like — improving inbox placement. **(c)** Instead of a PDF attachment (which
 raises spam scores and needs a PDF/headless subsystem the repo doesn't have), the email links to a
@@ -2025,21 +2024,20 @@ phones had to scale to ~78% to avoid the overflow. The token is a stateless HMAC
 a bad token → 400, a missing row → 404. The admin sent-history also exposes each letter's print URL
 ("View letter"). Covered by `test/unit/thank-you-letter-token.test.ts`,
 `test/unit/thank-you-letter-page.test.ts`, the extended `thank-you-letter` text/print-button tests,
-and `@thankyou @db` print-page scenarios. **Ops:** the relay Worker must be **redeployed**
-(`services/email-relay` — a manual `wrangler deploy`) for the `giving@` sender + `thankYou` branch to
-take effect, and the new `GIVING_FROM_EMAIL` SSM param needs an infra apply.
+and `@thankyou @db` print-page scenarios. **Ops (historical):** at the time this shipped, the relay
+Worker needed a manual `wrangler deploy` — the relay has since been retired (Resend→SES migration);
+the `GIVING_FROM_EMAIL` SSM param still needs an infra apply.
 
 **Thank-you CC + delete (REQ-069 · TASK-168).** Two additions to the tab above. **(a)** The compose
 form has an optional **CC** field (`ccEmail`) so an admin can copy a colleague on the donor's email;
 it is validated as an email when set, sent-time only (not stored), threaded through
-`sendThankYou` → the relay's `thankYou` branch → the Resend `cc`. **(b)** Each **Sent history** row
+`sendThankYou` → the SES `CcAddresses`. **(b)** Each **Sent history** row
 (Editor+) has a **Delete** button: `DELETE /api/admin/thank-you/sent/:id` (`deleteThankYouSent`)
 removes the row and appends a `thank_you.deleted` audit entry in the same transaction — written
 **only** when a row is actually deleted (a missing id → 404, no audit). The append-only `audit_log`
 keeps the original `thank_you.sent` entry, so the governance trail records both the send and the
-deletion. Covered by the extended `email-relay-build` CC test and `@thankyou @db` delete/CC scenarios.
-**Ops:** the relay Worker must be redeployed for the CC pass-through to take effect (delete works
-without it — it's an app endpoint).
+deletion. Covered by `@thankyou @db` delete/CC scenarios (the CC mapping now lives in
+`src/clients/ses-request.ts`, pinned by `test/unit/email-templates.test.ts`).
 
 **Supporter ticker (REQ-003 · TASK-178).** An admin-curated list of ongoing supporters (businesses or
 people) shown scrolling under the site nav — distinct from the donor-derived Supporters page. The
@@ -2984,7 +2982,7 @@ login, not a replacement for it.
   (remembered), it is written to `localStorage["nbcc_admin_device"]` for the 30-day skip on future
   logins. A wrong code shows an inline error and stays on the code panel (honest-save).
 - **Non-production dev code (stub safety).** `src/clients/email.ts` stubs outbound email (no network)
-  outside production whenever `EMAIL_SEND_URL` is a placeholder (`emailStubbed`) — which is the case
+  outside production whenever `EMAIL_PROVIDER` is `stub` (`emailStubbed`) — which is the case
   in local dev and CI by default. Since a stubbed send never actually delivers the code, step 1's
   response includes it directly as `devCode` **only when `config.NODE_ENV !== "production"`** — so
   local admins can always complete 2FA even without live email — and this is **never** true in
@@ -3007,14 +3005,15 @@ login, not a replacement for it.
   sniffing its fields (`buildEmail`), with no branch for the login-code payload, so it silently fell
   through to the generic donation-confirmation default and sent the **wrong subject** ("Thank you for
   your donation to NBCC" on a 2FA code). TASK-209 fixed the whole email family: every send now carries
-  an explicit `kind`, the relay routes on it, and each kind gets its OWN branded body + correct subject
-  (the login code now reads "Your NBCC admin sign-in code"). The old field heuristics remain only as a
-  deploy-skew fallback for a no-`kind` payload. See **All transactional emails share one branded shell**
-  below.
+  an explicit `kind`, routed by it, and each kind gets its OWN branded body + correct subject
+  (the login code now reads "Your NBCC admin sign-in code"). Since the Resend→SES migration the
+  templates live IN the app (`src/email/templates.ts`) and ship with it, so template/app skew is no
+  longer possible and the old field heuristics are gone. See **All transactional emails share one
+  branded shell** below.
 
-**All transactional emails share one branded shell (REQ, TASK-209).** Every transactional send from
-`src/clients/email.ts` now tags its JSON with an explicit `kind`, and the Cloudflare Worker email relay
-(`services/email-relay/src/index.js`, `buildEmail`) routes on that `kind` first, wrapping the body in
+**All transactional emails share one branded shell (REQ, TASK-209; templates moved in-app by the
+Resend→SES migration).** Every transactional send from `src/clients/email.ts` routes through
+`buildKindEmail` (`src/email/templates.ts`) by an explicit `kind`, wrapping the body in
 ONE branded shell and giving each email its OWN correct subject. The shell mirrors the admin thank-you
 letter email (`src/thank-you/letter.ts`): a maroon page, a cream content panel, the NBCC logo
 letterhead (hosted absolute URL, not base64), and a maroon footer bar carrying `01292 811 015` /
@@ -3027,26 +3026,24 @@ clients don't invert the palette. The `kind` -> subject map:
 | `donation` | Thank you for your donation to NBCC | app |
 | `receipt` | Your NBCC donation receipt | app |
 | `refund` | Your NBCC refund confirmation | app |
-| `loginCode` | Your NBCC admin sign-in code | relay |
-| `adminInvite` | Your NBCC admin account invitation | relay |
-| `adminReset` | Reset your NBCC admin password | relay |
-| `portal` | Your NBCC donor portal link | relay |
-| `declaration` | Add Gift Aid to your NBCC donation | relay |
-| `lapsedDonor` | Your NBCC monthly donation has stopped | relay |
-| `lapsedAdmin` | A monthly NBCC subscription has lapsed | relay |
+| `loginCode` | Your NBCC admin sign-in code | template |
+| `adminInvite` | Your NBCC admin account invitation | template |
+| `adminReset` | Reset your NBCC admin password | template |
+| `portal` | Your NBCC donor portal link | template |
+| `declaration` | Add Gift Aid to your NBCC donation | template |
+| `lapsedDonor` | Your NBCC monthly donation has stopped | template |
+| `lapsedAdmin` | A monthly NBCC subscription has lapsed | template |
 
-This fixes a real bug: the 2FA sign-in code, admin invites and password resets used to fall through the
-relay's field-sniffing to the donation default and get the wrong subject, and almost none were branded.
+This fixed a real bug: the 2FA sign-in code, admin invites and password resets used to fall through
+old field-sniffing to the donation default and get the wrong subject, and almost none were branded.
 The `donation` / `receipt` / `refund` bodies are still built by the app (`src/donors/confirmation.ts`,
 `src/donors/receipt.ts`) and already end with the charity-registration line, so the shell wraps them with
-a contacts-only footer (no duplicate registration); the `relay`-built kinds get the registration in the
-footer. `newsletter` and `thankYou` are unchanged (each already ships its own fully branded html +
-subject). Covered by `test/unit/email-relay-build.test.ts` (each kind's subject, the branded shell,
-the footer contacts on every kind, registration exactly once, the old collisions gone, and the no-`kind`
-skew fallback). **Ops:** the relay Worker is deployed on its own (`cd services/email-relay && wrangler
-deploy`), so it needs its own redeploy for the rebrand + fixed subjects to reach live email; the app
-side ships with the normal ECS deploy. The two tolerate deploy skew in either order (the app keeps
-sending, and the relay keeps its field heuristics, as a fallback).
+a contacts-only footer (no duplicate registration); the `template`-built kinds get the registration in
+the footer. `newsletter` and `thankYou` are unchanged (each already ships its own fully branded html +
+subject). Covered by `test/unit/email-templates.test.ts` (each kind's subject, the branded shell,
+escaping, and registration exactly once). Since the Resend→SES migration the templates ship inside the
+app image (`src/email/templates.ts`), so a normal ECS deploy carries both the sends and their bodies —
+there is no second service to redeploy and no deploy-skew window.
 
 **My account: self-service name + password (admin-management Phase 4, TASK-197).** Any signed-in
 admin, of any role, can change their own display name and password from a **My account** panel —
@@ -3113,9 +3110,9 @@ endpoint (REQ-030) still validates `{ firstName, lastName, email, message }` zod
 bad/missing field), but a valid enquiry is now **stored** directly via `insertEnquiry`
 (`src/db/contact.ts`) into the isolated `contact` database, returning `{ status: "sent" }` on
 success and **500** on a store failure. The previous external form-service forward
-(`src/clients/contact.ts`'s `forwardEnquiry`, `CONTACT_FORWARD_URL`) is **retired from this path** —
-the client module and its config value are left in place (unused) rather than removed, so no other
-touch-point changes. A honeypot field (`company`) filled by a bot is silently accepted (**200**,
+(`forwardEnquiry`, `CONTACT_FORWARD_URL`) was **retired from this path** by that spec and has since
+been **removed entirely** (Resend→SES migration): the dead client module, the config key, its SSM
+parameter and task-def wiring are all gone. A honeypot field (`company`) filled by a bot is silently accepted (**200**,
 nothing stored) and a per-IP rate limiter (5/minute) guards the endpoint, matching the My Story
 submission pattern. `initContactForm` (`assets/js/main.js`) is now **honest-save**: the success
 message and form reset show **only** on a genuine `res.ok` from this endpoint; a non-2xx response or
@@ -3973,11 +3970,12 @@ untouched (it uses the Corporation Tax receipt path, TASK-088, not this confirma
 `test/unit/donation-confirmation-email.test.ts` (mocked client) proves exactly one send on
 email+consent and none otherwise, plus the Gift Aid / manage-cancel content rules.
 
-> **Stub seam (no live email provider needed).** `src/clients/email.ts` POSTs to a
-> real `EMAIL_SEND_URL` when one is configured. **Outside production**, when the URL
-> is a `.example` placeholder (local dev, CI, fresh SSM param), the send is stubbed
-> (no network). `EMAIL_SEND_URL` is wired through config, `.env.example`, the CI env,
-> SSM, the task-def `secrets` and the `exec_secrets` IAM policy (golden rule 3).
+> **Stub seam (no live email provider needed).** `src/clients/email.ts` sends via Amazon SES
+> when `EMAIL_PROVIDER=ses` (production's task definition sets it). **Outside production**,
+> on the schema's `stub` default (local dev, CI), the send is stubbed (no network).
+> Production never stubs, whatever the flag says. `EMAIL_PROVIDER` and the other SES keys are
+> wired through config, `.env.example` and the task-def `environment` (golden rule 3; none are
+> secrets, so no SSM/`exec_secrets` entries — the one exception is `SES_WEBHOOK_TOKEN`).
 
 **In-person declaration email (TASK-075 / REQ-048).** A card-present (in-person) gift
 captures no Gift Aid declaration at the till, so the walk-in donor is offered one
@@ -4151,8 +4149,8 @@ bad/missing fields with **400**. A valid enquiry is **stored** (`insertEnquiry`,
 in the isolated `contact` database and returns `{ status: "sent" }`; a store failure returns **500**.
 See **Contact form tab** above for the honest-save front-end behaviour this enables (success shows
 only on a real 200) and the admin side (`/api/admin/contact*`) that reads these rows. The former
-external form-service forward (`src/clients/contact.ts`, `CONTACT_FORWARD_URL`) is retired from this
-path — see the note under **Configuration**.
+external form-service forward (`CONTACT_FORWARD_URL`) is retired and removed — see the note under
+**Configuration**.
 
 > **Hosting (REQ-033):** the marketing site and these endpoints are served by the
 > **existing Express service on ECS/Fargate behind the ALB** — not a static host
@@ -4397,17 +4395,9 @@ aws ssm put-parameter --name /charity-site/production/STRIPE_PRICE_BRONZE \
 aws ssm put-parameter --name /charity-site/production/STRIPE_WEBHOOK_SECRET \
   --type SecureString --value 'whsec_...' --overwrite
 
-# Contact forwarding (REQ-030): the form-service endpoint (SecureString). Starts
-# as a https://forward.example/replace-me placeholder, which keeps the forward
-# stubbed until a real URL is set.
-aws ssm put-parameter --name /charity-site/production/CONTACT_FORWARD_URL \
-  --type SecureString --value 'https://formspree.io/f/xxxx' --overwrite
-
-# Transactional email (TASK-070): the provider send endpoint (SecureString). Starts
-# as a https://email.example/replace-me placeholder, which keeps the confirmation
-# email stubbed until a real URL is set.
-aws ssm put-parameter --name /charity-site/production/EMAIL_SEND_URL \
-  --type SecureString --value 'https://api.provider.com/send' --overwrite
+# Email needs no put-parameter (Resend→SES migration): the app sends straight to
+# Amazon SES with the ECS task role, and the one email secret (SES_WEBHOOK_TOKEN)
+# is minted by Terraform itself (infra/modules/app/ses.tf).
 
 # Declaration form base URL (TASK-075): the public site base the in-person Gift Aid
 # declaration link/QR is built on. A plain String (not a secret); starts as a
@@ -4499,16 +4489,12 @@ defaulted, injected via `valueFrom` with its ARN in `exec_secrets`. It is the
 verify inbound events; its `.env.example`/CI placeholder is any non-empty
 `whsec_…` string, which keeps signature checks working offline.
 
-`CONTACT_FORWARD_URL` (TASK-039, REQ-030) is the form-service endpoint
-`/api/contact` forwards enquiries to (a Formspree-style form URL or an NBCC inbox
-endpoint). It is a secret (it authorises submissions), so it is an SSM
-`SecureString` injected via `valueFrom` with its ARN in `exec_secrets`, and is
-validated as a URL. Its placeholder is a valid `.example` URL (not `REPLACE_ME`,
-which would fail URL validation); `src/clients/contact.ts` treats a `.example`
-host as unconfigured and stubs the forward outside production. **Retired from the
-live path** by the 2026-07-10 contact-inbox spec — `POST /api/contact` now stores
-enquiries instead of forwarding them (see **Contact form tab** above) — the config
-value and `src/clients/contact.ts` are left in place, unused, rather than removed.
+`CONTACT_FORWARD_URL` (TASK-039, REQ-030) was the form-service endpoint `/api/contact` used to
+forward enquiries to. It was retired from the live path by the 2026-07-10 contact-inbox spec —
+`POST /api/contact` stores enquiries instead of forwarding them (see **Contact form tab** above) —
+and the Resend→SES migration **removed it entirely**: the dead `src/clients/contact.ts` module, the
+schema key, `.env.example`/CI entries, the SSM parameter and the task-def/`exec_secrets` wiring are
+all gone.
 
 `CONTACT_DATABASE_URL` (2026-07-10 contact-inbox spec) is the connection string for
 the **isolated `contact` database** the public enquiry form and its admin tab read
@@ -4519,12 +4505,29 @@ assembled with `sslmode=no-verify` and injected via `valueFrom` with its ARN in
 `exec_secrets`. See **Local development** below for the local DB/role setup and
 `migrate:contact` / `bootstrap:contact` scripts.
 
-`EMAIL_SEND_URL` (TASK-070) is the transactional-email provider endpoint the
-donation-confirmation email is POSTed to after a successful payment. Same treatment
-as `CONTACT_FORWARD_URL`: an SSM `SecureString` injected via `valueFrom` with its
-ARN in `exec_secrets`, validated as a URL, with a valid `.example` placeholder that
-`src/clients/email.ts` treats as unconfigured and stubs outside production. Set the
-real value with `put-parameter` (above) when a provider is chosen.
+**Email keys (Resend→SES migration — replaces `EMAIL_SEND_URL`).** The app sends every email
+straight to the **Amazon SESv2 API** (`src/clients/ses.ts`) — no relay Worker, no provider API key.
+Authentication is the **ECS task role** (`ses:SendEmail` scoped to the two verified identities,
+`infra/modules/app/ecs.tf`), signed by a dependency-free SigV4 signer (`src/clients/aws-sigv4.ts`,
+pinned to AWS's published test vector — no `@aws-sdk` dependency, deliberately: the npm registry is
+blocked on the owner's machine). The keys, all defaulted so boot never blocks:
+
+- `EMAIL_PROVIDER` (`stub`|`ses`, default `stub`) — the stub seam. Outside production `stub` makes
+  every send a no-op (the old `.example`-placeholder behaviour); production's task definition sets
+  `ses` and production never stubs regardless.
+- `SES_REGION` (default `eu-west-2`) — plain task-def env, matching the stack's region.
+- `SES_NEWSLETTER_CONFIGURATION_SET` / `SES_TRANSACTIONAL_CONFIGURATION_SET` — the two SES
+  configuration sets Terraform creates (`ses.tf`): the newsletter one carries click tracking on
+  `links.news.nbcc.scot`, the transactional one deliberately none. Blank = send without events.
+- `MAIL_FROM` (default `noreply@nbcc.scot`) — the From for app-branded transactional email (the
+  retired relay's `MAIL_FROM` role).
+- `SES_WEBHOOK_TOKEN` — the ONE email secret: the shared token in the delivery-webhook path
+  (`POST /api/webhooks/ses/:token`), minted by Terraform (`random_password` → SSM `SecureString` →
+  both the task-def `secrets` and the SNS subscription URL). Blank ⇒ the webhook answers 503.
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` /
+  `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI` — optional pass-throughs the platform injects (Fargate
+  sets the last one for the task role); they exist in the schema only because golden rule 3 forbids
+  reading `process.env` outside the config module. Not wired to SSM/task-def by hand.
 
 `DECLARATION_FORM_BASE_URL` (TASK-075) is the public site base the in-person Gift Aid
 declaration link + QR short link are built on (`declarationLinks`). **Not** a secret (it
@@ -4563,30 +4566,22 @@ Pinned by `test/unit/newsletter-addresses.test.ts`.
 Neither is a secret (both ship in the email headers) — plain SSM `String`s injected via `valueFrom`
 like `DECLARATION_FORM_BASE_URL`/`PORTAL_BASE_URL` (their ARNs live in the `exec_secrets` policy,
 matching that pattern), validated as email addresses and defaulted so local dev / CI boot without
-extra setup. `sendNewsletter`
-(`src/clients/email.ts`) POSTs the recipient in `email`, its own `subject`/`from`/`replyTo`, and a
-`newsletter: true` discriminator; the relay Worker (`services/email-relay/src/index.js`) has a
-dedicated newsletter branch that maps those to a Resend send honouring the per-message `from`/`reply_to`
-(other payloads fall through to the fixed `MAIL_FROM`). **Ops prerequisites:** (1) the relay Worker
-must be redeployed (`cd services/email-relay && wrangler deploy`) for the newsletter branch to take
-effect — one Worker serves production; (2) `newsletter@nbcc.scot` must be a real
-**receiving mailbox** (Resend is send-only) for replies to land, and its domain `nbcc.scot` must stay
-verified in Resend.
+extra setup. `sendNewsletter` (`src/clients/email.ts`) sends each message via SES with its own
+`subject`/`from`/`replyTo` honoured per message, tagged with the click-tracked newsletter
+configuration set. **Ops prerequisite:** `newsletter@nbcc.scot` must be a real **receiving mailbox**
+(the `news.` sending subdomain is send-only) for replies to land, and both SES identities must be
+verified (DKIM CNAMEs applied — `infra/modules/app/ses.tf`).
 
 `GIVING_FROM_EMAIL` (TASK-165 · REQ-069) is the equivalent From **and** Reply-To address for donor
 **thank-you letters**, so a donor's reply reaches the giving inbox rather than a noreply. Same shape
 as `NEWSLETTER_FROM_EMAIL`: **not** a secret, a plain SSM `String` injected via `valueFrom` (its ARN
 in `exec_secrets`), validated as an email and **defaulted** to `giving@nbcc.scot`. `sendThankYou`
-(`src/clients/email.ts`) POSTs its own `subject`/`from`/`replyTo` plus a `thankYou: true`
-discriminator; the relay Worker's dedicated thank-you branch honours the per-message `from`/`reply_to`.
-**Ops prerequisites** mirror the newsletter's: (1) redeploy the relay Worker (`cd services/email-relay
-&& wrangler deploy`) so the thank-you branch takes effect (one Worker serves both envs); (2)
-`giving@nbcc.scot` must be a real **receiving mailbox** (Resend is send-only) for replies to land, and
-`nbcc.scot` must stay verified in Resend. A `DMARC` record on `nbcc.scot` (with SPF/DKIM) is
-recommended for inbox placement. The **business-supporter thank-you invite** (TASK-213,
-`sendBusinessSupporterInvite`) reuses this **same** `thankYou: true` passthrough with the same
-`GIVING_FROM_EMAIL` From/Reply-To, so it needs **no** relay `kind` and **no** extra Worker redeploy —
-the relay already forwards its app-built `subject`/`html`/`text` verbatim.
+(`src/clients/email.ts`) sends its own `subject`/`from`/`replyTo` verbatim via SES.
+**Ops prerequisite:** `giving@nbcc.scot` must be a real **receiving mailbox** for replies to land,
+and the `nbcc.scot` SES identity must stay verified. A `DMARC` record on `nbcc.scot` (with SPF/DKIM)
+is in place for inbox placement. The **business-supporter thank-you invite** (TASK-213,
+`sendBusinessSupporterInvite`) reuses this **same** verbatim-send path with the same
+`GIVING_FROM_EMAIL` From/Reply-To.
 
 **Signup band, import names and email rules (TASK-269).** Three fixes around the newsletter's edges:
 
@@ -4731,12 +4726,11 @@ here protects the `nbcc.scot` sending reputation, which also carries admin sign-
   `listRecipientsForList`, the one resolver both the send loop and the recipient preview use, so the
   count an admin confirms is the count that goes out. Blocked addresses are listed in the admin
   ("Blocked addresses") and can be lifted — suppression is a tombstone, never a delete.
-- **RFC 8058 one-click unsubscribe.** The relay now sets `List-Unsubscribe` and
-  `List-Unsubscribe-Post` from a per-recipient `unsubscribeUrl`, and `/unsubscribe/:token` accepts
-  **POST** as well as GET. Gmail and Yahoo require this of bulk senders; without it recipients reach
-  for "report spam" instead, and a complaint costs far more than an unsubscribe.
-  ⚠️ **Ops:** the relay Worker must be redeployed (`cd services/email-relay && wrangler deploy`) for
-  the headers to take effect.
+- **RFC 8058 one-click unsubscribe.** `sendNewsletter` sets `List-Unsubscribe` and
+  `List-Unsubscribe-Post` from a per-recipient `unsubscribeUrl` (SES `Content.Simple.Headers`), and
+  `/unsubscribe/:token` accepts **POST** as well as GET. Gmail and Yahoo require this of bulk
+  senders; without it recipients reach for "report spam" instead, and a complaint costs far more
+  than an unsubscribe.
 - **An unsubscribe now sticks.** Someone who donated with the box ticked *and* signed up through the
   website footer exists twice — a consenting donor and a list membership. The send deduped them with
   the donor identity winning, so clearing that flag left the subscriber row active and the next
@@ -4752,7 +4746,7 @@ here protects the `nbcc.scot` sending reputation, which also carries admin sign-
   got 403s swallowed by empty catch handlers and a tab stuck on "Loading…". Reads now accept `view`.
 
 **The delivery stats under-counted by half, and a provider export showed why (TASK-305).** A real
-send reported 95 delivered and 0 clicks; Resend's own export of the same 200 emails showed **182
+send reported 95 delivered and 0 clicks; the provider's own export of the same 200 emails showed **182
 arrived and 24 clicks**. Nothing was wrong with the sending — every one of the 200 went out, to 200
 distinct people, with no duplicates. The reporting was wrong.
 
@@ -4933,9 +4927,9 @@ this, who got it, and who added this person.
   contradicted anyone sending mail as `@nbcc.scot`. The apex TXT set now also carries
   `v=spf1 include:_spf.google.com ~all`. It must include Google because the apex MX is
   `smtp.google.com` — staff mail is Google Workspace, and an SPF record omitting it would start
-  failing every real email a human sends from the domain. Resend is deliberately absent: its envelope
-  sender is `send.nbcc.scot`, which has its own SPF record, and `include:amazonses.com` at the apex
-  would authorise every Amazon SES customer to send as NBCC.
+  failing every real email a human sends from the domain. SES is deliberately absent: its envelope
+  sender lives on its own bounce subdomain with its own SPF record, and `include:amazonses.com` at
+  the apex would authorise every Amazon SES customer to send as NBCC.
 - **DMARC reported nothing.** The record was `p=none;` with no `rua`, so it neither protected the
   domain nor told anyone what was happening — it met the letter of the Gmail/Yahoo bulk-sender rule
   and delivered none of the value. Now `v=DMARC1; p=none; rua=mailto:newsletter@nbcc.scot; fo=1;`.
@@ -4945,10 +4939,9 @@ this, who got it, and who added this person.
   `p=none` → `p=quarantine; pct=25` → `p=quarantine` → `p=reject`. Do not skip to reject blind: it
   risks silently binning legitimate mail from a platform nobody remembered was sending for the charity.
 
-> **Still to do for deliverability** (documented, not yet built): a dedicated `news.nbcc.scot`
-> sending subdomain so a bad campaign cannot damage receipts and admin sign-in codes (needs the
-> domain added in Resend first, then `NEWSLETTER_FROM_EMAIL` repointed); enabling open/click tracking
-> in the Resend dashboard; and volume warm-up on any new sending domain.
+> **Since done:** the dedicated `news.nbcc.scot` sending subdomain shipped in TASK-296/298/299, and
+> click tracking is now part of the SES newsletter configuration set (Resend→SES migration). Volume
+> warm-up still applies to any new sending domain or provider switch.
 
 **Newsletter tab flow (TASK-279).** The tab was one continuous ~19,000-character scroll: reaching the
 composer meant scrolling past all the audience and people management every time, three full-width
@@ -5271,7 +5264,7 @@ Both senders were **checked** to authenticate *and* align before changing it, so
 
 | Sender | SPF | DKIM |
 |---|---|---|
-| Resend (newsletters, receipts) | envelope on `send.nbcc.scot` → `include:amazonses.com` | `resend._domainkey` signs `d=nbcc.scot` |
+| Amazon SES (newsletters, receipts) | envelope on `bounce.nbcc.scot` / `bounce.news.nbcc.scot` → `include:amazonses.com` | Easy-DKIM CNAMEs sign `d=nbcc.scot` / `d=news.nbcc.scot` |
 | Google Workspace (staff mail) | apex → `include:_spf.google.com` | `google._domainkey` present |
 
 The policy only ever acts on mail that **fails**. Genuine mail passes and is untouched.
@@ -5281,13 +5274,16 @@ go to a mailbox this codebase can't read, so if some forgotten sender does exist
 its mail still lands while the reports surface it. Next steps on the documented path are
 `p=quarantine` (full) then `p=reject`, once the reports are clean.
 
-**Click-tracking on our own domain (TASK-295).** Resend rewrites every link in a newsletter so clicks
-can be counted. By default those rewritten links point at Resend's **shared** tracking domain — so an
-email that says it is from `nbcc.scot` carries links to somewhere else entirely. That is the shape of
-a phishing message, and it is very likely part of why a real send reached Hotmail's junk folder.
+**Click-tracking on our own domain (TASK-295; provider-agnostic principle).** The provider rewrites
+every link in a newsletter so clicks can be counted. By default those rewritten links point at the
+provider's **shared** tracking domain — so an email that says it is from `nbcc.scot` carries links to
+somewhere else entirely. That is the shape of a phishing message, and it is very likely part of why a
+real send reached Hotmail's junk folder.
 
-A `links.nbcc.scot` CNAME → `links1.resend-dns.com` makes the rewritten links match the sender. Same
-click data, nothing suspicious.
+A tracking CNAME on our own subdomain makes the rewritten links match the sender — since the
+Resend→SES migration that is `links.news.nbcc.scot` → `r.eu-west-2.awstrack.me`, configured on the
+SES newsletter configuration set; the apex tracker is gone because transactional mail no longer
+carries click tracking at all. Same click data, nothing suspicious.
 
 **Open tracking stays off.** It works by embedding an invisible image, which Apple Mail and Gmail
 pre-load — so the numbers lie — and some filters read a tracking pixel as a negative signal. Clicks
@@ -5298,34 +5294,76 @@ the same domain as donation receipts, Gift Aid declarations and admin login code
 upsets a spam filter could therefore damage the deliverability of mail people actually *need* to
 receive.
 
-`news.nbcc.scot` gives the newsletter its own reputation to build, and its own to lose. Three records,
-all inside the existing hosted zone — no delegation, no new zone, nothing about the apex changes:
+`news.nbcc.scot` gives the newsletter its own reputation to build, and its own to lose. All records
+sit inside the existing hosted zone — no delegation, no new zone, nothing about the apex changes.
+Since the Resend→SES migration they are (see `infra/modules/app/ses.tf`):
 
 | Name | Type | Purpose |
 |---|---|---|
-| `resend._domainkey.news` | TXT | DKIM — **its own key**, distinct from the apex |
-| `send.news` | MX | Return-Path: bounce and complaint feedback |
-| `send.news` | TXT | SPF |
+| `<token>._domainkey.news` ×3 | CNAME | Easy DKIM — **its own keys**, distinct from the apex |
+| `bounce.news` | MX | MAIL FROM / Return-Path: bounce and complaint feedback |
+| `bounce.news` | TXT | SPF (`include:amazonses.com`) |
+| `links.news` | CNAME | click tracking → `r.eu-west-2.awstrack.me` |
 
 DMARC is inherited from the apex policy (there is no `sp=` tag), so the tightened `p=quarantine`
 covers this subdomain too without a second record.
 
-Switching `NEWSLETTER_FROM_EMAIL` over was a **separate** change (TASK-298), made only once Resend
-reported the domain verified — flipping the from-address before the DNS resolved would have sent
-unauthenticated mail, the exact opposite of the point. That change also had to split Reply-To out
-into `NEWSLETTER_REPLY_TO_EMAIL`, because this subdomain has no MX and cannot receive a reply.
+Switching `NEWSLETTER_FROM_EMAIL` over was a **separate** change (TASK-298), made only once the
+provider reported the domain verified — flipping the from-address before the DNS resolved would have
+sent unauthenticated mail, the exact opposite of the point. That change also had to split Reply-To
+out into `NEWSLETTER_REPLY_TO_EMAIL`, because this subdomain has no MX at its root and cannot
+receive a reply.
 
-**Click/open tracking is configured per sending domain in Resend**, so moving the From address in
-TASK-298 did not carry the apex tracking domain with it. TASK-299 added the matching record for the
-new sender:
+**Click tracking is configured per configuration set in SES** and only the newsletter set carries
+it; the From address and the rewritten link domain share the `news.` subdomain exactly — the tighter
+alignment. Open tracking stays OFF (it embeds an invisible image, which Apple Mail and Gmail
+pre-load, so the numbers lie, and some filters read it as a negative signal). Clicks are the honest
+measure.
 
-| Record | Type | Serves |
-|---|---|---|
-| `links` | CNAME | `links.nbcc.scot` - anything still sent from the apex (TASK-295) |
-| `links.news` | CNAME | `links.news.nbcc.scot` - the newsletter (TASK-299) |
+**The Resend→SES migration (2026-08-31).** Every outbound email — newsletters, donation
+confirmations, Gift Aid declarations, receipts, refunds, portal/admin links, 2FA codes,
+lapsed-subscription notices, thank-you letters, business-supporter mails, Festive Ball emails — now
+goes **straight from the app to the Amazon SESv2 API**, and delivery facts come back from SES. The
+Cloudflare Worker relay (`services/email-relay/`) and the Resend account are gone entirely.
 
-Both point at `links1.resend-dns.com`. Resend fixes the parent domain in its UI, so the newsletter
-tracker can only be a subdomain of `news.nbcc.scot` - which is the tighter alignment anyway: the
-From address and the rewritten link domain now share the same subdomain exactly. Open tracking
-stays OFF on both (it embeds an invisible image, which Apple Mail and Gmail pre-load, so the numbers
-lie, and some filters read it as a negative signal). Clicks are the honest measure.
+- **Sending** (`src/clients/ses.ts` + `src/clients/ses-request.ts`): a dependency-free SigV4 signer
+  (`src/clients/aws-sigv4.ts`, pinned to AWS's published signing vector — no `@aws-sdk`, because
+  the npm registry is blocked on the owner's machine and a new runtime dep would break local dev),
+  authenticated by the **ECS task role** (`ses:SendEmail` scoped to the two identities +
+  configuration sets). No provider API key exists anywhere.
+- **Templates** (`src/email/templates.ts`): the relay's branded shell + per-kind bodies, ported
+  verbatim into the app (see the TASK-209 section — same shell, same subjects), pinned by
+  `test/unit/email-templates.test.ts`. Templates now ship in the app image: no second deploy, no
+  skew window.
+- **Delivery events**: SES configuration sets publish to an SNS topic which POSTs to
+  **`POST /api/webhooks/ses/:token`** (`src/routes/ses-webhook.ts`). The path token — minted by
+  Terraform, held as the SSM `SES_WEBHOOK_TOKEN` SecureString, embedded in the SNS subscription
+  URL — is the trust boundary (the role the Svix signing secret played). The route auto-confirms
+  the SNS subscription (only for genuine `https://sns.<region>.amazonaws.com` URLs — SSRF-pinned in
+  `parseSnsEnvelope`), maps `Delivery`/`Bounce`/`Complaint`/`Click` onto the existing
+  `newsletter_email_events` store (`recordEmailEvent`; the `svix_event_id` column keeps its
+  historical name and now carries the SNS `MessageId` — same idempotency role, no destructive
+  rename), and applies the same suppression rules (complaint always; Permanent bounce; 3 repeat
+  bounces). Pinned by `test/unit/ses-webhook.test.ts` + the rewritten webhook scenarios in
+  `features/newsletter.feature`.
+- **Two configuration sets** (`infra/modules/app/ses.tf`): `…-newsletter` (click tracking on
+  `links.news.nbcc.scot`, HTTPS required) and `…-transactional` (no tracking, no link rewriting) —
+  a receipt must never carry newsletter-tracker links.
+- **Config**: `EMAIL_PROVIDER` (`stub`/`ses`) replaces the `.example`-URL stub seam;
+  `RESEND_WEBHOOK_SECRET`, `EMAIL_SEND_URL` and `CONTACT_FORWARD_URL` are removed everywhere
+  (schema, `.env.example`, `pr.yml`, SSM, task-def, IAM). The dead contact-forwarding client went
+  with them. See **Email keys** under **Configuration**.
+- **DNS** (`ses.tf` + `dns.tf`): Easy-DKIM CNAMEs ×3 per identity, `bounce.`/`bounce.news.` MAIL
+  FROM MX+SPF, `links.news` → `r.eu-west-2.awstrack.me`; every `resend._domainkey`/`send.*` record
+  removed. Root SPF and DMARC values are untouched.
+
+⚠️ **Cutover order matters** (sandbox → production): (1) `infra.yml` plan + apply — creates the
+identities, DNS, configuration sets, SNS topic/subscription and token; DKIM verifies itself in
+minutes once the records exist. (2) In the SES console, **request production access** (the account
+starts sandboxed: verified recipients only, 200/day) — cite the charity (SC047995), opt-in lists,
+the suppression + one-click-unsubscribe machinery. (3) Only then merge/deploy the app change that
+sends via SES — merging earlier leaves production trying to send through an unverified identity.
+(4) First campaign after the switch: use the gentle rollout — SES's shared IPs are a new
+neighbourhood even though the domain reputation carries. `NEWSLETTER_DAILY_SEND_CAP` (70) guarded a
+100/day provider pot that no longer exists; raise it once the SES sending quota (visible in the
+console) is confirmed comfortably above campaign size.

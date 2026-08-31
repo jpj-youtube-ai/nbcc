@@ -2217,6 +2217,29 @@ Notes on the shape:
 **Expect red deploys until an underlying rollout problem is fixed.** That is the intent: a red
 deploy that tells the truth is worth more than a green one that does not.
 
+### What the ticket covers, and when it starts (TASK-333)
+
+Arrival reads **"From 7pm, to be confirmed"** and the inclusions read **"Entry to the ball, a
+three-course meal, a drink on arrival, and entertainment through the evening. Further drinks
+are not included."**
+
+That last sentence is doing real work. "A drink on arrival" reads to plenty of people as
+"drinks are provided", and the difference otherwise gets discovered at the bar on the night —
+which is both an unhappy guest and, in an advert for a £100 ticket, a claim NBCC could not
+stand behind.
+
+**One copy of the sentence, in `TICKET_INCLUDES` (`src/ball/page.ts`).** It necessarily appears
+twice at runtime: `ball.html` shows it before the venue confirms a menu, and `page.ts` appends
+the menu note to it afterwards. Two hand-written copies of one sentence is exactly the shape
+that drifts, and the symptom would be the page saying different things depending on whether a
+note happened to be set — which nobody would think to check. `ball-inclusions.test.ts` pins
+them together and asserts the menu note is **appended**, so a note about food can never delete
+the statement about drinks.
+
+**These are still admin-editable and admin wins.** Once the venue confirms, setting Arrival in
+**Admin → Festive Ball → Details the venue confirms later** replaces the estimate in both
+places it appears, with no deploy.
+
 ### Agreeing to the ticket terms (TASK-331)
 
 Tickets are **non-refundable**, on purchases up to £1,000 a table. Under the Consumer Rights

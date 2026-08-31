@@ -49,7 +49,7 @@ export function buildBallConfirmationEmail(
   const name = escapeHtml(booking.buyerName);
   const arrival = details.arrivalTime
     ? escapeHtml(details.arrivalTime)
-    : "Start time to be confirmed. We'll email you";
+    : "From 7pm, to be confirmed. We'll email you";
   const included = details.includedNote
     ? ` ${escapeHtml(details.includedNote)}`
     : " The menu and drinks are still being finalised with the venue; we'll email you as soon as they're confirmed.";
@@ -129,7 +129,7 @@ ${moneyText}
 THE NIGHT
 Saturday 7th November 2026
 The Park Hotel, Rugby Park, Kilmarnock
-${details.arrivalTime ?? "Start time to be confirmed. We'll email you"}
+${details.arrivalTime ?? "From 7pm, to be confirmed. We'll email you"}
 Dress to impress. This is an over 18s event.
 Your ticket includes entry, a meal and the evening's entertainment.${
     details.includedNote

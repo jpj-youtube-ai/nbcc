@@ -154,6 +154,51 @@ export const configSchema = z.object({
   // setup TASK-293/298 built. Defaulted like the other from-addresses.
   BALL_FROM_EMAIL: z.string().email().default("events@nbcc.scot"),
 
+  // --- Amazon SES (Resend→SES migration) -----------------------------------------------------
+  // The app sends email straight to the SESv2 API (src/clients/ses.ts) — no relay Worker, no
+  // provider API key. Authentication is the ECS task role (or static keys locally).
+
+  // Whether real sends happen outside production. "stub" (the default) keeps local dev and CI
+  // network-free — every send is a no-op, exactly as the old `.example`-URL placeholder seam
+  // behaved. Production NEVER stubs regardless of this value (same rule as before): a
+  // misconfigured production must fail loudly, not silently swallow receipts.
+  EMAIL_PROVIDER: z.enum(["stub", "ses"]).default("stub"),
+
+  // The AWS region the SES identities live in. Injected as plain env on ECS (matches the
+  // stack's own region); the default keeps local/CI boot working.
+  SES_REGION: z.string().min(1).default("eu-west-1"),
+
+  // SES configuration sets: they route delivery/bounce/complaint events to the SNS topic behind
+  // POST /api/webhooks/ses. Two sets on purpose — the NEWSLETTER one has click tracking (links
+  // rewritten via links.news.nbcc.scot), the TRANSACTIONAL one does not (a receipt from
+  // events@nbcc.scot carrying links.news.* links is the mismatched-link phishing shape TASK-295
+  // removed). Blank = send without a configuration set (no events), so boot never blocks.
+  SES_NEWSLETTER_CONFIGURATION_SET: z.string().default(""),
+  SES_TRANSACTIONAL_CONFIGURATION_SET: z.string().default(""),
+
+  // The From address for app-branded transactional email (donation confirmations, login codes,
+  // portal links…) — the role the relay Worker's MAIL_FROM var used to play. NOT a secret;
+  // defaulted to the production address like the other from-addresses.
+  MAIL_FROM: z.string().email().default("noreply@nbcc.scot"),
+
+  // Where a website contact enquiry is delivered (replaces the relay's CONTACT_TO Worker var —
+  // the enquiry is now a normal SES send with Reply-To set to the enquirer).
+  CONTACT_TO_EMAIL: z.string().email().default("giving@nbcc.scot"),
+
+  // Shared token in the SES/SNS webhook path (/api/webhooks/ses/<token>) — the trust boundary
+  // for delivery facts, the role the Svix signing secret used to play. DEFAULTED to empty like
+  // that secret was: unconfigured means the endpoint answers 503, never that boot fails.
+  SES_WEBHOOK_TOKEN: z.string().default(""),
+
+  // AWS credential pass-throughs for src/clients/aws-sigv4.ts. These are injected by the
+  // platform (Fargate sets AWS_CONTAINER_CREDENTIALS_RELATIVE_URI for the task role; local dev
+  // may export static keys) — they are NOT app config to wire through SSM/task-def, they exist
+  // here only because golden rule 3 forbids reading process.env outside this module.
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  AWS_SESSION_TOKEN: z.string().optional(),
+  AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: z.string().optional(),
+
   // TASK-302: the most newsletter emails that may leave in one day, whatever a send asks for.
   //
   // The mail provider's daily allowance is shared by EVERYTHING we send - donation receipts, Gift

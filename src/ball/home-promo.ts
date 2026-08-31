@@ -20,8 +20,13 @@ export interface HomePromoInput {
 // the donation money path. Inline also means these bytes cost nothing while the gate is shut,
 // and add no extra HTTP request when it is open.
 const PROMO_STYLES = `<style>
+  /* MARGIN, not padding, to clear the fixed nav. Padding is inside the box, so the navy
+     background painted UP behind the header — and the home page nav is transparent until you
+     scroll, which left grey nav links and the red NBCC logo sitting on a dark band. A margin
+     starts the band BELOW the nav instead. The ticker's own height is already reserved by
+     body.has-ticker, so this must clear the nav only or it double-counts. */
   .ball-banner{background:#0B1020;color:#F2EEE4;text-decoration:none;display:block;
-    padding:calc(var(--nav-h) + 12px) 0 14px}
+    margin-top:var(--nav-h);padding:14px 0}
   .ball-banner .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
     gap:6px 18px;text-align:center}
   .ball-banner b{font-family:"Playfair Display",Georgia,serif;font-weight:600;font-size:1.05rem;

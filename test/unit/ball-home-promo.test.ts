@@ -81,3 +81,33 @@ describe("renderHomePromo", () => {
     expect(twice).toBe(once);
   });
 });
+
+describe("the banner sits BELOW the fixed header, not behind it (TASK-322)", () => {
+  // The home page nav is transparent until you scroll, so anything painting a background
+  // behind it shows through. Clearing the nav with PADDING put the banner's navy inside its
+  // own box and therefore behind the header: grey nav links and the red NBCC logo ended up on
+  // a dark band. A MARGIN starts the band below the nav instead.
+  //
+  // Asserted on the .ball-banner rule alone rather than the whole stylesheet, so an unrelated
+  // rule elsewhere cannot make this pass or fail by accident.
+  const rule = () => {
+    const css = renderHomePromo(HOME, { gateOpen: true });
+    const start = css.indexOf(".ball-banner{");
+    return css.slice(start, css.indexOf("}", start) + 1);
+  };
+
+  it("clears the nav with a margin", () => {
+    expect(rule()).toContain("margin-top:var(--nav-h)");
+  });
+
+  it("does not clear it with padding, which would paint behind the header", () => {
+    const padding = rule().match(/padding:[^;}]*/)?.[0] ?? "";
+    expect(padding).not.toContain("--nav-h");
+  });
+
+  // body.has-ticker already reserves the partner ticker's height for the whole page. Adding it
+  // here as well would double-count and leave a cream gap between the ticker and the banner.
+  it("does not also try to clear the partner ticker", () => {
+    expect(rule()).not.toContain("--ticker-h");
+  });
+});

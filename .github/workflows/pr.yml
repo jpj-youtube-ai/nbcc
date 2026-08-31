@@ -50,13 +50,10 @@ jobs:
       # the app boots; the stripe-webhook BDD signs its events with THIS same value
       # (via generateTestHeaderString) so signature verification passes offline.
       STRIPE_WEBHOOK_SECRET: whsec_ci_dummy_secret
-      RESEND_WEBHOOK_SECRET: whsec_Y2ktdGVzdC1rZXktZm9yLXJlc2VuZC13ZWJob29rcw==
-      # Contact forwarding (REQ-030). A `.example` placeholder so the app boots and
-      # the forward is stubbed (no live form service) for the BDD step.
-      CONTACT_FORWARD_URL: https://forward.example/contact
-      # Transactional email (TASK-070). A `.example` placeholder so the app boots and
-      # the confirmation-email send is stubbed (no live provider) for the BDD step.
-      EMAIL_SEND_URL: https://email.example/send
+      # Email (Resend→SES migration): EMAIL_PROVIDER defaults to "stub" in the schema, so every
+      # send (confirmations, contact forwards, newsletters) is a no-op in CI — no live provider.
+      # The SES webhook token is what the BDD posts its SNS-shaped delivery events with.
+      SES_WEBHOOK_TOKEN: ci-ses-webhook-token
       # Declaration form base URL (TASK-075) for the in-person confirmation link/QR.
       DECLARATION_FORM_BASE_URL: http://localhost:3000
       # Admin notification recipient (TASK-092): required by the schema so the app boots.

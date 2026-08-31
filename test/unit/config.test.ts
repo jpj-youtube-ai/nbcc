@@ -23,9 +23,6 @@ const validEnv = (): Record<string, string> => ({
   STRIPE_PRICE_PLATINUM: "price_platinum",
   // Stripe webhook signing secret (TASK-046, REQ-036).
   STRIPE_WEBHOOK_SECRET: "whsec_test",
-  // Contact forwarding (TASK-039, REQ-030).
-  CONTACT_FORWARD_URL: "https://formspree.io/f/test",
-  EMAIL_SEND_URL: "https://email.example/send",
   DECLARATION_FORM_BASE_URL: "https://nbcc.example",
   ADMIN_NOTIFICATION_EMAIL: "admin@nbcc.example",
   PORTAL_BASE_URL: "https://nbcc.example",
@@ -86,17 +83,33 @@ describe("config schema — Stripe checkout keys (REQ-028/REQ-029)", () => {
   });
 });
 
-describe("config schema — contact forwarding key (REQ-030)", () => {
-  it("requires CONTACT_FORWARD_URL", () => {
-    const env = validEnv();
-    delete env.CONTACT_FORWARD_URL;
-    expect(configSchema.safeParse(env).success).toBe(false);
+describe("config schema — email keys (Resend→SES migration)", () => {
+  it("defaults EMAIL_PROVIDER to stub and rejects unknown providers", () => {
+    // "stub" keeps local dev + CI network-free (the old `.example` placeholder seam); production
+    // gets "ses" via the task definition. An unknown value must fail boot, not silently stub.
+    const parsed = configSchema.safeParse(validEnv());
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.EMAIL_PROVIDER).toBe("stub");
+    expect(configSchema.safeParse({ ...validEnv(), EMAIL_PROVIDER: "resend" }).success).toBe(false);
+    expect(configSchema.safeParse({ ...validEnv(), EMAIL_PROVIDER: "ses" }).success).toBe(true);
   });
 
-  it("validates CONTACT_FORWARD_URL as a URL", () => {
-    expect(configSchema.safeParse({ ...validEnv(), CONTACT_FORWARD_URL: "not-a-url" }).success).toBe(
-      false,
-    );
+  it("defaults the SES region, sender addresses and webhook token so boot never blocks on them", () => {
+    const parsed = configSchema.safeParse(validEnv());
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.SES_REGION).toBe("eu-west-1");
+      expect(parsed.data.MAIL_FROM).toBe("noreply@nbcc.scot");
+      expect(parsed.data.CONTACT_TO_EMAIL).toBe("giving@nbcc.scot");
+      expect(parsed.data.SES_WEBHOOK_TOKEN).toBe(""); // blank ⇒ the webhook answers 503
+      expect(parsed.data.SES_NEWSLETTER_CONFIGURATION_SET).toBe("");
+      expect(parsed.data.SES_TRANSACTIONAL_CONFIGURATION_SET).toBe("");
+    }
+  });
+
+  it("validates MAIL_FROM and CONTACT_TO_EMAIL as email addresses", () => {
+    expect(configSchema.safeParse({ ...validEnv(), MAIL_FROM: "not-an-email" }).success).toBe(false);
+    expect(configSchema.safeParse({ ...validEnv(), CONTACT_TO_EMAIL: "not-an-email" }).success).toBe(false);
   });
 
   it("requires ADMIN_NOTIFICATION_EMAIL and validates it as an email (TASK-092)", () => {

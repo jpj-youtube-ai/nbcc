@@ -53,12 +53,6 @@ export const configSchema = z.object({
   // in SSM in staging/prod.
   STRIPE_WEBHOOK_SECRET: z.string().min(1),
 
-  // Resend delivery-webhook signing secret (TASK-255, email stats Phase 1). DEFAULTED to empty —
-  // unlike Stripe's (which donations cannot function without), this one is additive: the app must
-  // deploy BEFORE the user configures the webhook in Resend's dashboard, so an unconfigured secret
-  // means the endpoint answers 503, never that the app fails to boot. whsec_… once real.
-  RESEND_WEBHOOK_SECRET: z.string().default(""),
-
   // Optional: a Stripe Product id (prod_…) to group one-off donations under. The
   // one-off amount stays variable; this only sets the product the inline price
   // hangs off (cleaner Stripe reporting/receipts). Left unset, an inline product
@@ -71,19 +65,6 @@ export const configSchema = z.object({
   // one must never stop the app booting — this value exists to make a deploy honest, not to
   // become a new way for it to fail.
   GIT_SHA: z.string().default("unknown"),
-
-  // Contact form forwarding (REQ-030). The endpoint URL of the form service
-  // (Formspree-style) or NBCC inbox the /api/contact handler POSTs enquiries to.
-  // It is the credential that authorises submissions, so it is held as a secret
-  // (SSM SecureString in AWS); validated as a URL.
-  CONTACT_FORWARD_URL: z.string().url(),
-
-  // Transactional email send endpoint (TASK-070). The provider URL the email
-  // client POSTs a single donation-confirmation message to after a successful
-  // payment. It authorises sends, so it is held as a secret (SSM SecureString in
-  // AWS); validated as a URL. A `.example` host is treated as unconfigured and the
-  // send is stubbed outside production (mirrors CONTACT_FORWARD_URL / the Stripe seam).
-  EMAIL_SEND_URL: z.string().url(),
 
   // Base URL for the Gift Aid declaration form the in-person confirmation email links to
   // (TASK-075/REQ-048). The auto-email after a card-present donation embeds a unique,

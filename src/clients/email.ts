@@ -1,18 +1,17 @@
 import { config } from "../config";
+import { sendSesEmail } from "./ses";
+import { buildKindEmail } from "../email/templates";
 
-// Transactional email client (TASK-070). Sends a single donation-confirmation
-// message to the configured provider after a successful payment. The endpoint URL
-// comes from src/config — an SSM SecureString in AWS — never process.env directly
-// (golden rule 3). Mirrors src/clients/contact.ts: a thin fetch wrapper reading its
-// credentials through the config module.
+// Transactional email client (TASK-070; Resend→SES migration). Sends every app email straight
+// to Amazon SES (src/clients/ses.ts) — the Cloudflare Worker relay and its Resend account are
+// gone. The branded bodies the relay used to build now come from src/email/templates.ts; the
+// kinds that ship fully rendered content (newsletter, thank-you letters, ball emails…) send it
+// verbatim, exactly as the relay's passthrough branches did.
 //
-// Stub seam (mirrors contact.ts / stripe.ts): a real send URL points at a real
-// provider; local dev, CI and fresh SSM params use a placeholder on the reserved
-// `.example` domain. OUTSIDE production, when the URL is a placeholder, sending is
-// stubbed (no network) so the payment→confirmation flow can be exercised end to end
-// — locally and in CI — without a provider account. With a real URL the real POST is
-// made in any environment, and production NEVER stubs. This is the SINGLE, minimal
-// donation-confirmation email — not the full REQ-060 templated system.
+// Stub seam (mirrors contact.ts / stripe.ts): outside production, sends are stubbed (no
+// network) unless EMAIL_PROVIDER=ses — so the payment→confirmation flow can be exercised end to
+// end, locally and in CI, without an AWS account. Production NEVER stubs, whatever the flag
+// says: a misconfigured production must fail loudly, not silently swallow receipts.
 export interface DonationConfirmation {
   email: string;
   fullName: string;
@@ -24,15 +23,7 @@ export interface DonationConfirmation {
   html?: string;
 }
 
-function isPlaceholderUrl(url: string): boolean {
-  try {
-    return new URL(url).hostname.endsWith(".example");
-  } catch {
-    return true;
-  }
-}
-
-export const emailConfigured = !isPlaceholderUrl(config.EMAIL_SEND_URL);
+export const emailConfigured = config.EMAIL_PROVIDER === "ses";
 const useStub = !emailConfigured && config.NODE_ENV !== "production";
 // Exposes the stub seam to callers outside this module (admin-management Phase 3, TASK-188)
 // so the login route can tell whether a login-code email actually left the building. Always
@@ -40,18 +31,19 @@ const useStub = !emailConfigured && config.NODE_ENV !== "production";
 // only production-facing use: the login-code response must never leak the code when this is false.
 export const emailStubbed = useStub;
 
+// The transactional sender + configuration set, shared by every kind below except the
+// newsletter (which carries its own from/reply-to and the click-tracked newsletter set).
+const transactional = () => ({
+  from: config.MAIL_FROM,
+  configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
+});
+
 export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "donation" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("donation", { html: message.html, text: message.text });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 // The in-person Gift Aid declaration email (TASK-075/REQ-048). After a card-present
@@ -72,21 +64,20 @@ export async function sendDeclarationEmail(message: DeclarationEmail): Promise<v
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "declaration" }),
+  const built = buildKindEmail("declaration", {
+    declarationLink: message.declarationLink,
+    shortLink: message.shortLink,
+    amountPence: message.amountPence,
+    currency: message.currency,
   });
-  if (!res.ok) {
-    throw new Error(`Declaration email send responded ${res.status}`);
-  }
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 // The Corporation Tax receipt email for a COMPANY donation (REQ-053, TASK-088). A company gift
 // is relieved via Corporation Tax, not Gift Aid, so after a company checkout with NO
 // consideration given the donor's billing contact is emailed a receipt. The verbatim content
-// (text + html) is built by the pure src/donors/receipt.ts and passed in, so this client only
-// ships the payload. Same stub-seam + best-effort contract as sendDonationConfirmation.
+// (text + html) is built by the pure src/donors/receipt.ts and passed in. Same stub-seam +
+// best-effort contract as sendDonationConfirmation.
 export interface CompanyReceiptEmail {
   email: string; // the company's billing contact email
   legalName: string;
@@ -100,14 +91,8 @@ export async function sendCompanyReceipt(message: CompanyReceiptEmail): Promise<
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "receipt" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Company receipt email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("receipt", { html: message.html, text: message.text });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 // The refund-confirmation email for an INDIVIDUAL donor (REQ-063 · TASK-099). After a
@@ -128,14 +113,8 @@ export async function sendRefundConfirmation(message: RefundConfirmationEmail): 
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "refund" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Refund confirmation email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("refund", { html: message.html, text: message.text });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 // The self-serve portal magic-link email (TASK-100/REQ-061). A passwordless, one-time, expiring
@@ -151,21 +130,15 @@ export async function sendPortalMagicLink(message: PortalMagicLinkEmail): Promis
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "portal" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Portal magic-link email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("portal", { fullName: message.fullName, link: message.link });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 // Admin team invite / password-reset emails (admin-management Phase 1, Task 5). A staff invite or
 // an admin/self-service password reset is a one-time, expiring, purpose-scoped link (built by
 // adminActionLink on PORTAL_BASE_URL, signed with ADMIN_SESSION_SECRET — src/admin/tokens.ts).
 // Mirrors sendPortalMagicLink exactly: same minimal payload shape, same stub-seam + best-effort
-// contract as the other sends (no network outside production when EMAIL_SEND_URL is a placeholder).
+// contract as the other sends.
 export interface AdminInviteEmail {
   email: string;
   fullName: string;
@@ -176,14 +149,8 @@ export async function sendAdminInvite(message: AdminInviteEmail): Promise<void> 
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "adminInvite" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Admin invite email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("adminInvite", { fullName: message.fullName, link: message.link });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 export interface AdminResetEmail {
@@ -196,23 +163,17 @@ export async function sendAdminReset(message: AdminResetEmail): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "adminReset" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Admin reset email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("adminReset", { fullName: message.fullName, link: message.link });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 // Admin login-code email (admin-management Phase 3 · mandatory email 2FA, TASK-188). After a
 // password-valid login from an untrusted device, the platform emails a one-time 6-digit code
-// (generated + hashed by src/admin/two-factor.ts) so the admin can complete step 2. Mirrors
-// sendAdminInvite exactly: same minimal payload shape, same stub-seam + best-effort contract
-// as the other sends (no network outside production when EMAIL_SEND_URL is a placeholder). See
+// (generated + hashed by src/admin/two-factor.ts) so the admin can complete step 2. See
 // emailStubbed above: on non-production, when this stubs, the login route falls back to
-// returning the code directly in its response so 2FA can still be completed.
+// returning the code directly in its response so 2FA can still be completed. (The TASK-209
+// deploy-skew fallback subject/text are gone: the templates now ship IN the app, so the app and
+// its email bodies can never be out of step.)
 export interface AdminLoginCodeEmail {
   email: string;
   fullName: string;
@@ -223,21 +184,8 @@ export async function sendAdminLoginCode(message: AdminLoginCodeEmail): Promise<
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  // TASK-209: the relay now builds the branded, correctly-subjected login-code email from
-  // `kind` + `code`. The plain `subject`/`text` below are kept ONLY as a deploy-skew safety
-  // net, so an OLDER relay (deployed separately via wrangler) still delivers the code rather
-  // than 422-ing on an unrecognised payload while the app and Worker versions are out of step.
-  const subject = `Your NBCC admin sign-in code is ${message.code}`;
-  const text = `Hello ${message.fullName},\n\n${subject}. This code expires in 10 minutes.\n\nIf you did not request this, you can ignore this email.`;
-
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ kind: "loginCode", email: message.email, fullName: message.fullName, code: message.code, subject, text }),
-  });
-  if (!res.ok) {
-    throw new Error(`Admin login-code email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("loginCode", { fullName: message.fullName, code: message.code });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 // Subscription-lapsed notices (TASK-092/REQ-065). When a monthly subscription lapses (Stripe
@@ -255,14 +203,8 @@ export async function sendSubscriptionLapsedDonor(message: SubscriptionLapsedDon
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "lapsedDonor" }),
-  });
-  if (!res.ok) {
-    throw new Error(`Subscription lapsed (donor) email send responded ${res.status}`);
-  }
+  const built = buildKindEmail("lapsedDonor", { fullName: message.fullName });
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
 export interface SubscriptionLapsedAdminEmail {
@@ -275,96 +217,96 @@ export async function sendSubscriptionLapsedAdmin(message: SubscriptionLapsedAdm
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, kind: "lapsedAdmin" }),
+  const built = buildKindEmail("lapsedAdmin", {
+    donorName: message.donorName,
+    subscriptionId: message.subscriptionId,
   });
-  if (!res.ok) {
-    throw new Error(`Subscription lapsed (admin) email send responded ${res.status}`);
-  }
+  await sendSesEmail({ to: message.email, ...transactional(), ...built });
 }
 
-// The admin newsletter send (TASK-161/REQ-069; relay contract fixed TASK-162). Sends ONE individual
-// message per consenting donor, with From + Reply-To set to config.NEWSLETTER_FROM_EMAIL so replies
-// reach a real inbox (not noreply). Each message's html already carries the recipient's unsubscribe
-// link (built by the route from buildNewsletterHtml). Same stub-seam + best-effort contract as the
-// other sends: a placeholder EMAIL_SEND_URL means no network outside production.
-//
-// The recipient rides in `email` (the field the relay Worker reads — services/email-relay), and the
-// posted body carries `newsletter: true` so the relay maps it via its dedicated newsletter branch
-// (honouring this message's subject + from + replyTo) instead of the donation-confirmation default.
+// The admin newsletter send (TASK-161/REQ-069). Sends ONE individual message per consenting
+// donor, with From + Reply-To set by the caller (config.NEWSLETTER_FROM_EMAIL /
+// NEWSLETTER_REPLY_TO_EMAIL) so replies reach a real inbox (not noreply). Each message's html
+// already carries the recipient's unsubscribe link (built by the route from
+// buildNewsletterHtml). The newsletter rides the CLICK-TRACKED configuration set
+// (SES_NEWSLETTER_CONFIGURATION_SET) so delivery/bounce/complaint/click events flow back to
+// POST /api/webhooks/ses; transactional mail deliberately does not.
 export interface NewsletterEmail {
-  email: string; // recipient — the relay's recipient field
+  email: string; // recipient
   from: string; // config.NEWSLETTER_FROM_EMAIL
-  replyTo: string; // same as from
+  replyTo: string; // config.NEWSLETTER_REPLY_TO_EMAIL
   subject: string;
   html: string;
   // TASK-275: the plain-text alternative. Newsletters went out HTML-only, which counts against a
   // sender with spam filters and leaves text-only clients and some screen readers with nothing. The
   // thank-you letters have carried one for ages; the newsletter was the one send that skipped it.
   text?: string;
-  // TASK-272: the recipient's own one-click unsubscribe URL. The relay turns this into the
-  // List-Unsubscribe / List-Unsubscribe-Post headers (RFC 8058) that Gmail and Yahoo require of bulk
-  // senders. Without them people reach for "report spam" instead of the in-body link — and a
-  // complaint costs the sending domain far more than an unsubscribe does.
+  // TASK-272: the recipient's own one-click unsubscribe URL, sent as the List-Unsubscribe /
+  // List-Unsubscribe-Post headers (RFC 8058) that Gmail and Yahoo require of bulk senders.
+  // Without them people reach for "report spam" instead of the in-body link — and a complaint
+  // costs the sending domain far more than an unsubscribe does.
   unsubscribeUrl?: string;
   // No attachments field on purpose: uploaded files are HOSTED (public /newsletter/document/<uuid>
-  // pages) and linked from the body, never attached — the relay never forwarded attachments, and
-  // links keep deliverability clean (hosted-documents design, 2026-07-22).
+  // pages) and linked from the body, never attached — links keep deliverability clean
+  // (hosted-documents design, 2026-07-22).
 }
 
 export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, newsletter: true }),
+  // TASK-302 contract, unchanged across the provider swap: a refusal must carry the real status
+  // + detail (the SES client throws exactly that), so the queue can tell "come back later" (429)
+  // from "give up on this address" — see src/newsletter/send-failure.ts.
+  await sendSesEmail({
+    to: message.email,
+    from: message.from,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    configurationSet: config.SES_NEWSLETTER_CONFIGURATION_SET || undefined,
+    ...(message.unsubscribeUrl
+      ? {
+          headers: {
+            "List-Unsubscribe": `<${message.unsubscribeUrl}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          },
+        }
+      : {}),
   });
-  if (!res.ok) {
-    // TASK-302: carry the body. The relay wraps EVERY provider error as a 502, so without the detail
-    // a rate limit and a malformed address look identical - and the queue cannot tell "come back
-    // later" from "give up on this address". Truncated because it is stored on the queue row.
-    const detail = await res.text().catch(() => "");
-    throw new Error(
-      `Newsletter email send responded ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`,
-    );
-  }
 }
 
 // The admin thank-you letter send (TASK-163/REQ-069; from-address + text part TASK-165; CC TASK-168).
 // After an admin composes a thank-you in the "Thank you" view, the platform emails the donor the fully
 // rendered, branded letter (built by the pure src/thank-you/letter.ts) with a plain-text alternative,
 // optionally copying a CC. From + Reply-To are set to config.GIVING_FROM_EMAIL (giving@nbcc.scot) so a
-// reply reaches a real NBCC inbox and the send authenticates on the verified domain, and the body
-// carries `thankYou: true` so the relay maps it via its dedicated thank-you branch (honouring this
-// message's subject + from + replyTo + text + cc) instead of the donation-confirmation default. Same
-// stub-seam + best-effort contract as the other sends: a placeholder EMAIL_SEND_URL means no network
-// outside production.
+// reply reaches a real NBCC inbox and the send authenticates on the verified domain. The content is
+// sent VERBATIM — this is the design the transactional templates mirror, not the other way round.
 export interface ThankYouLetterEmail {
-  email: string; // recipient — the relay's recipient field
-  cc?: string; // optional CC recipient (TASK-168); omitted from the payload when unset
+  email: string; // recipient
+  cc?: string; // optional CC recipient (TASK-168); omitted when unset
   from: string; // config.GIVING_FROM_EMAIL
   replyTo: string; // same as from
   subject: string;
   html: string;
-  text?: string; // plain-text alternative (improves deliverability; the relay forwards it)
+  text?: string; // plain-text alternative (improves deliverability)
 }
 
 export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
 
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, thankYou: true }),
+  await sendSesEmail({
+    to: message.email,
+    cc: message.cc,
+    from: message.from,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
   });
-  if (!res.ok) {
-    throw new Error(`Thank-you email send responded ${res.status}`);
-  }
 }
 
 // The business-supporter thank-you INVITE email (TASK-213). When a NEW business monthly supporter's
@@ -372,33 +314,41 @@ export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> 
 // can choose how NBCC thanks them (without this email the token-gated page is unreachable). The fully
 // rendered, branded content (subject + html + text) is built by the pure src/business/invite-email.ts
 // and passed in; From + Reply-To are config.GIVING_FROM_EMAIL (giving@nbcc.scot) so a reply reaches a
-// real NBCC inbox and the send authenticates on the verified domain (same as the admin thank-you
-// letter). The body carries `thankYou: true`, so this rides the relay's EXISTING "app fully owns this
-// branded email" passthrough — the relay honours our subject/html/text/from/replyTo verbatim, so NO
-// relay `kind` and NO Worker redeploy are needed (the same path sendThankYou uses). Same stub-seam +
-// best-effort contract as the other sends: a placeholder EMAIL_SEND_URL means no network outside
-// production.
+// real NBCC inbox (same as the admin thank-you letter). Sent verbatim, like sendThankYou.
 export interface BusinessSupporterInviteEmail {
-  email: string; // recipient — the business's contact email (the relay's recipient field)
+  email: string; // recipient — the business's contact email
   from: string; // config.GIVING_FROM_EMAIL
   replyTo: string; // same as from
   subject: string;
   html: string;
-  text: string; // plain-text alternative (improves deliverability; the relay forwards it)
+  text: string; // plain-text alternative (improves deliverability)
+}
+
+async function sendVerbatim(message: {
+  email: string;
+  cc?: string;
+  from: string;
+  replyTo: string;
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<void> {
+  await sendSesEmail({
+    to: message.email,
+    cc: message.cc,
+    from: message.from,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
+  });
 }
 
 export async function sendBusinessSupporterInvite(message: BusinessSupporterInviteEmail): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
-
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, thankYou: true }),
-  });
-  if (!res.ok) {
-    throw new Error(`Business supporter invite email send responded ${res.status}`);
-  }
+  await sendVerbatim(message);
 }
 
 // The business-supporter CAPTURE-CONFIRMATION email (TASK-221). After a business supporter submits
@@ -406,73 +356,47 @@ export async function sendBusinessSupporterInvite(message: BusinessSupporterInvi
 // via postFulfilment), we email them a warm "here is what you chose" confirmation listing their choices
 // and their download links. The fully rendered, branded content (subject + html + text) is built by the
 // pure src/business/capture-confirmation-email.ts and passed in; From + Reply-To are
-// config.GIVING_FROM_EMAIL (giving@nbcc.scot). The body carries `thankYou: true`, so — exactly like
-// sendBusinessSupporterInvite — this rides the relay's EXISTING "app fully owns this branded email"
-// passthrough (the relay honours our subject/html/text/from/replyTo verbatim), so NO relay `kind` and
-// NO Worker redeploy are needed. Same stub-seam + best-effort contract as the other sends.
+// config.GIVING_FROM_EMAIL (giving@nbcc.scot). Sent verbatim, like the invite.
 export interface BusinessCaptureConfirmationEmail {
-  email: string; // recipient — the business's contact email (the relay's recipient field)
+  email: string; // recipient — the business's contact email
   from: string; // config.GIVING_FROM_EMAIL
   replyTo: string; // same as from
   subject: string;
   html: string;
-  text: string; // plain-text alternative (improves deliverability; the relay forwards it)
+  text: string; // plain-text alternative (improves deliverability)
 }
 
 export async function sendBusinessCaptureConfirmation(message: BusinessCaptureConfirmationEmail): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
-
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, thankYou: true }),
-  });
-  if (!res.ok) {
-    throw new Error(`Business supporter capture confirmation email send responded ${res.status}`);
-  }
+  await sendVerbatim(message);
 }
 
 // The business-supporter thank-you REMINDER email (TASK-222). When a business supporter has not yet
 // chosen how they would like to be thanked, the daily runner nudges them twice: a warm 5-day reminder
 // and a gentle 14-day last note. The fully rendered, branded content (subject + html + text) is built
 // by the pure src/business/reminder-email.ts and passed in; From + Reply-To are config.GIVING_FROM_EMAIL
-// (giving@nbcc.scot), exactly like the invite. The body carries `thankYou: true`, so this rides the
-// relay's EXISTING "app fully owns this branded email" passthrough — the relay honours our
-// subject/html/text/from/replyTo verbatim, so NO relay `kind` and NO Worker redeploy are needed (the
-// same path sendThankYou / sendBusinessSupporterInvite use). Same stub-seam + best-effort contract as
-// the other sends: a placeholder EMAIL_SEND_URL means no network outside production.
+// (giving@nbcc.scot), exactly like the invite. Sent verbatim.
 export interface BusinessSupporterReminderEmail {
-  email: string; // recipient — the business's contact email (the relay's recipient field)
+  email: string; // recipient — the business's contact email
   from: string; // config.GIVING_FROM_EMAIL
   replyTo: string; // same as from
   subject: string;
   html: string;
-  text: string; // plain-text alternative (improves deliverability; the relay forwards it)
+  text: string; // plain-text alternative (improves deliverability)
 }
 
 export async function sendBusinessSupporterReminder(message: BusinessSupporterReminderEmail): Promise<void> {
   // Preview/stub: pretend the email sent (no network call).
   if (useStub) return;
-
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, thankYou: true }),
-  });
-  if (!res.ok) {
-    throw new Error(`Business supporter reminder email send responded ${res.status}`);
-  }
+  await sendVerbatim(message);
 }
 
 // The Festive Ball booking confirmation (TASK-313). Someone has just paid up to £1,000, so this
 // is the receipt they hold until November. Content is built by the pure
 // src/ball/confirmation-email.ts and passed in; From + Reply-To are config.BALL_FROM_EMAIL
 // (events@nbcc.scot) — the APEX domain, deliberately NOT news.nbcc.scot, which is the
-// newsletter's send-only sender and must not carry transactional receipts. Rides the same
-// `thankYou: true` passthrough as sendThankYou / sendBusinessSupporterInvite, so the relay
-// forwards our content verbatim with no Worker change. Same stub seam: a placeholder
-// EMAIL_SEND_URL means no network outside production.
+// newsletter's send-only sender and must not carry transactional receipts. Sent verbatim.
 export interface BallConfirmationMessage {
   email: string; // the buyer
   from: string; // config.BALL_FROM_EMAIL
@@ -484,29 +408,13 @@ export interface BallConfirmationMessage {
 
 export async function sendBallConfirmation(message: BallConfirmationMessage): Promise<void> {
   if (useStub) return;
-
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, thankYou: true }),
-  });
-  if (!res.ok) {
-    throw new Error(`Ball confirmation email send responded ${res.status}`);
-  }
+  await sendVerbatim(message);
 }
 
-// The Festive Ball "a week to go" reminder (TASK-313 plan 5). Same shape and same relay
-// passthrough as the booking confirmation; separate function so the two can be told apart in
-// logs and so a change to one never silently alters the other.
+// The Festive Ball "a week to go" reminder (TASK-313 plan 5). Same shape and same verbatim send
+// as the booking confirmation; separate function so the two can be told apart in logs and so a
+// change to one never silently alters the other.
 export async function sendBallReminder(message: BallConfirmationMessage): Promise<void> {
   if (useStub) return;
-
-  const res = await fetch(config.EMAIL_SEND_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ ...message, thankYou: true }),
-  });
-  if (!res.ok) {
-    throw new Error(`Ball reminder email send responded ${res.status}`);
-  }
+  await sendVerbatim(message);
 }

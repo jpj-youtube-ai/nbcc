@@ -1,18 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// TASK-214: the admin endpoint that triggers the one-time catch-up invite backfill —
+// TASK-214: the admin endpoint that triggers the one-time catch-up invite backfill â€”
 // POST /api/admin/business-supporters/backfill-invites. Editor+ (donations:edit), same gate as the
 // rest of the business-supporter fulfilment API: an unauthenticated or Viewer-level request is
 // rejected (401/403) and touches nothing. An Editor+ call drives the REAL wiring end to end (the route
-// → runBusinessInviteBackfill → the real list/send/mark/audit) over a mocked pool + a stubbed email
-// client (dev + placeholder EMAIL_SEND_URL ⇒ the send stubs, no network), returns the counts, and
+// â†’ runBusinessInviteBackfill â†’ the real list/send/mark/audit) over a mocked pool + a stubbed email
+// client (dev + the default EMAIL_PROVIDER=stub â‡’ the send stubs, no network), returns the counts, and
 // appends exactly one `fulfilment.backfill_invites` audit row. DB-free, mirroring
 // admin-fulfilment-api.test.ts: pool, the per-request auth row (getUserAuthRow), config, and the
 // Stripe client (imported at admin.ts load) are mocked.
 
 const { queryMock, clientQueryMock, mockClient, connect, getUserAuthRowMock } = vi.hoisted(() => {
-  const queryMock = vi.fn(); // pool.query — the un-invited list read + the per-supporter invited stamp
-  const clientQueryMock = vi.fn(); // client.query — the recordAudit summary insert
+  const queryMock = vi.fn(); // pool.query â€” the un-invited list read + the per-supporter invited stamp
+  const clientQueryMock = vi.fn(); // client.query â€” the recordAudit summary insert
   const mockClient = { query: clientQueryMock, release: vi.fn() };
   const connect = vi.fn(async () => mockClient);
   const getUserAuthRowMock = vi.fn();
@@ -30,7 +30,7 @@ vi.mock("../../src/config", () => ({
     // The env-correct public base for the tokenised link + the repliable giving inbox (no new key).
     PORTAL_BASE_URL: "https://nbcc.test",
     GIVING_FROM_EMAIL: "giving@nbcc.scot",
-    // EMAIL_SEND_URL deliberately absent ⇒ the email client treats it as a placeholder ⇒ dev sends stub.
+    // EMAIL_SEND_URL deliberately absent â‡’ the email client treats it as a placeholder â‡’ dev sends stub.
   },
 }));
 // routes/admin.ts imports the Stripe client at module load (cancelSubscription); stub it so the real
@@ -144,7 +144,7 @@ describe.each(["editor", "admin"])("role %s (Editor+) may run the backfill", (ro
   it("returns the counts, stamps each supporter invited, and audits one summary row", async () => {
     const res = await runBackfill({ role });
     expect(res.statusCode).toBe(200);
-    // Both un-invited supporters were sent (the email client stubs in dev) + stamped ⇒ sent: 2.
+    // Both un-invited supporters were sent (the email client stubs in dev) + stamped â‡’ sent: 2.
     expect(res.body).toEqual({ pending: 2, sent: 2, failed: 0 });
 
     // Each supporter was stamped invited (one UPDATE ... invited_at per supporter).

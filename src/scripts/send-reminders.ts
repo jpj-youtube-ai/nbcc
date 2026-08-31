@@ -1,5 +1,5 @@
 // TASK-222: the daily business-supporter reminder runner. It reads the fulfilment records due a
-// thank-you reminder (a 5-day nudge, then a 14-day last note — listSupportersDueForReminder) and, for
+// thank-you reminder (a 5-day nudge, then a 14-day last note â€” listSupportersDueForReminder) and, for
 // each, best-effort sends the stage-appropriate branded email and, only on success, advances the
 // record's reminder_count (markReminderSent) so a re-run never double-sends the same stage. The
 // orchestration is the pure runReminderPass (src/business/reminders.ts); this script only WIRES the
@@ -7,13 +7,13 @@
 // one-line summary of the counts.
 //
 // It lives under src/ so `tsc` compiles it into dist/ (shipped in the runtime image), letting it run
-// with plain `node dist/scripts/send-reminders.js` — no tsx / devDeps needed (the runtime image is
+// with plain `node dist/scripts/send-reminders.js` â€” no tsx / devDeps needed (the runtime image is
 // `npm ci --omit=dev` and copies only dist/, so a tsx-on-src invocation would fail there). `npm run
 // reminders` is exactly that command. In production the DB is only reachable from inside the VPC, so a
 // daily EventBridge schedule runs it as a one-off ECS task reusing the app task definition with a
-// `["sh","-c","npm run reminders"]` command override (infra/modules/app/scheduler.tf) — the same
+// `["sh","-c","npm run reminders"]` command override (infra/modules/app/scheduler.tf) â€” the same
 // one-off-task pattern the deploy uses for migrations. Reuses existing config (DATABASE_URL,
-// EMAIL_SEND_URL, PORTAL_BASE_URL, GIVING_FROM_EMAIL) — no new config key.
+// EMAIL_PROVIDER, PORTAL_BASE_URL, GIVING_FROM_EMAIL) â€” no new config key.
 import { pool } from "../db/pool";
 import { config } from "../config";
 import { listSupportersDueForReminder, markReminderSent } from "../db/fulfilment";

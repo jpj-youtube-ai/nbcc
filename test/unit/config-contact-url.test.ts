@@ -17,8 +17,6 @@ const base = {
   STRIPE_PRICE_GOLD: "p",
   STRIPE_PRICE_PLATINUM: "p",
   STRIPE_WEBHOOK_SECRET: "whsec",
-  CONTACT_FORWARD_URL: "https://forms.example/x",
-  EMAIL_SEND_URL: "https://email.example/send",
   DECLARATION_FORM_BASE_URL: "https://x.example/d",
   ADMIN_NOTIFICATION_EMAIL: "ops@nbcc.scot",
   PORTAL_BASE_URL: "https://x.example",

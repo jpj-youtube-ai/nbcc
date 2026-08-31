@@ -49,7 +49,7 @@ export function buildBallConfirmationEmail(
   const name = escapeHtml(booking.buyerName);
   const arrival = details.arrivalTime
     ? escapeHtml(details.arrivalTime)
-    : "Start time to be confirmed — we'll email you";
+    : "Start time to be confirmed. We'll email you";
   const included = details.includedNote
     ? ` ${escapeHtml(details.includedNote)}`
     : " The menu and drinks are still being finalised with the venue; we'll email you as soon as they're confirmed.";
@@ -73,7 +73,7 @@ export function buildBallConfirmationEmail(
     .join("");
 
   const giftAidHtml = booking.giftAid
-    ? `<p style="margin:0 0 16px;color:#333333;">Thank you for adding Gift Aid to your donation — it lets us claim an extra 25p for every pound, at no cost to you. Gift Aid can't be claimed on ticket sales, because you receive a meal and entertainment in return.</p>`
+    ? `<p style="margin:0 0 16px;color:#333333;">Thank you for adding Gift Aid to your donation. It lets us claim an extra 25p for every pound, at no cost to you. Gift Aid can't be claimed on ticket sales, because you receive a meal and entertainment in return.</p>`
     : `<p style="margin:0 0 16px;color:#6F6A66;font-size:14px;">Gift Aid can't be claimed on ticket sales, because you receive a meal and entertainment in return. It can be claimed on a donation, if you'd like to add one.</p>`;
 
   const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#F8F5EE;">
@@ -93,7 +93,7 @@ export function buildBallConfirmationEmail(
   ${giftAidHtml}
 
   <h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">The night</h2>
-  <p style="margin:0 0 6px;color:#333333;"><b>Saturday 7 November 2026</b><br />The Park Hotel, Rugby Park, Kilmarnock</p>
+  <p style="margin:0 0 6px;color:#333333;"><b>Saturday 7th November 2026</b><br />The Park Hotel, Rugby Park, Kilmarnock</p>
   <p style="margin:0 0 6px;color:#333333;">${arrival}</p>
   <p style="margin:0 0 6px;color:#333333;">Dress to impress. This is an over 18s event.</p>
   <p style="margin:0 0 16px;color:#333333;">Your ticket includes entry, a meal and the evening's entertainment.${included}</p>
@@ -105,7 +105,7 @@ export function buildBallConfirmationEmail(
     : `<p style="margin:0 0 16px;color:#333333;">Nearer the time we'll ask for your guests' names and any dietary or access requirements, so the venue can look after everyone properly.</p>`}
 
   <h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">If your plans change</h2>
-  <p style="margin:0 0 16px;color:#333333;">Tickets are non-refundable, but they are transferable — just tell us the new guest's name and we'll update the door list. If the event is cancelled and not rescheduled, you'll be refunded in full.</p>
+  <p style="margin:0 0 16px;color:#333333;">Tickets are non-refundable, but they are transferable. Just tell us the new guest's name and we'll update the door list. If the event is cancelled and not rescheduled, you'll be refunded in full.</p>
 
   <p style="margin:0 0 20px;color:#333333;">Any questions, just reply to this email or call 01292 811 015, Monday to Friday.</p>
 
@@ -117,7 +117,7 @@ export function buildBallConfirmationEmail(
 </div>`;
 
   const moneyText = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
-  const text = `A NIGHT TO REMEMBER — FESTIVE BALL 2026
+  const text = `A NIGHT TO REMEMBER: FESTIVE BALL 2026
 
 Thank you, ${booking.buyerName}. Your booking is confirmed.
 
@@ -127,9 +127,9 @@ You have booked ${what}.
 ${moneyText}
 
 THE NIGHT
-Saturday 7 November 2026
+Saturday 7th November 2026
 The Park Hotel, Rugby Park, Kilmarnock
-${details.arrivalTime ?? "Start time to be confirmed — we'll email you"}
+${details.arrivalTime ?? "Start time to be confirmed. We'll email you"}
 Dress to impress. This is an over 18s event.
 Your ticket includes entry, a meal and the evening's entertainment.${
     details.includedNote
@@ -146,7 +146,7 @@ ${details.guestLink}`
 requirements, so the venue can look after everyone properly.`}
 
 IF YOUR PLANS CHANGE
-Tickets are non-refundable, but they are transferable — just tell us the new
+Tickets are non-refundable, but they are transferable. Just tell us the new
 guest's name and we'll update the door list. If the event is cancelled and not
 rescheduled, you'll be refunded in full.
 

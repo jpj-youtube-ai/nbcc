@@ -56,7 +56,7 @@ export function buildBallReminderEmail(
             .join(" · ");
           return (
             `<tr><td style="padding:6px 0;color:#333333;">${escapeHtml(g.fullName)}</td>` +
-            `<td style="padding:6px 0;color:#6F6A66;text-align:right;">${notes || "—"}</td></tr>`
+            `<td style="padding:6px 0;color:#6F6A66;text-align:right;">${notes || "None"}</td></tr>`
           );
         })
         .join("")
@@ -74,7 +74,7 @@ export function buildBallReminderEmail(
     details.guestLink
       ? `<a href="${escapeHtml(details.guestLink)}" style="color:#800000;">change it here</a>`
       : "email us"
-  } — it's not too late.</p>
+  }. It's not too late.</p>
   <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 16px;">${guestRowsHtml}</table>`
     : "";
 
@@ -82,11 +82,11 @@ export function buildBallReminderEmail(
   <p style="margin:0 0 4px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8A6A26;font-weight:600;">A week to go</p>
   <h1 style="margin:0 0 18px;font-family:Georgia,serif;font-size:24px;font-weight:600;color:#800000;">A Night to Remember is nearly here</h1>
 
-  <p style="margin:0 0 16px;color:#333333;">Hello ${escapeHtml(greetingName(booking))} — here's everything you need for Saturday.</p>
+  <p style="margin:0 0 16px;color:#333333;">Hello ${escapeHtml(greetingName(booking))}. Here's everything you need for Saturday.</p>
 
   <table role="presentation" style="width:100%;border-collapse:collapse;background:#FFFDFA;border:1px solid #E9DFD2;border-radius:8px;margin:0 0 20px;">
     <tr><td style="padding:14px 16px 4px;color:#6F6A66;font-size:13px;">When</td></tr>
-    <tr><td style="padding:0 16px 10px;color:#333333;"><b>Saturday 7 November 2026</b><br />${escapeHtml(arrival)}</td></tr>
+    <tr><td style="padding:0 16px 10px;color:#333333;"><b>Saturday 7th November 2026</b><br />${escapeHtml(arrival)}</td></tr>
     <tr><td style="padding:0 16px 4px;color:#6F6A66;font-size:13px;">Where</td></tr>
     <tr><td style="padding:0 16px 10px;color:#333333;">The Park Hotel, Rugby Park, Kilmarnock</td></tr>
     <tr><td style="padding:0 16px 4px;color:#6F6A66;font-size:13px;">Booking</td></tr>
@@ -95,7 +95,7 @@ export function buildBallReminderEmail(
     }</td></tr>
   </table>
 
-  <p style="margin:0 0 16px;color:#333333;">Give your name at the welcome desk when you arrive — there's no ticket to print. Dress to impress. Over 18s only.${
+  <p style="margin:0 0 16px;color:#333333;">Give your name at the welcome desk when you arrive. There's no ticket to print. Dress to impress. Over 18s only.${
     details.includedNote ? " " + escapeHtml(details.includedNote) : ""
   }</p>
 
@@ -120,7 +120,7 @@ export function buildBallReminderEmail(
           return `- ${g.fullName}${notes ? ": " + notes : ""}`;
         })
         .join("\n") +
-      "\nIf anything's wrong, it's not too late — change it here:" +
+      "\nIf anything's wrong, it's not too late. Change it here:" +
       (details.guestLink ? "\n" + details.guestLink : " email events@nbcc.scot")
     : "";
 
@@ -129,16 +129,16 @@ export function buildBallReminderEmail(
       ? `\n\nThere ${missing === 1 ? "is" : "are"} still ${missing} ${missing === 1 ? "place" : "places"} without a name:\n${details.guestLink}`
       : "";
 
-  const text = `A NIGHT TO REMEMBER — A WEEK TO GO
+  const text = `A NIGHT TO REMEMBER: A WEEK TO GO
 
-Hello ${greetingName(booking)} — here's everything you need for Saturday.
+Hello ${greetingName(booking)}. Here's everything you need for Saturday.
 
-WHEN   Saturday 7 November 2026
+WHEN   Saturday 7th November 2026
        ${arrival}
 WHERE  The Park Hotel, Rugby Park, Kilmarnock
 BOOKING ${booking.reference}${booking.tableName ? " · " + booking.tableName : ""}
 
-Give your name at the welcome desk when you arrive — there's no ticket to
+Give your name at the welcome desk when you arrive. There's no ticket to
 print. Dress to impress. Over 18s only.${details.includedNote ? " " + details.includedNote : ""}${guestsText}${missingText}
 
 ON THE NIGHT
@@ -152,7 +152,7 @@ Friday. See you Saturday.
 ${FOOTER_TEXT}`;
 
   return {
-    subject: `A week to go — your Festive Ball booking, ${booking.reference}`,
+    subject: `A week to go: your Festive Ball booking, ${booking.reference}`,
     html,
     text,
   };

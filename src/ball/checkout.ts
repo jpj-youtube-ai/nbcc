@@ -43,7 +43,7 @@ function ticketLine(purchase: Purchase): StripeNS.Checkout.SessionCreateParams.L
         name: isTable
           ? "A Night to Remember — Festive Ball 2026, table of 10"
           : "A Night to Remember — Festive Ball 2026, ticket",
-        description: "Saturday 7 November 2026, The Park Hotel, Kilmarnock",
+        description: "Saturday 7th November 2026, The Park Hotel, Kilmarnock",
       },
     },
   };

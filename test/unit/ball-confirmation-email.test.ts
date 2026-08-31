@@ -83,7 +83,7 @@ describe("buildBallConfirmationEmail", () => {
 
   it("carries the event details a guest actually needs", () => {
     const mail = buildBallConfirmationEmail(seatBooking, noArrival);
-    for (const detail of ["7 November 2026", "The Park Hotel", "Dress to impress", "over 18"]) {
+    for (const detail of ["7th November 2026", "The Park Hotel", "Dress to impress", "over 18"]) {
       expect(mail.html.toLowerCase()).toContain(detail.toLowerCase());
     }
   });

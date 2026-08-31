@@ -409,7 +409,7 @@
    * the ball is in November. A generic particle effect would be decoration; this is
    * the subject.
    *
-   * Kept cheap and well-behaved: one canvas, ~115 flakes, sized to the hero only,
+   * Kept cheap and well-behaved: one canvas, ~180 flakes, sized to the hero only,
    * paused whenever the hero is off-screen or the tab is hidden, and not started at
    * all under prefers-reduced-motion.
    */
@@ -439,17 +439,25 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Fewer flakes on a narrow screen: the same count on a phone reads as a
       // blizzard, and costs battery for the privilege.
-      var count = w < 600 ? 62 : 115;
+      var count = w < 600 ? 95 : 180;
       flakes = [];
       for (var i = 0; i < count; i += 1) {
+        // DEPTH is what makes this read as snow rather than as dots moving. One random
+        // number decides how near a flake is, and then everything about it follows from
+        // that: near flakes are bigger, faster and brighter, far ones smaller, slower and
+        // fainter. Flakes at different distances separate as they fall, which is the
+        // parallax the eye reads as three dimensions.
+        var depth = Math.random();
         flakes.push({
           x: Math.random() * w,
           y: Math.random() * h,
-          r: Math.random() * 1.6 + 0.5,
-          speed: Math.random() * 0.6 + 0.28,
+          r: 0.5 + depth * 2.1,
+          speed: 0.34 + depth * 1.15,
           drift: Math.random() * 0.5 - 0.25,
           phase: Math.random() * Math.PI * 2,
-          alpha: Math.random() * 0.4 + 0.18,
+          // Sway is per-flake, so they do not all wander in step like a single sheet.
+          sway: 0.18 + Math.random() * 0.42,
+          alpha: 0.14 + depth * 0.5,
         });
       }
     }
@@ -463,7 +471,7 @@
         var f = flakes[i];
         f.y += f.speed;
         f.phase += 0.012;
-        f.x += Math.sin(f.phase) * 0.28 + f.drift * 0.1;
+        f.x += Math.sin(f.phase) * f.sway + f.drift * 0.1;
         if (f.y > h + 4) { f.y = -4; f.x = Math.random() * w; }
         if (f.x > w + 4) f.x = -4;
         if (f.x < -4) f.x = w + 4;

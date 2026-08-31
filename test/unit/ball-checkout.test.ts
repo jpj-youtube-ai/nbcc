@@ -8,14 +8,16 @@ const NOW = new Date("2026-09-04T09:00:00Z");
 const seat = purchaseSchema.parse({
   kind: "seat",
   quantity: 2,
-  buyerName: "Jo Smith",
+  buyerFirstName: "Jo",
+  buyerSurname: "Smith",
   buyerEmail: "jo@example.com",
 });
 
 const tableWithExtras = purchaseSchema.parse({
   kind: "table",
   quantity: 1,
-  buyerName: "Ayrshire Bakery",
+  buyerFirstName: "Ayrshire",
+  buyerSurname: "Bakery",
   buyerEmail: "orders@example.com",
   donationPence: 5_000,
   coverFee: true,

@@ -203,10 +203,10 @@ export async function releaseReservation(token: string): Promise<void> {
 export async function createPendingBooking(booking: BallBookingWrite): Promise<void> {
   await pool.query(
     `INSERT INTO ball_bookings
-       (reference, kind, quantity, seats, buyer_name, buyer_email,
-        tickets_pence, donation_pence, fee_cover_pence, total_pence,
+       (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
+        buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence,
         gift_aid, newsletter_opt_in, stripe_session_id, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'pending')
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending')
      ON CONFLICT (stripe_session_id) DO NOTHING`,
     [
       booking.reference,
@@ -214,6 +214,8 @@ export async function createPendingBooking(booking: BallBookingWrite): Promise<v
       booking.quantity,
       booking.seats,
       booking.buyerName,
+      booking.buyerFirstName,
+      booking.buyerSurname,
       booking.buyerEmail,
       booking.ticketsPence,
       booking.donationPence,
@@ -253,10 +255,10 @@ export async function markBookingPaid(
 
   await client.query(
     `INSERT INTO ball_bookings
-       (reference, kind, quantity, seats, buyer_name, buyer_email,
-        tickets_pence, donation_pence, fee_cover_pence, total_pence,
+       (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
+        buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence,
         gift_aid, newsletter_opt_in, stripe_session_id, status, paid_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'paid',now())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'paid',now())
      ON CONFLICT (stripe_session_id) DO NOTHING`,
     [
       booking.reference,
@@ -264,6 +266,8 @@ export async function markBookingPaid(
       booking.quantity,
       booking.seats,
       booking.buyerName,
+      booking.buyerFirstName,
+      booking.buyerSurname,
       booking.buyerEmail,
       booking.ticketsPence,
       booking.donationPence,
@@ -569,9 +573,9 @@ export async function listGuestsForExport(): Promise<ExportGuest[]> {
 
 export async function listBookingsForExport(): Promise<ExportBooking[]> {
   const res = await pool.query(
-    `SELECT reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence,
-            donation_pence, fee_cover_pence, total_pence, gift_aid, newsletter_opt_in,
-            status, table_name, created_at
+    `SELECT reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
+            buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence,
+            gift_aid, newsletter_opt_in, status, table_name, created_at
        FROM ball_bookings
       ORDER BY created_at ASC`,
   );
@@ -581,6 +585,8 @@ export async function listBookingsForExport(): Promise<ExportBooking[]> {
     quantity: r.quantity,
     seats: r.seats,
     buyerName: r.buyer_name,
+    buyerFirstName: r.buyer_first_name,
+    buyerSurname: r.buyer_surname,
     buyerEmail: r.buyer_email,
     ticketsPence: r.tickets_pence,
     donationPence: r.donation_pence,
@@ -600,6 +606,8 @@ export interface ReminderTarget {
   id: number;
   reference: string;
   buyerName: string;
+  /** NULL on bookings taken before TASK-318; the email falls back to the whole name. */
+  buyerFirstName: string | null;
   buyerEmail: string;
   seats: number;
   tableName: string | null;
@@ -611,7 +619,7 @@ export interface ReminderTarget {
 // idempotency story: pressing send twice finds nobody the second time.
 export async function listBookingsNeedingReminder(): Promise<ReminderTarget[]> {
   const res = await pool.query(
-    `SELECT id, reference, buyer_name, buyer_email, seats, table_name, guest_token
+    `SELECT id, reference, buyer_name, buyer_first_name, buyer_email, seats, table_name, guest_token
        FROM ball_bookings
       WHERE status = 'paid' AND reminder_sent_at IS NULL AND buyer_email <> ''
       ORDER BY id ASC`,
@@ -627,6 +635,7 @@ export async function listBookingsNeedingReminder(): Promise<ReminderTarget[]> {
       id: r.id,
       reference: r.reference,
       buyerName: r.buyer_name,
+      buyerFirstName: r.buyer_first_name,
       buyerEmail: r.buyer_email,
       seats: r.seats,
       tableName: r.table_name,
@@ -655,15 +664,26 @@ export async function markReminderSent(bookingId: number): Promise<void> {
 // place was added.
 export async function joinWaitingList(entry: WaitingListEntry): Promise<{ added: boolean }> {
   const res = await pool.query(
-    `INSERT INTO ball_waiting_list (name, email, seats_wanted, note, newsletter_opt_in)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO ball_waiting_list
+       (name, first_name, surname, email, seats_wanted, note, newsletter_opt_in)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (email) DO UPDATE
        SET name = EXCLUDED.name,
+           first_name = EXCLUDED.first_name,
+           surname = EXCLUDED.surname,
            seats_wanted = EXCLUDED.seats_wanted,
            note = EXCLUDED.note,
            newsletter_opt_in = ball_waiting_list.newsletter_opt_in OR EXCLUDED.newsletter_opt_in
      RETURNING (xmax = 0) AS inserted`,
-    [entry.name, entry.email, entry.seatsWanted, entry.note, entry.newsletterOptIn],
+    [
+      entry.name,
+      entry.firstName,
+      entry.surname,
+      entry.email,
+      entry.seatsWanted,
+      entry.note,
+      entry.newsletterOptIn,
+    ],
   );
   return { added: Boolean(res.rows[0]?.inserted) };
 }

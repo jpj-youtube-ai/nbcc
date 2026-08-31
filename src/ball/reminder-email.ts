@@ -13,8 +13,17 @@ import type { GuestRow } from "./guest-page";
 export interface ReminderBooking {
   reference: string;
   buyerName: string;
+  /** NULL on bookings taken before TASK-318, when the form asked for one name. */
+  buyerFirstName?: string | null;
   seats: number;
   tableName: string | null;
+}
+
+// "Hello Jo" is what a person writes; "Hello Jo Smith" is what a system writes, and this is an
+// invitation to a party. Falls back to the whole name rather than splitting it here — guessing
+// where a name divides is exactly what storing the two halves was meant to stop.
+function greetingName(booking: ReminderBooking): string {
+  return booking.buyerFirstName?.trim() || booking.buyerName;
 }
 
 export interface ReminderDetails {
@@ -73,7 +82,7 @@ export function buildBallReminderEmail(
   <p style="margin:0 0 4px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8A6A26;font-weight:600;">A week to go</p>
   <h1 style="margin:0 0 18px;font-family:Georgia,serif;font-size:24px;font-weight:600;color:#800000;">A Night to Remember is nearly here</h1>
 
-  <p style="margin:0 0 16px;color:#333333;">Hello ${escapeHtml(booking.buyerName)} — here's everything you need for Saturday.</p>
+  <p style="margin:0 0 16px;color:#333333;">Hello ${escapeHtml(greetingName(booking))} — here's everything you need for Saturday.</p>
 
   <table role="presentation" style="width:100%;border-collapse:collapse;background:#FFFDFA;border:1px solid #E9DFD2;border-radius:8px;margin:0 0 20px;">
     <tr><td style="padding:14px 16px 4px;color:#6F6A66;font-size:13px;">When</td></tr>
@@ -122,7 +131,7 @@ export function buildBallReminderEmail(
 
   const text = `A NIGHT TO REMEMBER — A WEEK TO GO
 
-Hello ${booking.buyerName} — here's everything you need for Saturday.
+Hello ${greetingName(booking)} — here's everything you need for Saturday.
 
 WHEN   Saturday 7 November 2026
        ${arrival}

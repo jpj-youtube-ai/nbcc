@@ -9,7 +9,10 @@ import { MAX_SEATS_PER_ORDER } from "./capacity";
 // data on the chance it becomes handy, which is the thing data-protection law is actually about.
 
 export const waitingListSchema = z.object({
-  name: z.string().trim().min(1, "please tell us your name").max(120),
+  // Split like the booking form and the rest of the site (TASK-318). `name` below is
+  // DERIVED, so the row, the admin list and the export keep reading one field.
+  firstName: z.string().trim().min(1, "please give your first name").max(60),
+  surname: z.string().trim().min(1, "please give your surname").max(60),
   email: z.string().trim().toLowerCase().email("that does not look like an email address").max(254),
   // Capped at the per-order seat limit: a waiting-list entry for 40 seats is not a realistic
   // offer to fill from cancellations, and the same cap already governs buying.
@@ -27,7 +30,8 @@ export const waitingListSchema = z.object({
   // Unticked by default and its own affirmative act, per PECR. Joining a waiting list is not
   // consent to be marketed to.
   newsletterOptIn: z.coerce.boolean().default(false),
-});
+})
+  .transform((e) => ({ ...e, name: `${e.firstName} ${e.surname}` }));
 export type WaitingListEntry = z.infer<typeof waitingListSchema>;
 
 // An HTML checkbox posts "on" when ticked and nothing at all when not, which z.coerce.boolean()

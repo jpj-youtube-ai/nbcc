@@ -15,7 +15,12 @@ export const purchaseSchema = z
   .object({
     kind: z.enum(["seat", "table"]),
     quantity: z.number().int().positive(),
-    buyerName: z.string().trim().min(1).max(120),
+    // Split, matching the donate and contact forms (TASK-318). buyerName below is DERIVED
+    // from these two rather than asked for, so every existing consumer — the metadata, the
+    // confirmation email, the door list, the exports — keeps reading one field and none of
+    // them has to guess where a name divides.
+    buyerFirstName: z.string().trim().min(1, "please give your first name").max(60),
+    buyerSurname: z.string().trim().min(1, "please give your surname").max(60),
     buyerEmail: z.string().trim().toLowerCase().email().max(254),
     // A voluntary donation on top of the ticket. This is the ONLY Gift Aid-able money in the
     // event: HMRC does not allow Gift Aid on ticket sales, because the buyer receives a dinner
@@ -26,6 +31,8 @@ export const purchaseSchema = z
     newsletterOptIn: z.boolean().default(false),
     uiMode: z.enum(["hosted", "embedded"]).default("hosted"),
   })
+  // Derived, never accepted from the client: one name, assembled the same way every time.
+  .transform((p) => ({ ...p, buyerName: `${p.buyerFirstName} ${p.buyerSurname}` }))
   .refine((p) => (p.kind === "seat" ? p.quantity <= MAX_SEATS_PER_ORDER : p.quantity <= MAX_TABLES_PER_ORDER), {
     message: "quantity above the per-order limit",
     path: ["quantity"],
@@ -87,6 +94,8 @@ export function ballMetadata(
     quantity: String(purchase.quantity),
     seats: String(seats),
     buyerName: purchase.buyerName,
+    buyerFirstName: purchase.buyerFirstName,
+    buyerSurname: purchase.buyerSurname,
     ticketsPence: String(total.ticketsPence),
     donationPence: String(total.donationPence),
     feeCoverPence: String(total.feeCoverPence),
@@ -102,6 +111,8 @@ export interface BallBookingWrite {
   quantity: number;
   seats: number;
   buyerName: string;
+  buyerFirstName: string | null;
+  buyerSurname: string | null;
   buyerEmail: string;
   ticketsPence: number;
   donationPence: number;
@@ -138,6 +149,10 @@ export function bookingFromSession(session: SessionLike): BallBookingWrite | nul
     quantity: num("quantity"),
     seats: num("seats"),
     buyerName: md.buyerName ?? "",
+    // Older sessions, created before TASK-318, carry no split. Null rather than a guess: a
+    // wrong surname on the door list is worse than a blank one.
+    buyerFirstName: md.buyerFirstName || null,
+    buyerSurname: md.buyerSurname || null,
     buyerEmail: session.customer_details?.email ?? session.customer_email ?? "",
     ticketsPence: num("ticketsPence"),
     donationPence: num("donationPence"),

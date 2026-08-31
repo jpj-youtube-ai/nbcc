@@ -118,7 +118,8 @@ function ballSessionObject(sessionId, kind, quantity, seats) {
       kind,
       quantity: String(quantity),
       seats: String(seats),
-      buyerName: "Ball Buyer",
+      buyerFirstName: "Ball",
+      buyerSurname: "Buyer",
       ticketsPence: String(kind === "table" ? quantity * 100000 : quantity * 10000),
       donationPence: "0",
       feeCoverPence: "0",
@@ -206,7 +207,8 @@ async function startCheckout(ctx, body) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      buyerName: "BDD Buyer",
+      buyerFirstName: "BDD",
+      buyerSurname: "Buyer",
       buyerEmail: "checkout.ball.bdd@example.com",
       ...body,
     }),
@@ -623,7 +625,14 @@ When(
     const res = await fetch(`${BASE_URL}/api/ball/waiting-list`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, seatsWanted: 2 }),
+      // The feature files pass a whole name; the API now takes it in two halves
+      // (TASK-318), so split on the last space here rather than changing every scenario.
+      body: JSON.stringify({
+        firstName: name.split(" ").slice(0, -1).join(" ") || name,
+        surname: name.split(" ").slice(-1)[0],
+        email,
+        seatsWanted: 2,
+      }),
     });
     this.waitingStatus = res.status;
     this.waitingBody = await res.json().catch(() => ({}));

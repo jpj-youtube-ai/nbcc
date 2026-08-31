@@ -138,6 +138,8 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
       quantity: purchase.quantity,
       seats,
       buyerName: purchase.buyerName,
+      buyerFirstName: purchase.buyerFirstName,
+      buyerSurname: purchase.buyerSurname,
       buyerEmail: purchase.buyerEmail,
       ticketsPence: totals.ticketsPence,
       donationPence: totals.donationPence,
@@ -396,7 +398,8 @@ export function newGuestToken(): string {
 ballRouter.post("/api/ball/waiting-list", async (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = waitingListSchema.safeParse({
-    name: body.name,
+    firstName: body.firstName,
+    surname: body.surname,
     email: body.email,
     seatsWanted: body.seatsWanted ?? 1,
     note: body.note ?? "",

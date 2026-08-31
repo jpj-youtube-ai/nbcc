@@ -204,9 +204,13 @@
     event.preventDefault();
     clearError();
 
-    var name = (form.elements.buyerName.value || "").trim();
+    var firstName = (form.elements.buyerFirstName.value || "").trim();
+    var surname = (form.elements.buyerSurname.value || "").trim();
     var email = (form.elements.buyerEmail.value || "").trim();
-    if (!name) return showError("Please tell us your name so we know who the booking is for.");
+    // Named separately so the message points at the box that is empty, rather than making
+    // someone work out which half of "your name" we mean.
+    if (!firstName) return showError("Please give your first name, so we know who the booking is for.");
+    if (!surname) return showError("Please give your surname, so we can find you on the door list.");
     if (!email || email.indexOf("@") === -1) {
       return showError("Please give us an email address — your booking confirmation goes there.");
     }
@@ -218,7 +222,8 @@
     var body = {
       kind: kind(),
       quantity: parseInt(quantity.value, 10) || 1,
-      buyerName: name,
+      buyerFirstName: firstName,
+      buyerSurname: surname,
       buyerEmail: email,
       donationPence: donation,
       coverFee: !!(form.elements.coverFee && form.elements.coverFee.checked),
@@ -374,9 +379,10 @@
       errorNode.hidden = true;
       doneNode.hidden = true;
 
-      var name = (waitingForm.elements.name.value || "").trim();
+      var wlFirstName = (waitingForm.elements.firstName.value || "").trim();
+      var wlSurname = (waitingForm.elements.surname.value || "").trim();
       var email = (waitingForm.elements.email.value || "").trim();
-      if (!name || !email || email.indexOf("@") === -1) {
+      if (!wlFirstName || !wlSurname || !email || email.indexOf("@") === -1) {
         errorNode.textContent = "Please give us your name and an email address we can reach you on.";
         errorNode.hidden = false;
         return;
@@ -387,7 +393,8 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name,
+          firstName: wlFirstName,
+          surname: wlSurname,
           email: email,
           seatsWanted: waitingForm.elements.seatsWanted.value,
           note: waitingForm.elements.note.value,

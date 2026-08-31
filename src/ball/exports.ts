@@ -26,6 +26,8 @@ export interface ExportBooking {
   quantity: number;
   seats: number;
   buyerName: string;
+  buyerFirstName: string | null;
+  buyerSurname: string | null;
   buyerEmail: string;
   ticketsPence: number;
   donationPence: number;
@@ -87,7 +89,7 @@ export function bookingsCsv(bookings: ExportBooking[]): string {
   const money = (p: number) => (p / 100).toFixed(2);
   return csvRows([
     [
-      "Reference", "Booked", "What", "Seats", "Table name", "Name", "Email",
+      "Reference", "Booked", "What", "Seats", "Table name", "First name", "Surname", "Email",
       "Tickets", "Donation", "Fee covered", "Total", "Gift Aid", "Newsletter", "Status",
     ],
     ...bookings.map((b) => [
@@ -96,7 +98,11 @@ export function bookingsCsv(bookings: ExportBooking[]): string {
       b.kind === "table" ? `${b.quantity} table(s)` : `${b.quantity} ticket(s)`,
       b.seats,
       b.tableName ?? "",
-      b.buyerName,
+      // Split columns so the sheet can be sorted by surname. Bookings taken before TASK-318
+      // have no split stored, so fall back to the single name rather than showing a blank
+      // row: a name in the wrong column still finds the person on the night.
+      b.buyerFirstName ?? b.buyerName,
+      b.buyerSurname ?? "",
       b.buyerEmail,
       money(b.ticketsPence),
       money(b.donationPence),

@@ -110,6 +110,22 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
         <a href="tel:+441292811015">01292 811 015</a>, Monday to Friday.
         See the <a href="/ball/terms">ticket terms</a>.
       </p>
+
+      <!-- The moment someone has just paid is the right moment to say who made the evening
+           possible, and this page is cream, so it takes the dark version of the wordmark. -->
+      <aside class="ball-ty-sponsor">
+        <span>Organised and sponsored by</span>
+        <a href="https://thedesignerrooms.com/" target="_blank" rel="noopener">
+          <img
+            src="/assets/img/the-designer-rooms.png"
+            alt="The Designer Rooms"
+            width="486"
+            height="63"
+            loading="lazy"
+            decoding="async"
+          />
+        </a>
+      </aside>
     </div>
   </section>
 </main>

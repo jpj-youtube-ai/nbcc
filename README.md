@@ -2159,6 +2159,33 @@ weaken that guard. The same file is reused (lazily) in the home-page promo band 
 `src/ball/home-promo.ts`, where the surrounding band is already the same navy the artwork was
 cut out of.
 
+### The sponsor's wordmark (TASK-327)
+
+The Designer Rooms are credited with their own mark in two places: the sponsor band on `/ball`
+and the foot of the thank-you page, after someone has paid.
+
+**How the asset was made, and why there are two.** The supplied file is black line art on solid
+white with **no transparency**, so dropping it on the navy band would have shown a white slab.
+The luminance of that file *is* the artwork, so it is inverted into a coverage mask (black
+strokes opaque, white paper clear) and then painted:
+
+- `the-designer-rooms.png` — near-black, for cream backgrounds
+- `the-designer-rooms-cream.png` — cream, for the night-sky bands
+
+Both are the same 486x63 trimmed artwork at ~3.5KB. If Ryan ever supplies a vector, replace both
+and delete this note; 600px was the largest source available and it is adequate at the sizes
+used, not at larger ones.
+
+**Where it is deliberately NOT.** The confirmation email has no images at all, by design — it
+never breaks when a client blocks them. Adding the first one for a sponsor logo, which most
+clients would hide by default, would weaken a robust email for very little. The sponsor is
+credited there in words instead.
+
+In the sponsor band the mark **replaces** the typed name rather than sitting beside it: a
+wordmark next to the same words set in our own face reads as a mistake. It sits at 92% opacity,
+lifting on hover — present and legible, never louder than the ball's own lockup a few sections
+above. It is a guest's mark on NBCC's page.
+
 ### Ball copy house rules (TASK-325)
 
 Two rules the rest of the site already followed and the ball surfaces did not. Both are

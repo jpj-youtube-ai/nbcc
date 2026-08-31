@@ -11,11 +11,30 @@ import { orderSchema, type Order, SEATS_PER_TABLE } from "./capacity";
 export const SEAT_PRICE_PENCE = 10_000; // £100
 export const TABLE_PRICE_PENCE = SEAT_PRICE_PENCE * SEATS_PER_TABLE; // £1,000, no discount
 
-// Stripe UK standard card pricing. If NBCC is granted the nonprofit rate (1.2% + 20p) this
-// is the one place to change — but note ticket sales do NOT count towards that scheme's
-// donation-volume test, so the standard rate is the safe assumption.
-export const STRIPE_PERCENT = 0.015;
-export const STRIPE_FIXED_PENCE = 20;
+// NBCC's Stripe card rate, confirmed against the account: 1.2% + 20p on the UK charity
+// pricing. Held in BASIS POINTS so the arithmetic stays in integers — 120 bp = 1.20%.
+//
+// These are DEFAULTS. The live rate is a column on ball_settings and editable in admin
+// (TASK-317), because a hardcoded rate quietly over-collects the day Stripe changes it: the
+// page asks buyers to cover this exact number, so a stale rate takes money for a fee that
+// was never charged. These values are the fallback when the settings row cannot be read.
+export const DEFAULT_CARD_FEE_BP = 120;
+export const DEFAULT_CARD_FEE_FIXED_PENCE = 20;
+
+export interface CardFeeRate {
+  percentBp: number;
+  fixedPence: number;
+}
+
+export const DEFAULT_CARD_FEE: CardFeeRate = {
+  percentBp: DEFAULT_CARD_FEE_BP,
+  fixedPence: DEFAULT_CARD_FEE_FIXED_PENCE,
+};
+
+export const cardFeeRateSchema = z.object({
+  percentBp: z.number().int().min(0).max(1000),
+  fixedPence: z.number().int().min(0).max(500),
+});
 
 export function lineTotalPence(order: Order): number {
   const o = orderSchema.parse(order);
@@ -24,15 +43,22 @@ export function lineTotalPence(order: Order): number {
 
 // Rounded UP: the buyer is offering to cover the fee, and a rounded-down penny would leave
 // the charity fractionally short on every single order.
-export function stripeFeePence(amountPence: number): number {
+//
+// The fixed part is added ONCE, because Stripe charges per TRANSACTION, not per ticket. A
+// table of ten is a single £1,000 payment and costs one 20p, not ten — charging per ticket
+// would collect ~£1.80 more than Stripe actually takes and make the "cover the fee" claim
+// untrue. It also means the fee per ticket falls as the order grows, which is worth showing.
+export function stripeFeePence(amountPence: number, rate: CardFeeRate = DEFAULT_CARD_FEE): number {
   const amount = z.number().int().nonnegative().parse(amountPence);
-  return Math.ceil(amount * STRIPE_PERCENT) + STRIPE_FIXED_PENCE;
+  const { percentBp, fixedPence } = cardFeeRateSchema.parse(rate);
+  return Math.ceil((amount * percentBp) / 10_000) + fixedPence;
 }
 
 export const orderTotalInputSchema = z.object({
   order: orderSchema,
   donationPence: z.number().int().nonnegative().default(0),
   coverFee: z.boolean().default(false),
+  cardFee: cardFeeRateSchema.default(DEFAULT_CARD_FEE),
 });
 export type OrderTotalInput = z.input<typeof orderTotalInputSchema>;
 
@@ -44,12 +70,22 @@ export interface OrderTotal {
 }
 
 // The single place an order's money is decided, so the checkout page, the Stripe session and
-// the booking row can never disagree about what was charged. The fee cover is calculated on
-// tickets PLUS donation, because that is the amount Stripe actually charges a percentage of.
+// the booking row can never disagree about what was charged.
+//
+// The fee cover is calculated on the TICKETS ONLY, not tickets + donation. Stripe does charge
+// its percentage on the whole payment, so NBCC absorbs roughly 1.2% of any donation added
+// here — about 30p on £25. That is deliberate and matches the rest of the site, which has
+// never asked donors to cover fees on a gift. The ticket is a fixed price where the fee eats
+// into event income; the donation is a gift, and the fee on it is ordinary cost of
+// fundraising.
 export function orderTotalPence(input: OrderTotalInput): OrderTotal {
-  const { order, donationPence, coverFee } = orderTotalInputSchema.parse(input);
+  const { order, donationPence, coverFee, cardFee } = orderTotalInputSchema.parse(input);
   const ticketsPence = lineTotalPence(order);
-  const subtotal = ticketsPence + donationPence;
-  const feeCoverPence = coverFee ? stripeFeePence(subtotal) : 0;
-  return { ticketsPence, donationPence, feeCoverPence, totalPence: subtotal + feeCoverPence };
+  const feeCoverPence = coverFee ? stripeFeePence(ticketsPence, cardFee) : 0;
+  return {
+    ticketsPence,
+    donationPence,
+    feeCoverPence,
+    totalPence: ticketsPence + donationPence + feeCoverPence,
+  };
 }

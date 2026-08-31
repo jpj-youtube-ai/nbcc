@@ -49,6 +49,11 @@ ballRouter.get("/api/ball/availability", async (_req, res) => {
       tablesRemaining: a.tablesRemaining,
       soldOut: a.soldOut,
       salesOpen: a.salesOpen,
+      // So the "cover the card fee" checkbox quotes the live rate rather than a number
+      // baked into the script at build time (TASK-317). Not sensitive: the page already
+      // shows the resulting amount in pounds.
+      cardFeePercentBp: a.cardFee.percentBp,
+      cardFeeFixedPence: a.cardFee.fixedPence,
     });
   } catch (err) {
     console.error("ball availability failed:", err instanceof Error ? err.message : err);
@@ -115,6 +120,7 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
       baseUrl: config.BALL_BASE_URL,
       now: new Date(),
       embedded,
+      cardFee: avail.cardFee,
     });
     const session = await stripe.checkout.sessions.create(params);
 
@@ -124,6 +130,7 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
       order: { kind: purchase.kind, quantity: purchase.quantity },
       donationPence: purchase.donationPence,
       coverFee: purchase.coverFee,
+      cardFee: avail.cardFee,
     });
     await createPendingBooking({
       reference,

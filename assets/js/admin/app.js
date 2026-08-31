@@ -6085,6 +6085,10 @@
     el("ballHeldSeats").value = ballSettings.heldSeats;
     el("ballSalesCloseAt").value = toLocalInput(ballSettings.salesCloseAt);
     el("ballSalesClosed").checked = !!ballSettings.salesClosed;
+    // Staff think in percent, the database stores basis points so nothing is a float.
+    el("ballCardFeePercent").value = (ballSettings.cardFeePercentBp / 100).toFixed(2);
+    el("ballCardFeeFixed").value = ballSettings.cardFeeFixedPence;
+    ballFeeExample(ballSettings.cardFeePercentBp, ballSettings.cardFeeFixedPence);
     el("ballArrivalTime").value = ballSettings.arrivalTime || "";
     el("ballIncludedNote").value = ballSettings.includedNote || "";
     el("ballLineUpNote").value = ballSettings.lineUpNote || "";
@@ -6092,10 +6096,27 @@
     // Editors get view-only on this section by default (the gate publishes a page), so mirror
     // the server rule in the UI rather than letting someone fill a form that will 403.
     var canWrite = canEdit("ball");
-    ["ballGateSchedule", "ballCapacitySave", "ballDetailsSave"].forEach(function (id) {
+    ["ballGateSchedule", "ballCapacitySave", "ballFeeSave", "ballDetailsSave"].forEach(function (id) {
       var n = el(id);
       if (n) n.hidden = !canWrite;
     });
+  }
+
+  // Mirrors stripeFeePence in src/ball/pricing.ts, including the round-UP.
+  function ballFeeExample(bp, fixedPence) {
+    var node = el("ballFeeExample");
+    if (!node) return;
+    if (!isFinite(bp) || !isFinite(fixedPence) || bp < 0 || fixedPence < 0) {
+      node.textContent = "";
+      return;
+    }
+    var pounds = function (pence) { return "£" + (pence / 100).toFixed(2); };
+    var one = Math.ceil((10000 * bp) / 10000) + fixedPence;
+    var table = Math.ceil((100000 * bp) / 10000) + fixedPence;
+    node.textContent =
+      "At this rate a £100 ticket costs " + pounds(one) +
+      " and a £1,000 table costs " + pounds(table) +
+      " (" + pounds(Math.round(table / 10)) + " a seat) — that is what the page asks a buyer to cover.";
   }
 
   function ballSave(patch, statusId, done) {
@@ -6171,6 +6192,26 @@
         ballStatus(
           "ballPasswordStatus",
           "Password changed. Anyone using the old one will be asked again."
+        );
+      });
+    });
+
+    el("ballFeeForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      // Percent in the box, basis points on the wire: 1.2 -> 120. Rounded because a browser
+      // number input will happily hand back 1.2000000000000002.
+      var bp = Math.round(Number(el("ballCardFeePercent").value) * 100);
+      var fixed = Math.round(Number(el("ballCardFeeFixed").value));
+      ballSave({ cardFeePercentBp: bp, cardFeeFixedPence: fixed }, "ballFeeStatus");
+    });
+
+    // Show the consequence, not just the setting: the number that actually appears on the
+    // ticket page next to a tickbox asking someone to pay it.
+    ["ballCardFeePercent", "ballCardFeeFixed"].forEach(function (id) {
+      el(id).addEventListener("input", function () {
+        ballFeeExample(
+          Math.round(Number(el("ballCardFeePercent").value) * 100),
+          Math.round(Number(el("ballCardFeeFixed").value)),
         );
       });
     });

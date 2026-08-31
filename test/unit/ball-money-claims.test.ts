@@ -27,7 +27,8 @@ const BANNED = [
 
 // The fee-cover control is the ONE place a full-value claim is correct, because covering the
 // fee is precisely what makes it true. Phrased around the option, never as a blanket promise.
-const ALLOWED_FULL_VALUE = /so the full ticket price reaches NBCC|so the full .100 reaches NBCC/i;
+const ALLOWED_FULL_VALUE =
+  /so the full\s+ticket price reaches NBCC|so the full\s+.100 reaches NBCC/i;
 
 function assertNoAbsoluteClaim(surface: string, text: string): void {
   for (const pattern of BANNED) {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { MAX_SEATS_PER_ORDER, MAX_TABLES_PER_ORDER, seatsFor } from "./capacity";
-import { orderTotalPence } from "./pricing";
+import { orderTotalPence, DEFAULT_CARD_FEE, type CardFeeRate } from "./pricing";
 
 // TASK-313: pure booking model for the Festive Ball — the request a buyer submits, the
 // reference they are given, and the mapping back out of a Stripe session. NO pool, NO
@@ -63,15 +63,22 @@ export function isBallSession(metadata: Record<string, string> | null | undefine
 // Everything the webhook needs stamped onto the Stripe session, as strings (Stripe metadata
 // values are always strings). The money is recorded here rather than recalculated later, so
 // what we charged and what we record can never drift.
+//
+// That promise is why cardFee is a PARAMETER (TASK-317). The line items are priced at the
+// live rate from ball_settings; if this stamped the compiled-in default instead, then the
+// moment anyone edited the rate in admin, Stripe would charge one figure and the booking row
+// would record another — with only the metadata surviving into the database.
 export function ballMetadata(
   purchase: Purchase,
   reference: string,
   seats: number,
+  cardFee: CardFeeRate = DEFAULT_CARD_FEE,
 ): Record<string, string> {
   const total = orderTotalPence({
     order: { kind: purchase.kind, quantity: purchase.quantity },
     donationPence: purchase.donationPence,
     coverFee: purchase.coverFee,
+    cardFee,
   });
   return {
     product: "ball",

@@ -1046,6 +1046,20 @@
               <p class="admin-note">Seats held back never go on sale — use it for comps, the sponsor&rsquo;s guests and the top table. Individual tickets share tables, so a table only stays sellable while nobody has been seated at it.</p>
               <p class="ty-status" id="ballCapacityStatus" role="status" aria-live="polite"></p>
 
+              <h3 class="admin-subhead">Card fee</h3>
+              <p class="admin-note">What Stripe charges NBCC. The ticket page offers buyers the chance to cover it, so this must be the rate you are <em>actually</em> on &mdash; check it against a real payment in the Stripe dashboard, not a price list. Stripe charges this <b>once per booking</b>, not per ticket.</p>
+              <form id="ballFeeForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Percentage
+                  <input id="ballCardFeePercent" type="number" min="0" max="10" step="0.01" style="width:90px" /> %
+                </label>
+                <label class="ty-inline">Plus, per booking
+                  <input id="ballCardFeeFixed" type="number" min="0" max="500" step="1" style="width:90px" /> p
+                </label>
+                <button class="btn btn-primary" type="submit" id="ballFeeSave">Save</button>
+              </form>
+              <p class="admin-note" id="ballFeeExample"></p>
+              <p class="ty-status" id="ballFeeStatus" role="status" aria-live="polite"></p>
+
               <h3 class="admin-subhead">Details the venue confirms later</h3>
               <p class="admin-note">Leave these empty and the page says &ldquo;to be confirmed&rdquo; rather than guessing. Fill one in and it appears on the ticket page and in every booking email from then on.</p>
               <form id="ballDetailsForm" class="ty-controls admin-stack" autocomplete="off">

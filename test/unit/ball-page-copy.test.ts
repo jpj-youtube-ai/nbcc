@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { stripeFeePence, SEAT_PRICE_PENCE } from "../../src/ball/pricing";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -118,5 +119,26 @@ describe("the ways to book that the form cannot handle", () => {
   it("no longer buries either route in the smallprint", () => {
     const smallprint = ballHtml.match(/<p class="ball-smallprint">[\s\S]*?<\/p>/)?.[0] ?? "";
     expect(smallprint).not.toMatch(/invoice/i);
+  });
+});
+
+describe("the fee the page quotes before JavaScript runs", () => {
+  // ball.html hard-codes a starting figure in the "cover the card fee" checkbox so the form
+  // is not blank on first paint. The live rate arrives moments later from
+  // /api/ball/availability, but until it does this number is what a buyer reads — so it has
+  // to be the fee on ONE seat at the default rate, not a figure left behind by an old one.
+  // It was £1.70 (Stripe's 1.5% standard rate) while NBCC was actually on 1.2%.
+  it("matches the fee on a single seat at the default rate", () => {
+    const expected = stripeFeePence(SEAT_PRICE_PENCE);
+    const pounds = "£" + (expected / 100).toFixed(2);
+    const checkbox = ballHtml.match(/<b id="ballFee">[^<]*<\/b>/)?.[0] ?? "";
+    expect(checkbox).not.toBe("");
+    // The file writes the pound sign as an entity.
+    expect(checkbox.replace("&pound;", "£")).toContain(pounds);
+  });
+
+  it("has somewhere to put the per-ticket breakdown", () => {
+    // The 20p is charged once per ORDER, so the fee per ticket falls as the order grows.
+    expect(ballHtml).toContain('id="ballFeeEach"');
   });
 });

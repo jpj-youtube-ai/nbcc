@@ -54,6 +54,12 @@ export const ballSettingsUpdateSchema = z
     // written on a Post-it.
     previewPassword: z.string().min(8, "use at least 8 characters").max(200).optional(),
 
+    // The card rate NBCC is charged, so the "cover the fee" checkbox quotes the truth
+    // (TASK-317). Bounded to match the CHECK constraints on the columns: an accidental 1200
+    // here would ask every buyer to cover 12%.
+    cardFeePercentBp: z.number().int().min(0).max(1000).optional(),
+    cardFeeFixedPence: z.number().int().min(0).max(500).optional(),
+
     // Details that were not confirmed when the page was written.
     arrivalTime: nullableText(120).optional(),
     includedNote: nullableText(1000).optional(),

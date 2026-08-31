@@ -111,6 +111,32 @@ export function renderSupportersPage(
   );
 }
 
+// TASK-326: is the ball published? Read per request, deliberately NOT cached.
+//
+// A cache was the obvious move, and it was wrong. It bought very little: this is one indexed
+// read of a single-row table, and `/` and `/supporters` already query the database on every
+// request, so the two busiest pages have always done exactly this. It cost two real things:
+// staff flipping the gate in admin would wait out the TTL before other pages agreed, and the
+// BDD scenarios set the gate by SQL rather than through the app, so a stale entry from the
+// previous scenario would make them fail at random.
+//
+// The robustness worry a cache appears to answer is answered better below: every caller falls
+// back to sending the file untouched, so a database outage costs the ball LINK, never the page.
+//
+// Fails to "shut": if we cannot tell, the link is absent, which is the safe way to be wrong
+// about an event that has not been announced.
+async function ballIsPublished(): Promise<boolean> {
+  try {
+    const [{ getSettings }, { isGateOpen }] = await Promise.all([
+      import("../db/ball"),
+      import("../ball/gate"),
+    ]);
+    return isGateOpen(await getSettings(), new Date());
+  } catch {
+    return false;
+  }
+}
+
 export function createSiteRouter(siteRoot: string): Router {
   const router = Router();
   const redirectsFile = join(siteRoot, "_redirects");
@@ -179,7 +205,16 @@ export function createSiteRouter(siteRoot: string): Router {
       const { listPublicSupporters } = await import("../db/donations");
       const tiers = await listPublicSupporters();
       const template = readFileSync(supportersFile, "utf8");
-      res.type("html").send(renderSupportersPage(template, tiers));
+      let html = renderSupportersPage(template, tiers);
+      // Rendered by hand rather than served from disk, so it does not pass through the
+      // `_redirects` loop below and needs the nav item adding here too (TASK-326). This is
+      // also the page where getting the anchor wrong shows: its own nav item carries
+      // class="active", so matching the link rather than the list finds the FOOTER first.
+      if (await ballIsPublished()) {
+        const { addBallNavLink } = await import("../ball/nav-link");
+        html = addBallNavLink(html);
+      }
+      res.type("html").send(html);
     } catch (err) {
       if (existsSync(supportersFile)) {
         res.sendFile(supportersFile);
@@ -205,11 +240,24 @@ export function createSiteRouter(siteRoot: string): Router {
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).
   for (const rule of rules) {
-    router.get(rule.from, (_req, res) => {
+    router.get(rule.from, async (_req, res) => {
       if (rule.status.startsWith("301")) {
         res.redirect(301, rule.to);
-      } else {
-        res.sendFile(join(siteRoot, rule.to.replace(/^\//, "")));
+        return;
+      }
+      const file = join(siteRoot, rule.to.replace(/^\//, ""));
+      // While the ball is unpublished this is byte-for-byte the old behaviour: the file is
+      // sent as-is and nothing on any page mentions it.
+      if (!file.endsWith(".html") || !(await ballIsPublished())) {
+        res.sendFile(file);
+        return;
+      }
+      try {
+        const { addBallNavLink } = await import("../ball/nav-link");
+        res.type("html").send(addBallNavLink(readFileSync(file, "utf8")));
+      } catch (err) {
+        console.error("ball nav link failed:", err instanceof Error ? err.message : err);
+        res.sendFile(file);
       }
     });
   }

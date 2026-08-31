@@ -2317,6 +2317,33 @@ Worth knowing for any future full-width band added near the top of a page: the h
 transparent at scroll 0, so a coloured background that starts above `--nav-h` will show through
 it.
 
+### One nav and one footer, everywhere (TASK-326)
+
+**The nav item.** At launch, "Festive Ball" is added to the main nav on **every** page, not
+just the home page, and to none of them before. Every clean-URL page is served through a single
+`sendFile` loop in `src/routes/site.ts`, so that loop is the one place it needs doing;
+`/supporters` is rendered by hand and so needs it separately.
+
+`addBallNavLink` (`src/ball/nav-link.ts`) anchors on the nav **list**, not on a link inside it.
+The obvious approach — find the Supporters item and insert after it — quietly puts the item in
+the **footer** on `supporters.html`, whose own nav copy carries `class="active"
+aria-current="page"` and so does not match, leaving the footer's Explore list as the first hit.
+A test asserts the link never lands in a footer on any page.
+
+**Not cached, deliberately.** A TTL cache was the obvious move and it was wrong. It bought very
+little (one indexed read of a single-row table, and `/` and `/supporters` already query per
+request), and it cost two real things: staff flipping the gate would wait out the TTL before
+other pages agreed, and the BDD scenarios set the gate by SQL rather than through the app, so a
+stale entry from the previous scenario would fail them at random. The robustness worry a cache
+appears to answer is answered better by the fallback: every caller sends the file untouched if
+anything throws, so a database outage costs the ball **link**, never the page.
+
+**The footer.** `ball.html` and `ball-terms.html` carried a "Festive Ball" column in place of
+"Ways to give". They now use the same footer as every other main page and have joined the
+byte-identity group in `footer.test.ts`. Nothing was lost: booking, terms and the events address
+all appear in the page body already. The four short-footer pages (portal, privacy, gift-aid,
+thank-you) are unchanged, per NBCC.
+
 ### Previewing the launch-morning home page (TASK-320)
 
 Staff asked how to see what the front page will look like on launch morning without launching

@@ -801,20 +801,37 @@ async function publicSubscribe(body) {
 }
 
 When("a visitor subscribes in the footer as {string} with email {string}", async function (name, email) {
-  const r = await publicSubscribe({ name, email, consent: true });
+  // The feature files pass a whole name; the endpoint takes it in two halves (TASK-331), so
+  // split on the last space here rather than rewriting every scenario.
+  const r = await publicSubscribe({
+    firstName: name.split(" ").slice(0, -1).join(" ") || name,
+    surname: name.split(" ").slice(-1)[0],
+    email,
+    consent: true,
+  });
   this.subPubStatus = r.status;
 });
 
 When(
   "a visitor subscribes in the footer as {string} with email {string} but without consent",
   async function (name, email) {
-    const r = await publicSubscribe({ name, email });
+    const r = await publicSubscribe({
+      firstName: name.split(" ").slice(0, -1).join(" ") || name,
+      surname: name.split(" ").slice(-1)[0],
+      email,
+    });
     this.subPubStatus = r.status;
   },
 );
 
 When("a bot fills the footer honeypot with email {string}", async function (email) {
-  const r = await publicSubscribe({ name: "Bot", email, consent: true, website: "https://spam.example" });
+  const r = await publicSubscribe({
+    firstName: "Bot",
+    surname: "Bot",
+    email,
+    consent: true,
+    website: "https://spam.example",
+  });
   this.subPubStatus = r.status;
 });
 

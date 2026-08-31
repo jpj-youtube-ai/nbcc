@@ -30,6 +30,10 @@ export const purchaseSchema = z
     giftAid: z.boolean().default(false),
     newsletterOptIn: z.boolean().default(false),
     uiMode: z.enum(["hosted", "embedded"]).default("hosted"),
+    // Not a boolean: `z.literal(true)` means an absent or false value is a validation FAILURE
+    // rather than a quietly-recorded "no". There is no such thing as a ticket bought without
+    // agreeing to the terms, so the type says so (TASK-331).
+    termsAccepted: z.literal(true),
   })
   // Derived, never accepted from the client: one name, assembled the same way every time.
   .transform((p) => ({ ...p, buyerName: `${p.buyerFirstName} ${p.buyerSurname}` }))

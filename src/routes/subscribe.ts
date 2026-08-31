@@ -24,12 +24,16 @@ import { config } from "../config";
 export const subscribeRouter = Router();
 
 export const subscribeSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  // Split to match every other form on the site (TASK-331). `name` below is DERIVED, so the
+  // stored row, the welcome email and the admin list all keep reading one field.
+  firstName: z.string().trim().min(1).max(60),
+  surname: z.string().trim().min(1).max(60),
   email: z.string().trim().email(),
   phone: z.string().trim().max(30).optional(),
   consent: z.literal(true),
   website: z.string().max(0).optional(), // the honeypot — anything in it is a bot
-});
+})
+  .transform((v) => ({ ...v, name: `${v.firstName} ${v.surname}` }));
 
 // Fixed-window per-IP limiter (same shape as the business fulfilment routes): 10 attempts / 10 min.
 const WINDOW_MS = 10 * 60 * 1000;

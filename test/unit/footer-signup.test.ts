@@ -29,7 +29,8 @@ function mount(fetchImpl: unknown) {
 }
 
 function fill(consent: boolean) {
-  (el("fsName") as HTMLInputElement).value = "Ann Volunteer";
+  (el("fsFirstName") as HTMLInputElement).value = "Ann";
+  (el("fsSurname") as HTMLInputElement).value = "Volunteer";
   (el("fsEmail") as HTMLInputElement).value = "ann@example.com";
   (el("fsConsent") as HTMLInputElement).checked = consent;
 }
@@ -84,7 +85,8 @@ describe("footer signup (TASK-261)", () => {
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, { body: string }];
     expect(url).toBe("/api/subscribe");
     expect(JSON.parse(init.body)).toEqual({
-      name: "Ann Volunteer",
+      firstName: "Ann",
+      surname: "Volunteer",
       email: "ann@example.com",
       phone: "07000 000001",
       consent: true,

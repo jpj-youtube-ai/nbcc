@@ -14,6 +14,7 @@ describe("purchaseSchema", () => {
     buyerFirstName: "Jo",
     buyerSurname: "Smith",
     buyerEmail: "jo@example.com",
+    termsAccepted: true,
   };
 
   it("accepts a minimal seat purchase and defaults the extras off", () => {
@@ -117,6 +118,7 @@ describe("ballMetadata / bookingFromSession round trip", () => {
     buyerFirstName: "Jo",
     buyerSurname: "Smith",
     buyerEmail: "jo@example.com",
+    termsAccepted: true,
     donationPence: 2_500,
     coverFee: true,
     giftAid: true,

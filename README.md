@@ -2186,6 +2186,31 @@ wordmark next to the same words set in our own face reads as a mistake. It sits 
 lifting on hover — present and legible, never louder than the ball's own lockup a few sections
 above. It is a guest's mark on NBCC's page.
 
+### Agreeing to the ticket terms (TASK-331)
+
+Tickets are **non-refundable**, on purchases up to £1,000 a table. Under the Consumer Rights
+Act an onerous term has to be brought to the consumer's attention, not merely made findable —
+so a link in the smallprint is not enough on its own.
+
+The booking form now carries a **required, never pre-ticked** box immediately above the pay
+button, and the label names the non-refundable term itself rather than hiding it behind the
+link. The server enforces it with `z.literal(true)`, not a boolean: an absent or false value is
+a validation *failure*, because there is no such thing as a ticket bought without agreeing to
+the terms.
+
+`ball_bookings.terms_accepted_at` records **when**. The point of that column is the moment it
+becomes useful: a dispute months later, where the question is not "were the terms on the site"
+but "did this buyer agree to them". It is nullable, because bookings taken before this have no
+such record and must not be given a fabricated one.
+
+Photography needed no change — the terms already covered filming, use in NBCC and Designer
+Rooms publicity, signage on the night, and telling a volunteer at the welcome desk.
+
+**The footer signup now asks for a first name and a surname**, the last single-name field on
+the site. `name` is derived from the two, so the stored row, the welcome email and the admin
+list all keep reading one field. (Storing the halves, for "Hi Jo" personalisation, is a natural
+follow-up and would need a migration on `list_subscribers`.)
+
 ### Third staff review: legibility on the dark ground (TASK-330)
 
 Most of this round was one root cause wearing several hats: **things on the night-sky ground

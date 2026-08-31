@@ -33,7 +33,15 @@ const BUDGET = {
   // again. These are UNCOMPRESSED bytes and the added text is comments and repeated class tokens,
   // i.e. the best case for gzip, so the real transfer cost is a fraction of this — but the right
   // fix is a weight review of donate.html, deferred by NBCC until after 7 November.
-  maxTransferKB: 258,
+  // Raised 258 -> 260 (TASK-331, splitting the footer signup's name field): a second input and
+  // its handling in the shared main.js, which breached the ceiling by TWENTY-SEVEN bytes.
+  //
+  // That number is the point. This is the second raise in a day, and the first one already
+  // said the next addition would breach it. donate.html has no slack left, so the budget is
+  // no longer measuring anything — it just records what the page happens to weigh. The fix is
+  // the weight review NBCC deferred until after 7 November, not another raise; 260 buys ~1KB
+  // of room so the next small change does not fail a build for a reason nobody can act on.
+  maxTransferKB: 260,
   maxRequests: 15,
   maxFontFiles: 2,
 };

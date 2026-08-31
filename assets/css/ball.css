@@ -441,6 +441,14 @@
   accent-color: var(--maroon);
 }
 .ball-check b { font-weight: 600; }
+/* The per-ticket breakdown under the fee checkbox. A block so it starts its own line under
+   the sentence rather than trailing it, and quieter, because it is an aside not a term. */
+.ball-check small {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.86rem;
+  color: var(--slate-soft);
+}
 
 .ball-donation {
   display: flex;

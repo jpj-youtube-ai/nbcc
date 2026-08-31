@@ -1,6 +1,12 @@
 import type StripeNS from "stripe";
 import { ballMetadata, type Purchase } from "./booking";
-import { orderTotalPence, SEAT_PRICE_PENCE, TABLE_PRICE_PENCE } from "./pricing";
+import {
+  orderTotalPence,
+  SEAT_PRICE_PENCE,
+  TABLE_PRICE_PENCE,
+  DEFAULT_CARD_FEE,
+  type CardFeeRate,
+} from "./pricing";
 
 // TASK-313: pure assembly of the Stripe Checkout session for a Festive Ball purchase.
 // Config and the clock are INJECTED (baseUrl, now), so this is unit-tested DB-free and
@@ -20,6 +26,8 @@ export interface BallSessionInput {
   now: Date;
   /** Embedded Checkout only engages when a publishable key is configured (see TASK-215). */
   embedded?: boolean;
+  /** The live card rate from ball_settings. Omitted only in tests, where the default applies. */
+  cardFee?: CardFeeRate;
 }
 
 const trimSlash = (s: string): string => s.replace(/\/+$/, "");
@@ -53,6 +61,7 @@ export function buildBallSessionParams(
     order: { kind: purchase.kind, quantity: purchase.quantity },
     donationPence: purchase.donationPence,
     coverFee: purchase.coverFee,
+    cardFee: input.cardFee ?? DEFAULT_CARD_FEE,
   });
 
   const line_items: StripeNS.Checkout.SessionCreateParams.LineItem[] = [ticketLine(purchase)];
@@ -92,7 +101,7 @@ export function buildBallSessionParams(
     payment_method_types: ["card"],
     line_items,
     customer_email: purchase.buyerEmail,
-    metadata: ballMetadata(purchase, reference, seats),
+    metadata: ballMetadata(purchase, reference, seats, input.cardFee ?? DEFAULT_CARD_FEE),
     expires_at: Math.floor((now.getTime() + SESSION_TTL_MS) / 1000),
   };
 

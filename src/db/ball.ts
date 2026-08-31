@@ -15,6 +15,7 @@ import type { GuestPageBooking, GuestRow } from "../ball/guest-page";
 import type { ExportBooking, ExportGuest } from "../ball/exports";
 import type { WaitingListEntry } from "../ball/waiting-list";
 import type { ThankYouBooking } from "../ball/thank-you-page";
+import type { CardFeeRate } from "../ball/pricing";
 import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
@@ -33,6 +34,11 @@ export interface BallSettings {
   arrivalTime: string | null;
   includedNote: string | null;
   lineUpNote: string | null;
+  // The card rate NBCC is actually charged (TASK-317). Data rather than a constant, because
+  // the page asks buyers to cover this exact number: a stale rate collects money for a fee
+  // that was never charged. Basis points so nothing here is a float — 120 = 1.20%.
+  cardFeePercentBp: number;
+  cardFeeFixedPence: number;
 }
 
 // What updateSettings actually writes. previewPassword (plaintext) is REPLACED by
@@ -53,11 +59,14 @@ interface SettingsRow {
   arrival_time: string | null;
   included_note: string | null;
   line_up_note: string | null;
+  card_fee_percent_bp: number;
+  card_fee_fixed_pence: number;
 }
 
 const SETTINGS_SQL = `SELECT total_tables, seats_per_table, held_seats, gate_open,
                              gate_opens_at, sales_close_at, sales_closed,
-                             arrival_time, included_note, line_up_note
+                             arrival_time, included_note, line_up_note,
+                             card_fee_percent_bp, card_fee_fixed_pence
                         FROM ball_settings WHERE id = 1`;
 
 // Sold seats, split by how they were bought. 'pending' counts as well as 'paid': a booking
@@ -85,6 +94,8 @@ function toSettings(r: SettingsRow): BallSettings {
     arrivalTime: r.arrival_time,
     includedNote: r.included_note,
     lineUpNote: r.line_up_note,
+    cardFeePercentBp: r.card_fee_percent_bp,
+    cardFeeFixedPence: r.card_fee_fixed_pence,
   };
 }
 
@@ -117,14 +128,25 @@ export async function getCapacityState(): Promise<CapacityState> {
   return readCapacityState(pool);
 }
 
-export async function getAvailability(): Promise<Availability & { salesOpen: boolean }> {
+export async function getAvailability(): Promise<
+  Availability & { salesOpen: boolean; cardFee: CardFeeRate }
+> {
   const res = await pool.query<SettingsRow>(SETTINGS_SQL);
   const settings = toSettings(res.rows[0]);
   const state = await readCapacityState(pool);
   const a = availability(state);
   const closedByDate =
     settings.salesCloseAt !== null && new Date(settings.salesCloseAt) <= new Date();
-  return { ...a, salesOpen: !settings.salesClosed && !closedByDate && !a.soldOut };
+  return {
+    ...a,
+    salesOpen: !settings.salesClosed && !closedByDate && !a.soldOut,
+    // Carried here so the ONE read the checkout already does gives the route the rate too,
+    // rather than a second round trip to price the same order.
+    cardFee: {
+      percentBp: settings.cardFeePercentBp,
+      fixedPence: settings.cardFeeFixedPence,
+    },
+  };
 }
 
 // Claim seats for a checkout. Runs in a transaction that LOCKS the single settings row, so
@@ -282,6 +304,8 @@ const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
   arrivalTime: "arrival_time",
   includedNote: "included_note",
   lineUpNote: "line_up_note",
+  cardFeePercentBp: "card_fee_percent_bp",
+  cardFeeFixedPence: "card_fee_fixed_pence",
 };
 
 // Save settings and record WHO changed WHAT in the same transaction. The gate toggle publishes

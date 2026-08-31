@@ -51,7 +51,8 @@ Given(
       await db.query(
         `UPDATE ball_settings
             SET total_tables = $1, seats_per_table = $2, held_seats = $3,
-                sales_closed = false, sales_close_at = NULL
+                sales_closed = false, sales_close_at = NULL,
+                card_fee_percent_bp = 120, card_fee_fixed_pence = 20
           WHERE id = 1`,
         [tables, seats, held],
       );
@@ -88,6 +89,14 @@ Then("the ball availability should say sales are open", function () {
 Then("the ball availability should say sales are closed", function () {
   assert.strictEqual(this.ballBody.salesOpen, false);
 });
+
+Then(
+  "the ball availability should show a card fee of {int} basis points plus {int}p",
+  function (bp, fixed) {
+    assert.strictEqual(this.ballBody.cardFeePercentBp, bp);
+    assert.strictEqual(this.ballBody.cardFeeFixedPence, fixed);
+  },
+);
 
 Then("the ball availability should not contain buyer details", function () {
   const body = JSON.stringify(this.ballBody).toLowerCase();

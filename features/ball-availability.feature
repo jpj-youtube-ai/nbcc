@@ -29,6 +29,12 @@ Feature: Festive Ball availability (TASK-313)
     When I request the ball availability
     Then the ball availability should say sales are closed
 
+  Scenario: the page is told the live card rate, so it quotes what NBCC is really charged
+    Given the ball is reset to 40 tables of 10 with 0 held back
+    When I request the ball availability
+    Then the ball response status should be 200
+    And the ball availability should show a card fee of 120 basis points plus 20p
+
   Scenario: the endpoint never exposes buyer details
     Given the ball is reset to 40 tables of 10 with 0 held back
     When I request the ball availability

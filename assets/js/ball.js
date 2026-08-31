@@ -15,8 +15,12 @@
   var TABLE_PENCE = 100000;
   var MAX_SEATS = 9;
   var MAX_TABLES = 4;
-  var STRIPE_PERCENT = 0.015;
-  var STRIPE_FIXED_PENCE = 20;
+  // NBCC's Stripe charity rate, in basis points to match src/ball/pricing.ts (120 = 1.20%).
+  // These are only the fallback for the moment before /api/ball/availability answers; the
+  // live values from ball_settings overwrite them, and the SERVER prices the actual charge,
+  // so a stale page can misquote by a few pence but can never mis-charge.
+  var cardFeeBp = 120;
+  var cardFeeFixedPence = 20;
 
   var form = document.getElementById("ballForm");
   if (!form) return;
@@ -24,6 +28,7 @@
   var quantity = document.getElementById("ballQuantity");
   var totalOut = document.getElementById("ballTotal");
   var feeOut = document.getElementById("ballFee");
+  var feeEachOut = document.getElementById("ballFeeEach");
   var addDonation = document.getElementById("ballAddDonation");
   var donationFields = document.getElementById("ballDonationFields");
   var errorBox = document.getElementById("ballError");
@@ -55,9 +60,10 @@
   }
 
   // Rounded UP, mirroring stripeFeePence server-side: a rounded-down penny would
-  // leave the charity fractionally short on every fee-covered order.
+  // leave the charity fractionally short on every fee-covered order. The fixed part is
+  // added ONCE, because Stripe bills per transaction rather than per ticket.
   function feePence(amount) {
-    return Math.ceil(amount * STRIPE_PERCENT) + STRIPE_FIXED_PENCE;
+    return Math.ceil((amount * cardFeeBp) / 10000) + cardFeeFixedPence;
   }
 
   function fillQuantities() {
@@ -89,12 +95,28 @@
 
   function recalculate() {
     var qty = parseInt(quantity && quantity.value, 10) || 1;
-    var tickets = (kind() === "table" ? TABLE_PENCE : SEAT_PENCE) * qty;
+    var isTable = kind() === "table";
+    var tickets = (isTable ? TABLE_PENCE : SEAT_PENCE) * qty;
     var donation = donationPence();
-    var fee = feePence(tickets + donation);
+    // TICKETS only. NBCC absorbs the fee on any donation added here, the same way it does
+    // everywhere else on the site — a gift is not something we ask people to pay a surcharge
+    // on. Mirrors orderTotalPence server-side, which is what actually gets charged.
+    var fee = feePence(tickets);
     var coverFee = form.elements.coverFee && form.elements.coverFee.checked;
 
     if (feeOut) feeOut.textContent = money(fee);
+    // The 20p is per ORDER, so the fee per ticket falls as the order grows. Worth saying:
+    // it turns a number that looks like a surcharge into one that visibly gets better.
+    if (feeEachOut) {
+      var seatCount = isTable ? qty * 10 : qty;
+      if (seatCount > 1) {
+        feeEachOut.textContent = "That is about " + money(Math.round(fee / seatCount)) + " a ticket.";
+        feeEachOut.hidden = false;
+      } else {
+        feeEachOut.textContent = "";
+        feeEachOut.hidden = true;
+      }
+    }
     if (totalOut) {
       var next = money(tickets + donation + (coverFee ? fee : 0));
       if (totalOut.textContent !== next) {
@@ -131,6 +153,10 @@
       })
       .then(function (data) {
         if (!data) return;
+        // Adopt the live card rate before anything is priced on screen (TASK-317).
+        if (typeof data.cardFeePercentBp === "number") cardFeeBp = data.cardFeePercentBp;
+        if (typeof data.cardFeeFixedPence === "number") cardFeeFixedPence = data.cardFeeFixedPence;
+        recalculate();
         if (!data.salesOpen) {
           availability.textContent = data.soldOut
             ? "The ball is sold out."

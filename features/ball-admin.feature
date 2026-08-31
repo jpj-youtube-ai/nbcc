@@ -34,6 +34,25 @@ Feature: Festive Ball admin controls (TASK-313)
     Then the ball availability should show 360 seats remaining
     And the ball availability should show 36 tables remaining
 
+  Scenario: a change to the card fee rate reaches the public page
+    Given a ball admin "ball17.admin.bdd@example.com" with role "admin" and password "pw-ball17"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    When I PATCH the ball admin as "ball17.admin.bdd@example.com" with password "pw-ball17":
+      """
+      {"cardFeePercentBp": 150, "cardFeeFixedPence": 25}
+      """
+    Then the ball admin status should be 200
+    When I request the ball availability
+    Then the ball availability should show a card fee of 150 basis points plus 25p
+
+  Scenario: an impossible card fee is refused rather than passed on to buyers
+    Given a ball admin "ball18.admin.bdd@example.com" with role "admin" and password "pw-ball18"
+    When I PATCH the ball admin as "ball18.admin.bdd@example.com" with password "pw-ball18":
+      """
+      {"cardFeePercentBp": 5000}
+      """
+    Then the ball admin status should be 400
+
   Scenario: publishing a confirmed arrival time reaches the page
     Given a ball admin "ball4.admin.bdd@example.com" with role "admin" and password "pw-ball4"
     And the ball gate is open

@@ -2058,9 +2058,36 @@ and a caller asking for a table is refused while the page still sells seats. Tha
 pure and DB-free in `src/ball/capacity.ts`.
 
 **Money.** £100 a seat, £1,000 a table, no discount, integer pence throughout
-(`src/ball/pricing.ts`). Buyers may optionally cover the card fee (1.5% + 20p, rounded up) and
-add a voluntary donation. **Gift Aid applies to the donation only** — HMRC does not allow it on
-ticket sales, because the buyer receives a dinner and a show in return.
+(`src/ball/pricing.ts`). Buyers may optionally cover the card fee and add a voluntary donation.
+**Gift Aid applies to the donation only** — HMRC does not allow it on ticket sales, because the
+buyer receives a dinner and a show in return.
+
+**The card fee (TASK-317).** Three things about it are deliberate:
+
+- **The rate is 1.2% + 20p**, NBCC's Stripe UK charity rate, confirmed against the account.
+  It was hardcoded at Stripe's 1.5% standard rate, so everyone who ticked "cover the fee" was
+  handing over about 30p a ticket for a fee that was never charged.
+- **It is charged once per ORDER, not per ticket**, because that is how Stripe bills. A table
+  of ten is a single £1,000 payment carrying one 20p, so ten single-seat fees would
+  over-collect £1.80 and make the checkbox's promise untrue. The page shows the per-ticket
+  figure alongside the total (`#ballFeeEach`), which also makes visible that the fee per
+  ticket *falls* as the order grows.
+- **It is calculated on the tickets only, never on the donation.** Stripe does take its
+  percentage on the whole payment, so NBCC absorbs ~1.2% of any donation added here — about
+  30p on £25. That matches the rest of the site, which has never asked a donor to pay a
+  surcharge on a gift.
+
+The live rate lives on `ball_settings` (`card_fee_percent_bp`, `card_fee_fixed_pence` — basis
+points, so no float reaches the database) and is editable in **Admin → Festive Ball → Card
+fee**, which takes a percentage and converts. `DEFAULT_CARD_FEE` in `src/ball/pricing.ts` is
+only the fallback; `ball.html` also hard-codes the single-seat figure so the form is not blank
+on first paint, and `ball-page-copy.test.ts` asserts that figure still matches the default.
+
+The rate reaches the charge through `getAvailability()`, which already reads the settings row
+the checkout needs anyway. **It must be passed to `ballMetadata` as well as to the line items:**
+the webhook writes the booking row from that metadata, so pricing the line items at the live
+rate while stamping the compiled-in default would mean Stripe charging one figure and the
+database recording another, invisibly. `ball-checkout.test.ts` pins the two together.
 
 **Overselling.** `claimReservation` (`src/db/ball.ts`) locks the single `ball_settings` row, so
 two people going for the last table are serialised and the loser is refused. The reservation

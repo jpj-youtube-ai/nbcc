@@ -55,8 +55,32 @@ describe("buildBallSessionParams", () => {
     const sum = p.line_items!.reduce(
       (t, li) => t + li.price_data!.unit_amount! * (li.quantity ?? 1), 0,
     );
-    // £1,000 table + £50 donation = £1,050; fee = ceil(105000*0.015)=1575 +20 = 1595
-    expect(sum).toBe(100_000 + 5_000 + 1_595);
+    // £1,000 table + £50 donation = £1,050. The fee cover is calculated on the TICKETS
+    // ONLY at the 1.2% + 20p charity rate: ceil(100000*120/10000) = 1200, +20 = 1220. The
+    // donation is deliberately excluded — NBCC does not surcharge a gift (TASK-317).
+    expect(sum).toBe(100_000 + 5_000 + 1_220);
+  });
+
+  // TASK-317 near-miss. The line items are priced from the live rate in ball_settings, but
+  // the metadata was still stamped from the compiled-in default. The webhook writes the
+  // booking row from that METADATA, so the moment anyone edited the rate in admin, Stripe
+  // would have charged one amount and the database recorded another — and only the database
+  // figure is ever seen again.
+  it("prices the line items and the metadata from the SAME rate", () => {
+    const rate = { percentBp: 250, fixedPence: 45 };
+    const p = buildBallSessionParams({
+      purchase: tableWithExtras, reference: "BALL-XYZ789", seats: 10, baseUrl: BASE, now: NOW,
+      cardFee: rate,
+    });
+    const sum = p.line_items!.reduce(
+      (t, li) => t + li.price_data!.unit_amount! * (li.quantity ?? 1), 0,
+    );
+    expect(p.metadata!.totalPence).toBe(String(sum));
+
+    // And the fee line itself is the non-default rate, not the 1.2% default.
+    const feeLine = p.line_items!.find((li) => /fee/i.test(li.price_data!.product_data!.name!));
+    expect(feeLine!.price_data!.unit_amount).toBe(2_545);
+    expect(p.metadata!.feeCoverPence).toBe("2545");
   });
 
   it("stamps the metadata the webhook reads back", () => {

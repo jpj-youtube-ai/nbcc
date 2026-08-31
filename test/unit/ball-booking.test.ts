@@ -118,6 +118,24 @@ describe("ballMetadata / bookingFromSession round trip", () => {
     expect(md.newsletterOptIn).toBe("true");
   });
 
+  // TASK-317: buildBallSessionParams prices the Stripe LINE ITEMS from the live rate in
+  // ball_settings. If ballMetadata stamped the compiled-in default instead, then the moment
+  // anyone edited the rate in admin, Stripe would charge one figure while the booking row —
+  // which the webhook writes from this metadata — recorded another. Only the metadata
+  // survives into the database, so the difference would be invisible until a reconciliation.
+  it("stamps the rate it was given, so the charge and the recorded booking agree", () => {
+    const rate = { percentBp: 250, fixedPence: 45 };
+    const md = ballMetadata(purchase, "BALL-ABC234", 10, rate);
+    // 1,000 x 2.5% = 2500, + 45 = 2545.
+    expect(md.feeCoverPence).toBe("2545");
+    expect(md.totalPence).toBe(String(100_000 + 2_500 + 2_545));
+  });
+
+  it("falls back to the default rate when none is given", () => {
+    const md = ballMetadata(purchase, "BALL-ABC234", 10);
+    expect(md.feeCoverPence).toBe("1220");
+  });
+
   it("reads back into a booking row with the money intact", () => {
     const md = ballMetadata(purchase, "BALL-ABC234", 10);
     const booking = bookingFromSession({
@@ -134,8 +152,10 @@ describe("ballMetadata / bookingFromSession round trip", () => {
     expect(booking!.buyerEmail).toBe("jo@example.com");
     expect(booking!.ticketsPence).toBe(100_000);
     expect(booking!.donationPence).toBe(2_500);
-    expect(booking!.feeCoverPence).toBe(1_558);
-    expect(booking!.totalPence).toBe(104_058);
+    // Tickets only, at the 1.2% + 20p charity rate: ceil(100000*120/10000) + 20 = 1220.
+    // The £25 donation is deliberately outside the fee cover (TASK-317).
+    expect(booking!.feeCoverPence).toBe(1_220);
+    expect(booking!.totalPence).toBe(103_720);
     expect(booking!.giftAid).toBe(true);
     expect(booking!.stripeSessionId).toBe("cs_test_123");
   });

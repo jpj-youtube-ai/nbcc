@@ -2261,6 +2261,25 @@ Three paths, all verified in a browser against stubbed network and Stripe:
 | Stripe.js blocked or the mount is missing | Straight to the hosted redirect, never tries embedded, modal stays shut |
 | A real refusal (sold out, validation, sales closed) | Shows the actual reason and **does not** retry as a hosted redirect, which would fail again and read as a broken button |
 
+### The home-page banner clears the header with a MARGIN (TASK-322)
+
+`.ball-banner` clears the fixed nav with `margin-top: var(--nav-h)`, not padding. Padding is
+inside the box, so the banner's navy background painted **upward behind the header** — and the
+home page nav is transparent until you scroll, so the result was grey nav links and the red
+NBCC logo sitting on a dark band. Staff spotted it the first time they previewed.
+
+It clears the **nav only**. The partner ticker is also fixed (`top: var(--nav-h)`), but its
+height is already reserved page-wide by `body.has-ticker`, so adding it here too would
+double-count and leave a cream seam between the ticker and the banner.
+
+Both states are verified: with the ticker the banner starts at 118px, flush under it; without
+it, at 78px, flush under the nav. `ball-home-promo.test.ts` asserts the clearance is a margin
+and that the `.ball-banner` padding never mentions `--nav-h`.
+
+Worth knowing for any future full-width band added near the top of a page: the home nav is
+transparent at scroll 0, so a coloured background that starts above `--nav-h` will show through
+it.
+
 ### Previewing the launch-morning home page (TASK-320)
 
 Staff asked how to see what the front page will look like on launch morning without launching

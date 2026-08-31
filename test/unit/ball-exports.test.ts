@@ -21,6 +21,8 @@ const booking: ExportBooking = {
   quantity: 1,
   seats: 10,
   buyerName: "Jo Smith",
+  buyerFirstName: "Jo",
+  buyerSurname: "Smith",
   buyerEmail: "jo@example.com",
   ticketsPence: 100_000,
   donationPence: 2_500,
@@ -131,5 +133,22 @@ describe("bookingsCsv", () => {
 
   it("keeps the buyer's email, because this list stays inside NBCC", () => {
     expect(bookingsCsv([booking])).toContain("jo@example.com");
+  });
+});
+
+describe("bookingsCsv name columns (TASK-318)", () => {
+  it("keeps first name and surname in their own columns, so it sorts by surname", () => {
+    const lines = bookingsCsv([booking]).split("\r\n");
+    expect(lines[0]).toContain('"First name"');
+    expect(lines[0]).toContain('"Surname"');
+    expect(lines[1]).toContain('"Jo"');
+    expect(lines[1]).toContain('"Smith"');
+  });
+
+  // Bookings taken before the split have no first name or surname stored. A blank name is
+  // worse than a name in the wrong column - on the night, staff still have to find them.
+  it("falls back to the single name for a booking taken before the split", () => {
+    const old = { ...booking, buyerFirstName: null, buyerSurname: null };
+    expect(bookingsCsv([old]).split("\r\n")[1]).toContain('"Jo Smith"');
   });
 });

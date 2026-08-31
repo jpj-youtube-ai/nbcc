@@ -138,6 +138,8 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
       quantity: purchase.quantity,
       seats,
       buyerName: purchase.buyerName,
+      buyerFirstName: purchase.buyerFirstName,
+      buyerSurname: purchase.buyerSurname,
       buyerEmail: purchase.buyerEmail,
       ticketsPence: totals.ticketsPence,
       donationPence: totals.donationPence,

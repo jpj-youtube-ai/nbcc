@@ -142,3 +142,26 @@ describe("the fee the page quotes before JavaScript runs", () => {
     expect(ballHtml).toContain('id="ballFeeEach"');
   });
 });
+
+describe("both forms ask for a first name and a surname (TASK-318)", () => {
+  // One "Your name" box matched nothing else on the site and left no reliable way back out:
+  // splitting on the last space makes "Jo van der Berg" a Berg and "Dr Jo Smith" a Dr.
+  it("splits the name on the booking form", () => {
+    expect(ballHtml).toContain('name="buyerFirstName"');
+    expect(ballHtml).toContain('name="buyerSurname"');
+    expect(ballHtml).not.toContain('name="buyerName"');
+  });
+
+  it("splits the name on the waiting-list form too", () => {
+    expect(ballHtml).toContain('name="firstName"');
+    expect(ballHtml).toContain('name="surname"');
+  });
+
+  // autocomplete="name" on a half-name box makes a browser offer the WHOLE name for the
+  // first field, which is worse than no autofill at all.
+  it("tells the browser which half each box is", () => {
+    expect(ballHtml).toContain('autocomplete="given-name"');
+    expect(ballHtml).toContain('autocomplete="family-name"');
+    expect(ballHtml).not.toContain('autocomplete="name"');
+  });
+});

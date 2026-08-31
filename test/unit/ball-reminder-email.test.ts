@@ -108,3 +108,23 @@ describe("buildBallReminderEmail", () => {
     expect(mail.text).not.toContain("<");
   });
 });
+
+describe("how the reminder greets people (TASK-318)", () => {
+  it("uses the first name, the way a person writing would", () => {
+    const mail = buildBallReminderEmail({ ...booking, buyerFirstName: "Jo" }, guests, details);
+    expect(mail.html).toContain("Hello Jo —");
+    expect(mail.text).toContain("Hello Jo —");
+    expect(mail.html).not.toContain("Hello Jo Smith");
+  });
+
+  // Bookings taken before the split have no first name. Falling back to the whole name is
+  // right; splitting it here would reintroduce exactly the guess the two columns removed.
+  it("falls back to the whole name rather than guessing where it divides", () => {
+    const mail = buildBallReminderEmail(
+      { ...booking, buyerName: "Jo van der Berg", buyerFirstName: null },
+      guests,
+      details,
+    );
+    expect(mail.html).toContain("Hello Jo van der Berg —");
+  });
+});

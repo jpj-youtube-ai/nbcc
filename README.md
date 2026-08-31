@@ -2167,6 +2167,35 @@ Also settled in TASK-316, from the first round of staff review:
   fall speed. Still one canvas, still paused off-screen, still off under
   `prefers-reduced-motion`.
 
+### Names are stored in two halves (TASK-318)
+
+Both ball forms asked for "Your name" in one box, matching nothing else on the site — donate
+and contact have taken a first name and surname separately since TASK-226. One box costs two
+things: there is no reliable way back out (splitting on the last space makes "Jo van der Berg"
+a *Berg* and "Dr Jo Smith" a *Dr*, so any surname-sorted list is wrong for exactly the people
+it is most awkward to get wrong), and emails cannot greet anyone properly.
+
+`buyerFirstName` / `buyerSurname` on the booking, `firstName` / `surname` on the waiting list.
+**`buyerName` and `name` still exist and are still written** — derived in the Zod schema as
+`"First Surname"`, never accepted from the client. That keeps every existing reader (metadata,
+confirmation email, guest page, door list, thank-you page) on one field, and means nothing
+downstream has to guess where a name divides.
+
+Expand-only: `buyer_first_name` / `buyer_surname` and `first_name` / `surname` are **nullable**
+and the old columns are untouched, so bookings taken before this keep their single name with
+NULLs beside it. Both fallbacks are deliberate and tested — the bookings CSV puts the whole old
+name in the first-name column rather than leaving the row blank (staff still have to find that
+person on the night), and the reminder email greets with the whole name rather than splitting
+it, which would reintroduce the guess the columns removed.
+
+The guest list is **not** split. A table of ten would become twenty inputs, and those names go
+only to a door list and the kitchen — neither needs a reliable surname the way a payer's record
+does.
+
+The forms use `autocomplete="given-name"` / `"family-name"`. `autocomplete="name"` on a
+half-name box makes a browser offer the whole name for the first field, which is worse than no
+autofill at all.
+
 ### Changing the preview password
 
 Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`

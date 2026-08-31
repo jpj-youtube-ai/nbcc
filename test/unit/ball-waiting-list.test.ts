@@ -1,9 +1,22 @@
 import { describe, it, expect } from "vitest";
 import { waitingListSchema, checkboxValue } from "../../src/ball/waiting-list";
 
-const valid = { name: "Jo Smith", email: "jo@example.com" };
+const valid = { firstName: "Jo", surname: "Smith", email: "jo@example.com" };
 
 describe("waitingListSchema", () => {
+  // TASK-318: the row keeps a single `name` so the admin list and the export read one field,
+  // but it is DERIVED here rather than asked for — nothing downstream has to guess where a
+  // name divides.
+  it("assembles one name from the two halves", () => {
+    const r = waitingListSchema.safeParse(valid);
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.firstName).toBe("Jo");
+      expect(r.data.surname).toBe("Smith");
+      expect(r.data.name).toBe("Jo Smith");
+    }
+  });
+
   it("accepts a name and an email, defaulting to one place", () => {
     const r = waitingListSchema.safeParse(valid);
     expect(r.success).toBe(true);
@@ -20,7 +33,8 @@ describe("waitingListSchema", () => {
   });
 
   it("rejects a missing name or a bad email", () => {
-    expect(waitingListSchema.safeParse({ ...valid, name: "  " }).success).toBe(false);
+    expect(waitingListSchema.safeParse({ ...valid, firstName: "  " }).success).toBe(false);
+    expect(waitingListSchema.safeParse({ ...valid, surname: "  " }).success).toBe(false);
     expect(waitingListSchema.safeParse({ ...valid, email: "not-an-email" }).success).toBe(false);
   });
 

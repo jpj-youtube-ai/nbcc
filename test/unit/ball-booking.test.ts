@@ -8,7 +8,13 @@ import {
 } from "../../src/ball/booking";
 
 describe("purchaseSchema", () => {
-  const valid = { kind: "seat", quantity: 2, buyerName: "Jo Smith", buyerEmail: "jo@example.com" };
+  const valid = {
+    kind: "seat",
+    quantity: 2,
+    buyerFirstName: "Jo",
+    buyerSurname: "Smith",
+    buyerEmail: "jo@example.com",
+  };
 
   it("accepts a minimal seat purchase and defaults the extras off", () => {
     const p = purchaseSchema.parse(valid);
@@ -19,7 +25,15 @@ describe("purchaseSchema", () => {
   });
 
   it("trims the name and lowercases the email", () => {
-    const p = purchaseSchema.parse({ ...valid, buyerName: "  Jo Smith  ", buyerEmail: "JO@Example.COM" });
+    const p = purchaseSchema.parse({
+      ...valid,
+      buyerFirstName: "  Jo  ",
+      buyerSurname: "  Smith  ",
+      buyerEmail: "JO@Example.COM",
+    });
+    expect(p.buyerFirstName).toBe("Jo");
+    expect(p.buyerSurname).toBe("Smith");
+    // Derived, never sent by the client, so it is assembled identically every time.
     expect(p.buyerName).toBe("Jo Smith");
     expect(p.buyerEmail).toBe("jo@example.com");
   });
@@ -29,7 +43,8 @@ describe("purchaseSchema", () => {
   });
 
   it("rejects an empty name", () => {
-    expect(() => purchaseSchema.parse({ ...valid, buyerName: "   " })).toThrow();
+    expect(() => purchaseSchema.parse({ ...valid, buyerFirstName: "   " })).toThrow();
+    expect(() => purchaseSchema.parse({ ...valid, buyerSurname: "   " })).toThrow();
   });
 
   it("enforces the per-order seat cap", () => {
@@ -99,7 +114,8 @@ describe("ballMetadata / bookingFromSession round trip", () => {
   const purchase = purchaseSchema.parse({
     kind: "table",
     quantity: 1,
-    buyerName: "Jo Smith",
+    buyerFirstName: "Jo",
+    buyerSurname: "Smith",
     buyerEmail: "jo@example.com",
     donationPence: 2_500,
     coverFee: true,

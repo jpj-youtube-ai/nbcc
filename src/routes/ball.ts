@@ -8,6 +8,7 @@ import { canFulfil, seatsFor } from "../ball/capacity";
 import { makeReference, purchaseSchema } from "../ball/booking";
 import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
+import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import {
   claimReservation,
   createPendingBooking,
@@ -30,7 +31,7 @@ import { renderBallLockPage } from "../ball/lock-page";
 import { guestSubmissionSchema, makeGuestToken } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
 import { renderBallThankYou } from "../ball/thank-you-page";
-import { getBookingByGuestToken, getBookingBySessionId, getPreviewPasswordHash, joinWaitingList, saveGuests } from "../db/ball";
+import { getBookingByGuestToken, getBookingBySessionId, joinWaitingList, saveGuests } from "../db/ball";
 import { verifyPassword } from "../admin/password";
 import { checkboxValue, waitingListSchema } from "../ball/waiting-list";
 
@@ -182,16 +183,6 @@ export const ballCheckoutUsesLiveStripe = (): boolean => stripeConfigured;
 
 const SITE_ROOT = resolve(__dirname, "../..");
 
-// The gate's secret. Once staff set a password in the admin area we use its hash — for BOTH
-// checking the password and signing the preview cookie. Signing with the hash means changing the
-// password immediately invalidates every cookie issued under the old one, which is exactly what
-// someone changing a shared password expects: it should lock out whoever they changed it because
-// of. Falls back to the config value until a password has been set, so nothing breaks in between.
-async function previewSecret(): Promise<{ hash: string | null; signingKey: string }> {
-  const hash = await getPreviewPasswordHash();
-  return { hash, signingKey: hash ?? config.BALL_PREVIEW_PASSWORD };
-}
-
 async function previewPasswordAccepted(attempt: string): Promise<string | null> {
   const { hash, signingKey } = await previewSecret();
   const ok = hash ? await verifyPassword(attempt, hash) : passwordMatches(config.BALL_PREVIEW_PASSWORD, attempt);
@@ -204,9 +195,9 @@ async function canView(req: express.Request): Promise<{ allowed: boolean; gateOp
   const settings = await getSettings();
   const gateOpen = isGateOpen(settings, new Date());
   if (gateOpen) return { allowed: true, gateOpen };
-  const cookie = readCookie(req.headers.cookie, GATE_COOKIE);
-  const { signingKey } = await previewSecret();
-  const allowed = cookie ? verifyGateToken(cookie, signingKey, new Date()) : false;
+  // Shared with the home page's promo preview (TASK-320), so "may this person see the ball"
+  // has exactly one implementation.
+  const allowed = await holdsPreviewCookie(req.headers.cookie);
   return { allowed, gateOpen };
 }
 

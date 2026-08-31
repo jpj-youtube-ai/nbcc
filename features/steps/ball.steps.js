@@ -305,7 +305,21 @@ async function getBall(ctx, path) {
   const res = await fetch(`${BASE_URL}${path}`, { headers, redirect: "manual" });
   ctx.ballPageStatus = res.status;
   ctx.ballPageBody = await res.text();
+  ctx.ballPageHeaders = res.headers;
 }
+
+// A cookie of the right NAME carrying a value we never signed. The preview must turn on the
+// promotion for a real cookie only, not for the mere presence of one.
+When("I request {string} carrying a forged preview cookie", async function (path) {
+  this.ballCookie = "nbcc_ball_preview=not-a-token-we-issued";
+  await getBall(this, path);
+});
+
+Then("the ball page should not be cached by anything shared", function () {
+  const cacheControl = String(this.ballPageHeaders.get("cache-control") || "");
+  assert.match(cacheControl, /private/, `expected a private Cache-Control, got "${cacheControl}"`);
+  assert.match(cacheControl, /no-store/, `expected no-store, got "${cacheControl}"`);
+});
 
 When("I request the ball page", async function () {
   await getBall(this, "/ball");

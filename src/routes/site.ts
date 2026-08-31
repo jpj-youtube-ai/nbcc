@@ -130,21 +130,38 @@ export function createSiteRouter(siteRoot: string): Router {
   // parseRedirects tests, and any failure falls back to the plain home page: a broken ball
   // promo must never take the front page down with it.
   const homeFile = join(siteRoot, "index.html");
-  router.get("/", async (_req, res) => {
+  router.get("/", async (req, res) => {
     try {
-      const [{ getSettings }, { isGateOpen }, { renderHomePromo }] = await Promise.all([
-        import("../db/ball"),
-        import("../ball/gate"),
-        import("../ball/home-promo"),
-      ]);
+      const [{ getSettings }, { isGateOpen }, { renderHomePromo }, { holdsPreviewCookie }] =
+        await Promise.all([
+          import("../db/ball"),
+          import("../ball/gate"),
+          import("../ball/home-promo"),
+          import("../ball/preview-access"),
+        ]);
       const settings = await getSettings();
       const gateOpen = isGateOpen(settings, new Date());
-      if (!gateOpen) {
+
+      // TASK-320: staff asked how to see the launch-morning home page before launching it.
+      // Anyone carrying a valid preview cookie — which you only get by typing the ball
+      // password — sees the promotion band while the gate is still shut. Everyone else gets
+      // the file byte for byte, so the ball is absent from the page SOURCE rather than
+      // hidden in it.
+      const preview = gateOpen ? false : await holdsPreviewCookie(req.headers.cookie);
+      if (!gateOpen && !preview) {
         res.sendFile(homeFile);
         return;
       }
+
+      if (preview) {
+        // Never let a shared cache hand this response to the public. There is no CDN in
+        // front of the ALB today, but the whole point of the gate is that this page must
+        // not reach anyone who has not typed the password.
+        res.setHeader("Cache-Control", "private, no-store");
+        res.setHeader("Vary", "Cookie");
+      }
       const template = readFileSync(homeFile, "utf8");
-      res.type("html").send(renderHomePromo(template, { gateOpen }));
+      res.type("html").send(renderHomePromo(template, { gateOpen: true }));
     } catch (err) {
       console.error("home ball promo failed:", err instanceof Error ? err.message : err);
       res.sendFile(homeFile);

@@ -364,6 +364,20 @@ Then("the ball page status should be {int}", function (expected) {
   assert.strictEqual(this.ballPageStatus, expected);
 });
 
+// TASK-326: the nav item must appear on EVERY page at launch, and nowhere before it. Asserted
+// on the nav list, not the whole page: the footer carries an Explore list with the same links,
+// and a page that put the item there would otherwise look like a pass.
+Then("the nav should offer the Festive Ball", function () {
+  const nav = (this.ballPageBody.match(/<ul[^>]*class="nav-links"[\s\S]*?<\/ul>/i) || [""])[0];
+  assert.ok(nav.length > 0, "no nav list on the page");
+  assert.ok(nav.includes('href="/ball"'), `nav did not offer the ball: ${nav.slice(0, 300)}`);
+});
+
+Then("the nav should not mention the Festive Ball", function () {
+  const nav = (this.ballPageBody.match(/<ul[^>]*class="nav-links"[\s\S]*?<\/ul>/i) || [""])[0];
+  assert.ok(!nav.includes('href="/ball"'), "the nav offered an unpublished event");
+});
+
 Then("the ball page should ask for a password", function () {
   assert.match(this.ballPageBody, /name="password"/);
 });

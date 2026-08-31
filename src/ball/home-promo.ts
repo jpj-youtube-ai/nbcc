@@ -11,6 +11,8 @@
 // source for anyone to find before launch. That is what lets the whole thing be built, merged
 // and deployed days early and switched on with one toggle.
 
+import { addBallNavLink } from "./nav-link";
+
 export interface HomePromoInput {
   gateOpen: boolean;
 }
@@ -82,7 +84,6 @@ const FEATURE = `      <section class="ball-home-feature" aria-labelledby="ball-
       </section>
 `;
 
-const NAV_ANCHOR = '<li><a href="/supporters">Supporters</a></li>';
 const MAIN_ANCHOR = '<main class="site-main home" id="main" tabindex="-1">';
 const AFTER_HERO_ANCHOR = '<section class="section tint" aria-label="What we do">';
 
@@ -93,12 +94,10 @@ export function renderHomePromo(template: string, input: HomePromoInput): string
 
   let html = template;
 
-  // The nav link goes in at launch and comes out after 7 November — people come back to buy
-  // later and will not remember the URL.
-  html = html.replace(
-    NAV_ANCHOR,
-    NAV_ANCHOR + '\n            <li><a href="/ball">Festive Ball</a></li>',
-  );
+  // The nav link goes in at launch and comes out after 7 November: people come back to buy
+  // later and will not remember the URL. Shared with every other page (TASK-326) so the nav
+  // says the same thing wherever you are.
+  html = addBallNavLink(html);
 
   html = html.replace("</head>", PROMO_STYLES + "\n  </head>");
   html = html.replace(MAIN_ANCHOR, MAIN_ANCHOR + "\n" + BANNER);

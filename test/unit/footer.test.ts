@@ -26,6 +26,8 @@ const PAGES = [
   "privacy.html",
   "gift-aid.html",
   "thank-you.html",
+  "ball.html",
+  "ball-terms.html",
 ];
 
 // Pages whose footer is byte-identical to index.html's (full brand paragraph,
@@ -33,7 +35,10 @@ const PAGES = [
 // (portal/privacy/gift-aid/thank-you) ship a legitimately shorter footer (no
 // handle line, only two "Ways to give" items) and are intentionally excluded
 // from the byte-identity group below.
-const IDENTICAL_FOOTER_GROUP = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html", "my-story.html"];
+// TASK-326: ball.html and ball-terms.html joined this group. They had carried a "Festive
+// Ball" column in place of "Ways to give"; staff asked for one footer everywhere, and
+// nothing was lost since those links all appear in the page body already.
+const IDENTICAL_FOOTER_GROUP = ["index.html", "about.html", "donate.html", "contact.html", "supporters.html", "my-story.html", "ball.html", "ball-terms.html"];
 
 describe.each(PAGES)("%s footer", (file) => {
   const footer = footerOf(read(file));

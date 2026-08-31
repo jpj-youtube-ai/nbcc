@@ -66,6 +66,33 @@ Feature: The Festive Ball password gate (TASK-313)
     And the ball page should not contain "Festive Ball"
     And the ball page should not contain "ball-banner"
 
+  Scenario: while the gate is shut, no page anywhere offers the ball
+    Given the ball gate is closed
+    When I request "/"
+    Then the nav should not mention the Festive Ball
+    When I request "/about-us"
+    Then the nav should not mention the Festive Ball
+    When I request "/supporters"
+    Then the nav should not mention the Festive Ball
+    When I request "/donate"
+    Then the nav should not mention the Festive Ball
+
+  Scenario: opening the gate puts the ball in the nav on EVERY page, not just the home page
+    # The nav used to differ depending on which page you were on, because the link was added
+    # only to the home page. supporters.html is the one that matters most here: its own nav
+    # item carries class="active", so a naive match finds the FOOTER's copy instead.
+    Given the ball gate is open
+    When I request "/"
+    Then the nav should offer the Festive Ball
+    When I request "/about-us"
+    Then the nav should offer the Festive Ball
+    When I request "/supporters"
+    Then the nav should offer the Festive Ball
+    When I request "/donate"
+    Then the nav should offer the Festive Ball
+    When I request "/contact"
+    Then the nav should offer the Festive Ball
+
   Scenario: staff preview the launch-morning home page without publishing it
     # "How do we see what the home page looks like before it goes live?" Anyone holding a
     # preview cookie -- which you only get by typing the ball password -- sees the promotion

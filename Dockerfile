@@ -42,6 +42,14 @@ COPY scripts/bootstrap-contact-db.mjs ./scripts/bootstrap-contact-db.mjs
 # guards this list against the served files so a new page can't ship a route with no file.
 COPY index.html about.html donate.html contact.html supporters.html thank-you.html gift-aid.html portal.html privacy.html admin.html my-story.html hub.html set-password.html business-thank-you.html ball.html ball-terms.html _redirects ./
 COPY assets ./assets
+# TASK-332: stamp the commit into the image so the running service can say WHICH BUILD it is.
+#
+# Deliberately the LAST thing before the runtime declarations: an ARG that changes on every
+# commit invalidates every layer below it, so it sits after all the COPYs to leave the build
+# cache intact.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 EXPOSE 3000
 USER node
 CMD ["node", "dist/index.js"]

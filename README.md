@@ -2186,6 +2186,37 @@ wordmark next to the same words set in our own face reads as a mistake. It sits 
 lifting on hover — present and legible, never louder than the ball's own lockup a few sections
 above. It is a guest's mark on NBCC's page.
 
+### A deploy proves what it shipped (TASK-332)
+
+`/health` reports `version`: the commit the running image was built from, stamped in by the
+Dockerfile and read through the config schema. The deploy's smoke test asserts that value
+matches the commit it just built.
+
+**Why this exists.** On 31 August three consecutive production deploys reported success while
+shipping nothing. A partly-applied infra change had removed two required settings from the task
+definition, so every new container failed its config check and died; ECS's circuit breaker
+rolled back to the previous containers; `aws ecs wait services-stable` then succeeded, because
+the service genuinely *was* stable — on the old revision; and the smoke test confirmed
+something was answering `/health`, which the old build did perfectly well. Two days of merged
+work sat undeployed with every signal green.
+
+The old smoke test asked "is anything alive at this URL?". That is not the question a deploy
+needs answered. **A gate that cannot tell "shipped" from "silently reverted" is not a gate.**
+
+Notes on the shape:
+
+- The `ARG`/`ENV` sit at the very END of the Dockerfile. A build arg that changes every commit
+  invalidates every layer beneath it, so putting it after the COPYs leaves the cache intact.
+- `GIT_SHA` is **defaulted**, not required. Local dev and tests have no build stamp, and this
+  value exists to make a deploy honest, not to become a new way for the app to fail to boot.
+- `smoke.sh` keeps its liveness-only mode when called with one argument, which is how `pr.yml`
+  uses it against localhost.
+- The failure message says what a failure most likely means — alive but reporting the wrong
+  commit is a rollback — and points at the ECS service events.
+
+**Expect red deploys until an underlying rollout problem is fixed.** That is the intent: a red
+deploy that tells the truth is worth more than a green one that does not.
+
 ### Agreeing to the ticket terms (TASK-331)
 
 Tickets are **non-refundable**, on purchases up to £1,000 a table. Under the Consumer Rights

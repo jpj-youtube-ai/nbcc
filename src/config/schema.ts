@@ -65,6 +65,13 @@ export const configSchema = z.object({
   // is named instead, so it is optional and never blocks boot.
   STRIPE_DONATION_PRODUCT: z.string().optional(),
 
+  // The commit this image was built from, stamped in by the Dockerfile (TASK-332). Reported
+  // by /health so a deploy can prove the running service is the build it just pushed.
+  // Defaulted rather than required: local dev and tests have no build stamp, and a missing
+  // one must never stop the app booting — this value exists to make a deploy honest, not to
+  // become a new way for it to fail.
+  GIT_SHA: z.string().default("unknown"),
+
   // Contact form forwarding (REQ-030). The endpoint URL of the form service
   // (Formspree-style) or NBCC inbox the /api/contact handler POSTs enquiries to.
   // It is the credential that authorises submissions, so it is held as a secret

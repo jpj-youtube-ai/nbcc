@@ -2219,9 +2219,21 @@ that section, which is what a headline booking should have, and it echoes the he
 sponsor band rather than introducing a new colour. The venue's short form drops "Rugby Park" — it stays in the full address in the
 emails, terms and getting-there copy, where somebody actually needs it to find the place.
 
-**Motion.** The hero entrance runs at 1.15s (lockup 1.5s) with a wider stagger, and this page's
-scroll reveals are slowed to 1.05s. A quick fade reads as an interface responding; a long one
-reads as a curtain going up. The snow is 180 flakes on a desktop (95 on a phone) and each
+**Motion.** The hero entrance runs at 1.7s (lockup 2.2s) and this page's scroll reveals fade
+over 1.45s. A quick fade reads as an interface responding; a long one reads as a curtain going
+up.
+
+Two things about how that slowness is spent (TASK-329):
+
+- **Long durations, short delays.** These are not the same lever and only one is free. `both`
+  fill holds an element invisible until its delay elapses, so a wide stagger was keeping "Book
+  tickets" off the screen for over a second while somebody arriving from the printed advert's
+  QR code waited on a decoration. The delays were therefore *shortened* (nothing waits more
+  than 0.62s) while the fades got longer. Slow to watch, never slow to use.
+- **The reveals have a lower ceiling than the hero, and it is a usability one.** The hero plays
+  once while somebody is still arriving; a reveal fires every time they scroll to something
+  they have decided to read. Their opacity runs 1.45s but the transform finishes in 1.05s, so
+  the text stops moving well before it stops brightening, which is much easier to read during. The snow is 180 flakes on a desktop (95 on a phone) and each
 flake's size, speed and brightness are derived from **one** depth value, so near flakes are
 big, fast and bright and far ones small, slow and faint. That separation as they fall is the
 parallax the eye reads as three dimensions, and it is what makes it look like snow rather than

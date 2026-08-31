@@ -55,7 +55,7 @@ const PROMO_STYLES = `<style>
 const BANNER = `      <a class="ball-banner" href="/ball">
         <span class="wrap">
           <b>A Night to Remember</b>
-          <span>Festive Ball, Saturday 7 November 2026, The Park Hotel, Kilmarnock</span>
+          <span>Festive Ball, Saturday 7<sup class="ord">th</sup> November 2026, The Park Hotel, Kilmarnock</span>
           <em>Tickets now on sale &rarr;</em>
         </span>
       </a>
@@ -70,7 +70,7 @@ const FEATURE = `      <section class="ball-home-feature" aria-labelledby="ball-
             <span class="eyebrow">An evening in aid of NBCC</span>
             <h2 id="ball-home-heading">Join us for A Night to Remember.</h2>
             <p>
-              Saturday 7 November 2026 at The Park Hotel, Kilmarnock. Dinner, live music and a
+              Saturday 7<sup class="ord">th</sup> November 2026 at The Park Hotel, Kilmarnock. Dinner, live music and a
               charity auction, hosted by Michelle McManus. Tickets are &pound;100, tables of ten
               &pound;1,000, and because <a href="https://thedesignerrooms.com/" target="_blank"
               rel="noopener">The Designer Rooms</a> is covering the cost of the evening, your

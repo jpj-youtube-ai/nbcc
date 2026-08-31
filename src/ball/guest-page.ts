@@ -123,7 +123,7 @@ export function renderGuestPage(input: GuestPageInput): string {
   <section class="section" aria-label="Your guests">
     <div class="wrap">
       ${notice}
-      <p class="ball-progress">${progress} <b>You don't have to do it all at once</b> — save what you know and come back later.</p>
+      <p class="ball-progress">${progress} <b>You don't have to do it all at once.</b> Save what you know and come back later.</p>
 
       <form method="post" action="/ball/guests/${escapeHtml(token)}" class="ball-form ball-guest-form">
         <label class="ball-field">

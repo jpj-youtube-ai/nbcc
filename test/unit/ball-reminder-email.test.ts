@@ -29,7 +29,7 @@ describe("buildBallReminderEmail", () => {
 
   it("carries the practical details a guest needs on the day", () => {
     const mail = buildBallReminderEmail(booking, guests, details);
-    for (const d of ["7 November 2026", "The Park Hotel", "7pm for 7.30pm", "Dress to impress", "Over 18"]) {
+    for (const d of ["7th November 2026", "The Park Hotel", "7pm for 7.30pm", "Dress to impress", "Over 18"]) {
       expect(mail.html).toContain(d);
     }
   });
@@ -112,8 +112,8 @@ describe("buildBallReminderEmail", () => {
 describe("how the reminder greets people (TASK-318)", () => {
   it("uses the first name, the way a person writing would", () => {
     const mail = buildBallReminderEmail({ ...booking, buyerFirstName: "Jo" }, guests, details);
-    expect(mail.html).toContain("Hello Jo —");
-    expect(mail.text).toContain("Hello Jo —");
+    expect(mail.html).toContain("Hello Jo.");
+    expect(mail.text).toContain("Hello Jo.");
     expect(mail.html).not.toContain("Hello Jo Smith");
   });
 
@@ -125,6 +125,6 @@ describe("how the reminder greets people (TASK-318)", () => {
       guests,
       details,
     );
-    expect(mail.html).toContain("Hello Jo van der Berg —");
+    expect(mail.html).toContain("Hello Jo van der Berg.");
   });
 });

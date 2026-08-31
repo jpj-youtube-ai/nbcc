@@ -2159,6 +2159,43 @@ weaken that guard. The same file is reused (lazily) in the home-page promo band 
 `src/ball/home-promo.ts`, where the surrounding band is already the same navy the artwork was
 cut out of.
 
+### Ball copy house rules (TASK-325)
+
+Two rules the rest of the site already followed and the ball surfaces did not. Both are
+enforced by `test/unit/ball-copy-standards.test.ts`, which asserts on **rendered output** and
+on HTML with its comments stripped: a comment explaining a rule is not a breach of it, and
+testing raw source would fail on its own documentation.
+
+- **Impact is never stated as a fact.** Code of Fundraising Practice: "could help provide...",
+  never "£X provides Y". Every amount-to-outcome line on the site already read this way
+  (`donate.html`, the live impact map in `main.js`, the business emails). The ball page said
+  *"A £100 ticket **helps** NBCC support around two more people"* — the only violation on the
+  site, and on a **ticket**, where the buyer also receives a dinner, which makes a stated
+  impact harder still to stand behind. Now "could help".
+- **No long dashes in anything a reader sees.** NBCC house style, already applied to the
+  business emails. 22 of them across the page, terms, thank-you page, both emails, the guest
+  page and the home banner were rewritten rather than substituted — most became a full stop and
+  a new sentence. Hyphens inside words ("line-up", "step-free") are untouched and deliberately
+  not caught.
+
+Also in TASK-325: the date carries a raised ordinal (`7<sup class="ord">th</sup> November`) on
+web pages, and a flat "7th November" in emails, meta tags and the Stripe line item, none of
+which can carry markup. `.ord` is sized and lifted by hand because the browser default `<sup>`
+pushes the line box open, which shows as an uneven gap above any line containing a date.
+
+Michelle McManus has her own credit (`.ball-host`) rather than a clause inside a paragraph
+about the line-up: a named host is a reason to buy a ticket, and set as running text she read
+as a detail. The venue's short form drops "Rugby Park" — it stays in the full address in the
+emails, terms and getting-there copy, where somebody actually needs it to find the place.
+
+**Motion.** The hero entrance runs at 1.15s (lockup 1.5s) with a wider stagger, and this page's
+scroll reveals are slowed to 1.05s. A quick fade reads as an interface responding; a long one
+reads as a curtain going up. The snow is 180 flakes on a desktop (95 on a phone) and each
+flake's size, speed and brightness are derived from **one** depth value, so near flakes are
+big, fast and bright and far ones small, slow and faint. That separation as they fall is the
+parallax the eye reads as three dimensions, and it is what makes it look like snow rather than
+dots moving.
+
 ### What the ball page may and may not say (TASK-316)
 
 Three claims on `/ball` are not ours to reword freely, and each is pinned by

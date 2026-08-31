@@ -71,7 +71,9 @@ describe("renderHomePromo", () => {
 
   it("states the price and the date, because that is what a scanner wants first", () => {
     const html = renderHomePromo(HOME, { gateOpen: true });
-    expect(html).toContain("7 November 2026");
+    // The date carries a raised ordinal in HTML (TASK-325); assert the parts either side.
+    expect(html).toContain("Saturday 7");
+    expect(html).toContain("November 2026");
     expect(html).toContain("&pound;100");
   });
 

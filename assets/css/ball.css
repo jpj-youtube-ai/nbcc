@@ -197,8 +197,46 @@
   color: var(--on-night-soft);
 }
 .ball-organiser b {
-  color: var(--on-night);
+  /* Gold, not a brighter white. The two-step lift from --on-night-soft to --on-night looks
+     like a colour that has gone wrong rather than a phrase being stressed; the page's own
+     accent reads as deliberate, and it is the same gold used for every other emphasis here. */
+  color: var(--gold);
   font-weight: 600;
+}
+
+/* Raised ordinal on the date. Sized and lifted by hand rather than left to the browser's
+   default <sup>, which is set too high and too large and pushes the line box open — visible
+   as an uneven gap above any line containing a date. */
+.ord {
+  font-size: 0.62em;
+  vertical-align: baseline;
+  position: relative;
+  top: -0.42em;
+  line-height: 0;
+  letter-spacing: 0.02em;
+}
+
+/* The host, given her own credit rather than a clause inside a paragraph about the line-up.
+   A named host is a reason to buy a ticket; set as running text she reads as a detail. Small
+   letterspaced label above, name large in the display face, the way a bill is set. */
+.ball-host {
+  margin: 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ball-host-label {
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+}
+.ball-host-name {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 600;
+  font-size: clamp(1.5rem, 3.4vw, 2.1rem);
+  line-height: 1.1;
+  color: var(--maroon);
 }
 
 /* ---------- the night ---------- */
@@ -760,18 +798,30 @@
 /* The lockup gets its own entrance — a touch of scale, so the artwork settles into
    place rather than sliding like body copy. It is the thing people came for. */
 @keyframes ball-lockup-in {
-  from { opacity: 0; transform: scale(0.965); }
+  from { opacity: 0; transform: scale(0.94); }
   to   { opacity: 1; transform: none; }
 }
 
 .ball-hero .wrap > * {
-  animation: ball-rise 0.7s var(--ease-quart) both;
+  /* Slower than a normal UI transition on purpose. Quick fades read as an interface
+     responding; a long one reads as a curtain going up, which is the feeling this page is
+     selling. The stagger is widened to match, so the hero assembles as one considered
+     movement instead of five quick ones overlapping. */
+  animation: ball-rise 1.15s var(--ease-quart) both;
 }
-.ball-hero .wrap > :nth-child(1) { animation-delay: 0.05s; }
-.ball-hero .wrap > :nth-child(2) { animation: ball-lockup-in 0.9s var(--ease-expo) 0.12s both; }
-.ball-hero .wrap > :nth-child(3) { animation-delay: 0.42s; }
-.ball-hero .wrap > :nth-child(4) { animation-delay: 0.54s; }
-.ball-hero .wrap > :nth-child(5) { animation-delay: 0.64s; }
+.ball-hero .wrap > :nth-child(1) { animation-delay: 0.08s; }
+.ball-hero .wrap > :nth-child(2) { animation: ball-lockup-in 1.5s var(--ease-expo) 0.2s both; }
+.ball-hero .wrap > :nth-child(3) { animation-delay: 0.72s; }
+.ball-hero .wrap > :nth-child(4) { animation-delay: 0.92s; }
+.ball-hero .wrap > :nth-child(5) { animation-delay: 1.08s; }
+
+/* The scroll reveals are the shared site transition (.reveal, 0.65s). On this page they are
+   slowed to sit with the hero's longer entrance, so the whole page moves at one pace. */
+.ball-page .reveal {
+  transition:
+    opacity 1.05s var(--ease-quart) var(--d, 0ms),
+    transform 1.05s var(--ease-quart) var(--d, 0ms);
+}
 
 /* Snow sits behind the hero content and never intercepts a click. */
 .ball-snow {

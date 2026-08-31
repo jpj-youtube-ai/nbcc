@@ -42,17 +42,17 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
   const detail = booking
     ? `<dl class="ball-facts ball-facts-light">
         <div><dt>Booking</dt><dd><b>${escapeHtml(booking.reference)}</b><span>Keep this for your records</span></dd></div>
-        <div><dt>You booked</dt><dd><b>${describe(booking)}</b><span>Saturday 7 November 2026</span></dd></div>
+        <div><dt>You booked</dt><dd><b>${describe(booking)}</b><span>Saturday 7<sup class="ord">th</sup> November 2026</span></dd></div>
         <div><dt>Paid</dt><dd><b>${money(booking.totalPence)}</b><span>Receipt on its way</span></dd></div>
       </dl>
       <p>We've emailed your confirmation to <b>${escapeHtml(booking.buyerEmail)}</b>. If it hasn't
-      arrived in a few minutes, check your junk folder before booking again &mdash; and email us
+      arrived in a few minutes, check your junk folder before booking again, and email us
       either way, so we can make sure it reaches you.</p>`
     : // The webhook can lag the redirect by a second or two. Say the true thing rather than
       // inventing detail we cannot see yet.
       `<p>Your payment went through. Your confirmation email is on its way and will carry your
       booking reference. If it hasn't arrived within ten minutes, email
-      <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> before trying again &mdash; we'll
+      <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> before trying again. We'll
       find your booking.</p>`;
 
   const guestPrompt =
@@ -71,7 +71,7 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Thank you &mdash; your Festive Ball booking | Night Before Christmas Campaign</title>
+<title>Thank you for your Festive Ball booking | Night Before Christmas Campaign</title>
 <link rel="stylesheet" href="/assets/css/styles.css" />
 <link rel="stylesheet" href="/assets/css/ball.css" />
 </head>
@@ -89,7 +89,7 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
     <div class="wrap">
       <span class="eyebrow">A Night to Remember</span>
       <h1 id="ty-heading">You're coming to the Festive Ball</h1>
-      <p class="lede">Thank you &mdash; and thank you for supporting NBCC.</p>
+      <p class="lede">Thank you, and thank you for supporting NBCC.</p>
     </div>
   </section>
 
@@ -100,8 +100,8 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
 
       <h2>On the night</h2>
       <p>
-        Saturday 7 November 2026 at The Park Hotel, Rugby Park, Kilmarnock. Dress to impress,
-        over 18s only. Give your name at the welcome desk &mdash; there's no ticket to print.
+        Saturday 7<sup class="ord">th</sup> November 2026 at The Park Hotel, Rugby Park, Kilmarnock. Dress to impress,
+        over 18s only. Give your name at the welcome desk. There's no ticket to print.
         We'll email you the timings and menu once the venue confirms them.
       </p>
 

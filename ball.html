@@ -9,7 +9,7 @@
     <title>A Night to Remember, Festive Ball 2026 | Night Before Christmas Campaign</title>
     <meta
       name="description"
-      content="A Night to Remember, Festive Ball 2026. Saturday 7 November at The Park Hotel, Kilmarnock. Tickets £100, tables of ten £1,000. Organised by The Designer Rooms in aid of NBCC, a Scottish charity (SC047995)."
+      content="A Night to Remember, Festive Ball 2026. Saturday 7 November at The Park Hotel, Kilmarnock. Tickets £100, tables of ten £1,000. Organised and sponsored by The Designer Rooms in aid of NBCC, a Scottish charity (SC047995)."
     />
     <meta name="robots" content="noindex, nofollow" data-region="robots" />
     <link rel="canonical" href="https://nbcc.scot/ball" />
@@ -59,7 +59,7 @@
             <li><a href="/supporters">Supporters</a></li>
           </ul>
         </nav>
-        <a class="nav-cta" href="#tickets">Tickets</a>
+        <a class="nav-cta" href="/donate">Donate</a>
         <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks"><span></span><span></span><span></span></button>
       </div>
     </header>
@@ -103,8 +103,8 @@
           </div>
 
           <p class="ball-organiser">
-            Organised by <b>The Designer Rooms</b> in aid of the Night Before Christmas Campaign.
-            The Designer Rooms is covering the full cost of the evening, so
+            Organised and sponsored by <b><a href="https://thedesignerrooms.com/" target="_blank" rel="noopener">The Designer Rooms</a></b> in aid of the
+            Night Before Christmas Campaign. They are covering the full cost of the evening, so
             <b>your ticket funds NBCC's work, not the party</b>.
           </p>
         </div>
@@ -132,10 +132,13 @@
 
               <h3>Who's playing</h3>
               <p>
-                Hosted by <b>Michelle McManus</b>, with live music from <b>Clanadonia</b>,
-                <b>The MacDonald Brothers</b> and <b>The Kilted DJ</b>.
+                Hosted by <b>Michelle McManus</b>, with live music and entertainment through the
+                evening.
               </p>
-              <p data-region="lineup" class="ball-tbc">Special guests still to be announced.</p>
+              <p data-region="lineup" class="ball-tbc">
+                The rest of the line-up is being announced shortly. We'll email everyone who has
+                booked as each act is confirmed.
+              </p>
             </div>
 
             <ul class="ball-details reveal">
@@ -182,6 +185,7 @@
               <label class="ball-field">
                 <span>How many?</span>
                 <select name="quantity" id="ballQuantity"></select>
+                <small id="ballQuantityNote"></small>
               </label>
               <p class="ball-total" aria-live="polite">Total <b id="ballTotal">&pound;100</b></p>
             </div>
@@ -233,7 +237,8 @@
 
               <label class="ball-check">
                 <input type="checkbox" name="newsletterOptIn" />
-                <span>Keep me posted about NBCC's work through the year. You can unsubscribe any time.</span>
+                <span>Email me the <b>NBCC newsletter</b> &mdash; a few updates a year on what
+                  your support makes possible. Unsubscribe any time.</span>
               </label>
             </div>
 
@@ -246,10 +251,29 @@
             <p class="ball-smallprint">
               Tickets are non-refundable but transferable to another guest, and fully refunded if
               the event is cancelled and not rescheduled. See the
-              <a href="/ball/terms">ticket terms</a>. Buying five or more tables, or need an
-              invoice? Email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a>.
+              <a href="/ball/terms">ticket terms</a>.
             </p>
           </form>
+
+          <!-- The two things this form CANNOT do, said plainly and in their own card. Both used
+               to be one clause at the tail of the smallprint, which is where reading stops — and
+               a company taking five tables or needing an invoice is among the largest orders NBCC
+               can take. Placed straight after the form so it is found at the moment the quantity
+               dropdown runs out, not after someone has given up. -->
+          <aside class="ball-invoice reveal" aria-labelledby="ball-invoice-heading">
+            <h3 id="ball-invoice-heading">Booking bigger, or paying by invoice?</h3>
+            <p>
+              This form takes up to <b>four tables</b> or <b>nine individual tickets</b> at a time,
+              paid by card. For a larger booking, or if your company needs an <b>invoice</b>
+              instead of paying by card, talk to us directly &mdash; we'll raise the invoice and
+              hold your tables while it is settled.
+            </p>
+            <p class="ball-invoice-contact">
+              <a href="mailto:events@nbcc.scot">events@nbcc.scot</a>
+              <span aria-hidden="true">&middot;</span>
+              <a href="tel:+441292811015">01292 811 015</a>
+            </p>
+          </aside>
 
           <!-- Shown only when the room is full (ball.js swaps them). Kept in the markup rather
                than built in script so it still exists for anyone without JavaScript. -->
@@ -290,7 +314,8 @@
 
             <label class="ball-check">
               <input type="checkbox" name="newsletterOptIn" />
-              <span>Keep me posted about NBCC's work through the year. You can unsubscribe any time.</span>
+              <span>Email me the <b>NBCC newsletter</b> &mdash; a few updates a year on what
+                  your support makes possible. Unsubscribe any time.</span>
             </label>
 
             <p class="ball-error" id="ballWaitingError" role="alert" hidden></p>
@@ -420,8 +445,8 @@
             <h2 id="ball-cta-heading">Come and make it a night to remember.</h2>
             <p>
               Saturday 7 November 2026 at The Park Hotel, Kilmarnock. &pound;100 a ticket,
-              &pound;1,000 for a table of ten. The Designer Rooms is covering the cost of the
-              night, so your ticket funds NBCC's work.
+              &pound;1,000 for a table of ten. <a href="https://thedesignerrooms.com/" target="_blank" rel="noopener">The Designer Rooms</a> is covering the cost
+              of the night, so your ticket funds NBCC's work.
             </p>
             <a class="btn btn-primary" href="#tickets">Book tickets</a>
           </div>
@@ -434,11 +459,12 @@
       <section class="ball-sponsor" aria-labelledby="sponsor-heading">
         <div class="wrap">
           <span class="eyebrow on-dark" id="sponsor-heading">Event organised and sponsored by</span>
-          <p class="ball-sponsor-name">The Designer Rooms</p>
+          <p class="ball-sponsor-name"><a href="https://thedesignerrooms.com/" target="_blank" rel="noopener">The Designer Rooms</a></p>
           <p class="ball-sponsor-note">
-            The Designer Rooms has brought this whole evening together and is covering its full
-            cost, so the night raises money for the children, young people and vulnerable adults
-            NBCC supports rather than paying for itself. We're enormously grateful.
+            They have brought this whole evening together and are
+            covering its full cost, so the night raises money for the children, young people and
+            vulnerable adults NBCC supports rather than paying for itself. We're enormously
+            grateful.
           </p>
         </div>
       </section>

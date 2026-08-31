@@ -75,6 +75,16 @@
       quantity.appendChild(opt);
     }
     quantity.value = String(Math.min(current, max));
+
+    // Say the per-order limit HERE, next to the control it applies to. Discovering it by
+    // running out of options and hunting for why is the version people email us about.
+    var note = document.getElementById("ballQuantityNote");
+    if (note) {
+      note.textContent =
+        kind() === "table"
+          ? "Up to " + MAX_TABLES + " tables in one booking — for more, see below."
+          : "Up to " + MAX_SEATS + " tickets in one booking — for ten or more, book a table.";
+    }
   }
 
   function recalculate() {
@@ -235,7 +245,7 @@
    * the ball is in November. A generic particle effect would be decoration; this is
    * the subject.
    *
-   * Kept cheap and well-behaved: one canvas, ~60 flakes, sized to the hero only,
+   * Kept cheap and well-behaved: one canvas, ~115 flakes, sized to the hero only,
    * paused whenever the hero is off-screen or the tab is hidden, and not started at
    * all under prefers-reduced-motion.
    */
@@ -265,14 +275,14 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       // Fewer flakes on a narrow screen: the same count on a phone reads as a
       // blizzard, and costs battery for the privilege.
-      var count = w < 600 ? 34 : 60;
+      var count = w < 600 ? 62 : 115;
       flakes = [];
       for (var i = 0; i < count; i += 1) {
         flakes.push({
           x: Math.random() * w,
           y: Math.random() * h,
           r: Math.random() * 1.6 + 0.5,
-          speed: Math.random() * 0.32 + 0.12,
+          speed: Math.random() * 0.6 + 0.28,
           drift: Math.random() * 0.5 - 0.25,
           phase: Math.random() * Math.PI * 2,
           alpha: Math.random() * 0.4 + 0.18,
@@ -288,7 +298,7 @@
       for (var i = 0; i < flakes.length; i += 1) {
         var f = flakes[i];
         f.y += f.speed;
-        f.phase += 0.008;
+        f.phase += 0.012;
         f.x += Math.sin(f.phase) * 0.28 + f.drift * 0.1;
         if (f.y > h + 4) { f.y = -4; f.x = Math.random() * w; }
         if (f.x > w + 4) f.x = -4;

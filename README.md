@@ -2098,6 +2098,48 @@ weaken that guard. The same file is reused (lazily) in the home-page promo band 
 `src/ball/home-promo.ts`, where the surrounding band is already the same navy the artwork was
 cut out of.
 
+### What the ball page may and may not say (TASK-316)
+
+Three claims on `/ball` are not ours to reword freely, and each is pinned by
+`test/unit/ball-page-copy.test.ts`:
+
+- **The line-up is not announced.** The acts are contracted by The Designer Rooms and
+  announced on *their* schedule. **Michelle McManus is the only performer who may be
+  named** — she is confirmed and cleared. The test asserts the previously-listed acts
+  appear nowhere in `ball.html`, comments included: a name parked in a comment is one
+  uncomment away from being published.
+- **The Designer Rooms is "organised and sponsored by", and linked.** Ryan organises the
+  evening *and* pays for all of it; "organised by" alone drops the half that is the reason
+  NBCC keeps the ticket income. Every credit links to <https://thedesignerrooms.com/> with
+  `rel="noopener"`. The credit is linked once per section, not per mention — the sponsor
+  band's large name is the link, and the paragraph under it says "they".
+- **The newsletter is called the newsletter.** "Keep me posted about NBCC's work" describes
+  a feeling, not a thing you can picture arriving. Both opt-ins (booking form and waiting
+  list) name it.
+
+Also settled in TASK-316, from the first round of staff review:
+
+- **The header CTA is Donate, like every other page.** It was a red "Tickets" pill — a
+  second call to action for the page you are already reading. The shared
+  `@media(min-width:681px)` rule in `styles.css` then hides the `/donate` item in the nav
+  list, so there is exactly one Donate above 681px and exactly one in the burger below it.
+- **The booking form is centred.** `.section-head` was always centred; the *form* under it
+  was flush left in the 1180px wrap, which read as a misaligned heading.
+- **The opening line is sentence case.** Set in small letterspaced capitals it read as a
+  system label above the artwork rather than a sentence about the evening. `max-width` is
+  `60ch` with `text-wrap: balance` so it holds one line on a desktop instead of orphaning
+  "lives.".
+- **Links on the night-sky bands are gold.** The shared crimson link colour is ~2:1 against
+  `#0B1020` — the first thing put on that ground was the sponsor credit we had just
+  promised to link properly.
+- **Invoicing and large bookings have their own card** (`.ball-invoice`), not the last
+  clause of the closing smallprint. The form takes at most `MAX_TABLES_PER_ORDER` tables or
+  `MAX_SEATS_PER_ORDER` seats; that limit is now stated next to the quantity dropdown by
+  `fillQuantities()` rather than discovered by running out of options.
+- **More snow, moving faster** — 115 flakes on a desktop (62 on a phone), roughly double the
+  fall speed. Still one canvas, still paused off-screen, still off under
+  `prefers-reduced-motion`.
+
 ### Changing the preview password
 
 Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`

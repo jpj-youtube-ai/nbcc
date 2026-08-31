@@ -86,13 +86,16 @@
 
 .ball-kicker {
   margin: 0;
-  font-size: clamp(0.78rem, 1.5vw, 0.95rem);
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  /* Sentence case, not caps. Set in small letterspaced capitals this read as a system
+     label above the artwork; it is a sentence someone says about the evening, so it is
+     set as one — and it can carry a little more size once it is no longer shouting. */
+  font-size: clamp(0.95rem, 1.7vw, 1.15rem);
+  letter-spacing: 0.01em;
   color: var(--on-night-soft);
   /* Light type on a dark ground reads lighter than it is; give it room. */
-  line-height: 1.75;
-  max-width: 46ch;
+  line-height: 1.7;
+  max-width: 60ch;
+  text-wrap: balance;
 }
 .ball-kicker em {
   font-style: normal;
@@ -270,6 +273,9 @@
   padding: clamp(22px, 4vw, 40px);
   box-shadow: var(--shadow-sm);
   max-width: 760px;
+  /* Centred under the centred .section-head. Without this the form sat flush left in
+     the 1180px wrap while its heading sat mid-page, which read as a misaligned heading. */
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 26px;
@@ -471,6 +477,64 @@
   line-height: 1.65;
   color: var(--slate-soft);
   max-width: 62ch;
+}
+
+/* The invoice / larger-booking route. Sized and centred to the form so it reads as the
+   next thing on the same track, and given the gold edge so it is visibly an offer rather
+   than more terms. Deep gold, not the bright one: this sits on cream. */
+.ball-invoice {
+  max-width: 760px;
+  margin: 20px auto 0;
+  padding: clamp(20px, 3vw, 28px);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold-deep);
+  border-radius: var(--radius-lg);
+}
+.ball-invoice h3 {
+  margin: 0 0 10px;
+  font-size: 1.06rem;
+}
+.ball-invoice p {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--slate-soft);
+}
+.ball-invoice-contact {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+.ball-invoice-contact a {
+  font-weight: 600;
+  color: var(--gold-deep);
+}
+
+/* Links on the night-sky bands. The shared crimson link colour is ~2:1 against #0B1020 and
+   effectively invisible there — and the first thing we put on that ground is the sponsor
+   credit we had just promised to link properly. Gold is the page's accent and reads. */
+.ball-hero a:not(.btn),
+.ball-sponsor a,
+.ball-organiser a {
+  color: var(--gold);
+  text-decoration-color: rgba(228, 200, 122, 0.45);
+  text-underline-offset: 3px;
+}
+.ball-hero a:not(.btn):hover,
+.ball-sponsor a:hover,
+.ball-organiser a:hover {
+  color: #F0DCA0;
+  text-decoration-color: currentColor;
+}
+/* The standing credit is set large; an underline at that size reads as a mistake. */
+.ball-sponsor-name a {
+  text-decoration: none;
+}
+.ball-sponsor-name a:hover {
+  text-decoration: underline;
 }
 
 /* ---------- who you're supporting ---------- */

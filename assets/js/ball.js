@@ -200,6 +200,80 @@
   });
   form.addEventListener("input", recalculate);
 
+  /* ---- inline payment (TASK-319) ---------------------------------------------
+   *
+   * Buyers pay WITHOUT leaving nbcc.scot, the same way donors already do. The page a
+   * stranger reaches from a printed advert is not the place to bounce someone to a
+   * different domain at the exact moment they are deciding whether to trust it.
+   *
+   * The server side already supported this (ui_mode "embedded_page" returns a client
+   * secret instead of a URL); only the page still redirected.
+   *
+   * It reuses the shared .give-embedded-* styles from styles.css and the same
+   * "stripe-js-sdk" script id as the donate page, so Stripe.js is fetched once at most.
+   * It deliberately does NOT reuse main.js's donate controller: that keeps its mounted
+   * instance in a variable this file cannot see, so a shared Close button would hide the
+   * modal without destroying the iframe and the next attempt would mount twice.
+   *
+   * Every failure path falls back to the hosted redirect. Nobody is left with a button
+   * that does nothing.
+   */
+  var checkoutInstance = null;
+
+  function ensureStripeJs() {
+    if (typeof window.Stripe === "function") return;
+    if (document.getElementById("stripe-js-sdk")) return;
+    var script = document.createElement("script");
+    script.id = "stripe-js-sdk";
+    script.src = "https://js.stripe.com/v3/";
+    script.async = true;
+    (document.head || document.documentElement).appendChild(script);
+  }
+
+  function openCheckout() {
+    var modal = document.getElementById("ballCheckoutModal");
+    if (modal) {
+      modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+    }
+    if (document.body) document.body.classList.add("give-embedded-open");
+    var close = document.getElementById("ballCheckoutClose");
+    if (close && close.focus) {
+      try { close.focus(); } catch (e) { /* focus unavailable */ }
+    }
+  }
+
+  function closeCheckout() {
+    var modal = document.getElementById("ballCheckoutModal");
+    if (modal) {
+      modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+    }
+    if (document.body) document.body.classList.remove("give-embedded-open");
+    // Destroy before clearing the mount: Stripe keeps an iframe alive otherwise, and the
+    // next attempt would mount a second one into the same node.
+    if (checkoutInstance) {
+      try { checkoutInstance.destroy(); } catch (e) { /* already gone */ }
+      checkoutInstance = null;
+    }
+    var mount = document.getElementById("ballCheckout");
+    if (mount) mount.innerHTML = "";
+  }
+
+  // Fetch Stripe.js as soon as the page is interactive, not at submit time: waiting until
+  // someone presses the button adds a network round trip to the most impatient moment.
+  ensureStripeJs();
+
+  var closeButton = document.getElementById("ballCheckoutClose");
+  if (closeButton) {
+    closeButton.addEventListener("click", function () { closeCheckout(); });
+  }
+  document.addEventListener("keydown", function (e) {
+    var modal = document.getElementById("ballCheckoutModal");
+    if (!modal || modal.hidden) return;
+    if (e.key === "Escape" || e.keyCode === 27) closeCheckout();
+  });
+
   form.addEventListener("submit", function (event) {
     event.preventDefault();
     clearError();
@@ -236,37 +310,96 @@
     var original = submit.innerHTML;
     submit.textContent = "Taking you to payment…";
 
-    fetch("/api/ball/checkout-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    })
-      .then(function (res) {
+    function restore() {
+      submit.disabled = false;
+      submit.innerHTML = original;
+    }
+
+    function post(mode) {
+      body.uiMode = mode;
+      return fetch("/api/ball/checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then(function (res) {
         return res.json().then(function (data) {
           return { status: res.status, data: data };
         });
-      })
+      });
+    }
+
+    function failed(result) {
+      restore();
+      showError(
+        result && result.data && result.data.error
+          ? result.data.error
+          : "Something went wrong starting your payment. Please try again, or email events@nbcc.scot.",
+      );
+      // The refusal is usually "those seats just went", so re-read what is actually left
+      // rather than leaving the page insisting the order is still possible.
+      loadAvailability();
+    }
+
+    // The hosted Stripe page, in its own tab-less redirect. This is the fallback, not the
+    // plan: it is what happens if Stripe.js is blocked, the mount is missing, or the embed
+    // throws — so a buyer is never left holding a dead button.
+    function hostedRedirect() {
+      post("hosted")
+        .then(function (result) {
+          if (result.status === 201 && result.data.url) {
+            window.location.assign(result.data.url);
+            return;
+          }
+          failed(result);
+        })
+        .catch(function () {
+          restore();
+          showError(
+            "We couldn't reach the payment page. Check your connection and try again, or email events@nbcc.scot.",
+          );
+        });
+    }
+
+    var mount = document.getElementById("ballCheckout");
+    if (typeof window.Stripe !== "function" || !mount) {
+      hostedRedirect();
+      return;
+    }
+
+    post("embedded")
       .then(function (result) {
-        if (result.status === 201 && result.data.url) {
-          window.location.assign(result.data.url);
+        if (result.status !== 201) {
+          // A real refusal — sold out, validation, a closed sale. Say so; do NOT retry as a
+          // hosted redirect, which would just fail again and look like a broken button.
+          failed(result);
           return;
         }
-        submit.disabled = false;
-        submit.innerHTML = original;
-        showError(
-          result.data && result.data.error
-            ? result.data.error
-            : "Something went wrong starting your payment. Please try again, or email events@nbcc.scot.",
-        );
-        loadAvailability();
+        var data = result.data;
+        if (!data.clientSecret || !data.publishableKey) {
+          hostedRedirect();
+          return;
+        }
+        var stripe;
+        try {
+          stripe = window.Stripe(data.publishableKey);
+        } catch (e) {
+          hostedRedirect();
+          return;
+        }
+        stripe
+          .initEmbeddedCheckout({ clientSecret: data.clientSecret })
+          .then(function (checkout) {
+            checkoutInstance = checkout;
+            openCheckout();
+            checkout.mount(mount);
+            restore();
+          })
+          .catch(function () {
+            closeCheckout();
+            hostedRedirect();
+          });
       })
-      .catch(function () {
-        submit.disabled = false;
-        submit.innerHTML = original;
-        showError(
-          "We couldn't reach the payment page. Check your connection and try again, or email events@nbcc.scot.",
-        );
-      });
+      .catch(hostedRedirect);
   });
 
   /* ---- snow ----------------------------------------------------------------

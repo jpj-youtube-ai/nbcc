@@ -6040,6 +6040,15 @@
     return isNaN(d.getTime()) ? null : d.toISOString();
   }
 
+  // Only a live booking has seats to give back; anything already cancelled or refunded says so
+  // instead of offering a button that would 409.
+  function cancelCell(b) {
+    if (b.status !== "pending" && b.status !== "paid") return "—";
+    if (!canEdit("ball")) return "";
+    return '<button type="button" class="btn btn-small btn-danger" data-cancel-booking="' +
+      H.escapeHtml(b.reference) + '">Cancel</button>';
+  }
+
   function ballBookingsTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No bookings yet.</p>';
     var body = rows.map(function (b) {
@@ -6050,10 +6059,11 @@
         "<br /><small>" + H.escapeHtml(b.buyerEmail) + "</small></td><td>" + what +
         '</td><td class="admin-num">' + H.formatPence(b.totalPence) +
         '</td><td class="admin-num">' + (b.donationPence ? H.formatPence(b.donationPence) + (b.giftAid ? " (GA)" : "") : "—") +
-        "</td><td>" + H.escapeHtml(b.status) + "</td><td>" + (b.newsletterOptIn ? "Yes" : "—") + "</td></tr>";
+        "</td><td>" + H.escapeHtml(b.status) + "</td><td>" + (b.newsletterOptIn ? "Yes" : "—") +
+        "</td><td>" + cancelCell(b) + "</td></tr>";
     }).join("");
     return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who</th><th>Bought</th>' +
-      "<th>Paid</th><th>Donation</th><th>Status</th><th>Newsletter</th></tr></thead><tbody>" +
+      "<th>Paid</th><th>Donation</th><th>Status</th><th>Newsletter</th><th></th></tr></thead><tbody>" +
       body + "</tbody></table>";
   }
 
@@ -6150,9 +6160,39 @@
       .then(j)
       .then(function (d) {
         el("ballBookings").innerHTML = ballBookingsTable(d.results || []);
+        // Delegated, because the table is re-rendered on every load.
+        el("ballBookings").addEventListener("click", onCancelBookingClick);
       })
       .catch(function () {
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
+      });
+  }
+
+  // Cancelling hands the seats back to the public pool. It does NOT refund: money moves in
+  // Stripe, by a person, deliberately. The confirmation says so, because "cancel" reads like
+  // "undo the whole thing" and a buyer who is out of pocket will not agree.
+  function onCancelBookingClick(e) {
+    var btn = e.target && e.target.closest && e.target.closest("[data-cancel-booking]");
+    if (!btn) return;
+    var reference = btn.getAttribute("data-cancel-booking");
+    var ok = window.confirm(
+      "Cancel booking " + reference + "?"
+        + "\n\nThe seats go straight back on sale."
+        + "\n\nThis does NOT refund any money. If they paid, refund them in Stripe separately."
+    );
+    if (!ok) return;
+    var note = window.prompt("Why? (optional, kept in the audit log)", "") || "";
+    btn.disabled = true;
+    authFetch("/api/admin/ball/bookings/" + encodeURIComponent(reference) + "/cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: note }),
+    })
+      .then(j)
+      .then(function () { loadBall(); })
+      .catch(function () {
+        btn.disabled = false;
+        window.alert("Could not cancel " + reference + ". Nothing has been changed.");
       });
   }
 

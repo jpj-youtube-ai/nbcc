@@ -46,6 +46,7 @@ import {
   getCapacityState,
   getDashboard,
   getSettings as getBallSettings,
+  cancelBooking,
   listBookings,
   listBookingsForExport,
   listBookingsNeedingReminder,
@@ -2839,9 +2840,41 @@ export async function getAdminBallBookings(req: Request, res: Response): Promise
   }
 }
 
+// POST /api/admin/ball/bookings/:reference/cancel — release a booking's seats. Editor+ WITH
+// the ball section granted, the same bar as changing capacity: this hands seats back to the
+// public pool and, near a sell-out, decides who gets them.
+//
+// It does NOT refund. Money moves in Stripe, by a person, deliberately.
+export async function postAdminBallCancelBooking(
+  req: Request,
+  res: Response,
+): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  const reference = String(req.params.reference ?? "").trim();
+  if (!reference) return res.status(400).json({ error: "Which booking?" });
+  const rawNote = typeof req.body?.note === "string" ? req.body.note.trim() : "";
+  const note = rawNote.length > 0 ? rawNote.slice(0, 500) : null;
+  try {
+    const outcome = await cancelBooking(reference, claims.email, note);
+    if (!outcome.ok) {
+      return outcome.reason === "not_found"
+        ? res.status(404).json({ error: "No booking with that reference." })
+        : res.status(409).json({
+            error: `That booking is already ${outcome.status}, so there are no seats to give back.`,
+          });
+    }
+    return res.status(200).json({ cancelled: reference, seatsReturned: outcome.seats });
+  } catch (err) {
+    console.error("admin ball cancel failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/ball", getAdminBall);
 adminRouter.patch("/api/admin/ball", patchAdminBall);
 adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);
+adminRouter.post("/api/admin/ball/bookings/:reference/cancel", postAdminBallCancelBooking);
 
 // The three lists (TASK-313 plan 5). Viewer+ can read them; they are downloads of data the
 // section already shows on screen.

@@ -324,6 +324,72 @@ const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
   cardFeeFixedPence: "card_fee_fixed_pence",
 };
 
+// TASK-323: cancel a booking from the admin area.
+//
+// The seats come back on their own: readCapacityState counts only 'pending' and 'paid', so a
+// cancelled booking stops consuming capacity the moment the status changes. There is no
+// separate "give the seats back" step to forget.
+//
+// It does NOT refund anything. Money is moved in Stripe, by a person, deliberately — a button
+// in our admin that quietly issued refunds would be a far worse thing to get wrong than one
+// that does not. The UI says so, and so does the README.
+//
+// Only a live booking can be cancelled. Re-cancelling something already cancelled or refunded
+// returns null rather than pretending it did something, so the caller can say so plainly.
+export type CancelOutcome =
+  | { ok: true; seats: number; wasStatus: "pending" | "paid" }
+  | { ok: false; reason: "not_found" | "already_closed"; status?: string };
+
+export async function cancelBooking(
+  reference: string,
+  actor: string,
+  note: string | null,
+): Promise<CancelOutcome> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Locked for the length of the transaction so two staff pressing cancel at once cannot
+    // both count it as a fresh cancellation in the audit log.
+    const found = await client.query<{ id: number; status: string; seats: number }>(
+      `SELECT id, status, seats FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
+      [reference],
+    );
+    const row = found.rows[0];
+    if (!row) {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "not_found" };
+    }
+    if (row.status !== "pending" && row.status !== "paid") {
+      await client.query("ROLLBACK");
+      return { ok: false, reason: "already_closed", status: row.status };
+    }
+
+    await client.query(
+      `UPDATE ball_bookings SET status = 'cancelled' WHERE id = $1`,
+      [row.id],
+    );
+    await insertAudit(client, {
+      actor,
+      action: "ball.booking_cancelled",
+      entity: "ball_booking",
+      entityId: row.id,
+      data: {
+        reference,
+        seatsReturned: row.seats,
+        previousStatus: row.status,
+        note: note ?? null,
+      },
+    });
+    await client.query("COMMIT");
+    return { ok: true, seats: row.seats, wasStatus: row.status };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 // Save settings and record WHO changed WHAT in the same transaction. The gate toggle publishes
 // a page to the public and the capacity decides whether the room oversells, so both belong in
 // the audit log next to the donation writes.

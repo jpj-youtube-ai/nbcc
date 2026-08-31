@@ -490,6 +490,45 @@ When(
   },
 );
 
+// TASK-323: a paid booking to cancel. Written straight to the table rather than driven through
+// Stripe, because what is under test is the release of seats, not the purchase.
+Given(
+  "a paid ball booking {string} for {int} seats",
+  async function (reference, seats) {
+    await withDb((db) =>
+      db.query(
+        `INSERT INTO ball_bookings
+           (reference, kind, quantity, seats, buyer_name, buyer_email,
+            tickets_pence, donation_pence, total_pence, status, paid_at)
+         VALUES ($1, 'seat', $2, $2, 'Cancel Test', 'cancel.ball.bdd@example.com',
+                 $3, 0, $3, 'paid', now())`,
+        [reference, seats, seats * 10000],
+      ),
+    );
+  },
+);
+
+When(
+  "I cancel ball booking {string} as {string} with password {string}",
+  async function (reference, email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(
+      `${BASE_URL}/api/admin/ball/bookings/${encodeURIComponent(reference)}/cancel`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ note: "BDD" }),
+      },
+    );
+    this.ballAdminStatus = res.status;
+    this.ballAdminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the cancellation should report {int} seats returned", function (n) {
+  assert.strictEqual(this.ballAdminBody.seatsReturned, n);
+});
+
 Then("the ball admin status should be {int}", function (expected) {
   assert.strictEqual(this.ballAdminStatus, expected);
 });

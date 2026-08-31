@@ -53,6 +53,44 @@ Feature: Festive Ball admin controls (TASK-313)
       """
     Then the ball admin status should be 400
 
+  Scenario: cancelling a booking puts its seats straight back on sale
+    # The seats come back on their own: availability counts only pending and paid, so the
+    # status change is the whole mechanism. There is no separate "give the seats back" step.
+    Given a ball admin "ball19.admin.bdd@example.com" with role "admin" and password "pw-ball19"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And a paid ball booking "BALL-CANCEL1" for 4 seats
+    When I request the ball availability
+    Then the ball availability should show 396 seats remaining
+    When I cancel ball booking "BALL-CANCEL1" as "ball19.admin.bdd@example.com" with password "pw-ball19"
+    Then the ball admin status should be 200
+    And the cancellation should report 4 seats returned
+    When I request the ball availability
+    Then the ball availability should show 400 seats remaining
+
+  Scenario: a booking cannot be cancelled twice
+    Given a ball admin "ball20.admin.bdd@example.com" with role "admin" and password "pw-ball20"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And a paid ball booking "BALL-CANCEL2" for 2 seats
+    When I cancel ball booking "BALL-CANCEL2" as "ball20.admin.bdd@example.com" with password "pw-ball20"
+    Then the ball admin status should be 200
+    When I cancel ball booking "BALL-CANCEL2" as "ball20.admin.bdd@example.com" with password "pw-ball20"
+    Then the ball admin status should be 409
+
+  Scenario: cancelling an unknown reference is refused, not silently ignored
+    Given a ball admin "ball21.admin.bdd@example.com" with role "admin" and password "pw-ball21"
+    When I cancel ball booking "BALL-NOSUCH" as "ball21.admin.bdd@example.com" with password "pw-ball21"
+    Then the ball admin status should be 404
+
+  Scenario: a viewer cannot release someone's seats
+    # Same bar as changing capacity: near a sell-out this decides who gets the last table.
+    Given a ball admin "ball22.admin.bdd@example.com" with role "viewer" and password "pw-ball22"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And a paid ball booking "BALL-CANCEL3" for 2 seats
+    When I cancel ball booking "BALL-CANCEL3" as "ball22.admin.bdd@example.com" with password "pw-ball22"
+    Then the ball admin status should be 403
+    When I request the ball availability
+    Then the ball availability should show 398 seats remaining
+
   Scenario: publishing a confirmed arrival time reaches the page
     Given a ball admin "ball4.admin.bdd@example.com" with role "admin" and password "pw-ball4"
     And the ball gate is open

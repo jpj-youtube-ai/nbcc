@@ -230,8 +230,8 @@ export async function createPendingBooking(booking: BallBookingWrite): Promise<v
     `INSERT INTO ball_bookings
        (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
         buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence,
-        gift_aid, newsletter_opt_in, stripe_session_id, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending')
+        gift_aid, newsletter_opt_in, stripe_session_id, status, terms_accepted_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'pending',now())
      ON CONFLICT (stripe_session_id) DO NOTHING`,
     [
       booking.reference,

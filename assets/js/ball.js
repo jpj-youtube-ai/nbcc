@@ -288,6 +288,9 @@
     if (!email || email.indexOf("@") === -1) {
       return showError("Please give us an email address — your booking confirmation goes there.");
     }
+    if (!form.elements.termsAccepted || !form.elements.termsAccepted.checked) {
+      return showError("Please tick to confirm you agree to the ticket terms.");
+    }
     var donation = donationPence();
     if (form.elements.giftAid && form.elements.giftAid.checked && donation <= 0) {
       return showError("Gift Aid applies to a donation, so please enter a donation amount, or untick Gift Aid.");
@@ -303,6 +306,7 @@
       coverFee: !!(form.elements.coverFee && form.elements.coverFee.checked),
       giftAid: !!(form.elements.giftAid && form.elements.giftAid.checked && donation > 0),
       newsletterOptIn: !!(form.elements.newsletterOptIn && form.elements.newsletterOptIn.checked),
+      termsAccepted: true,
       uiMode: "hosted",
     };
 

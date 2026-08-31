@@ -212,6 +212,7 @@ async function startCheckout(ctx, body) {
       buyerFirstName: "BDD",
       buyerSurname: "Buyer",
       buyerEmail: "checkout.ball.bdd@example.com",
+      termsAccepted: true,
       ...body,
     }),
   });

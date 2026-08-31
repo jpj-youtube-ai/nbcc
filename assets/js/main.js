@@ -2129,7 +2129,8 @@
       '<p class="foot-signup-sub">Hear what your support makes possible — a few emails a year, unsubscribe any time.</p>' +
       '<form class="foot-signup-form" id="footSignupForm" novalidate>' +
       '<div class="foot-signup-fields">' +
-      '<input type="text" id="fsName" name="name" placeholder="Your name" autocomplete="name" required aria-label="Your name" />' +
+      '<input type="text" id="fsFirstName" name="firstName" placeholder="First name" autocomplete="given-name" required aria-label="First name" />' +
+      '<input type="text" id="fsSurname" name="surname" placeholder="Surname" autocomplete="family-name" required aria-label="Surname" />' +
       '<input type="email" id="fsEmail" name="email" placeholder="Your email" autocomplete="email" required aria-label="Your email" />' +
       '<input type="tel" id="fsPhone" name="phone" placeholder="Mobile (optional, for texts)" autocomplete="tel" aria-label="Mobile number, optional" />' +
       "</div>" +
@@ -2150,10 +2151,14 @@
       e.preventDefault();
       var error = doc.getElementById("fsError");
       error.hidden = true;
-      var name = doc.getElementById("fsName").value.trim();
+      // Split to match every other form on the site (TASK-331). autocomplete given-name /
+      // family-name, not "name": on a half-name box the latter makes a browser offer the
+      // WHOLE name for the first field, which is worse than no autofill at all.
+      var firstName = doc.getElementById("fsFirstName").value.trim();
+      var surname = doc.getElementById("fsSurname").value.trim();
       var email = doc.getElementById("fsEmail").value.trim();
       var consent = doc.getElementById("fsConsent").checked;
-      if (!name || !email) {
+      if (!firstName || !surname || !email) {
         error.textContent = "Please give your name and email address.";
         error.hidden = false;
         return;
@@ -2170,7 +2175,8 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: name,
+            firstName: firstName,
+          surname: surname,
             email: email,
             phone: doc.getElementById("fsPhone").value.trim() || undefined,
             consent: true,

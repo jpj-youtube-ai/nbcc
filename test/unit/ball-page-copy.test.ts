@@ -209,3 +209,30 @@ describe("paying without leaving the site (TASK-319)", () => {
     expect(modal).toContain("give-embedded-mount");
   });
 });
+
+describe("agreeing to the ticket terms (TASK-331)", () => {
+  // Tickets are NON-REFUNDABLE on purchases up to £1,000 a table. That is an onerous term,
+  // and the Consumer Rights Act expects an onerous term to be brought to a buyer's attention
+  // rather than merely made findable. A link in the smallprint does not do that; a positive
+  // act does.
+  const box = ballHtml.match(/<label class="ball-check ball-terms-check">[\s\S]*?<\/label>/)?.[0] ?? "";
+
+  it("asks for a tick before payment", () => {
+    expect(box).not.toBe("");
+    expect(box).toContain('name="termsAccepted"');
+  });
+
+  it("is required, and never pre-ticked", () => {
+    // Plain substrings: the leading space distinguishes the standalone `required` attribute
+    // from `aria-required`, where the character before it is a dash.
+    expect(box).toContain(" required");
+    expect(box).toContain("aria-required=\"true\"");
+    expect(box).not.toContain(" checked");
+  });
+
+  // The point of the box: the buyer sees the onerous term itself, not just a link to it.
+  it("names the non-refundable term in the label, not only behind the link", () => {
+    expect(box).toMatch(/non-refundable/i);
+    expect(box).toContain('href="/ball/terms"');
+  });
+});

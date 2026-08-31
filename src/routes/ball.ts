@@ -398,7 +398,8 @@ export function newGuestToken(): string {
 ballRouter.post("/api/ball/waiting-list", async (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const parsed = waitingListSchema.safeParse({
-    name: body.name,
+    firstName: body.firstName,
+    surname: body.surname,
     email: body.email,
     seatsWanted: body.seatsWanted ?? 1,
     note: body.note ?? "",

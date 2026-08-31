@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // rest of the business-supporter fulfilment API: an unauthenticated or Viewer-level request is
 // rejected (401/403) and touches nothing. An Editor+ call drives the REAL wiring end to end (the route
 // → runBusinessInviteBackfill → the real list/send/mark/audit) over a mocked pool + a stubbed email
-// client (dev + placeholder EMAIL_SEND_URL ⇒ the send stubs, no network), returns the counts, and
+// client (dev + the default EMAIL_PROVIDER=stub ⇒ the send stubs, no network), returns the counts, and
 // appends exactly one `fulfilment.backfill_invites` audit row. DB-free, mirroring
 // admin-fulfilment-api.test.ts: pool, the per-request auth row (getUserAuthRow), config, and the
 // Stripe client (imported at admin.ts load) are mocked.
@@ -30,7 +30,7 @@ vi.mock("../../src/config", () => ({
     // The env-correct public base for the tokenised link + the repliable giving inbox (no new key).
     PORTAL_BASE_URL: "https://nbcc.test",
     GIVING_FROM_EMAIL: "giving@nbcc.scot",
-    // EMAIL_SEND_URL deliberately absent ⇒ the email client treats it as a placeholder ⇒ dev sends stub.
+    // EMAIL_PROVIDER deliberately left at its "stub" default ⇒ dev sends stub (no network).
   },
 }));
 // routes/admin.ts imports the Stripe client at module load (cancelSubscription); stub it so the real

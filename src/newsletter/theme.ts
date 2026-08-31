@@ -54,8 +54,8 @@ export function escapeHtml(value: string): string {
 // TASK-292: a blank name no longer means the word "friend". It means whatever nameFallback says —
 // and when that is blank too, the name is removed and the punctuation tidied, so "Hey, !" still
 // never reaches a donor. See src/newsletter/name-fallback.ts.
-// TASK-268: the From header the inbox displays. RFC 5322 display-name + angle-addr — the relay and
-// Resend pass it through verbatim, so recipients see "NBCC Newsletter", not a bare address.
+// TASK-268: the From header the inbox displays. RFC 5322 display-name + angle-addr — SES passes
+// it through verbatim, so recipients see "NBCC Newsletter", not a bare address.
 export function newsletterSender(address: string): string {
   return `NBCC Newsletter <${address}>`;
 }

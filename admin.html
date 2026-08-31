@@ -607,7 +607,7 @@
 
                 <!-- Delivery stats (TASK-256, email stats Phase 1): shown only for a SENT newsletter.
                      Counts come from GET /api/admin/newsletters/:id/stats — real per-address facts
-                     reported back by Resend (delivered / bounced / marked-as-spam) plus attributed
+                     reported back by Amazon SES (delivered / bounced / marked-as-spam) plus attributed
                      unsubscribes. Aggregates only, by design. app.js renders into the grid; the note
                      carries the empty/pre-tracking/redacted states so the panel never shows fake
                      zeros for a send that simply predates tracking. -->

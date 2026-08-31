@@ -43,11 +43,11 @@ describe("when a send is recorded (TASK-305)", () => {
 });
 
 describe("the webhook still answers 200 to a foreign event (TASK-306)", () => {
-  it("does not ask Svix to retry an unmatched event", () => {
+  it("does not ask SNS to retry an unmatched event", () => {
     // Receipts, Gift Aid confirmations and admin login codes share the provider account and match no
     // newsletter. Any non-2xx here turns each of them into a retry storm against our own webhook.
     const route = readFileSync(
-      resolve(__dirname, "../../src/routes/resend-webhook.ts"),
+      resolve(__dirname, "../../src/routes/ses-webhook.ts"),
       "utf8",
     );
     expect(route).not.toContain("409");

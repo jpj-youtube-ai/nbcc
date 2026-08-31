@@ -284,12 +284,12 @@ Feature: Admin newsletter (REQ-069)
     And the newsletter response field "bodyHtml" should be "<p>Real content</p>"
     And the newsletter recipient count should be at least 1
 
-  # TASK-255: delivery-truth stats (email dashboard Phase 1). Resend reports what happened to each
-  # email via a signed webhook; this proves the full loop against the running app: send -> a SIGNED
-  # delivered/bounced event for that address -> the stats endpoint reflects it. Plus the trust
-  # boundary (an unsigned report is rejected) and the privacy rule (an event for an address we never
-  # sent a newsletter to is acknowledged but NOT stored).
-  Scenario: delivery events land in the newsletter's stats, and only signed ones count
+  # TASK-255 lineage (Resend→SES migration): delivery-truth stats. SES reports what happened to each
+  # email via SNS to the token-addressed webhook; this proves the full loop against the running app:
+  # send -> a delivered/bounced event for that address -> the stats endpoint reflects it. Plus the
+  # trust boundary (a report with the wrong token is rejected) and the privacy rule (an event for an
+  # address we never sent a newsletter to is acknowledged but NOT stored).
+  Scenario: delivery events land in the newsletter's stats, and only token-bearing ones count
     Given a newsletter admin "stats.admin.newsletter.bdd@example.com" with role "admin" and password "pw-st"
     And a consenting donor with email "delivered.newsletter.bdd@example.com"
     And a consenting donor with email "bounced.newsletter.bdd@example.com"
@@ -297,32 +297,32 @@ Feature: Admin newsletter (REQ-069)
     And I send that newsletter
     Then the newsletter response status should be 202
 
-    # Resend reports: one delivered, one bounced — each signed with the real webhook secret.
-    When Resend reports a signed "email.delivered" event for "delivered.newsletter.bdd@example.com"
+    # SES reports: one delivered, one bounced — each through the token-addressed endpoint.
+    When SES reports a "Delivery" event for "delivered.newsletter.bdd@example.com"
     Then the webhook response status should be 200
-    When Resend reports a signed "email.bounced" event for "bounced.newsletter.bdd@example.com"
+    When SES reports a "Bounce" event for "bounced.newsletter.bdd@example.com"
     Then the webhook response status should be 200
 
-    # A duplicate retry of the same event must not double-count (Svix retries until acknowledged).
-    When Resend retries the last event
+    # A duplicate retry of the same event must not double-count (SNS retries until acknowledged).
+    When SES retries the last event
     Then the webhook response status should be 200
 
     When I fetch that newsletter's stats
     Then the newsletter stats should show at least 2 sends, 1 delivered and 1 bounced
     And the bounced addresses should include "bounced.newsletter.bdd@example.com"
 
-    # The trust boundary: an unsigned report is turned away.
-    When Resend reports an UNSIGNED "email.delivered" event for "delivered.newsletter.bdd@example.com"
+    # The trust boundary: a report without the right token is turned away.
+    When SES reports a "Delivery" event for "delivered.newsletter.bdd@example.com" with the wrong token
     Then the webhook response status should be 401
 
     # The privacy rule: an event for an address with no newsletter send is dropped, not warehoused.
-    When Resend reports a signed "email.delivered" event for "receipt-only.bdd@example.com"
+    When SES reports a "Delivery" event for "receipt-only.bdd@example.com"
     Then the webhook response status should be 200
     And the webhook outcome should be "unmatched"
 
     # TASK-257 (Phase 2): engagement rides the SAME webhook once tracking is on. A click carries WHICH
     # link, and the stats break clicks down per link.
-    When Resend reports a signed click on "https://nbcc.scot/donate" by "delivered.newsletter.bdd@example.com"
+    When SES reports a click on "https://nbcc.scot/donate" by "delivered.newsletter.bdd@example.com"
     Then the webhook response status should be 200
     When I fetch that newsletter's stats
     Then the newsletter stats should count 1 click

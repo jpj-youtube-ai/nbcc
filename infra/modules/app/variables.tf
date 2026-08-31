@@ -186,3 +186,11 @@ variable "giving_from_email" {
   type        = string
   default     = "giving@nbcc.scot"
 }
+
+# From address for app-branded transactional email (Resend→SES migration) — the role the retired
+# relay Worker's MAIL_FROM var played. Non-secret; a plain task-def environment value.
+variable "mail_from" {
+  description = "From address for app-branded transactional email (receipts, login codes…)"
+  type        = string
+  default     = "noreply@nbcc.scot"
+}

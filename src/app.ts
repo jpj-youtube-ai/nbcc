@@ -6,7 +6,7 @@ import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
-import { resendWebhookRouter } from "./routes/resend-webhook";
+import { sesWebhookRouter } from "./routes/ses-webhook";
 import { preferencesRouter } from "./routes/preferences";
 import { subscribeRouter } from "./routes/subscribe";
 import { unsubscribeRouter } from "./routes/unsubscribe";
@@ -31,9 +31,10 @@ export function createApp() {
   // it is mounted BEFORE express.json — its route applies express.raw itself; all
   // other routes still get parsed JSON below.
   app.use(stripeWebhookRouter);
-  // The Resend delivery webhook (TASK-255) verifies a Svix signature over the raw bytes, so it is
-  // mounted before express.json for exactly the same reason as Stripe's.
-  app.use(resendWebhookRouter);
+  // The SES delivery webhook (TASK-255 lineage; Resend→SES migration) reads its SNS envelope
+  // from the raw bytes (SNS posts JSON as text/plain), so it is mounted before express.json for
+  // the same reason as Stripe's.
+  app.use(sesWebhookRouter);
   app.use(preferencesRouter);
   // Reject an oversized JSON submission to the public, unauthenticated /api/my-story
   // endpoint by its Content-Length BEFORE the global express.json() parses it, so the

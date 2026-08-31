@@ -1,12 +1,16 @@
 import { pool } from "./pool";
-import type { ParsedResendEvent } from "../newsletter/resend-events";
+import type { ParsedEmailEvent } from "../newsletter/ses-events";
 
 // TASK-255: the delivery-facts store behind the email stats dashboard (Phase 1 — see
 // docs/superpowers/specs/2026-07-16-newsletter-email-stats-design.md). Two tables:
 //   newsletter_sends        — one row per ACCEPTED recipient per send (correlation target + honest
 //                             rate denominator);
-//   newsletter_email_events — per-address facts: Resend's delivered/bounced/complained plus our own
-//                             unsubscribed events.
+//   newsletter_email_events — per-address facts: the provider's delivered/bounced/complained plus
+//                             our own unsubscribed events. Since the Resend→SES migration the
+//                             provider is Amazon SES via SNS; the svix_event_id column KEEPS its
+//                             historical name (a rename is a destructive migration) and now
+//                             carries the SNS MessageId — its role, a provider-side unique id
+//                             that makes ingestion idempotent, is unchanged.
 // Single-statement writes over the pool, mirroring src/db/newsletters.ts.
 
 // Batch-record who a newsletter was accepted for — ONE statement however many donors (the send loop
@@ -25,21 +29,22 @@ export async function recordNewsletterSends(
   );
 }
 
-export type ResendEventOutcome = "recorded" | "unmatched" | "duplicate";
+export type EmailEventOutcome = "recorded" | "unmatched" | "duplicate";
 
-// Ingest one verified webhook event. Resend reports per ADDRESS, not per newsletter, so first find
+// Ingest one verified webhook event. SES reports per ADDRESS, not per newsletter, so first find
 // the newest send to that address: sent no later than ~10 minutes after the event (clock skew) and no
 // more than 14 days before it (events beyond that window are not ours to claim). No match means the
 // email was a receipt / login code / anything else on the domain → the caller acknowledges and DROPS
 // it: we do not warehouse data about mail the dashboard has no use for.
 //
-// The insert is idempotent on the Svix id (partial unique index): Resend retries deliveries until
-// acknowledged, and a retry must report "duplicate", never a second row — rates are counted off these
-// rows, so one duplicate would silently inflate every percentage.
-export async function recordResendEvent(
-  svixEventId: string,
-  event: ParsedResendEvent,
-): Promise<ResendEventOutcome> {
+// The insert is idempotent on the provider event id — the SNS MessageId, stored in the
+// historically-named svix_event_id column (partial unique index): SNS retries deliveries until
+// acknowledged, and a retry must report "duplicate", never a second row — rates are counted off
+// these rows, so one duplicate would silently inflate every percentage.
+export async function recordEmailEvent(
+  providerEventId: string,
+  event: ParsedEmailEvent,
+): Promise<EmailEventOutcome> {
   const occurredAtIso = event.occurredAt.toISOString();
   const match = await pool.query(
     `SELECT newsletter_id FROM newsletter_sends
@@ -58,7 +63,7 @@ export async function recordResendEvent(
      VALUES ($1, $2, $3, $4, $5::timestamptz, $6::jsonb, $7)
      ON CONFLICT (svix_event_id) WHERE svix_event_id IS NOT NULL DO NOTHING`,
     [
-      svixEventId,
+      providerEventId,
       newsletterId,
       event.email,
       event.eventType,

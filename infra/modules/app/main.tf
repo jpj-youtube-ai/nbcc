@@ -140,15 +140,6 @@ resource "aws_ssm_parameter" "stripe_webhook_secret" {
   lifecycle { ignore_changes = [value] }
 }
 
-# Resend delivery-webhook signing secret (TASK-255, email stats) — verifies inbound Resend/Svix
-# webhook signatures, exactly as the Stripe one does for donations. Real value set out of band.
-resource "aws_ssm_parameter" "resend_webhook_secret" {
-  name  = "/${var.project}/${var.environment}/RESEND_WEBHOOK_SECRET"
-  type  = "SecureString"
-  value = "REPLACE_ME"
-  lifecycle { ignore_changes = [value] }
-}
-
 resource "aws_ssm_parameter" "stripe_price_bronze" {
   name  = "/${var.project}/${var.environment}/STRIPE_PRICE_BRONZE"
   type  = "String"
@@ -174,30 +165,6 @@ resource "aws_ssm_parameter" "stripe_price_platinum" {
   name  = "/${var.project}/${var.environment}/STRIPE_PRICE_PLATINUM"
   type  = "String"
   value = "REPLACE_ME"
-  lifecycle { ignore_changes = [value] }
-}
-
-# Contact form forwarding endpoint (REQ-030). A SecureString — it authorises form
-# submissions. The placeholder is a VALID `.example` URL (not REPLACE_ME) so the
-# app's URL validation passes on a fresh apply; the contact client treats a
-# `.example` host as unconfigured and stubs the forward outside production until a
-# real URL is set out of band. Set the real value with put-parameter (see README).
-resource "aws_ssm_parameter" "contact_forward_url" {
-  name  = "/${var.project}/${var.environment}/CONTACT_FORWARD_URL"
-  type  = "SecureString"
-  value = "https://forward.example/replace-me"
-  lifecycle { ignore_changes = [value] }
-}
-
-# Transactional email send endpoint (TASK-070). A SecureString — it authorises
-# sends. The placeholder is a VALID `.example` URL (not REPLACE_ME) so the app's URL
-# validation passes on a fresh apply; the email client treats a `.example` host as
-# unconfigured and stubs the send outside production until a real URL is set out of
-# band. Set the real value with put-parameter (see README).
-resource "aws_ssm_parameter" "email_send_url" {
-  name  = "/${var.project}/${var.environment}/EMAIL_SEND_URL"
-  type  = "SecureString"
-  value = "https://email.example/replace-me"
   lifecycle { ignore_changes = [value] }
 }
 

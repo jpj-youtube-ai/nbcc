@@ -2,7 +2,8 @@
 # Gated on `domain_name`. Empty => HTTP-only (staging default before this: no cert).
 # Two modes:
 #   • Apex mode (parent_zone_id == ""): CREATE a Route53 hosted zone for domain_name
-#     and put every record + the ported Google/Resend email records in it. Production
+#     and put every record + the ported Google email records in it (SES's own records live
+#     in ses.tf). Production
 #     (nbcc.scot) uses this — the zone's nameservers are delegated at the registrar.
 #   • Subdomain mode (parent_zone_id set): do NOT create a zone; add the cert-validation
 #     + A-alias records into the EXISTING parent zone (already delegated). Staging
@@ -61,8 +62,8 @@ resource "aws_route53_record" "txt_apex" {
   # Google Workspace. Publishing an SPF record that omitted Google would start FAILING every real
   # email a human sends from @nbcc.scot — worse than having none.
   #
-  # Resend is deliberately NOT included here: its envelope sender is send.nbcc.scot, which has its
-  # own SPF record (resend_spf below). Adding include:amazonses.com at the apex would authorise every
+  # SES is deliberately NOT included here: its envelope sender is bounce.nbcc.scot, which has its
+  # own SPF record (ses.tf). Adding include:amazonses.com at the apex would authorise every
   # Amazon SES customer to send as @nbcc.scot — far broader than we need.
   #
   # ~all (softfail) not -all: a hard fail is the goal, but only after the DMARC reports (rua below)
@@ -82,111 +83,33 @@ resource "aws_route53_record" "dkim" {
   records = [join("\"\"", local.dkim_chunks)]
 }
 
-# Resend (transactional email relay) sender verification — apex mode only.
-resource "aws_route53_record" "resend_dkim" {
-  count   = local.create_zone ? 1 : 0
-  zone_id = local.zone_id
-  name    = "resend._domainkey.${var.domain_name}"
-  type    = "TXT"
-  ttl     = 3600
-  records = ["p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDObmTJ0OFRvcEFtdxNNptkaGrbU6xnXoHkZj3CoB7cfSLywko1WOUYsinRa3DjQ67QAyLcfQeZKP+jyxcb/Hj+WCSOtNWQ5H4h7CzizVjiQ/JeRwSJNiYG6cl2RiL7avUsGgni2ri+y30XRUbzeQCGMAt68+Wd7YjRw8uteMaLtwIDAQAB"]
-}
-
-resource "aws_route53_record" "resend_mx" {
-  count   = local.create_zone ? 1 : 0
-  zone_id = local.zone_id
-  name    = "send.${var.domain_name}"
-  type    = "MX"
-  ttl     = 3600
-  records = ["10 feedback-smtp.eu-west-1.amazonses.com"]
-}
-
-resource "aws_route53_record" "resend_spf" {
-  count   = local.create_zone ? 1 : 0
-  zone_id = local.zone_id
-  name    = "send.${var.domain_name}"
-  type    = "TXT"
-  ttl     = 3600
-  records = ["v=spf1 include:amazonses.com ~all"]
-}
-
-# ---- news.nbcc.scot: the dedicated newsletter sending subdomain (TASK-296) ------
+# Email sending records live in ses.tf (Resend→SES migration): Easy-DKIM CNAMEs for the apex and
+# news.<apex> identities, plus the bounce.* / bounce.news.* MAIL FROM MX + SPF pairs. The old
+# Resend records (resend._domainkey.*, send.* / send.news.* MX+SPF) are gone with the provider.
 #
-# Newsletters used to send from the apex, nbcc.scot — the same domain as donation receipts, Gift
-# Aid declarations and admin login codes. That means one campaign that upsets a spam filter can
-# damage the deliverability of mail people NEED to receive. A dedicated subdomain gives the
-# newsletter its own reputation to build and its own reputation to lose.
-#
-# Its DKIM key is distinct from the apex one, which is the point: news.nbcc.scot authenticates on
-# its own account. DMARC is inherited from the apex policy (no sp= tag there), so the tightened
-# p=quarantine applies here too without a second record.
-#
-# Values supplied by Resend when the domain was added. The subdomain is created inside the EXISTING
-# nbcc.scot hosted zone, so no delegation and no new zone — nothing about the apex changes.
-resource "aws_route53_record" "news_dkim" {
-  count   = local.create_zone ? 1 : 0
-  zone_id = local.zone_id
-  name    = "resend._domainkey.news.${var.domain_name}"
-  type    = "TXT"
-  ttl     = 3600
-  records = ["p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDyf4vj13IJRGFP5XEpV6PzgYAbBZWM/gIEPI705o4GWR0htMlFTqn/g1IFVhCJcqxpHejGj1yzbOSPHaFhe9VavoXXfi8L4dOf3eF1rfLKvkGcPRaZ5u/u5foraR6tcrU33DRf9TsoeJ8SfqrQR7zmo8IwU66VhKqCHPFg/QGIywIDAQAB"]
-}
+# The news.<apex> subdomain itself remains the dedicated newsletter sender (TASK-296 rationale
+# unchanged): one campaign that upsets a spam filter must risk its OWN reputation, not the apex's
+# — the apex carries donation receipts, Gift Aid confirmations and admin login codes. DMARC is
+# inherited from the apex policy (no sp= tag), so p=quarantine applies to it without a second
+# record.
 
-# The Return-Path domain: bounce and complaint feedback comes back here.
-resource "aws_route53_record" "news_mx" {
-  count   = local.create_zone ? 1 : 0
-  zone_id = local.zone_id
-  name    = "send.news.${var.domain_name}"
-  type    = "MX"
-  ttl     = 3600
-  records = ["10 feedback-smtp.eu-west-1.amazonses.com"]
-}
-
-resource "aws_route53_record" "news_spf" {
-  count   = local.create_zone ? 1 : 0
-  zone_id = local.zone_id
-  name    = "send.news.${var.domain_name}"
-  type    = "TXT"
-  ttl     = 3600
-  records = ["v=spf1 include:amazonses.com ~all"]
-}
-
-# TASK-295: the click-tracking subdomain, links.nbcc.scot.
+# TASK-295/299: the click-tracking subdomain for the newsletter sender, links.news.nbcc.scot.
 #
-# Resend rewrites every link in a newsletter so clicks can be counted. By default those rewritten
-# links point at Resend's own SHARED tracking domain — so an email that says it is from nbcc.scot
-# carries links to somewhere else entirely, which is the shape of a phishing message and is very
-# likely part of why a real send reached Hotmail's junk folder.
-#
-# With this CNAME the rewritten links become links.nbcc.scot: same sender, same link domain, and the
-# click data is kept. Open tracking is deliberately left OFF in Resend — it works by embedding an
-# invisible image, which Apple Mail and Gmail pre-load (so the numbers lie) and some filters read as
-# a negative signal. Clicks are the honest measure.
-resource "aws_route53_record" "resend_tracking" {
-  count   = local.create_zone ? 1 : 0
-  zone_id = local.zone_id
-  name    = "links.${var.domain_name}"
-  type    = "CNAME"
-  ttl     = 3600
-  records = ["links1.resend-dns.com"]
-}
-
-# TASK-299: the click-tracking subdomain for the NEW sending domain, links.news.nbcc.scot.
-#
-# Tracking is configured PER SENDING DOMAIN in Resend, and TASK-298 moved the newsletter onto
-# news.nbcc.scot. The apex record above still serves anything sent from nbcc.scot, but it does not
-# cover the subdomain - so without this, newsletters would either lose click data entirely or fall
-# back to Resend shared tracking domain, which is the mismatched-link shape we removed in TASK-295.
-#
-# Resend fixes the parent domain in its UI, so this can only ever be a subdomain of news.nbcc.scot.
-# That is the tighter alignment anyway: From and link domain now share the same subdomain exactly.
+# SES rewrites every link in a newsletter (the click-tracked configuration set in ses.tf) so
+# clicks can be counted. By default those rewritten links point at SES's own shared tracker — so
+# an email that says it is from news.nbcc.scot would carry links to somewhere else entirely,
+# which is the shape of a phishing message. With this CNAME the rewritten links stay on the
+# sender's own subdomain and the click data is kept. Open tracking stays OFF (Apple Mail and
+# Gmail pre-load images, so the numbers lie, and some filters read the pixel as a negative
+# signal). The old apex tracker (links.nbcc.scot) is gone: transactional mail no longer carries
+# click tracking at all, by design.
 resource "aws_route53_record" "news_tracking" {
   count   = local.create_zone ? 1 : 0
   zone_id = local.zone_id
   name    = "links.news.${var.domain_name}"
   type    = "CNAME"
   ttl     = 3600
-  records = ["links1.resend-dns.com"]
+  records = ["r.${var.region}.awstrack.me"]
 }
 
 resource "aws_route53_record" "dmarc" {
@@ -218,8 +141,9 @@ resource "aws_route53_record" "dmarc" {
   #
   # Why it is safe: both things that send as nbcc.scot were checked to authenticate AND align, so
   # neither is affected by a stricter policy —
-  #   - Resend (newsletters, receipts): envelope on send.nbcc.scot -> SPF include:amazonses.com;
-  #     DKIM at resend._domainkey signs d=nbcc.scot. Aligns on both.
+  #   - Amazon SES (newsletters, receipts): envelope on bounce.nbcc.scot / bounce.news.nbcc.scot
+  #     -> SPF include:amazonses.com; Easy DKIM signs d=nbcc.scot / d=news.nbcc.scot (ses.tf).
+  #     Aligns on both.
   #   - Google Workspace (staff mail): apex SPF include:_spf.google.com, and google._domainkey is
   #     present, so it aligns on DKIM too rather than on SPF alone.
   # The policy only ever acts on mail that FAILS. Genuine mail passes and is untouched.

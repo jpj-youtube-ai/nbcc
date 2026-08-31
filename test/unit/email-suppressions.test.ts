@@ -17,14 +17,14 @@ const { queryMock } = vi.hoisted(() => ({ queryMock: vi.fn() }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect: vi.fn() } }));
 
 import { suppressEmail, unsuppressEmail, suppressedAmong } from "../../src/db/email-suppressions";
-import { suppressionFor, type ParsedResendEvent } from "../../src/newsletter/resend-events";
+import { suppressionFor, type ParsedEmailEvent } from "../../src/newsletter/ses-events";
 
 const sqlOf = (re: RegExp): string =>
   queryMock.mock.calls.map((c) => String(c[0])).find((s) => re.test(s)) ?? "";
 const paramsOf = (re: RegExp): unknown[] =>
   (queryMock.mock.calls.find((c) => re.test(String(c[0]))) || [])[1] as unknown[];
 
-const event = (over: Partial<ParsedResendEvent>): ParsedResendEvent => ({
+const event = (over: Partial<ParsedEmailEvent>): ParsedEmailEvent => ({
   eventType: "bounced",
   email: "x@example.com",
   occurredAt: new Date("2026-07-30T00:00:00Z"),
@@ -44,12 +44,24 @@ describe("suppressionFor — which events stop future sending (pure)", () => {
   });
 
   it("suppresses a PERMANENT bounce, and keeps the provider's reason", () => {
-    const out = suppressionFor(event({ detail: { type: "Permanent", message: "mailbox does not exist" } }));
+    const out = suppressionFor(
+      event({
+        detail: {
+          bounceType: "Permanent",
+          bouncedRecipients: [{ emailAddress: "x@example.com", diagnosticCode: "mailbox does not exist" }],
+        },
+      }),
+    );
     expect(out).toEqual({ reason: "bounced", detail: "mailbox does not exist" });
   });
 
+  it("falls back to the bounce sub-type when SES gives no diagnostic", () => {
+    const out = suppressionFor(event({ detail: { bounceType: "Permanent", bounceSubType: "NoEmail" } }));
+    expect(out).toEqual({ reason: "bounced", detail: "NoEmail" });
+  });
+
   it("does NOT suppress a transient bounce — a full inbox is temporary", () => {
-    expect(suppressionFor(event({ detail: { type: "Transient", message: "mailbox full" } }))).toBeNull();
+    expect(suppressionFor(event({ detail: { bounceType: "Transient", bounceSubType: "MailboxFull" } }))).toBeNull();
   });
 
   it("does not suppress a bounce whose type is unknown, or any other event", () => {
@@ -59,7 +71,7 @@ describe("suppressionFor — which events stop future sending (pure)", () => {
   });
 
   it("matches the permanent type case-insensitively", () => {
-    expect(suppressionFor(event({ detail: { type: "PERMANENT" } }))?.reason).toBe("bounced");
+    expect(suppressionFor(event({ detail: { bounceType: "PERMANENT" } }))?.reason).toBe("bounced");
   });
 });
 

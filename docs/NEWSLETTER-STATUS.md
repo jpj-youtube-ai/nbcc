@@ -1,6 +1,26 @@
 # Newsletter platform — status and pickup notes
 
-Written 2026-08-20, refreshed after TASK-311 on 2026-08-28. Point a fresh session at this file.
+Written 2026-08-20, refreshed after TASK-311 on 2026-08-28; Resend→SES migration noted 2026-08-31.
+Point a fresh session at this file.
+
+## ⚠️ 2026-08-31: the provider is changing — Resend → Amazon SES (code merged, cutover gated)
+
+The "mail plan before December" decision landed on **option 2 (Amazon SES)** and the code migration
+is complete on the `task-ses-email-migration` branch: the app sends straight to the SESv2 API with
+the task role, the relay Worker + Resend account are removed, and delivery events arrive via
+SES → SNS → `POST /api/webhooks/ses/:token`. See the README's **"The Resend→SES migration"**
+section for the full picture.
+
+**Do not merge that branch until, in order:** (1) the Infra workflow has applied
+`infra/modules/app/ses.tf` (identities, DKIM DNS, configuration sets, SNS, webhook token) and both
+identities show **verified** in the SES console; (2) **SES production access** has been granted
+(the account starts sandboxed: 200/day, verified recipients only — request it in the console citing
+SC047995, opt-in lists, suppression + one-click unsubscribe). Merging early breaks production
+receipts — merging IS the production deploy. After cutover, warm up gently (SES IPs are new even
+though the domain reputation carries) and revisit `NEWSLETTER_DAILY_SEND_CAP` (70): the shared
+100/day pot it defended no longer exists.
+
+Everything below this section describing "Resend" describes the world before this migration.
 
 ## ⚠️ START HERE: a real send is IN FLIGHT
 

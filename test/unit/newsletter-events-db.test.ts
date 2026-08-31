@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // the feature's promises:
 //   - correlation picks the NEWEST send for an address, bounded by a window (webhook events arrive
 //     keyed by address, not newsletter);
-//   - inserts are idempotent on the Svix id (Resend retries until acknowledged);
+//   - inserts are idempotent on the provider event id (SNS retries until acknowledged);
 //   - stats count DISTINCT addresses, so a duplicate event can never inflate a rate;
 //   - an unmatched event is NOT stored (receipts/login codes: acknowledged and dropped).
 
@@ -14,7 +14,7 @@ vi.mock("../../src/db/pool", () => ({ pool: { query: queryMock, connect } }));
 
 import {
   recordNewsletterSends,
-  recordResendEvent,
+  recordEmailEvent,
   recordUnsubscribeEvent,
   getNewsletterStats,
 } from "../../src/db/newsletter-events";
@@ -56,12 +56,12 @@ describe("recordNewsletterSends", () => {
   });
 });
 
-describe("recordResendEvent (webhook ingestion)", () => {
+describe("recordEmailEvent (webhook ingestion)", () => {
   it("correlates to the NEWEST send for that address within the window, then inserts", async () => {
     queryMock
       .mockResolvedValueOnce({ rows: [{ newsletter_id: 41 }], rowCount: 1 }) // the match
       .mockResolvedValueOnce({ rows: [], rowCount: 1 }); // the insert
-    const outcome = await recordResendEvent("msg_1", parsed);
+    const outcome = await recordEmailEvent("msg_1", parsed);
     expect(outcome).toBe("recorded");
     const match = sqlOf(/from\s+newsletter_sends/i);
     expect(match).toMatch(/order\s+by\s+sent_at\s+desc/i);
@@ -72,23 +72,23 @@ describe("recordResendEvent (webhook ingestion)", () => {
 
   it("DROPS an event for an address we never sent a newsletter to — no warehousing receipts", async () => {
     queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // no send matches
-    const outcome = await recordResendEvent("msg_1", parsed);
+    const outcome = await recordEmailEvent("msg_1", parsed);
     expect(outcome).toBe("unmatched");
     expect(allSql()).not.toMatch(/insert\s+into\s+newsletter_email_events/i);
   });
 
-  it("is idempotent on the Svix id — a retry reports duplicate, never a second row", async () => {
+  it("is idempotent on the provider event id — a retry reports duplicate, never a second row", async () => {
     queryMock
       .mockResolvedValueOnce({ rows: [{ newsletter_id: 41 }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // ON CONFLICT DO NOTHING swallowed it
-    const outcome = await recordResendEvent("msg_1", parsed);
+    const outcome = await recordEmailEvent("msg_1", parsed);
     expect(outcome).toBe("duplicate");
     expect(sqlOf(/insert\s+into\s+newsletter_email_events/i)).toMatch(/on\s+conflict/i);
   });
 });
 
 describe("recordUnsubscribeEvent", () => {
-  it("stores our own event with NO svix id, resolving the donor's address in the same statement", async () => {
+  it("stores our own event with NO provider event id, resolving the donor's address in the same statement", async () => {
     await recordUnsubscribeEvent(41, 7);
     const sql = sqlOf(/insert\s+into\s+newsletter_email_events/i);
     expect(sql).toMatch(/from\s+donors/i); // email comes from the donor row, not the caller
@@ -149,7 +149,7 @@ describe("engagement events (TASK-257)", () => {
     queryMock
       .mockResolvedValueOnce({ rows: [{ newsletter_id: 41 }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [], rowCount: 1 });
-    await recordResendEvent("msg_c1", clicked);
+    await recordEmailEvent("msg_c1", clicked);
     const params = paramsOf(/insert\s+into\s+newsletter_email_events/i);
     expect(params).toContain("https://nbcc.scot/donate");
   });

@@ -13,7 +13,7 @@
 // daily EventBridge schedule runs it as a one-off ECS task reusing the app task definition with a
 // `["sh","-c","npm run reminders"]` command override (infra/modules/app/scheduler.tf) — the same
 // one-off-task pattern the deploy uses for migrations. Reuses existing config (DATABASE_URL,
-// EMAIL_SEND_URL, PORTAL_BASE_URL, GIVING_FROM_EMAIL) — no new config key.
+// EMAIL_PROVIDER, PORTAL_BASE_URL, GIVING_FROM_EMAIL) — no new config key.
 import { pool } from "../db/pool";
 import { config } from "../config";
 import { listSupportersDueForReminder, markReminderSent } from "../db/fulfilment";

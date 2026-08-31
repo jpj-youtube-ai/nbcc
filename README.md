@@ -2301,6 +2301,28 @@ announces an event The Designer Rooms has not announced yet. It **fails closed**
 forged, expired or unverifiable cookie all mean no, including when the database read for the
 password hash throws.
 
+### Cancelling a booking (TASK-323)
+
+**Admin → Festive Ball → bookings → Cancel.** Editor+ **with the ball section granted** — the
+same bar as changing capacity, because near a sell-out this decides who gets the last table.
+
+The seats come back on their own: availability counts only `pending` and `paid`
+(`SOLD_SQL`), so the status change *is* the mechanism. There is no separate "give the seats
+back" step to forget.
+
+**It does not refund.** Money moves in Stripe, by a person, deliberately — a button in our
+admin that quietly issued refunds would be far worse to get wrong than one that does not. The
+confirmation dialog says so explicitly, because "cancel" reads like "undo the whole thing" and
+a buyer who is still out of pocket will not agree.
+
+Only a live booking can be cancelled; a second attempt returns 409 rather than pretending, and
+an unknown reference returns 404. Every cancellation writes a `ball.booking_cancelled` audit row
+with the reference, the seats returned, the previous status and the optional note — the booking
+row itself is kept, marked `cancelled`, so nothing is erased.
+
+This is also how you clear test bookings before launch: cancel them and the count returns to
+the full room.
+
 ### Changing the preview password
 
 Staff set it in **Admin → Festive Ball**, not in AWS. `ball_settings.preview_password_hash`

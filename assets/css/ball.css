@@ -858,23 +858,39 @@
 }
 
 .ball-hero .wrap > * {
-  /* Slower than a normal UI transition on purpose. Quick fades read as an interface
-     responding; a long one reads as a curtain going up, which is the feeling this page is
-     selling. The stagger is widened to match, so the hero assembles as one considered
-     movement instead of five quick ones overlapping. */
-  animation: ball-rise 1.15s var(--ease-quart) both;
+  /* Slower than a normal UI transition on purpose: a quick fade reads as an interface
+     responding, a long one as a curtain going up, and the second is what this page is for.
+     
+     LONG DURATIONS, SHORT DELAYS. These are not the same lever and only one of them is free.
+     Stretching the delays too is the obvious way to make a hero feel slower, and it was how
+     this was first written -- but `both` holds an element invisible until its delay elapses,
+     so the stagger was keeping "Book tickets" off the screen for over a second. Someone
+     arriving from the printed advert's QR code was waiting on a decoration.
+     
+     So the fades are longer than before and the delays are SHORTER: everything is on screen
+     and readable inside ~0.6s, and then takes its time settling. Slow to watch, never slow to
+     use. */
+  animation: ball-rise 1.7s var(--ease-quart) both;
 }
-.ball-hero .wrap > :nth-child(1) { animation-delay: 0.08s; }
-.ball-hero .wrap > :nth-child(2) { animation: ball-lockup-in 1.5s var(--ease-expo) 0.2s both; }
-.ball-hero .wrap > :nth-child(3) { animation-delay: 0.72s; }
-.ball-hero .wrap > :nth-child(4) { animation-delay: 0.92s; }
-.ball-hero .wrap > :nth-child(5) { animation-delay: 1.08s; }
+.ball-hero .wrap > :nth-child(1) { animation-delay: 0.06s; }
+.ball-hero .wrap > :nth-child(2) { animation: ball-lockup-in 2.2s var(--ease-expo) 0.14s both; }
+.ball-hero .wrap > :nth-child(3) { animation-delay: 0.34s; }
+.ball-hero .wrap > :nth-child(4) { animation-delay: 0.5s; }
+.ball-hero .wrap > :nth-child(5) { animation-delay: 0.62s; }
 
-/* The scroll reveals are the shared site transition (.reveal, 0.65s). On this page they are
-   slowed to sit with the hero's longer entrance, so the whole page moves at one pace. */
+/* The scroll reveals are the shared site transition (.reveal, 0.65s), slowed here to sit with
+   the hero's longer entrance so the whole page moves at one pace.
+   
+   These have a lower ceiling than the hero does, and it is a usability ceiling rather than a
+   taste one: the hero plays once while somebody is still arriving, but a reveal fires every
+   time they scroll to something they have decided to read. Past roughly a second and a half it
+   stops feeling composed and starts feeling like the page is struggling to keep up. The
+   opacity carries most of the perceived slowness; the transform finishes sooner so the text
+   has stopped moving well before it has finished brightening, which is far easier to read
+   during. */
 .ball-page .reveal {
   transition:
-    opacity 1.05s var(--ease-quart) var(--d, 0ms),
+    opacity 1.45s var(--ease-quart) var(--d, 0ms),
     transform 1.05s var(--ease-quart) var(--d, 0ms);
 }
 

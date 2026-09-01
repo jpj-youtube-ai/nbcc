@@ -10,6 +10,12 @@ export type NewsletterEmailEventType = "delivered" | "bounced" | "complained" | 
 
 export interface ParsedEmailEvent {
   eventType: NewsletterEmailEventType;
+  /**
+   * TASK-346: the id SES gave the message when we sent it (payload.mail.messageId) — NOT the SNS
+   * notification's own id. This is what lets the audit log stamp the outcome onto the exact row,
+   * rather than the newest one for that address.
+   */
+  messageId: string | null;
   email: string; // first recipient, lowercased — our sends have exactly one
   occurredAt: Date;
   detail: Record<string, unknown> | null; // the bounce object and nothing else — never a whole payload
@@ -73,7 +79,7 @@ const EVENT_MAP: Record<string, NewsletterEmailEventType> = {
 export function parseSesEvent(message: string): ParsedEmailEvent | null {
   let payload: {
     eventType?: unknown;
-    mail?: { timestamp?: unknown; destination?: unknown };
+    mail?: { timestamp?: unknown; destination?: unknown; messageId?: unknown };
     delivery?: { timestamp?: unknown };
     bounce?: { timestamp?: unknown; bounceType?: unknown };
     complaint?: { timestamp?: unknown };
@@ -113,7 +119,10 @@ export function parseSesEvent(message: string): ParsedEmailEvent | null {
     if (typeof candidate === "string" && candidate.trim()) linkUrl = candidate.trim();
   }
 
-  return { eventType, email: first.trim().toLowerCase(), occurredAt, detail, linkUrl };
+  const mailId = payload?.mail?.messageId;
+  const messageId = typeof mailId === "string" && mailId.trim() ? mailId.trim() : null;
+
+  return { eventType, email: first.trim().toLowerCase(), occurredAt, detail, linkUrl, messageId };
 }
 
 // TASK-272 lineage: which events take an address off every future send. Pure, so the rule is

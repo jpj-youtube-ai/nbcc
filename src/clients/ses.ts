@@ -25,10 +25,17 @@ const resolveCredentials = createCredentialProvider({
  * src/newsletter/send-failure.ts classifies 429/503/504 as "come back later", so the status
  * must survive into the message (SES throttling is a 429 TooManyRequestsException).
  */
+// TASK-346: returns the id SES assigns the message, which the audit log stores so a delivery
+// event can be matched to the exact send it belongs to. SESv2 has always returned this in the
+// response body; it was simply being discarded, which is why email_log had to fall back to
+// guessing by recipient and recency.
+//
+// Null rather than throwing when the body cannot be read: the email HAS been accepted at this
+// point, and losing the audit id is not a reason to tell the caller the send failed.
 export async function sendSesEmail(
   msg: SesMessage,
   deps: { fetchImpl?: typeof fetch } = {},
-): Promise<void> {
+): Promise<string | null> {
   const fetchImpl = deps.fetchImpl ?? fetch;
   const url = sesEndpoint(config.SES_REGION);
   const body = JSON.stringify(buildSesSendRequest(msg));
@@ -46,5 +53,11 @@ export async function sendSesEmail(
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
     throw new Error(`SES send responded ${res.status}${detail ? `: ${detail.slice(0, 300)}` : ""}`);
+  }
+  try {
+    const parsed = (await res.json()) as { MessageId?: unknown };
+    return typeof parsed?.MessageId === "string" ? parsed.MessageId : null;
+  } catch {
+    return null;
   }
 }

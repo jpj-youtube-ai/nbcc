@@ -26,6 +26,10 @@ export const SECTIONS = [
   // search-visibility choices. Editing changes PUBLIC URLs and what Google lists, so edit is
   // launch-sensitive like "ball": admins edit by role; editors and viewers may look.
   "site",
+  // TASK-354: business outreach. Editors get it alongside the other operational sections below:
+  // it is fundraising work volunteers do, not governance. It does carry contact details for
+  // businesses and named people, which is why it is not given to viewers.
+  "outreach",
   "team",
 ] as const;
 
@@ -46,6 +50,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
   "newsletter",
   "thank-you",
   "search",
+  "outreach",
 ];
 
 /**

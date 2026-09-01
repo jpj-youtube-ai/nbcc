@@ -451,7 +451,14 @@ Then("the ball calendar should be a calendar file", function () {
 // stale copy without asking — which is why three separate markup changes appeared not to ship
 // while every stylesheet change appeared at once.
 Then("the ball page should be revalidated on every view", function () {
-  const cc = this.ballPageCacheControl || "";
+  // Two different steps fetch this page: getBall() for a plain request, which already keeps the
+  // whole Headers object, and the unlock step, which keeps the one header it needs. The first
+  // version of this read only a variable the unlock step set, so the scenario that fetches the
+  // page WITHOUT unlocking it asserted against an empty string and failed.
+  const cc =
+    (this.ballPageHeaders && this.ballPageHeaders.get("cache-control")) ||
+    this.ballPageCacheControl ||
+    "";
   assert.ok(cc, "expected the ball page to state how long it may be cached");
   assert.ok(
     /max-age=0|no-store|no-cache/.test(cc),

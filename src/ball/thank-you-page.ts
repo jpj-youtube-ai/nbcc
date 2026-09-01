@@ -147,6 +147,8 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
           />
         </a>
       </p>
+      <!-- Appendix A2, verbatim, ABOVE NBCC's own words rather than instead of them. -->
+      <p class="ball-sponsor-statement">Organised and sponsored by The Designer Rooms in aid of NBCC. The Designer Rooms is covering the full cost of the evening, so all proceeds from ticket sales are donated to the charity. The Designer Rooms receives no payment for organising this event.</p>
       <p class="ball-sponsor-note">
         We are proud to have them behind this evening. They have brought the whole night together
         and are paying for every part of it, so what you have just paid funds NBCC's work rather

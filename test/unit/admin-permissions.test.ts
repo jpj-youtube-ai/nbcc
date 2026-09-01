@@ -38,9 +38,22 @@ describe("SECTIONS", () => {
       "thank-you",
       "audit",
       "email-audit",
+      "site",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(15);
+    expect(SECTIONS).toHaveLength(16);
+  });
+});
+
+// Site addressing (site-pages feature): editing changes PUBLIC URLs and what search engines
+// list, so edit arrives only with the admin role (like ball's launch gate); everyone else may
+// look but not touch by default.
+describe("site defaults", () => {
+  it("admins edit; editors and viewers view", () => {
+    expect(roleToPermissions("admin").site).toBe("edit");
+    expect(roleToPermissions("editor").site).toBe("view");
+    expect(roleToPermissions("viewer").site).toBe("view");
+    expect(can(roleToPermissions("editor"), "site", "edit")).toBe(false);
   });
 });
 

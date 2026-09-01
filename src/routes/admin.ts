@@ -2303,6 +2303,87 @@ export async function getAdminEmailLog(req: Request, res: Response): Promise<Res
   }
 }
 
+// --- Site addressing (site-pages feature): spare addresses + search visibility -------------
+// GET  /api/admin/site-pages          — the registry pages (with effective listed flags) + aliases
+// POST /api/admin/site-aliases        — add a spare address (validated, friendly refusals)
+// DELETE /api/admin/site-aliases/:id  — remove one
+// PATCH /api/admin/site-seo           — set one page's "show to search engines" choice
+// Reads need site:view; every write needs site:edit (admins by default — public URLs and what
+// Google lists are launch-sensitive).
+export async function getAdminSitePages(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "site", "view"))) return;
+  try {
+    const { ALL_PAGES } = await import("../site/pages");
+    const { listAliases, getSeoOverrides } = await import("../db/site-pages");
+    const [aliases, overrides] = await Promise.all([listAliases(), getSeoOverrides()]);
+    const pages = ALL_PAGES.map((p) => ({
+      path: p.path,
+      title: p.title,
+      ballGated: Boolean(p.ballGated),
+      listedByDefault: p.listedByDefault,
+      listed: overrides.get(p.path) ?? p.listedByDefault,
+      overridden: overrides.has(p.path),
+    }));
+    return res.status(200).json({ pages, aliases });
+  } catch (err) {
+    console.error("admin site pages read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+export async function postAdminSiteAlias(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "site", "edit");
+  if (!claims) return;
+  try {
+    const from = typeof req.body?.from === "string" ? req.body.from.trim().toLowerCase() : "";
+    const to = typeof req.body?.to === "string" ? req.body.to.trim() : "";
+    const { aliasFromProblem, aliasToProblem } = await import("../site/pages");
+    const problem = aliasFromProblem(from) ?? aliasToProblem(to);
+    if (problem) return res.status(400).json({ error: problem });
+    const { addAlias } = await import("../db/site-pages");
+    const added = await addAlias(from, to, `admin:${claims.email}`);
+    if (!added) return res.status(409).json({ error: "That spare address already exists." });
+    return res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error("admin site alias add failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+export async function deleteAdminSiteAlias(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "site", "edit"))) return;
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid id" });
+    const { removeAlias } = await import("../db/site-pages");
+    return (await removeAlias(id))
+      ? res.status(200).json({ ok: true })
+      : res.status(404).json({ error: "Not found" });
+  } catch (err) {
+    console.error("admin site alias delete failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+export async function patchAdminSiteSeo(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "site", "edit");
+  if (!claims) return;
+  try {
+    const path = typeof req.body?.path === "string" ? req.body.path : "";
+    const listed = req.body?.listed;
+    const { isKnownPage } = await import("../site/pages");
+    if (!isKnownPage(path) || typeof listed !== "boolean") {
+      return res.status(400).json({ error: "Pick a real page and a yes or no." });
+    }
+    const { setSeoListed } = await import("../db/site-pages");
+    await setSeoListed(path, listed, `admin:${claims.email}`);
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    console.error("admin site seo update failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 // GET /api/admin/subscriptions/dunning?status — at-risk / lapsed monthly gifts. Viewer and up.
 export async function getAdminDunning(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "subscriptions", "view"))) return;
@@ -2320,6 +2401,10 @@ adminRouter.get("/api/admin/claim-batches", getAdminClaimBatches);
 adminRouter.get("/api/admin/claim-batches/:id/export", getAdminClaimBatchExport);
 adminRouter.get("/api/admin/audit", getAdminAuditLog);
 adminRouter.get("/api/admin/email-log", getAdminEmailLog);
+adminRouter.get("/api/admin/site-pages", getAdminSitePages);
+adminRouter.post("/api/admin/site-aliases", postAdminSiteAlias);
+adminRouter.delete("/api/admin/site-aliases/:id", deleteAdminSiteAlias);
+adminRouter.patch("/api/admin/site-seo", patchAdminSiteSeo);
 adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);
 
 // --- Admin Stories (Task C): list/view/manage My Story submissions -------------------------------

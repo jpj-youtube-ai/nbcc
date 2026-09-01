@@ -28,6 +28,10 @@ const PAGES = [
   "thank-you.html",
   "ball.html",
   "ball-terms.html",
+  // Site-pages feature: both carry privacy.html's (legitimately shorter) footer, so they join
+  // PAGES but not the byte-identity group below.
+  "404.html",
+  "sitemap.html",
 ];
 
 // Pages whose footer is byte-identical to index.html's (full brand paragraph,

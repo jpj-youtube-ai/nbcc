@@ -16,6 +16,7 @@ export interface ExportGuest {
   fullName: string;
   dietary: string | null;
   accessNeeds: string | null;
+  menuChoice: string | null;
   tableName: string | null;
   reference: string;
 }
@@ -74,14 +75,25 @@ export function doorListCsv(guests: ExportGuest[]): string {
 // Only guests who actually have something to tell the kitchen. A list of forty rows of blanks
 // buries the three that matter, and the three that matter are the whole point.
 export function cateringCsv(guests: ExportGuest[]): string {
-  const relevant = guests.filter((g) => g.dietary || g.accessNeeds);
+  // TASK-345: a menu choice counts as something to tell the kitchen. Once the venue confirms a
+  // menu this list stops being a short list of exceptions and becomes the order itself, so a
+  // guest with a choice and no allergy has to appear on it.
+  const relevant = guests.filter((g) => g.dietary || g.accessNeeds || g.menuChoice);
   const sorted = [...relevant].sort(
     (a, b) => (a.tableName ?? "").localeCompare(b.tableName ?? "") ||
       a.fullName.localeCompare(b.fullName),
   );
   return csvRows([
-    ["Table", "Guest", "Food", "Access"],
-    ...sorted.map((g) => [g.tableName ?? "", g.fullName, g.dietary ?? "", g.accessNeeds ?? ""]),
+    ["Table", "Guest", "Menu", "Food", "Access"],
+    ...sorted.map((g) => [
+      g.tableName ?? "",
+      g.fullName,
+      // One cell, newlines flattened: a spreadsheet cell with hard returns in it is awkward to
+      // read down a column, and the caterer reads this as a list.
+      (g.menuChoice ?? "").replace(/\r?\n/g, "; "),
+      g.dietary ?? "",
+      g.accessNeeds ?? "",
+    ]),
   ]);
 }
 

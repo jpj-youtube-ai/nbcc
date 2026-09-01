@@ -1112,6 +1112,17 @@
               </p>
               <p class="ty-status" id="ballReminderStatus" role="status" aria-live="polite"></p>
 
+              <h3 class="admin-subhead">The menu</h3>
+              <p class="admin-note">Paste what the venue sends, <b>one course per line</b>, options separated by a vertical bar. A line with no options is a course everybody gets. Leave this empty and guests see no menu section at all &mdash; which is how it ships, because the menu is not confirmed yet.</p>
+              <p class="admin-note"><code>Starter: Cullen skink | Haggis bon bons | Melon</code><br /><code>Main: Steak pie | Salmon | Mushroom wellington</code><br /><code>Dessert: Cranachan | Cheesecake</code></p>
+              <form id="ballMenuForm" class="ty-controls admin-stack" autocomplete="off">
+                <label class="ty-inline" style="align-items:flex-start">Menu
+                  <textarea id="ballMenuOptions" rows="5" maxlength="4000" style="width:min(100%,520px)" placeholder="Leave empty until the venue confirms it"></textarea>
+                </label>
+                <button class="btn btn-primary" type="submit">Save the menu</button>
+                <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>
+              </form>
+
               <h3 class="admin-subhead">When guest details close</h3>
               <p class="admin-note">The date the venue needs final numbers by. <b>Nothing is chased until you set this</b> &mdash; an email asking for names with no date in it is just nagging, and it spends the one message people actually read. Once it is set, anyone still outstanding gets a reminder a fortnight before, and a last call on the day itself.</p>
               <form id="ballLockForm" class="ty-controls admin-stack" autocomplete="off">

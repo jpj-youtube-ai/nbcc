@@ -38,6 +38,9 @@ export interface BallSettings {
   lineUpNote: string | null;
   // TASK-338: when guest details close. NULL until agreed with the venue.
   guestDetailsLockAt: string | null;
+  // TASK-345: NULL until the venue confirms a menu; the guest form shows no menu section while
+  // it is null, rather than an empty picker.
+  menuOptions: string | null;
   // The card rate NBCC is actually charged (TASK-317). Data rather than a constant, because
   // the page asks buyers to cover this exact number: a stale rate collects money for a fee
   // that was never charged. Basis points so nothing here is a float — 120 = 1.20%.
@@ -64,6 +67,7 @@ interface SettingsRow {
   included_note: string | null;
   line_up_note: string | null;
   guest_details_lock_at: string | null;
+  menu_options: string | null;
   card_fee_percent_bp: number;
   card_fee_fixed_pence: number;
 }
@@ -71,7 +75,7 @@ interface SettingsRow {
 const SETTINGS_SQL = `SELECT total_tables, seats_per_table, held_seats, gate_open,
                              gate_opens_at, sales_close_at, sales_closed,
                              arrival_time, included_note, line_up_note,
-                             guest_details_lock_at,
+                             guest_details_lock_at, menu_options,
                              card_fee_percent_bp, card_fee_fixed_pence
                         FROM ball_settings WHERE id = 1`;
 
@@ -110,6 +114,7 @@ function toSettings(r: SettingsRow): BallSettings {
     includedNote: r.included_note,
     lineUpNote: r.line_up_note,
     guestDetailsLockAt: r.guest_details_lock_at,
+    menuOptions: r.menu_options,
     cardFeePercentBp: r.card_fee_percent_bp,
     cardFeeFixedPence: r.card_fee_fixed_pence,
   };
@@ -341,6 +346,7 @@ const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
   includedNote: "included_note",
   lineUpNote: "line_up_note",
   guestDetailsLockAt: "guest_details_lock_at",
+  menuOptions: "menu_options",
   cardFeePercentBp: "card_fee_percent_bp",
   cardFeeFixedPence: "card_fee_fixed_pence",
 };
@@ -556,7 +562,7 @@ export async function updateSettings(
       `UPDATE ball_settings SET ${sets.join(", ")} WHERE id = 1 RETURNING
          total_tables, seats_per_table, held_seats, gate_open, gate_opens_at,
          sales_close_at, sales_closed, arrival_time, included_note, line_up_note,
-         guest_details_lock_at`,
+         guest_details_lock_at, menu_options`,
       values,
     );
     await insertAudit(client, {
@@ -761,6 +767,7 @@ export async function getBookingByGuestToken(token: string): Promise<BookingByTo
       fullName: g.full_name,
       dietary: g.dietary,
       accessNeeds: g.access_needs,
+      menuChoice: g.menu_choice,
     })),
   };
 }
@@ -788,9 +795,10 @@ export async function saveGuests(bookingId: number, submission: GuestWrite): Pro
     const expires = retentionDate().toISOString();
     for (const g of submission.guests) {
       await client.query(
-        `INSERT INTO ball_guests (booking_id, full_name, dietary, access_needs, expires_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [bookingId, g.fullName, g.dietary, g.accessNeeds, expires],
+        `INSERT INTO ball_guests
+           (booking_id, full_name, dietary, access_needs, expires_at, menu_choice)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [bookingId, g.fullName, g.dietary, g.accessNeeds, expires, g.menuChoice ?? null],
       );
     }
     await client.query("COMMIT");
@@ -923,7 +931,7 @@ export async function listGuestProgress(): Promise<GuestProgressRow[]> {
 
 export async function listGuestsForExport(): Promise<ExportGuest[]> {
   const res = await pool.query(
-    `SELECT g.full_name, g.dietary, g.access_needs, b.table_name, b.reference
+    `SELECT g.full_name, g.dietary, g.access_needs, g.menu_choice, b.table_name, b.reference
        FROM ball_guests g
        JOIN ball_bookings b ON b.id = g.booking_id
       WHERE b.status = 'paid'`,
@@ -932,6 +940,7 @@ export async function listGuestsForExport(): Promise<ExportGuest[]> {
     fullName: r.full_name,
     dietary: r.dietary,
     accessNeeds: r.access_needs,
+    menuChoice: r.menu_choice,
     tableName: r.table_name,
     reference: r.reference,
   }));
@@ -993,7 +1002,7 @@ export async function listBookingsNeedingReminder(): Promise<ReminderTarget[]> {
   const targets: ReminderTarget[] = [];
   for (const r of res.rows) {
     const guests = await pool.query(
-      `SELECT full_name, dietary, access_needs FROM ball_guests
+      `SELECT full_name, dietary, access_needs, menu_choice FROM ball_guests
         WHERE booking_id = $1 ORDER BY id ASC`,
       [r.id],
     );

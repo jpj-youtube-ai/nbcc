@@ -12,6 +12,7 @@ import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
 import { buildBallCalendar } from "../ball/calendar";
 import { buildGuestSummaryEmail } from "../ball/run-up-email";
+import { parseMenu, choosableCourses, formatChoice, type MenuCourse } from "../ball/menu";
 import { sendBallRunUp } from "../clients/email";
 import { markRunUpSent } from "../db/ball";
 import {
@@ -357,7 +358,30 @@ ballRouter.get("/ball/terms", async (req, res, next) => {
 // The form posts flat fields (fullName1, dietary1, …) because it is a plain HTML form with no
 // JavaScript to build a nested body. Fold them back into the shape the schema expects, dropping
 // any row the booker left entirely blank — a half-filled table is the expected case, not an error.
-function guestsFromForm(body: Record<string, unknown>, seats: number) {
+// TASK-345: the menu selects, read back per guest.
+//
+// Keyed off the MENU rather than the form, so a select somebody added by hand cannot introduce a
+// course the venue never offered, and a course dropped from the menu stops being collected the
+// moment staff edit it.
+function menuChoiceFromForm(
+  body: Record<string, unknown>,
+  n: number,
+  menu: MenuCourse[],
+): string | null {
+  const asked = choosableCourses(menu);
+  if (asked.length === 0) return null;
+  const pairs: Array<[string, string]> = asked.map((course, c) => {
+    const raw = body[`menu${n}_${c}`];
+    const value = typeof raw === "string" ? raw : "";
+    // Only an option the menu actually offers. Anything else is discarded rather than stored,
+    // so the kitchen never receives a dish nobody is cooking.
+    return [course.name, course.options.includes(value) ? value : ""];
+  });
+  const formatted = formatChoice(pairs);
+  return formatted.length > 0 ? formatted : null;
+}
+
+function guestsFromForm(body: Record<string, unknown>, seats: number, menu: MenuCourse[]) {
   const rows = [];
   for (let n = 1; n <= seats; n += 1) {
     const fullName = typeof body[`fullName${n}`] === "string" ? String(body[`fullName${n}`]).trim() : "";
@@ -365,6 +389,7 @@ function guestsFromForm(body: Record<string, unknown>, seats: number) {
     rows.push({
       fullName,
       dietary: typeof body[`dietary${n}`] === "string" ? String(body[`dietary${n}`]) : "",
+      menuChoice: menuChoiceFromForm(body, n, menu),
       accessNeeds: typeof body[`accessNeeds${n}`] === "string" ? String(body[`accessNeeds${n}`]) : "",
     });
   }
@@ -383,6 +408,7 @@ ballRouter.get("/ball/guests/:token", async (req, res, next) => {
         booking: found.booking,
         guests: found.guests,
         token: req.params.token,
+        menuOptions: (await getSettings()).menuOptions,
         saved: req.query.saved === "1",
       }),
     );
@@ -436,7 +462,9 @@ ballRouter.post(
         return;
       }
       const body = (req.body ?? {}) as Record<string, unknown>;
-      const guests = guestsFromForm(body, found.booking.seats);
+      const settings = await getSettings();
+      const menu = parseMenu(settings.menuOptions);
+      const guests = guestsFromForm(body, found.booking.seats, menu);
 
       // Clearing the table entirely is a legitimate action (a booker fixing a mistake), so an
       // empty list saves rather than erroring — the schema's min(1) guards the API, not this form.
@@ -456,6 +484,7 @@ ballRouter.post(
             booking: found.booking,
             guests: found.guests,
             token: req.params.token,
+            menuOptions: (await getSettings()).menuOptions,
             error:
               "We couldn't save that. Check that every guest you've listed has a name, and that " +
               "the notes aren't too long.",

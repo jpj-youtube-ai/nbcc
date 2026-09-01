@@ -108,7 +108,7 @@ describe("cateringCsv", () => {
 
   it("groups by table so the kitchen can work through the room", () => {
     const lines = cateringCsv(guests).split("\r\n");
-    expect(lines[0]).toBe('"Table","Guest","Food","Access"');
+    expect(lines[0]).toBe('"Table","Guest","Menu","Food","Access"');
     expect(lines[1]).toContain("Bakery");
     expect(lines[2]).toContain("Team Ayr");
   });

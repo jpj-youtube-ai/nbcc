@@ -216,6 +216,21 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
     res.status(404).send("Not found");
     return;
   }
+  // TASK-341: say how long this may be cached, because Express does not.
+  //
+  // res.send() sets an ETag and NOTHING else. With no Cache-Control a browser falls back to
+  // HEURISTIC caching — roughly a tenth of the age since Last-Modified — and may serve a stale
+  // copy without asking the server at all. Every other page on the site is served by the static
+  // handler, which sets `public, max-age=0`; this route is the one page that bypasses it.
+  //
+  // The symptom was not subtle and took most of a day to spot: ball.css is served with
+  // max-age=0, so every STYLE change appeared immediately, while every MARKUP change — bolded
+  // words in the tick boxes, the rewritten sponsor credit — appeared not to have shipped. Three
+  // separate "I still cannot see it" reports, all of them HTML, none of them CSS.
+  //
+  // max-age=0 rather than no-store: it still revalidates on every view, but a 304 costs nothing
+  // when the page has not changed.
+  res.setHeader("Cache-Control", "public, max-age=0");
   const template = readFileSync(file, "utf8");
   // TASK-334: the ball page is served here rather than by the shared static handler in
   // site.ts, which is the handler that adds the Festive Ball nav item to every other page.
@@ -273,6 +288,7 @@ ballRouter.get("/ball", async (req, res, next) => {
       if (!unlocked) {
         // 401, not 200: this is an unauthenticated response, and it also stops any crawler
         // or link preview treating the lock screen as the page's content.
+        res.setHeader("Cache-Control", "private, no-store");
         res.status(401).type("html").send(renderBallLockPage());
         return;
       }
@@ -519,5 +535,8 @@ ballRouter.get("/ball/thank-you", async (req, res) => {
   } catch (err) {
     console.error("ball thank-you lookup failed:", err instanceof Error ? err.message : err);
   }
+  // A personal receipt with a booking reference on it. Never cached, and never by anything
+  // shared: this is the page someone lands on straight after paying.
+  res.setHeader("Cache-Control", "private, no-store");
   res.type("html").send(renderBallThankYou(booking));
 });

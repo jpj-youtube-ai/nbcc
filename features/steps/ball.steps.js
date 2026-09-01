@@ -340,6 +340,7 @@ When("I unlock the ball page with {string}", async function (password) {
     redirect: "manual",
   });
   this.ballPageStatus = res.status;
+  this.ballPageCacheControl = res.headers.get("cache-control") || "";
   this.ballPageBody = await res.text();
   const setCookie = res.headers.get("set-cookie");
   if (setCookie) {
@@ -443,6 +444,19 @@ Then("the ball calendar should be a calendar file", function () {
   );
   assert.ok(this.ballCalendarBody.startsWith("BEGIN:VCALENDAR"));
   assert.ok(this.ballCalendarBody.includes("DTSTART:20261107T"));
+});
+
+// TASK-341: the ball page is served by its own route, which means Express sets an ETag and no
+// Cache-Control at all. With no Cache-Control a browser caches heuristically and can serve a
+// stale copy without asking — which is why three separate markup changes appeared not to ship
+// while every stylesheet change appeared at once.
+Then("the ball page should be revalidated on every view", function () {
+  const cc = this.ballPageCacheControl || "";
+  assert.ok(cc, "expected the ball page to state how long it may be cached");
+  assert.ok(
+    /max-age=0|no-store|no-cache/.test(cc),
+    `expected the ball page to force revalidation, got "${cc}"`,
+  );
 });
 
 Then("the ball page nav should link to the ball", function () {

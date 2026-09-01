@@ -70,6 +70,13 @@ import {
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
 import { listEmailLog, listRecentEmailFailures } from "../db/email-log";
+import {
+  listKnownBusinesses,
+  createOutreach,
+  listOutreach,
+} from "../db/outreach";
+import { findMatches, isDoNotContact } from "../outreach/matching";
+import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
@@ -2320,6 +2327,79 @@ adminRouter.get("/api/admin/claim-batches", getAdminClaimBatches);
 adminRouter.get("/api/admin/claim-batches/:id/export", getAdminClaimBatchExport);
 adminRouter.get("/api/admin/audit", getAdminAuditLog);
 adminRouter.get("/api/admin/email-log", getAdminEmailLog);
+
+// --- Business outreach (TASK-352) ---------------------------------------------------------------
+//
+// Cold contact asking local businesses to become monthly supporters. The front of a funnel whose
+// later stages already exist; this ends at "they signed up".
+
+// POST /api/admin/outreach/check — what does the matcher say about this business?
+//
+// Deliberately its own endpoint rather than part of the create: the volunteer sees the warnings
+// BEFORE committing anything, which is the entire point. Checking is a read, so Viewer+ can do it.
+export async function postAdminOutreachCheck(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  const businessName = typeof req.body?.businessName === "string" ? req.body.businessName.trim() : "";
+  const contactEmail = typeof req.body?.contactEmail === "string" ? req.body.contactEmail.trim() : "";
+  if (!businessName) return res.status(400).json({ error: "A business name is needed" });
+  try {
+    const known = await listKnownBusinesses();
+    const matches = findMatches({ businessName, contactEmail: contactEmail || null }, known);
+    return res.status(200).json({ matches, doNotContact: isDoNotContact(matches) });
+  } catch (err) {
+    console.error("outreach check failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/outreach — add a business. Creates a DRAFT; nothing is sent here.
+export async function postAdminOutreach(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "edit"))) return;
+  const parsed = outreachCreateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid business", details: parsed.error.issues });
+  }
+  try {
+    // Checked again on the server, not only in the browser. A decline is an instruction, and the
+    // browser is not where instructions are enforced.
+    const known = await listKnownBusinesses();
+    const matches = findMatches(parsed.data, known);
+    if (isDoNotContact(matches) && parsed.data.acknowledgedMatches !== true) {
+      return res.status(409).json({
+        error: "This business has told us not to contact them again",
+        matches,
+      });
+    }
+    const row = await createOutreach({
+      businessName: parsed.data.businessName,
+      contactName: parsed.data.contactName ?? null,
+      contactEmail: parsed.data.contactEmail ?? null,
+      contactPhone: parsed.data.contactPhone ?? null,
+      businessType: parsed.data.businessType,
+      note: parsed.data.note ?? null,
+      owner: parsed.data.owner ?? null,
+    });
+    return res.status(201).json({ business: row, matches });
+  } catch (err) {
+    console.error("outreach create failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/outreach — the list behind the landing counts.
+export async function getAdminOutreach(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  try {
+    return res.status(200).json({ results: await listOutreach() });
+  } catch (err) {
+    console.error("outreach list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/outreach/check", postAdminOutreachCheck);
+adminRouter.post("/api/admin/outreach", postAdminOutreach);
+adminRouter.get("/api/admin/outreach", getAdminOutreach);
 adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);
 
 // --- Admin Stories (Task C): list/view/manage My Story submissions -------------------------------

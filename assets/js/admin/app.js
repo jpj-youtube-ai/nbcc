@@ -32,7 +32,7 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "team",
+    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "outreach", "team",
   ];
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",

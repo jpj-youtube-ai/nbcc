@@ -22,6 +22,10 @@ export const SECTIONS = [
   // editors and viewers get NONE, unlike every other section, because the page lists who
   // received what email — donor-identifying operational data, not general content.
   "email-audit",
+  // TASK-352: business outreach. Editors get it alongside the other operational sections below:
+  // it is fundraising work volunteers do, not governance. It does carry contact details for
+  // businesses and named people, which is why it is not given to viewers.
+  "outreach",
   "team",
 ] as const;
 
@@ -42,6 +46,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
   "newsletter",
   "thank-you",
   "search",
+  "outreach",
 ];
 
 /**

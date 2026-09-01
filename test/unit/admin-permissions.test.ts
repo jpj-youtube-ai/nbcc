@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 15 matrix sections", () => {
+  it("lists exactly the 16 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -38,9 +38,10 @@ describe("SECTIONS", () => {
       "thank-you",
       "audit",
       "email-audit",
+      "outreach",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(15);
+    expect(SECTIONS).toHaveLength(16);
   });
 });
 

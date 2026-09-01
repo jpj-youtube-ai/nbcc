@@ -16,6 +16,7 @@ import type { ExportBooking, ExportGuest } from "../ball/exports";
 import type { WaitingListEntry } from "../ball/waiting-list";
 import type { ThankYouBooking } from "../ball/thank-you-page";
 import type { CardFeeRate } from "../ball/pricing";
+import type { GuestProgressRow } from "../ball/guest-progress";
 import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
@@ -766,6 +767,38 @@ export async function purgeExpiredGuests(): Promise<number> {
 // Every named guest on a PAID booking, with the table they sit at. Pending and cancelled
 // bookings are excluded: nobody unpaid is coming, and printing them would send the welcome desk
 // looking for people who are not there.
+// TASK-336: how many guests each PAID booking has named, against how many seats it holds.
+//
+// A LEFT JOIN, not an inner one: a booking with no guests yet is the entire point of the query,
+// and an inner join drops exactly the rows staff need to chase. Grouped in SQL rather than
+// counted in Node so a sold-out ball is one round trip and not four hundred.
+//
+// Unpaid bookings are excluded. A pending or expired row owes nobody anything, and counting it
+// would put seats nobody bought into the denominator of the catering list.
+export async function listGuestProgress(): Promise<GuestProgressRow[]> {
+  const res = await pool.query(
+    `SELECT b.reference, b.buyer_name, b.buyer_email, b.seats, b.guest_token,
+            COUNT(g.id)::int AS guests_named,
+            COUNT(g.id) FILTER (
+              WHERE COALESCE(g.dietary, '') <> '' OR COALESCE(g.access_needs, '') <> ''
+            )::int AS needs_given
+       FROM ball_bookings b
+       LEFT JOIN ball_guests g ON g.booking_id = b.id
+      WHERE b.status = 'paid'
+      GROUP BY b.id, b.reference, b.buyer_name, b.buyer_email, b.seats, b.guest_token
+      ORDER BY b.created_at ASC`,
+  );
+  return res.rows.map((r) => ({
+    reference: r.reference,
+    buyerName: r.buyer_name,
+    buyerEmail: r.buyer_email,
+    seats: r.seats,
+    guestsNamed: r.guests_named,
+    needsGiven: r.needs_given,
+    guestToken: r.guest_token,
+  }));
+}
+
 export async function listGuestsForExport(): Promise<ExportGuest[]> {
   const res = await pool.query(
     `SELECT g.full_name, g.dietary, g.access_needs, b.table_name, b.reference

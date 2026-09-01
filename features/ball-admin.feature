@@ -10,6 +10,16 @@ Feature: Festive Ball admin controls (TASK-313)
     Then the ball admin status should be 200
     And the ball admin should report 400 seats remaining
 
+  # TASK-336: guest names and dietary needs come back from BUYERS, so staff needed a list of who
+  # has not replied. With no paid bookings the honest answer is an empty list and zero seats -
+  # not a divide-by-zero, and not a percentage that claims a catering list is ready.
+  Scenario: the guest chase list is empty, not broken, before anyone has booked
+    Given a ball admin "ball9.admin.bdd@example.com" with role "admin" and password "pw-ball9"
+    When I GET the ball guest progress as "ball9.admin.bdd@example.com" with password "pw-ball9"
+    Then the ball admin status should be 200
+    And the guest progress should report 0 seats booked
+    And the guest progress should list 0 bookings to chase
+
   Scenario: an admin flips the gate and the public page opens
     Given a ball admin "ball2.admin.bdd@example.com" with role "admin" and password "pw-ball2"
     And the ball gate is closed

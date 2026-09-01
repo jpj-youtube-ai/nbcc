@@ -491,6 +491,28 @@ When("I GET the ball admin without a token", async function () {
   this.ballAdminBody = await res.json().catch(() => ({}));
 });
 
+// TASK-336: the chase list - bookings whose guest details have not come back yet.
+When(
+  "I GET the ball guest progress as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/guest-progress`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballAdminStatus = res.status;
+    this.ballAdminBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the guest progress should report {int} seats booked", function (seats) {
+  assert.strictEqual(this.ballAdminBody.summary.seatsBooked, seats);
+});
+
+Then("the guest progress should list {int} bookings to chase", function (n) {
+  assert.strictEqual(this.ballAdminBody.summary.bookingsOutstanding, n);
+  assert.strictEqual((this.ballAdminBody.outstanding || []).length, n);
+});
+
 When(
   "I GET the ball admin as {string} with password {string}",
   async function (email, password) {

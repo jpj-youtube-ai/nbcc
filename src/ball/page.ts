@@ -33,8 +33,8 @@ export const lineUpSentence = (): string =>
   `${BALL_HOST} hosts, with ${BALL_LINE_UP.slice(0, -1).join(", ")} and ${BALL_LINE_UP[BALL_LINE_UP.length - 1]}.`;
 
 export const TICKET_INCLUDES =
-  "Entry to the ball, a three-course meal, a drink on arrival, and entertainment " +
-  "through the evening. Further drinks are not included.";
+  "Entry to the ball, a three-course meal, a welcome drink on arrival, and entertainment " +
+  "through the evening.";
 
 export interface BallPageInput {
   settings: BallPageSettings;
@@ -87,10 +87,12 @@ export function renderBallPage(template: string, input: BallPageInput): string {
   // The confirmed inclusions are fixed copy; the menu detail is APPENDED once the venue
   // confirms it, never substituted for them.
   //
-  // "Further drinks are not included" is doing real work. A drink on arrival reads to plenty of
-  // people as "drinks are provided", and the difference is discovered at the bar on the night
-  // — which is both an unhappy guest and, in an advert for a £100 ticket, a claim we could not
-  // stand behind. Better said plainly here than argued about in November.
+  // TASK-336: this used to close with "Further drinks are not included", because "a drink on
+  // arrival" reads to plenty of people as "drinks are provided" and the difference gets
+  // discovered at the bar on the night. NBCC's answer was better than the caveat: "a WELCOME
+  // drink on arrival" already says one drink, at the start, without the page telling a buyer
+  // what they are not getting. Same protection, and it stops the sentence ending on a negative
+  // in an advert for a £100 ticket.
   if (settings.includedNote) {
     html = fillRegion(html, "included", TICKET_INCLUDES + " " + escapeHtml(settings.includedNote));
   }

@@ -59,7 +59,13 @@ import {
   markReminderSent,
   purgeExpiredGuests,
   updateSettings as updateBallSettings,
+  listGuestProgress,
 } from "../db/ball";
+import {
+  summariseGuestProgress,
+  outstandingBookings,
+  guestLinkFor,
+} from "../ball/guest-progress";
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
 import { parseArchiveView } from "../admin/archive-filter";
@@ -2933,7 +2939,35 @@ export async function deleteAdminBallHold(req: Request, res: Response): Promise<
 
 adminRouter.get("/api/admin/ball", getAdminBall);
 adminRouter.patch("/api/admin/ball", patchAdminBall);
+// GET /api/admin/ball/guest-progress — who still owes us their guests, and how far off a
+// complete catering list is. Viewer+, the same bar as the bookings list it sits beside.
+//
+// The chase list carries each buyer's own guest link so staff can resend it, rather than asking
+// someone to find a confirmation email from weeks ago. That link is a bearer token for one
+// booking's guest details, which is why this is behind the admin session like everything else
+// here and why it is never logged.
+export async function getAdminBallGuestProgress(
+  req: Request,
+  res: Response,
+): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    const rows = await listGuestProgress();
+    return res.status(200).json({
+      summary: summariseGuestProgress(rows),
+      outstanding: outstandingBookings(rows).map((b) => ({
+        ...b,
+        guestLink: guestLinkFor(b, config.BALL_BASE_URL),
+      })),
+    });
+  } catch (err) {
+    console.error("admin ball guest progress failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);
+adminRouter.get("/api/admin/ball/guest-progress", getAdminBallGuestProgress);
 adminRouter.post("/api/admin/ball/bookings/:reference/cancel", postAdminBallCancelBooking);
 adminRouter.get("/api/admin/ball/holds", getAdminBallHolds);
 adminRouter.post("/api/admin/ball/holds", postAdminBallHold);

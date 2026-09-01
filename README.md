@@ -5400,3 +5400,31 @@ sends via SES — merging earlier leaves production trying to send through an un
 neighbourhood even though the domain reputation carries. `NEWSLETTER_DAILY_SEND_CAP` (70) guarded a
 100/day provider pot that no longer exists; raise it once the SES sending quota (visible in the
 console) is confirmed comfortably above campaign size.
+
+**Email audit page (email-audit feature, 2026-09-01).** A new admin view — **Email audit**, under
+Governance — listing every email the system has TRIED to send, newest first, with its outcome:
+sent, failed (with the reason), and what the mailbox side reported back (delivered / bounced /
+marked as spam). Recent failures (14 days) are pinned in a red band at the top. One search box
+covers recipient, name and subject; dropdowns filter by kind and status; paginated 50/page.
+
+- **Recording** (`src/db/email-log.ts` + the `email_log` migration): every send in
+  `src/clients/email.ts` funnels through one `sendAndLog` seam that writes a **metadata-only** row
+  — kind, recipient, name, subject, sent/failed + truncated error; **never a body** (bodies carry
+  one-time links and 2FA codes). Best-effort by contract: a bookkeeping failure can never fail the
+  send. Stubbed (dev/CI) sends log too, so the page is exercised end to end offline. History
+  starts at this feature's deploy — nothing recorded per-send existed before it.
+- **Delivery truth**: the SES webhook (`src/routes/ses-webhook.ts`) stamps
+  delivered/bounced/complained onto the newest matching un-stamped row — the same windowed,
+  per-address correlation the newsletter stats use — so "sent" and "arrived" are never conflated.
+- **Access is its own permission**: a new `email-audit` section in the matrix that NO role below
+  admin carries (viewer's view-everywhere default and editor's operational defaults both exclude
+  it — the page shows donor-identifying send data). Admins — today exactly the two
+  commissioners — hold it by role and grant it per person via the Team → Manage access matrix.
+- **Retention**: rows are pruned **six years after the end of the UK tax year they were sent in**
+  (`src/email/log-retention.ts`, reusing `endOfUkTaxYear` — HMRC's Gift Aid record window),
+  by the existing daily reminders task. `eraseEmailLogFor(email)` ships alongside for the day a
+  donor-erasure flow lands; nothing calls it yet, by design.
+- Covered by `test/unit/email-log.test.ts` (SQL contracts, correlation, prune cutoff, erasure),
+  the extended `admin-permissions` tests (role defaults), and `features/email-audit.feature`
+  (a real send appearing in the list, a failure in the red band, search + type filter, and the
+  editor-gets-403 gate).

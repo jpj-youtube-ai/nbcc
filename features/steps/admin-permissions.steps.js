@@ -28,6 +28,7 @@ const SECTIONS = [
   "newsletter",
   "thank-you",
   "audit",
+  "email-audit",
   "team",
 ];
 

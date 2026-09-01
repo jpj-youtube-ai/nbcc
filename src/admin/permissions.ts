@@ -16,6 +16,12 @@ export const SECTIONS = [
   "newsletter",
   "thank-you",
   "audit",
+  // The email send audit page (email-audit feature). Deliberately locked down by default:
+  // admins get it through the role loop below (today that is exactly Jaimie and Jon, per the
+  // request that they alone hold it and control who else does — via the Team matrix);
+  // editors and viewers get NONE, unlike every other section, because the page lists who
+  // received what email — donor-identifying operational data, not general content.
+  "email-audit",
   "team",
 ] as const;
 
@@ -65,10 +71,11 @@ export function roleToPermissions(role: string): PermissionMap {
     return perms;
   }
 
-  // viewer (and any unrecognised role) — view everywhere except team, no edit.
+  // viewer (and any unrecognised role) — view everywhere except team and the email audit
+  // (donor-identifying send data is admin-granted per person, never arrives with a role).
   const perms: PermissionMap = {};
   for (const section of SECTIONS) {
-    perms[section] = section === "team" ? "none" : "view";
+    perms[section] = section === "team" || section === "email-audit" ? "none" : "view";
   }
   return perms;
 }

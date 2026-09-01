@@ -58,6 +58,17 @@ if (require.main === module) {
       } catch (err) {
         console.error("ball run-up failed:", err instanceof Error ? err.message : err);
       }
+      // Email-audit retention: prune email_log rows past their six-tax-years window
+      // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
+      // ball run-up does — one more statement on a schedule that already exists — and in its
+      // own try/catch so a prune hiccup cannot stop the passes above (or vice versa).
+      try {
+        const { pruneEmailLog } = await import("../db/email-log");
+        const pruned = await pruneEmailLog(new Date());
+        console.error(`email log retention: pruned=${pruned}`);
+      } catch (err) {
+        console.error("email log prune failed:", err instanceof Error ? err.message : err);
+      }
       await pool.end();
     })
     .catch(async (err: unknown) => {

@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 14 matrix sections", () => {
+  it("lists exactly the 15 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -37,9 +37,35 @@ describe("SECTIONS", () => {
       "newsletter",
       "thank-you",
       "audit",
+      "email-audit",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(14);
+    expect(SECTIONS).toHaveLength(15);
+  });
+});
+
+// The email audit page (email-audit feature) lists who received what email — donor-identifying
+// operational data — so unlike every other section it never arrives with a role below admin.
+// Today's admins are exactly the two people the page was commissioned for; anyone else gets it
+// per person, through the Team matrix.
+describe("email-audit defaults", () => {
+  it("arrives with the admin role", () => {
+    expect(roleToPermissions("admin")["email-audit"]).toBe("edit");
+  });
+
+  it("is NONE for editors — even though they edit most operational sections", () => {
+    expect(roleToPermissions("editor")["email-audit"] ?? "none").toBe("none");
+    expect(can(roleToPermissions("editor"), "email-audit", "view")).toBe(false);
+  });
+
+  it("is NONE for viewers — the one view-everywhere role exception besides team", () => {
+    expect(roleToPermissions("viewer")["email-audit"]).toBe("none");
+    expect(can(roleToPermissions("viewer"), "email-audit", "view")).toBe(false);
+  });
+
+  it("can still be granted per person via a stored override", () => {
+    const stored: PermissionMap = { "email-audit": "view" };
+    expect(can(effectivePermissions({ role: "viewer", permissions: stored }), "email-audit", "view")).toBe(true);
   });
 });
 
@@ -108,10 +134,10 @@ describe("roleToPermissions", () => {
     expect(can(perms, "team", "view")).toBe(false);
   });
 
-  it("viewer gets view on all sections except team", () => {
+  it("viewer gets view on all sections except team and email-audit", () => {
     const perms = roleToPermissions("viewer");
     for (const section of SECTIONS) {
-      if (section === "team") continue;
+      if (section === "team" || section === "email-audit") continue;
       expect(perms[section]).toBe("view");
     }
   });

@@ -69,6 +69,7 @@ import {
 } from "../ball/guest-progress";
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
+import { listEmailLog, listRecentEmailFailures } from "../db/email-log";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
@@ -2273,6 +2274,35 @@ export async function getAdminAuditLog(req: Request, res: Response): Promise<Res
   }
 }
 
+// GET /api/admin/email-log?type&status&q&limit&offset — the email send audit (email-audit
+// feature): every send attempt with its outcome, plus the recent-failures band. Gated on the
+// email-audit section, which NO role except admin carries by default (donor-identifying send
+// data — granted per person via the Team matrix).
+export async function getAdminEmailLog(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "email-audit", "view"))) return;
+  try {
+    const paged = pageArgs(req);
+    // Clamped: the page reads 50 at a time; an unbounded limit would let one request dump the
+    // whole log.
+    const limit = Math.min(Math.max(paged.limit ?? 50, 1), 200);
+    const offset = Math.max(paged.offset ?? 0, 0);
+    const kind = typeof req.query.type === "string" && req.query.type ? req.query.type : undefined;
+    const status = typeof req.query.status === "string" && req.query.status ? req.query.status : undefined;
+    const q = typeof req.query.q === "string" ? req.query.q : undefined;
+    const [listed, failures] = await Promise.all([
+      listEmailLog({ kind, status, q, limit, offset }),
+      // The red band only decorates the FIRST page of an unfiltered view — a filtered or paged
+      // request is already a deliberate search, and repeating the band above it would just
+      // duplicate rows the filter may deliberately exclude.
+      !kind && !status && !q && offset === 0 ? listRecentEmailFailures() : Promise.resolve([]),
+    ]);
+    return res.status(200).json({ results: listed.rows, total: listed.total, failures });
+  } catch (err) {
+    console.error("admin email log list failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 // GET /api/admin/subscriptions/dunning?status — at-risk / lapsed monthly gifts. Viewer and up.
 export async function getAdminDunning(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "subscriptions", "view"))) return;
@@ -2289,6 +2319,7 @@ adminRouter.get("/api/admin/donations", getAdminDonations);
 adminRouter.get("/api/admin/claim-batches", getAdminClaimBatches);
 adminRouter.get("/api/admin/claim-batches/:id/export", getAdminClaimBatchExport);
 adminRouter.get("/api/admin/audit", getAdminAuditLog);
+adminRouter.get("/api/admin/email-log", getAdminEmailLog);
 adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);
 
 // --- Admin Stories (Task C): list/view/manage My Story submissions -------------------------------

@@ -1283,3 +1283,20 @@ tr.nl-click:hover { background: var(--tint); }
 }
 .admin-fold > summary:hover { color: var(--slate); }
 .admin-fold[open] > summary { margin-bottom: 8px; }
+
+/* ---- Email audit (email-audit feature) ---- */
+/* The red band: the page leads with what went wrong, styled as a warning, not another table
+   card. Colours reuse the site tokens (crimson on a faint tint) rather than inventing an
+   alert palette. */
+.email-fail-band { border: 1px solid var(--crimson, #C02238); border-radius: 10px; background: rgba(192, 34, 56, 0.06); padding: .75rem 1rem 1rem; margin: 0 0 1.2rem; }
+.email-fail-band h3 { color: var(--crimson, #C02238); margin: 0 0 .5rem; font-size: 1rem; }
+.email-fail-band .admin-table-wrap { margin: 0; }
+/* Fit the card: the shared .admin-table sets nowrap on every cell, so one long subject would
+   scroll the whole card sideways (same fix the newsletter tables carry). Fixed layout, wrapping
+   cells, and the date/type/status columns pinned so the subject takes what is left. */
+.email-audit-table { table-layout: fixed; width: 100%; }
+.email-audit-table th, .email-audit-table td { white-space: normal; vertical-align: top; overflow-wrap: anywhere; }
+.email-audit-table th:nth-child(1), .email-audit-table td:nth-child(1) { width: 7.5rem; }
+.email-audit-table th:nth-child(2), .email-audit-table td:nth-child(2) { width: 8.5rem; }
+.email-audit-table th:nth-child(5), .email-audit-table td:nth-child(5) { width: 9rem; }
+.email-audit-table small { color: var(--slate-soft, #6F6A66); }

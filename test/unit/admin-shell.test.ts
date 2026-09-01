@@ -77,6 +77,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "newsletter",
       "thank-you",
       "audit",
+      "email-audit",
       "team",
     ]);
     for (const v of [

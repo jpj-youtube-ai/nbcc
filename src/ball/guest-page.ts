@@ -26,6 +26,11 @@ export interface GuestPageBooking {
   quantity: number;
   seats: number;
   buyerName: string;
+  // TASK-338: carried for the read-back email sent on save, not rendered on the page. The page
+  // is reached by a link in the buyer's inbox and shows their guests' names, so it deliberately
+  // does NOT print the buyer's own address back at them.
+  buyerFirstName: string | null;
+  buyerEmail: string;
   tableName: string | null;
 }
 

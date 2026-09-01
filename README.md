@@ -2603,11 +2603,44 @@ parsing — `z.coerce.boolean()` reads ANY non-empty string as true, so a stray 
 silently opt someone into marketing. Entries carry the same 90-day retention as guest details:
 nobody should still be on a waiting list for a party that has happened.
 
+### The run-up (TASK-338)
+
+Guest names, dietary requirements and access needs come back from **buyers**, and most of a table
+of ten is filled in because one person chased nine others. The run-up drives that on a schedule
+instead of leaving it to somebody remembering.
+
+**Set the lock date first.** Admin → Festive Ball → *When guest details close*. Until it is set
+**nothing is chased at all** — an email asking for names with no date in it is nagging, and it
+spends the one message people actually read before there is anything useful to say.
+
+Then, per paid booking:
+
+| When | What | To whom |
+|---|---|---|
+| On every guest-form save | A read-back of exactly what we now hold | That buyer |
+| 14 days before the lock date | "We still need your guest list", with the date | Anyone outstanding |
+| On the lock date | Last call | Anyone still outstanding |
+| 3 days before the ball | The practical email, with their guests read back | Everyone |
+
+The schedule is pure (`src/ball/run-up.ts`) and unit-tested without a clock or a database; the
+wiring is `src/ball/run-up-runner.ts`. It rides the **existing** daily EventBridge task
+(`npm run reminders`) rather than getting infrastructure of its own — one more read on a schedule
+that already exists, where a second rule would be a second thing to notice had stopped. A failure
+in either pass cannot stop the other.
+
+Each stage stamps its own column **only after a successful send**, so a re-run never double-sends
+and a failed send is retried tomorrow rather than silently recorded as done. `POST
+/api/admin/ball/chase` (Editor+) runs the same pass on demand — anyone already emailed at that
+stage is skipped, so pressing the button twice is safe.
+
+Past the lock date the chase stops entirely rather than running to the event: staff work the
+remaining stragglers by hand from the outstanding list.
+
 ### The week-before reminder
 
-`POST /api/admin/ball/reminders` (Editor+ with the ball section). Staff-triggered, not scheduled:
-this app has no scheduler, and a cron misfiring at 3am against a guest list is a worse failure
-than a button someone presses.
+`POST /api/admin/ball/reminders` (Editor+ with the ball section). The original staff-triggered
+button, kept because it is still the way to send this early or re-send it. Since TASK-338 the same
+email also goes out automatically three days before the ball, to anyone who has not had it.
 
 It carries the practical details **and reads back what the booker told us** — guest names,
 allergies, access needs. That is the point of it: a coeliac note that never saved is caught a week

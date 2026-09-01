@@ -2972,6 +2972,26 @@ export async function getAdminBallGuestProgress(
 
 adminRouter.get("/api/admin/ball/bookings", getAdminBallBookings);
 adminRouter.get("/api/admin/ball/guest-progress", getAdminBallGuestProgress);
+
+// POST /api/admin/ball/chase — email everyone whose guest details are still outstanding, now.
+//
+// Editor+, not Viewer: it sends real email to real buyers. It runs the same pass the daily task
+// runs, so a booking already chased today is skipped rather than emailed twice — pressing this
+// button twice is safe, which is the property that matters for something staff will press when
+// they are not sure whether it worked the first time.
+export async function postAdminBallChase(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "edit"))) return;
+  try {
+    const { runBallRunUp } = await import("../ball/run-up-runner");
+    const result = await runBallRunUp();
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error("ball chase failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Could not send the chase emails" });
+  }
+}
+
+adminRouter.post("/api/admin/ball/chase", postAdminBallChase);
 adminRouter.post("/api/admin/ball/bookings/:reference/cancel", postAdminBallCancelBooking);
 adminRouter.get("/api/admin/ball/holds", getAdminBallHolds);
 adminRouter.post("/api/admin/ball/holds", postAdminBallHold);

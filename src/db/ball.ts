@@ -17,6 +17,7 @@ import type { WaitingListEntry } from "../ball/waiting-list";
 import type { ThankYouBooking } from "../ball/thank-you-page";
 import type { CardFeeRate } from "../ball/pricing";
 import type { GuestProgressRow } from "../ball/guest-progress";
+import type { RunUpBooking } from "../ball/run-up";
 import { insertAudit } from "./donations";
 
 // TASK-313: the read/write layer for the Festive Ball. Pure decisions live in src/ball/;
@@ -35,6 +36,8 @@ export interface BallSettings {
   arrivalTime: string | null;
   includedNote: string | null;
   lineUpNote: string | null;
+  // TASK-338: when guest details close. NULL until agreed with the venue.
+  guestDetailsLockAt: string | null;
   // The card rate NBCC is actually charged (TASK-317). Data rather than a constant, because
   // the page asks buyers to cover this exact number: a stale rate collects money for a fee
   // that was never charged. Basis points so nothing here is a float — 120 = 1.20%.
@@ -60,6 +63,7 @@ interface SettingsRow {
   arrival_time: string | null;
   included_note: string | null;
   line_up_note: string | null;
+  guest_details_lock_at: string | null;
   card_fee_percent_bp: number;
   card_fee_fixed_pence: number;
 }
@@ -67,6 +71,7 @@ interface SettingsRow {
 const SETTINGS_SQL = `SELECT total_tables, seats_per_table, held_seats, gate_open,
                              gate_opens_at, sales_close_at, sales_closed,
                              arrival_time, included_note, line_up_note,
+                             guest_details_lock_at,
                              card_fee_percent_bp, card_fee_fixed_pence
                         FROM ball_settings WHERE id = 1`;
 
@@ -104,6 +109,7 @@ function toSettings(r: SettingsRow): BallSettings {
     arrivalTime: r.arrival_time,
     includedNote: r.included_note,
     lineUpNote: r.line_up_note,
+    guestDetailsLockAt: r.guest_details_lock_at,
     cardFeePercentBp: r.card_fee_percent_bp,
     cardFeeFixedPence: r.card_fee_fixed_pence,
   };
@@ -334,6 +340,7 @@ const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
   arrivalTime: "arrival_time",
   includedNote: "included_note",
   lineUpNote: "line_up_note",
+  guestDetailsLockAt: "guest_details_lock_at",
   cardFeePercentBp: "card_fee_percent_bp",
   cardFeeFixedPence: "card_fee_fixed_pence",
 };
@@ -548,7 +555,8 @@ export async function updateSettings(
     const res = await client.query<SettingsRow>(
       `UPDATE ball_settings SET ${sets.join(", ")} WHERE id = 1 RETURNING
          total_tables, seats_per_table, held_seats, gate_open, gate_opens_at,
-         sales_close_at, sales_closed, arrival_time, included_note, line_up_note`,
+         sales_close_at, sales_closed, arrival_time, included_note, line_up_note,
+         guest_details_lock_at`,
       values,
     );
     await insertAudit(client, {
@@ -691,7 +699,8 @@ export interface BookingByToken {
 // and a cancelled one has no table to describe.
 export async function getBookingByGuestToken(token: string): Promise<BookingByToken | null> {
   const res = await pool.query(
-    `SELECT id, reference, kind, quantity, seats, buyer_name, table_name
+    `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_first_name,
+            buyer_email, table_name
        FROM ball_bookings
       WHERE guest_token = $1 AND status = 'paid'`,
     [token],
@@ -712,6 +721,8 @@ export async function getBookingByGuestToken(token: string): Promise<BookingByTo
       quantity: r.quantity,
       seats: r.seats,
       buyerName: r.buyer_name,
+      buyerFirstName: r.buyer_first_name,
+      buyerEmail: r.buyer_email,
       tableName: r.table_name,
     },
     guests: guests.rows.map((g) => ({
@@ -792,6 +803,68 @@ export async function purgeExpiredGuests(): Promise<number> {
 //
 // Unpaid bookings are excluded. A pending or expired row owes nobody anything, and counting it
 // would put seats nobody bought into the denominator of the catering list.
+// TASK-338: everything the daily run-up pass needs, in one query.
+//
+// Same LEFT JOIN reasoning as listGuestProgress below - a booking with no guests is exactly the
+// one being chased, so an inner join would drop it. Paid only: an abandoned checkout owes nobody
+// an email.
+export async function listBookingsForRunUp(): Promise<RunUpBooking[]> {
+  const res = await pool.query(
+    `SELECT b.id, b.reference, b.buyer_email, b.buyer_first_name, b.seats, b.guest_token,
+            b.buyer_name, b.table_name,
+            b.guest_chase_sent_at, b.guest_final_call_sent_at, b.reminder_sent_at,
+            COUNT(g.id)::int AS guests_named
+       FROM ball_bookings b
+       LEFT JOIN ball_guests g ON g.booking_id = b.id
+      WHERE b.status = 'paid' AND b.buyer_email <> ''
+      GROUP BY b.id
+      ORDER BY b.id ASC`,
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    reference: r.reference,
+    buyerEmail: r.buyer_email,
+    buyerName: r.buyer_name,
+    buyerFirstName: r.buyer_first_name,
+    tableName: r.table_name,
+    seats: r.seats,
+    guestsNamed: r.guests_named,
+    guestToken: r.guest_token,
+    guestChaseSentAt: r.guest_chase_sent_at,
+    guestFinalCallSentAt: r.guest_final_call_sent_at,
+    reminderSentAt: r.reminder_sent_at,
+  }));
+}
+
+// Written only AFTER a send succeeds. The column is chosen from a fixed map rather than
+// interpolated, so a stage name can never reach SQL as an identifier.
+const RUN_UP_STAMP: Record<string, string> = {
+  chase: "guest_chase_sent_at",
+  "final-call": "guest_final_call_sent_at",
+  practical: "reminder_sent_at",
+  summary: "guest_summary_sent_at",
+};
+
+export async function markRunUpSent(bookingId: number, stage: string): Promise<void> {
+  const column = RUN_UP_STAMP[stage];
+  if (!column) throw new Error(`unknown run-up stage: ${stage}`);
+  await pool.query(`UPDATE ball_bookings SET ${column} = now() WHERE id = $1`, [bookingId]);
+}
+
+// The guests on one booking, for the read-back in the practical email.
+export async function listGuestsForBooking(bookingId: number): Promise<GuestRow[]> {
+  const res = await pool.query(
+    `SELECT full_name, dietary, access_needs FROM ball_guests
+      WHERE booking_id = $1 ORDER BY id ASC`,
+    [bookingId],
+  );
+  return res.rows.map((g) => ({
+    fullName: g.full_name,
+    dietary: g.dietary,
+    accessNeeds: g.access_needs,
+  }));
+}
+
 export async function listGuestProgress(): Promise<GuestProgressRow[]> {
   const res = await pool.query(
     `SELECT b.reference, b.buyer_name, b.buyer_email, b.seats, b.guest_token,

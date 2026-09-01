@@ -11,6 +11,9 @@ import { orderTotalPence } from "../ball/pricing";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
 import { buildBallCalendar } from "../ball/calendar";
+import { buildGuestSummaryEmail } from "../ball/run-up-email";
+import { sendBallRunUp } from "../clients/email";
+import { markRunUpSent } from "../db/ball";
 import {
   claimReservation,
   createPendingBooking,
@@ -372,6 +375,40 @@ ballRouter.get("/ball/guests/:token", async (req, res, next) => {
   }
 });
 
+// The read-back email for a guest save. Re-reads the booking so the email describes what is
+// ACTUALLY stored rather than what the request asked for — a difference that only ever appears
+// when something went wrong, which is exactly when a buyer needs to see it.
+async function sendGuestSummary(
+  found: { id: number; booking: { reference: string; seats: number; buyerEmail: string; buyerFirstName: string | null } },
+  token: string,
+): Promise<void> {
+  if (!found.booking.buyerEmail) return;
+  const fresh = await getBookingByGuestToken(token);
+  if (!fresh) return;
+  const settings = await getSettings();
+  const mail = buildGuestSummaryEmail({
+    buyerFirstName: found.booking.buyerFirstName || "there",
+    reference: found.booking.reference,
+    seats: found.booking.seats,
+    guests: fresh.guests.map((g) => ({
+      fullName: g.fullName,
+      dietary: g.dietary,
+      accessNeeds: g.accessNeeds,
+    })),
+    guestLink: `${config.BALL_BASE_URL.replace(/\/+$/, "")}/ball/guests/${token}`,
+    lockAt: settings.guestDetailsLockAt ? new Date(settings.guestDetailsLockAt) : null,
+  });
+  await sendBallRunUp({
+    email: found.booking.buyerEmail,
+    from: config.BALL_FROM_EMAIL,
+    replyTo: config.BALL_FROM_EMAIL,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+  });
+  await markRunUpSent(found.id, "summary");
+}
+
 ballRouter.post(
   "/ball/guests/:token",
   express.urlencoded({ extended: false }),
@@ -412,6 +449,16 @@ ballRouter.post(
       }
 
       await saveGuests(found.id, parsed.data);
+      // TASK-338: send the buyer a read-back of what we now hold.
+      //
+      // On EVERY successful save, not once. Someone has just typed names and allergies into a
+      // form and pressed a button; without this they have no record of what they sent and no way
+      // to check it, and an allergy taken down wrongly is the one that matters. It doubles as a
+      // security signal: if somebody else edits your table, the email arrives and you know.
+      //
+      // After the write and outside it, best-effort. A slow or failing provider must never lose
+      // guest details that are already saved.
+      await sendGuestSummary(found, req.params.token).catch(() => undefined);
       // Redirect after post, so a refresh does not resubmit the table.
       res.redirect(303, `/ball/guests/${encodeURIComponent(req.params.token)}?saved=1`);
     } catch (err) {

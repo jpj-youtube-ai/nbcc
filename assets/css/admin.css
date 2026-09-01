@@ -1270,3 +1270,16 @@ tr.nl-click:hover { background: var(--tint); }
   .nl-fallback-row { grid-template-columns: 1fr; }
   .nl-fallback-hint { grid-column: 1; }
 }
+
+/* TASK-339: abandoned checkouts, behind a fold. There when you want them, out of the way of the
+   table of people who actually bought. */
+.admin-fold { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.admin-fold > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: .88rem;
+  color: var(--slate-soft);
+  padding: 4px 0;
+}
+.admin-fold > summary:hover { color: var(--slate); }
+.admin-fold[open] > summary { margin-bottom: 8px; }

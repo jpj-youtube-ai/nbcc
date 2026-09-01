@@ -147,6 +147,11 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
           />
         </a>
       </p>
+      <p class="ball-sponsor-note">
+        We are proud to have them behind this evening. They have brought the whole night together
+        and are paying for every part of it, so what you have just paid funds NBCC's work rather
+        than the party. We are enormously grateful.
+      </p>
     </div>
   </section>
 </main>

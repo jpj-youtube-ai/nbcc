@@ -60,7 +60,7 @@ import {
   purgeExpiredGuests,
   updateSettings as updateBallSettings,
   listGuestProgress,
-  countAbandonedBookings,
+  listAbandonedBookings,
 } from "../db/ball";
 import {
   summariseGuestProgress,
@@ -2845,9 +2845,16 @@ export async function getAdminBallBookings(req: Request, res: Response): Promise
         Number.isFinite(limit) ? limit : 200,
         Number.isFinite(offset) ? offset : 0,
       ),
-      countAbandonedBookings(),
+      listAbandonedBookings(),
     ]);
-    return res.status(200).json({ results, abandoned });
+    // The rows AND the count. NBCC wanted to see who had tried, without those attempts sitting
+    // in the same table as people who actually bought — so they travel together and the admin
+    // puts them behind a fold.
+    return res.status(200).json({
+      results,
+      abandoned: abandoned.length,
+      abandonedRows: abandoned,
+    });
   } catch (err) {
     console.error("admin ball bookings failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

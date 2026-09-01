@@ -144,6 +144,31 @@ describe("the bold in a tick box is visible (TASK-337)", () => {
     );
     expect(weight).toBeGreaterThanOrEqual(700);
   });
+
+  // TASK-340: weight alone was never going to work here. poppins-400.woff2 is a STATIC 400
+  // file declared in styles.css as `font-weight: 400 600`, so the browser believes that one
+  // file covers the range, renders every weight in it at 400, and applies no synthetic bold.
+  // The emphasis therefore has to carry something that is not weight.
+  it("carries emphasis the font cannot swallow", () => {
+    const rule = ballCss.match(/\.ball-check b\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).toMatch(/color:/);
+  });
+
+  // Maroon is the site's link colour and the terms box has a real link a few words away, so
+  // emphasis in maroon reads as a second link that goes nowhere.
+  it("does not use the link colour to do it", () => {
+    const rule = ballCss.match(/\.ball-check b\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(rule).not.toMatch(/var\(--maroon\)/);
+    expect(rule).not.toMatch(/var\(--crimson\)/);
+  });
+
+  // The declaration this all works around. If someone corrects it, this fails and points at
+  // the rules above, which can then go back to plain weight.
+  it("records the font declaration that made weight useless", () => {
+    const site = read("assets/css/styles.css");
+    expect(site).toContain('font-family:"Poppins"');
+    expect(site).toMatch(/font-family:"Poppins";font-style:normal;font-weight:400 600/);
+  });
 });
 
 describe("the add-to-calendar link (TASK-337)", () => {

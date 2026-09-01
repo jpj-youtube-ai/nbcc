@@ -611,10 +611,27 @@
   margin: 1px 0 0;
   accent-color: var(--maroon);
 }
-/* TASK-337: 600 -> 700. The words were already bolded and NBCC could not see it: against the
-   label's own 400, semibold is a difference you find by looking for it, which is the opposite
-   of the point. These four phrases are the scannable summary of what each box does. */
-.ball-check b { font-weight: 700; }
+/* TASK-340: reported THREE times as invisible, and weight was never going to fix it.
+   assets/fonts/poppins-400.woff2 is a STATIC 400-weight file, but styles.css declares it as
+   `font-weight: 400 600` — telling the browser that one file covers the whole 400-600 range. So
+   every weight in that range renders at 400 and no synthetic bold is applied, because the
+   browser has been told the face already provides it. Sixty-six rules across the site ask for
+   500 or 600 from this font; none of them do anything. Fixing the declaration is the real
+   answer, but it changes every page at once and is not a thing to ship unreviewed days before
+   a launch — so it is written up for NBCC to decide on.
+
+   Here, the emphasis has to actually work. Colour is not subject to any of the above: the four
+   phrases are the scannable summary of what each box does.
+
+   --gold-deep, NOT --maroon. Maroon is the site's link colour, and the terms box carries a real
+   link ("ticket terms") a few words away — emphasis in the same colour would read as a second
+   link that does not go anywhere. --gold-deep is this page's own accent, defined at the top of
+   this file as the accessible foreground for small text on cream, which is exactly this. The
+   weight stays at 700 so these become properly bold the moment the font declaration is fixed. */
+.ball-check b {
+  font-weight: 700;
+  color: var(--gold-deep);
+}
 /* The per-ticket breakdown under the fee checkbox. A block so it starts its own line under
    the sentence rather than trailing it, and quieter, because it is an aside not a term. */
 .ball-check small {

@@ -25,10 +25,17 @@ const BANNED = [
   /100% of your ticket/i,
 ];
 
-// The fee-cover control is the ONE place a full-value claim is correct, because covering the
-// fee is precisely what makes it true. Phrased around the option, never as a blanket promise.
-const ALLOWED_FULL_VALUE =
-  /so the full\s+ticket price reaches NBCC|so the full\s+.100 reaches NBCC/i;
+// TASK-349: the fee-cover control no longer claims a full value at all, and that is the point.
+//
+// It used to say "so the full ticket price reaches NBCC", which is true on Visa and Mastercard
+// and about 1.7% out on Amex - 2.9% + 20p rather than 1.2% + 20p. The fee has to be quoted
+// before anybody knows which card is being used, so that claim cannot be made true for
+// everybody; saying where the money GOES instead is true on every card.
+//
+// The guard therefore inverts: the option must still explain itself, and must no longer promise
+// an exact amount arrives.
+const FEE_COVER_CLAIM = /funds NBCC's work rather than the card company/i;
+const RETIRED_FULL_VALUE = /so the full\s+ticket price reaches NBCC|so the full\s+.100 reaches NBCC/i;
 
 function assertNoAbsoluteClaim(surface: string, text: string): void {
   for (const pattern of BANNED) {
@@ -87,8 +94,17 @@ describe("ball surfaces make no money claim that card fees contradict", () => {
     expect(page).toMatch(/funds NBCC's work/i);
   });
 
-  it("keeps the full-value wording exactly where it is earned — the fee-cover option", () => {
-    expect(read("ball.html")).toMatch(ALLOWED_FULL_VALUE);
+  it("still explains what covering the fee achieves", () => {
+    expect(read("ball.html")).toMatch(FEE_COVER_CLAIM);
+  });
+
+  // Amex is 2.9% + 20p, and the fee is quoted before the card is known — so no surface may
+  // promise an exact amount lands, not even the fee-cover option where it was once earned.
+  it.each([
+    ["the ball page", "ball.html"],
+    ["the ticket terms", "ball-terms.html"],
+  ])("%s no longer promises the full ticket price arrives", (_where, file) => {
+    expect(read(file)).not.toMatch(RETIRED_FULL_VALUE);
   });
 
   it("tells buyers in the terms that the fee is deducted if they do not cover it", () => {

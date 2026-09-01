@@ -54,6 +54,45 @@ export function stripeFeePence(amountPence: number, rate: CardFeeRate = DEFAULT_
   return Math.ceil((amount * percentBp) / 10_000) + fixedPence;
 }
 
+// TASK-348: the fee to ADD so that the charity actually nets `targetPence`.
+//
+// stripeFeePence above answers "what does Stripe take on this amount", which is the right
+// question for a charge that has already happened and the WRONG one for the cover-the-fee
+// option. Stripe's percentage applies to the TOTAL it processes, and once the fee is added the
+// total is bigger than the ticket price — so covering stripeFeePence(tickets) leaves the charity
+// a penny or two short of the ticket price on every order, and more as the order grows:
+//
+//   1 seat  £100    fee £1.40   charged £101.40   Stripe takes £1.42   NBCC nets  £99.98
+//   1 table £1,000  fee £12.20  charged £1,012.20 Stripe takes £12.35  NBCC nets £999.85
+//
+// Small, but the page's promise is "so the full ticket price reaches NBCC", and that was not
+// quite true. This grosses up instead: charge C such that C minus Stripe's cut on C is exactly
+// the target.
+//
+// Closed form first — C = ceil((target + fixed) / (1 - rate)) in integer pence — then verified
+// against stripeFeePence itself and nudged up if the rounding leaves it a penny short. The
+// verification is what makes this exact rather than approximately right: the two functions round
+// independently, and a formula that agrees with the rounding today can stop agreeing when the
+// rate changes.
+export function grossedUpFeePence(
+  targetPence: number,
+  rate: CardFeeRate = DEFAULT_CARD_FEE,
+): number {
+  const target = z.number().int().nonnegative().parse(targetPence);
+  const { percentBp, fixedPence } = cardFeeRateSchema.parse(rate);
+  if (target === 0) return 0;
+
+  // percentBp is capped at 1000 (10%) by the schema, so this denominator cannot reach zero.
+  const denominator = 10_000 - percentBp;
+  let charged = Math.ceil(((target + fixedPence) * 10_000) / denominator);
+
+  // At most a penny or two of correction; bounded so a pathological rate cannot spin here.
+  for (let i = 0; i < 4 && charged - stripeFeePence(charged, rate) < target; i += 1) {
+    charged += 1;
+  }
+  return charged - target;
+}
+
 export const orderTotalInputSchema = z.object({
   order: orderSchema,
   donationPence: z.number().int().nonnegative().default(0),
@@ -81,7 +120,7 @@ export interface OrderTotal {
 export function orderTotalPence(input: OrderTotalInput): OrderTotal {
   const { order, donationPence, coverFee, cardFee } = orderTotalInputSchema.parse(input);
   const ticketsPence = lineTotalPence(order);
-  const feeCoverPence = coverFee ? stripeFeePence(ticketsPence, cardFee) : 0;
+  const feeCoverPence = coverFee ? grossedUpFeePence(ticketsPence, cardFee) : 0;
   return {
     ticketsPence,
     donationPence,

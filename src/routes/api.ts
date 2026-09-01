@@ -16,7 +16,7 @@ import { containsBlockedWord } from "../donors/display-name-filter";
 import { getGiftAidDeclarationContext, completeDeclaration, GiftAidCompletionError } from "../db/donations";
 import { renderGiftAidForm, renderGiftAidMessage } from "../declarations/render";
 import { config } from "../config";
-import { stripeFeePence, DEFAULT_CARD_FEE, type CardFeeRate } from "../ball/pricing";
+import { grossedUpFeePence, DEFAULT_CARD_FEE, type CardFeeRate } from "../ball/pricing";
 import { storySubmissionSchema, buildStoryRecord } from "../stories/schema";
 import { insertStory } from "../db/stories";
 import { contactEnquirySchema } from "../contact/schema";
@@ -234,7 +234,8 @@ export function embeddedRequested(body: CheckoutBody): boolean {
 // a claim twelve times a year rather than once.
 export function donationFeeCoverPence(body: CheckoutBody, cardFee: CardFeeRate): number {
   if (!body.coverFee || body.mode !== "once" || !body.amount) return 0;
-  return stripeFeePence(body.amount, cardFee);
+  // TASK-348: grossed up, so the donation the donor chose is what actually lands.
+  return grossedUpFeePence(body.amount, cardFee);
 }
 
 // Assemble the Stripe Checkout session parameters from a validated body.

@@ -144,14 +144,14 @@ describe("ballMetadata / bookingFromSession round trip", () => {
   it("stamps the rate it was given, so the charge and the recorded booking agree", () => {
     const rate = { percentBp: 250, fixedPence: 45 };
     const md = ballMetadata(purchase, "BALL-ABC234", 10, rate);
-    // 1,000 x 2.5% = 2500, + 45 = 2545.
-    expect(md.feeCoverPence).toBe("2545");
-    expect(md.totalPence).toBe(String(100_000 + 2_500 + 2_545));
+    // TASK-348: grossed up so the charity nets the ticket price exactly.
+    expect(md.feeCoverPence).toBe("2611");
+    expect(md.totalPence).toBe(String(100_000 + 2_500 + 2_611));
   });
 
   it("falls back to the default rate when none is given", () => {
     const md = ballMetadata(purchase, "BALL-ABC234", 10);
-    expect(md.feeCoverPence).toBe("1220");
+    expect(md.feeCoverPence).toBe("1235");
   });
 
   it("reads back into a booking row with the money intact", () => {
@@ -170,10 +170,11 @@ describe("ballMetadata / bookingFromSession round trip", () => {
     expect(booking!.buyerEmail).toBe("jo@example.com");
     expect(booking!.ticketsPence).toBe(100_000);
     expect(booking!.donationPence).toBe(2_500);
-    // Tickets only, at the 1.2% + 20p charity rate: ceil(100000*120/10000) + 20 = 1220.
+    // TASK-348: the fee is grossed up so the charity nets the ticket price exactly, so this is
+    // 1235 rather than the 1220 Stripe takes on the tickets alone.
     // The £25 donation is deliberately outside the fee cover (TASK-317).
-    expect(booking!.feeCoverPence).toBe(1_220);
-    expect(booking!.totalPence).toBe(103_720);
+    expect(booking!.feeCoverPence).toBe(1_235);
+    expect(booking!.totalPence).toBe(103_735);
     expect(booking!.giftAid).toBe(true);
     expect(booking!.stripeSessionId).toBe("cs_test_123");
   });

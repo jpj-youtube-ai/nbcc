@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { stripeFeePence, SEAT_PRICE_PENCE } from "../../src/ball/pricing";
+import { grossedUpFeePence, SEAT_PRICE_PENCE } from "../../src/ball/pricing";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -149,7 +149,10 @@ describe("the fee the page quotes before JavaScript runs", () => {
   // to be the fee on ONE seat at the default rate, not a figure left behind by an old one.
   // It was £1.70 (Stripe's 1.5% standard rate) while NBCC was actually on 1.2%.
   it("matches the fee on a single seat at the default rate", () => {
-    const expected = stripeFeePence(SEAT_PRICE_PENCE);
+    // TASK-348: the GROSSED-UP fee, not stripeFeePence. The checkbox promises "the full ticket
+    // price reaches NBCC", and the fee on the ticket price alone does not deliver that - Stripe
+    // charges its percentage on the total it processes, which includes the fee.
+    const expected = grossedUpFeePence(SEAT_PRICE_PENCE);
     const pounds = "£" + (expected / 100).toFixed(2);
     const checkbox = ballHtml.match(/<b id="ballFee">[^<]*<\/b>/)?.[0] ?? "";
     expect(checkbox).not.toBe("");

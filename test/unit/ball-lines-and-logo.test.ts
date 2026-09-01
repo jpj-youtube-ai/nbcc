@@ -133,3 +133,36 @@ describe("what is still to be confirmed (TASK-334)", () => {
     expect(email).toMatch(/menu and the running order are still being finalised/i);
   });
 });
+
+describe("the bold in a tick box is visible (TASK-337)", () => {
+  // The four phrases were bolded in TASK-335 and NBCC could not see it. They were: .ball-check b
+  // was set to 600, and against the label's own 400 semibold is a difference you find by looking
+  // for it. The markup was right and the weight was doing nothing.
+  it("is a real bold, not semibold", () => {
+    const weight = Number(
+      ballCss.match(/\.ball-check b\s*\{[^}]*font-weight:\s*(\d+)/)?.[1] ?? 0,
+    );
+    expect(weight).toBeGreaterThanOrEqual(700);
+  });
+});
+
+describe("the add-to-calendar link (TASK-337)", () => {
+  const thankYou = read("src/ball/thank-you-page.ts");
+  const email = read("src/ball/confirmation-email.ts");
+
+  it("is offered on the thank-you page", () => {
+    expect(thankYou).toContain('href="/ball/calendar.ics"');
+  });
+
+  // Both halves of the email, or the plain-text readers lose it silently.
+  it("is in the confirmation email, HTML and text", () => {
+    expect(email).toContain("details.calendarUrl");
+    expect((email.match(/details\.calendarUrl/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  // The module is pure - no config, no clock - so the URL has to arrive as an argument.
+  it("takes the URL as a parameter rather than reading config", () => {
+    expect(email).toMatch(/calendarUrl\?: string \| null/);
+    expect(email).not.toContain("BALL_BASE_URL");
+  });
+});

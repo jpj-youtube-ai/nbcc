@@ -424,6 +424,27 @@ Then("the ball page should not contain {string}", function (text) {
 // TASK-334: scoped to the nav LIST, never the whole page. "Festive Ball" appears five times in
 // ball.html already (title, hero, terms link…), so a whole-page search for it passes just as
 // happily with the nav item missing — which is precisely the state staff reported.
+// TASK-337: the add-to-calendar file, gated exactly like the page it belongs to.
+When("I request the ball calendar file", async function () {
+  const res = await fetch(`${BASE_URL}/ball/calendar.ics`);
+  this.ballCalendarStatus = res.status;
+  this.ballCalendarType = res.headers.get("content-type") || "";
+  this.ballCalendarBody = await res.text();
+});
+
+Then("the ball calendar status should be {int}", function (status) {
+  assert.strictEqual(this.ballCalendarStatus, status);
+});
+
+Then("the ball calendar should be a calendar file", function () {
+  assert.ok(
+    this.ballCalendarType.includes("text/calendar"),
+    `expected a calendar content type, got "${this.ballCalendarType}"`,
+  );
+  assert.ok(this.ballCalendarBody.startsWith("BEGIN:VCALENDAR"));
+  assert.ok(this.ballCalendarBody.includes("DTSTART:20261107T"));
+});
+
 Then("the ball page nav should link to the ball", function () {
   const start = this.ballPageBody.indexOf('class="nav-links"');
   assert.ok(start !== -1, "expected the ball page to have a main nav");

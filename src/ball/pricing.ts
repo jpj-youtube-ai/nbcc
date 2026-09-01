@@ -65,7 +65,7 @@ export function stripeFeePence(amountPence: number, rate: CardFeeRate = DEFAULT_
 //   1 seat  £100    fee £1.40   charged £101.40   Stripe takes £1.42   NBCC nets  £99.98
 //   1 table £1,000  fee £12.20  charged £1,012.20 Stripe takes £12.35  NBCC nets £999.85
 //
-// Small, but the page's promise is "so the full ticket price reaches NBCC", and that was not
+// Small, but the page promised the full ticket price would reach NBCC, and that was not
 // quite true. This grosses up instead: charge C such that C minus Stripe's cut on C is exactly
 // the target.
 //

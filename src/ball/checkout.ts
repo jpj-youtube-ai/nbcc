@@ -86,7 +86,11 @@ export function buildBallSessionParams(
         unit_amount: totals.feeCoverPence,
         product_data: {
           name: "Card fee cover",
-          description: "So the full ticket price reaches NBCC",
+          // TASK-349: says where the money GOES rather than promising an exact figure lands.
+          // The old line ("so the full ticket price reaches NBCC") is true on Visa and
+          // Mastercard and about 1.7% out on Amex, whose rate is 2.9% rather than 1.2% - and
+          // the fee has to be quoted before anyone knows which card is being used.
+          description: "So your ticket funds NBCC's work rather than the card company",
         },
       },
     });

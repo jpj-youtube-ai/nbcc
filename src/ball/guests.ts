@@ -33,6 +33,9 @@ export const guestSchema = z.object({
   // a medical record into a charity's door list.
   dietary: optionalText(500),
   accessNeeds: optionalText(500),
+  // TASK-345: "Course: choice" lines, built by the route from the menu itself. 500 covers a
+  // three-course menu with long dish names and nothing more - this is a selection, not free text.
+  menuChoice: optionalText(500),
 });
 export type GuestInput = z.infer<typeof guestSchema>;
 

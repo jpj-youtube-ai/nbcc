@@ -69,6 +69,9 @@ export const ballSettingsUpdateSchema = z
     arrivalTime: nullableText(120).optional(),
     includedNote: nullableText(1000).optional(),
     lineUpNote: nullableText(1000).optional(),
+    // TASK-345: the menu, one course per line. 4000 rather than 1000: a three-course menu with
+    // options runs long, and a silently truncated menu is a guest choosing from half a list.
+    menuOptions: nullableText(4000).optional(),
   })
   // .strict() is deliberately NOT used: an unknown key is stripped rather than rejected, so a
   // future admin form field cannot 400 the whole save before the server knows about it. The

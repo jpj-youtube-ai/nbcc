@@ -6314,6 +6314,7 @@
           .toISOString()
           .slice(0, 16)
       : "";
+    el("ballMenuOptions").value = ballSettings.menuOptions || "";
     el("ballArrivalTime").value = ballSettings.arrivalTime || "";
     el("ballIncludedNote").value = ballSettings.includedNote || "";
     el("ballLineUpNote").value = ballSettings.lineUpNote || "";
@@ -6589,6 +6590,13 @@
           });
       });
     }
+
+    el("ballMenuForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      // Empty clears it, which turns the menu section back off for every guest at once - the
+      // way back out if the venue changes its mind after this has gone live.
+      ballSave({ menuOptions: el("ballMenuOptions").value }, "ballMenuStatus");
+    });
 
     el("ballLockForm").addEventListener("submit", function (e) {
       e.preventDefault();

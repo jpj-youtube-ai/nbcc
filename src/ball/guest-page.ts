@@ -1,4 +1,5 @@
 import { escapeHtml } from "./page";
+import { choosableCourses, parseChoice, parseMenu, type MenuCourse } from "./menu";
 
 // TASK-313 (plan 5): the "tell us about your table" form. Pure render — no pool, no config —
 // so it is unit-tested DB-free, mirroring src/thank-you/letter-page.ts.
@@ -18,6 +19,8 @@ export interface GuestRow {
   fullName: string;
   dietary: string | null;
   accessNeeds: string | null;
+  // TASK-345: null until the venue confirms a menu and this guest picks from it.
+  menuChoice?: string | null;
 }
 
 export interface GuestPageBooking {
@@ -35,6 +38,8 @@ export interface GuestPageBooking {
 }
 
 export interface GuestPageInput {
+  /** TASK-345: the raw menu from admin. Null or absent renders no menu section at all. */
+  menuOptions?: string | null;
   booking: GuestPageBooking;
   guests: GuestRow[];
   token: string;
@@ -49,7 +54,40 @@ function describeBooking(b: GuestPageBooking): string {
   return b.quantity === 1 ? "1 ticket" : `${b.quantity} tickets`;
 }
 
-function guestFieldset(index: number, guest: GuestRow | undefined, isBooker: boolean): string {
+// TASK-345: the menu section, which does not exist until the venue confirms a menu.
+//
+// Returns "" while there is nothing to choose from — deliberately. A picker headed "choose your
+// main course" above an empty list is worse than no picker: it looks broken, and it invites an
+// email asking what the options are.
+function menuFields(index: number, guest: GuestRow | undefined, menu: MenuCourse[]): string {
+  const asked = choosableCourses(menu);
+  if (asked.length === 0) return "";
+  const n = index + 1;
+  const chosen = parseChoice(guest?.menuChoice ?? null);
+  return asked
+    .map((course, c) => {
+      const answer = chosen[course.name] ?? "";
+      const options = course.options
+        .map((o) => {
+          // An option the guest picked before the venue changed the menu is not offered again,
+          // so their select falls back to the blank — which is the truthful state, and the
+          // chase list counts them as outstanding until they pick something that exists.
+          const selected = o === answer ? " selected" : "";
+          return `<option value="${escapeHtml(o)}"${selected}>${escapeHtml(o)}</option>`;
+        })
+        .join("\n    ");
+      return `<label class="ball-field">
+      <span>${escapeHtml(course.name)}</span>
+      <select name="menu${n}_${c}" data-course="${escapeHtml(course.name)}">
+        <option value="">Please choose</option>
+        ${options}
+      </select>
+    </label>`;
+    })
+    .join("\n    ");
+}
+
+function guestFieldset(index: number, guest: GuestRow | undefined, isBooker: boolean, menu: MenuCourse[]): string {
   const n = index + 1;
   const name = guest ? escapeHtml(guest.fullName) : "";
   const dietary = guest?.dietary ? escapeHtml(guest.dietary) : "";
@@ -69,6 +107,7 @@ function guestFieldset(index: number, guest: GuestRow | undefined, isBooker: boo
     <span>Anything they need to get around comfortably?</span>
     <input type="text" name="accessNeeds${n}" value="${access}" maxlength="500" placeholder="e.g. step-free access, a seat near the door" />
   </label>
+  ${menuFields(index, guest, menu)}
 </fieldset>`;
 }
 
@@ -89,8 +128,12 @@ export function renderGuestPage(input: GuestPageInput): string {
         ? `All ${booking.seats} guests added.`
         : `${filled} of ${booking.seats} added so far.`;
 
+  // Empty until the venue confirms a menu, which is the state this ships in: the form renders
+  // exactly as it does today, with no menu section at all.
+  const menu = parseMenu(input.menuOptions ?? null);
+
   const fieldsets = Array.from({ length: booking.seats }, (_, i) =>
-    guestFieldset(i, guests[i], i === 0),
+    guestFieldset(i, guests[i], i === 0, menu),
   ).join("\n");
 
   return `<!doctype html>

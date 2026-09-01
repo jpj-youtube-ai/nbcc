@@ -607,6 +607,38 @@ export interface BallBookingRow {
 // real buyers made the bookings table read as sales that had not happened. The count still has
 // to be visible somewhere: a sudden run of them is what a broken payment flow looks like from
 // the outside, and hiding the rows without hiding the fact is the honest middle.
+// The abandoned rows themselves, for the collapsed panel under the bookings table. Newest
+// first: a checkout abandoned in the last hour is somebody who may still be mid-payment, which
+// is the only one worth looking at.
+export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow[]> {
+  const res = await pool.query(
+    `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
+            total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
+            created_at, paid_at
+       FROM ball_bookings
+      WHERE status = 'pending'
+      ORDER BY created_at DESC
+      LIMIT $1`,
+    [Math.min(Math.max(limit, 1), 200)],
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    reference: r.reference,
+    kind: r.kind,
+    quantity: r.quantity,
+    seats: r.seats,
+    buyerName: r.buyer_name,
+    buyerEmail: r.buyer_email,
+    totalPence: r.total_pence,
+    donationPence: r.donation_pence,
+    giftAid: r.gift_aid,
+    newsletterOptIn: r.newsletter_opt_in,
+    status: r.status,
+    createdAt: r.created_at,
+    paidAt: r.paid_at,
+  }));
+}
+
 export async function countAbandonedBookings(): Promise<number> {
   const res = await pool.query<{ n: string }>(
     `SELECT COUNT(*)::text AS n FROM ball_bookings WHERE status = 'pending'`,

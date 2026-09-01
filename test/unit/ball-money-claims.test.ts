@@ -79,8 +79,11 @@ describe("ball surfaces make no money claim that card fees contradict", () => {
 
   it("still keeps the claim that IS true: the sponsor is paying for the evening", () => {
     const page = read("ball.html");
-    // Whitespace-tolerant: this asserts a claim, not where the line happens to wrap.
-    expect(page).toMatch(/covering the full\s+cost of the evening/i);
+    // Whitespace-tolerant: this asserts a CLAIM, not where the line happens to wrap or the exact
+    // words used to make it. TASK-339 warmed the sponsor wording ("covering the full cost" became
+    // "paying for every part of it"), and this guard exists to keep the claim itself on the page,
+    // not to freeze one phrasing of it.
+    expect(page).toMatch(/paying for every\s+part of it/i);
     expect(page).toMatch(/funds NBCC's work/i);
   });
 

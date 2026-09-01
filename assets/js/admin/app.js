@@ -6260,10 +6260,18 @@
           // Said out loud rather than silently dropped: a run of abandoned checkouts is what a
           // broken payment flow looks like from the outside, and a table that quietly omitted
           // them would show nothing wrong.
+          // Behind a fold, not gone. Someone who pressed pay and did not arrive is worth being
+          // able to look at — they may still be mid-payment, or they may be someone to ring —
+          // but they are not a sale, so they must not sit in the same table as people who
+          // actually bought.
           (d.abandoned
-            ? '<p class="admin-note">' + d.abandoned +
+            ? '<details class="admin-fold"><summary>' + d.abandoned +
               (d.abandoned === 1 ? " checkout was" : " checkouts were") +
-              " started and never paid for. Not listed above — no money was taken and no seats are held.</p>"
+              " started and never paid for" +
+              "</summary><p class=\"admin-note\">No money was taken and no seats are held. " +
+              "A very recent one may still be mid-payment.</p>" +
+              ballBookingsTable(d.abandonedRows || []) +
+              "</details>"
             : "");
         // Delegated, because the table is re-rendered on every load.
         el("ballBookings").addEventListener("click", onCancelBookingClick);

@@ -22,6 +22,10 @@ export const SECTIONS = [
   // editors and viewers get NONE, unlike every other section, because the page lists who
   // received what email — donor-identifying operational data, not general content.
   "email-audit",
+  // Site addressing (site-pages feature): the spare-address table and the per-page
+  // search-visibility choices. Editing changes PUBLIC URLs and what Google lists, so edit is
+  // launch-sensitive like "ball": admins edit by role; editors and viewers may look.
+  "site",
   "team",
 ] as const;
 
@@ -64,7 +68,7 @@ export function roleToPermissions(role: string): PermissionMap {
     // publishes the ticket page to the public and puts the ball on the home page. That is a
     // launch decision, not routine operational work, so edit is granted per user instead of
     // arriving by default with the role.
-    const perms: PermissionMap = { overview: "view", audit: "view", team: "none", ball: "view" };
+    const perms: PermissionMap = { overview: "view", audit: "view", team: "none", ball: "view", site: "view" };
     for (const section of OPERATIONAL_EDITOR_SECTIONS) {
       perms[section] = "edit";
     }

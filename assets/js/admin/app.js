@@ -32,7 +32,7 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "team",
+    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "team",
   ];
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
@@ -63,7 +63,7 @@
       return perms;
     }
     if (role === "editor") {
-      perms = { overview: "view", audit: "view", team: "none" };
+      perms = { overview: "view", audit: "view", team: "none", ball: "view", site: "view" };
       OPERATIONAL_EDITOR_SECTIONS.forEach(function (s) { perms[s] = "edit"; });
       return perms;
     }
@@ -346,6 +346,7 @@
     else if (name === "ball") loadBall();
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
+    else if (name === "site") loadSite();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
   }
@@ -1504,6 +1505,135 @@
       .catch(function () {
         band.innerHTML = "";
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+
+  // ---- site pages (site-pages feature) ----
+  // Spare addresses (alias -> 301) and per-page search-engine visibility. Reads
+  // GET /api/admin/site-pages; writes need site:edit - the controls are hidden for read-only
+  // users here, and the server enforces regardless.
+  var siteWired = false;
+  function siteStatus(msg, cls) {
+    var s = el("siteStatus");
+    if (!s) return;
+    s.className = "ty-status" + (cls ? " " + cls : "");
+    s.textContent = msg || "";
+  }
+  function renderSiteAliases(aliases, canWrite) {
+    var wrap = el("siteAliasTable");
+    if (!aliases.length) {
+      wrap.innerHTML = '<p class="admin-empty">No spare addresses yet.</p>';
+      return;
+    }
+    var body = aliases
+      .map(function (a) {
+        var remove = canWrite
+          ? '<button class="admin-link" type="button" data-site-alias-remove="' + a.id + '">Remove</button>'
+          : "";
+        return (
+          "<tr><td>" + H.escapeHtml(a.fromPath) + "</td><td>" + H.escapeHtml(a.toPath) +
+          "</td><td>" + H.escapeHtml(a.createdBy) + "</td><td>" + remove + "</td></tr>"
+        );
+      })
+      .join("");
+    wrap.innerHTML =
+      '<table class="admin-table"><thead><tr><th>Spare address</th><th>Sends people to</th><th>Added by</th><th></th></tr></thead><tbody>' +
+      body + "</tbody></table>";
+    if (canWrite) {
+      Array.prototype.forEach.call(wrap.querySelectorAll("[data-site-alias-remove]"), function (b) {
+        b.addEventListener("click", function () {
+          authFetch("/api/admin/site-aliases/" + b.getAttribute("data-site-alias-remove"), { method: "DELETE" })
+            .then(function (res) {
+              if (!res.ok) throw new Error();
+              siteStatus("Spare address removed.", "ok");
+              loadSite();
+            })
+            .catch(function () { siteStatus("Could not remove that address.", "err"); });
+        });
+      });
+    }
+  }
+  function renderSiteSeo(pages, canWrite) {
+    var wrap = el("siteSeoTable");
+    var body = pages
+      .map(function (p) {
+        var note = p.ballGated ? " <small>(only while the ball is published)</small>" : "";
+        var control = canWrite
+          ? '<input type="checkbox" data-site-seo="' + H.escapeHtml(p.path) + '"' + (p.listed ? " checked" : "") +
+            ' aria-label="Show ' + H.escapeHtml(p.title) + ' to search engines" />'
+          : p.listed ? "Shown" : "Hidden";
+        return (
+          "<tr><td>" + H.escapeHtml(p.title) + note + "</td><td>" + H.escapeHtml(p.path) +
+          "</td><td>" + control + "</td></tr>"
+        );
+      })
+      .join("");
+    wrap.innerHTML =
+      '<table class="admin-table"><thead><tr><th>Page</th><th>Address</th><th>Show to search engines</th></tr></thead><tbody>' +
+      body + "</tbody></table>";
+    if (canWrite) {
+      Array.prototype.forEach.call(wrap.querySelectorAll("[data-site-seo]"), function (box) {
+        box.addEventListener("change", function () {
+          authFetch("/api/admin/site-seo", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ path: box.getAttribute("data-site-seo"), listed: box.checked }),
+          })
+            .then(function (res) {
+              if (!res.ok) throw new Error();
+              siteStatus("Saved.", "ok");
+            })
+            .catch(function () {
+              box.checked = !box.checked;
+              siteStatus("Could not save that change.", "err");
+            });
+        });
+      });
+    }
+  }
+  function wireSite() {
+    if (siteWired) return;
+    siteWired = true;
+    var form = el("siteAliasForm");
+    if (form) form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      siteStatus("");
+      authFetch("/api/admin/site-aliases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: el("siteAliasFrom").value.trim(), to: el("siteAliasTo").value }),
+      })
+        .then(function (res) {
+          return res.json().then(function (b) { return { ok: res.ok, body: b }; });
+        })
+        .then(function (r) {
+          if (!r.ok) { siteStatus(r.body.error || "Could not add that address.", "err"); return; }
+          el("siteAliasFrom").value = "";
+          siteStatus("Spare address added. It works right away.", "ok");
+          loadSite();
+        })
+        .catch(function () { siteStatus("Could not add that address.", "err"); });
+    });
+  }
+  function loadSite() {
+    wireSite();
+    var canWrite = canEdit("site");
+    el("siteAliasForm").hidden = !canWrite;
+    authFetch("/api/admin/site-pages")
+      .then(j)
+      .then(function (d) {
+        var sel = el("siteAliasTo");
+        sel.innerHTML = (d.pages || [])
+          .map(function (p) {
+            return '<option value="' + H.escapeHtml(p.path) + '">' + H.escapeHtml(p.title) + " (" + H.escapeHtml(p.path) + ")</option>";
+          })
+          .join("");
+        renderSiteAliases(d.aliases || [], canWrite);
+        renderSiteSeo(d.pages || [], canWrite);
+      })
+      .catch(function () {
+        el("siteAliasTable").innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        el("siteSeoTable").innerHTML = "";
       });
   }
 

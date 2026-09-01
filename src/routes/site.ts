@@ -271,5 +271,75 @@ export function createSiteRouter(siteRoot: string): Router {
   // Shared CSS/JS/fonts/images — the only directory exposed wholesale.
   router.use("/assets", express.static(join(siteRoot, "assets")));
 
+  // --- Site addressing (site-pages feature) ------------------------------------------------
+
+  // /sitemap: the branded page tree, server-rendered into sitemap.html's .sitemap-tree
+  // placeholder (the /supporters pattern) so it can never go stale. Deliberately unlisted:
+  // nothing links here, the file carries noindex, and the header repeats it for robots that
+  // read headers only. Ball pages appear only once the gate is open.
+  const sitemapFile = join(siteRoot, "sitemap.html");
+  router.get("/sitemap", async (req, res) => {
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    try {
+      const { SITE_PAGES, renderSitemapTree } = await import("../site/pages");
+      const ballOpen = await ballIsPublished(req.headers.cookie);
+      const template = readFileSync(sitemapFile, "utf8");
+      const html = template.replace(
+        /<div class="sitemap-tree">[\s\S]*?<\/div>/,
+        `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen)}</div>`,
+      );
+      res.type("html").send(html);
+    } catch (err) {
+      console.error("sitemap render failed:", err instanceof Error ? err.message : err);
+      res.sendFile(sitemapFile);
+    }
+  });
+
+  // /sitemap.xml: the search-engine feed — the registry, minus ball-gated pages while the
+  // gate is shut, filtered by the admin's per-page visibility choices (site_page_seo).
+  router.get("/sitemap.xml", async (req, res) => {
+    try {
+      const { SITE_PAGES, renderSitemapXml } = await import("../site/pages");
+      const { getSeoOverrides } = await import("../db/site-pages");
+      const [overrides, ballOpen] = await Promise.all([
+        getSeoOverrides(),
+        ballIsPublished(undefined), // never let a preview cookie leak the ball to a crawler
+      ]);
+      res.type("application/xml").send(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", overrides, ballOpen));
+    } catch (err) {
+      console.error("sitemap.xml failed:", err instanceof Error ? err.message : err);
+      res.status(500).type("text/plain").send("sitemap unavailable");
+    }
+  });
+
+  // The catch-all: spare addresses first, then the branded 404. This router is mounted LAST in
+  // src/app.ts, so reaching here means no real route wanted the request.
+  //
+  //   1. GET/HEAD only — anything else keeps Express's default handling.
+  //   2. /api/* gets a JSON 404: a machine caller must never receive an HTML page.
+  //   3. The alias table is consulted (one indexed read); a hit is a 301 to the canonical page
+  //      so the spare address never becomes a second home for the same content.
+  //   4. Otherwise: 404.html with a REAL 404 status and noindex, so a mistyped URL can neither
+  //      read as success to a monitor nor enter a search index.
+  //
+  // A database failure skips straight to the 404 — a broken alias lookup must never take
+  // page-serving down with it.
+  const notFoundFile = join(siteRoot, "404.html");
+  router.use(async (req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (req.path.startsWith("/api/")) return res.status(404).json({ error: "Not found" });
+    try {
+      const { resolveAlias } = await import("../db/site-pages");
+      const target = await resolveAlias(req.path);
+      if (target) return res.redirect(301, target);
+    } catch (err) {
+      console.error("alias lookup failed:", err instanceof Error ? err.message : err);
+    }
+    res.status(404);
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    if (existsSync(notFoundFile)) return res.sendFile(notFoundFile);
+    return res.type("text/plain").send("Not found");
+  });
+
   return router;
 }

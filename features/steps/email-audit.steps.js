@@ -15,8 +15,15 @@ const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 // before each scenario, so counts and "every result" assertions cannot be polluted by an earlier
 // run. CI starts fresh and is unaffected.
 Before({ tags: "@email-audit" }, async function () {
-  await pool.query("DELETE FROM email_log WHERE recipient LIKE '%.audit.bdd@example.com'");
-  await pool.query("DELETE FROM users WHERE email LIKE '%.audit.bdd@example.com'");
+  // Two shapes on purpose: the acting admins are audit.<role>.bdd@…, the invited/seeded
+  // recipients are <name>.audit.bdd@… — both must go or a local re-run collides on the
+  // users_email_key unique constraint (CI starts fresh and never sees this).
+  await pool.query(
+    "DELETE FROM email_log WHERE recipient LIKE '%.audit.bdd@example.com' OR recipient LIKE 'audit.%.bdd@example.com'",
+  );
+  await pool.query(
+    "DELETE FROM users WHERE email LIKE '%.audit.bdd@example.com' OR email LIKE 'audit.%.bdd@example.com'",
+  );
 });
 
 When("I invite {string} named {string} to the team", async function (email, fullName) {

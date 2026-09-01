@@ -46,6 +46,11 @@
 /my-story.html    /my-story          301!
 /hub.html         /hub               301!
 /business-thank-you.html  /business/thank-you  301!
+# Site map (site-pages feature): /sitemap is server-rendered (src/routes/site.ts, the
+# /supporters pattern), so there is deliberately NO 200 rule for it — only the raw-file
+# canonicalisation. 404.html has no rule at all: it is served by the router's catch-all
+# with a real 404 status, never at an address of its own.
+/sitemap.html     /sitemap      301!
 
 # Festive Ball (TASK-313). NOTE there is deliberately NO `/ball  /ball.html  200` rule:
 # /ball and /ball/terms are served by src/routes/ball.ts so the password gate can run. A 200

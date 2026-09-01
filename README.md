@@ -5428,3 +5428,30 @@ covers recipient, name and subject; dropdowns filter by kind and status; paginat
   the extended `admin-permissions` tests (role defaults), and `features/email-audit.feature`
   (a real send appearing in the list, a failure in the red band, search + type filter, and the
   editor-gets-403 gate).
+
+**Site addressing: branded 404, /sitemap, sitemap.xml, spare addresses (site-pages feature,
+2026-09-01).** Four related pieces, one page registry (`src/site/pages.ts`) behind all of them:
+
+- **Branded 404.** Unknown addresses used to get Express's bare "Cannot GET". The site router
+  now ends in a catch-all (`src/routes/site.ts`): GET/HEAD misses first consult the
+  spare-address table, then serve `404.html` — branded, warm copy, home/donate/contact buttons —
+  with a REAL 404 status and noindex. Unknown `/api/*` paths get a JSON 404, never HTML.
+- **Spare addresses (aliases), admin-managed.** `site_aliases` maps a spare path to its
+  canonical page as a **301** (one address per page, search-safe). Seeded day one: `/about`,
+  `/mystory`, `/contact-us`, `/donations`, `/give`, `/portal`, `/privacy-policy`, `/supporter`,
+  `/story`, `/stories`. Managed live in the new **Site pages** admin view; validation refuses a
+  spare address that would shadow a real page or system route (`aliasFromProblem`).
+- **`/sitemap`.** A branded, server-rendered tree of every public page (the `/supporters`
+  pattern over `sitemap.html`), deliberately unlisted: nothing links to it, and it carries
+  noindex in both the file and an `X-Robots-Tag` header. Ball pages appear only while the gate
+  is open.
+- **`sitemap.xml`.** The search-engine feed from the same registry, filtered by the admin's
+  per-page "Show to search engines" ticks (`site_page_seo` overrides over registry defaults;
+  `/donor-portal` and `/donate/thank-you` default hidden, hard-excluded paths never appear at
+  all). Ball pages join only when the gate is open — and a crawler never gets the preview.
+- **Access**: a new `site` permission section — admins edit by role (public URLs + what Google
+  lists are launch-sensitive, like the ball gate); editors and viewers may look.
+- Covered by `test/unit/site-pages.test.ts` (validators, tree, xml, seed list) and
+  `features/site-pages.feature` (404 status + brand, JSON API 404, seeded + admin-added alias
+  301s, shadow refusal, editor-gets-403 on writes, /sitemap noindex, sitemap.xml honouring the
+  visibility ticks).

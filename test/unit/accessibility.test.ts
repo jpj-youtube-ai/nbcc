@@ -31,6 +31,8 @@ const PAGES = [
   "gift-aid.html",
   "portal.html",
   "privacy.html",
+  "404.html",
+  "sitemap.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 // Tabbable = what the first Tab from page load can reach, in DOM order. A

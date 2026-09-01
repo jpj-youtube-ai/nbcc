@@ -29,6 +29,7 @@ const SECTIONS = [
   "thank-you",
   "audit",
   "email-audit",
+  "site",
   "team",
 ];
 

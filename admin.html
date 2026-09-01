@@ -95,6 +95,7 @@
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
               <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
               <li class="admin-nav-group" id="teamNavGroup" aria-hidden="true">Admin</li>
+              <li><button class="admin-nav-link" type="button" data-view="site">Site pages</button></li>
               <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
             </ul>
           </nav>
@@ -1190,6 +1191,29 @@
                  view/edit matrix (Admin Phase 2, Task 6 - see view-team-permissions below). Gated to
                  team:edit: app.js gates every write control behind canEdit("team"); the server enforces
                  it too via authorizeSection. -->
+            <!-- Site pages (site-pages feature): spare addresses (aliases -> 301 to the real
+                 page) and per-page "show to search engines" choices (drives /sitemap.xml).
+                 Reads need site:view; writes site:edit (admins by default) - app.js hides the
+                 write controls for read-only users and the server enforces regardless. -->
+            <section class="admin-view" id="view-site" aria-labelledby="site-heading" hidden>
+              <h2 id="site-heading">Site pages</h2>
+              <p class="admin-view-intro">Spare addresses quietly send visitors to the right page, so a mistyped or shortened address still lands well. The search engine ticks decide which pages appear in the site's public listing for Google and friends. The <a href="/sitemap" target="_blank" rel="noopener">site map page</a> shows every page as visitors can reach it.</p>
+              <h3 class="admin-subhead">Spare addresses</h3>
+              <form id="siteAliasForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Spare address
+                  <input id="siteAliasFrom" type="text" placeholder="/give" required style="width:160px" />
+                </label>
+                <label class="ty-inline">Sends people to
+                  <select id="siteAliasTo"></select>
+                </label>
+                <button class="btn btn-primary" type="submit" id="siteAliasAdd">Add</button>
+              </form>
+              <p class="ty-status" id="siteStatus" role="status" aria-live="polite"></p>
+              <div class="admin-table-wrap" id="siteAliasTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <h3 class="admin-subhead">Search engines</h3>
+              <div class="admin-table-wrap" id="siteSeoTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
             <section class="admin-view" id="view-team" aria-labelledby="team-heading" hidden>
               <h2 id="team-heading">Team</h2>
               <p class="admin-view-intro">Everyone who can sign in to this dashboard. Invite someone by email, change their role, or disable, re-enable or remove their access. Only an Admin can make changes here; there must always be at least one enabled Admin.</p>

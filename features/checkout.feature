@@ -34,7 +34,7 @@ Feature: Checkout session endpoint (REQ-029)
       { "mode": "once", "plan": null, "amount": 5000, "giftAid": true, "coverFee": true, "email": "donor@example.com" }
       """
     Then the response status should be 200
-    And the session metadata field "feeCoverPence" should be "80"
+    And the session metadata field "feeCoverPence" should be "81"
 
   @stub-only
   Scenario: a gift with no fee cover stamps zero, exactly as before (TASK-321)

@@ -60,9 +60,9 @@ describe("buildBallSessionParams", () => {
       (t, li) => t + li.price_data!.unit_amount! * (li.quantity ?? 1), 0,
     );
     // £1,000 table + £50 donation = £1,050. The fee cover is calculated on the TICKETS
-    // ONLY at the 1.2% + 20p charity rate: ceil(100000*120/10000) = 1200, +20 = 1220. The
+    // ONLY, and GROSSED UP (TASK-348) so the charity nets the ticket price exactly. The
     // donation is deliberately excluded — NBCC does not surcharge a gift (TASK-317).
-    expect(sum).toBe(100_000 + 5_000 + 1_220);
+    expect(sum).toBe(100_000 + 5_000 + 1_235);
   });
 
   // TASK-317 near-miss. The line items are priced from the live rate in ball_settings, but
@@ -83,8 +83,8 @@ describe("buildBallSessionParams", () => {
 
     // And the fee line itself is the non-default rate, not the 1.2% default.
     const feeLine = p.line_items!.find((li) => /fee/i.test(li.price_data!.product_data!.name!));
-    expect(feeLine!.price_data!.unit_amount).toBe(2_545);
-    expect(p.metadata!.feeCoverPence).toBe("2545");
+    expect(feeLine!.price_data!.unit_amount).toBe(2_611);
+    expect(p.metadata!.feeCoverPence).toBe("2611");
   });
 
   it("stamps the metadata the webhook reads back", () => {

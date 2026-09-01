@@ -44,8 +44,10 @@ const once = {
 
 describe("donationFeeCoverPence", () => {
   it("is 1.2% + 20p, rounded up, on a one-off gift", () => {
-    // £50 x 1.2% = 60p, + 20p = 80p.
-    expect(donationFeeCoverPence(once, RATE)).toBe(80);
+    // TASK-348: grossed up. 80p was the fee on the GIFT, but Stripe charges its percentage on
+      // the total it processes - which includes the fee - so covering 80p left the charity a
+      // penny short of £50. 81p is the figure that nets £50 exactly.
+    expect(donationFeeCoverPence(once, RATE)).toBe(81);
   });
 
   it("is nothing when the donor did not offer", () => {
@@ -68,7 +70,7 @@ describe("the donation session", () => {
   it("puts the fee cover on its OWN line, so the donor sees what each part is", () => {
     const p = buildSessionParams(once, RATE);
     expect(p.line_items).toHaveLength(2);
-    expect(p.line_items![1].price_data!.unit_amount).toBe(80);
+    expect(p.line_items![1].price_data!.unit_amount).toBe(81);
     expect(p.line_items![1].price_data!.product_data!.name).toMatch(/card fee/i);
   });
 
@@ -86,7 +88,7 @@ describe("the donation session", () => {
   // Stripe's amount_total is the sum of every line item, so the webhook has to be told what to
   // subtract. Without this stamp the fee cover is recorded as part of the gift.
   it("stamps the fee cover on the metadata for the webhook to subtract", () => {
-    expect(buildSessionParams(once, RATE).metadata!.feeCoverPence).toBe("80");
+    expect(buildSessionParams(once, RATE).metadata!.feeCoverPence).toBe("81");
   });
 
   it("never adds a fee line to a monthly subscription", () => {

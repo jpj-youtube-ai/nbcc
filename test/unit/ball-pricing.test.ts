@@ -86,15 +86,15 @@ describe("orderTotalPence", () => {
 
   it("adds the fee cover when the buyer opts in", () => {
     const t = orderTotalPence({ order: { kind: "seat", quantity: 1 }, coverFee: true });
-    expect(t.feeCoverPence).toBe(140);
-    expect(t.totalPence).toBe(10_140);
+    expect(t.feeCoverPence).toBe(142);
+    expect(t.totalPence).toBe(10_142);
   });
 
-  it("covers the fee on a table at £12.20", () => {
+  it("covers the fee on a table at £12.35, which is what nets £1,000", () => {
     const t = orderTotalPence({ order: { kind: "table", quantity: 1 }, coverFee: true });
     expect(t.ticketsPence).toBe(100_000);
-    expect(t.feeCoverPence).toBe(1_220);
-    expect(t.totalPence).toBe(101_220);
+    expect(t.feeCoverPence).toBe(1_235);
+    expect(t.totalPence).toBe(101_235);
   });
 
   // The rest of the site has never asked donors to cover the fee on a gift, and this page
@@ -108,8 +108,8 @@ describe("orderTotalPence", () => {
     });
     expect(t.ticketsPence).toBe(10_000);
     expect(t.donationPence).toBe(2_500);
-    expect(t.feeCoverPence).toBe(140);
-    expect(t.totalPence).toBe(12_640);
+    expect(t.feeCoverPence).toBe(142);
+    expect(t.totalPence).toBe(12_642);
   });
 
   it("charges the same fee cover whatever the donation is", () => {
@@ -128,7 +128,7 @@ describe("orderTotalPence", () => {
       coverFee: true,
       cardFee: { percentBp: 150, fixedPence: 20 },
     });
-    expect(t.feeCoverPence).toBe(170);
+    expect(t.feeCoverPence).toBe(173);
   });
 
   it("rejects a negative donation", () => {

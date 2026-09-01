@@ -59,11 +59,27 @@
     return Math.round(value * 100);
   }
 
-  // Rounded UP, mirroring stripeFeePence server-side: a rounded-down penny would
-  // leave the charity fractionally short on every fee-covered order. The fixed part is
-  // added ONCE, because Stripe bills per transaction rather than per ticket.
+  // What Stripe takes on an amount it processes. Used only to CHECK the gross-up below.
+  function stripeTakes(charged) {
+    return Math.ceil((charged * cardFeeBp) / 10000) + cardFeeFixedPence;
+  }
+
+  // TASK-348: mirrors grossedUpFeePence in src/ball/pricing.ts and must stay identical to it —
+  // this figure is shown on the page while the server charges its own, so any disagreement is a
+  // number the buyer was quoted and then not charged.
+  //
+  // The fee is grossed UP rather than being "1.2% of the tickets + 20p": Stripe's percentage
+  // applies to the total it processes, and that total includes the fee itself. Covering the
+  // naive figure left the charity 2p short on a seat and 15p on a table, which quietly made
+  // the page's own promise untrue.
+  //
+  // The fixed part is still added ONCE, because Stripe bills per transaction rather than per
+  // ticket, so the fee per ticket still falls as the order grows.
   function feePence(amount) {
-    return Math.ceil((amount * cardFeeBp) / 10000) + cardFeeFixedPence;
+    if (!amount) return 0;
+    var charged = Math.ceil(((amount + cardFeeFixedPence) * 10000) / (10000 - cardFeeBp));
+    for (var i = 0; i < 4 && charged - stripeTakes(charged) < amount; i += 1) charged += 1;
+    return charged - amount;
   }
 
   function fillQuantities() {

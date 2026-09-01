@@ -62,7 +62,7 @@ Feature: Festive Ball purchases through the shared Stripe webhook (TASK-313)
     Then the ball response status should be 201
     # £100 ticket + £25 donation + the fee on the TICKET only, at 1.2% + 20p: 120 + 20 = 140.
     # The donation carries no fee cover — NBCC absorbs Stripe's cut on a gift (TASK-317).
-    And the ball checkout total should be 12640 pence
+    And the ball checkout total should be 12642 pence
 
   Scenario: nine seats at once is allowed, ten is not
     Given the ball is reset to 40 tables of 10 with 0 held back

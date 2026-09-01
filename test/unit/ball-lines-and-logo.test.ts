@@ -162,12 +162,20 @@ describe("the bold in a tick box is visible (TASK-337)", () => {
     expect(rule).not.toMatch(/var\(--crimson\)/);
   });
 
-  // The declaration this all works around. If someone corrects it, this fails and points at
-  // the rules above, which can then go back to plain weight.
-  it("records the font declaration that made weight useless", () => {
+  // TASK-343 corrected it, which is what this guard was written to catch. It now asserts the
+  // fixed shape: the face must declare only the weight the file actually contains, so anything
+  // heavier falls outside it and the browser synthesises rather than silently rendering 400.
+  it("declares the body font at the one weight it actually contains", () => {
     const site = read("assets/css/styles.css");
-    expect(site).toContain('font-family:"Poppins"');
-    expect(site).toMatch(/font-family:"Poppins";font-style:normal;font-weight:400 600/);
+    expect(site).toMatch(/font-family:"Poppins";font-style:normal;font-weight:400;/);
+    expect(site).not.toMatch(/font-family:"Poppins";font-style:normal;font-weight:400 600/);
+  });
+
+  // Playfair is genuinely variable (playfair-var.woff2 carries an fvar table), so its range is
+  // a true statement and must not be "fixed" by copying the change above.
+  it("leaves the genuinely variable heading font alone", () => {
+    const site = read("assets/css/styles.css");
+    expect(site).toMatch(/font-family:"Playfair Display";font-style:normal;font-weight:400 800/);
   });
 });
 

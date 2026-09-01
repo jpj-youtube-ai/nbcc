@@ -6117,6 +6117,41 @@
       body + "</tbody></table>";
   }
 
+  // TASK-336: the chase list. Everything here is a difference the dashboard could not show
+  // before - seats bought against guests named - which is the question behind both "who do I
+  // nudge?" and "can the venue start on the catering list yet?".
+  function ballOutstandingTable(rows) {
+    if (!rows.length) {
+      return '<p class="admin-empty">Everyone who has paid has sent their guest details.</p>';
+    }
+    var body = rows.map(function (b) {
+      // No link until the confirmation mints the token, so a booking paid moments ago can
+      // legitimately have none. Say so rather than linking to /ball/guests/null.
+      var link = b.guestLink
+        ? '<a href="' + H.escapeHtml(b.guestLink) + '" target="_blank" rel="noopener">Their link</a>'
+        : "<small>No link yet</small>";
+      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+        '<br /><small><a href="mailto:' + H.escapeHtml(b.buyerEmail) + '">' +
+        H.escapeHtml(b.buyerEmail) + "</a></small></td>" +
+        '<td class="admin-num">' + b.guestsNamed + " of " + b.seats +
+        '</td><td class="admin-num">' + b.missing + "</td><td>" + link + "</td></tr>";
+    }).join("");
+    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
+      "<th>Named</th><th>Still missing</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
+  }
+
+  function ballGuestProgressRender(d) {
+    var s = d.summary || {};
+    el("ballGuestProgress").innerHTML =
+      statCard(s.guestsNamed + " of " + s.seatsBooked, "Guests named") +
+      // Warn while anything is outstanding: this is the number that decides whether the venue
+      // can be given a catering list, so "nearly there" should not look like "done".
+      statCard(s.percentComplete + "%", "Catering list ready", s.guestsMissing > 0) +
+      statCard(s.bookingsOutstanding || 0, "Bookings to chase", s.bookingsOutstanding > 0) +
+      statCard(s.needsGiven || 0, "Dietary or access needs");
+    el("ballOutstanding").innerHTML = ballOutstandingTable(d.outstanding || []);
+  }
+
   function ballRender(d) {
     ballSettings = d.settings;
     var a = d.availability || {};
@@ -6216,6 +6251,14 @@
       })
       .catch(function () {
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
+      });
+    authFetch("/api/admin/ball/guest-progress")
+      .then(j)
+      .then(ballGuestProgressRender)
+      .catch(function () {
+        el("ballGuestProgress").innerHTML =
+          '<p class="admin-empty">Could not load guest details.</p>';
+        el("ballOutstanding").innerHTML = "";
       });
   }
 

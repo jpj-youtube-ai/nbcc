@@ -33,16 +33,24 @@ describe("what the ticket includes", () => {
     expect(region(ballHtml, "included")).toBe(collapse(TICKET_INCLUDES));
   });
 
-  // The point of the sentence. "A drink on arrival" reads to plenty of people as "drinks are
-  // provided", and the difference gets discovered at the bar on the night.
-  it("says plainly that further drinks are not included", () => {
-    expect(TICKET_INCLUDES).toMatch(/further drinks are not included/i);
-    expect(region(ballHtml, "included")).toMatch(/further drinks are not included/i);
+  // TASK-336: this used to require the sentence to close with "further drinks are not included".
+  // The risk it guarded is real - "a drink on arrival" reads to plenty of people as "drinks are
+  // provided", and the difference gets discovered at the bar on the night - but NBCC solved it
+  // in the noun instead: a WELCOME drink is self-evidently one drink at the start. The guard
+  // moves to the word carrying that meaning, so it cannot quietly go back to "a drink".
+  it("calls it a WELCOME drink, which is what makes the caveat unnecessary", () => {
+    expect(TICKET_INCLUDES).toMatch(/welcome drink on arrival/i);
+    expect(region(ballHtml, "included")).toMatch(/welcome drink on arrival/i);
   });
 
-  it("names the three courses and the arrival drink", () => {
+  it("no longer ends an advert on what the buyer is not getting", () => {
+    expect(TICKET_INCLUDES).not.toMatch(/further drinks/i);
+    expect(region(ballHtml, "included")).not.toMatch(/not included/i);
+  });
+
+  it("names the three courses and the welcome drink", () => {
     expect(TICKET_INCLUDES).toMatch(/three-course meal/i);
-    expect(TICKET_INCLUDES).toMatch(/drink on arrival/i);
+    expect(TICKET_INCLUDES).toMatch(/welcome drink/i);
   });
 
   // The menu note is APPENDED, never substituted: a note about the menu must not delete the

@@ -55,6 +55,8 @@ const PROMO_STYLES = `<style>
   /* The sponsor's mark on the home band, larger than the hero's: this is the first thing a
      scanner sees and the credit is worth reading. translateX corrects the wordmark's own
      off-centre ink (the swoosh trails right with almost none in it). */
+  .ball-home-statement{margin:0 0 12px;font-size:.82rem;line-height:1.65;
+    color:rgba(242,238,228,.72);max-width:62ch}
   .ball-home-credit{display:flex;flex-direction:column;gap:8px;align-items:flex-start;
     margin:22px 0 0;padding-top:18px;border-top:1px solid rgba(233,210,150,.22)}
   .ball-home-credit span{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
@@ -90,6 +92,9 @@ const FEATURE = `      <section class="ball-home-feature" aria-labelledby="ball-
               ticket funds NBCC's work.
             </p>
             <a class="btn" href="/ball">Book tickets</a>
+            <!-- Appendix A2, verbatim: clause 11.1 requires it on ALL promotional material,
+                 and this band is the event advertised on the home page. -->
+            <p class="ball-home-statement">Organised and sponsored by The Designer Rooms in aid of NBCC. The Designer Rooms is covering the full cost of the evening, so all proceeds from ticket sales are donated to the charity. The Designer Rooms receives no payment for organising this event.</p>
             <p class="ball-home-credit">
               <span>Organised and sponsored by</span>
               <a href="https://thedesignerrooms.com/" target="_blank" rel="noopener">

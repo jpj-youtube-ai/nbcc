@@ -1179,3 +1179,24 @@
   .ball-tiles li { transition: none; }
   .ball-snow { display: none; }
 }
+
+/* TASK-347: the statements Appendix A of the fundraising agreement requires verbatim.
+   Deliberately quiet, and deliberately NOT hidden: this is a required disclosure, so it is set
+   as a legal note - smaller, softer, still comfortably readable - rather than either competing
+   with the copy around it or shrinking to the size people stop reading. */
+.ball-sponsor-statement {
+  margin: 0 0 14px;
+  max-width: 62ch;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--on-night-soft);
+}
+.ball-buy-statement {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  color: var(--slate-soft);
+}
+.ball-buy-statement a {
+  color: var(--maroon);
+}

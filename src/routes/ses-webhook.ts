@@ -1,8 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import express, { Router, type Request, type Response } from "express";
-import { parseSnsEnvelope, parseSesEvent, suppressionFor } from "../newsletter/ses-events";
+import { parseSnsEnvelope, parseSesEvent, suppressionFor, type ParsedEmailEvent } from "../newsletter/ses-events";
 import { recordEmailEvent, countBounces } from "../db/newsletter-events";
 import { suppressEmail } from "../db/email-suppressions";
+import { markEmailDelivery } from "../db/email-log";
 import { config } from "../config";
 
 // The SES delivery webhook (Resend→SES migration; TASK-255 lineage — see
@@ -29,6 +30,19 @@ import { config } from "../config";
 // provider outage does not cost a supporter, and early enough that we are not the sender still
 // hammering a dead mailbox months later.
 const REPEAT_BOUNCE_LIMIT = 3;
+
+// The short human-readable reason stored beside a bounce/complaint on the audit page: the
+// provider's diagnostic where it gave one, else the bounce sub-type; null for a clean delivery.
+function deliveryDetailOf(event: ParsedEmailEvent): string | null {
+  if (event.eventType !== "bounced") return null;
+  const recipients = event.detail?.bouncedRecipients;
+  const diagnostic =
+    Array.isArray(recipients) && recipients[0] && typeof recipients[0] === "object"
+      ? (recipients[0] as Record<string, unknown>).diagnosticCode
+      : null;
+  const words = diagnostic ?? event.detail?.bounceSubType ?? null;
+  return typeof words === "string" ? words : null;
+}
 
 export const sesWebhookRouter = Router();
 
@@ -64,6 +78,17 @@ async function postSesWebhook(req: Request, res: Response): Promise<Response> {
 
   const parsed = parseSesEvent(envelope.message);
   if (!parsed) return res.status(200).json({ outcome: "ignored" });
+
+  // Email-audit enrichment: stamp the mailbox-side outcome onto the newest matching email_log
+  // row (src/db/email-log.ts). Best-effort and FIRST, so a failure in the newsletter recording
+  // below cannot cost the audit page its delivery truth (and vice versa — each is independent).
+  if (parsed.eventType === "delivered" || parsed.eventType === "bounced" || parsed.eventType === "complained") {
+    try {
+      await markEmailDelivery(parsed.email, parsed.eventType, parsed.occurredAt, deliveryDetailOf(parsed));
+    } catch (err) {
+      console.error("email log delivery stamp failed:", err instanceof Error ? err.message : err);
+    }
+  }
 
   try {
     const outcome = await recordEmailEvent(envelope.messageId, parsed);

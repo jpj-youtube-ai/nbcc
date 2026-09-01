@@ -1,6 +1,7 @@
 import { config } from "../config";
-import { sendSesEmail } from "./ses";
+import { sendSesEmail, type SesMessage } from "./ses";
 import { buildKindEmail } from "../email/templates";
+import { recordEmailSend } from "../db/email-log";
 
 // Transactional email client (TASK-070; Resend→SES migration). Sends every app email straight
 // to Amazon SES (src/clients/ses.ts) — the Cloudflare Worker relay and its Resend account are
@@ -8,10 +9,16 @@ import { buildKindEmail } from "../email/templates";
 // kinds that ship fully rendered content (newsletter, thank-you letters, ball emails…) send it
 // verbatim, exactly as the relay's passthrough branches did.
 //
-// Stub seam (mirrors contact.ts / stripe.ts): outside production, sends are stubbed (no
-// network) unless EMAIL_PROVIDER=ses — so the payment→confirmation flow can be exercised end to
-// end, locally and in CI, without an AWS account. Production NEVER stubs, whatever the flag
-// says: a misconfigured production must fail loudly, not silently swallow receipts.
+// Stub seam (mirrors stripe.ts): outside production, sends are stubbed (no network) unless
+// EMAIL_PROVIDER=ses — so the payment→confirmation flow can be exercised end to end, locally and
+// in CI, without an AWS account. Production NEVER stubs, whatever the flag says: a misconfigured
+// production must fail loudly, not silently swallow receipts.
+//
+// Audit trail (email-audit feature): EVERY attempt through sendAndLog below lands one metadata
+// row in email_log (src/db/email-log.ts) — kind, recipient, name, subject, sent/failed + error;
+// never a body (bodies carry one-time links and 2FA codes). Best-effort by contract: a
+// bookkeeping failure must never fail, block, or alter the send it describes. Stubbed sends log
+// as 'sent' too, so the audit page is exercised end to end in dev/CI.
 export interface DonationConfirmation {
   email: string;
   fullName: string;
@@ -38,12 +45,47 @@ const transactional = () => ({
   configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
 });
 
-export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
+async function logAttempt(
+  kind: string,
+  to: string,
+  name: string | null,
+  subject: string,
+  error: string | null,
+): Promise<void> {
+  try {
+    await recordEmailSend({
+      kind,
+      recipient: to,
+      recipientName: name,
+      subject,
+      status: error ? "failed" : "sent",
+      error,
+    });
+  } catch (err) {
+    console.error("email log write failed:", err instanceof Error ? err.message : err);
+  }
+}
 
+// Every send funnels through here: stub short-circuit, the SES call, and the audit row. The
+// original error is ALWAYS rethrown untouched — callers (the newsletter queue's failure
+// classifier above all) depend on the real message.
+async function sendAndLog(kind: string, name: string | null, msg: SesMessage): Promise<void> {
+  if (useStub) {
+    await logAttempt(kind, msg.to, name, msg.subject, null);
+    return;
+  }
+  try {
+    await sendSesEmail(msg);
+  } catch (err) {
+    await logAttempt(kind, msg.to, name, msg.subject, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+  await logAttempt(kind, msg.to, name, msg.subject, null);
+}
+
+export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {
   const built = buildKindEmail("donation", { html: message.html, text: message.text });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("donation", message.fullName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 // The in-person Gift Aid declaration email (TASK-075/REQ-048). After a card-present
@@ -61,16 +103,13 @@ export interface DeclarationEmail {
 }
 
 export async function sendDeclarationEmail(message: DeclarationEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("declaration", {
     declarationLink: message.declarationLink,
     shortLink: message.shortLink,
     amountPence: message.amountPence,
     currency: message.currency,
   });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("declaration", null, { to: message.email, ...transactional(), ...built });
 }
 
 // The Corporation Tax receipt email for a COMPANY donation (REQ-053, TASK-088). A company gift
@@ -88,11 +127,8 @@ export interface CompanyReceiptEmail {
 }
 
 export async function sendCompanyReceipt(message: CompanyReceiptEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("receipt", { html: message.html, text: message.text });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("receipt", message.legalName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 // The refund-confirmation email for an INDIVIDUAL donor (REQ-063 · TASK-099). After a
@@ -110,11 +146,8 @@ export interface RefundConfirmationEmail {
 }
 
 export async function sendRefundConfirmation(message: RefundConfirmationEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("refund", { html: message.html, text: message.text });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("refund", message.fullName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 // The self-serve portal magic-link email (TASK-100/REQ-061). A passwordless, one-time, expiring
@@ -127,11 +160,8 @@ export interface PortalMagicLinkEmail {
 }
 
 export async function sendPortalMagicLink(message: PortalMagicLinkEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("portal", { fullName: message.fullName, link: message.link });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("portal", message.fullName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 // Admin team invite / password-reset emails (admin-management Phase 1, Task 5). A staff invite or
@@ -146,11 +176,8 @@ export interface AdminInviteEmail {
 }
 
 export async function sendAdminInvite(message: AdminInviteEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("adminInvite", { fullName: message.fullName, link: message.link });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("adminInvite", message.fullName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 export interface AdminResetEmail {
@@ -160,20 +187,16 @@ export interface AdminResetEmail {
 }
 
 export async function sendAdminReset(message: AdminResetEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("adminReset", { fullName: message.fullName, link: message.link });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("adminReset", message.fullName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 // Admin login-code email (admin-management Phase 3 · mandatory email 2FA, TASK-188). After a
 // password-valid login from an untrusted device, the platform emails a one-time 6-digit code
 // (generated + hashed by src/admin/two-factor.ts) so the admin can complete step 2. See
 // emailStubbed above: on non-production, when this stubs, the login route falls back to
-// returning the code directly in its response so 2FA can still be completed. (The TASK-209
-// deploy-skew fallback subject/text are gone: the templates now ship IN the app, so the app and
-// its email bodies can never be out of step.)
+// returning the code directly in its response so 2FA can still be completed. The audit row
+// carries the SUBJECT only — the subject deliberately does not contain the code.
 export interface AdminLoginCodeEmail {
   email: string;
   fullName: string;
@@ -181,11 +204,8 @@ export interface AdminLoginCodeEmail {
 }
 
 export async function sendAdminLoginCode(message: AdminLoginCodeEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("loginCode", { fullName: message.fullName, code: message.code });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("loginCode", message.fullName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 // Subscription-lapsed notices (TASK-092/REQ-065). When a monthly subscription lapses (Stripe
@@ -200,11 +220,8 @@ export interface SubscriptionLapsedDonorEmail {
 }
 
 export async function sendSubscriptionLapsedDonor(message: SubscriptionLapsedDonorEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("lapsedDonor", { fullName: message.fullName });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("lapsedDonor", message.fullName ?? null, { to: message.email, ...transactional(), ...built });
 }
 
 export interface SubscriptionLapsedAdminEmail {
@@ -214,14 +231,11 @@ export interface SubscriptionLapsedAdminEmail {
 }
 
 export async function sendSubscriptionLapsedAdmin(message: SubscriptionLapsedAdminEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   const built = buildKindEmail("lapsedAdmin", {
     donorName: message.donorName,
     subscriptionId: message.subscriptionId,
   });
-  await sendSesEmail({ to: message.email, ...transactional(), ...built });
+  await sendAndLog("lapsedAdmin", null, { to: message.email, ...transactional(), ...built });
 }
 
 // The admin newsletter send (TASK-161/REQ-069). Sends ONE individual message per consenting
@@ -252,13 +266,11 @@ export interface NewsletterEmail {
 }
 
 export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
   // TASK-302 contract, unchanged across the provider swap: a refusal must carry the real status
-  // + detail (the SES client throws exactly that), so the queue can tell "come back later" (429)
-  // from "give up on this address" — see src/newsletter/send-failure.ts.
-  await sendSesEmail({
+  // + detail (the SES client throws exactly that, and sendAndLog rethrows it untouched), so the
+  // queue can tell "come back later" (429) from "give up on this address" — see
+  // src/newsletter/send-failure.ts.
+  await sendAndLog("newsletter", null, {
     to: message.email,
     from: message.from,
     replyTo: message.replyTo,
@@ -293,11 +305,23 @@ export interface ThankYouLetterEmail {
   text?: string; // plain-text alternative (improves deliverability)
 }
 
-export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-
-  await sendSesEmail({
+// Shared by every "app fully owns this branded email" send below: verbatim content on the
+// transactional configuration set, logged under its own kind so the audit page can tell a
+// thank-you letter from a ball receipt.
+async function sendVerbatim(
+  kind: string,
+  name: string | null,
+  message: {
+    email: string;
+    cc?: string;
+    from: string;
+    replyTo: string;
+    subject: string;
+    html: string;
+    text?: string;
+  },
+): Promise<void> {
+  await sendAndLog(kind, name, {
     to: message.email,
     cc: message.cc,
     from: message.from,
@@ -307,6 +331,10 @@ export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> 
     text: message.text,
     configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
   });
+}
+
+export async function sendThankYou(message: ThankYouLetterEmail): Promise<void> {
+  await sendVerbatim("thankYou", null, message);
 }
 
 // The business-supporter thank-you INVITE email (TASK-213). When a NEW business monthly supporter's
@@ -324,31 +352,8 @@ export interface BusinessSupporterInviteEmail {
   text: string; // plain-text alternative (improves deliverability)
 }
 
-async function sendVerbatim(message: {
-  email: string;
-  cc?: string;
-  from: string;
-  replyTo: string;
-  subject: string;
-  html: string;
-  text?: string;
-}): Promise<void> {
-  await sendSesEmail({
-    to: message.email,
-    cc: message.cc,
-    from: message.from,
-    replyTo: message.replyTo,
-    subject: message.subject,
-    html: message.html,
-    text: message.text,
-    configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
-  });
-}
-
 export async function sendBusinessSupporterInvite(message: BusinessSupporterInviteEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-  await sendVerbatim(message);
+  await sendVerbatim("businessInvite", null, message);
 }
 
 // The business-supporter CAPTURE-CONFIRMATION email (TASK-221). After a business supporter submits
@@ -367,9 +372,7 @@ export interface BusinessCaptureConfirmationEmail {
 }
 
 export async function sendBusinessCaptureConfirmation(message: BusinessCaptureConfirmationEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-  await sendVerbatim(message);
+  await sendVerbatim("businessCapture", null, message);
 }
 
 // The business-supporter thank-you REMINDER email (TASK-222). When a business supporter has not yet
@@ -387,9 +390,7 @@ export interface BusinessSupporterReminderEmail {
 }
 
 export async function sendBusinessSupporterReminder(message: BusinessSupporterReminderEmail): Promise<void> {
-  // Preview/stub: pretend the email sent (no network call).
-  if (useStub) return;
-  await sendVerbatim(message);
+  await sendVerbatim("businessReminder", null, message);
 }
 
 // The Festive Ball booking confirmation (TASK-313). Someone has just paid up to £1,000, so this
@@ -407,22 +408,19 @@ export interface BallConfirmationMessage {
 }
 
 export async function sendBallConfirmation(message: BallConfirmationMessage): Promise<void> {
-  if (useStub) return;
-  await sendVerbatim(message);
+  await sendVerbatim("ballConfirmation", null, message);
 }
 
 // The Festive Ball "a week to go" reminder (TASK-313 plan 5). Same shape and same verbatim send
 // as the booking confirmation; separate function so the two can be told apart in logs and so a
 // change to one never silently alters the other.
 export async function sendBallReminder(message: BallConfirmationMessage): Promise<void> {
-  if (useStub) return;
-  await sendVerbatim(message);
+  await sendVerbatim("ballReminder", null, message);
 }
 
 // TASK-338: the run-up emails (guest read-back, chase, last call). Its own function for the same
 // reason as sendBallReminder above: so the three can be told apart in logs and in a bounce
 // report, and so a change to one cannot silently alter another.
 export async function sendBallRunUp(message: BallConfirmationMessage): Promise<void> {
-  if (useStub) return;
-  await sendVerbatim(message);
+  await sendVerbatim("ballRunUp", null, message);
 }

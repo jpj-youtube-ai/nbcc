@@ -32,7 +32,7 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "team",
+    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "team",
   ];
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
@@ -67,7 +67,9 @@
       OPERATIONAL_EDITOR_SECTIONS.forEach(function (s) { perms[s] = "edit"; });
       return perms;
     }
-    SECTIONS.forEach(function (s) { perms[s] = s === "team" ? "none" : "view"; });
+    // email-audit mirrors team: donor-identifying send data never arrives with a role below
+    // admin — it is granted per person (matches roleToPermissions in src/admin/permissions.ts).
+    SECTIONS.forEach(function (s) { perms[s] = s === "team" || s === "email-audit" ? "none" : "view"; });
     return perms;
   }
   // Mirrors effectivePermissions in src/admin/permissions.ts: a team member's stored map if it has
@@ -343,6 +345,7 @@
     else if (name === "ticker") loadTicker();
     else if (name === "ball") loadBall();
     else if (name === "audit") loadAudit();
+    else if (name === "email-audit") loadEmailAudit();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
   }
@@ -1383,6 +1386,123 @@
         wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>When</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>' + body + "</tbody></table>";
       })
       .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+      });
+  }
+
+  // ---- email audit (email-audit feature) ----
+  // Every email the system attempted to send, with its outcome and the mailbox side's verdict.
+  // Reads GET /api/admin/email-log (email-audit:view on the server); recent failures ride the
+  // same response and render as a red band above the list. Filters submit on Apply (not on each
+  // keystroke) so the page makes one request per deliberate search.
+  var EMAIL_KINDS = [
+    ["donation", "Donation confirmation"], ["receipt", "Company receipt"], ["refund", "Refund confirmation"],
+    ["declaration", "Gift Aid declaration"], ["portal", "Portal link"], ["adminInvite", "Admin invite"],
+    ["adminReset", "Password reset"], ["loginCode", "Sign-in code"], ["lapsedDonor", "Lapsed (donor)"],
+    ["lapsedAdmin", "Lapsed (admin)"], ["newsletter", "Newsletter"], ["thankYou", "Thank-you letter"],
+    ["businessInvite", "Business invite"], ["businessCapture", "Business confirmation"],
+    ["businessReminder", "Business reminder"], ["ballConfirmation", "Ball confirmation"],
+    ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"],
+  ];
+  function emailKindLabel(kind) {
+    for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
+    return kind;
+  }
+  var EMAIL_AUDIT_PAGE = 50;
+  var emailAuditOffset = 0;
+  var emailAuditWired = false;
+  function emailStatusPill(r) {
+    // OUR attempt failing outranks everything; then the mailbox verdict; then plain Sent.
+    if (r.status === "failed") return '<span class="ty-pill ty-pill-blocked">Failed</span>';
+    if (r.deliveryStatus === "bounced") return '<span class="ty-pill ty-pill-blocked">Bounced</span>';
+    if (r.deliveryStatus === "complained") return '<span class="ty-pill ty-pill-blocked">Marked as spam</span>';
+    if (r.deliveryStatus === "delivered") return '<span class="ty-pill ty-pill-ready">Delivered</span>';
+    return '<span class="ty-pill">Sent</span>';
+  }
+  function emailAuditRow(r) {
+    var who = H.escapeHtml(r.recipient) + (r.recipientName ? "<br><small>" + H.escapeHtml(r.recipientName) + "</small>" : "");
+    var detail = r.error || r.deliveryDetail;
+    var status = emailStatusPill(r) + (detail ? "<br><small>" + H.escapeHtml(String(detail)) + "</small>" : "");
+    return (
+      "<tr><td>" + H.fmtDate(r.createdAt) + "</td><td>" + H.escapeHtml(emailKindLabel(r.kind)) +
+      "</td><td>" + who + "</td><td>" + H.escapeHtml(r.subject) + "</td><td>" + status + "</td></tr>"
+    );
+  }
+  function emailAuditTableHtml(rows) {
+    return (
+      '<table class="admin-table email-audit-table"><thead><tr><th>When</th><th>Type</th><th>To</th><th>Subject</th><th>Status</th></tr></thead><tbody>' +
+      rows.map(emailAuditRow).join("") + "</tbody></table>"
+    );
+  }
+  function wireEmailAudit() {
+    if (emailAuditWired) return;
+    emailAuditWired = true;
+    var type = el("emailAuditType");
+    if (type) {
+      EMAIL_KINDS.forEach(function (k) {
+        var o = doc.createElement("option");
+        o.value = k[0];
+        o.textContent = k[1];
+        type.appendChild(o);
+      });
+    }
+    var form = el("emailAuditFilters");
+    if (form) form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      emailAuditOffset = 0;
+      loadEmailAudit();
+    });
+    bindClick("emailAuditClear", function () {
+      el("emailAuditSearch").value = "";
+      el("emailAuditType").value = "";
+      el("emailAuditStatus").value = "";
+      emailAuditOffset = 0;
+      loadEmailAudit();
+    });
+    bindClick("emailAuditPrev", function () {
+      emailAuditOffset = Math.max(0, emailAuditOffset - EMAIL_AUDIT_PAGE);
+      loadEmailAudit();
+    });
+    bindClick("emailAuditNext", function () {
+      emailAuditOffset += EMAIL_AUDIT_PAGE;
+      loadEmailAudit();
+    });
+  }
+  function loadEmailAudit() {
+    wireEmailAudit();
+    var wrap = el("emailAuditTable");
+    var band = el("emailAuditFailures");
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    var params = "?limit=" + EMAIL_AUDIT_PAGE + "&offset=" + emailAuditOffset;
+    var q = (el("emailAuditSearch").value || "").trim();
+    var type = el("emailAuditType").value;
+    var status = el("emailAuditStatus").value;
+    if (q) params += "&q=" + encodeURIComponent(q);
+    if (type) params += "&type=" + encodeURIComponent(type);
+    if (status) params += "&status=" + encodeURIComponent(status);
+    authFetch("/api/admin/email-log" + params)
+      .then(j)
+      .then(function (d) {
+        var failures = d.failures || [];
+        band.innerHTML = failures.length
+          ? '<div class="email-fail-band"><h3>Needs a look: ' + failures.length +
+            " problem" + (failures.length === 1 ? "" : "s") + ' in the last 14 days</h3><div class="admin-table-wrap">' +
+            emailAuditTableHtml(failures) + "</div></div>"
+          : "";
+        var rows = d.results || [];
+        wrap.innerHTML = rows.length
+          ? emailAuditTableHtml(rows)
+          : '<p class="admin-empty">' + (emailAuditOffset ? "No more entries." : "No emails recorded yet. The log starts from when this page was added.") + "</p>";
+        var total = d.total || 0;
+        var pager = el("emailAuditPager");
+        pager.hidden = total <= EMAIL_AUDIT_PAGE;
+        el("emailAuditPageInfo").textContent =
+          total ? (emailAuditOffset + 1) + "–" + Math.min(emailAuditOffset + EMAIL_AUDIT_PAGE, total) + " of " + total : "";
+        el("emailAuditPrev").disabled = emailAuditOffset === 0;
+        el("emailAuditNext").disabled = emailAuditOffset + EMAIL_AUDIT_PAGE >= total;
+      })
+      .catch(function () {
+        band.innerHTML = "";
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
       });
   }

@@ -93,6 +93,7 @@
               <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
               <li class="admin-nav-group" aria-hidden="true">Governance</li>
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
               <li class="admin-nav-group" id="teamNavGroup" aria-hidden="true">Admin</li>
               <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
             </ul>
@@ -1145,6 +1146,43 @@
             <section class="admin-view" id="view-audit" aria-labelledby="audit-heading" hidden>
               <h2 id="audit-heading">Audit trail</h2>
               <div class="admin-table-wrap" id="auditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Email audit (email-audit feature): every email the system attempted to send, with
+                 its outcome — recent failures pinned in a red band above the list. Gated to the
+                 email-audit section, which only admins carry by default (donor-identifying send
+                 data); app.js hides the nav entry and the server enforces on the route. History
+                 starts at the feature's deploy — nothing was recorded per-send before it. -->
+            <section class="admin-view" id="view-email-audit" aria-labelledby="email-audit-heading" hidden>
+              <h2 id="email-audit-heading">Email audit</h2>
+              <p class="admin-view-intro">Every email the system has tried to send, newest first, with what happened to it: sent, failed, and what the mailbox side reported back (delivered, bounced, marked as spam). Anything that went wrong in the last 14 days sits in the red band at the top. Records are kept for six years after the tax year they were sent in, then removed automatically.</p>
+              <form id="emailAuditFilters" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Search
+                  <input id="emailAuditSearch" type="search" placeholder="Name, email or subject" style="width:220px" />
+                </label>
+                <label class="ty-inline">Type
+                  <select id="emailAuditType"><option value="">All types</option></select>
+                </label>
+                <label class="ty-inline">Status
+                  <select id="emailAuditStatus">
+                    <option value="">All statuses</option>
+                    <option value="failed">Failed to send</option>
+                    <option value="bounced">Bounced</option>
+                    <option value="complained">Marked as spam</option>
+                    <option value="delivered">Delivered</option>
+                    <option value="sent">Sent</option>
+                  </select>
+                </label>
+                <button class="btn btn-primary" type="submit">Apply</button>
+                <button class="btn btn-ghost" type="button" id="emailAuditClear">Clear</button>
+              </form>
+              <div id="emailAuditFailures" aria-live="polite"></div>
+              <div class="admin-table-wrap" id="emailAuditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <div class="ty-controls" id="emailAuditPager" hidden>
+                <button class="btn btn-ghost" type="button" id="emailAuditPrev">&larr; Newer</button>
+                <span id="emailAuditPageInfo"></span>
+                <button class="btn btn-ghost" type="button" id="emailAuditNext">Older &rarr;</button>
+              </div>
             </section>
 
             <!-- Team: who can sign in to this dashboard - invite, change role, disable/enable, or

@@ -18,14 +18,17 @@ export interface EmailSendRecord {
   subject: string;
   status: "sent" | "failed";
   error?: string | null;
+  /** TASK-346: the id SES returned. Null for a stubbed or failed send. */
+  sesMessageId?: string | null;
 }
 
 // Record one send attempt. Callers treat this as BEST-EFFORT: a bookkeeping failure must never
 // fail (or block) the send it describes — src/clients/email.ts catches and logs.
 export async function recordEmailSend(record: EmailSendRecord): Promise<void> {
   await pool.query(
-    `INSERT INTO email_log (kind, recipient, recipient_name, subject, status, error)
-     VALUES ($1, lower($2), $3, $4, $5, $6)`,
+    `INSERT INTO email_log
+       (kind, recipient, recipient_name, subject, status, error, ses_message_id)
+     VALUES ($1, lower($2), $3, $4, $5, $6, $7)`,
     [
       record.kind,
       record.recipient,
@@ -33,20 +36,40 @@ export async function recordEmailSend(record: EmailSendRecord): Promise<void> {
       record.subject,
       record.status,
       record.error ? String(record.error).slice(0, DETAIL_LIMIT) : null,
+      record.sesMessageId ?? null,
     ],
   );
 }
 
-// Stamp a delivery outcome (delivered / bounced / complained) onto the NEWEST matching send to
-// that address that has no outcome yet — the same newest-first, windowed correlation the
-// newsletter stats use (SES reports per address, not per message). Unmatched events are simply
-// dropped here; the newsletter pipeline still records its own.
+// Stamp a delivery outcome (delivered / bounced / complained) onto the send it belongs to.
+//
+// TASK-346: BY MESSAGE ID where we have one. The original correlation was recipient + recency —
+// newest unmatched row for that address — which is simply wrong as soon as one person has two
+// recent emails, and it picks the NEWER one, so an event for an older send lands on a newer one
+// and the page shows both outcomes inverted. That became a live case when the ball started
+// sending a guest-details read-back minutes after a ticket confirmation: the page exists to
+// answer "did their confirmation arrive?", and it would have answered backwards.
+//
+// The old heuristic is kept as a FALLBACK, not deleted: rows written before this shipped have no
+// id, and neither do stubbed sends. Better a best guess than no outcome at all for those.
+// Unmatched events are still dropped; the newsletter pipeline records its own separately.
 export async function markEmailDelivery(
   recipient: string,
   deliveryStatus: "delivered" | "bounced" | "complained",
   occurredAt: Date,
   detail: string | null,
+  messageId: string | null = null,
 ): Promise<void> {
+  if (messageId) {
+    const exact = await pool.query(
+      `UPDATE email_log SET delivery_status = $2, delivery_at = $3::timestamptz, delivery_detail = $4
+        WHERE ses_message_id = $1`,
+      [messageId, deliveryStatus, occurredAt.toISOString(), detail ? detail.slice(0, DETAIL_LIMIT) : null],
+    );
+    // Only fall back when the id matched nothing — an id we have never seen is an email from
+    // before this shipped, or from another sender on the same SES identity.
+    if ((exact.rowCount ?? 0) > 0) return;
+  }
   await pool.query(
     `UPDATE email_log SET delivery_status = $2, delivery_at = $3::timestamptz, delivery_detail = $4
       WHERE id = (

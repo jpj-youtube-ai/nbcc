@@ -27,6 +27,16 @@ Feature: Email audit page (email-audit feature)
     When I filter the email audit log by type "newsletter"
     Then every email audit result should be of type "newsletter"
 
+  # TASK-346: the outcome must land on the send it belongs to, not the newest one to that
+  # address. The old correlation was recipient + recency, which picks the WRONG row the moment
+  # somebody has two recent emails — and a ball buyer now gets a confirmation and then a
+  # guest-details read-back minutes later, so it would have shown both outcomes inverted.
+  Scenario: a bounce lands on the email it was actually for, not the newest one
+    Given two sends to "twice.audit.bdd@example.com" are on record, ids "msg-older-001" and "msg-newer-002"
+    When a bounce arrives for message id "msg-older-001" to "twice.audit.bdd@example.com"
+    Then the send with id "msg-older-001" should be marked "bounced"
+    And the send with id "msg-newer-002" should be marked "nothing"
+
   Scenario: the page is its own permission, and no role below admin carries it
     Given a newsletter admin "audit.editor.bdd@example.com" with role "editor" and password "pw-ea3"
     When I fetch the email audit log

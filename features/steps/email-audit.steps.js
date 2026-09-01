@@ -36,6 +36,63 @@ Given("a failed {string} email to {string} is on record", async function (kind, 
   );
 });
 
+// TASK-346: two sends to ONE address, minutes apart, each with its own SES id. This is the
+// shape that broke the old correlation - and it is now the ordinary case, since a ball buyer
+// gets a confirmation and then a guest-details read-back.
+Given(
+  "two sends to {string} are on record, ids {string} and {string}",
+  async function (email, firstId, secondId) {
+    await pool.query(
+      `INSERT INTO email_log (kind, recipient, subject, status, ses_message_id, created_at)
+       VALUES ('ballConfirmation', lower($1), 'Your booking', 'sent', $2, now() - interval '10 minutes'),
+              ('ballGuests',       lower($1), 'Your guests', 'sent', $3, now() - interval '2 minutes')`,
+      [email, firstId, secondId],
+    );
+  },
+);
+
+// Through the REAL webhook, exactly as SNS delivers it, rather than by importing the app's
+// database module into this process: that would open a second pool nothing closes, and it would
+// test a copy of the path rather than the path.
+When(
+  "a bounce arrives for message id {string} to {string}",
+  async function (messageId, email) {
+    const now = new Date().toISOString();
+    const sesEvent = {
+      eventType: "Bounce",
+      mail: { timestamp: now, destination: [email], messageId },
+      bounce: { timestamp: now, bounceType: "Permanent", bounceSubType: "General" },
+    };
+    const res = await fetch(
+      `${BASE_URL}/api/webhooks/ses/${process.env.SES_WEBHOOK_TOKEN || "ci-ses-webhook-token"}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain; charset=UTF-8" },
+        body: JSON.stringify({
+          Type: "Notification",
+          MessageId: `sns-${messageId}`,
+          TopicArn: "arn:aws:sns:eu-west-1:000000000000:bdd-ses-events",
+          Message: JSON.stringify(sesEvent),
+          Timestamp: now,
+        }),
+      },
+    );
+    assert.strictEqual(res.status, 200, "expected the SES webhook to accept the event");
+  },
+);
+
+Then(
+  "the send with id {string} should be marked {string}",
+  async function (messageId, expected) {
+    const res = await pool.query(
+      "SELECT delivery_status FROM email_log WHERE ses_message_id = $1",
+      [messageId],
+    );
+    assert.strictEqual(res.rowCount, 1, `expected one row for ${messageId}`);
+    assert.strictEqual(res.rows[0].delivery_status, expected === "nothing" ? null : expected);
+  },
+);
+
 async function fetchEmailAudit(world, query) {
   const res = await fetch(`${BASE_URL}/api/admin/email-log${query || ""}`, {
     headers: { Authorization: `Bearer ${world.token}` },

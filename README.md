@@ -2603,6 +2603,23 @@ parsing — `z.coerce.boolean()` reads ANY non-empty string as true, so a stray 
 silently opt someone into marketing. Entries carry the same 90-day retention as guest details:
 nobody should still be on a waiting list for a party that has happened.
 
+### Which send a delivery event belongs to (TASK-346)
+
+`email_log` originally matched SES delivery/bounce/complaint events to a send by **recipient and
+recency** — the newest unmatched row for that address inside a 14-day window. That is wrong the
+moment one person has two recent emails, and it picks the *newer* one, so an event for an older
+send lands on a newer one and the page shows both outcomes inverted.
+
+That became a live case when TASK-338 started sending a guest-details read-back minutes after a
+ticket confirmation: the audit page exists to answer "did their confirmation arrive?", and it
+would have answered backwards.
+
+`sendSesEmail` now returns the id SES assigns the message (it was always in the response and was
+being discarded), `email_log.ses_message_id` stores it, and the webhook matches on it. The old
+recipient-and-recency correlation is **kept as a fallback**, not deleted: rows written before this
+shipped have no id, and neither do stubbed sends outside production — a best guess beats no
+outcome at all for those.
+
 ### The run-up (TASK-338)
 
 Guest names, dietary requirements and access needs come back from **buyers**, and most of a table

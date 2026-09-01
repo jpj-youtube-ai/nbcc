@@ -49,7 +49,11 @@ describe("parseSnsEnvelope", () => {
 const sesEvent = (over: Record<string, unknown> = {}) =>
   JSON.stringify({
     eventType: "Delivery",
-    mail: { timestamp: "2026-08-31T10:00:00.000Z", destination: ["Dora@Example.com"] },
+    mail: {
+      timestamp: "2026-08-31T10:00:00.000Z",
+      destination: ["Dora@Example.com"],
+      messageId: "0100018f-aaaa-bbbb-cccc-000000000001",
+    },
     delivery: { timestamp: "2026-08-31T10:00:01.000Z" },
     ...over,
   });
@@ -63,7 +67,26 @@ describe("parseSesEvent", () => {
       occurredAt: new Date("2026-08-31T10:00:01.000Z"),
       detail: null,
       linkUrl: null,
+      messageId: "0100018f-aaaa-bbbb-cccc-000000000001",
     });
+  });
+
+  // TASK-346: mail.messageId is what lets the audit log stamp an outcome onto the exact send.
+  // It is the id SES gave OUR message — deliberately not the SNS notification's own MessageId,
+  // which identifies the delivery of the notification and changes per event.
+  it("carries the SES message id, so an outcome can find the send it belongs to", () => {
+    expect(parseSesEvent(sesEvent())?.messageId).toBe("0100018f-aaaa-bbbb-cccc-000000000001");
+  });
+
+  // Events for mail sent before TASK-346, and any sender that omits it. The event must still
+  // parse: markEmailDelivery falls back to matching on recipient and recency rather than
+  // dropping the outcome entirely.
+  it("still parses an event with no message id, rather than dropping it", () => {
+    const parsed = parseSesEvent(
+      sesEvent({ mail: { timestamp: "2026-08-31T10:00:00.000Z", destination: ["dora@example.com"] } }),
+    );
+    expect(parsed?.eventType).toBe("delivered");
+    expect(parsed?.messageId).toBeNull();
   });
 
   it("keeps the bounce object as detail on a Bounce — and nothing else, ever", () => {

@@ -84,7 +84,16 @@ async function postSesWebhook(req: Request, res: Response): Promise<Response> {
   // below cannot cost the audit page its delivery truth (and vice versa — each is independent).
   if (parsed.eventType === "delivered" || parsed.eventType === "bounced" || parsed.eventType === "complained") {
     try {
-      await markEmailDelivery(parsed.email, parsed.eventType, parsed.occurredAt, deliveryDetailOf(parsed));
+      // TASK-346: the message id makes this land on the exact send. Null for an email sent
+      // before that shipped, in which case markEmailDelivery falls back to the old
+      // recipient-and-recency guess rather than dropping the outcome.
+      await markEmailDelivery(
+        parsed.email,
+        parsed.eventType,
+        parsed.occurredAt,
+        deliveryDetailOf(parsed),
+        parsed.messageId,
+      );
     } catch (err) {
       console.error("email log delivery stamp failed:", err instanceof Error ? err.message : err);
     }

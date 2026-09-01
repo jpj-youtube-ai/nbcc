@@ -51,6 +51,7 @@ async function logAttempt(
   name: string | null,
   subject: string,
   error: string | null,
+  sesMessageId: string | null = null,
 ): Promise<void> {
   try {
     await recordEmailSend({
@@ -60,6 +61,9 @@ async function logAttempt(
       subject,
       status: error ? "failed" : "sent",
       error,
+      // TASK-346: what lets a delivery event find THIS row rather than the newest one for this
+      // address. Null on a stubbed send, which is why the old heuristic is kept as a fallback.
+      sesMessageId,
     });
   } catch (err) {
     console.error("email log write failed:", err instanceof Error ? err.message : err);
@@ -74,13 +78,14 @@ async function sendAndLog(kind: string, name: string | null, msg: SesMessage): P
     await logAttempt(kind, msg.to, name, msg.subject, null);
     return;
   }
+  let messageId: string | null = null;
   try {
-    await sendSesEmail(msg);
+    messageId = await sendSesEmail(msg);
   } catch (err) {
     await logAttempt(kind, msg.to, name, msg.subject, err instanceof Error ? err.message : String(err));
     throw err;
   }
-  await logAttempt(kind, msg.to, name, msg.subject, null);
+  await logAttempt(kind, msg.to, name, msg.subject, null, messageId);
 }
 
 export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {

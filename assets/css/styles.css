@@ -14,7 +14,21 @@
    Playfair Display variable face (weights 400-800; italic synthesized) and Poppins
    400 (medium/semibold synthesized). */
 @font-face{font-family:"Playfair Display";font-style:normal;font-weight:400 800;font-display:swap;src:url(/assets/fonts/playfair-var.woff2) format("woff2")}
-@font-face{font-family:"Poppins";font-style:normal;font-weight:400 600;font-display:swap;src:url(/assets/fonts/poppins-400.woff2) format("woff2")}
+/* TASK-343: 400, not "400 600".
+
+   poppins-400.woff2 is a STATIC single-weight file - it has no fvar table, verified by reading
+   its table directory. The old descriptor told the browser this one file supplied every weight
+   from 400 to 600, so the browser used it for all of them, rendered the single design it
+   actually contains, and applied no synthetic bold - because it had been told none was needed.
+   Sixty-six rules across the site ask this family for 500 or 600. None of them did anything.
+
+   Declaring the truth means those weights now fall OUTSIDE the face, so the browser synthesises
+   them. Synthetic bold is not as good as a drawn semibold and the real fix is to ship one; this
+   is the honest version of what we have. Playfair below is correctly declared - playfair-var is
+   genuinely variable - which is why headings were never affected.
+
+   TO REVERT: put "400 600" back. That is the whole change. */
+@font-face{font-family:"Poppins";font-style:normal;font-weight:400;font-display:swap;src:url(/assets/fonts/poppins-400.woff2) format("woff2")}
 
 :root{
   /* ===== NBCC brand colour system (REQ-004) — six official colours ===== */

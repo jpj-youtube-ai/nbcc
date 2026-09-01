@@ -44,6 +44,15 @@ Feature: The Festive Ball password gate (TASK-313)
     Then the ball page status should be 200
     And the ball page nav should link to the ball
 
+  # TASK-341: this route sets its own headers, unlike every other page. Express sends an ETag
+  # and no Cache-Control, and a browser with no Cache-Control caches heuristically — serving a
+  # stale page without asking. Three markup changes appeared not to ship because of it.
+  Scenario: the ball page is never served from a stale cache
+    Given the ball gate is open
+    When I request the ball page
+    Then the ball page status should be 200
+    And the ball page should be revalidated on every view
+
   # TASK-337: the calendar file follows the page's gate. It is only a date and a venue, but the
   # gate exists because the printed advert lands on a fixed day, and an ungated file would put
   # the event on a public URL before then.

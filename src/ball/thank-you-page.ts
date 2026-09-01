@@ -91,9 +91,11 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
        for exactly this selector. -->
   <section class="ball-hero" aria-labelledby="ty-heading">
     <div class="wrap">
-      <!-- Child order matches the ball page's hero on purpose: the stagger in ball.css gives
-           :nth-child(2) the lockup's own entrance, so the artwork has to sit second here too. -->
-      <p class="ball-kicker">Your seat is booked. <em>Thank you.</em></p>
+      <!-- No kicker. It read "Your seat is booked", which is wrong for the buyer this page
+           matters most to: someone who has just taken a table of ten has not booked A seat.
+           Removing it also promotes the headline into :nth-child(2), the child the stagger in
+           ball.css gives the scale-in entrance to - so the biggest thing on the page is now
+           also the one that arrives with the flourish. -->
       <img class="ball-lockup ball-ty-lockup" src="/assets/img/ball-lockup.svg"
         alt="A Night to Remember, Festive Ball 2026" width="1306" height="491"
         fetchpriority="high" decoding="async" />
@@ -112,6 +114,10 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
         Saturday 7<sup class="ord">th</sup> November 2026 at The Park Hotel, Rugby Park, Kilmarnock. Dress to impress,
         over 18s only. Give your name at the welcome desk. There's no ticket to print.
         We'll email you the timings and menu once the venue confirms them.
+      </p>
+
+      <p class="ball-ty-calendar">
+        <a class="btn btn-ghost" href="/ball/calendar.ics" download>Add it to your calendar</a>
       </p>
 
       <p class="ball-smallprint">

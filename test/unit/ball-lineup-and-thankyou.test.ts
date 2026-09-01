@@ -27,14 +27,18 @@ function rule(css: string, selector: string): string {
   return end === -1 ? "" : css.slice(start, end);
 }
 
-describe("every Designer Rooms mark is the same 50% larger (TASK-335)", () => {
+describe("every Designer Rooms mark is the same size (TASK-337)", () => {
   // The sponsor pays for the whole evening. NBCC asked for the credit to carry more weight, and
   // asked for it FOUR separate times — once per place it appears — which is the tell that these
   // live in four files and nobody could see them together.
+  //
+  // TASK-337 settled them at ONE number. The +50% pass gave three different widths because each
+  // started from a different place, which just moved the problem: they still could not be
+  // checked against each other by eye.
   const sizes: Array<[string, string, number]> = [
-    ["hero, top of the ball page", rule(ballCss, ".ball-credit a"), 315],
-    ["band, foot of the ball page", rule(ballCss, ".ball-sponsor-name a"), 480],
-    ["home page promotion", rule(promo, ".ball-home-credit a"), 375],
+    ["hero, top of the ball page", rule(ballCss, ".ball-credit a"), 500],
+    ["band, foot of the ball page", rule(ballCss, ".ball-sponsor-name a"), 500],
+    ["home page promotion", rule(promo, ".ball-home-credit a"), 500],
   ];
 
   it.each(sizes)("%s is %s", (_where, css, px) => {
@@ -47,7 +51,7 @@ describe("every Designer Rooms mark is the same 50% larger (TASK-335)", () => {
     // .ball-sponsor band, so its mark is that band's 480px and cannot drift from it — which is
     // the better answer to "make this one bigger too" than a fourth number to keep in step.
     expect(thankYou).toContain('<p class="ball-sponsor-name">');
-    expect(rule(ballCss, ".ball-sponsor-name a").replace(/\s+/g, "")).toContain("width:480px");
+    expect(rule(ballCss, ".ball-sponsor-name a").replace(/\s+/g, "")).toContain("width:500px");
   });
 });
 
@@ -63,19 +67,39 @@ describe("the thank-you page follows the ball page (TASK-335)", () => {
     expect(thankYou).toContain("/assets/img/ball-lockup.svg");
   });
 
-  // The stagger in ball.css gives :nth-child(2) the lockup's own entrance. If the artwork is not
-  // the second child it gets a plain rise and something else gets the flourish.
-  it("puts the lockup second in the hero, where the animation expects it", () => {
+  // TASK-337: the kicker is gone. It said "Your seat is booked", which is the wrong sentence for
+  // the buyer this page matters most to — someone who has just taken a table of ten. Removing it
+  // moves the headline into :nth-child(2), which is the child the stagger gives the scale-in
+  // entrance to, so the biggest thing on the page is now also the one that arrives with it.
+  it("no longer tells a table buyer they booked a seat", () => {
+    // Scoped to what is RENDERED. The comment explaining the removal quotes the old line, so a
+    // whole-file search fails on the very note saying it is gone.
     const wrap = thankYou.slice(
       thankYou.indexOf('<section class="ball-hero"'),
       thankYou.indexOf("</section>", thankYou.indexOf('<section class="ball-hero"')),
     );
-    const kicker = wrap.indexOf("ball-kicker");
+    const rendered = wrap.replace(/<!--[\s\S]*?-->/g, "");
+    expect(rendered).not.toContain("ball-kicker");
+    expect(rendered).not.toMatch(/Your seat is booked/i);
+  });
+
+  it("puts the headline second, where the scale-in entrance lands", () => {
+    const wrap = thankYou.slice(
+      thankYou.indexOf('<section class="ball-hero"'),
+      thankYou.indexOf("</section>", thankYou.indexOf('<section class="ball-hero"')),
+    );
     const lockup = wrap.indexOf("ball-lockup");
     const title = wrap.indexOf("ball-ty-title");
-    expect(kicker).toBeGreaterThan(-1);
-    expect(lockup).toBeGreaterThan(kicker);
+    expect(lockup).toBeGreaterThan(-1);
     expect(title).toBeGreaterThan(lockup);
+  });
+
+  // The confirmation line is the one thing on this page a buyer needs to read at a glance, and
+  // at 2.15rem it was barely bigger than the body copy beneath it.
+  it("sets the headline at display scale, above the lockup's own size", () => {
+    const title = rule(ballCss, ".ball-ty-title");
+    const max = Number(title.match(/font-size:\s*clamp\([^,]+,[^,]+,\s*([\d.]+)rem\)/)?.[1] ?? 0);
+    expect(max).toBeGreaterThanOrEqual(3.5);
   });
 
   it("ends on the same sponsor band as the ball page, in cream not dark", () => {

@@ -292,7 +292,7 @@
   /* TASK-335: 210 -> 315 (+50%). NBCC asked for every Designer Rooms mark on the site to carry
      more weight: they are paying for the whole evening, and the credit read as a footnote
      rather than a thank-you. */
-  width: 315px;
+  width: 500px;
   max-width: 100%;
 }
 .ball-credit img {
@@ -611,7 +611,10 @@
   margin: 1px 0 0;
   accent-color: var(--maroon);
 }
-.ball-check b { font-weight: 600; }
+/* TASK-337: 600 -> 700. The words were already bolded and NBCC could not see it: against the
+   label's own 400, semibold is a difference you find by looking for it, which is the opposite
+   of the point. These four phrases are the scannable summary of what each box does. */
+.ball-check b { font-weight: 700; }
 /* The per-ticket breakdown under the fee checkbox. A block so it starts its own line under
    the sentence rather than trailing it, and quieter, because it is an aside not a term. */
 .ball-check small {
@@ -726,7 +729,7 @@
 .ball-sponsor-name a {
   display: block;
   /* 320 -> 480 (+50%), see .ball-credit above. */
-  width: 480px;
+  width: 500px;
   max-width: 100%;
   margin-inline: auto;
   text-decoration: none;
@@ -780,16 +783,26 @@
   color: var(--slate-soft);
 }
 
+/* TASK-337: the lockup steps back so the sentence can lead. On the ball page the artwork IS the
+   headline; here the headline is the line telling someone their booking worked, and two display
+   elements at the same size means neither reads first. */
 .ball-ty-lockup {
-  width: min(100%, 440px);
+  width: min(100%, 380px);
 }
 .ball-ty-title {
   font-family: "Playfair Display", Georgia, serif;
-  font-size: clamp(1.45rem, 3.6vw, 2.15rem);
+  /* Display scale, fluid. This is the one thing on the page a buyer needs to read at a glance,
+     and at 2.15rem it was barely larger than the body copy beneath it. */
+  font-size: clamp(2.2rem, 6.5vw, 4rem);
   font-weight: 600;
-  line-height: 1.2;
+  /* Tighter as it grows: display type left at body line-height drifts apart. */
+  line-height: 1.08;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--on-night);
+  /* Held to a readable measure so it breaks into two or three shapely lines rather than one
+     very long one on a wide screen. */
+  max-width: 16ch;
   text-wrap: balance;
 }
 .ball-ty-lede {

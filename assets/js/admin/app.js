@@ -6245,7 +6245,16 @@
     authFetch("/api/admin/ball/bookings")
       .then(j)
       .then(function (d) {
-        el("ballBookings").innerHTML = ballBookingsTable(d.results || []);
+        el("ballBookings").innerHTML =
+          ballBookingsTable(d.results || []) +
+          // Said out loud rather than silently dropped: a run of abandoned checkouts is what a
+          // broken payment flow looks like from the outside, and a table that quietly omitted
+          // them would show nothing wrong.
+          (d.abandoned
+            ? '<p class="admin-note">' + d.abandoned +
+              (d.abandoned === 1 ? " checkout was" : " checkouts were") +
+              " started and never paid for. Not listed above — no money was taken and no seats are held.</p>"
+            : "");
         // Delegated, because the table is re-rendered on every load.
         el("ballBookings").addEventListener("click", onCancelBookingClick);
       })

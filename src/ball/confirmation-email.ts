@@ -16,6 +16,8 @@ export interface BallEventDetails {
   includedNote: string | null;
   /** Absolute link to the "tell us about your table" form, when a token has been minted. */
   guestLink?: string | null;
+  /** Absolute link to the .ics file (TASK-337). Passed in, because this module stays pure. */
+  calendarUrl?: string | null;
 }
 
 export interface BallConfirmationEmail {
@@ -97,7 +99,10 @@ export function buildBallConfirmationEmail(
   <p style="margin:0 0 6px;color:#333333;">${arrival}</p>
   <p style="margin:0 0 6px;color:#333333;">Dress to impress. This is an over 18s event.</p>
   <p style="margin:0 0 6px;color:#333333;">Your ticket includes entry, a meal and the evening's entertainment.${included}</p>
-  <p style="margin:0 0 16px;color:#333333;"><b>Entertainment:</b> ${lineUpSentence()}</p>
+  <p style="margin:0 0 6px;color:#333333;"><b>Entertainment:</b> ${lineUpSentence()}</p>
+  ${details.calendarUrl
+    ? `<p style="margin:0 0 16px;"><a href="${escapeHtml(details.calendarUrl)}" style="color:#800000;font-weight:600;">Add it to your calendar</a></p>`
+    : ""}
 
   ${details.guestLink
     ? `<h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">Tell us about your table</h2>
@@ -132,7 +137,8 @@ Saturday 7th November 2026
 The Park Hotel, Rugby Park, Kilmarnock
 ${details.arrivalTime ?? "From 7pm, to be confirmed. We'll email you"}
 Dress to impress. This is an over 18s event.
-Entertainment: ${lineUpSentence()}
+Entertainment: ${lineUpSentence()}${details.calendarUrl ? `
+Add it to your calendar: ${details.calendarUrl}` : ""}
 Your ticket includes entry, a meal and the evening's entertainment.${
     details.includedNote
       ? " " + details.includedNote

@@ -44,6 +44,20 @@ Feature: The Festive Ball password gate (TASK-313)
     Then the ball page status should be 200
     And the ball page nav should link to the ball
 
+  # TASK-337: the calendar file follows the page's gate. It is only a date and a venue, but the
+  # gate exists because the printed advert lands on a fixed day, and an ungated file would put
+  # the event on a public URL before then.
+  Scenario: the calendar file is offered once the ball is public
+    Given the ball gate is open
+    When I request the ball calendar file
+    Then the ball calendar status should be 200
+    And the ball calendar should be a calendar file
+
+  Scenario: the calendar file is not public before the ball is
+    Given the ball gate is closed
+    When I request the ball calendar file
+    Then the ball calendar status should be 401
+
   Scenario: a scheduled unlock opens the gate on its own
     Given the ball gate is closed but scheduled to open in the past
     When I request the ball page

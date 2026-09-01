@@ -1101,6 +1101,7 @@ async function sendBallConfirmationEmail(booking: BallBookingWrite | null): Prom
       arrivalTime: settings.arrivalTime,
       includedNote: settings.includedNote,
       guestLink: token ? `${config.BALL_BASE_URL.replace(/\/+$/, "")}/ball/guests/${token}` : null,
+      calendarUrl: `${config.BALL_BASE_URL.replace(/\/+$/, "")}/ball/calendar.ics`,
     });
     await sendBallConfirmation({
       email: booking.buyerEmail,

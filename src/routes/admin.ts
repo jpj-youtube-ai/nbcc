@@ -60,6 +60,7 @@ import {
   purgeExpiredGuests,
   updateSettings as updateBallSettings,
   listGuestProgress,
+  countAbandonedBookings,
 } from "../db/ball";
 import {
   summariseGuestProgress,
@@ -2839,11 +2840,14 @@ export async function getAdminBallBookings(req: Request, res: Response): Promise
   const limit = Number(req.query.limit ?? 200);
   const offset = Number(req.query.offset ?? 0);
   try {
-    const results = await listBookings(
-      Number.isFinite(limit) ? limit : 200,
-      Number.isFinite(offset) ? offset : 0,
-    );
-    return res.status(200).json({ results });
+    const [results, abandoned] = await Promise.all([
+      listBookings(
+        Number.isFinite(limit) ? limit : 200,
+        Number.isFinite(offset) ? offset : 0,
+      ),
+      countAbandonedBookings(),
+    ]);
+    return res.status(200).json({ results, abandoned });
   } catch (err) {
     console.error("admin ball bookings failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

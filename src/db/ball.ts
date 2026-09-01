@@ -592,12 +592,29 @@ export interface BallBookingRow {
   paidAt: string | null;
 }
 
+// TASK-337: how many checkouts were started and never finished.
+//
+// Reported as a NUMBER rather than as rows. A pending booking is somebody who pressed pay and
+// did not arrive - either still typing their card in, or long gone - and listing them beside
+// real buyers made the bookings table read as sales that had not happened. The count still has
+// to be visible somewhere: a sudden run of them is what a broken payment flow looks like from
+// the outside, and hiding the rows without hiding the fact is the honest middle.
+export async function countAbandonedBookings(): Promise<number> {
+  const res = await pool.query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM ball_bookings WHERE status = 'pending'`,
+  );
+  return Number(res.rows[0]?.n ?? 0);
+}
+
+// Real outcomes only - paid and cancelled. See countAbandonedBookings above for why 'pending'
+// is excluded rather than shown greyed out.
 export async function listBookings(limit = 200, offset = 0): Promise<BallBookingRow[]> {
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
             created_at, paid_at
        FROM ball_bookings
+      WHERE status <> 'pending'
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2`,
     [Math.min(Math.max(limit, 1), 500), Math.max(offset, 0)],

@@ -10,6 +10,7 @@ import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
+import { buildBallCalendar } from "../ball/calendar";
 import {
   claimReservation,
   createPendingBooking,
@@ -224,6 +225,39 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   // request by definition. Re-testing it could only ever disagree with the page being sent.
   res.type("html").send(addBallNavLink(renderBallPage(template, { settings, gateOpen })));
 }
+
+// TASK-337: the add-to-calendar file.
+//
+// Gated exactly like the page it belongs to. It is only a date and a venue, but the gate exists
+// because the printed advert lands on a fixed day, and an ungated file would put the event on a
+// public URL before then. After launch the gate is open and this is public to everyone, which is
+// when the confirmation email's link needs it to work.
+ballRouter.get("/ball/calendar.ics", async (req, res, next) => {
+  try {
+    const settings = await getSettings();
+    if (!isGateOpen(settings, new Date())) {
+      const cookie = readCookie(req.headers.cookie, GATE_COOKIE);
+      const { signingKey } = await previewSecret();
+      if (!cookie || !verifyGateToken(cookie, signingKey, new Date())) {
+        res.status(401).type("text/plain").send("Not available yet");
+        return;
+      }
+    }
+    const ics = buildBallCalendar({
+      arrivalTime: settings.arrivalTime,
+      location: "The Park Hotel, Rugby Park, Kilmarnock",
+      url: `${config.BALL_BASE_URL.replace(/\/+$/, "")}/ball`,
+      uid: "festive-ball-2026@nbcc.scot",
+    });
+    res
+      .status(200)
+      .type("text/calendar; charset=utf-8")
+      .set("Content-Disposition", 'attachment; filename="nbcc-festive-ball-2026.ics"')
+      .send(ics);
+  } catch (err) {
+    next(err);
+  }
+});
 
 ballRouter.get("/ball", async (req, res, next) => {
   try {

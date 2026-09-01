@@ -166,9 +166,77 @@
   font-size: 0.88rem;
   color: var(--on-night-soft);
 }
-@media (max-width: 620px) {
-  .ball-facts { grid-template-columns: 1fr; gap: 18px; text-align: center; }
+@media (max-width: 620px) {
+  .ball-facts { grid-template-columns: 1fr; gap: 18px; text-align: center; }
+}
+
+/* TASK-335: the line-up, announced 31 August. Sits directly beneath the facts band and takes
+   only a BOTTOM rule: the band above already closes with one, and a border on both would draw
+   a double line a few pixels apart, which reads as a mistake rather than a frame. */
+.ball-lineup {
+  width: 100%;
+  max-width: 780px;
+  padding: clamp(14px, 2vw, 20px) 0;
+  border-bottom: 3px solid var(--night-line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
 }
+.ball-lineup-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 600;
+}
+.ball-lineup-acts {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: baseline;
+  gap: 2px 16px;
+}
+.ball-lineup-acts b {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.02rem, 2.1vw, 1.24rem);
+  font-weight: 600;
+  line-height: 1.3;
+}
+/* A gold point between names rather than a comma: at this size a comma sitting on the baseline
+   between two serif names reads as punctuation inside one of them. */
+.ball-lineup-acts b:not(:first-child)::before {
+  content: "·";
+  color: var(--gold);
+  padding-right: 16px;
+  font-family: system-ui, sans-serif;
+}
+.ball-lineup-acts i {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--on-night-soft);
+}
+
+/* The same names again in the "Who's playing" column, under Michelle's card. Stacked, not a
+   second inline run: this column is prose, and a wrapping inline list beside a paragraph reads
+   as a sentence that lost its verbs. */
+.ball-acts {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ball-acts li {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.06rem;
+  font-weight: 600;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.ball-acts li:first-child { border-top: 1px solid var(--line); }
 
 .ball-hero-cta {
   display: flex;
@@ -221,7 +289,10 @@
 }
 .ball-credit a {
   display: block;
-  width: 210px;
+  /* TASK-335: 210 -> 315 (+50%). NBCC asked for every Designer Rooms mark on the site to carry
+     more weight: they are paying for the whole evening, and the credit read as a footnote
+     rather than a thank-you. */
+  width: 315px;
   max-width: 100%;
 }
 .ball-credit img {
@@ -654,7 +725,8 @@
    Read as "the logo is not centred", which is exactly what it was. */
 .ball-sponsor-name a {
   display: block;
-  width: 320px;
+  /* 320 -> 480 (+50%), see .ball-credit above. */
+  width: 480px;
   max-width: 100%;
   margin-inline: auto;
   text-decoration: none;
@@ -680,25 +752,50 @@
 /* The sponsor credit on the thank-you page. Quiet: the buyer has just paid and the page's job
    is to reassure them, so this sits at the foot as a thank-you rather than an advert. Dark
    version of the wordmark, because this page is cream. */
-.ball-ty-sponsor {
-  margin: 34px 0 0;
-  padding-top: 22px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  align-items: flex-start;
+/* TASK-335: the thank-you page now ends on the ball page's own .ball-sponsor band, so the
+   cream-ground .ball-ty-sponsor block it used to carry is gone rather than left to rot.
+
+   What remains here is only what the confirmation needs on top of the shared hero: a smaller
+   lockup, and a real heading under it. The ball page's lockup IS its headline at 780px; here
+   the headline is the sentence telling someone their seat is booked, so the artwork sits back
+   and lets it lead. */
+/* The confirmation's booking details carry .ball-facts for its SHAPE - three columns, rules
+   above and below - but they sit on the cream section, not the night hero. Until now the
+   modifier existed in the markup with no rule behind it, so the band arrived wearing the hero's
+   palette on cream: gold labels bleaching out, and rules at 42% gold that were effectively
+   invisible. It reads as the one part of the page nobody styled, which is exactly what it was.
+
+   Colours only. The geometry is inherited, so the two bands stay the same object. */
+.ball-facts-light {
+  border-top-color: var(--line);
+  border-bottom-color: var(--line);
 }
-.ball-ty-sponsor span {
-  font-size: 0.74rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+.ball-facts-light dt {
+  color: var(--crimson);
+}
+.ball-facts-light dd b {
+  color: var(--slate);
+}
+.ball-facts-light dd span {
   color: var(--slate-soft);
 }
-.ball-ty-sponsor img {
-  display: block;
-  width: min(100%, 240px);
-  height: auto;
+
+.ball-ty-lockup {
+  width: min(100%, 440px);
+}
+.ball-ty-title {
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: clamp(1.45rem, 3.6vw, 2.15rem);
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+  color: var(--on-night);
+  text-wrap: balance;
+}
+.ball-ty-lede {
+  margin: 0;
+  font-size: 1.02rem;
+  color: var(--on-night-soft);
 }
 
 /* The booking section needs to look like somewhere you have ARRIVED, not more of the page.
@@ -950,6 +1047,12 @@
 .ball-hero .wrap > :nth-child(3) { animation-delay: 0.34s; }
 .ball-hero .wrap > :nth-child(4) { animation-delay: 0.5s; }
 .ball-hero .wrap > :nth-child(5) { animation-delay: 0.62s; }
+/* TASK-335: the line-up inserted a child at position 4, pushing the CTA to 5 and the sponsor
+   credit to 6. Without these the credit and the organiser line fall off the end of the stagger
+   and animate at zero delay - arriving BEFORE the buttons above them, which reads as the page
+   assembling itself backwards. */
+.ball-hero .wrap > :nth-child(6) { animation-delay: 0.74s; }
+.ball-hero .wrap > :nth-child(7) { animation-delay: 0.86s; }
 
 /* The scroll reveals are the shared site transition (.reveal, 0.65s), slowed here to sit with
    the hero's longer entrance so the whole page moves at one pace.

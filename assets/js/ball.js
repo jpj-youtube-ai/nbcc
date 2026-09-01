@@ -102,7 +102,11 @@
     // everywhere else on the site — a gift is not something we ask people to pay a surcharge
     // on. Mirrors orderTotalPence server-side, which is what actually gets charged.
     var fee = feePence(tickets);
-    var coverFee = form.elements.coverFee && form.elements.coverFee.checked;
+    // TASK-335: `form` is null on a ball page with no booking form - the thank-you page now
+    // shares this script so it can have the hero's snow. Every other read in here was already
+    // guarded; this one threw, and since recalculate() runs before startSnow() at the foot of
+    // the file, the throw showed up as no snow rather than as an obvious error.
+    var coverFee = form && form.elements.coverFee && form.elements.coverFee.checked;
 
     if (feeOut) feeOut.textContent = money(fee);
     // The 20p is per ORDER, so the fee per ticket falls as the order grows. Worth saying:

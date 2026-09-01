@@ -97,6 +97,17 @@
             <div><dt>Tickets</dt><dd><b>&pound;100 each</b><span>Tables of ten &pound;1,000</span></dd></div>
           </dl>
 
+            <!-- The line-up, announced by The Designer Rooms on 31 August. It sits in the hero
+                 because it is the second reason someone buys a ticket after the cause itself.
+                 It takes no rule of its own on top: the facts band above already ends in one,
+                 so a second border here would draw a double line. -->
+            <div class="ball-lineup">
+              <span class="ball-lineup-label">Entertainment</span>
+              <p class="ball-lineup-acts">
+                <b>Michelle McManus</b><i>your host</i><b>Clanadonia</b><b>The MacDonald Brothers</b><b>The Kilted DJ</b>
+              </p>
+            </div>
+
           <div class="ball-hero-cta">
             <a class="btn btn-gold" href="#tickets">Book tickets</a>
             <a class="btn btn-ghost-gold" href="#the-night">What's the night about?</a>
@@ -153,9 +164,13 @@
                 <span class="ball-host-name">Michelle McManus</span>
               </p>
               <p>Live music and entertainment through the evening.</p>
+                <ul class="ball-acts">
+                  <li>Clanadonia</li>
+                  <li>The MacDonald Brothers</li>
+                  <li>The Kilted DJ</li>
+                </ul>
               <p data-region="lineup" class="ball-tbc">
-                The rest of the line-up is being announced shortly. We'll email everyone who has
-                booked as each act is confirmed.
+                Set times will follow nearer the night.
               </p>
             </div>
 
@@ -227,14 +242,14 @@
             <div class="ball-extras">
               <label class="ball-check">
                 <input type="checkbox" name="coverFee" />
-                <span>Add <b id="ballFee">&pound;1.40</b> to cover the card fee, so the full
+                <span>Add <b id="ballFee">&pound;1.40</b> to <b>cover the card fee</b>, so the full
                   ticket price reaches NBCC.<small id="ballFeeEach" hidden></small></span>
               </label>
 
               <div class="ball-donation">
                 <label class="ball-check">
                   <input type="checkbox" name="addDonation" id="ballAddDonation" />
-                  <span>I'd like to add a donation to NBCC.</span>
+                  <span>I'd like to <b>add a donation</b> to NBCC.</span>
                 </label>
                 <div class="ball-donation-fields" id="ballDonationFields" hidden>
                   <label class="ball-field ball-field-narrow">
@@ -270,9 +285,9 @@
                    link alone does not do that; a positive act does. -->
               <label class="ball-check ball-terms-check">
                 <input type="checkbox" name="termsAccepted" required aria-required="true" />
-                <span>I have read and agree to the <a href="/ball/terms" target="_blank"
-                  rel="noopener">ticket terms</a>, including that <b>tickets are
-                  non-refundable</b> but can be transferred to another guest.</span>
+                <span><b>Required:</b> I have read and <b>agree to the <a href="/ball/terms"
+                  target="_blank" rel="noopener">ticket terms</a></b>, including that <b>tickets
+                  are non-refundable</b> but can be transferred to another guest.</span>
               </label>
             </div>
 

@@ -85,11 +85,20 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
 </header>
 
 <main class="site-main" id="main" tabindex="-1">
-  <section class="page-top" aria-labelledby="ty-heading">
+  <!-- TASK-335: the ball page's OWN hero class, not a copy of it. Reusing .ball-hero means this
+       page cannot drift away from the one it follows, and it inherits two things for free: the
+       night ground with its overhead light shaft, and the snow, which ball.js starts by looking
+       for exactly this selector. -->
+  <section class="ball-hero" aria-labelledby="ty-heading">
     <div class="wrap">
-      <span class="eyebrow">A Night to Remember</span>
-      <h1 id="ty-heading">You're coming to the Festive Ball</h1>
-      <p class="lede">Thank you, and thank you for supporting NBCC.</p>
+      <!-- Child order matches the ball page's hero on purpose: the stagger in ball.css gives
+           :nth-child(2) the lockup's own entrance, so the artwork has to sit second here too. -->
+      <p class="ball-kicker">Your seat is booked. <em>Thank you.</em></p>
+      <img class="ball-lockup ball-ty-lockup" src="/assets/img/ball-lockup.svg"
+        alt="A Night to Remember, Festive Ball 2026" width="1306" height="491"
+        fetchpriority="high" decoding="async" />
+      <h1 id="ty-heading" class="ball-ty-title">You're coming to the Festive Ball</h1>
+      <p class="ball-ty-lede">Thank you for supporting NBCC.</p>
     </div>
   </section>
 
@@ -111,13 +120,19 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
         See the <a href="/ball/terms">ticket terms</a>.
       </p>
 
-      <!-- The moment someone has just paid is the right moment to say who made the evening
-           possible, and this page is cream, so it takes the dark version of the wordmark. -->
-      <aside class="ball-ty-sponsor">
-        <span>Organised and sponsored by</span>
+    </div>
+  </section>
+
+  <!-- The moment someone has just paid is the right moment to say who made the evening possible.
+       Same band, same classes, same size as the foot of the ball page, so the two pages end the
+       same way - and on the night ground it takes the cream wordmark, not the dark one. -->
+  <section class="ball-sponsor" aria-labelledby="ty-sponsor-heading">
+    <div class="wrap">
+      <span class="eyebrow on-dark" id="ty-sponsor-heading">Event organised and sponsored by</span>
+      <p class="ball-sponsor-name">
         <a href="https://thedesignerrooms.com/" target="_blank" rel="noopener">
           <img
-            src="/assets/img/the-designer-rooms.png"
+            src="/assets/img/the-designer-rooms-cream.png"
             alt="The Designer Rooms"
             width="486"
             height="63"
@@ -125,7 +140,7 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
             decoding="async"
           />
         </a>
-      </aside>
+      </p>
     </div>
   </section>
 </main>
@@ -138,6 +153,7 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
     </div>
   </div>
 </footer>
+<script defer src="/assets/js/ball.js"></script>
 </body>
 </html>`;
 }

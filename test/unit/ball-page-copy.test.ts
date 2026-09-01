@@ -16,26 +16,46 @@ const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
 const ballHtml = read("ball.html");
 const termsHtml = read("ball-terms.html");
 
-describe("the line-up is not announced yet", () => {
-  // The acts are contracted by The Designer Rooms and announced on THEIR schedule, not
-  // ours. Naming one early is not a typo — it breaks an agreement with a performer and
-  // spoils someone else's announcement. Michelle McManus is the single exception: she is
-  // confirmed and cleared to be named.
-  //
-  // Deliberately searched across the WHOLE file, comments included: a name parked in a
-  // comment is one uncomment away from being published.
-  const NOT_YET_ANNOUNCED = ["Clanadonia", "MacDonald Brothers", "Kilted DJ"];
+describe("the line-up, announced 31 August (TASK-335)", () => {
+  // This block used to assert the OPPOSITE: that none of these names appeared anywhere on the
+  // page. The acts are contracted by The Designer Rooms and were theirs to announce, so naming
+  // one early would have broken an agreement with a performer. That embargo has now been
+  // lifted by NBCC, and the guard is inverted rather than deleted — the page has to keep
+  // carrying what it is now advertising.
+  const LINE_UP = ["Clanadonia", "The MacDonald Brothers", "The Kilted DJ"];
 
-  it.each(NOT_YET_ANNOUNCED)("does not name %s anywhere on the page", (act) => {
-    expect(ballHtml).not.toContain(act);
+  it.each(LINE_UP)("names %s", (act) => {
+    expect(ballHtml).toContain(act);
   });
 
-  it("still credits Michelle McManus, who is confirmed and cleared", () => {
+  it("still credits Michelle McManus as the host", () => {
     expect(ballHtml).toContain("Michelle McManus");
   });
 
-  it("says the rest of the line-up is still to come, rather than staying silent", () => {
-    expect(ballHtml).toMatch(/line-up is being announced/i);
+  // Two places, deliberately: the hero strip under the facts band, and the "Who's playing"
+  // column further down. Someone who never scrolls past the fold still sees the line-up.
+  it("puts the whole line-up, host included, in the hero strip", () => {
+    const strip = ballHtml.slice(
+      ballHtml.indexOf('<div class="ball-lineup">'),
+      ballHtml.indexOf("</div>", ballHtml.indexOf('<div class="ball-lineup">')),
+    );
+    expect(strip).not.toBe("");
+    expect(strip).toContain("Michelle McManus");
+    for (const act of LINE_UP) expect(strip.replace(/\s+/g, " ")).toContain(act);
+  });
+
+  it("lists the acts again beside Michelle's card", () => {
+    const list = ballHtml.slice(
+      ballHtml.indexOf('<ul class="ball-acts">'),
+      ballHtml.indexOf("</ul>", ballHtml.indexOf('<ul class="ball-acts">')),
+    );
+    expect(list).not.toBe("");
+    for (const act of LINE_UP) expect(list).toContain(act);
+  });
+
+  it("no longer says the line-up is still to be announced", () => {
+    expect(ballHtml).not.toMatch(/line-up is being announced/i);
+    expect(ballHtml).not.toMatch(/rest of the line-up/i);
   });
 });
 

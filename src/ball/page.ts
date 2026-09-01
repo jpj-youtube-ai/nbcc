@@ -18,6 +18,20 @@ export type BallPageSettings = Pick<BallSettings, "arrivalTime" | "includedNote"
 // confirms a menu; this constant is what the menu note gets appended to afterwards. Two hand
 // copies would drift, and the page would then say different things depending on whether a note
 // happened to be set. test/unit/ball-page.test.ts pins them together.
+// TASK-335: the line-up, announced by The Designer Rooms on 31 August 2026.
+//
+// Named here rather than typed wherever it is needed. It already appears twice in ball.html (the
+// hero strip and the "Who's playing" column) and now in the confirmation email too, and the way
+// a third hand-typed copy goes wrong is not a spelling mistake - it is one place still saying
+// three acts after a fourth is added. ball.html is a static file and cannot import this, so a
+// unit test ties the page to these values instead.
+export const BALL_HOST = "Michelle McManus";
+export const BALL_LINE_UP = ["Clanadonia", "The MacDonald Brothers", "The Kilted DJ"];
+
+// The sentence both the email and any future page copy should use, built once.
+export const lineUpSentence = (): string =>
+  `${BALL_HOST} hosts, with ${BALL_LINE_UP.slice(0, -1).join(", ")} and ${BALL_LINE_UP[BALL_LINE_UP.length - 1]}.`;
+
 export const TICKET_INCLUDES =
   "Entry to the ball, a three-course meal, a drink on arrival, and entertainment " +
   "through the evening. Further drinks are not included.";

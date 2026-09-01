@@ -1,5 +1,5 @@
 import type { BallBookingWrite } from "./booking";
-import { escapeHtml } from "./page";
+import { escapeHtml, lineUpSentence } from "./page";
 import { FOOTER_HTML, FOOTER_TEXT } from "../legal/registration";
 
 // TASK-313: the booking confirmation for a Festive Ball ticket. Pure — no pool, no config, no
@@ -96,7 +96,8 @@ export function buildBallConfirmationEmail(
   <p style="margin:0 0 6px;color:#333333;"><b>Saturday 7th November 2026</b><br />The Park Hotel, Rugby Park, Kilmarnock</p>
   <p style="margin:0 0 6px;color:#333333;">${arrival}</p>
   <p style="margin:0 0 6px;color:#333333;">Dress to impress. This is an over 18s event.</p>
-  <p style="margin:0 0 16px;color:#333333;">Your ticket includes entry, a meal and the evening's entertainment.${included}</p>
+  <p style="margin:0 0 6px;color:#333333;">Your ticket includes entry, a meal and the evening's entertainment.${included}</p>
+  <p style="margin:0 0 16px;color:#333333;"><b>Entertainment:</b> ${lineUpSentence()}</p>
 
   ${details.guestLink
     ? `<h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">Tell us about your table</h2>
@@ -131,6 +132,7 @@ Saturday 7th November 2026
 The Park Hotel, Rugby Park, Kilmarnock
 ${details.arrivalTime ?? "From 7pm, to be confirmed. We'll email you"}
 Dress to impress. This is an over 18s event.
+Entertainment: ${lineUpSentence()}
 Your ticket includes entry, a meal and the evening's entertainment.${
     details.includedNote
       ? " " + details.includedNote

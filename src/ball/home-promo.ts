@@ -59,7 +59,7 @@ const PROMO_STYLES = `<style>
     margin:22px 0 0;padding-top:18px;border-top:1px solid rgba(233,210,150,.22)}
   .ball-home-credit span{font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
     color:rgba(242,238,228,.7)}
-  .ball-home-credit a{display:block;width:250px;max-width:100%}
+  .ball-home-credit a{display:block;width:375px;max-width:100%}
   .ball-home-credit img{display:block;width:100%;height:auto;opacity:.92;
     transform:translateX(3.1%)}
   .ball-home-credit a:hover img{opacity:1}

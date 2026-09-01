@@ -512,6 +512,30 @@ When("I GET the ball admin without a token", async function () {
   this.ballAdminBody = await res.json().catch(() => ({}));
 });
 
+// TASK-338: the chase button. Runs the same pass the daily task runs.
+When(
+  "I press the ball chase button as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/chase`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballAdminStatus = res.status;
+    this.ballAdminBody = await res.json().catch(() => ({}));
+  },
+);
+
+When("I press the ball chase button without a token", async function () {
+  const res = await fetch(`${BASE_URL}/api/admin/ball/chase`, { method: "POST" });
+  this.ballAdminStatus = res.status;
+});
+
+Then("nothing should have been sent", function () {
+  assert.strictEqual(this.ballAdminBody.sent, 0);
+  assert.strictEqual(this.ballAdminBody.failed, 0);
+});
+
 // TASK-336: the chase list - bookings whose guest details have not come back yet.
 When(
   "I GET the ball guest progress as {string} with password {string}",

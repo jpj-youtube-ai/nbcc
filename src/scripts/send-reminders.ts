@@ -36,12 +36,28 @@ export async function sendReminders(): Promise<ReminderPassResult> {
 
 // Only run when invoked directly (node dist/scripts/send-reminders.js), not when imported by a test.
 if (require.main === module) {
+  // TASK-338: the ball run-up rides the SAME daily task rather than getting infrastructure of its
+  // own. It is one more read and a handful of sends on a schedule that already exists, and a
+  // second EventBridge rule would be a second thing to notice had stopped.
+  //
+  // Run after the supporter pass and in its own try/catch: a failure in either must not stop the
+  // other, because they have nothing to do with each other beyond sharing a clock.
   sendReminders()
     .then(async (result) => {
       // A single summary line (no recipient PII) so the ECS task log shows what the pass did.
       console.error(
         `business-supporter reminders: due=${result.due} sent=${result.sent} failed=${result.failed}`,
       );
+      try {
+        const { runBallRunUp } = await import("../ball/run-up-runner");
+        const ball = await runBallRunUp();
+        console.error(
+          `ball run-up: considered=${ball.considered} sent=${ball.sent} failed=${ball.failed} ` +
+            `chase=${ball.byStage.chase} finalCall=${ball.byStage["final-call"]} practical=${ball.byStage.practical}`,
+        );
+      } catch (err) {
+        console.error("ball run-up failed:", err instanceof Error ? err.message : err);
+      }
       await pool.end();
     })
     .catch(async (err: unknown) => {

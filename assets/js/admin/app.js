@@ -6184,6 +6184,16 @@
     el("ballCardFeePercent").value = (ballSettings.cardFeePercentBp / 100).toFixed(2);
     el("ballCardFeeFixed").value = ballSettings.cardFeeFixedPence;
     ballFeeExample(ballSettings.cardFeePercentBp, ballSettings.cardFeeFixedPence);
+    // datetime-local wants "YYYY-MM-DDTHH:mm" in LOCAL time. Slicing the ISO string would show
+    // a UTC clock face against a British evening date, an hour out for half the year.
+    el("ballLockAt").value = ballSettings.guestDetailsLockAt
+      ? new Date(
+          new Date(ballSettings.guestDetailsLockAt).getTime() -
+            new Date(ballSettings.guestDetailsLockAt).getTimezoneOffset() * 60000,
+        )
+          .toISOString()
+          .slice(0, 16)
+      : "";
     el("ballArrivalTime").value = ballSettings.arrivalTime || "";
     el("ballIncludedNote").value = ballSettings.includedNote || "";
     el("ballLineUpNote").value = ballSettings.lineUpNote || "";
@@ -6451,6 +6461,41 @@
           });
       });
     }
+
+    el("ballLockForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      // Empty clears it, which is the way back out if a date is agreed and then moves.
+      var raw = el("ballLockAt").value;
+      ballSave(
+        { guestDetailsLockAt: raw ? new Date(raw).toISOString() : null },
+        "ballLockStatus",
+      );
+    });
+
+    el("ballChase").addEventListener("click", function () {
+      var btn = el("ballChase");
+      var status = el("ballChaseStatus");
+      btn.disabled = true;
+      status.textContent = "Sending…";
+      authFetch("/api/admin/ball/chase", { method: "POST" })
+        .then(j)
+        .then(function (r) {
+          // Count what was SENT, not what was outstanding: the two differ whenever somebody has
+          // already been chased at this stage, and reporting the larger number would claim we
+          // emailed people we deliberately skipped.
+          status.textContent =
+            r.sent === 0
+              ? "Nobody was due a reminder just now."
+              : "Sent " + r.sent + (r.sent === 1 ? " email." : " emails.") +
+                (r.failed ? " " + r.failed + " could not be sent." : "");
+          btn.disabled = false;
+          loadBall();
+        })
+        .catch(function () {
+          status.textContent = "Could not send the reminders.";
+          btn.disabled = false;
+        });
+    });
 
     el("ballDetailsForm").addEventListener("submit", function (e) {
       e.preventDefault();

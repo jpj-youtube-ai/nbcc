@@ -60,6 +60,11 @@ export const ballSettingsUpdateSchema = z
     cardFeePercentBp: z.number().int().min(0).max(1000).optional(),
     cardFeeFixedPence: z.number().int().min(0).max(500).optional(),
 
+    // TASK-338: the date the venue needs final guest numbers by. NULL until NBCC agrees it,
+    // and the run-up sends NOTHING while it is null - a chase with no date in it is nagging,
+    // and it spends the one message people actually read before there is anything to say.
+    guestDetailsLockAt: nullableDate.optional(),
+
     // Details that were not confirmed when the page was written.
     arrivalTime: nullableText(120).optional(),
     includedNote: nullableText(1000).optional(),

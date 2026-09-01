@@ -418,3 +418,11 @@ export async function sendBallReminder(message: BallConfirmationMessage): Promis
   if (useStub) return;
   await sendVerbatim(message);
 }
+
+// TASK-338: the run-up emails (guest read-back, chase, last call). Its own function for the same
+// reason as sendBallReminder above: so the three can be told apart in logs and in a bounce
+// report, and so a change to one cannot silently alter another.
+export async function sendBallRunUp(message: BallConfirmationMessage): Promise<void> {
+  if (useStub) return;
+  await sendVerbatim(message);
+}

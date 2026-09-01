@@ -20,6 +20,20 @@ Feature: Festive Ball admin controls (TASK-313)
     And the guest progress should report 0 seats booked
     And the guest progress should list 0 bookings to chase
 
+  # TASK-338: the chase runs the same pass the daily task runs, so pressing it twice is safe.
+  # With no lock date agreed it must send NOTHING rather than chase people towards a deadline
+  # nobody has set.
+  Scenario: the chase sends nothing while no lock date has been agreed
+    Given a ball admin "ball10.admin.bdd@example.com" with role "admin" and password "pw-ball10"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    When I press the ball chase button as "ball10.admin.bdd@example.com" with password "pw-ball10"
+    Then the ball admin status should be 200
+    And nothing should have been sent
+
+  Scenario: the chase button is not open to the public
+    When I press the ball chase button without a token
+    Then the ball admin status should be 401
+
   Scenario: an admin flips the gate and the public page opens
     Given a ball admin "ball2.admin.bdd@example.com" with role "admin" and password "pw-ball2"
     And the ball gate is closed

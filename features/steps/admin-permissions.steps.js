@@ -30,6 +30,7 @@ const SECTIONS = [
   "audit",
   "email-audit",
   "site",
+  "outreach",
   "team",
 ];
 

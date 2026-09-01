@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 15 matrix sections", () => {
+  it("lists exactly the 17 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -39,9 +39,10 @@ describe("SECTIONS", () => {
       "audit",
       "email-audit",
       "site",
+      "outreach",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(16);
+    expect(SECTIONS).toHaveLength(17);
   });
 });
 
@@ -54,6 +55,17 @@ describe("site defaults", () => {
     expect(roleToPermissions("editor").site).toBe("view");
     expect(roleToPermissions("viewer").site).toBe("view");
     expect(can(roleToPermissions("editor"), "site", "edit")).toBe(false);
+  });
+});
+
+// TASK-354: business outreach is operational fundraising work, so editors get it with the other
+// operational sections. Viewers do not: the page carries contact details for named people at
+// businesses who have not asked to hear from us.
+describe("outreach defaults", () => {
+  it("editors can work it, viewers cannot", () => {
+    expect(roleToPermissions("admin").outreach).toBe("edit");
+    expect(roleToPermissions("editor").outreach).toBe("edit");
+    expect(can(roleToPermissions("viewer"), "outreach", "edit")).toBe(false);
   });
 });
 

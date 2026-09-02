@@ -15,6 +15,9 @@
     <!-- Absolute asset URLs, unlike the other pages: a 404 renders at ANY depth (e.g.
          /some/missing/path), where a relative href would resolve into the void. -->
     <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- The reading column, the action row and the site-map tree. Kept out of the shared
+         bundle so a donor does not download this page's CSS on the way to /donate. -->
+    <link rel="stylesheet" href="/assets/css/pages.css" />
     <script defer src="/assets/js/main.js"></script>
   </head>
   <body>
@@ -46,30 +49,36 @@
            router's catch-all, after the spare-address lookup has had its chance. Copy is
            dash free and warm (REQ-031); the buttons offer the three places people most
            likely meant to go. -->
-      <section class="privacy-intro" aria-labelledby="notfound-heading">
-        <span class="eyebrow">Lost in the snow</span>
-        <h1 id="notfound-heading">We cannot find that page</h1>
-        <div class="rule"></div>
-        <p class="lede">
-          The address may have been mistyped, or the page may have moved. Nothing is broken
-          on your side, and everything else is where it should be.
-        </p>
+      <section class="page-top" aria-labelledby="notfound-heading">
+        <div class="wrap">
+          <div class="intro-hero">
+            <span class="eyebrow">Lost in the snow</span>
+            <h1 id="notfound-heading">We cannot find that page</h1>
+            <div class="rule"><i></i></div>
+            <p class="lede">
+              The page you are looking for is not here. It may have moved, or there may be a
+              small mistake in the address.
+            </p>
+          </div>
+        </div>
       </section>
 
-      <section class="page-sections" data-region="sections">
-        <div class="privacy-body card reveal">
-          <h2>Where would you like to go?</h2>
-          <p>These are the pages people are usually looking for:</p>
-          <div class="privacy-actions">
-            <a class="btn btn-primary" href="/">Go to the home page</a>
-            <a class="btn btn-primary" href="/donate">Donate</a>
-            <a class="btn btn-primary" href="/contact">Contact us</a>
+      <!-- No .reveal on an error page: it starts at opacity 0 and waits for JavaScript, and a
+           404 has to be readable even when something has already gone wrong. -->
+      <section class="section flush-top" aria-labelledby="notfound-next" data-region="sections">
+        <div class="wrap">
+          <div class="page-prose">
+            <h2 id="notfound-next">Where would you like to go?</h2>
+            <div class="page-actions">
+              <a class="btn btn-primary" href="/">Home</a>
+              <a class="btn btn-ghost" href="/donate">Donate</a>
+              <a class="btn btn-ghost" href="/contact">Contact us</a>
+            </div>
+            <p>
+              If a link of ours brought you here, please <a href="/contact">tell us</a> so we
+              can put it right.
+            </p>
           </div>
-          <p>
-            If you followed a link from one of our emails or printed materials and ended up
-            here, we would love to know so we can put it right. Please tell us through the
-            <a href="/contact">contact form</a>.
-          </p>
         </div>
       </section>
     </main>

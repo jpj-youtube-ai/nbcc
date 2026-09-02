@@ -8,7 +8,13 @@ Feature: Site addressing (site-pages feature)
     When I request the site path "/no-such-page"
     Then the site response status should be 404
     And the site response should contain "We cannot find that page"
-    And the site response should contain "Go to the home page"
+    # The way out matters more than the wording on it: a 404 that offers nowhere to go is a
+    # dead end.
+    And the site response should contain "Where would you like to go?"
+    # And it has to be on the site's page shell. Without page-top the heading sits under the
+    # fixed header; without the reading column the copy runs the full width of the window.
+    And the site response should contain "page-top"
+    And the site response should contain "page-prose"
 
   Scenario: an unknown API path gets a JSON 404, never an HTML page
     When I request the site path "/api/no-such-endpoint"

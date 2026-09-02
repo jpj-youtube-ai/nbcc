@@ -1,0 +1,27 @@
+/* Text-only pages (TASK-402): the privacy notice, the site map and the 404.
+
+   A SEPARATE stylesheet, not part of styles.css, on purpose. These rules serve three low-traffic
+   reference pages, and every byte in the shared bundle is a byte a donor downloads on the way to
+   giving us money - donate.html sits within a few hundred bytes of its enforced budget
+   (test/unit/perf-budget.test.ts), and the honest answer to that is to stop putting page-specific
+   CSS in the shared file, not to raise the ceiling again. ball.css and business-thankyou.css
+   already work this way. */
+
+.page-prose{max-width:68ch}
+.page-prose h2{font-size:clamp(1.45rem,1.25rem + .8vw,1.95rem);color:var(--maroon);margin:34px 0 10px}
+.page-prose > h2:first-child{margin-top:0}
+.page-prose p,.page-prose li{color:var(--slate);line-height:1.75}
+.page-prose p{margin:0 0 1rem}
+.page-prose ul{margin:0 0 1.1rem;padding-left:22px}
+.page-prose li{margin:.35rem 0}
+.page-actions{display:flex;flex-wrap:wrap;gap:12px;margin:4px 0 1.6rem}
+
+.sitemap-tree ul{list-style:none;margin:0;padding:0}
+.sitemap-tree li{margin:0;border-top:1px solid var(--line)}
+.sitemap-tree > ul > li:first-child{border-top:0}
+.sitemap-tree a{display:block;padding:11px 2px;color:var(--maroon);font-weight:600;text-decoration:none}
+.sitemap-tree a:hover,.sitemap-tree a:focus-visible{color:var(--crimson);text-decoration:underline}
+/* A child page is indented and quieter, so the shape of the site reads at a glance. */
+.sitemap-tree ul ul{padding-left:22px;border-left:2px solid var(--holly);opacity:.85;margin-left:2px}
+.sitemap-tree ul ul a{font-weight:500;font-size:.95rem}
+

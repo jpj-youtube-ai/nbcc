@@ -43,7 +43,74 @@ export const SITE_PAGES: SitePage[] = [
   },
 ];
 
-// Paths (and prefixes) that must never appear on the sitemap page, in sitemap.xml, or as an
+/**
+ * How a page is reached. Only "public" pages belong on /sitemap and in sitemap.xml.
+ */
+export type PageReach = "unlisted" | "link-only" | "staff";
+
+export interface PrivatePage {
+  path: string;
+  title: string;
+  reach: PageReach;
+  /** Plain English, for a volunteer who has never seen this page. */
+  note: string;
+}
+
+/**
+ * Pages that exist but are NOT on the public map (TASK-402).
+ *
+ * Kept deliberately apart from SITE_PAGES, because that list feeds /sitemap and sitemap.xml and
+ * none of these belong in either. This one exists for a different job: so the admin's page list
+ * is COMPLETE. The point is not navigation, it is memory - a page nobody has opened in a year is
+ * still somebody's responsibility, and the only way to keep it current is to be able to see that
+ * it exists.
+ */
+export const PRIVATE_PAGES: PrivatePage[] = [
+  {
+    path: "/sitemap",
+    title: "Site map",
+    reach: "unlisted",
+    note: "The public list of pages. Nothing links to it and search engines are told to skip it.",
+  },
+  {
+    path: "/business/thank-you",
+    title: "Business thank you",
+    reach: "link-only",
+    note: "Where a business chooses how it would like to be thanked. Opened from the link in its own thank-you email, and fillable once.",
+  },
+  {
+    path: "/gift-aid/declare",
+    title: "Gift Aid declaration",
+    reach: "link-only",
+    note: "The Gift Aid form a donor reaches from the link or QR code in their receipt. The page is built for that one donor.",
+  },
+  {
+    path: "/portal/access",
+    title: "Ask for a donor portal link",
+    reach: "link-only",
+    note: "A donor puts in their email address and we send them their own portal link.",
+  },
+  {
+    path: "/invite",
+    title: "Accept a staff invitation",
+    reach: "link-only",
+    note: "Where a new volunteer sets their password, from the link in their invitation email.",
+  },
+  {
+    path: "/reset",
+    title: "Reset a password",
+    reach: "link-only",
+    note: "Where a volunteer who has forgotten their password sets a new one.",
+  },
+  {
+    path: "/admin",
+    title: "Admin",
+    reach: "staff",
+    note: "This tool. Staff only, and behind a password and a code.",
+  },
+];
+
+// Paths (and prefixes) that must never appear on the sitemap page// Paths (and prefixes) that must never appear on the sitemap page, in sitemap.xml, or as an
 // alias target/source: admin surfaces, token-addressed pages, machine endpoints. An alias may
 // not shadow any of these either — routing order would make some shadows silently dead and
 // others live, and neither is acceptable.

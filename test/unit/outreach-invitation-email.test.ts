@@ -123,6 +123,17 @@ describe("what the law requires of a cold approach", () => {
     expect(mail.html).toContain("Jaimie Wakefield");
     expect(mail.html).toContain("Project Manager");
   });
+
+  // A cold approach is the one email whose recipient has most reason to want a person on the end
+  // of a phone rather than a reply box. Both halves carry both, and the HTML makes them tappable.
+  it("gives a phone number and an email address, not just a reply box", () => {
+    for (const half of [mail.html, mail.text]) {
+      expect(half).toContain("01292 811 015");
+      expect(half).toContain("info@nbcc.scot");
+    }
+    expect(mail.html).toContain('href="tel:+441292811015"');
+    expect(mail.html).toContain('href="mailto:info@nbcc.scot"');
+  });
 });
 
 describe("the shape of it", () => {

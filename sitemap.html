@@ -15,6 +15,9 @@
     <meta name="robots" content="noindex, nofollow" />
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- The reading column, the action row and the site-map tree. Kept out of the shared
+         bundle so a donor does not download this page's CSS on the way to /donate. -->
+    <link rel="stylesheet" href="/assets/css/pages.css" />
     <script defer src="/assets/js/main.js"></script>
   </head>
   <body>
@@ -47,22 +50,28 @@
            HTML with the live page tree from src/site/pages.ts, so this page can never go
            stale as pages are added. The static fallback keeps the page honest if that
            render ever fails. -->
-      <section class="privacy-intro" aria-labelledby="sitemap-heading">
-        <span class="eyebrow">Reference</span>
-        <h1 id="sitemap-heading">Site map</h1>
-        <div class="rule"></div>
-        <p class="lede">
-          Every public page on this website, with a link to each. This page is a quiet
-          reference for staff and visitors, and is not listed anywhere.
-        </p>
+      <section class="page-top" aria-labelledby="sitemap-heading">
+        <div class="wrap">
+          <div class="intro-hero">
+            <span class="eyebrow">Reference</span>
+            <h1 id="sitemap-heading">Site map</h1>
+            <div class="rule"><i></i></div>
+            <p class="lede">
+              Every public page on this website, with a link to each. A quiet reference, not
+              listed anywhere.
+            </p>
+          </div>
+        </div>
       </section>
 
-      <section class="page-sections" data-region="sections">
-        <div class="privacy-body card reveal">
-          <div class="sitemap-tree">
+      <section class="section flush-top" aria-label="Every page" data-region="sections">
+        <div class="wrap">
+          <div class="page-prose">
+            <div class="sitemap-tree">
             <ul>
               <li><a href="/">Home</a></li>
             </ul>
+            </div>
           </div>
         </div>
       </section>

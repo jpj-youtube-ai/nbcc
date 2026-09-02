@@ -2744,6 +2744,60 @@ nothing type-checks that join, so `test/unit/ball-admin-view.test.ts` walks ever
 reaches for and proves the markup provides it. It also asserts the block sits INSIDE the module
 IIFE: appended after the closing `})();` it parses fine but every helper is undefined at runtime.
 
+### Every page wears the same shell (TASK-402)
+
+There are exactly **two** page shells, and a new page must use one of them:
+
+- **Boxed** — `<main class="site-main site-main--boxed">`. The `<main>` IS the container: it sets
+  the max width, the side padding, and the top padding that clears the fixed header. Its sections
+  need no `.wrap`. Used by supporters, thank-you, portal and gift-aid.
+- **Wrapped** — `<main class="site-main">` holding full-bleed `<section>`s, each putting its
+  content inside a `.wrap`. The first section carries `page-top` (or a `*-hero`) to clear the
+  header. Used by everything else.
+
+There is no third option. `test/unit/page-shell.test.ts` enforces both, for every `.html` in the
+repo, with a named exemption list for the three pages that legitimately carry their own shell.
+
+**Why the test exists.** `privacy.html`, `sitemap.html` and `404.html` were each built from class
+names that no stylesheet had ever heard of — `.privacy-intro`, `.privacy-body`,
+`.privacy-actions`, `.page-sections`, `.sitemap-tree`. Nothing was broken in a way a build could
+see: valid HTML, valid CSS, a 200 response. They simply had no container, so the copy ran edge to
+edge, and no nav-clearing section, so the heading sat underneath the fixed header. The privacy
+notice — a legal page — was live in that state. It happened three times because the second and
+third pages were copied from the first, and nothing in the repo could tell that a page had been
+assembled from parts that do not exist. The rules those pages needed now exist as `.page-prose`,
+`.page-actions` and `.sitemap-tree`, named so the next text page can reuse them.
+
+They live in **`assets/css/pages.css`**, linked only by those three pages, not in the shared
+`styles.css`. Every byte in the shared bundle is a byte a donor downloads on the way to giving us
+money, and donate.html sits about a kilobyte from its enforced ceiling
+(`test/unit/perf-budget.test.ts`). The honest answer to that is to stop putting page-specific CSS
+in the shared file rather than raise the ceiling a fourth time; `ball.css` and
+`business-thankyou.css` already work this way. `privacy.html` also had a **relative** stylesheet
+href, which resolved correctly only because `/privacy` has no trailing slash; it is absolute now,
+like every other page.
+
+### The admin knows about every page, not just the public ones (TASK-402)
+
+`src/site/pages.ts` holds two registries, deliberately apart:
+
+- `SITE_PAGES` — the **public** tree. Feeds `/sitemap`, `sitemap.xml`, the spare-address
+  destinations and the search-engine ticks.
+- `PRIVATE_PAGES` — pages that exist but belong on **neither** public list: the admin itself, the
+  token-gated business thank-you and Gift Aid forms, the portal-link request, the invitation and
+  password-reset pages, and `/sitemap` itself.
+
+`GET /api/admin/site-pages` returns both, and the **Site pages** tab opens with **Every page**: the
+whole website in one table, each address a working link, each row saying who can reach it and what
+it is for. Its value is being complete — a page nobody has opened in a year is still somebody's to
+keep current, and you cannot keep current what you cannot see.
+
+It is part of the existing Site pages tab rather than a tab of its own, because the spare addresses
+and the search-engine ticks below it act on the same pages; splitting one subject across two tabs
+would mean checking both. `test/unit/private-pages.test.ts` holds the registries apart (a page in
+both would leak a private page onto the public map) and keeps every private path inside
+`RESERVED_PREFIXES`, so a spare address can never shadow one.
+
 ### Contacting local businesses (TASK-351 · TASK-354 · TASK-401)
 
 The **Contact businesses** screen in the admin (`#view-outreach`) is how a volunteer asks a local
@@ -2762,7 +2816,9 @@ Three layers, deliberately separated:
   **declined**. A volunteer needs warning about three different mistakes, not one.
 - `src/outreach/invitation-email.ts` — the email itself, in the approved NBCC family. Carries the
   charity registration statement, an opt-out in plain words (PECR applies to companies too), and
-  "could help" rather than "£25 buys" (Code of Fundraising Practice).
+  "could help" rather than "£25 buys" (Code of Fundraising Practice). It also gives the phone
+  number and email address beside the signature (TASK-402): a cold approach is the one email whose
+  recipient has most reason to want a person on the end of a phone rather than a reply box.
 
 The screen follows the Thank you page's shape: a form on the left, the real email on the right.
 The preview is fetched from `POST /api/admin/outreach/preview`, which runs the **same**

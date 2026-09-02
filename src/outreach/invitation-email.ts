@@ -30,6 +30,13 @@ const HEAD = "'Playfair Display', Georgia, 'Times New Roman', serif";
 const BODY = "'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
 const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";
 
+// A cold approach is the one email whose recipient has most reason to want a person on the end of
+// a phone rather than a reply box, so both are on it. Same number and address as the ball emails
+// and the contact page.
+const PHONE = "01292 811 015";
+const PHONE_TEL = "+441292811015";
+const CONTACT_EMAIL = "info@nbcc.scot";
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -102,12 +109,14 @@ ${input.donateUrl}
 
 If you would rather we did not contact you again, just reply and say so and we will
 make sure of it. And if you would simply like a chat first, reply to this email and
-it comes straight to us.
+it comes straight to us, or call ${PHONE}, Monday to Friday.
 
 Thank you for reading this far.
 
 ${input.signerName}
 ${input.signerRole}
+${PHONE}
+${CONTACT_EMAIL}
 
 ${FOOTER_TEXT}`;
 }
@@ -193,11 +202,17 @@ export function buildOutreachEmailHtml(input: OutreachInvitation): string {
         <p style="margin:0 0 16px;">
           If you would rather we did not contact you again, just reply and say so and we will make sure
           of it. And if you would simply like a chat first, reply to this email and it comes straight
-          to us.
+          to us, or call <a href="tel:${PHONE_TEL}" style="color:${MAROON};font-weight:600;">${PHONE}</a>,
+          Monday to Friday.
         </p>
         <p style="margin:0 0 4px;">Thank you for reading this far.</p>
         <p style="margin:16px 0 0;font-weight:600;">${escapeHtml(input.signerName)}</p>
-        <p style="margin:0;color:${SLATE_SOFT};font-size:14px;">${escapeHtml(input.signerRole)}</p>
+        <p style="margin:0 0 10px;color:${SLATE_SOFT};font-size:14px;">${escapeHtml(input.signerRole)}</p>
+        <p style="margin:0;font-size:14px;">
+          <a href="tel:${PHONE_TEL}" style="color:${MAROON};font-weight:600;">${PHONE}</a>
+          <span style="color:${SLATE_SOFT};">&nbsp;&nbsp;</span>
+          <a href="mailto:${CONTACT_EMAIL}" style="color:${MAROON};font-weight:600;">${CONTACT_EMAIL}</a>
+        </p>
       </td></tr>
 
       <tr><td style="background:${MAROON};padding:18px 32px;font-family:${BODY};color:rgba(248,245,238,.82);font-size:12px;line-height:1.7;">

@@ -34,7 +34,10 @@
     />
     <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
 
-    <link rel="stylesheet" href="assets/css/styles.css" />
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- The reading column, the action row and the site-map tree. Kept out of the shared
+         bundle so a donor does not download this page's CSS on the way to /donate. -->
+    <link rel="stylesheet" href="/assets/css/pages.css" />
     <script defer src="assets/js/main.js"></script>
   </head>
   <body>
@@ -66,19 +69,24 @@
       <!-- Privacy intro: a centred page intro mirroring .contact-intro / .thankyou-intro.
            Reuses .eyebrow / base h1 / .rule / .lede and the tokens, no new fonts and no
            image tags. Copy carries "NBCC" in full per REQ-031 and is dash free. -->
-      <section class="privacy-intro" aria-labelledby="privacy-intro-heading">
+      <section class="page-top" aria-labelledby="privacy-intro-heading">
+        <div class="wrap">
+          <div class="intro-hero">
         <span class="eyebrow">Privacy</span>
         <h1 id="privacy-intro-heading">Privacy notice</h1>
-        <div class="rule"></div>
+        <div class="rule"><i></i></div>
         <p class="lede">
           The Night Before Christmas Campaign (NBCC) respects your privacy. This notice
           explains what personal data we collect, why we use it, how long we keep it, and
           the rights you have over it.
         </p>
+          </div>
+        </div>
       </section>
 
-      <section class="page-sections" data-region="sections">
-        <div class="privacy-body card reveal">
+      <section class="section flush-top" aria-label="Privacy notice" data-region="sections">
+        <div class="wrap">
+          <div class="page-prose">
           <h2>Who we are</h2>
           <p>
             NBCC is a volunteer run Scottish Charitable Incorporated Organisation (SCIO),
@@ -152,7 +160,7 @@
             have a question about how we handle your data, email us at
             <a href="mailto:privacy@nbcc.scot">privacy@nbcc.scot</a>, or get in touch.
           </p>
-          <div class="privacy-actions">
+          <div class="page-actions">
             <a class="btn btn-primary" href="/contact">Contact us</a>
           </div>
 
@@ -163,6 +171,7 @@
             can also use the Fundraising Preference Service to manage or stop fundraising
             communications.
           </p>
+          </div>
         </div>
       </section>
     </main>

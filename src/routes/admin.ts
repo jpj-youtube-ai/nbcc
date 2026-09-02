@@ -2324,7 +2324,7 @@ export async function getAdminEmailLog(req: Request, res: Response): Promise<Res
 export async function getAdminSitePages(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "site", "view"))) return;
   try {
-    const { ALL_PAGES } = await import("../site/pages");
+    const { ALL_PAGES, PRIVATE_PAGES } = await import("../site/pages");
     const { listAliases, getSeoOverrides } = await import("../db/site-pages");
     const [aliases, overrides] = await Promise.all([listAliases(), getSeoOverrides()]);
     const pages = ALL_PAGES.map((p) => ({
@@ -2335,7 +2335,9 @@ export async function getAdminSitePages(req: Request, res: Response): Promise<Re
       listed: overrides.get(p.path) ?? p.listedByDefault,
       overridden: overrides.has(p.path),
     }));
-    return res.status(200).json({ pages, aliases });
+    // The private half goes out alongside, so the admin can show ONE complete list. It is static
+    // and carries no SEO choice, because none of these pages is a search destination.
+    return res.status(200).json({ pages, aliases, privatePages: PRIVATE_PAGES });
   } catch (err) {
     console.error("admin site pages read failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

@@ -66,7 +66,7 @@ describe("privacy notice links next to consent controls (REQ-064)", () => {
 // "How long we keep it" sections above (which describe donor/enquiry data, not story submissions).
 describe("privacy notice covers My Story submissions (G2 item 9)", () => {
   const doc = docOf(read("privacy.html"));
-  const headings = [...doc.querySelectorAll(".privacy-body h2")];
+  const headings = [...doc.querySelectorAll(".page-prose h2")];
   const storiesHeading = headings.find((h) => /stories you share with us/i.test(h.textContent ?? ""));
 
   it("has a 'Stories you share with us' section after Sharing your data / How long we keep it", () => {

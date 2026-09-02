@@ -1554,6 +1554,43 @@
       });
     }
   }
+  // The whole website in one list (TASK-402). Two sources, on purpose: the public registry that
+  // feeds /sitemap and sitemap.xml, and the private pages that must never appear in either. The
+  // job here is memory, not navigation - a page nobody has opened in a year is still somebody's
+  // to keep current, and you cannot keep current what you cannot see.
+  var SITE_REACH = {
+    "link-only": { label: "Personal link only", why: "Reached from a link we send. Not browsable." },
+    unlisted: { label: "Not listed", why: "A real page, but nothing links to it." },
+    staff: { label: "Staff only", why: "Behind a password and a code." },
+  };
+  function renderSiteAll(pages, privatePages) {
+    var wrap = el("siteAllTable");
+    if (!wrap) return;
+    var rows = (pages || []).map(function (p) {
+      var reach = p.listed ? "On the site map" : "Not listed";
+      var why = p.ballGated
+        ? "Hidden everywhere until the ball is published."
+        : p.listed ? "Anyone can find this page." : "A real page, but nothing links to it.";
+      return { title: p.title, path: p.path, reach: reach, why: why };
+    });
+    (privatePages || []).forEach(function (p) {
+      var kind = SITE_REACH[p.reach] || { label: p.reach, why: "" };
+      rows.push({ title: p.title, path: p.path, reach: kind.label, why: p.note || kind.why });
+    });
+    wrap.innerHTML =
+      '<table class="admin-table"><thead><tr><th>Page</th><th>Address</th><th>Who can reach it</th>' +
+      "<th>What it is</th></tr></thead><tbody>" +
+      rows
+        .map(function (r) {
+          // The address is a real link: the quickest way to check a page is still right is to look.
+          return "<tr><td>" + H.escapeHtml(r.title) + '</td><td><a href="' + H.escapeHtml(r.path) +
+            '" target="_blank" rel="noopener">' + H.escapeHtml(r.path) + "</a></td><td>" +
+            H.escapeHtml(r.reach) + "</td><td>" + H.escapeHtml(r.why) + "</td></tr>";
+        })
+        .join("") +
+      "</tbody></table>";
+  }
+
   function renderSiteSeo(pages, canWrite) {
     var wrap = el("siteSeoTable");
     var body = pages
@@ -1629,12 +1666,14 @@
             return '<option value="' + H.escapeHtml(p.path) + '">' + H.escapeHtml(p.title) + " (" + H.escapeHtml(p.path) + ")</option>";
           })
           .join("");
+        renderSiteAll(d.pages || [], d.privatePages || []);
         renderSiteAliases(d.aliases || [], canWrite);
         renderSiteSeo(d.pages || [], canWrite);
       })
       .catch(function () {
         el("siteAliasTable").innerHTML = '<p class="admin-empty">Unavailable.</p>';
         el("siteSeoTable").innerHTML = "";
+        el("siteAllTable").innerHTML = "";
       });
   }
 

@@ -342,6 +342,7 @@
     else if (name === "contact") loadContact();
     else if (name === "newsletter") loadNewsletters();
     else if (name === "thank-you") loadThankYou();
+    else if (name === "outreach") loadOutreach();
     else if (name === "ticker") loadTicker();
     else if (name === "ball") loadBall();
     else if (name === "audit") loadAudit();
@@ -6017,6 +6018,287 @@
     loadThankYouSent();
     tyFit();
     setTimeout(tyFit, 200); // after webfonts settle
+  }
+
+  // ---- contact businesses (REQ-003 · TASK-401) ----
+  // Cold outreach asking local firms to become monthly supporters. Modelled on the thank-you
+  // screen deliberately: a form on the left, the real email on the right. The preview is rendered
+  // by the SERVER through the same builder the send uses, so it cannot drift from what is posted.
+  var outWired = false;
+  var outRows = [];
+  var outBlocked = false; // set once the matcher says this business has told us no
+  var OUT_OUTCOMES = {
+    signed_up: "Signed up",
+    interested: "Interested",
+    asked_for_info: "Asked for information",
+    passed_on: "Passed on internally",
+    not_this_year: "Not this year",
+    declined: "Said no",
+    no_reply: "No reply",
+  };
+
+  function outStatusOf(r) {
+    if (r.outcome) return OUT_OUTCOMES[r.outcome] || r.outcome;
+    if (r.sentAt) return "Emailed " + H.fmtDate(r.sentAt);
+    return "Not emailed yet";
+  }
+  function outSay(id, msg, cls) {
+    var e = el(id);
+    if (!e) return;
+    e.className = "ty-status" + (cls ? " " + cls : "");
+    e.textContent = msg || "";
+  }
+
+  // Warnings appear while the volunteer types, not after they have committed. A decline is the
+  // only one that blocks; everything else is information for a person to judge.
+  function outRenderWarnings(data) {
+    var box = el("outWarnings");
+    if (!box) return;
+    outBlocked = false;
+    var matches = (data && data.matches) || [];
+    if (!matches.length) {
+      box.innerHTML = "";
+      return;
+    }
+    var items = matches
+      .map(function (m) {
+        return "<li><strong>" + H.escapeHtml(m.businessName || "") + "</strong> — " +
+          H.escapeHtml(m.reason || "") + "</li>";
+      })
+      .join("");
+    outBlocked = !!data.doNotContact;
+    box.innerHTML =
+      '<div class="out-warn' + (outBlocked ? " out-warn--stop" : "") + '"><p><strong>' +
+      (outBlocked
+        ? "This business has asked us not to contact them again."
+        : "We may already know this business.") +
+      "</strong></p><ul>" + items + "</ul>" +
+      (outBlocked
+        ? '<p class="out-ack"><label><input type="checkbox" id="outAck" /> I have checked, and this is a different business.</label></p>'
+        : '<p class="admin-help">Have a look before you add them. If it is the same firm, add a note to the one we already have instead.</p>') +
+      "</div>";
+  }
+
+  var outCheckTimer = null;
+  function outCheck() {
+    var name = (el("outBusinessName").value || "").trim();
+    if (name.length < 2) {
+      el("outWarnings").innerHTML = "";
+      return;
+    }
+    authFetch("/api/admin/outreach/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        businessName: name,
+        contactEmail: (el("outContactEmail").value || "").trim(),
+      }),
+    })
+      .then(function (r) { return r.json(); })
+      .then(outRenderWarnings)
+      .catch(function () { /* a failed check must never block someone typing */ });
+  }
+  function outCheckSoon() {
+    if (outCheckTimer) clearTimeout(outCheckTimer);
+    outCheckTimer = setTimeout(outCheck, 350);
+  }
+
+  function outAdd(e) {
+    e.preventDefault();
+    var payload = {
+      businessName: (el("outBusinessName").value || "").trim(),
+      contactName: (el("outContactName").value || "").trim() || null,
+      contactEmail: (el("outContactEmail").value || "").trim() || null,
+      contactPhone: (el("outContactPhone").value || "").trim() || null,
+      businessType: el("outBusinessType").value,
+      note: (el("outNote").value || "").trim() || null,
+      owner: el("outOwner").value || null,
+    };
+    if (outBlocked && el("outAck") && el("outAck").checked) payload.acknowledgedMatches = true;
+    var btn = el("outAdd");
+    btn.disabled = true;
+    outSay("outAddStatus", "Adding…");
+    authFetch("/api/admin/outreach", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, body: b }; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res.ok) {
+          outSay("outAddStatus", res.body.error || "Could not add that business.", "is-error");
+          if (res.body.matches) outRenderWarnings(res.body);
+          return;
+        }
+        outSay("outAddStatus", "Added. They are in the list below, not emailed yet.", "is-ok");
+        el("outAddForm").reset();
+        el("outWarnings").innerHTML = "";
+        outBlocked = false;
+        loadOutreachList();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        outSay("outAddStatus", "Could not add that business.", "is-error");
+      });
+  }
+
+  var outPreviewTimer = null;
+  function outPreview() {
+    var frame = el("outPreview");
+    if (!frame) return;
+    var id = el("outSendTo").value;
+    var r = outRows.filter(function (x) { return String(x.id) === id; })[0];
+    var opt = el("outSigner").selectedOptions[0];
+    authFetch("/api/admin/outreach/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        businessName: r ? r.businessName : "",
+        contactName: r ? r.contactName : "",
+        personalMessage: (el("outPersonal").value || "").trim(),
+        signerName: opt ? opt.value : "",
+        signerRole: opt ? opt.getAttribute("data-role") : "",
+      }),
+    })
+      .then(function (x) { return x.json(); })
+      .then(function (b) { if (b.html) frame.srcdoc = b.html; })
+      .catch(function () { /* leave the last good preview on screen */ });
+  }
+  function outPreviewSoon() {
+    if (outPreviewTimer) clearTimeout(outPreviewTimer);
+    outPreviewTimer = setTimeout(outPreview, 300);
+  }
+
+  function outSend(e) {
+    e.preventDefault();
+    var id = el("outSendTo").value;
+    if (!id) {
+      outSay("outSendStatus", "Choose a business first.", "is-error");
+      return;
+    }
+    var r = outRows.filter(function (x) { return String(x.id) === id; })[0];
+    var who = r ? r.businessName : "this business";
+    // One deliberate pause. This lands in a stranger's inbox and cannot be taken back.
+    if (!window.confirm("Send this to " + who + "? It goes straight to their inbox.")) return;
+    var opt = el("outSigner").selectedOptions[0];
+    var btn = el("outSend");
+    btn.disabled = true;
+    outSay("outSendStatus", "Sending…");
+    authFetch("/api/admin/outreach/" + encodeURIComponent(id) + "/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        personalMessage: (el("outPersonal").value || "").trim(),
+        signerName: opt ? opt.value : "",
+        signerRole: opt ? opt.getAttribute("data-role") : "",
+      }),
+    })
+      .then(function (x) { return x.json().then(function (b) { return { ok: x.ok, body: b }; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res.ok) {
+          outSay("outSendStatus", res.body.error || "The email could not be sent.", "is-error");
+          return;
+        }
+        outSay("outSendStatus", "Sent to " + who + ".", "is-ok");
+        el("outPersonal").value = "";
+        loadOutreachList();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        outSay("outSendStatus", "The email could not be sent.", "is-error");
+      });
+  }
+
+  function outRenderList() {
+    var wrap = el("outList");
+    if (!wrap) return;
+    if (!outRows.length) {
+      wrap.innerHTML = '<p class="admin-empty">No businesses yet. Add the first one above.</p>';
+    } else {
+      wrap.innerHTML =
+        '<table class="admin-table"><thead><tr><th>Business</th><th>Contact</th>' +
+        "<th>Where it stands</th><th>Looked after by</th><th>Added</th></tr></thead><tbody>" +
+        outRows
+          .map(function (r) {
+            var contact = [r.contactName, r.contactEmail, r.contactPhone]
+              .filter(Boolean)
+              .map(H.escapeHtml)
+              .join("<br />");
+            return "<tr><td>" + H.escapeHtml(r.businessName) + "</td><td>" +
+              (contact || "&mdash;") + "</td><td>" + H.escapeHtml(outStatusOf(r)) +
+              "</td><td>" + H.escapeHtml(r.owner || "") + "</td><td>" +
+              H.fmtDate(r.createdAt) + "</td></tr>";
+          })
+          .join("") +
+        "</tbody></table>";
+    }
+
+    // Only businesses with an email address and nothing sent yet can be picked. Anything else in
+    // this list would be a send that is going to fail, or a business emailed twice.
+    var sel = el("outSendTo");
+    var keep = sel.value;
+    var sendable = outRows.filter(function (r) { return r.contactEmail && !r.sentAt; });
+    sel.innerHTML = sendable.length
+      ? sendable
+          .map(function (r) {
+            return '<option value="' + r.id + '">' + H.escapeHtml(r.businessName) +
+              " — " + H.escapeHtml(r.contactEmail) + "</option>";
+          })
+          .join("")
+      : '<option value="">Nobody is waiting to be emailed</option>';
+    if (keep && sendable.some(function (r) { return String(r.id) === keep; })) sel.value = keep;
+
+    var sent = outRows.filter(function (r) { return r.sentAt; }).length;
+    var signed = outRows.filter(function (r) { return r.outcome === "signed_up"; }).length;
+    el("outStats").innerHTML =
+      statCard(outRows.length, "On the list") +
+      statCard(outRows.length - sent, "Waiting to be emailed") +
+      statCard(sent, "Emailed") +
+      statCard(signed, "Signed up");
+  }
+
+  function loadOutreachList() {
+    authFetch("/api/admin/outreach")
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        outRows = b.results || [];
+        outRenderList();
+        outPreview();
+      })
+      .catch(function () {
+        el("outList").innerHTML = '<p class="admin-empty">Could not load the list.</p>';
+      });
+  }
+
+  function outWire() {
+    if (outWired) return;
+    outWired = true;
+    var writable = canEdit("outreach");
+    el("outAdd").hidden = !writable;
+    el("outSend").hidden = !writable;
+    fillSignerSelect(el("outSigner"));
+    var owner = el("outOwner");
+    owner.innerHTML = '<option value="">Not assigned yet</option>';
+    (H.SIGNERS || []).forEach(function (sg) {
+      var o = doc.createElement("option");
+      o.value = sg.name;
+      o.textContent = sg.name;
+      owner.appendChild(o);
+    });
+    tyBindInput("outBusinessName", outCheckSoon);
+    tyBindInput("outContactEmail", outCheckSoon);
+    tyBindInput("outPersonal", outPreviewSoon);
+    el("outSendTo").addEventListener("change", outPreview);
+    el("outSigner").addEventListener("change", outPreview);
+    el("outAddForm").addEventListener("submit", outAdd);
+    el("outSendForm").addEventListener("submit", outSend);
+  }
+  function loadOutreach() {
+    if (!el("outAddForm")) return;
+    outWire();
+    loadOutreachList();
   }
 
   // ---- supporters ticker (REQ-003 · TASK-178) ----

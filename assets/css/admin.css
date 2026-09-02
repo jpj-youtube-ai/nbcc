@@ -1300,3 +1300,19 @@ tr.nl-click:hover { background: var(--tint); }
 .email-audit-table th:nth-child(2), .email-audit-table td:nth-child(2) { width: 8.5rem; }
 .email-audit-table th:nth-child(5), .email-audit-table td:nth-child(5) { width: 9rem; }
 .email-audit-table small { color: var(--slate-soft, #6F6A66); }
+
+/* Contact businesses (TASK-401). Reuses the thank-you compose grid; only the preview frame and
+   the duplicate warnings are new. The stop variant is crimson because a decline is an instruction,
+   and it must not look like the ordinary "we may already know them" note. */
+.out-preview-wrap{position:sticky;top:14px;min-width:0}
+.out-preview-label{font-family:var(--font-body);text-transform:uppercase;letter-spacing:.16em;font-size:.72rem;font-weight:700;color:var(--crimson);margin:0 0 10px}
+.out-preview{width:100%;height:min(78vh,900px);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);background:#fff}
+.out-warn{border:1.6px solid var(--line);border-left:4px solid var(--gold-ink);border-radius:10px;background:var(--cream);padding:12px 14px;margin:4px 0 12px;font-size:.88rem;color:var(--slate)}
+.out-warn--stop{border-left-color:var(--crimson)}
+.out-warn p{margin:0 0 6px}
+.out-warn ul{margin:0;padding-left:18px}
+.out-warn li{margin:3px 0;line-height:1.45}
+.out-warn .admin-help{margin:8px 0 0}
+.out-ack{margin:12px 0 0;padding-top:11px;border-top:1px solid var(--line)}
+.out-ack label{display:flex;align-items:flex-start;gap:8px;font-weight:600;color:var(--crimson);cursor:pointer}
+.out-ack input{margin-top:2px}

@@ -1358,6 +1358,11 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
 | `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
 | `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking) |
+| `POST /api/admin/outreach/check` | **implemented** | TASK-354 (Viewer+; what the matcher says about a business, BEFORE anything is committed) |
+| `POST /api/admin/outreach` | **implemented** | TASK-354 (Editor+; add a business as a draft. 409 on a business that declined, unless `acknowledgedMatches`) |
+| `GET /api/admin/outreach` | **implemented** | TASK-354 (Viewer+; every business on the list, newest first) |
+| `POST /api/admin/outreach/preview` | **implemented** | TASK-401 (Viewer+; the invitation rendered through the same builder the send uses) |
+| `POST /api/admin/outreach/:id/send` | **implemented** | TASK-401 (Editor+; send one invitation. 400 without an email address, 409 if already sent; `sent_at` is stamped only after the send succeeds) |
 | `GET /api/admin/ball` | **implemented** | TASK-313 (Viewer+; settings, live availability and money raised) |
 | `PATCH /api/admin/ball` | **implemented** | TASK-313 (Editor+ **with the ball section granted**; capacity, held seats, gate, sales window, late-confirmed details. Audited as `ball.settings_updated`) |
 | `GET /api/admin/ball/bookings` | **implemented** | TASK-313 (Viewer+; bookings newest first) |
@@ -2738,6 +2743,54 @@ Markup lives in `admin.html`, behaviour in `assets/js/admin/app.js`, joined only
 nothing type-checks that join, so `test/unit/ball-admin-view.test.ts` walks every id the code
 reaches for and proves the markup provides it. It also asserts the block sits INSIDE the module
 IIFE: appended after the closing `})();` it parses fine but every helper is undefined at runtime.
+
+### Contacting local businesses (TASK-351 · TASK-354 · TASK-401)
+
+The **Contact businesses** screen in the admin (`#view-outreach`) is how a volunteer asks a local
+firm to become a monthly supporter. It is the front of a funnel whose later stages already exist,
+and it ends at "they signed up" — which is the same row the donor list already knows about.
+
+Three layers, deliberately separated:
+
+- `src/outreach/matching.ts` — pure, DB-free. Reduces a business name to what identifies it
+  (`The Designer Rooms Ltd.` and `designer rooms limited` are the same firm), reads email domains,
+  and scores how alike two names are with a bigram Dice coefficient. Free mailboxes are in a
+  `PUBLIC_DOMAINS` set, because two businesses sharing `gmail.com` tells you nothing while two
+  sharing `ayrjoinery.co.uk` are almost certainly one firm.
+- `src/db/outreach.ts` — what the matcher compares against, from three sources: businesses already
+  on the outreach list, businesses that **already give us money**, and businesses that have
+  **declined**. A volunteer needs warning about three different mistakes, not one.
+- `src/outreach/invitation-email.ts` — the email itself, in the approved NBCC family. Carries the
+  charity registration statement, an opt-out in plain words (PECR applies to companies too), and
+  "could help" rather than "£25 buys" (Code of Fundraising Practice).
+
+The screen follows the Thank you page's shape: a form on the left, the real email on the right.
+The preview is fetched from `POST /api/admin/outreach/preview`, which runs the **same**
+`buildOutreachEmail` the send uses — re-implementing the template in browser JavaScript would have
+been faster and would have started lying within a week.
+
+Two rules are enforced on the server, not in the browser:
+
+- **A decline is an instruction.** Adding a business the matcher matches to a declined one returns
+  409 until the volunteer sends `acknowledgedMatches` — which the screen only offers after showing
+  them what it found, and which is worded as an assertion ("this is a different business"), not an
+  override.
+- **`sent_at` is stamped only after the send succeeds.** A provider failure leaves the draft
+  sendable rather than marking a business as contacted when nothing left the building. A second
+  send returns 409, because two volunteers can open the same business at once.
+
+Reading is Viewer+; adding and sending are Editor+. Sending is one business at a time by design —
+there is no bulk send here and there is not meant to be.
+
+The promo booklet the email links to is `assets/nbcc-business-booklet-2026.pdf`, served by the
+static `/assets` mount. The supplied artwork was 15.25 MB of 300 DPI page scans; it is re-encoded
+at 150 DPI to 1.28 MB, because a 15 MB download is a reason not to open it. **It has no text
+layer** — the source is four full-page images — so a screen reader gets nothing from it. That is
+worth fixing at the design end; it cannot be fixed here.
+
+Covered by `test/unit/outreach-matching.test.ts`, `outreach-model.test.ts`,
+`outreach-invitation-email.test.ts` and `admin-outreach-screen.test.ts` (DB-free), plus
+`features/admin-outreach.feature` for who is allowed to do what and for the do-not-contact rule.
 
 ### Nav: one Donate, not two
 

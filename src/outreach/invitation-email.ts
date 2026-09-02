@@ -120,7 +120,7 @@ export function buildOutreachEmailHtml(input: OutreachInvitation): string {
   // type them; everything else is escaped.
   const personalHtml = personal
     ? `<tr><td style="padding:0 32px 20px;">
-        <div style="border-left:3px solid ${LINE};padding:2px 0 2px 16px;color:${SLATE};font-size:16px;line-height:1.7;">
+        <div style="border-left:3px solid ${CRIMSON};padding:2px 0 2px 16px;color:${SLATE};font-size:16px;line-height:1.7;font-style:italic;">
           ${escapeHtml(personal).replace(/\r?\n/g, "<br />")}
         </div>
       </td></tr>`
@@ -140,11 +140,17 @@ export function buildOutreachEmailHtml(input: OutreachInvitation): string {
   <tr><td align="center" style="padding:24px 12px;">
     <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#FFFDFA;border:1px solid ${LINE};border-radius:10px;overflow:hidden;">
 
-      <tr><td style="background:${MAROON};padding:22px 32px;">
-        <img src="${LOGO_URL}" width="48" height="48" alt="Night Before Christmas Campaign" style="display:block;border:0;" />
+      <tr><td style="padding:26px 32px 0;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td style="vertical-align:middle;font-family:${BODY};font-weight:700;color:${MAROON};font-size:14px;line-height:1.5;">Night Before Christmas Campaign</td>
+          <td style="vertical-align:middle;text-align:right;">
+            <img src="${LOGO_URL}" alt="Night Before Christmas Campaign" width="150" style="display:inline-block;height:auto;max-width:150px;border:0;" />
+            <div style="font-family:${BODY};font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:${MAROON};font-size:13px;margin-top:2px;">Here all year</div>
+          </td>
+        </tr></table>
       </td></tr>
 
-      <tr><td style="padding:28px 32px 8px;">
+      <tr><td style="padding:22px 32px 8px;">
         <h1 style="margin:0;font-family:${HEAD};font-size:24px;font-weight:600;color:${MAROON};line-height:1.25;">
           A small idea from a local charity
         </h1>

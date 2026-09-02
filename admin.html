@@ -91,6 +91,7 @@
               <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
               <li><button class="admin-nav-link" type="button" data-view="thank-you">Thank you</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="outreach">Contact businesses</button></li>
               <li class="admin-nav-group" aria-hidden="true">Governance</li>
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
               <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
@@ -1155,6 +1156,96 @@
             </section>
 
             <!-- Audit trail (append-only governance log). -->
+            <!-- Contact businesses (TASK-401): cold outreach asking local firms to become monthly
+                 supporters. Follows the Thank you page's shape - a form on the left, the real
+                 email previewed live on the right - because that is the pattern staff already
+                 know. Wired in app.js (loadOutreach); styles are the .out-* rules. -->
+            <section class="admin-view" id="view-outreach" aria-labelledby="outreach-heading" hidden>
+              <h2 id="outreach-heading">Contact businesses</h2>
+              <p class="admin-view-intro">Ask a local business to become a monthly supporter. Add them, check nobody has approached them already, write a line of your own, and send. One business at a time, always by a person.</p>
+
+              <div class="admin-stats" id="outStats" aria-live="polite"></div>
+
+              <h3 class="admin-subhead">1. Who are we writing to?</h3>
+              <p class="admin-help">As soon as you type a name or an email we check whether anyone has already contacted them, whether they already give to us, and whether they have asked us not to write again.</p>
+              <form class="ty-panel" id="outAddForm" autocomplete="off">
+                <div class="ty-row">
+                  <div class="ty-field">
+                    <label for="outBusinessName">Business name</label>
+                    <input id="outBusinessName" type="text" maxlength="200" required />
+                  </div>
+                  <div class="ty-field">
+                    <label for="outContactName">Contact name <span class="ty-muted">(optional)</span></label>
+                    <input id="outContactName" type="text" maxlength="120" placeholder="So the email can open &ldquo;Hello Jane&rdquo;" />
+                  </div>
+                </div>
+                <div class="ty-row">
+                  <div class="ty-field">
+                    <label for="outContactEmail">Email <span class="ty-muted">(optional for now)</span></label>
+                    <input id="outContactEmail" type="email" maxlength="200" />
+                  </div>
+                  <div class="ty-field">
+                    <label for="outContactPhone">Phone <span class="ty-muted">(optional)</span></label>
+                    <input id="outContactPhone" type="tel" maxlength="40" />
+                  </div>
+                </div>
+                <div class="ty-row">
+                  <div class="ty-field">
+                    <label for="outBusinessType">What kind of business</label>
+                    <select id="outBusinessType">
+                      <option value="company">Limited company or LLP</option>
+                      <option value="sole_trader">Sole trader or partnership</option>
+                    </select>
+                  </div>
+                  <div class="ty-field">
+                    <label for="outOwner">Looked after by</label>
+                    <select id="outOwner"></select>
+                  </div>
+                </div>
+                <div class="ty-field">
+                  <label for="outNote">Why this business <span class="ty-muted">(private, never sent)</span></label>
+                  <textarea id="outNote" rows="2" maxlength="2000" spellcheck="true" lang="en-GB" placeholder="e.g. Sarah knows the owner. Sponsored the gala last year."></textarea>
+                  <span class="ty-hint">Write it as though they will read it one day. If they ever ask what we hold about them, this is part of the answer.</span>
+                </div>
+                <div id="outWarnings" aria-live="polite"></div>
+                <p class="ty-controls">
+                  <button class="btn btn-primary" type="submit" id="outAdd">Add this business</button>
+                  <span class="ty-status" id="outAddStatus" role="status" aria-live="polite"></span>
+                </p>
+              </form>
+
+              <h3 class="admin-subhead">2. Write and send</h3>
+              <p class="admin-help">The preview on the right is exactly what lands in their inbox. It updates as you type.</p>
+              <div class="ty-compose">
+                <form class="ty-panel" id="outSendForm" autocomplete="off">
+                  <div class="ty-field">
+                    <label for="outSendTo">Sending to</label>
+                    <select id="outSendTo"></select>
+                  </div>
+                  <div class="ty-field">
+                    <label for="outPersonal">Personal message <span class="ty-muted">(optional)</span></label>
+                    <textarea id="outPersonal" rows="4" maxlength="1000" spellcheck="true" lang="en-GB" placeholder="One line about this business. It is the difference between a letter and a mailshot."></textarea>
+                  </div>
+                  <div class="ty-field">
+                    <label for="outSigner">From</label>
+                    <select id="outSigner"></select>
+                  </div>
+                  <p class="ty-controls">
+                    <button class="btn btn-primary" type="submit" id="outSend">Send it</button>
+                    <span class="ty-status" id="outSendStatus" role="status" aria-live="polite"></span>
+                  </p>
+                </form>
+                <div class="out-preview-wrap">
+                  <p class="out-preview-label">What they receive</p>
+                  <iframe id="outPreview" class="out-preview" title="Preview of the email"></iframe>
+                </div>
+              </div>
+
+              <h3 class="admin-subhead">3. Everyone we have contacted</h3>
+              <div class="admin-table-wrap" id="outList" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+            </section>
+
+
             <section class="admin-view" id="view-audit" aria-labelledby="audit-heading" hidden>
               <h2 id="audit-heading">Audit trail</h2>
               <div class="admin-table-wrap" id="auditTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>

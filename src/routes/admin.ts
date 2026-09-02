@@ -74,7 +74,11 @@ import {
   listKnownBusinesses,
   createOutreach,
   listOutreach,
+  getOutreach,
+  markOutreachSent,
 } from "../db/outreach";
+import { buildOutreachEmail } from "../outreach/invitation-email";
+import { sendOutreachInvitation } from "../clients/email";
 import { findMatches, isDoNotContact } from "../outreach/matching";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
@@ -2484,7 +2488,88 @@ export async function getAdminOutreach(req: Request, res: Response): Promise<Res
 
 adminRouter.post("/api/admin/outreach/check", postAdminOutreachCheck);
 adminRouter.post("/api/admin/outreach", postAdminOutreach);
+// POST /api/admin/outreach/:id/send — send the invitation to one business.
+//
+// Editor+, because it puts an email in a stranger's inbox. One business at a time by design:
+// there is no bulk send here and there is not meant to be.
+export async function postAdminOutreachSend(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "edit"))) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Unknown business" });
+
+  const signerName = typeof req.body?.signerName === "string" ? req.body.signerName.trim() : "";
+  const signerRole = typeof req.body?.signerRole === "string" ? req.body.signerRole.trim() : "";
+  const personalMessage =
+    typeof req.body?.personalMessage === "string" ? req.body.personalMessage.trim() : "";
+  if (!signerName || !signerRole) {
+    return res.status(400).json({ error: "Choose who this is from" });
+  }
+
+  try {
+    const business = await getOutreach(id);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    if (!business.contactEmail) {
+      return res.status(400).json({ error: "This business has no email address yet" });
+    }
+    if (business.sentAt) {
+      // A fact, not a telling-off: two volunteers can open the same business at once.
+      return res.status(409).json({ error: "This business has already been emailed" });
+    }
+
+    const base = config.PORTAL_BASE_URL.replace(/\/+$/, "");
+    const mail = buildOutreachEmail({
+      businessName: business.businessName,
+      contactName: business.contactName,
+      personalMessage: personalMessage || null,
+      signerName,
+      signerRole,
+      donateUrl: `${base}/donate`,
+      bookletUrl: `${base}/assets/nbcc-business-booklet-2026.pdf`,
+    });
+
+    await sendOutreachInvitation(business.businessName, {
+      email: business.contactEmail,
+      from: config.GIVING_FROM_EMAIL,
+      replyTo: config.GIVING_FROM_EMAIL,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+
+    // Stamped only AFTER the send succeeds, so a provider failure leaves the draft sendable
+    // rather than marking a business as contacted when nothing left the building.
+    await markOutreachSent(id, signerName);
+    return res.status(200).json({ sent: true });
+  } catch (err) {
+    console.error("outreach send failed:", err instanceof Error ? err.message : err);
+    return res.status(502).json({ error: "The email could not be sent. Nothing has been recorded." });
+  }
+}
+
+// POST /api/admin/outreach/preview — the exact email, rendered, before anyone sends it.
+//
+// The preview goes through buildOutreachEmail, the same function the send uses, so what the
+// volunteer reads on screen cannot drift from what the business receives. Re-implementing the
+// template in browser JavaScript would have been faster and would have started lying within a week.
+export async function postAdminOutreachPreview(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  const base = config.PORTAL_BASE_URL.replace(/\/+$/, "");
+  const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+  const mail = buildOutreachEmail({
+    businessName: str(req.body?.businessName, 200) || "your business",
+    contactName: str(req.body?.contactName, 120) || null,
+    personalMessage: str(req.body?.personalMessage, 1000) || null,
+    signerName: str(req.body?.signerName, 120) || "NBCC",
+    signerRole: str(req.body?.signerRole, 160) || "Night Before Christmas Campaign",
+    donateUrl: `${base}/donate`,
+    bookletUrl: `${base}/assets/nbcc-business-booklet-2026.pdf`,
+  });
+  return res.status(200).json({ subject: mail.subject, html: mail.html });
+}
+
 adminRouter.get("/api/admin/outreach", getAdminOutreach);
+adminRouter.post("/api/admin/outreach/preview", postAdminOutreachPreview);
+adminRouter.post("/api/admin/outreach/:id/send", postAdminOutreachSend);
 adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);
 
 // --- Admin Stories (Task C): list/view/manage My Story submissions -------------------------------

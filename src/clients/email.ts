@@ -429,3 +429,14 @@ export async function sendBallReminder(message: BallConfirmationMessage): Promis
 export async function sendBallRunUp(message: BallConfirmationMessage): Promise<void> {
   await sendVerbatim("ballRunUp", null, message);
 }
+
+// TASK-401: the cold approach to a local business. Its own kind, like every other sender here, so
+// it can be told apart in the email audit log and in a bounce report - which matters more for
+// this one than most. A bounce on cold outreach means the address was wrong, and the volunteer
+// needs to know that rather than assume they were ignored.
+export async function sendOutreachInvitation(
+  businessName: string,
+  message: BallConfirmationMessage,
+): Promise<void> {
+  await sendVerbatim("outreach", businessName, message);
+}

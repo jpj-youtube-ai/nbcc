@@ -34,6 +34,25 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     When I add the business "Zzbdd Bakery Ltd" acknowledging the matches as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the outreach response status should be 201
 
+  # The third source the matcher reads, and the one nothing exercised until this scenario: a
+  # business that ALREADY gives us money. Cold-pitching an existing supporter is the most
+  # embarrassing mistake this screen exists to prevent.
+  Scenario: a business that already gives us money is flagged, not cold-pitched
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And "Zzbdd Motors" already gives us money
+    When I check the business "Zzbdd Motors Ltd" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach response should match a business we already know
+
+  # A company that started a checkout and never paid has given us nothing. Warning a volunteer off
+  # it would cost us the very approach worth making.
+  Scenario: a business that started a payment and never finished it is not treated as a supporter
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And "Zzbdd Glazing" started a payment that never went through
+    When I check the business "Zzbdd Glazing" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach response should find nothing
+
   # The preview goes through the same builder as the send, so what a volunteer approves on
   # screen is what the business receives.
   Scenario: the preview is the real email, personal message and all

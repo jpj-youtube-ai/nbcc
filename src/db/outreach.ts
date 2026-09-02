@@ -63,11 +63,19 @@ export async function listKnownBusinesses(): Promise<Known[]> {
        FROM business_outreach`,
   );
 
+  // business_name and email live on DONORS, not on donations - a donation carries the money and
+  // the donor carries who gave it. Joining to a paid donation is the point of the query rather
+  // than a nicety: a company that started a checkout and never finished it has not given us
+  // anything, and warning a volunteer off it would cost us the very approach worth making.
   const donors = await pool.query(
-    `SELECT MIN(id) AS id, business_name, MIN(email) AS email, MIN(created_at) AS since
-       FROM donations
-      WHERE COALESCE(business_name, '') <> ''
-      GROUP BY business_name`,
+    `SELECT MIN(dn.id) AS id,
+            dn.business_name,
+            MIN(dn.email) AS email,
+            MIN(d.created_at) AS since
+       FROM donors dn
+       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid'
+      WHERE COALESCE(dn.business_name, '') <> ''
+      GROUP BY dn.business_name`,
   );
 
   const known: Known[] = [];

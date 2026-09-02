@@ -17,6 +17,8 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 // collide with seeded donor rows the matcher also reads.
 async function clean() {
   await pool.query("DELETE FROM business_outreach WHERE business_name LIKE 'Zzbdd%'");
+  await pool.query("DELETE FROM donations WHERE donor_id IN (SELECT id FROM donors WHERE business_name LIKE 'Zzbdd%')");
+  await pool.query("DELETE FROM donors WHERE business_name LIKE 'Zzbdd%'");
 }
 Before({ tags: "@admin-outreach" }, clean);
 After({ tags: "@admin-outreach" }, clean);
@@ -66,6 +68,28 @@ Given("the business {string} told us not to contact them again", async function 
      VALUES ($1, 'company', 'declined', now())`,
     [name],
   );
+});
+
+// A company donor with a settled gift - the "already gives us money" source.
+async function seedBusinessDonor(name, paymentStatus) {
+  const donor = await pool.query(
+    `INSERT INTO donors (donor_type, full_name, business_name, email)
+     VALUES ('company', 'Zzbdd Contact', $1, $2) RETURNING id`,
+    [name, `hello@${name.toLowerCase().replace(/[^a-z]/g, "")}.example`],
+  );
+  await pool.query(
+    `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status, payment_status)
+     VALUES ($1, 'monthly', 2500, false, 'not_eligible', $2)`,
+    [donor.rows[0].id, paymentStatus],
+  );
+}
+
+Given("{string} already gives us money", async function (name) {
+  await seedBusinessDonor(name, "paid");
+});
+
+Given("{string} started a payment that never went through", async function (name) {
+  await seedBusinessDonor(name, "pending");
 });
 
 Given("the business {string} was added without an email address", async function (name) {
@@ -163,6 +187,19 @@ Then("the outreach response status should be {int}", function (status) {
 
 Then("the outreach response should say do not contact", function () {
   assert.equal(this.outBody.doNotContact, true);
+});
+
+Then("the outreach response should match a business we already know", function () {
+  const matches = this.outBody.matches || [];
+  assert.ok(matches.length > 0, "expected at least one match");
+  assert.ok(
+    matches.some((m) => m.source === "donor"),
+    `expected a donor match, got ${JSON.stringify(matches)}`,
+  );
+});
+
+Then("the outreach response should find nothing", function () {
+  assert.deepEqual(this.outBody.matches, []);
 });
 
 Then("the outreach business should not have been emailed", async function () {

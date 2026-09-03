@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 17 matrix sections", () => {
+  it("lists exactly the 18 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -40,9 +40,10 @@ describe("SECTIONS", () => {
       "email-audit",
       "site",
       "outreach",
+      "business-supporters",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(17);
+    expect(SECTIONS).toHaveLength(18);
   });
 });
 
@@ -159,10 +160,10 @@ describe("roleToPermissions", () => {
     expect(can(perms, "team", "view")).toBe(false);
   });
 
-  it("viewer gets view on all sections except team and email-audit", () => {
+  it("viewer gets view on all sections except team, email-audit and business-supporters", () => {
     const perms = roleToPermissions("viewer");
     for (const section of SECTIONS) {
-      if (section === "team" || section === "email-audit") continue;
+      if (section === "team" || section === "email-audit" || section === "business-supporters") continue;
       expect(perms[section]).toBe("view");
     }
   });
@@ -204,5 +205,31 @@ describe("effectivePermissions", () => {
     const result = effectivePermissions({ role: "admin", permissions: stored });
     expect(result).toEqual(stored);
     expect(can(result, "donations", "view")).toBe(false);
+  });
+});
+
+// TASK-406: the new section, and the rule that decides who gets it.
+describe("business supporters is granted, not inherited (TASK-406)", () => {
+  it("comes with the admin role", () => {
+    expect(can(roleToPermissions("admin"), "business-supporters", "edit")).toBe(true);
+  });
+
+  // Locked down like email-audit, and for the same reason: these records carry business contact
+  // details and the postal address a certificate is sent to.
+  it.each(["editor", "viewer"])("does not come with the %s role", (role) => {
+    expect(can(roleToPermissions(role), "business-supporters", "view")).toBe(false);
+  });
+
+  // The rule that makes the migration necessary, asserted here so nobody "fixes" it by laying the
+  // role defaults underneath a stored matrix. Failing closed loses somebody a tab, which is
+  // visible and recoverable; failing open grants access nobody chose and nobody sees.
+  it("stays denied when a stored matrix predates the section, rather than falling back to the role", () => {
+    const savedBefore: PermissionMap = {};
+    for (const section of SECTIONS) {
+      if (section === "business-supporters") continue;
+      savedBefore[section] = "edit";
+    }
+    const perms = effectivePermissions({ role: "admin", permissions: savedBefore });
+    expect(can(perms, "business-supporters", "edit")).toBe(false);
   });
 });

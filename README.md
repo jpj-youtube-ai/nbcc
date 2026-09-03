@@ -2862,6 +2862,27 @@ business reads. A drop-down rather than one fixed sentence for a reason: a sente
 than one that is vague. Every variant ends "and nowhere else", because "you bought a list" is the
 thing a business actually fears.
 
+### Business supporters is its own permission (TASK-406)
+
+The **Business supporters** tab — what each supporter asked to be thanked with, and ticking each
+step done — used to ride on `donations:edit`. That meant anyone who could correct a donation could
+also work through somebody's perks and read the postal address their certificate goes to. It is now
+its own section, `business-supporters`, locked down like `email-audit`: **admins hold it by role,
+everyone else is granted it per person from the Team matrix.** The three endpoints
+(`GET /api/admin/fulfilments`, `POST /api/admin/fulfilments/:id/mark`, and the catch-up invites)
+and the nav link's `data-edit-gate` all move together.
+
+**Adding a section needs a migration, and here is why.** `effectivePermissions` treats a stored
+matrix as a *complete* statement: a section it does not name is denied. That is deliberate and it
+stays — an authorisation rule that fails closed loses somebody a tab, which is visible and
+recoverable, where one that fails open grants access nobody chose and nobody sees. The cost is
+that the permissions editor submits every section that existed when it was used, so a matrix saved
+before today has no key for a section added today and would read as "none" for everyone who has
+ever had their permissions edited, **the admins included**. So the data is brought up to date once,
+in `migrations/1788100000000_permissions-business-supporters.js`, matching what the role would have
+given. Every future section ships with the same one-line migration; forgetting it fails closed,
+which is what makes the rule safe to keep.
+
 ### Needs you today (TASK-405)
 
 The screen opens with one list, above the forms, because it is the reason to open the screen at

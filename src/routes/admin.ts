@@ -3161,9 +3161,11 @@ function fulfilmentId(req: Request, res: Response): number | null {
 }
 
 // GET /api/admin/fulfilments — list every business-supporter fulfilment record (joined to its donor),
-// most recent first. Editor+ (donations:edit).
+// most recent first. Needs business-supporters:edit (TASK-406) - it used to ride on
+// donations:edit, which meant anyone who could correct a donation could also work through
+// somebody's perks and read the address their certificate is posted to.
 export async function getAdminFulfilments(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "donations", "edit"))) return;
+  if (!(await authorizeSection(req, res, "business-supporters", "edit"))) return;
   try {
     return res.status(200).json({ results: await listBusinessFulfilments() });
   } catch (err) {
@@ -3176,10 +3178,11 @@ export async function getAdminFulfilments(req: Request, res: Response): Promise<
 // clean 400; markFulfilmentFlag re-checks the same allowlist as defence in depth).
 const fulfilmentMarkSchema = z.object({ flag: z.enum(FULFILMENT_FLAGS) });
 
-// POST /api/admin/fulfilments/:id/mark — set one fulfilment status flag true. Editor+ (donations:edit).
-// Audited + transactional. An unknown flag → 400; an unknown record id → 404. Returns the updated record.
+// POST /api/admin/fulfilments/:id/mark — set one fulfilment status flag true.
+// Needs business-supporters:edit (TASK-406). Audited + transactional. An unknown flag → 400; an
+// unknown record id → 404. Returns the updated record.
 export async function postAdminMarkFulfilment(req: Request, res: Response): Promise<Response | void> {
-  const claims = await authorizeSection(req, res, "donations", "edit");
+  const claims = await authorizeSection(req, res, "business-supporters", "edit");
   if (!claims) return;
   const id = fulfilmentId(req, res);
   if (id == null) return;
@@ -3214,7 +3217,8 @@ adminRouter.post("/api/admin/fulfilments/:id/mark", postAdminMarkFulfilment);
 // counted and never aborts the rest — and the run appends one `fulfilment.backfill_invites` audit row.
 // Returns the counts { pending, sent, failed }.
 export async function postAdminBackfillBusinessInvites(req: Request, res: Response): Promise<Response | void> {
-  const claims = await authorizeSection(req, res, "donations", "edit");
+  // business-supporters:edit (TASK-406): it lives on that tab and it puts email in inboxes.
+  const claims = await authorizeSection(req, res, "business-supporters", "edit");
   if (!claims) return;
   try {
     const result = await runBusinessInviteBackfill({

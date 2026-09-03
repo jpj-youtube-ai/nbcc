@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // TASK-207: the admin API for the business-supporter fulfilment feature — GET /api/admin/fulfilments
 // (list) and POST /api/admin/fulfilments/:id/mark (mark one status flag). Both are Editor+
-// (donations:edit): an unauthenticated or Viewer-level request is rejected (401/403) and never
+// (business-supporters:edit since TASK-406): an unauthenticated or ungranted request is rejected
+// (401/403) and never
 // reads/writes; an Editor+ session may list, and may mark a flag — which flips the boolean and
 // appends EXACTLY ONE audit_log row in the same transaction (writeWithAudit — the truth model). An
 // unknown flag is rejected (400), and the fixed five-flag allowlist prevents any arbitrary-column
@@ -196,13 +197,23 @@ describe("role enforcement: Editor+ only (Viewer is 403)", () => {
     expect(auditInserts()).toHaveLength(0);
   });
 
-  it("403s a caller whose stored permissions grant donations:view only (not edit)", async () => {
+  // TASK-406: this used to ride on donations:edit, so an editor got it with the role. Now it is
+  // granted per person, and an editor who has not been granted it is refused like anyone else.
+  it("403s an editor who has not been granted the section", async () => {
+    expect((await runList({ role: "editor" })).statusCode).toBe(403);
+    expect(
+      (await runMark({ role: "editor", body: { flag: "badge_sent" } })).statusCode,
+    ).toBe(403);
+    expect(connect).not.toHaveBeenCalled();
+  });
+
+  it("403s a caller granted business-supporters:view only (not edit)", async () => {
     getUserAuthRowMock.mockResolvedValue({
       id: 1,
       email: "kenny@nbcc.test",
       status: "active",
       role: "viewer",
-      permissions: { donations: "view" },
+      permissions: { "business-supporters": "view" },
     });
     expect((await runList({ role: "viewer" })).statusCode).toBe(403);
     expect((await runMark({ role: "viewer", body: { flag: "badge_sent" } })).statusCode).toBe(403);
@@ -211,7 +222,9 @@ describe("role enforcement: Editor+ only (Viewer is 403)", () => {
 });
 
 // --- 200: Editor and Admin may list and mark ----------------------------------------------------
-describe.each(["editor", "admin"])("role %s (Editor+) may list and mark", (role) => {
+// Admins hold it by role. An editor gets it only when an admin grants it, which the last case
+// in this block proves.
+describe.each(["admin"])("role %s may list and mark", (role) => {
   it("lists business-supporter fulfilment records (200, { results }), most recent first + bounded", async () => {
     const res = await runList({ role });
     expect(res.statusCode).toBe(200);
@@ -249,7 +262,7 @@ describe.each(["editor", "admin"])("role %s (Editor+) may list and mark", (role)
 // Every one of the five flags maps to ITS OWN column + action (no cross-talk, all allow-listed).
 describe.each(FULFILMENT_FLAGS)("mark flag %s", (flag) => {
   it("flips that column true and audits fulfilment.<flag>", async () => {
-    const res = await runMark({ role: "editor", id: "7", body: { flag } });
+    const res = await runMark({ role: "admin", id: "7", body: { flag } });
     expect(res.statusCode).toBe(200);
     const update = clientQueryMock.mock.calls.find((c) => /update business_supporter_fulfilment/i.test(String(c[0])));
     expect(update?.[0]).toMatch(new RegExp(`set\\s+${flag}\\s*=\\s*true`, "i"));
@@ -262,7 +275,7 @@ describe.each(FULFILMENT_FLAGS)("mark flag %s", (flag) => {
 // --- mark validation: id, flag allowlist, not-found ---------------------------------------------
 describe("mark validation", () => {
   it("400s an unknown flag and never opens a transaction (no arbitrary-column write)", async () => {
-    const res = await runMark({ role: "editor", id: "7", body: { flag: "is_admin" } });
+    const res = await runMark({ role: "admin", id: "7", body: { flag: "is_admin" } });
     expect(res.statusCode).toBe(400);
     expect(connect).not.toHaveBeenCalled();
     expect(clientQueryMock).not.toHaveBeenCalled();
@@ -270,7 +283,7 @@ describe("mark validation", () => {
 
   it("400s a SQL-injection-style flag and writes nothing", async () => {
     const res = await runMark({
-      role: "editor",
+      role: "admin",
       id: "7",
       body: { flag: "certificate_sent = true; DROP TABLE donors; --" },
     });
@@ -279,11 +292,11 @@ describe("mark validation", () => {
   });
 
   it("400s a missing flag", async () => {
-    expect((await runMark({ role: "editor", id: "7", body: {} })).statusCode).toBe(400);
+    expect((await runMark({ role: "admin", id: "7", body: {} })).statusCode).toBe(400);
   });
 
   it("400s a non-numeric fulfilment id", async () => {
-    const res = await runMark({ role: "editor", id: "abc", body: { flag: "certificate_sent" } });
+    const res = await runMark({ role: "admin", id: "abc", body: { flag: "certificate_sent" } });
     expect(res.statusCode).toBe(400);
     expect(connect).not.toHaveBeenCalled();
   });
@@ -294,7 +307,7 @@ describe("mark validation", () => {
       if (/update business_supporter_fulfilment/i.test(sql)) return { rows: [], rowCount: 0 };
       return { rows: [], rowCount: 0 };
     });
-    const res = await runMark({ role: "editor", id: "999", body: { flag: "badge_sent" } });
+    const res = await runMark({ role: "admin", id: "999", body: { flag: "badge_sent" } });
     expect(res.statusCode).toBe(404);
     expect(auditInserts()).toHaveLength(0);
     const seq = clientQueryMock.mock.calls.map((c) => String(c[0]).trim());

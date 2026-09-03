@@ -120,11 +120,12 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
   });
 
   // TASK-208: the Business supporters (fulfilment) tab — an Editor+ area, gated in the nav on
-  // donations:edit (data-edit-gate) to match its server route, with its own table + status region.
+  // business-supporters:edit (data-edit-gate) to match its server route (TASK-406), with its own
+  // table + status region.
   it("has the Business supporters view, gated Editor+ via data-edit-gate on the nav link", () => {
     const navLink = doc.querySelector('.admin-nav-link[data-view="fulfilments"]');
     expect(navLink).not.toBeNull();
-    expect(navLink?.getAttribute("data-edit-gate")).toBe("donations");
+    expect(navLink?.getAttribute("data-edit-gate")).toBe("business-supporters");
     expect(doc.getElementById("view-fulfilments")).not.toBeNull();
     expect(doc.getElementById("fulfilmentsTable")).not.toBeNull();
     expect(doc.getElementById("fulfilmentActionStatus")?.getAttribute("role")).toBe("status");

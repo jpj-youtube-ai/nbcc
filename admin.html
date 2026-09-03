@@ -1202,6 +1202,27 @@
                     <select id="outOwner"></select>
                   </div>
                 </div>
+                <!-- Article 14 (TASK-403): the email tells the business where we got their
+                     details, so the volunteer has to say. A drop-down rather than one fixed
+                     sentence, because a disclosure that is WRONG is worse than one that is vague. -->
+                <div class="ty-field">
+                  <label for="outSource">Where did you get their details?</label>
+                  <select id="outSource">
+                    <option value="website_or_listing">Their website or a business listing</option>
+                    <option value="given_to_us">They gave them to us</option>
+                    <option value="referred">Someone we know passed them on</option>
+                    <option value="social">Their social media page</option>
+                  </select>
+                  <span class="ty-hint">The email says this back to them, so pick the one that is actually true.</span>
+                </div>
+                <!-- Shown only for a sole trader (TASK-403). PECR treats them as a person rather
+                     than a company, so we may only email one who has already agreed to hear from
+                     us, and the send is refused on the server without this. -->
+                <div class="ty-field" id="outConsentField" hidden>
+                  <label for="outConsent">How did they agree to hear from us?</label>
+                  <input id="outConsent" type="text" maxlength="400" placeholder="e.g. Gave me her card at the Chamber breakfast and said to email" />
+                  <span class="ty-hint">A sole trader counts as a person in law, not a company, so we can only email one who has said yes. Without this you can still call them or send a letter.</span>
+                </div>
                 <div class="ty-field">
                   <label for="outNote">Why this business <span class="ty-muted">(private, never sent)</span></label>
                   <textarea id="outNote" rows="2" maxlength="2000" spellcheck="true" lang="en-GB" placeholder="e.g. Sarah knows the owner. Sponsored the gala last year."></textarea>

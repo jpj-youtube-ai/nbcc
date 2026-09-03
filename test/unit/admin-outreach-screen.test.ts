@@ -81,6 +81,34 @@ describe("the Contact businesses screen (TASK-401)", () => {
     expect(app).toContain("out-warn--stop");
   });
 
+  // Article 14 (TASK-403): the email states where the details came from, so it has to be asked.
+  it("asks where the details came from, and warns that the business is told", () => {
+    const select = doc.getElementById("outSource") as HTMLSelectElement | null;
+    expect(select).not.toBeNull();
+    const values = [...select!.querySelectorAll("option")].map((o) => o.getAttribute("value"));
+    expect(values).toEqual(["website_or_listing", "given_to_us", "referred", "social"]);
+    expect(doc.getElementById("outSource")?.parentElement?.textContent).toMatch(
+      /says this back to them/i,
+    );
+  });
+
+  // PECR (TASK-403): a sole trader is a person in law, so we may only email one who has already
+  // agreed. The box appears only for a sole trader - asking every volunteer a question that does
+  // not apply to them is how a form teaches people to ignore it.
+  it("asks a sole trader how they agreed, and asks nobody else", () => {
+    expect(doc.getElementById("outConsentField")?.hasAttribute("hidden")).toBe(true);
+    expect(doc.querySelector('label[for="outConsent"]')?.textContent).toContain(
+      "How did they agree to hear from us?",
+    );
+    expect(app).toContain('el("outBusinessType").addEventListener("change", outToggleConsent)');
+    expect(app).toContain('var sole = el("outBusinessType").value === "sole_trader"');
+  });
+
+  it("explains what to do instead when there is no agreement", () => {
+    const hint = doc.getElementById("outConsentField")?.textContent ?? "";
+    expect(hint).toMatch(/call them or send a letter/i);
+  });
+
   it("has the personal message box, and previews it as the volunteer types", () => {
     expect(doc.getElementById("outPersonal")).not.toBeNull();
     expect(app).toContain('tyBindInput("outPersonal", outPreviewSoon)');

@@ -45,6 +45,32 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/**
+ * Where a volunteer got this business's details, and the sentence the email tells them.
+ *
+ * A drop-down rather than one fixed line, because Article 14 asks us to say where the data came
+ * from, and a sentence that is WRONG is worse than one that is vague. "We found you on your
+ * website" sent to someone who handed over a business card reads as a charity that does not know
+ * what it did with their details.
+ *
+ * Each ends the same way. "And nowhere else" is the sentence a business actually wants: it says
+ * we did not buy a list.
+ */
+export const DETAILS_SOURCES = {
+  website_or_listing: "We found your details on your own website or a local business listing",
+  given_to_us: "You gave us these details when we spoke",
+  referred: "Someone we both know passed your details on to us",
+  social: "We found your details on your business's own social media page",
+} as const;
+
+export type DetailsSource = keyof typeof DETAILS_SOURCES;
+
+export function detailsSourceSentence(source: string | null | undefined): string {
+  const key = (source ?? "website_or_listing") as DetailsSource;
+  const opening = DETAILS_SOURCES[key] ?? DETAILS_SOURCES.website_or_listing;
+  return `${opening}, and nowhere else.`;
+}
+
 export interface OutreachInvitation {
   /** The business itself, used in the greeting when no contact name is known. */
   businessName: string;
@@ -62,6 +88,14 @@ export interface OutreachInvitation {
   /** Absolute links, passed in so this module stays config-free. */
   donateUrl: string;
   bookletUrl: string;
+  /** Where the volunteer got these details. Drives the Article 14 sentence. */
+  detailsSource?: string | null;
+  /**
+   * The privacy notice. Not decoration: UK GDPR Article 14 says that when personal data comes from
+   * somewhere other than the person - a company website, a local directory - they must be told,
+   * and the first communication is the deadline. This email IS that first communication.
+   */
+  privacyUrl: string;
 }
 
 export interface BuiltEmail {
@@ -107,9 +141,12 @@ ${input.bookletUrl}
 And if you would like to start today, this is the page:
 ${input.donateUrl}
 
-If you would rather we did not contact you again, just reply and say so and we will
-make sure of it. And if you would simply like a chat first, reply to this email and
-it comes straight to us, or call ${PHONE}, Monday to Friday.
+${detailsSourceSentence(input.detailsSource)} If you would rather we did not contact
+you again, just reply and say so and we will make sure of it. What we hold, and how
+to ask us to remove it, is here: ${input.privacyUrl}
+
+And if you would simply like a chat first, reply to this email and it comes straight
+to us, or call ${PHONE}, Monday to Friday.
 
 Thank you for reading this far.
 
@@ -200,9 +237,14 @@ export function buildOutreachEmailHtml(input: OutreachInvitation): string {
 
       <tr><td style="padding:0 32px 24px;font-family:${BODY};color:${SLATE};font-size:16px;line-height:1.7;">
         <p style="margin:0 0 16px;">
-          If you would rather we did not contact you again, just reply and say so and we will make sure
-          of it. And if you would simply like a chat first, reply to this email and it comes straight
-          to us, or call <a href="tel:${PHONE_TEL}" style="color:${MAROON};font-weight:600;">${PHONE}</a>,
+          ${escapeHtml(detailsSourceSentence(input.detailsSource))}
+          If you would rather we did not contact you again, just reply and say so and we will make
+          sure of it. What we hold, and how to ask us to remove it, is in our
+          <a href="${escapeHtml(input.privacyUrl)}" style="color:${MAROON};font-weight:600;">privacy notice</a>.
+        </p>
+        <p style="margin:0 0 16px;">
+          And if you would simply like a chat first, reply to this email and it comes straight to
+          us, or call <a href="tel:${PHONE_TEL}" style="color:${MAROON};font-weight:600;">${PHONE}</a>,
           Monday to Friday.
         </p>
         <p style="margin:0 0 4px;">Thank you for reading this far.</p>

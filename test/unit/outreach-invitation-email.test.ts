@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  detailsSourceSentence,
+  DETAILS_SOURCES,
   buildOutreachEmail,
   buildOutreachEmailHtml,
   buildOutreachEmailText,
@@ -18,9 +20,14 @@ const base: OutreachInvitation = {
   signerRole: "Project Manager, Night Before Christmas Campaign",
   donateUrl: "https://nbcc.scot/donate",
   bookletUrl: "https://nbcc.scot/assets/nbcc-business-booklet-2026.pdf",
+  privacyUrl: "https://nbcc.scot/privacy",
 };
 
 const build = (over: Partial<OutreachInvitation> = {}) => buildOutreachEmail({ ...base, ...over });
+
+/** The text half is hard-wrapped, so a phrase can straddle a line break. Match the words, not
+ *  where the wrap happens to fall. */
+const flat = (s: string) => s.replace(/\s+/g, " ");
 
 describe("the greeting", () => {
   // "Hello Jane" against "Hello" is the difference between a letter and a mailshot, and a
@@ -107,8 +114,42 @@ describe("what the law requires of a cold approach", () => {
 
   // PECR: every marketing message needs a way to opt out, including to companies.
   it("offers a way to opt out, in plain words", () => {
-    expect(mail.text).toMatch(/would rather we did not contact you again/i);
-    expect(mail.html).toMatch(/would rather we did not contact you again/i);
+    expect(flat(mail.text)).toMatch(/would rather we did not contact you again/i);
+    expect(flat(mail.html)).toMatch(/would rather we did not contact you again/i);
+  });
+
+  // UK GDPR Article 14: where personal data came from somewhere other than the person - a company
+  // website, a local directory - they must be told, and the first communication is the deadline.
+  // This email IS that first communication, so the answer cannot live only on a page they would
+  // have to think to go and find.
+  it("says where we got their details, and points at the privacy notice", () => {
+    for (const half of [mail.html, mail.text]) {
+      expect(flat(half)).toMatch(/we found your details/i);
+      expect(flat(half)).toMatch(/own website or a local business listing/i);
+    }
+    expect(mail.html).toContain("https://nbcc.scot/privacy");
+    expect(mail.text).toContain("https://nbcc.scot/privacy");
+  });
+
+  // A fixed sentence would be wrong for a business that handed over a card, and a disclosure
+  // that is wrong is worse than one that is vague.
+  it("says the source the volunteer actually recorded", () => {
+    expect(flat(build({ detailsSource: "given_to_us" }).text)).toMatch(/you gave us these details/i);
+    expect(flat(build({ detailsSource: "referred" }).text)).toMatch(/someone we both know/i);
+    expect(flat(build({ detailsSource: "social" }).text)).toMatch(/social media/i);
+  });
+
+  it("falls back to the commonest source rather than saying nothing", () => {
+    expect(detailsSourceSentence(null)).toBe(DETAILS_SOURCES.website_or_listing + ", and nowhere else.");
+    expect(detailsSourceSentence("not-a-source")).toContain("website or a local business listing");
+  });
+
+  // "We bought a list" is the thing a business fears, so the email says the opposite outright.
+  it("says plainly that this is the only place we got them", () => {
+    expect(flat(mail.text)).toMatch(/and nowhere else/i);
+    for (const source of Object.keys(DETAILS_SOURCES)) {
+      expect(detailsSourceSentence(source), source).toMatch(/and nowhere else\.$/);
+    }
   });
 
   // 2005 Act and the SCIO Regulations, from the single source of truth rather than retyped.

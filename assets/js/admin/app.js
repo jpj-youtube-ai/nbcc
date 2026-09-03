@@ -6118,6 +6118,12 @@
       "</div>";
   }
 
+  function outToggleConsent() {
+    var sole = el("outBusinessType").value === "sole_trader";
+    el("outConsentField").hidden = !sole;
+    if (!sole) el("outConsent").value = "";
+  }
+
   var outCheckTimer = null;
   function outCheck() {
     var name = (el("outBusinessName").value || "").trim();
@@ -6150,6 +6156,8 @@
       contactEmail: (el("outContactEmail").value || "").trim() || null,
       contactPhone: (el("outContactPhone").value || "").trim() || null,
       businessType: el("outBusinessType").value,
+      detailsSource: el("outSource").value,
+      consentBasis: (el("outConsent").value || "").trim() || null,
       note: (el("outNote").value || "").trim() || null,
       owner: el("outOwner").value || null,
     };
@@ -6172,6 +6180,7 @@
         }
         outSay("outAddStatus", "Added. They are in the list below, not emailed yet.", "is-ok");
         el("outAddForm").reset();
+        outToggleConsent();
         el("outWarnings").innerHTML = "";
         outBlocked = false;
         loadOutreachList();
@@ -6195,6 +6204,7 @@
       body: JSON.stringify({
         businessName: r ? r.businessName : "",
         contactName: r ? r.contactName : "",
+        detailsSource: r ? r.detailsSource : null,
         personalMessage: (el("outPersonal").value || "").trim(),
         signerName: opt ? opt.value : "",
         signerRole: opt ? opt.getAttribute("data-role") : "",
@@ -6326,6 +6336,10 @@
       o.textContent = sg.name;
       owner.appendChild(o);
     });
+    // The consent box exists only for a sole trader, because only a sole trader needs one.
+    // Showing it always would ask every volunteer a question that does not apply to them.
+    el("outBusinessType").addEventListener("change", outToggleConsent);
+    outToggleConsent();
     tyBindInput("outBusinessName", outCheckSoon);
     tyBindInput("outContactEmail", outCheckSoon);
     tyBindInput("outPersonal", outPreviewSoon);

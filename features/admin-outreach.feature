@@ -69,6 +69,24 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the outreach response status should be 400
 
+  # PECR (TASK-403). A sole trader is a person in law, not a company, so an unsolicited marketing
+  # email needs their agreement first. Checked on the SERVER: the screen hides the box for a
+  # company, but a hidden box is not a legal control.
+  Scenario: a sole trader cannot be emailed until we record that they agreed
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the sole trader "Zzbdd Barbers" was added with email "hello@zzbddbarbers.example"
+    When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 422
+    And the outreach response should explain the sole trader rule
+    And the outreach business should not have been emailed
+
+  Scenario: a sole trader who agreed can be emailed
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the sole trader "Zzbdd Florists" agreed to hear from us
+    When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach business should have been emailed
+
   # Two volunteers can open the same business at once. The second send is a fact, not a scolding.
   Scenario: a business is never emailed twice
     Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"

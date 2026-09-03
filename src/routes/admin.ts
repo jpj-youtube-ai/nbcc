@@ -80,6 +80,7 @@ import {
 import { buildOutreachEmail } from "../outreach/invitation-email";
 import { sendOutreachInvitation } from "../clients/email";
 import { findMatches, isDoNotContact } from "../outreach/matching";
+import { emailBlockReason } from "../outreach/lawful-basis";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
@@ -2445,7 +2446,8 @@ export async function postAdminOutreachCheck(req: Request, res: Response): Promi
 
 // POST /api/admin/outreach — add a business. Creates a DRAFT; nothing is sent here.
 export async function postAdminOutreach(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "outreach", "edit"))) return;
+  const claims = await authorizeSection(req, res, "outreach", "edit");
+  if (!claims) return;
   const parsed = outreachCreateSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid business", details: parsed.error.issues });
@@ -2468,6 +2470,9 @@ export async function postAdminOutreach(req: Request, res: Response): Promise<Re
       contactPhone: parsed.data.contactPhone ?? null,
       businessType: parsed.data.businessType,
       note: parsed.data.note ?? null,
+      detailsSource: parsed.data.detailsSource,
+      consentBasis: parsed.data.consentBasis ?? null,
+      recordedBy: claims.email,
       owner: parsed.data.owner ?? null,
     });
     return res.status(201).json({ business: row, matches });
@@ -2517,6 +2522,11 @@ export async function postAdminOutreachSend(req: Request, res: Response): Promis
       // A fact, not a telling-off: two volunteers can open the same business at once.
       return res.status(409).json({ error: "This business has already been emailed" });
     }
+    // PECR (TASK-403): a sole trader is a person in law, not a company, so we may only email one
+    // who has already agreed to hear from us. Checked HERE and not only on the screen, because
+    // the browser is not where the law is enforced.
+    const blocked = emailBlockReason(business);
+    if (blocked) return res.status(422).json({ error: blocked });
 
     const base = config.PORTAL_BASE_URL.replace(/\/+$/, "");
     const mail = buildOutreachEmail({
@@ -2527,6 +2537,8 @@ export async function postAdminOutreachSend(req: Request, res: Response): Promis
       signerRole,
       donateUrl: `${base}/donate`,
       bookletUrl: `${base}/assets/nbcc-business-booklet-2026.pdf`,
+      privacyUrl: `${base}/privacy`,
+      detailsSource: business.detailsSource,
     });
 
     await sendOutreachInvitation(business.businessName, {
@@ -2565,6 +2577,8 @@ export async function postAdminOutreachPreview(req: Request, res: Response): Pro
     signerRole: str(req.body?.signerRole, 160) || "Night Before Christmas Campaign",
     donateUrl: `${base}/donate`,
     bookletUrl: `${base}/assets/nbcc-business-booklet-2026.pdf`,
+    privacyUrl: `${base}/privacy`,
+    detailsSource: str(req.body?.detailsSource, 40) || null,
   });
   return res.status(200).json({ subject: mail.subject, html: mail.html });
 }

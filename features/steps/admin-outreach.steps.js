@@ -92,6 +92,27 @@ Given("{string} started a payment that never went through", async function (name
   await seedBusinessDonor(name, "pending");
 });
 
+Given("the sole trader {string} was added with email {string}", async function (name, email) {
+  const row = await pool.query(
+    `INSERT INTO business_outreach (business_name, contact_email, business_type)
+     VALUES ($1, $2, 'sole_trader') RETURNING id`,
+    [name, email],
+  );
+  this.outId = row.rows[0].id;
+});
+
+Given("the sole trader {string} agreed to hear from us", async function (name) {
+  const row = await pool.query(
+    `INSERT INTO business_outreach
+       (business_name, contact_email, business_type, consent_basis, consent_basis_recorded_by,
+        consent_basis_recorded_at)
+     VALUES ($1, $2, 'sole_trader', $3, 'bdd@example.com', now()) RETURNING id`,
+    [name, `hello@${name.toLowerCase().replace(/[^a-z]/g, "")}.example`,
+     "Gave me her card at the Chamber breakfast and said to email."],
+  );
+  this.outId = row.rows[0].id;
+});
+
 Given("the business {string} was added without an email address", async function (name) {
   const row = await pool.query(
     `INSERT INTO business_outreach (business_name, business_type) VALUES ($1, 'company') RETURNING id`,
@@ -196,6 +217,13 @@ Then("the outreach response should match a business we already know", function (
     matches.some((m) => m.source === "donor"),
     `expected a donor match, got ${JSON.stringify(matches)}`,
   );
+});
+
+Then("the outreach response should explain the sole trader rule", function () {
+  const error = String(this.outBody.error || "");
+  assert.match(error, /sole trader/i);
+  // A refusal that does not say what to do instead just gets worked around.
+  assert.match(error, /call|letter/i);
 });
 
 Then("the outreach response should find nothing", function () {

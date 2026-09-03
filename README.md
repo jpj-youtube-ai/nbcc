@@ -2838,6 +2838,31 @@ Two rules are enforced on the server, not in the browser:
 Reading is Viewer+; adding and sending are Editor+. Sending is one business at a time by design —
 there is no bulk send here and there is not meant to be.
 
+**Two rules the law adds, both enforced on the server (TASK-403).**
+
+*A sole trader is a person, not a company.* PECR splits recipients into corporate subscribers —
+limited companies, LLPs, and (because Scots law gives partnerships their own legal personality)
+Scottish partnerships — who may be sent unsolicited marketing, and individual subscribers, who may
+not; the ICO treats a charity promoting its aims as direct marketing. The form had always asked
+which kind of business it was and nothing acted on the answer. `src/outreach/lawful-basis.ts` is
+that rule, pure and DB-free: emailing a sole trader is refused (422) until a volunteer has recorded
+**how they already agreed**, and the refusal names the two routes PECR does not restrict this way —
+a call or a letter.
+
+*They must be told where we got their details.* UK GDPR Article 14 applies whenever personal data
+comes from somewhere other than the person, and the first communication is the deadline — so the
+answer belongs in the email, not only on a page they would have to think to visit. The volunteer
+picks the source from a short list (their website or a listing, they gave them to us, someone
+passed them on, their social media), and `detailsSourceSentence` turns it into the line the
+business reads. A drop-down rather than one fixed sentence for a reason: a sentence that is
+**wrong** — "we found you on your website", to someone who handed over a business card — is worse
+than one that is vague. Every variant ends "and nowhere else", because "you bought a list" is the
+thing a business actually fears.
+
+The privacy notice carries a matching **"If you run a local business"** section, and
+`docs/legitimate-interests-assessment-business-outreach.md` is the written Article 6(1)(f)
+assessment a trustee signs.
+
 The promo booklet the email links to is `assets/nbcc-business-booklet-2026.pdf`, served by the
 static `/assets` mount. The supplied artwork was 15.25 MB of 300 DPI page scans; it is re-encoded
 at 150 DPI to 1.28 MB, because a 15 MB download is a reason not to open it. **It has no text

@@ -45,6 +45,17 @@ export const outreachCreateSchema = z.object({
   // reverse would suppress a warning somebody did.
   businessType: z.enum(["company", "sole_trader"]).default("company"),
   note: optionalText(2000),
+  // Where the volunteer got the details, which the email then states (TASK-403, Article 14).
+  detailsSource: z
+    .enum(["website_or_listing", "given_to_us", "referred", "social"])
+    .default("website_or_listing"),
+  /**
+   * How an individual subscriber agreed to hear from us (TASK-403). Meaningless for a company;
+   * required before a sole trader can be emailed - see src/outreach/lawful-basis.ts. Captured on
+   * the add form rather than at send time, because the volunteer remembers on the day they met
+   * them, not three weeks later.
+   */
+  consentBasis: optionalText(400),
   owner: optionalText(120),
   /**
    * Set only when a volunteer has SEEN the matches and said they are a different business.

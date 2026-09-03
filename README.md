@@ -2862,6 +2862,39 @@ business reads. A drop-down rather than one fixed sentence for a reason: a sente
 than one that is vague. Every variant ends "and nowhere else", because "you bought a list" is the
 thing a business actually fears.
 
+### The thank-you letter sends itself (TASK-407 — shipped as TASK-408)
+
+A business that becomes a monthly supporter is thanked without anybody having to remember. The
+sequence, and why it is that way round:
+
+1. They sign up.
+2. The invite email goes — already automatic (TASK-212/214).
+3. They say **how** they would like to be thanked.
+4. The letter goes.
+
+Waiting for step 3 is not caution. A Platinum letter cannot be written properly until you know
+whether they want a certificate and where it should be posted, so sending first would mean thanking
+somebody with the wrong letter. But silence is not a reason to say nothing either, so after a
+**fortnight** the standard letter goes anyway.
+
+`src/business/auto-thank-you.ts` is pure and holds every decision; `auto-thank-you-runner.ts` wires
+the pool, the mail client and the clock. It rides the **existing daily EventBridge task**
+(`npm run reminders`) beside the supporter reminders, the ball run-up and the email-log prune — one
+more read on a schedule that already exists, in its own try/catch, and **no new infrastructure**.
+
+Three things worth knowing:
+
+- **Gift Aid comes from the donation, never from the kind of supporter.** A company cannot Gift Aid
+  at all (it claims Corporation Tax relief instead), but a sole trader giving personally can, and
+  the 25% line on the wrong letter tells somebody something untrue about their own tax.
+- **The letter is signed by the charity, not by a volunteer.** Nobody read this one before it went,
+  and putting a person's name on a letter they never saw would be the one thing in it that was not
+  true.
+- **One letter per donor, ever.** The due-list `LEFT JOIN`s `thank_you_sent`, so a supporter thanked
+  by hand from the Thank you screen is never then thanked again by a machine. The row is written
+  only *after* the send succeeds, and `sent_by` records `automatic` rather than attributing it to
+  whoever happened to be signed in.
+
 ### Business supporters is its own permission (TASK-406)
 
 The **Business supporters** tab — what each supporter asked to be thanked with, and ticking each

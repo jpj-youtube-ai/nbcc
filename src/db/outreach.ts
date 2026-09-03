@@ -141,8 +141,7 @@ export async function createOutreach(input: OutreachCreate): Promise<OutreachRow
     `INSERT INTO business_outreach
        (business_name, contact_name, contact_email, contact_phone, business_type, note, owner,
         details_source, consent_basis, consent_basis_recorded_by, consent_basis_recorded_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-             CASE WHEN $9 IS NULL THEN NULL ELSE now() END)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING ${ROW_COLUMNS}`,
     [
       input.businessName,
@@ -154,7 +153,10 @@ export async function createOutreach(input: OutreachCreate): Promise<OutreachRow
       input.owner,
       input.detailsSource,
       input.consentBasis,
+      // Stamped together, or not at all: a basis with nobody's name against it cannot be asked
+      // about later, and a name with no basis says nothing.
       input.consentBasis ? input.recordedBy : null,
+      input.consentBasis ? new Date() : null,
     ],
   );
   return toRow(res.rows[0]);

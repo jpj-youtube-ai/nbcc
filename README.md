@@ -2266,6 +2266,21 @@ such record and must not be given a fabricated one.
 Photography needed no change — the terms already covered filming, use in NBCC and Designer
 Rooms publicity, signage on the night, and telling a volunteer at the welcome desk.
 
+**The age rule is now in that same tick box**, for the same reason the non-refundable term is.
+"Over 18s only" sat in the facts list several screens above the card fields, which is not where
+somebody entering a card is looking, and being turned away at the door with no refund is exactly
+the kind of term the Act expects to be put in front of a buyer rather than left to be found. The
+label and `/ball/terms` both now say that anyone who cannot show they are 18 or over will not be
+admitted and no refund is given — **paired in the same breath with the way out**, which is that
+tickets are transferable and NBCC will move the place to another guest at no charge if told
+before the night. A refusal with no remedy is what makes a term unfair; a refusal with a free
+transfer beside it is not.
+
+**The fee box asks buyers to "help cover" the card fee**, not to cover it. The figure is grossed
+up against Stripe's 1.2% + 20p charity rate, and Amex is 2.9%, so on an Amex the charity is
+still fractionally short. The fee has to be quoted before anyone knows which card is coming, so
+"cover" is a promise the page cannot keep on every payment and "help cover" is one it can.
+
 **The footer signup now asks for a first name and a surname**, the last single-name field on
 the site. `name` is derived from the two, so the stored row, the welcome email and the admin
 list all keep reading one field. (Storing the halves, for "Hi Jo" personalisation, is a natural
@@ -2711,6 +2726,15 @@ Two rules follow from when the page is seen. It is **not behind the launch gate*
 has just paid must see confirmation whatever the public page is doing. And it **never reads as a
 failure**: Stripe only redirects here on success, so an unknown session id (the webhook can lag
 the redirect by a second) still renders "your payment went through", not an error.
+
+A third follows from the same rule and was missed. Both branches used to end on the idea of
+paying twice: "check your junk folder **before booking again**", and "email us **before trying
+again**". That is the last suggestion to put in front of somebody who has just been charged and
+cannot find the receipt, and it invites exactly the double booking the sentence was trying to
+prevent. Both now give the two steps in order and name the inbox that will fix it: check junk,
+then email `events@nbcc.scot` and we'll sort it out. The no-booking branch also states plainly
+that the payment went through and the place is held, since that is the reassurance actually
+being asked for.
 
 ### Guest details
 

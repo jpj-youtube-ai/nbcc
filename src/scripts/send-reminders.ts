@@ -58,6 +58,20 @@ if (require.main === module) {
       } catch (err) {
         console.error("ball run-up failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-407: the automatic thank-you letter. A business that has signed up and told us how
+      // it would like to be thanked gets its letter without anybody having to remember, and one
+      // that never answered gets the standard letter after a fortnight rather than nothing at
+      // all. Rides this task for the same reason as the two passes above, and in its own
+      // try/catch so a failure here cannot stop the retention prune below.
+      try {
+        const { runAutoThankYou } = await import("../business/auto-thank-you-runner");
+        const thanks = await runAutoThankYou();
+        console.error(
+          `automatic thank-you letters: due=${thanks.due} sent=${thanks.sent} failed=${thanks.failed}`,
+        );
+      } catch (err) {
+        console.error("automatic thank-you failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

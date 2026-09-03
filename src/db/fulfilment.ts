@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
+import type { SupporterAwaitingThanks } from "../business/auto-thank-you";
 import { writeWithAudit } from "./donations";
 import type { SupporterBand } from "../donors/fulfilment";
 
@@ -647,6 +648,92 @@ export interface SupporterDueForReminder {
 // clock is passed in (not now()), so the pass is deterministic and unit-testable. Read-only
 // (pool.query, bounded by a defensive LIMIT). The greeting name is resolved in JS (business_name,
 // trimmed, falling back to full_name) to match the invite / thank-you-page fallback exactly.
+/**
+ * Business supporters awaiting an automatic thank-you letter (TASK-407).
+ *
+ * Due when they have SAID how they would like to be thanked, or when a fortnight has passed since
+ * the invite and they never did. The final say on both is the pure rule in
+ * src/business/auto-thank-you.ts; this query only narrows the rows worth asking about.
+ *
+ * The dedupe is the LEFT JOIN to thank_you_sent: one letter per donor, whether it went
+ * automatically or a volunteer sent it by hand from the Thank you screen. A supporter thanked in
+ * person must not then be thanked again by a machine.
+ *
+ * The monthly amount comes from a PAID donation. A checkout that was started and never finished
+ * is not a reason to thank anybody.
+ */
+export async function listSupportersDueForThankYou(now: Date): Promise<SupporterAwaitingThanks[]> {
+  const res = await pool.query(
+    `SELECT f.id, f.donor_id, f.band, f.invited_at, f.captured_at,
+            COALESCE(NULLIF(f.credit_name, ''), dn.business_name, dn.full_name) AS credit_name,
+            dn.full_name, dn.email,
+            d.amount_pence, d.gift_aid
+       FROM business_supporter_fulfilment f
+       JOIN donors dn ON dn.id = f.donor_id
+       JOIN LATERAL (
+              SELECT amount_pence, gift_aid
+                FROM donations
+               WHERE donor_id = dn.id AND mode = 'monthly' AND payment_status = 'paid'
+               ORDER BY created_at DESC
+               LIMIT 1
+            ) d ON true
+       LEFT JOIN thank_you_sent t ON t.donor_id = dn.id
+      WHERE t.id IS NULL
+        AND dn.email IS NOT NULL
+        AND dn.email <> ''
+        AND (
+              f.captured_at IS NOT NULL
+           OR (f.invited_at IS NOT NULL AND f.invited_at <= $1::timestamptz - interval '14 days')
+        )
+      ORDER BY f.id ASC
+      LIMIT ${REMINDER_DUE_LIST_LIMIT}`,
+    [now],
+  );
+  return res.rows.map((r) => ({
+    fulfilmentId: r.id as number,
+    donorId: r.donor_id as number,
+    creditName: (r.credit_name as string) ?? "our supporter",
+    contactName: (r.full_name as string) ?? null,
+    email: (r.email as string) ?? null,
+    band: (r.band as string) ?? "bronze",
+    monthlyPence: r.amount_pence as number,
+    giftAided: Boolean(r.gift_aid),
+    invitedAt: r.invited_at ? new Date(r.invited_at as string) : null,
+    capturedAt: r.captured_at ? new Date(r.captured_at as string) : null,
+  }));
+}
+
+/** Record the letter, so tomorrow's pass leaves this supporter alone. */
+export async function recordAutoThankYou(
+  donorId: number,
+  view: {
+    thankYouName: string;
+    addressedTo: string;
+    giftAmountPence: number | null;
+    giftAided: boolean;
+    signedByName: string;
+  },
+  email: string,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO thank_you_sent
+       (donor_id, thank_you_name, addressed_to, recipient_email, gift_type, gift_amount_pence,
+        gift_aided, signed_by_name, sent_by)
+     VALUES ($1, $2, $3, $4, 'money', $5, $6, $7, 'automatic')`,
+    [
+      donorId,
+      view.thankYouName,
+      view.addressedTo,
+      email,
+      view.giftAmountPence,
+      view.giftAided,
+      view.signedByName,
+      // sent_by is "who pressed send". Nobody did, and saying so is more useful in the Sent
+      // history than attributing it to whoever happens to be signed in.
+    ],
+  );
+}
+
 export async function listSupportersDueForReminder(now: Date): Promise<SupporterDueForReminder[]> {
   const res = await pool.query<{
     id: number;

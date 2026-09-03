@@ -119,7 +119,13 @@ describe("buildBallConfirmationEmail", () => {
       { ...seatBooking, buyerName: 'Jo <img src=x onerror="alert(1)">' },
       noArrival,
     );
-    expect(mail.html).not.toContain("<img");
+    // Asserts on the INJECTION, not on the string "<img" anywhere in the document. The branded
+    // shell carries two legitimate images of its own now (the NBCC letterhead and the sponsor
+    // wordmark), so a blanket ban on the tag would fail on the design rather than on a hole.
+    expect(mail.html).not.toContain("<img src=x");
+    // The escaped text still reads "onerror=&quot;", which is the SAFE outcome. What must not
+    // appear is the live attribute, quote and all.
+    expect(mail.html).not.toContain('onerror="');
     expect(mail.html).toContain("&lt;img");
   });
 

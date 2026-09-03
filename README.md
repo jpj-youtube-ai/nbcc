@@ -3057,6 +3057,27 @@ event actually moved to `paid` is confirmed, so a Stripe redelivery cannot send 
 receipt. A failed send is logged, never thrown: the booking is already paid and a 5xx would make
 Stripe redeliver.
 
+**The five ball emails share the NBCC shell and the sponsor band.** The confirmation, the
+week-to-go reminder and the three run-up emails (guest-list read-back, chase, last call) all
+render through `ballEmailShell` (`src/ball/email-shell.ts`), which wraps `emailShell` from
+`src/email/brand.ts` with the ball's own settings: `events@nbcc.scot` in the footer bar rather
+than the giving inbox, the registered postal address (its absence is a small but real spam
+signal at Microsoft, and these were the emails landing in junk), and a maroon **sponsor band**
+carrying The Designer Rooms cream wordmark above the Appendix A2 statement, which clause 11.1
+requires wherever the event is promoted. `contactPanel()` puts the phone number and the events
+address in the body as well, at reading size, rather than leaving them as grey small print.
+
+Three copy rules the emails now hold, each pinned by `test/unit/ball-email-brand.test.ts`:
+
+- The confirmation subject is **"You're coming to the ball!"** followed by the reference, not a
+  filing label.
+- What the ticket includes is imported from `TICKET_INCLUDES` (`src/ball/page.ts`), the same
+  sentence the website sells on, so the email cannot promise less than the page did. It used to
+  say "a meal" while the page said a three-course meal and a welcome drink.
+- Gift Aid is mentioned **only when Gift Aid was actually added**. A paragraph about a relief the
+  buyer did not claim and cannot claim on a ticket is the form-letter note that made the old
+  email read like a bank statement.
+
 **Home page.** `renderHomePromo` adds a banner above the hero, a feature section below it, and a
 nav link — but ONLY once the gate is open. While it is shut it returns index.html byte for byte,
 so the promotion is absent from the page source rather than hidden. This matters because the
@@ -3328,7 +3349,17 @@ letter email (`src/thank-you/letter.ts`): a maroon page, a cream content panel, 
 letterhead (hosted absolute URL, not base64), and a maroon footer bar carrying `01292 811 015` /
 `giving@nbcc.scot` / `nbcc.scot`. It stays email-safe (layout tables + inline styles + web-safe
 Georgia/Playfair and Arial/Poppins stacks) and carries a `color-scheme: light` meta so dark-mode
-clients don't invert the palette. The `kind` -> subject map:
+clients don't invert the palette.
+
+The shell itself now lives in **`src/email/brand.ts`** — the palette, the type stacks, the
+letterhead, the footer bar and the body fragments (`heading`, `bodyP`, `note`, `button`,
+`codeBox`), all pure. `src/email/templates.ts` renders through it byte for byte. It was extracted
+because there were two copies: the Festive Ball emails had been written before the shell existed
+and carried their own, which had drifted to system-ui type, a bare cream box, no letterhead and
+no footer bar, so a supporter who donated and then bought a ball ticket got two emails that did
+not look related. `emailShell(body, options)` takes a `contactEmail` (the ball uses
+`events@nbcc.scot`, not the giving inbox), an optional `postalAddress`, and an optional `sponsor`
+band for an event somebody else is paying for. The `kind` -> subject map:
 
 | `kind` | subject | body |
 |---|---|---|

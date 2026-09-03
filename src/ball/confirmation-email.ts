@@ -1,6 +1,7 @@
 import type { BallBookingWrite } from "./booking";
-import { escapeHtml, lineUpSentence } from "./page";
-import { FOOTER_HTML, FOOTER_TEXT } from "../legal/registration";
+import { escapeHtml, lineUpSentence, TICKET_INCLUDES } from "./page";
+import { ballEmailShell, contactPanel, factsCard, BALL_TEXT_FOOTER } from "./email-shell";
+import { MAROON, SLATE, SLATE_SOFT, TAN_SOFT, HEAD, BODY_FONT, CRIMSON } from "../email/brand";
 
 // TASK-313: the booking confirmation for a Festive Ball ticket. Pure — no pool, no config, no
 // network, no clock — so it is unit-tested DB-free, mirroring src/business/invite-email.ts.
@@ -10,6 +11,19 @@ import { FOOTER_HTML, FOOTER_TEXT } from "../legal/registration";
 // until November, so it carries the reference, the money broken down, and every practical
 // detail we actually know — and says plainly where we do not know yet, rather than leaving a
 // gap they have to email us about.
+//
+// It is also the first thing they receive after choosing to spend that money on a charity, so
+// it opens by telling them they are coming to a party rather than filing a receipt at them.
+// Three changes make that true, and each was asked for:
+//
+//  * The subject says "You're coming to the ball" and keeps the reference after it. The old one
+//    ("Your Festive Ball booking, BALL-K7M2PQ") read like a filing label.
+//  * It promises what the WEBSITE promises, by importing the website's own sentence. The page
+//    said a three-course meal and a welcome drink; this email said "a meal", and the buyer had
+//    no way to know which was right.
+//  * It says nothing about Gift Aid unless Gift Aid was actually added. A paragraph explaining
+//    a tax relief they did not claim and cannot claim on a ticket is exactly the form-letter
+//    note that made the old email feel like a bank statement.
 
 export interface BallEventDetails {
   arrivalTime: string | null;
@@ -43,6 +57,10 @@ function describe(booking: Pick<BallBookingWrite, "kind" | "quantity" | "seats">
   return booking.quantity === 1 ? "1 ticket" : `${booking.quantity} tickets`;
 }
 
+const P = `style="color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6;margin:0 0 12px"`;
+const H2 = `style="color:${MAROON};font-family:${HEAD};font-size:18px;font-weight:700;margin:26px 0 10px"`;
+const LINK = `style="color:${CRIMSON};font-weight:700"`;
+
 export function buildBallConfirmationEmail(
   booking: BallBookingWrite,
   details: BallEventDetails,
@@ -52,9 +70,16 @@ export function buildBallConfirmationEmail(
   const arrival = details.arrivalTime
     ? escapeHtml(details.arrivalTime)
     : "From 7pm, to be confirmed. We'll email you";
-  const included = details.includedNote
-    ? ` ${escapeHtml(details.includedNote)}`
-    : " The menu and the running order are still being finalised with the venue; we'll email you as soon as they're confirmed.";
+
+  // The one sentence, imported rather than retyped, so the email cannot promise less than the
+  // page that sold the ticket. Any menu note staff have added is APPENDED to it, never swapped
+  // in, exactly as renderBallPage does it.
+  const includes = details.includedNote
+    ? `${TICKET_INCLUDES} ${escapeHtml(details.includedNote)}`
+    : `${TICKET_INCLUDES} The menu and the running order are still being finalised with the venue; we'll email you as soon as they're confirmed.`;
+  const includesText = details.includedNote
+    ? `${TICKET_INCLUDES} ${details.includedNote}`
+    : `${TICKET_INCLUDES} The menu and the running order are still being finalised with the venue; we'll email you as soon as they're confirmed.`;
 
   // Only show a money line that exists. A "Donation: £0.00" row is noise on a receipt.
   const rows: Array<[string, string]> = [["Tickets", money(booking.ticketsPence)]];
@@ -65,95 +90,92 @@ export function buildBallConfirmationEmail(
   const rowsHtml = rows
     .map(([label, value], i) => {
       const last = i === rows.length - 1;
-      const weight = last ? "font-weight:600;" : "";
-      const border = last ? "border-top:1px solid #E9DFD2;" : "";
+      const weight = last ? "font-weight:700;" : "";
+      const border = last ? `border-top:1px solid ${TAN_SOFT};` : "";
       return (
-        `<tr><td style="padding:8px 0;${border}${weight}color:#333333;">${label}</td>` +
-        `<td style="padding:8px 0;${border}${weight}color:#333333;text-align:right;">${value}</td></tr>`
+        `<tr><td style="padding:8px 0;${border}${weight}color:${SLATE};font-family:${BODY_FONT};font-size:14px;">${label}</td>` +
+        `<td style="padding:8px 0;${border}${weight}color:${SLATE};font-family:${BODY_FONT};font-size:14px;text-align:right;">${value}</td></tr>`
       );
     })
     .join("");
 
+  // Only when they actually added it. HMRC does not allow Gift Aid on the ticket itself (the
+  // buyer receives a dinner and a show in return), so the thank-you carries that limit with it
+  // rather than leaving a donor to wonder why their ticket is not being claimed on.
   const giftAidHtml = booking.giftAid
-    ? `<p style="margin:0 0 16px;color:#333333;">Thank you for adding Gift Aid to your donation. It lets us claim an extra 25p for every pound, at no cost to you. Gift Aid can't be claimed on ticket sales, because you receive a meal and entertainment in return.</p>`
-    : `<p style="margin:0 0 16px;color:#6F6A66;font-size:14px;">Gift Aid can't be claimed on ticket sales, because you receive a meal and entertainment in return. It can be claimed on a donation, if you'd like to add one.</p>`;
+    ? `<p ${P}>Thank you for adding Gift Aid to your donation. It lets us claim an extra 25p for every pound, at no cost to you. Gift Aid can't be claimed on ticket sales, because you receive a meal and entertainment in return.</p>`
+    : "";
 
-  const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px;background:#F8F5EE;">
-  <p style="margin:0 0 4px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#8A6A26;font-weight:600;">A Night to Remember</p>
-  <h1 style="margin:0 0 18px;font-family:Georgia,serif;font-size:24px;font-weight:600;color:#800000;">You're coming to the Festive Ball</h1>
+  const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">A night to remember</p>
+  <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">You're coming to the ball!</h1>
 
-  <p style="margin:0 0 16px;color:#333333;">Thank you, ${name}. Your booking is confirmed.</p>
+  <p ${P}>Thank you, ${name}. Your booking is confirmed, and we're delighted you're joining us on Saturday 7th November.</p>
 
-  <table role="presentation" style="width:100%;border-collapse:collapse;background:#FFFDFA;border:1px solid #E9DFD2;border-radius:8px;padding:16px;margin:0 0 20px;">
-    <tr><td style="padding:12px 16px 4px;color:#6F6A66;font-size:13px;">Booking reference</td></tr>
-    <tr><td style="padding:0 16px 12px;font-size:20px;font-weight:600;color:#800000;letter-spacing:.04em;">${booking.reference}</td></tr>
-    <tr><td style="padding:0 16px 12px;color:#333333;">You have booked <b>${what}</b>.</td></tr>
-  </table>
+  ${factsCard(
+    `<tr><td style="padding:14px 18px 4px;color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;">Booking reference</td></tr>
+    <tr><td style="padding:0 18px 12px;font-family:${HEAD};font-size:22px;font-weight:800;color:${MAROON};letter-spacing:.04em;">${escapeHtml(booking.reference)}</td></tr>
+    <tr><td style="padding:0 18px 16px;color:${SLATE};font-family:${BODY_FONT};font-size:14px;">You have booked <b>${what}</b>.</td></tr>`,
+  )}
 
-  <table role="presentation" style="width:100%;border-collapse:collapse;margin:0 0 20px;">${rowsHtml}</table>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 4px;">${rowsHtml}</table>
 
   ${giftAidHtml}
 
-  <h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">The night</h2>
-  <p style="margin:0 0 6px;color:#333333;"><b>Saturday 7th November 2026</b><br />The Park Hotel, Rugby Park, Kilmarnock</p>
-  <p style="margin:0 0 6px;color:#333333;">${arrival}</p>
-  <p style="margin:0 0 6px;color:#333333;">Dress to impress. This is an over 18s event.</p>
-  <p style="margin:0 0 6px;color:#333333;">Your ticket includes entry, a meal and the evening's entertainment.${included}</p>
-  <p style="margin:0 0 6px;color:#333333;"><b>Entertainment:</b> ${lineUpSentence()}</p>
+  <h2 ${H2}>The night</h2>
+  <p ${P}><b>Saturday 7th November 2026</b><br />The Park Hotel, Rugby Park, Kilmarnock</p>
+  <p ${P}>${arrival}</p>
+  <p ${P}>${includes}</p>
+  <p ${P}><b>Entertainment:</b> ${lineUpSentence()}</p>
+  <p ${P}>Dress to impress. This is an over 18s event.</p>
   ${details.calendarUrl
-    ? `<p style="margin:0 0 16px;"><a href="${escapeHtml(details.calendarUrl)}" style="color:#800000;font-weight:600;">Add it to your calendar</a></p>`
+    ? `<p ${P}><a href="${escapeHtml(details.calendarUrl)}" ${LINK}>Add it to your calendar</a></p>`
     : ""}
 
   ${details.guestLink
-    ? `<h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">Tell us about your table</h2>
-  <p style="margin:0 0 8px;color:#333333;">Let us know who's coming and anything they can't eat, so the venue can look after everyone properly. You can save what you know and come back to it.</p>
-  <p style="margin:0 0 16px;"><a href="${escapeHtml(details.guestLink)}" style="color:#800000;font-weight:600;">Add your guests</a></p>`
-    : `<p style="margin:0 0 16px;color:#333333;">Nearer the time we'll ask for your guests' names and any dietary or access requirements, so the venue can look after everyone properly.</p>`}
+    ? `<h2 ${H2}>Next: tell us who's coming</h2>
+  <p ${P}>Let us know who's coming and anything they can't eat, so the venue can look after everyone properly. You can save what you know and come back to it.</p>
+  <p ${P}><a href="${escapeHtml(details.guestLink)}" ${LINK}>Add your guests</a></p>`
+    : `<h2 ${H2}>Next: tell us who's coming</h2>
+  <p ${P}>Nearer the time we'll ask for your guests' names and any dietary or access requirements, so the venue can look after everyone properly.</p>`}
 
-  <h2 style="margin:24px 0 10px;font-family:Georgia,serif;font-size:18px;color:#800000;">If your plans change</h2>
-  <p style="margin:0 0 16px;color:#333333;">Tickets are non-refundable, but they are transferable. Just tell us the new guest's name and we'll update the door list. If the event is cancelled and not rescheduled, you'll be refunded in full.</p>
+  <h2 ${H2}>If your plans change</h2>
+  <p ${P}>Tickets are non-refundable, but they are transferable. Just tell us the new guest's name and we'll update the door list. If the event is cancelled and not rescheduled, you'll be refunded in full.</p>
 
-  <p style="margin:0 0 20px;color:#333333;">Any questions, just reply to this email or call 01292 811 015, Monday to Friday.</p>
-
-  <!-- Appendix A2, verbatim. Clause 11.1 requires it wherever the event is promoted and at the
-       point tickets are bought; this email is the buyer's record of the purchase. -->
-  <p style="margin:0 0 8px;color:#333333;font-size:14px;">Organised and sponsored by The Designer Rooms in aid of NBCC. The Designer Rooms is covering the full cost of the evening, so all proceeds from ticket sales are donated to the charity. The Designer Rooms receives no payment for organising this event.</p>
-  <p style="margin:0 0 20px;color:#6F6A66;font-size:14px;">We are proud to have The Designer Rooms behind this evening. They have organised it and are paying for every part of it, which is why your ticket funds NBCC's work rather than the party. We are enormously grateful to them.</p>
-
-  <div style="margin-top:24px;padding-top:16px;border-top:1px solid #E9DFD2;color:#6F6A66;font-size:12px;line-height:1.6;">
-    ${FOOTER_HTML}
-  </div>
-</div>`;
+  ${contactPanel()}`;
 
   const moneyText = rows.map(([label, value]) => `${label}: ${value}`).join("\n");
-  const text = `A NIGHT TO REMEMBER: FESTIVE BALL 2026
+  const giftAidText = booking.giftAid
+    ? `\nThank you for adding Gift Aid to your donation. It lets us claim an extra 25p
+for every pound, at no cost to you. Gift Aid can't be claimed on ticket sales,
+because you receive a meal and entertainment in return.\n`
+    : "";
 
-Thank you, ${booking.buyerName}. Your booking is confirmed.
+  const text = `YOU'RE COMING TO THE BALL
+
+Thank you, ${booking.buyerName}. Your booking is confirmed, and we're delighted
+you're joining us on Saturday 7th November.
 
 Booking reference: ${booking.reference}
 You have booked ${what}.
 
 ${moneyText}
-
+${giftAidText}
 THE NIGHT
 Saturday 7th November 2026
 The Park Hotel, Rugby Park, Kilmarnock
 ${details.arrivalTime ?? "From 7pm, to be confirmed. We'll email you"}
-Dress to impress. This is an over 18s event.
-Entertainment: ${lineUpSentence()}${details.calendarUrl ? `
+${includesText}
+Entertainment: ${lineUpSentence()}
+Dress to impress. This is an over 18s event.${details.calendarUrl ? `
 Add it to your calendar: ${details.calendarUrl}` : ""}
-Your ticket includes entry, a meal and the evening's entertainment.${
-    details.includedNote
-      ? " " + details.includedNote
-      : " The menu and the running order are still being finalised with the venue; we'll email you as soon as they're confirmed."
-  }
 
 ${details.guestLink
-    ? `TELL US ABOUT YOUR TABLE
+    ? `NEXT: TELL US WHO'S COMING
 Let us know who's coming and anything they can't eat, so the venue
 can look after everyone properly. Save what you know and come back to it:
 ${details.guestLink}`
-    : `Nearer the time we'll ask for your guests' names and any dietary or access
+    : `NEXT: TELL US WHO'S COMING
+Nearer the time we'll ask for your guests' names and any dietary or access
 requirements, so the venue can look after everyone properly.`}
 
 IF YOUR PLANS CHANGE
@@ -161,24 +183,11 @@ Tickets are non-refundable, but they are transferable. Just tell us the new
 guest's name and we'll update the door list. If the event is cancelled and not
 rescheduled, you'll be refunded in full.
 
-Gift Aid cannot be claimed on ticket sales, because you receive a meal and
-entertainment in return. It can be claimed on a donation.
-
-Any questions, just reply to this email or call 01292 811 015, Monday to Friday.
-
-Organised and sponsored by The Designer Rooms in aid of NBCC. The Designer Rooms is
-covering the full cost of the evening, so all proceeds from ticket sales are donated
-to the charity. The Designer Rooms receives no payment for organising this event.
-
-We are proud to have The Designer Rooms behind this evening. They have organised it
-and are paying for every part of it, which is why your ticket funds NBCC's work
-rather than the party. We are enormously grateful to them.
-
-${FOOTER_TEXT}`;
+${BALL_TEXT_FOOTER}`;
 
   return {
-    subject: `Your Festive Ball booking, ${booking.reference}`,
-    html,
+    subject: `You're coming to the ball! Booking ${booking.reference}`,
+    html: ballEmailShell(body),
     text,
   };
 }

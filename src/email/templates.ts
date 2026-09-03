@@ -21,68 +21,20 @@ const gbp = (pence: unknown, currency: unknown): string => {
   }
 };
 
-// Brand palette + font stacks: hex/stack mirrors of the site tokens, inlined because email has
-// no stylesheet. Kept identical to src/thank-you/letter.ts so the whole NBCC email family reads
-// as one design.
-const MAROON = "#800000";
-const CRIMSON = "#C02238";
-const CREAM = "#F8F5EE";
-const SLATE = "#333333";
-const SLATE_SOFT = "#6F6A66";
-const TAN_SOFT = "#F3E4DD";
-const CREAM_82 = "rgba(248,245,238,.82)";
-const HEAD = "'Playfair Display', Georgia, 'Times New Roman', serif";
-const BODY_FONT = "'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
-const LOGO_URL = "https://nbcc.scot/assets/img/nbcc-logo.png";
+// The palette, the type, the letterhead and the fragment helpers now live in ./brand.ts, which
+// is the ONE place they are declared. The Festive Ball emails carried a second, older copy of
+// this shell that had quietly drifted (system-ui type, no letterhead, no footer bar), so a
+// supporter who donated and then bought a ball ticket got two emails that did not look related.
+// Rendering both families through one module is what stops that happening again. This file's
+// output is unchanged by the move, which is what its own tests assert.
+import { emailShell, heading, bodyP, note, button, codeBox, CHARITY_REGISTRATION } from "./brand";
 
-// The charity-registration sentence, mirrored verbatim from the thank-you letter email. Shown in
-// the maroon footer ONLY for template-built kinds; the app-built kinds (donation / receipt /
-// refund) already carry it in their own body, so their footer omits it (contacts only).
-const CHARITY_REGISTRATION =
-  "Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation. Scottish Charity Number SC047995, regulated by OSCR.";
 const TEXT_CONTACTS = "01292 811 015 · giving@nbcc.scot · nbcc.scot";
 
-// The APPROVED branded shell. A full, self-contained HTML document (mail clients need the
-// color-scheme meta so dark mode does not invert the maroon/cream palette). `bodyHtml` drops
-// into the cream panel; `includeRegistration` adds the legal sentence under the contact line in
-// the maroon footer (true for template-built kinds, false for app-built ones).
-const shell = (bodyHtml: string, includeRegistration: boolean): string => `<!doctype html>
-<html lang="en-GB">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- color-scheme: light keeps the maroon/cream palette in dark-mode mail clients (no auto-invert). -->
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-<style>:root { color-scheme: light; supported-color-schemes: light; }</style>
-</head>
-<body style="margin:0;background:${MAROON};padding:24px 0;font-family:${BODY_FONT}">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:660px;margin:0 auto;background:${CREAM}">
-    <tr><td style="padding:30px 40px 16px;text-align:center;border-bottom:1px solid ${TAN_SOFT}">
-      <img src="${LOGO_URL}" alt="Night Before Christmas Campaign" width="150" style="display:inline-block;height:auto;max-width:150px" />
-      <div style="font-family:${BODY_FONT};font-weight:800;text-transform:uppercase;letter-spacing:.18em;color:${MAROON};font-size:13px;margin-top:2px">Here all year</div>
-    </td></tr>
-    <tr><td style="padding:24px 40px 28px;color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6">${bodyHtml}</td></tr>
-    <tr><td style="background:${MAROON};color:${CREAM};padding:20px 40px;font-family:${BODY_FONT};font-size:14px;text-align:center">
-      <div style="font-weight:700"><a href="tel:+441292811015" style="color:${CREAM};text-decoration:none">01292 811 015</a> &nbsp;·&nbsp; <a href="mailto:giving@nbcc.scot" style="color:${CREAM};text-decoration:underline">giving@nbcc.scot</a> &nbsp;·&nbsp; <a href="https://nbcc.scot" style="color:${CREAM};text-decoration:underline">nbcc.scot</a></div>${includeRegistration ? `
-      <div style="color:${CREAM_82};font-size:11px;margin-top:8px">${CHARITY_REGISTRATION}</div>` : ""}
-    </td></tr>
-  </table>
-</body>
-</html>`;
-
-// Body-fragment helpers (crimson serif heading, slate body copy, a crimson pill CTA button, a
-// maroon code callout). Colours match the thank-you letter email.
-const heading = (t: string) =>
-  `<h1 style="color:${CRIMSON};font-family:${HEAD};font-size:24px;font-weight:800;margin:0 0 12px;letter-spacing:-.01em">${t}</h1>`;
-const bodyP = (html: string) =>
-  `<p style="color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6;margin:0 0 12px">${html}</p>`;
-const note = (html: string) =>
-  `<p style="color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;line-height:1.55;margin:14px 0 0">${html}</p>`;
-const button = (href: unknown, label: string) =>
-  `<div style="text-align:center;margin:22px 0"><a href="${esc(href)}" style="display:inline-block;background:${CRIMSON};color:${CREAM};text-decoration:none;font-family:${BODY_FONT};font-weight:700;font-size:15px;padding:12px 26px;border-radius:999px">${esc(label)}</a></div>`;
-const codeBox = (code: unknown) =>
-  `<div style="text-align:center;margin:22px 0"><div style="display:inline-block;background:${TAN_SOFT};border-radius:10px;padding:14px 28px;font-family:${HEAD};font-size:32px;font-weight:800;letter-spacing:8px;color:${MAROON}">${esc(code)}</div></div>`;
+// `includeRegistration` adds the legal sentence under the contact line in the maroon footer
+// (true for template-built kinds, false for app-built ones, which carry it in their own body).
+const shell = (bodyHtml: string, includeRegistration: boolean): string =>
+  emailShell(bodyHtml, { registration: includeRegistration });
 
 export interface BuiltEmail {
   subject: string;

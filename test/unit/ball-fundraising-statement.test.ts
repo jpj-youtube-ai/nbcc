@@ -7,6 +7,8 @@ import {
   CHARITY_STATEMENT,
   CHARITY_STATEMENT_HTML,
 } from "../../src/ball/fundraising-statement";
+import { buildBallConfirmationEmail } from "../../src/ball/confirmation-email";
+import { buildBallReminderEmail } from "../../src/ball/reminder-email";
 
 // TASK-347: Appendix A of the fundraising agreement requires this wording VERBATIM. These are not
 // style assertions - they are the text of a signed agreement, and a reworded version is a breach
@@ -18,6 +20,26 @@ const read = (f: string) => readFileSync(resolve(ROOT, f), "utf8");
 // Collapsed, because the same sentence is wrapped differently in HTML, in a plain-text email and
 // in a TypeScript string. Comparing raw would fail on a line break rather than on the wording.
 const flat = (s: string) => s.replace(/\s+/g, " ");
+
+// One paid table, enough to render either email in full.
+const sampleBooking = {
+  reference: "BALL-K7M2PQ",
+  kind: "table" as const,
+  quantity: 1,
+  seats: 10,
+  buyerName: "Jo Smith",
+  buyerFirstName: "Jo",
+  buyerEmail: "jo@example.com",
+  ticketsPence: 100_000,
+  donationPence: 0,
+  feeCoverPence: 0,
+  totalPence: 100_000,
+  giftAid: false,
+  newsletterOptIn: false,
+  tableName: null,
+  stripeSessionId: "cs_1",
+};
+const sampleDetails = { arrivalTime: null, includedNote: null, guestLink: null };
 
 describe("Appendix A2 is quoted exactly", () => {
   // The three parts clause 11.1 makes mandatory.
@@ -53,10 +75,18 @@ describe("Appendix A1 links the charity number online", () => {
 describe("the statement reaches every surface the agreement names", () => {
   // Clause 11.1: "All promotional material for the event, AND the point at which tickets are
   // bought". So the page, the terms, the confirmation email and the thank-you page.
+  // The emails are checked as they are RENDERED, not as they are written. The statement used to
+  // be typed into confirmation-email.ts and is now composed into the shared sponsor band that
+  // every ball email carries (src/ball/email-shell.ts), so reading that one source file proves
+  // nothing either way. Rendering is also the stronger assertion: it fails if the band is
+  // dropped from the shell, which grepping a source file would not catch.
+  const confirmation = buildBallConfirmationEmail(sampleBooking, sampleDetails);
   const surfaces: Array<[string, string]> = [
     ["the ball page", read("ball.html")],
     ["the ticket terms", read("ball-terms.html")],
-    ["the confirmation email", read("src/ball/confirmation-email.ts")],
+    ["the confirmation email (html)", confirmation.html],
+    ["the confirmation email (text)", confirmation.text],
+    ["the reminder email (html)", buildBallReminderEmail(sampleBooking, [], sampleDetails).html],
     ["the thank-you page", read("src/ball/thank-you-page.ts")],
     ["the home page promotion", read("src/ball/home-promo.ts")],
   ];

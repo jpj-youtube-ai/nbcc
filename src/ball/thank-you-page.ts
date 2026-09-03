@@ -45,15 +45,16 @@ export function renderBallThankYou(booking: ThankYouBooking | null): string {
         <div><dt>You booked</dt><dd><b>${describe(booking)}</b><span>Saturday 7<sup class="ord">th</sup> November 2026</span></dd></div>
         <div><dt>Paid</dt><dd><b>${money(booking.totalPence)}</b><span>Receipt on its way</span></dd></div>
       </dl>
-      <p>We've emailed your confirmation to <b>${escapeHtml(booking.buyerEmail)}</b>. If it hasn't
-      arrived in a few minutes, check your junk folder before booking again, and email us
-      either way, so we can make sure it reaches you.</p>`
+      <p>We've emailed your confirmation to <b>${escapeHtml(booking.buyerEmail)}</b>. It should
+      arrive within a few minutes. If it hasn't, please check your junk folder, and if it isn't
+      there either, email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> and we'll sort
+      it out for you.</p>`
     : // The webhook can lag the redirect by a second or two. Say the true thing rather than
       // inventing detail we cannot see yet.
-      `<p>Your payment went through. Your confirmation email is on its way and will carry your
-      booking reference. If it hasn't arrived within ten minutes, email
-      <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> before trying again. We'll
-      find your booking.</p>`;
+      `<p>Your payment went through and your place is held. Your confirmation email is on its way
+      and will carry your booking reference. If it hasn't arrived within ten minutes, please
+      check your junk folder, and if it isn't there either, email
+      <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> and we'll sort it out for you.</p>`;
 
   const guestPrompt =
     booking && booking.guestToken

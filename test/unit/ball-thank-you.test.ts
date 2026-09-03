@@ -39,8 +39,17 @@ describe("renderBallThankYou", () => {
   });
 
   it("tells them what to do if the email does not arrive, rather than book again", () => {
-    expect(renderBallThankYou(null)).toMatch(/before trying again/i);
-    expect(renderBallThankYou(booking)).toMatch(/check your junk folder before booking again/i);
+    // The intent is unchanged and the wording is not. Both sentences used to end on the idea of
+    // paying twice ("before booking again", "before trying again"), which is the last thing to
+    // put in front of somebody who has just paid and cannot find the receipt. They now give the
+    // two steps in order and name the inbox that will fix it. Collapsed, because the copy wraps.
+    const flat = (s: string) => s.replace(/\s+/g, " ");
+    for (const html of [flat(renderBallThankYou(null)), flat(renderBallThankYou(booking))]) {
+      expect(html).toMatch(/check your junk folder/i);
+      expect(html).toMatch(/events@nbcc\.scot/);
+      expect(html).toMatch(/we'll sort it out/i);
+      expect(html).not.toMatch(/again/i);
+    }
   });
 
   it("is hidden from search engines", () => {

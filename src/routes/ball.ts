@@ -12,7 +12,7 @@ import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
 import { buildBallCalendar } from "../ball/calendar";
 import { buildGuestSummaryEmail } from "../ball/run-up-email";
-import { parseMenu, choosableCourses, formatChoice, type MenuCourse } from "../ball/menu";
+import { parseMenu } from "../ball/menu";
 import { sendBallRunUp } from "../clients/email";
 import { markRunUpSent } from "../db/ball";
 import {
@@ -34,7 +34,7 @@ import {
 } from "../ball/gate";
 import { renderBallPage } from "../ball/page";
 import { renderBallLockPage } from "../ball/lock-page";
-import { guestSubmissionSchema, makeGuestToken } from "../ball/guests";
+import { guestSubmissionSchema, makeGuestToken, guestsFromForm } from "../ball/guests";
 import { renderGuestNotFound, renderGuestPage } from "../ball/guest-page";
 import { renderBallThankYou } from "../ball/thank-you-page";
 import { getBookingByGuestToken, getBookingBySessionId, joinWaitingList, saveGuests } from "../db/ball";
@@ -355,46 +355,11 @@ ballRouter.get("/ball/terms", async (req, res, next) => {
 // NOT gated behind the launch gate: someone who has paid must be able to complete their table
 // whatever the public page is doing.
 
-// The form posts flat fields (fullName1, dietary1, …) because it is a plain HTML form with no
-// JavaScript to build a nested body. Fold them back into the shape the schema expects, dropping
-// any row the booker left entirely blank — a half-filled table is the expected case, not an error.
-// TASK-345: the menu selects, read back per guest.
-//
-// Keyed off the MENU rather than the form, so a select somebody added by hand cannot introduce a
-// course the venue never offered, and a course dropped from the menu stops being collected the
-// moment staff edit it.
-function menuChoiceFromForm(
-  body: Record<string, unknown>,
-  n: number,
-  menu: MenuCourse[],
-): string | null {
-  const asked = choosableCourses(menu);
-  if (asked.length === 0) return null;
-  const pairs: Array<[string, string]> = asked.map((course, c) => {
-    const raw = body[`menu${n}_${c}`];
-    const value = typeof raw === "string" ? raw : "";
-    // Only an option the menu actually offers. Anything else is discarded rather than stored,
-    // so the kitchen never receives a dish nobody is cooking.
-    return [course.name, course.options.includes(value) ? value : ""];
-  });
-  const formatted = formatChoice(pairs);
-  return formatted.length > 0 ? formatted : null;
-}
-
-function guestsFromForm(body: Record<string, unknown>, seats: number, menu: MenuCourse[]) {
-  const rows = [];
-  for (let n = 1; n <= seats; n += 1) {
-    const fullName = typeof body[`fullName${n}`] === "string" ? String(body[`fullName${n}`]).trim() : "";
-    if (!fullName) continue;
-    rows.push({
-      fullName,
-      dietary: typeof body[`dietary${n}`] === "string" ? String(body[`dietary${n}`]) : "",
-      menuChoice: menuChoiceFromForm(body, n, menu),
-      accessNeeds: typeof body[`accessNeeds${n}`] === "string" ? String(body[`accessNeeds${n}`]) : "",
-    });
-  }
-  return rows;
-}
+// The form posts flat fields (firstName1, surname1, dietary1, …) because it is a plain HTML form
+// with no JavaScript to build a nested body. Folding them back into the shape the schema expects
+// now lives in src/ball/guests.ts alongside the schema itself: it is pure string work, and it
+// was the one part of this flow that could not be unit-tested without standing up config, a pool
+// and an HTTP server.
 
 ballRouter.get("/ball/guests/:token", async (req, res, next) => {
   try {
@@ -403,13 +368,17 @@ ballRouter.get("/ball/guests/:token", async (req, res, next) => {
       res.status(404).type("html").send(renderGuestNotFound());
       return;
     }
+    const settings = await getSettings();
     res.type("html").send(
       renderGuestPage({
         booking: found.booking,
         guests: found.guests,
         token: req.params.token,
-        menuOptions: (await getSettings()).menuOptions,
+        menuOptions: settings.menuOptions,
         saved: req.query.saved === "1",
+        // TASK-409: NULL until it is agreed with the venue, and the page then says the date is
+        // still to be confirmed rather than implying the form is open until the night.
+        lockAt: settings.guestDetailsLockAt ? new Date(settings.guestDetailsLockAt) : null,
       }),
     );
   } catch (err) {
@@ -484,7 +453,8 @@ ballRouter.post(
             booking: found.booking,
             guests: found.guests,
             token: req.params.token,
-            menuOptions: (await getSettings()).menuOptions,
+            menuOptions: settings.menuOptions,
+            lockAt: settings.guestDetailsLockAt ? new Date(settings.guestDetailsLockAt) : null,
             error:
               "We couldn't save that. Check that every guest you've listed has a name, and that " +
               "the notes aren't too long.",

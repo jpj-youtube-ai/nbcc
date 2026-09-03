@@ -24,13 +24,14 @@ Feature: Festive Ball guest details (TASK-313)
     Given a paid ball booking for 1 table with guest token "guest-tok-2"
     When I save guests "Jo Smith,Pat Brown" on "guest-tok-2"
     Then the guest page status should be 200
-    And the guest page should show "Jo Smith"
+    And the guest page should list the guest "Jo Smith"
+    And the guest page should list the guest "Pat Brown"
     And the guest page should show "2 of 10 added so far."
 
   Scenario: dietary and access notes are kept against the right guest
     Given a paid ball booking for 1 table with guest token "guest-tok-3"
     When I save a guest "Ayesha Khan" with dietary "Coeliac" on "guest-tok-3"
-    Then the guest page should show "Ayesha Khan"
+    Then the guest page should list the guest "Ayesha Khan"
     And the guest page should show "Coeliac"
 
   Scenario: saving again replaces the table rather than doubling it

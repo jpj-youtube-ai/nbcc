@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { choosableCourses, formatChoice, type MenuCourse } from "./menu";
 
 // TASK-313 (plan 5): guest details for the Festive Ball — names for the door list, plus
 // dietary and access needs for the venue. Pure: no pool, no clock, no crypto source (the
@@ -29,6 +30,10 @@ const optionalText = (max: number) =>
 
 export const guestSchema = z.object({
   fullName: z.string().trim().min(1, "every guest needs a name").max(120),
+  // TASK-409: the halves, kept as typed. Optional because rows saved before the split have only
+  // the joined name, and because the API accepts a full name on its own.
+  firstName: optionalText(60),
+  surname: optionalText(60),
   // 500 is deliberate: enough for "coeliac, and no shellfish", far short of somewhere to paste
   // a medical record into a charity's door list.
   dietary: optionalText(500),
@@ -44,6 +49,81 @@ export const guestSubmissionSchema = z.object({
   guests: z.array(guestSchema).min(1, "list at least one guest").max(MAX_GUESTS),
 });
 export type GuestSubmission = z.infer<typeof guestSubmissionSchema>;
+
+// --- folding the posted form back into guests ---------------------------------------------
+//
+// The form posts flat fields (firstName1, surname1, dietary1, …) because it is a plain HTML
+// form with no JavaScript to build a nested body. This lives here rather than in the route so
+// it is unit-testable without standing up config, a pool or an HTTP server.
+
+/** "Jo" + "Smith" -> "Jo Smith". Either half may be missing; both being missing means no guest. */
+export function composeName(firstName: string, surname: string): string {
+  return [firstName.trim(), surname.trim()].filter((p) => p.length > 0).join(" ");
+}
+
+export interface GuestFormRow {
+  firstName: string;
+  surname: string;
+  fullName: string;
+  dietary: string;
+  accessNeeds: string;
+  menuChoice: string | null;
+}
+
+const field = (body: Record<string, unknown>, key: string): string =>
+  typeof body[key] === "string" ? String(body[key]) : "";
+
+// TASK-345: the menu selects, read back per guest.
+//
+// Keyed off the MENU rather than the form, so a select somebody added by hand cannot introduce a
+// course the venue never offered, and a course dropped from the menu stops being collected the
+// moment staff edit it.
+export function menuChoiceFromForm(
+  body: Record<string, unknown>,
+  n: number,
+  menu: MenuCourse[],
+): string | null {
+  const asked = choosableCourses(menu);
+  if (asked.length === 0) return null;
+  const pairs: Array<[string, string]> = asked.map((course, c) => {
+    const value = field(body, `menu${n}_${c}`);
+    // Only an option the menu actually offers. Anything else is discarded rather than stored,
+    // so the kitchen never receives a dish nobody is cooking.
+    return [course.name, course.options.includes(value) ? value : ""];
+  });
+  const formatted = formatChoice(pairs);
+  return formatted.length > 0 ? formatted : null;
+}
+
+/**
+ * Read every seat's row out of the posted body, dropping any the booker left entirely blank.
+ * A half-filled table is the expected case, not an error.
+ *
+ * A row survives on EITHER half of a name. Someone who knows a guest only as "Sam" should not be
+ * blocked from telling us about the allergy attached to Sam.
+ */
+export function guestsFromForm(
+  body: Record<string, unknown>,
+  seats: number,
+  menu: MenuCourse[],
+): GuestFormRow[] {
+  const rows: GuestFormRow[] = [];
+  for (let n = 1; n <= seats; n += 1) {
+    const firstName = field(body, `firstName${n}`).trim();
+    const surname = field(body, `surname${n}`).trim();
+    const fullName = composeName(firstName, surname);
+    if (!fullName) continue;
+    rows.push({
+      firstName,
+      surname,
+      fullName,
+      dietary: field(body, `dietary${n}`),
+      accessNeeds: field(body, `accessNeeds${n}`),
+      menuChoice: menuChoiceFromForm(body, n, menu),
+    });
+  }
+  return rows;
+}
 
 // The token in the "tell us about your table" email link. 24 random bytes, url-safe — long
 // enough that guessing is not a route in, which matters because the link needs no password:

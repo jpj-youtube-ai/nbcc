@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // TASK-214: the admin endpoint that triggers the one-time catch-up invite backfill —
-// POST /api/admin/business-supporters/backfill-invites. Editor+ (donations:edit), same gate as the
+// POST /api/admin/business-supporters/backfill-invites. business-supporters:edit (TASK-406), same gate as the
 // rest of the business-supporter fulfilment API: an unauthenticated or Viewer-level request is
 // rejected (401/403) and touches nothing. An Editor+ call drives the REAL wiring end to end (the route
 // → runBusinessInviteBackfill → the real list/send/mark/audit) over a mocked pool + a stubbed email
@@ -140,7 +140,8 @@ describe("role enforcement: Editor+ only (Viewer is 403)", () => {
   });
 });
 
-describe.each(["editor", "admin"])("role %s (Editor+) may run the backfill", (role) => {
+// TASK-406: admins hold business-supporters by role; an editor needs it granted.
+describe.each(["admin"])("role %s may run the backfill", (role) => {
   it("returns the counts, stamps each supporter invited, and audits one summary row", async () => {
     const res = await runBackfill({ role });
     expect(res.statusCode).toBe(200);
@@ -168,7 +169,7 @@ describe("idempotent second run (nobody left un-invited)", () => {
       }
       return { rows: [], rowCount: 0 };
     });
-    const res = await runBackfill({ role: "editor" });
+    const res = await runBackfill({ role: "admin" });
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ pending: 0, sent: 0, failed: 0 });
     // No supporter was stamped, but the (empty) run is still audited.

@@ -30,6 +30,12 @@ export const SECTIONS = [
   // it is fundraising work volunteers do, not governance. It does carry contact details for
   // businesses and named people, which is why it is not given to viewers.
   "outreach",
+  // Business supporters: what each one asked to be thanked with, and ticking each step done
+  // (TASK-406). Locked down by default like "email-audit", and for the same reason: the records
+  // carry business contact details and the POSTAL ADDRESS a certificate goes to. It used to ride
+  // on donations:edit, which meant anyone who could correct a donation could also work through
+  // somebody's perks. Admins hold it by role and grant it per person from the Team matrix.
+  "business-supporters",
   "team",
 ] as const;
 
@@ -80,11 +86,15 @@ export function roleToPermissions(role: string): PermissionMap {
     return perms;
   }
 
-  // viewer (and any unrecognised role) — view everywhere except team and the email audit
-  // (donor-identifying send data is admin-granted per person, never arrives with a role).
+  // viewer (and any unrecognised role) — view everywhere except team, the email audit and
+  // business supporters (donor-identifying data is admin-granted per person, never arrives with
+  // a role).
   const perms: PermissionMap = {};
   for (const section of SECTIONS) {
-    perms[section] = section === "team" || section === "email-audit" ? "none" : "view";
+    perms[section] =
+      section === "team" || section === "email-audit" || section === "business-supporters"
+        ? "none"
+        : "view";
   }
   return perms;
 }
@@ -92,6 +102,17 @@ export function roleToPermissions(role: string): PermissionMap {
 /**
  * A user's effective permissions: their stored per-section map if it has any
  * keys, else the defaults derived from their role.
+ *
+ * A stored map is a COMPLETE statement of access: anything it does not name is denied. That is
+ * deliberate and it stays (TASK-406 considered laying the role defaults underneath and decided
+ * against - a rule that fails closed loses somebody a tab, which is visible and recoverable,
+ * where one that fails open grants access nobody chose and nobody sees).
+ *
+ * The consequence is that ADDING a section leaves it unnamed in every matrix saved before it
+ * existed, and therefore denied to everyone who has ever had their permissions edited. That is
+ * handled where it belongs, in the data: each new section ships with a migration that writes the
+ * role-appropriate default into the existing rows. See
+ * migrations/*_permissions-business-supporters.js for the pattern.
  */
 export function effectivePermissions(row: { role: string; permissions: PermissionMap | null }): PermissionMap {
   if (row.permissions && Object.keys(row.permissions).length > 0) {

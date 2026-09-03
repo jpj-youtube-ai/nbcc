@@ -50,3 +50,21 @@ Feature: Admin per-section permission matrix (admin-management Phase 2)
     And the admin response field "email" should be "me.admin.bdd@example.com"
     And the admin response permissions field "stories" should be "view"
     And the admin response permissions field "donations" should be "none"
+
+  # TASK-406: Business supporters is granted per person, not inherited with a role. The records
+  # carry business contact details and the postal address a certificate is sent to, so it is
+  # locked down like the email audit rather than arriving with "editor".
+  Scenario: an editor cannot reach the business supporters list until it is granted
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    When I GET the admin path "/api/admin/fulfilments" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the admin response status should be 403
+
+  Scenario: an admin reaches it by role
+    Given an admin user "boss.admin.bdd@example.com" with password "boss-pw-123"
+    When I GET the admin path "/api/admin/fulfilments" as "boss.admin.bdd@example.com" with password "boss-pw-123"
+    Then the admin response status should be 200
+
+  Scenario: a staff user granted it can reach it whatever their role
+    Given a staff user "care.admin.bdd@example.com" with password "care-pw-123" and only "business-supporters:edit" permission
+    When I GET the admin path "/api/admin/fulfilments" as "care.admin.bdd@example.com" with password "care-pw-123"
+    Then the admin response status should be 200

@@ -32,7 +32,8 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach", "team",
+    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
+    "business-supporters", "team",
   ];
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
@@ -69,7 +70,9 @@
     }
     // email-audit mirrors team: donor-identifying send data never arrives with a role below
     // admin — it is granted per person (matches roleToPermissions in src/admin/permissions.ts).
-    SECTIONS.forEach(function (s) { perms[s] = s === "team" || s === "email-audit" ? "none" : "view"; });
+    SECTIONS.forEach(function (s) {
+      perms[s] = s === "team" || s === "email-audit" || s === "business-supporters" ? "none" : "view";
+    });
     return perms;
   }
   // Mirrors effectivePermissions in src/admin/permissions.ts: a team member's stored map if it has
@@ -158,9 +161,8 @@
       var section = b.getAttribute("data-view");
       if (section === "overview") return;
       // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
-      // data-view - e.g. Business supporters is an Editor+ area gated on donations:edit, matching its
-      // server route (authorizeSection "donations" "edit"). Everything else gates on view of its own
-      // section, as before.
+      // data-view - e.g. Business supporters gates on business-supporters:edit, matching its server
+      // route. Everything else gates on view of its own section, as before.
       var editGate = b.getAttribute("data-edit-gate");
       b.hidden = editGate ? !canEdit(editGate) : !canView(section);
     });

@@ -747,14 +747,25 @@ async function postGuests(ctx, token, form) {
   ctx.guestBody = await res.text();
 }
 
+// TASK-409: the form posts a first name and a surname per seat, not one box. The features are
+// written the way a person says a name ("Jo Smith"), so the split happens here rather than
+// spreading it across every scenario.
+function nameFields(name, n) {
+  const parts = name.trim().split(/\s+/);
+  return {
+    ["firstName" + n]: parts[0] || "",
+    ["surname" + n]: parts.slice(1).join(" "),
+  };
+}
+
 When("I save guests {string} on {string}", async function (names, token) {
   const form = {};
-  names.split(",").forEach(function (name, i) { form["fullName" + (i + 1)] = name.trim(); });
+  names.split(",").forEach(function (name, i) { Object.assign(form, nameFields(name, i + 1)); });
   await postGuests(this, token, form);
 });
 
 When("I save a guest {string} with dietary {string} on {string}", async function (name, diet, token) {
-  await postGuests(this, token, { fullName1: name, dietary1: diet });
+  await postGuests(this, token, { ...nameFields(name, 1), dietary1: diet });
 });
 
 Then("the guest page status should be {int}", function (expected) {
@@ -762,13 +773,39 @@ Then("the guest page status should be {int}", function (expected) {
 });
 
 Then("the guest page should have {int} guest name fields", function (n) {
-  const count = (this.guestBody.match(/name="fullName\d+"/g) || []).length;
+  // One PAIR per seat, so count the surnames: counting both halves would report double.
+  const count = (this.guestBody.match(/name="surname\d+"/g) || []).length;
   assert.strictEqual(count, n);
+  assert.strictEqual((this.guestBody.match(/name="firstName\d+"/g) || []).length, n);
+});
+
+// TASK-409: a saved guest is shown back in TWO boxes, so the joined name is no longer a string
+// on the page. Asserting on the halves is what "we still hold this person" now means.
+Then("the guest page should list the guest {string}", function (name) {
+  const parts = name.trim().split(/\s+/);
+  for (const part of parts) {
+    assert.ok(
+      this.guestBody.includes(`value="${part}"`),
+      `expected the page to hold "${part}" of "${name}" in a name box`,
+    );
+  }
 });
 
 Then("the guest page should work without JavaScript", function () {
   assert.match(this.guestBody, /method="post"/);
-  assert.ok(!this.guestBody.includes("<script"), "the guest form must not depend on JavaScript");
+  // TASK-409 added one small INLINE script, which reveals the "clear this guest" button. The
+  // rule is not "no script tag" but "nothing the form needs can fail to arrive", so assert that:
+  // no external script to fetch, a plain submit, and the one JS-only control shipped hidden so
+  // a reader without JavaScript never sees a button that does nothing.
+  assert.ok(
+    !/<script[^>]*\ssrc=/.test(this.guestBody),
+    "the guest form must not depend on a script it has to fetch",
+  );
+  assert.ok(
+    this.guestBody.includes('<button class="btn btn-primary" type="submit">'),
+    "saving must be a plain submit, not a scripted handler",
+  );
+  assert.match(this.guestBody, /data-guest-clear[^>]*hidden/);
 });
 
 Then("the guest page should show {string}", function (text) {

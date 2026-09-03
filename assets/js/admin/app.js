@@ -6156,6 +6156,7 @@
       contactEmail: (el("outContactEmail").value || "").trim() || null,
       contactPhone: (el("outContactPhone").value || "").trim() || null,
       businessType: el("outBusinessType").value,
+      warmIntro: (el("outWarmIntro").value || "").trim() || null,
       detailsSource: el("outSource").value,
       consentBasis: (el("outConsent").value || "").trim() || null,
       note: (el("outNote").value || "").trim() || null,
@@ -6275,7 +6276,9 @@
               .filter(Boolean)
               .map(H.escapeHtml)
               .join("<br />");
-            return "<tr><td>" + H.escapeHtml(r.businessName) + "</td><td>" +
+            // The name is the way in. Everything about this firm is one click away.
+            return '<tr><td><button class="admin-linkish" type="button" data-out-open="' + r.id +
+              '">' + H.escapeHtml(r.businessName) + "</button></td><td>" +
               (contact || "&mdash;") + "</td><td>" + H.escapeHtml(outStatusOf(r)) +
               "</td><td>" + H.escapeHtml(r.owner || "") + "</td><td>" +
               H.fmtDate(r.createdAt) + "</td></tr>";
@@ -6324,6 +6327,10 @@
   function outWire() {
     if (outWired) return;
     outWired = true;
+    el("outList").addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-out-open]");
+      if (b) openBusiness(Number(b.getAttribute("data-out-open")));
+    });
     var writable = canEdit("outreach");
     el("outAdd").hidden = !writable;
     el("outSend").hidden = !writable;
@@ -6352,6 +6359,226 @@
     if (!el("outAddForm")) return;
     outWire();
     loadOutreachList();
+  }
+
+  // ---- one business (TASK-404) ----
+  // Reached by clicking a name in the list, not from the nav. Everything known about one firm in
+  // one place: who they are, where the details came from, who knows them, what happened, and every
+  // note anyone has written. Piecing that together from a list row is how a volunteer ends up
+  // asking the same business twice.
+  var businessWired = false;
+  var businessId = null;
+  var businessRow = null;
+
+  // KEEP IN SYNC with OUTCOME_MEANINGS in src/outreach/outcomes.ts. The meanings are here rather
+  // than fetched because they never change between one business and the next, and a volunteer
+  // choosing between "Interested" and "Asked for information" should not wait on a round trip.
+  var OUT_MEANINGS = {
+    signed_up: "They are giving, or have promised to.",
+    interested: "Warm, but nothing agreed yet.",
+    asked_for_info: "They want to know more before deciding.",
+    passed_on: "The person we wrote to has handed it to someone else there.",
+    not_this_year: "A no for now, and worth asking again later.",
+    declined: "A no, and they should not be asked again.",
+    no_reply: "We heard nothing back.",
+  };
+  var OUT_ORDER = [
+    "signed_up", "interested", "asked_for_info", "passed_on",
+    "not_this_year", "declined", "no_reply",
+  ];
+
+  var OUT_SOURCE_WORDS = {
+    website_or_listing: "Their website or a business listing",
+    given_to_us: "They gave them to us",
+    referred: "Someone we know passed them on",
+    social: "Their social media page",
+  };
+
+  function businessSay(id, msg, cls) {
+    var e = el(id);
+    if (!e) return;
+    e.className = "ty-status" + (cls ? " " + cls : "");
+    e.textContent = msg || "";
+  }
+
+  function factRow(label, value) {
+    if (!value) return "";
+    return '<div class="out-fact"><dt>' + H.escapeHtml(label) + "</dt><dd>" + value + "</dd></div>";
+  }
+
+  function renderBusiness(r, notes) {
+    businessRow = r;
+    el("business-heading").textContent = r.businessName;
+
+    var contact = [
+      r.contactName ? H.escapeHtml(r.contactName) : "",
+      r.contactEmail ? '<a href="mailto:' + H.escapeHtml(r.contactEmail) + '">' + H.escapeHtml(r.contactEmail) + "</a>" : "",
+      r.contactPhone ? '<a href="tel:' + H.escapeHtml(r.contactPhone.replace(/\s/g, "")) + '">' + H.escapeHtml(r.contactPhone) + "</a>" : "",
+    ].filter(Boolean).join("<br />");
+
+    var stands = r.outcome
+      ? H.escapeHtml(OUT_OUTCOMES[r.outcome] || r.outcome) +
+        (r.outcomeAt ? ' <span class="ty-muted">on ' + H.fmtDate(r.outcomeAt) + "</span>" : "")
+      : r.sentAt
+        ? "Emailed " + H.fmtDate(r.sentAt) + (r.sentBy ? ' <span class="ty-muted">by ' + H.escapeHtml(r.sentBy) + "</span>" : "")
+        : "Not emailed yet";
+
+    el("businessDetail").innerHTML =
+      '<dl class="out-facts">' +
+      factRow("Where it stands", stands) +
+      factRow("Contact", contact) +
+      factRow("Kind of business", r.businessType === "sole_trader" ? "Sole trader or partnership" : "Limited company or LLP") +
+      // The reason this business is worth a call rather than another email.
+      factRow("Who knows them", r.warmIntro ? H.escapeHtml(r.warmIntro) : "") +
+      factRow("Looked after by", r.owner ? H.escapeHtml(r.owner) : "Nobody yet") +
+      factRow("Where the details came from", H.escapeHtml(OUT_SOURCE_WORDS[r.detailsSource] || r.detailsSource)) +
+      // Shown back rather than hidden: whoever emails a sole trader should be able to see why
+      // they are allowed to.
+      factRow("They agreed to hear from us", r.consentBasis
+        ? H.escapeHtml(r.consentBasis) + (r.consentBasisRecordedBy ? ' <span class="ty-muted">recorded by ' + H.escapeHtml(r.consentBasisRecordedBy) + "</span>" : "")
+        : "") +
+      factRow("Ask again", r.askAgainOn ? H.fmtDate(r.askAgainOn) : "") +
+      factRow("Why this business", r.note ? H.escapeHtml(r.note) : "") +
+      factRow("Added", H.fmtDate(r.createdAt)) +
+      "</dl>";
+
+    // The outcome list. Each option carries its meaning, so nobody has to guess which of two
+    // similar-sounding ones they want.
+    el("businessOutcomes").innerHTML = OUT_ORDER.map(function (key) {
+      var checked = r.outcome === key ? " checked" : "";
+      return '<label class="out-outcome"><input type="radio" name="outOutcome" value="' + key + '"' + checked + ' />' +
+        '<span class="out-outcome-label">' + H.escapeHtml(OUT_OUTCOMES[key]) + "</span>" +
+        '<span class="out-outcome-why">' + H.escapeHtml(OUT_MEANINGS[key]) + "</span></label>";
+    }).join("");
+
+    if (r.askAgainOn) el("businessAskAgain").value = String(r.askAgainOn).slice(0, 10);
+    businessToggleAskAgain();
+    renderBusinessNotes(notes);
+  }
+
+  function renderBusinessNotes(notes) {
+    var wrap = el("businessNotes");
+    if (!wrap) return;
+    if (!notes || !notes.length) {
+      wrap.innerHTML = '<p class="admin-empty">No notes yet. The first one is usually the most useful.</p>';
+      return;
+    }
+    wrap.innerHTML = '<ol class="out-notes">' + notes.map(function (n) {
+      return '<li class="out-note"><p class="out-note-meta">' + H.escapeHtml(n.author) + " &middot; " +
+        H.fmtDate(n.createdAt) + '</p><p class="out-note-body">' + H.escapeHtml(n.body) + "</p></li>";
+    }).join("") + "</ol>";
+  }
+
+  // The date only matters for "not this year", so it only appears for "not this year". A field
+  // that does nothing is a field people fill in anyway.
+  function businessToggleAskAgain() {
+    var picked = doc.querySelector('input[name="outOutcome"]:checked');
+    var wants = picked && picked.value === "not_this_year";
+    el("businessAskAgainField").hidden = !wants;
+    if (wants && !el("businessAskAgain").value) {
+      var d = new Date();
+      d.setMonth(d.getMonth() + 11);
+      el("businessAskAgain").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
+    }
+  }
+
+  function businessSaveOutcome(e) {
+    e.preventDefault();
+    var picked = doc.querySelector('input[name="outOutcome"]:checked');
+    if (!picked) {
+      businessSay("businessOutcomeStatus", "Pick what happened first.", "is-error");
+      return;
+    }
+    if (picked.value === "declined" &&
+        !window.confirm("Record that " + (businessRow ? businessRow.businessName : "this business") +
+          " said no? They will not be contacted again.")) return;
+    var btn = el("businessOutcomeSave");
+    btn.disabled = true;
+    businessSay("businessOutcomeStatus", "Saving…");
+    authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/outcome", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        outcome: picked.value,
+        askAgainOn: (el("businessAskAgain").value || "").trim() || null,
+      }),
+    })
+      .then(function (x) { return x.json().then(function (b) { return { ok: x.ok, body: b }; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res.ok) {
+          businessSay("businessOutcomeStatus", res.body.error || "Could not save that.", "is-error");
+          return;
+        }
+        businessSay("businessOutcomeStatus", "Saved.", "is-ok");
+        openBusiness(businessId);
+      })
+      .catch(function () {
+        btn.disabled = false;
+        businessSay("businessOutcomeStatus", "Could not save that.", "is-error");
+      });
+  }
+
+  function businessAddNote(e) {
+    e.preventDefault();
+    var body = (el("businessNote").value || "").trim();
+    if (!body) {
+      businessSay("businessNoteStatus", "Write something first.", "is-error");
+      return;
+    }
+    var btn = el("businessNoteAdd");
+    btn.disabled = true;
+    businessSay("businessNoteStatus", "Saving…");
+    authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: body }),
+    })
+      .then(function (x) { return x.json().then(function (b) { return { ok: x.ok, body: b }; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res.ok) {
+          businessSay("businessNoteStatus", res.body.error || "Could not save that note.", "is-error");
+          return;
+        }
+        el("businessNote").value = "";
+        businessSay("businessNoteStatus", "Added.", "is-ok");
+        renderBusinessNotes(res.body.notes);
+      })
+      .catch(function () {
+        btn.disabled = false;
+        businessSay("businessNoteStatus", "Could not save that note.", "is-error");
+      });
+  }
+
+  function businessWire() {
+    if (businessWired) return;
+    businessWired = true;
+    var writable = canEdit("outreach");
+    el("businessOutcomeForm").hidden = !writable;
+    el("businessNoteForm").hidden = !writable;
+    el("businessOutcomeForm").addEventListener("submit", businessSaveOutcome);
+    el("businessNoteForm").addEventListener("submit", businessAddNote);
+    el("businessOutcomes").addEventListener("change", businessToggleAskAgain);
+    bindClick("businessBack", function () { selectView("outreach"); });
+  }
+
+  function openBusiness(id) {
+    businessWire();
+    businessId = id;
+    showOnly("view-business");
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+      b.classList.remove("is-active");
+    });
+    businessSay("businessOutcomeStatus", "");
+    businessSay("businessNoteStatus", "");
+    el("businessDetail").innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/outreach/" + encodeURIComponent(id))
+      .then(j)
+      .then(function (d) { renderBusiness(d.business, d.notes || []); })
+      .catch(function () {
+        el("businessDetail").innerHTML = '<p class="admin-empty">Could not load that business.</p>';
+      });
   }
 
   // ---- supporters ticker (REQ-003 · TASK-178) ----

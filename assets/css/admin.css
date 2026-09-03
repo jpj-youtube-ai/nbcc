@@ -1316,3 +1316,30 @@ tr.nl-click:hover { background: var(--tint); }
 .out-ack{margin:12px 0 0;padding-top:11px;border-top:1px solid var(--line)}
 .out-ack label{display:flex;align-items:flex-start;gap:8px;font-weight:600;color:var(--crimson);cursor:pointer}
 .out-ack input{margin-top:2px}
+
+/* One business (TASK-404). The facts read as a record rather than a form: label above value, no
+   boxes, so the eye goes down the values. Only the outcome list is chrome, because it is the one
+   thing on the page you press. */
+.out-facts{display:grid;gap:14px 30px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin:0 0 8px;padding:18px 20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)}
+.out-fact dt{font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-soft);margin-bottom:3px}
+.out-fact dd{margin:0;color:var(--slate);line-height:1.5;font-size:.94rem;overflow-wrap:anywhere}
+.out-fact dd a{color:var(--maroon);font-weight:600}
+
+/* Each option carries its own meaning, so the two lines belong to one target. */
+.out-outcomes{display:grid;gap:8px;margin-bottom:14px}
+.out-outcome{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:start;padding:10px 12px;border:1.6px solid var(--line);border-radius:10px;background:var(--cream);cursor:pointer}
+.out-outcome:hover{border-color:var(--holly)}
+.out-outcome:has(input:checked){border-color:var(--crimson);background:var(--card)}
+.out-outcome input{grid-row:1 / span 2;margin-top:3px}
+.out-outcome-label{font-weight:600;color:var(--slate)}
+.out-outcome-why{font-size:.83rem;color:var(--slate-soft);line-height:1.45}
+
+/* Append-only, so they read as a log: newest first, each stamped with who and when. */
+.out-notes{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:10px}
+.out-note{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--holly);border-radius:10px;padding:11px 14px}
+.out-note-meta{margin:0 0 4px;font-size:.74rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--slate-soft)}
+.out-note-body{margin:0;color:var(--slate);line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* A name in a table that opens something. Reads as a link, behaves as a button. */
+.admin-linkish{background:none;border:0;padding:0;font:inherit;color:var(--maroon);font-weight:600;text-align:left;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.admin-linkish:hover{color:var(--crimson)}

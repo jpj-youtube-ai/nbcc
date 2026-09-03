@@ -164,7 +164,10 @@ describe("the tick boxes are scannable (TASK-335)", () => {
   };
 
   it.each([
-    ["coverFee", "cover the card fee"],
+    // "help cover", not "cover": the amount is grossed up against 1.2% + 20p and Amex is 2.9%,
+    // so on an Amex the charity is still a little short. The bolding is what this test is
+    // about and is unchanged; the phrase inside it gained the word that makes it true.
+    ["coverFee", "help cover the card fee"],
     ["addDonation", "add a donation"],
     ["newsletterOptIn", "NBCC newsletter"],
   ])("bolds the point of the %s box", (name, phrase) => {

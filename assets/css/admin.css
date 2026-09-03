@@ -1343,3 +1343,42 @@ tr.nl-click:hover { background: var(--tint); }
 /* A name in a table that opens something. Reads as a link, behaves as a button. */
 .admin-linkish{background:none;border:0;padding:0;font:inherit;color:var(--maroon);font-weight:600;text-align:left;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .admin-linkish:hover{color:var(--crimson)}
+
+/* Needs you today (TASK-405). A list of things to do, not a table of data: each row is one
+   target, and the kind is a chip on the left so the eye can sort by urgency without reading. The
+   left edge is colour-coded by kind, which is the only place semantic colour appears on this
+   screen - everything else is brand. */
+/* Which list am I looking at? .admin-btn has no selected state of its own, so without this both
+   buttons read as pressed. The unchosen one goes quiet rather than the chosen one going louder. */
+.out-scope .admin-btn{background:transparent;color:var(--maroon);border:1.6px solid var(--line)}
+.out-scope .admin-btn:hover{background:var(--cream);border-color:var(--holly);color:var(--maroon)}
+.out-scope .admin-btn.is-active{background:var(--holly);color:var(--cream);border-color:var(--holly)}
+.out-scope .admin-btn.is-active:hover{background:var(--holly-dark);color:var(--cream)}
+
+.out-todo{list-style:none;margin:0 0 22px;padding:0;display:grid;gap:8px}
+.out-todo-row{margin:0}
+.out-todo-open{display:grid;width:100%;text-align:left;gap:2px 14px;align-items:baseline;
+  grid-template-columns:minmax(96px,auto) minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1fr);
+  background:var(--card);border:1px solid var(--line);border-left:4px solid var(--slate-soft);
+  border-radius:10px;padding:11px 14px;font:inherit;color:inherit;cursor:pointer}
+.out-todo-open:hover{border-color:var(--holly);box-shadow:var(--shadow-sm)}
+.out-todo-kind{font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--slate-soft)}
+.out-todo-name{font-weight:600;color:var(--maroon)}
+.out-todo-why{color:var(--slate);font-size:.9rem}
+.out-todo-do{color:var(--crimson);font-weight:600;font-size:.9rem}
+.out-todo-who{grid-column:2 / -1;font-size:.78rem;color:var(--slate-soft)}
+.out-todo-late{color:var(--crimson);font-weight:600}
+
+/* A promise with a date on it is the one thing here we actually committed to. */
+.out-todo-row--ask-again .out-todo-open{border-left-color:var(--crimson)}
+.out-todo-row--ask-again .out-todo-kind{color:var(--crimson)}
+/* Warm, and being lost. The most expensive row on the page. */
+.out-todo-row--call .out-todo-open{border-left-color:var(--gold-ink)}
+.out-todo-row--call .out-todo-kind{color:var(--gold-ink)}
+.out-todo-row--send .out-todo-open{border-left-color:var(--holly)}
+.out-todo-row--send .out-todo-kind{color:var(--holly-dark)}
+
+@media(max-width:820px){
+  .out-todo-open{grid-template-columns:1fr}
+  .out-todo-who{grid-column:1}
+}

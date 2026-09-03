@@ -63,6 +63,9 @@ export const outreachCreateSchema = z.object({
    */
   consentBasis: optionalText(400),
   owner: optionalText(120),
+  // The volunteer's sign-in address (TASK-405). `owner` is the label a person reads; this is
+  // what "my businesses" matches on, because a display name cannot be compared to a session.
+  ownerEmail: optionalText(200),
   /**
    * Set only when a volunteer has SEEN the matches and said they are a different business.
    * Without it, a match against a decline is refused server-side. Named for what it means rather

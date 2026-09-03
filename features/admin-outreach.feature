@@ -69,6 +69,46 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the outreach response status should be 400
 
+  # TASK-405: the one list a volunteer opens. What is on it is a pure rule, proved DB-free in
+  # test/unit/outreach-todo.test.ts; what only a running server can prove is WHOSE list it is.
+  Scenario: the list defaults to mine and anything nobody owns
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And "Zzbdd Mine" was emailed 30 days ago and belongs to "editor.admin.bdd@example.com"
+    And "Zzbdd Nobody" was emailed 30 days ago and belongs to nobody
+    And "Zzbdd Theirs" was emailed 30 days ago and belongs to "someone.else@example.com"
+    When I open the list of what needs doing as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the list should include "Zzbdd Mine"
+    And the list should include "Zzbdd Nobody"
+    But the list should not include "Zzbdd Theirs"
+
+  # Nothing falls through: a business nobody owns is still somebody's problem, and the count says
+  # so before you have to click to find out.
+  Scenario: everyone's list shows the lot, and the count says what is behind the toggle
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And "Zzbdd Mine" was emailed 30 days ago and belongs to "editor.admin.bdd@example.com"
+    And "Zzbdd Theirs" was emailed 30 days ago and belongs to "someone.else@example.com"
+    When I open everyone's list of what needs doing as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the list should include "Zzbdd Mine"
+    And the list should include "Zzbdd Theirs"
+
+  Scenario: a business that said no never appears, however long ago it was
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And "Zzbdd Refused" was emailed 300 days ago and belongs to nobody
+    When I record the outcome "declined" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I open everyone's list of what needs doing as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the list should not include "Zzbdd Refused"
+
+  Scenario: the list is not readable without a session
+    When I open the list of what needs doing without a token
+    Then the outreach response status should be 401
+
+  # The picker offers the people who can sign in, not the people who sign letters.
+  Scenario: the volunteers a business can be handed to are the admin users
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    When I ask who a business can be assigned to as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the volunteers should include "editor.admin.bdd@example.com"
+
   # TASK-404: the business page, and the two things a volunteer does on it.
   Scenario: a Viewer can read a business and its notes but cannot change either
     Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"

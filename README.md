@@ -2862,6 +2862,44 @@ business reads. A drop-down rather than one fixed sentence for a reason: a sente
 than one that is vague. Every variant ends "and nowhere else", because "you bought a list" is the
 thing a business actually fears.
 
+### Needs you today (TASK-405)
+
+The screen opens with one list, above the forms, because it is the reason to open the screen at
+all. **One list, not three** — a separate nudge list, call list and ask-again list would be three
+places for a busy volunteer to forget instead of one.
+
+What goes on it is a pure rule in `src/outreach/todo.ts`, not a SQL `WHERE`. Putting it in the
+query would mean two places to change it and one of them untestable without a database. Five
+kinds, ranked, because a promise we made outranks a chase and a warm business outranks a cold one:
+
+| | When | Why it ranks there |
+|---|---|---|
+| **Ask again** | The date somebody set has come round | The only thing here we actually committed to |
+| **Worth a call** | Interested, and a week of silence since | The most expensive row to lose: the work is already spent |
+| **No reply** | Emailed 14 days ago, nothing recorded | |
+| **Ready to send** | Has an address, never emailed | The easiest win on the page |
+| **No address** | On the list 7 days with no email | |
+
+Three states take a business **off** the list for good: `declined` (an instruction, and putting one
+on a to-do list is how it gets ignored), `signed_up` (not a task), and `no_reply` (recording
+silence is a decision — it stops the nagging rather than moving the business to another pile).
+Every row carries the reason it is there and what to do about it, because a list of names with no
+explanation gets skimmed once and then ignored.
+
+**Whose list?** `GET /api/admin/outreach/todo` defaults to `scope=mine`, which means **mine plus
+anything unassigned**. Showing everyone's work by default means two volunteers chase the same
+business; showing only what is assigned means an unassigned business belongs to nobody and rots.
+The response also carries the count for the other scope, so the toggle says what is behind it.
+
+That needed a fix first: `owner` had always been a display name chosen from the **letter-signers**
+list. Signing a thank-you letter and chasing a local business are different jobs done by different
+people, and a name cannot be compared to the address a session is identified by — so "my
+businesses" was not answerable at all. `owner_email` is now stored alongside, the picker offers the
+admin users (`GET /api/admin/outreach/volunteers`), and `owner` stays as the label on screen.
+
+The full list below it has a search box, filtered in the browser across name, contact, email, phone
+and owner.
+
 ### One business, one page (TASK-404)
 
 Clicking a name in the list opens that business: everything known about the firm in one place,

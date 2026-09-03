@@ -6160,7 +6160,8 @@
       detailsSource: el("outSource").value,
       consentBasis: (el("outConsent").value || "").trim() || null,
       note: (el("outNote").value || "").trim() || null,
-      owner: el("outOwner").value || null,
+      owner: outOwnerName(),
+      ownerEmail: el("outOwner").value || null,
     };
     if (outBlocked && el("outAck") && el("outAck").checked) payload.acknowledgedMatches = true;
     var btn = el("outAdd");
@@ -6264,13 +6265,19 @@
   function outRenderList() {
     var wrap = el("outList");
     if (!wrap) return;
-    if (!outRows.length) {
-      wrap.innerHTML = '<p class="admin-empty">No businesses yet. Add the first one above.</p>';
+    var shown = outRows.filter(outMatches);
+    el("outSearchCount").textContent = outSearchTerm
+      ? shown.length + " of " + outRows.length + " businesses"
+      : "";
+    if (!shown.length) {
+      wrap.innerHTML = outSearchTerm
+        ? '<p class="admin-empty">Nothing matches that. Try part of the name, or the email address.</p>'
+        : '<p class="admin-empty">No businesses yet. Add the first one above.</p>';
     } else {
       wrap.innerHTML =
         '<table class="admin-table"><thead><tr><th>Business</th><th>Contact</th>' +
         "<th>Where it stands</th><th>Looked after by</th><th>Added</th></tr></thead><tbody>" +
-        outRows
+        shown
           .map(function (r) {
             var contact = [r.contactName, r.contactEmail, r.contactPhone]
               .filter(Boolean)
@@ -6335,14 +6342,10 @@
     el("outAdd").hidden = !writable;
     el("outSend").hidden = !writable;
     fillSignerSelect(el("outSigner"));
-    var owner = el("outOwner");
-    owner.innerHTML = '<option value="">Not assigned yet</option>';
-    (H.SIGNERS || []).forEach(function (sg) {
-      var o = doc.createElement("option");
-      o.value = sg.name;
-      o.textContent = sg.name;
-      owner.appendChild(o);
-    });
+    // The volunteers, not the letter-signers: signing a thank-you letter and chasing a
+    // local business are different jobs, and the old picker could not offer someone who
+    // only does the second. The option carries the email, which is what "mine" matches on.
+    loadOutreachVolunteers();
     // The consent box exists only for a sole trader, because only a sole trader needs one.
     // Showing it always would ask every volunteer a question that does not apply to them.
     el("outBusinessType").addEventListener("change", outToggleConsent);
@@ -6352,13 +6355,137 @@
     tyBindInput("outPersonal", outPreviewSoon);
     el("outSendTo").addEventListener("change", outPreview);
     el("outSigner").addEventListener("change", outPreview);
+    el("outTodoScope").addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-out-scope]");
+      if (!b) return;
+      outTodoScope = b.getAttribute("data-out-scope");
+      Array.prototype.forEach.call(el("outTodoScope").querySelectorAll("[data-out-scope]"), function (x) {
+        x.classList.toggle("is-active", x === b);
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
+      });
+      loadOutreachTodo();
+    });
+    el("outTodo").addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("[data-out-open]");
+      if (b) openBusiness(Number(b.getAttribute("data-out-open")));
+    });
+    tyBindInput("outSearch", function () {
+      outSearchTerm = (el("outSearch").value || "").trim().toLowerCase();
+      outRenderList();
+    });
     el("outAddForm").addEventListener("submit", outAdd);
     el("outSendForm").addEventListener("submit", outSend);
   }
+  // The display name for whichever volunteer is picked. Stored alongside the email so the
+  // list can show a person rather than an address.
+  function outOwnerName() {
+    var opt = el("outOwner").selectedOptions[0];
+    return opt && opt.value ? opt.textContent : null;
+  }
+
+  function loadOutreachVolunteers() {
+    var owner = el("outOwner");
+    owner.innerHTML = '<option value="">Not assigned yet</option>';
+    authFetch("/api/admin/outreach/volunteers")
+      .then(j)
+      .then(function (d) {
+        (d.volunteers || []).forEach(function (v) {
+          var o = doc.createElement("option");
+          o.value = v.email;
+          o.textContent = v.name;
+          owner.appendChild(o);
+        });
+      })
+      .catch(function () { /* the picker still offers 'not assigned yet' */ });
+  }
+
   function loadOutreach() {
     if (!el("outAddForm")) return;
     outWire();
+    loadOutreachTodo();
     loadOutreachList();
+  }
+
+  // ---- needs you today (TASK-405) ----
+  // One list, not three. Every row says WHY it is there and what to do about it, because a list of
+  // names with no explanation gets skimmed once and then ignored. Clicking a row opens the
+  // business, which is where all four of the actions actually happen.
+  var outTodoScope = "mine";
+
+  // The kinds, in the order they matter. A promise we made outranks a chase; a warm business
+  // outranks a cold one. KEEP IN SYNC with RANK in src/outreach/todo.ts.
+  var OUT_TODO_WORDS = {
+    "ask-again": "Ask again",
+    call: "Worth a call",
+    nudge: "No reply",
+    send: "Ready to send",
+    "find-address": "No address",
+  };
+
+  function outRenderTodo(d) {
+    var wrap = el("outTodo");
+    if (!wrap) return;
+    var todos = d.todos || [];
+
+    el("outTodoCount").textContent =
+      outTodoScope === "mine" && d.totalEverywhere > todos.length
+        ? d.totalEverywhere + " altogether across everyone"
+        : "";
+
+    if (!todos.length) {
+      // The screen will look like this until the first emails go out, so the empty state has to
+      // say why rather than reading as something broken.
+      wrap.innerHTML =
+        '<p class="admin-empty">Nothing needs you right now. Businesses appear here when an ' +
+        "email has gone unanswered for a fortnight, when someone was interested and has gone " +
+        "quiet, or when a date you set has come round.</p>";
+      return;
+    }
+
+    wrap.innerHTML =
+      '<ul class="out-todo">' +
+      todos
+        .map(function (t) {
+          var late = t.daysOverdue > 0
+            ? '<span class="out-todo-late">' + t.daysOverdue +
+              (t.daysOverdue === 1 ? " day over</span>" : " days over</span>")
+            : "";
+          var who = t.owner ? H.escapeHtml(t.owner) : "Nobody yet";
+          return (
+            '<li class="out-todo-row out-todo-row--' + t.kind + '">' +
+            '<button class="out-todo-open" type="button" data-out-open="' + t.id + '">' +
+            '<span class="out-todo-kind">' + H.escapeHtml(OUT_TODO_WORDS[t.kind] || t.kind) + "</span>" +
+            '<span class="out-todo-name">' + H.escapeHtml(t.businessName) + "</span>" +
+            '<span class="out-todo-why">' + H.escapeHtml(t.reason) + "</span>" +
+            '<span class="out-todo-do">' + H.escapeHtml(t.action) + "</span>" +
+            '<span class="out-todo-who">' + who + " " + late + "</span>" +
+            "</button></li>"
+          );
+        })
+        .join("") +
+      "</ul>";
+  }
+
+  function loadOutreachTodo() {
+    authFetch("/api/admin/outreach/todo?scope=" + encodeURIComponent(outTodoScope))
+      .then(j)
+      .then(outRenderTodo)
+      .catch(function () {
+        el("outTodo").innerHTML = '<p class="admin-empty">Could not load this list.</p>';
+      });
+  }
+
+  // ---- search (TASK-405) ----
+  // Filtered in the browser: the whole list is already here, and a round trip per keystroke would
+  // be slower than the filter. Matches on the things somebody actually half-remembers.
+  var outSearchTerm = "";
+  function outMatches(r) {
+    if (!outSearchTerm) return true;
+    return [r.businessName, r.contactName, r.contactEmail, r.contactPhone, r.owner]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .indexOf(outSearchTerm) !== -1;
   }
 
   // ---- one business (TASK-404) ----
@@ -6512,6 +6639,7 @@
         }
         businessSay("businessOutcomeStatus", "Saved.", "is-ok");
         openBusiness(businessId);
+        loadOutreachTodo();
       })
       .catch(function () {
         btn.disabled = false;

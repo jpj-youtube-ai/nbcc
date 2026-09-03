@@ -246,6 +246,72 @@ When("I add the note {string} as {string} with password {string}", async functio
   });
 });
 
+// The todo list reads sent_at and owner_email, so a scenario has to be able to seed both.
+async function seedEmailed(name, daysAgo, ownerEmail) {
+  const row = await pool.query(
+    `INSERT INTO business_outreach
+       (business_name, contact_email, business_type, owner_email, sent_at, sent_by)
+     VALUES ($1, $2, 'company', $3, now() - ($4 || ' days')::interval, 'bdd@example.com')
+     RETURNING id`,
+    [name, `hello@${name.toLowerCase().replace(/[^a-z]/g, "")}.example`, ownerEmail, String(daysAgo)],
+  );
+  return row.rows[0].id;
+}
+
+Given(
+  "{string} was emailed {int} days ago and belongs to {string}",
+  async function (name, daysAgo, ownerEmail) {
+    this.outId = await seedEmailed(name, daysAgo, ownerEmail);
+  },
+);
+
+Given("{string} was emailed {int} days ago and belongs to nobody", async function (name, daysAgo) {
+  this.outId = await seedEmailed(name, daysAgo, null);
+});
+
+When("I open the list of what needs doing without a token", async function () {
+  await call(this, "/api/admin/outreach/todo");
+});
+
+When(
+  "I open the list of what needs doing as {string} with password {string}",
+  async function (actor, password) {
+    const token = await login(actor, password);
+    await call(this, "/api/admin/outreach/todo", { token });
+  },
+);
+
+When(
+  "I open everyone's list of what needs doing as {string} with password {string}",
+  async function (actor, password) {
+    const token = await login(actor, password);
+    await call(this, "/api/admin/outreach/todo?scope=all", { token });
+  },
+);
+
+When(
+  "I ask who a business can be assigned to as {string} with password {string}",
+  async function (actor, password) {
+    const token = await login(actor, password);
+    await call(this, "/api/admin/outreach/volunteers", { token });
+  },
+);
+
+Then("the list should include {string}", function (name) {
+  const names = (this.outBody.todos || []).map((t) => t.businessName);
+  assert.ok(names.includes(name), `expected ${name} on the list, got ${JSON.stringify(names)}`);
+});
+
+Then("the list should not include {string}", function (name) {
+  const names = (this.outBody.todos || []).map((t) => t.businessName);
+  assert.ok(!names.includes(name), `expected ${name} NOT on the list, got ${JSON.stringify(names)}`);
+});
+
+Then("the volunteers should include {string}", function (email) {
+  const emails = (this.outBody.volunteers || []).map((v) => v.email);
+  assert.ok(emails.includes(email), `expected ${email}, got ${JSON.stringify(emails)}`);
+});
+
 // --- assertions ---------------------------------------------------------------------------------
 
 Then("the outreach response status should be {int}", function (status) {

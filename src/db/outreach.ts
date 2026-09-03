@@ -22,6 +22,8 @@ export interface OutreachRow {
   consentBasis: string | null;
   consentBasisRecordedBy: string | null;
   owner: string | null;
+  /** What "my businesses" matches on. `owner` stays the label shown on screen. */
+  ownerEmail: string | null;
   sentBy: string | null;
   sentAt: string | null;
   outcome: string | null;
@@ -33,7 +35,8 @@ export interface OutreachRow {
 
 const ROW_COLUMNS = `id, business_name, contact_name, contact_email, contact_phone,
                      business_type, note, owner, sent_by, sent_at, outcome, outcome_at,
-                     ask_again_on, last_engagement_at, created_at, warm_intro, details_source,
+                     ask_again_on, last_engagement_at, created_at, owner_email, warm_intro,
+                     details_source,
                      consent_basis,
                      consent_basis_recorded_by, consent_basis_recorded_at`;
 
@@ -46,6 +49,7 @@ function toRow(r: Record<string, unknown>): OutreachRow {
     contactPhone: (r.contact_phone as string) ?? null,
     businessType: r.business_type === "sole_trader" ? "sole_trader" : "company",
     note: (r.note as string) ?? null,
+    ownerEmail: (r.owner_email as string) ?? null,
     warmIntro: (r.warm_intro as string) ?? null,
     detailsSource: (r.details_source as string) ?? "website_or_listing",
     consentBasis: (r.consent_basis as string) ?? null,
@@ -140,15 +144,16 @@ export interface OutreachCreate {
   /** Who recorded the basis. Stamped only when there is a basis to attribute. */
   recordedBy: string | null;
   owner: string | null;
+  ownerEmail: string | null;
 }
 
 export async function createOutreach(input: OutreachCreate): Promise<OutreachRow> {
   const res = await pool.query(
     `INSERT INTO business_outreach
        (business_name, contact_name, contact_email, contact_phone, business_type, note, owner,
-        warm_intro, details_source, consent_basis, consent_basis_recorded_by,
+        owner_email, warm_intro, details_source, consent_basis, consent_basis_recorded_by,
         consent_basis_recorded_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING ${ROW_COLUMNS}`,
     [
       input.businessName,
@@ -158,6 +163,7 @@ export async function createOutreach(input: OutreachCreate): Promise<OutreachRow
       input.businessType,
       input.note,
       input.owner,
+      input.ownerEmail,
       input.warmIntro,
       input.detailsSource,
       input.consentBasis,
@@ -214,6 +220,32 @@ export async function setOutreachOutcome(
       WHERE id = $1`,
     [id, outcome, askAgainOn, engaged],
   );
+}
+
+/**
+ * Every business that could possibly need something. Deliberately NOT filtered here: what needs
+ * doing is a rule, not a query, and putting it in SQL would mean two places to change it and one
+ * of them untestable without a database.
+ *
+ * Declines and sign-ups are the exception, because those two are settled for good and there is no
+ * point carrying them across the wire every time somebody opens the screen.
+ */
+export async function listOutreachForTodo(): Promise<OutreachRow[]> {
+  const res = await pool.query(
+    `SELECT ${ROW_COLUMNS} FROM business_outreach
+      WHERE outcome IS NULL OR outcome NOT IN ('declined', 'signed_up')`,
+  );
+  return res.rows.map(toRow);
+}
+
+/** The volunteers a business can be assigned to: everyone who can sign in and is not disabled. */
+export async function listVolunteers(): Promise<{ name: string; email: string }[]> {
+  const res = await pool.query(
+    // 'invited' counts: somebody who has been asked to join can be handed a business ready for
+    // when they accept. 'disabled' does not.
+    `SELECT full_name, email FROM users WHERE status <> 'disabled' ORDER BY full_name`,
+  );
+  return res.rows.map((r) => ({ name: r.full_name as string, email: r.email as string }));
 }
 
 export interface OutreachNote {

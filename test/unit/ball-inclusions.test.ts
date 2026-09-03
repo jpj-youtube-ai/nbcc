@@ -33,6 +33,15 @@ describe("what the ticket includes", () => {
     expect(region(ballHtml, "included")).toBe(collapse(TICKET_INCLUDES));
   });
 
+  // The ticket terms are the third hand-written copy, and they had already drifted: they
+  // promised "a meal" where the page selling the ticket promised three courses and a welcome
+  // drink. Terms that undercut the advert are the wrong way round, and this is the one place a
+  // buyer looks when they think they were told something different.
+  it("the ticket terms promise no less than the page that sold the ticket", () => {
+    const terms = collapse(readFileSync(resolve(ROOT, "ball-terms.html"), "utf8"));
+    expect(terms).toContain(collapse(TICKET_INCLUDES));
+  });
+
   // TASK-336: this used to require the sentence to close with "further drinks are not included".
   // The risk it guarded is real - "a drink on arrival" reads to plenty of people as "drinks are
   // provided", and the difference gets discovered at the bar on the night - but NBCC solved it

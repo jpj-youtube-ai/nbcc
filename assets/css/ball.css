@@ -670,6 +670,106 @@
 .ball-submit { align-self: flex-start; }
 .ball-submit[disabled] { opacity: 0.6; cursor: progress; }
 
+/* ---- the guest form (TASK-409) --------------------------------------------------------
+   Everything below styles /ball/guests, which had no rules of its own at all: the fieldsets
+   rendered with the browser's default inset border on a cream page, which is not a look the
+   rest of the site has anywhere.
+
+   The hints are the point of the pass. They used to be `placeholder` attributes, which are
+   low contrast by design and thrown away the moment somebody types. They are now labels in
+   the ORDINARY body colour rather than the muted one this stylesheet uses elsewhere for
+   small print, because a hint on a question about a disability is content, not decoration.
+
+   Scoped under .ball-field on purpose: `.ball-field small` is (0,1,1) and a bare .ball-hint
+   is (0,1,0), so the muted colour would win and the hint would render in exactly the grey
+   this pass exists to get rid of. Two classes (0,2,0) takes it back. */
+.ball-field .ball-hint {
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--slate);
+  font-weight: 400;
+  letter-spacing: normal;
+}
+
+.ball-guest-form { gap: 22px; }
+
+.ball-guest {
+  margin: 0;
+  padding: clamp(16px, 2.4vw, 22px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* .ball-field carries `flex: 1 1 220px`, which is a WIDTH everywhere it was designed to be
+   used: inside .ball-row, a row-direction container. Dropped straight into this column, the
+   same 220px becomes a flex-basis on the vertical axis and every field grows a ~220px tall
+   box with the input stranded at the top of it. Reset the basis for fields that are direct
+   children of a column; the ones nested in a .ball-row keep the original rule and stay side
+   by side. */
+.ball-guest > .ball-field,
+.ball-guest-form > .ball-field {
+  flex: 0 0 auto;
+}
+.ball-guest > legend {
+  padding: 0 10px;
+  font-family: var(--font-head);
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--maroon);
+}
+
+/* The group name sits above the guests and is the one field that decides where a whole party
+   sits, so it takes the gold edge that marks the other "this one matters" blocks. */
+.ball-group-field {
+  padding: clamp(16px, 2.4vw, 20px);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold-deep);
+  border-radius: var(--radius);
+}
+
+.ball-guest-clear { margin: 0; }
+.ball-guest-clear[hidden] { display: none; }
+.btn-small {
+  padding: 7px 14px;
+  font-size: 0.84rem;
+}
+
+.ball-progress {
+  margin: 0 0 20px;
+  line-height: 1.7;
+  max-width: 62ch;
+}
+.ball-saved {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  border: 1px solid var(--gold-deep);
+  border-radius: 10px;
+  background: #FBF6EA;
+  font-size: 0.94rem;
+}
+.ball-privacy {
+  padding: clamp(16px, 2.4vw, 20px);
+  border-radius: var(--radius);
+  background: var(--tint);
+  border: 1px solid var(--line);
+}
+.ball-privacy h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: var(--maroon);
+}
+.ball-privacy p {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--slate-soft);
+}
+.ball-privacy p:last-child { margin-bottom: 0; }
+
 .ball-smallprint {
   margin: 0;
   font-size: 0.84rem;

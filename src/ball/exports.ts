@@ -14,6 +14,8 @@
 
 export interface ExportGuest {
   fullName: string;
+  /** TASK-409: as typed by the booker. NULL on rows saved before the split. */
+  surname?: string | null;
   dietary: string | null;
   accessNeeds: string | null;
   menuChoice: string | null;
@@ -56,14 +58,21 @@ export function csvRows(rows: Array<Array<string | number | null>>): string {
 // Surname = the last whitespace-separated word. Crude, and deliberately so: it is only a sort
 // order for a printed list a human reads, and a cleverer parser would get "van der Berg" and
 // "Smith Jones" wrong in less predictable ways.
-export function surnameOf(fullName: string): string {
+//
+// TASK-409: it is now the FALLBACK rather than the only answer. The form asks for a surname in
+// its own box, so where the booker gave us one we sort on what they typed and "Ali van der Berg"
+// files under V rather than under B. Rows saved before the split still have only the joined
+// name, and they keep the crude guess, which is why it stays.
+export function surnameOf(fullName: string, surname?: string | null): string {
+  const given = (surname ?? "").trim();
+  if (given) return given.toLowerCase();
   const parts = fullName.trim().split(/\s+/);
   return (parts.length > 1 ? parts[parts.length - 1] : parts[0] ?? "").toLowerCase();
 }
 
 export function doorListCsv(guests: ExportGuest[]): string {
   const sorted = [...guests].sort((a, b) => {
-    const s = surnameOf(a.fullName).localeCompare(surnameOf(b.fullName));
+    const s = surnameOf(a.fullName, a.surname).localeCompare(surnameOf(b.fullName, b.surname));
     return s !== 0 ? s : a.fullName.localeCompare(b.fullName);
   });
   return csvRows([

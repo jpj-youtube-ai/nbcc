@@ -2731,6 +2731,47 @@ terms, and `purgeExpiredGuests()` deletes on it. `isExpired` fails CLOSED on an 
 keeping a row too long is untidy, deleting someone's access needs early could mean they arrive
 somewhere that cannot accommodate them.
 
+**TASK-409 rebuilt the form around the person filling it in.** Five changes:
+
+- **A first name and a surname**, in two boxes. This was the last single-name field on the site;
+  TASK-318 split the buyer's for reasons that apply just as much to their guests. `full_name` is
+  still written and still holds "First Surname", so the door list, the CSV exports, the admin
+  table and the reminder email's read-back are untouched (expand-only, migration
+  `1788200000000`). `surnameOf()` now prefers the stored surname and keeps the last-word guess
+  only as the fallback for rows saved before the split, so **"Ali van der Berg" files under V**
+  on the door list instead of under B.
+- **The hints are labels, not placeholders.** Placeholder text is low contrast by design, is
+  thrown away the moment somebody types, and is announced inconsistently by screen readers. On a
+  field asking about a disability that is the wrong control. Each hint is visible text tied to
+  its input with `aria-describedby`, in the **ordinary body colour** rather than the muted
+  small-print grey (`.ball-field .ball-hint`, two classes, because `.ball-field small` is (0,1,1)
+  and would otherwise win).
+- **The booker is filled in as guest 1**, with a "Not you? Clear this guest" button for a PA who
+  booked on somebody else's behalf. The seed only happens when nothing is stored **and** the page
+  is not rendering after a save: without that second condition, clearing yourself and saving
+  would put the name straight back, which reads as the page refusing to do as it is told.
+- **"Table name" became a group name**, with the instruction that makes it work: agree one name
+  and have everyone type it identically. That is the whole mechanism. The alternative considered
+  was an open "who would you like to sit with?" box, which produces four contradictory partial
+  lists somebody has to reverse-engineer into groupings; one agreed name is a column you sort.
+  Both kinds of booking get the instruction, because a table booker whose friends bought separate
+  tickets needs the coordination most.
+- **The closing date is honest.** The page used to say guests could come back "any time before the
+  night", which is how a table plan arrives on the morning of the event. It now names
+  `guest_details_lock_at` when it is set and says the date is still to be confirmed when it is
+  not, which is the state this ships in.
+
+The page keeps its no-JavaScript guarantee. It gained one small **inline** script that reveals the
+clear button and empties the two name boxes; it fetches nothing, the button ships `hidden` so a
+reader without JavaScript is never shown a control that does nothing, and saving is a plain
+submit. `test/unit/ball-guest-page.test.ts` asserts those three things rather than the old proxy
+of "no `<script>` anywhere".
+
+`getBookingByGuestToken` also picked up a **fix**: its mapper read `g.menu_choice` but the query
+never selected it, so a saved menu choice never rendered back into the form and re-saving without
+re-picking would have wiped it. Latent rather than live, since the picker stays hidden until
+`ball_settings.menu_options` is set.
+
 ### The admin Festive Ball screen
 
 Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,

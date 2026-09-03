@@ -14,10 +14,14 @@ const render = (over: Partial<Parameters<typeof renderGuestPage>[0]> = {}) =>
   renderGuestPage({ booking, guests: [], token: "tok123", ...over });
 
 describe("renderGuestPage", () => {
+  // TASK-409 split the one name box into two. The seat count is what these are really about.
   it("gives one set of fields per seat booked", () => {
     const html = render();
-    for (let n = 1; n <= 10; n += 1) expect(html).toContain(`name="fullName${n}"`);
-    expect(html).not.toContain('name="fullName11"');
+    for (let n = 1; n <= 10; n += 1) {
+      expect(html).toContain(`name="firstName${n}"`);
+      expect(html).toContain(`name="surname${n}"`);
+    }
+    expect(html).not.toContain('name="firstName11"');
   });
 
   it("asks for only two seats when only two were bought", () => {
@@ -26,15 +30,27 @@ describe("renderGuestPage", () => {
       guests: [],
       token: "t",
     });
-    expect(html).toContain('name="fullName2"');
-    expect(html).not.toContain('name="fullName3"');
+    expect(html).toContain('name="surname2"');
+    expect(html).not.toContain('name="surname3"');
   });
 
   it("works with no JavaScript at all", () => {
     const html = render();
     expect(html).toContain('method="post"');
     expect(html).toContain('action="/ball/guests/tok123"');
-    expect(html).not.toContain("<script");
+
+    // TASK-409 added one small INLINE script, which reveals the "clear this guest" button for a
+    // PA who booked on somebody else's behalf. The rule this test exists to protect is not "no
+    // script tag" but "nothing the form needs can fail to arrive", so it now asserts that
+    // directly and more strictly than the old proxy did:
+    //
+    //   - no EXTERNAL script, so there is nothing to fetch and nothing to time out
+    //   - the submit button is a plain submit, so saving never goes through a handler
+    //   - the one control that does need the script ships hidden, so a reader without
+    //     JavaScript is never shown a button that does nothing
+    expect(html).not.toMatch(/<script[^>]*\ssrc=/);
+    expect(html).toContain('<button class="btn btn-primary" type="submit">');
+    expect(html).toMatch(/data-guest-clear[^>]*hidden/);
   });
 
   it("says plainly that a partial save is fine, so nobody waits for all ten names", () => {
@@ -74,10 +90,13 @@ describe("renderGuestPage", () => {
 
   it("pre-fills what was already given so nothing is retyped", () => {
     const html = render({
-      guests: [{ fullName: "Pat Brown", dietary: "Coeliac", accessNeeds: "Step-free" }],
+      guests: [
+        { firstName: "Pat", surname: "Brown", fullName: "Pat Brown", dietary: "Coeliac", accessNeeds: "Step-free" },
+      ],
       booking: { ...booking, tableName: "Ayrshire Bakery" },
     });
-    expect(html).toContain('value="Pat Brown"');
+    expect(html).toContain('value="Pat"');
+    expect(html).toContain('value="Brown"');
     expect(html).toContain('value="Coeliac"');
     expect(html).toContain('value="Ayrshire Bakery"');
   });
@@ -85,7 +104,11 @@ describe("renderGuestPage", () => {
   it("confirms a save and says they can come back", () => {
     const html = render({ saved: true });
     expect(html).toMatch(/Saved, thank you/);
-    expect(html).toMatch(/come back to this page any time/i);
+    // "any time" is gone deliberately (TASK-409): the guest list closes on a date agreed with
+    // the venue, and telling people they can edit right up to the night is how a table plan
+    // arrives on the morning of the event. The promise is now bounded by that date.
+    expect(html).toMatch(/come back to this page and change anything/i);
+    expect(html).not.toMatch(/any time before the night/i);
   });
 
   it("shows an error instead of a success when something failed", () => {

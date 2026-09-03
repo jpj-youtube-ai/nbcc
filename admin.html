@@ -1156,6 +1156,45 @@
             </section>
 
             <!-- Audit trail (append-only governance log). -->
+            <!-- One business (TASK-404). Reached by clicking a name, not from the nav, so it
+                 follows view-donor's shape: a Back control and a region the JS fills. Everything
+                 known about one firm in one place, because piecing a history together from a
+                 list row is how a volunteer ends up asking twice. -->
+            <section class="admin-view" id="view-business" aria-labelledby="business-heading" hidden>
+              <button class="admin-back" id="businessBack" type="button">&larr; Back to the list</button>
+              <h2 id="business-heading">Business</h2>
+              <div id="businessDetail" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+
+              <h3 class="admin-subhead">What happened?</h3>
+              <p class="admin-help">Pick one and press save. This is what puts them on, or takes them off, the list of people who need chasing.</p>
+              <form class="ty-panel" id="businessOutcomeForm" autocomplete="off">
+                <div id="businessOutcomes" class="out-outcomes"></div>
+                <div class="ty-field" id="businessAskAgainField" hidden>
+                  <label for="businessAskAgain">When should we ask again?</label>
+                  <input id="businessAskAgain" type="date" />
+                  <span class="ty-hint">They will appear on your list again on this date. Without one, &ldquo;not this year&rdquo; is the same as a no.</span>
+                </div>
+                <p class="ty-controls">
+                  <button class="btn btn-primary" type="submit" id="businessOutcomeSave">Save what happened</button>
+                  <span class="ty-status" id="businessOutcomeStatus" role="status" aria-live="polite"></span>
+                </p>
+              </form>
+
+              <h3 class="admin-subhead">Notes</h3>
+              <p class="admin-help">Anything worth the next volunteer knowing. Notes cannot be edited or deleted once saved, and the business can ask to see them, so write them as though they will.</p>
+              <form class="ty-panel" id="businessNoteForm" autocomplete="off">
+                <div class="ty-field">
+                  <label for="businessNote">Add a note</label>
+                  <textarea id="businessNote" rows="3" maxlength="2000" spellcheck="true" lang="en-GB" placeholder="e.g. Rang and spoke to Jim. Asked us to try again after their year end in April."></textarea>
+                </div>
+                <p class="ty-controls">
+                  <button class="btn btn-primary" type="submit" id="businessNoteAdd">Add this note</button>
+                  <span class="ty-status" id="businessNoteStatus" role="status" aria-live="polite"></span>
+                </p>
+              </form>
+              <div id="businessNotes" aria-live="polite"></div>
+            </section>
+
             <!-- Contact businesses (TASK-401): cold outreach asking local firms to become monthly
                  supporters. Follows the Thank you page's shape - a form on the left, the real
                  email previewed live on the right - because that is the pattern staff already
@@ -1222,6 +1261,11 @@
                   <label for="outConsent">How did they agree to hear from us?</label>
                   <input id="outConsent" type="text" maxlength="400" placeholder="e.g. Gave me her card at the Chamber breakfast and said to email" />
                   <span class="ty-hint">A sole trader counts as a person in law, not a company, so we can only email one who has said yes. Without this you can still call them or send a letter.</span>
+                </div>
+                <div class="ty-field">
+                  <label for="outWarmIntro">Who do we know that knows them? <span class="ty-muted">(optional)</span></label>
+                  <input id="outWarmIntro" type="text" maxlength="400" placeholder="e.g. Sarah&rsquo;s husband plays golf with the owner" />
+                  <span class="ty-hint">The most useful thing on this form. An introduction from someone they know beats any email we can write.</span>
                 </div>
                 <div class="ty-field">
                   <label for="outNote">Why this business <span class="ty-muted">(private, never sent)</span></label>

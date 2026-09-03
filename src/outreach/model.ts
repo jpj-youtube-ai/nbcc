@@ -45,6 +45,12 @@ export const outreachCreateSchema = z.object({
   // reverse would suppress a warning somebody did.
   businessType: z.enum(["company", "sole_trader"]).default("company"),
   note: optionalText(2000),
+  /**
+   * Who we know that knows them (TASK-404). Separate from `note` on purpose: the note is why the
+   * business is worth approaching, this is the person who can open the door, and it has to be
+   * findable on its own so a chase list can say "ask Sarah first".
+   */
+  warmIntro: optionalText(400),
   // Where the volunteer got the details, which the email then states (TASK-403, Article 14).
   detailsSource: z
     .enum(["website_or_listing", "given_to_us", "referred", "social"])

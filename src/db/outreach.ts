@@ -1,6 +1,7 @@
 import { pool } from "./pool";
 import type { Known } from "../outreach/matching";
 import type { Outcome } from "../outreach/model";
+import { isEngagement } from "../outreach/outcomes";
 
 // TASK-354: storage for business outreach. The matching itself is pure and lives in
 // src/outreach/matching.ts; this only fetches what it compares against and records what happened.
@@ -13,6 +14,8 @@ export interface OutreachRow {
   contactPhone: string | null;
   businessType: "company" | "sole_trader";
   note: string | null;
+  /** Who we know that knows them. The field most likely to walk out in somebody's head. */
+  warmIntro: string | null;
   /** Where the volunteer got the details. The email says this back to the business. */
   detailsSource: string;
   /** Why we may email an individual subscriber. Null for a company, which needs none. */
@@ -30,7 +33,8 @@ export interface OutreachRow {
 
 const ROW_COLUMNS = `id, business_name, contact_name, contact_email, contact_phone,
                      business_type, note, owner, sent_by, sent_at, outcome, outcome_at,
-                     ask_again_on, last_engagement_at, created_at, details_source, consent_basis,
+                     ask_again_on, last_engagement_at, created_at, warm_intro, details_source,
+                     consent_basis,
                      consent_basis_recorded_by, consent_basis_recorded_at`;
 
 function toRow(r: Record<string, unknown>): OutreachRow {
@@ -42,6 +46,7 @@ function toRow(r: Record<string, unknown>): OutreachRow {
     contactPhone: (r.contact_phone as string) ?? null,
     businessType: r.business_type === "sole_trader" ? "sole_trader" : "company",
     note: (r.note as string) ?? null,
+    warmIntro: (r.warm_intro as string) ?? null,
     detailsSource: (r.details_source as string) ?? "website_or_listing",
     consentBasis: (r.consent_basis as string) ?? null,
     consentBasisRecordedBy: (r.consent_basis_recorded_by as string) ?? null,
@@ -129,6 +134,7 @@ export interface OutreachCreate {
   contactPhone: string | null;
   businessType: "company" | "sole_trader";
   note: string | null;
+  warmIntro: string | null;
   detailsSource: string;
   consentBasis: string | null;
   /** Who recorded the basis. Stamped only when there is a basis to attribute. */
@@ -140,8 +146,9 @@ export async function createOutreach(input: OutreachCreate): Promise<OutreachRow
   const res = await pool.query(
     `INSERT INTO business_outreach
        (business_name, contact_name, contact_email, contact_phone, business_type, note, owner,
-        details_source, consent_basis, consent_basis_recorded_by, consent_basis_recorded_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        warm_intro, details_source, consent_basis, consent_basis_recorded_by,
+        consent_basis_recorded_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING ${ROW_COLUMNS}`,
     [
       input.businessName,
@@ -151,6 +158,7 @@ export async function createOutreach(input: OutreachCreate): Promise<OutreachRow
       input.businessType,
       input.note,
       input.owner,
+      input.warmIntro,
       input.detailsSource,
       input.consentBasis,
       // Stamped together, or not at all: a basis with nobody's name against it cannot be asked
@@ -188,16 +196,15 @@ export async function markOutreachSent(id: number, sentBy: string): Promise<void
 export { OUTCOMES, type Outcome } from "../outreach/model";
 
 /**
- * Anything that is not "no reply" counts as the business engaging, which is what drives the call
- * list and holds off the three-year retention purge. "No reply" deliberately does not: recording
- * silence is not contact, and treating it as engagement would keep a dead record alive forever.
+ * Whether this counts as the business engaging comes from src/outreach/outcomes.ts, so the rule
+ * that drives the call list, the retention purge and the screen is written once.
  */
 export async function setOutreachOutcome(
   id: number,
   outcome: Outcome,
   askAgainOn: string | null,
 ): Promise<void> {
-  const engaged = outcome !== "no_reply";
+  const engaged = isEngagement(outcome);
   await pool.query(
     `UPDATE business_outreach
         SET outcome = $2,

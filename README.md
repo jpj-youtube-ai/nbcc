@@ -1362,6 +1362,9 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/admin/outreach` | **implemented** | TASK-354 (Editor+; add a business as a draft. 409 on a business that declined, unless `acknowledgedMatches`) |
 | `GET /api/admin/outreach` | **implemented** | TASK-354 (Viewer+; every business on the list, newest first) |
 | `POST /api/admin/outreach/preview` | **implemented** | TASK-401 (Viewer+; the invitation rendered through the same builder the send uses) |
+| `GET /api/admin/outreach/:id` | **implemented** | TASK-404 (Viewer+; one business and every note written about it) |
+| `POST /api/admin/outreach/:id/outcome` | **implemented** | TASK-404 (Editor+; record what happened. An ask-again date is kept only for "not this year", ignored elsewhere. Audited) |
+| `POST /api/admin/outreach/:id/notes` | **implemented** | TASK-404 (Editor+; append a note. No edit, no delete, by intention. Audited) |
 | `POST /api/admin/outreach/:id/send` | **implemented** | TASK-401 (Editor+; send one invitation. 400 without an email address, 409 if already sent; `sent_at` is stamped only after the send succeeds) |
 | `GET /api/admin/ball` | **implemented** | TASK-313 (Viewer+; settings, live availability and money raised) |
 | `PATCH /api/admin/ball` | **implemented** | TASK-313 (Editor+ **with the ball section granted**; capacity, held seats, gate, sales window, late-confirmed details. Audited as `ball.settings_updated`) |
@@ -2858,6 +2861,36 @@ business reads. A drop-down rather than one fixed sentence for a reason: a sente
 **wrong** — "we found you on your website", to someone who handed over a business card — is worse
 than one that is vague. Every variant ends "and nowhere else", because "you bought a list" is the
 thing a business actually fears.
+
+### One business, one page (TASK-404)
+
+Clicking a name in the list opens that business: everything known about the firm in one place,
+because piecing a history together from a list row is how a volunteer ends up asking the same
+business twice. It is reached from a row rather than the nav, so it follows `view-donor`'s shape
+— a Back control and a region the JS fills.
+
+Three things live there.
+
+**What happened.** The seven outcomes have existed in the database since TASK-354 with no way to
+set one, so every business sat at "Emailed" for ever. `src/outreach/outcomes.ts` is now the single
+place that says what each one *means*: its label, the one-line explanation shown under it (a
+volunteer choosing between "Interested" and "Asked for information" should not have to guess),
+whether it counts as the business having **engaged** (everything except "No reply" — recording
+silence is not contact, and treating it as engagement would keep a dead record alive for ever),
+and whether it leaves us owing them a date. "Said no" gets a confirm, because it is the one
+outcome that takes something away: it puts the business permanently beyond the matcher.
+
+**Notes**, append-only, stamped with who wrote them. There is no edit and no delete: a record that
+can be tidied afterwards is not a record. They are also disclosable if the business ever asks what
+we hold, which is why that sentence sits next to the box rather than in a policy.
+
+**Who knows them** — a field of its own on the add form, not a line in the private note. In
+small-charity fundraising an introduction from someone they know beats any email we can write, and
+it has to be findable on its own so a chase list can say "ask Sarah first". It is also the thing
+most likely to walk out of the door in one volunteer's head.
+
+`POST /api/admin/outreach/:id/outcome` and `/notes` are Editor+ and both write to the audit trail,
+which is what the legitimate-interests assessment promises.
 
 The privacy notice carries a matching **"If you run a local business"** section, and
 `docs/legitimate-interests-assessment-business-outreach.md` is the written Article 6(1)(f)

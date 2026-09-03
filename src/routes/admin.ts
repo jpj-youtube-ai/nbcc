@@ -76,11 +76,15 @@ import {
   listOutreach,
   getOutreach,
   markOutreachSent,
+  setOutreachOutcome,
+  addOutreachNote,
+  listOutreachNotes,
 } from "../db/outreach";
 import { buildOutreachEmail } from "../outreach/invitation-email";
 import { sendOutreachInvitation } from "../clients/email";
 import { findMatches, isDoNotContact } from "../outreach/matching";
 import { emailBlockReason } from "../outreach/lawful-basis";
+import { isOutcome, wantsAskAgainDate } from "../outreach/outcomes";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
@@ -2425,6 +2429,16 @@ adminRouter.patch("/api/admin/site-seo", patchAdminSiteSeo);
 // Cold contact asking local businesses to become monthly supporters. The front of a funnel whose
 // later stages already exist; this ends at "they signed up".
 
+/** The id in the path, or null after sending a 400. Shared so the four routes agree. */
+function outreachId(req: Request, res: Response): number | null {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Unknown business" });
+    return null;
+  }
+  return id;
+}
+
 // POST /api/admin/outreach/check — what does the matcher say about this business?
 //
 // Deliberately its own endpoint rather than part of the create: the volunteer sees the warnings
@@ -2470,6 +2484,7 @@ export async function postAdminOutreach(req: Request, res: Response): Promise<Re
       contactPhone: parsed.data.contactPhone ?? null,
       businessType: parsed.data.businessType,
       note: parsed.data.note ?? null,
+      warmIntro: parsed.data.warmIntro ?? null,
       detailsSource: parsed.data.detailsSource,
       consentBasis: parsed.data.consentBasis ?? null,
       recordedBy: claims.email,
@@ -2501,8 +2516,8 @@ adminRouter.post("/api/admin/outreach", postAdminOutreach);
 // there is no bulk send here and there is not meant to be.
 export async function postAdminOutreachSend(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "outreach", "edit"))) return;
-  const id = Number(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: "Unknown business" });
+  const id = outreachId(req, res);
+  if (id === null) return;
 
   const signerName = typeof req.body?.signerName === "string" ? req.body.signerName.trim() : "";
   const signerRole = typeof req.body?.signerRole === "string" ? req.body.signerRole.trim() : "";
@@ -2583,8 +2598,101 @@ export async function postAdminOutreachPreview(req: Request, res: Response): Pro
   return res.status(200).json({ subject: mail.subject, html: mail.html });
 }
 
+// GET /api/admin/outreach/:id — one business, and everything written about it.
+//
+// The whole point of the business page: a volunteer who has never seen this firm before gets the
+// history in one place instead of piecing it together from a list row.
+export async function getAdminOutreachOne(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+  try {
+    const [business, notes] = await Promise.all([getOutreach(id), listOutreachNotes(id)]);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    return res.status(200).json({ business, notes });
+  } catch (err) {
+    console.error("outreach read failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/outreach/:id/outcome — record what happened.
+//
+// Editor+, because a decline written here puts the business permanently out of reach of the
+// matcher. Audited for the same reason.
+export async function postAdminOutreachOutcome(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "outreach", "edit");
+  if (!claims) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+
+  const outcome = req.body?.outcome;
+  if (!isOutcome(outcome)) return res.status(400).json({ error: "Choose what happened" });
+
+  const raw = typeof req.body?.askAgainOn === "string" ? req.body.askAgainOn.trim() : "";
+  if (raw && !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return res.status(400).json({ error: "Use a date like 2027-03-01" });
+  }
+  // A date on any other outcome is noise: nothing reads it, so storing it would only mislead
+  // whoever found it later.
+  const askAgainOn = wantsAskAgainDate(outcome) ? raw || null : null;
+
+  try {
+    const business = await getOutreach(id);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    await setOutreachOutcome(id, outcome, askAgainOn);
+    await recordAudit({
+      actor: claims.email,
+      action: "outreach.outcome_recorded",
+      entity: "business_outreach",
+      entityId: id,
+      data: { businessName: business.businessName, outcome, askAgainOn },
+    });
+    return res.status(200).json({ saved: true });
+  } catch (err) {
+    console.error("outreach outcome failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/outreach/:id/notes — add a note.
+//
+// Append-only by design: there is no edit and no delete. A note is what somebody thought at the
+// time, and a record that can be tidied afterwards is not a record. It is also disclosable if the
+// business ever asks what we hold, which is why the screen says to write it that way.
+export async function postAdminOutreachNote(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "outreach", "edit");
+  if (!claims) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+
+  const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+  if (!body) return res.status(400).json({ error: "The note needs something in it" });
+  if (body.length > 2000) return res.status(400).json({ error: "That note is too long" });
+
+  try {
+    const business = await getOutreach(id);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    await addOutreachNote(id, claims.email, body);
+    await recordAudit({
+      actor: claims.email,
+      action: "outreach.note_added",
+      entity: "business_outreach",
+      entityId: id,
+      data: { businessName: business.businessName },
+    });
+    return res.status(201).json({ notes: await listOutreachNotes(id) });
+  } catch (err) {
+    console.error("outreach note failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/outreach", getAdminOutreach);
 adminRouter.post("/api/admin/outreach/preview", postAdminOutreachPreview);
+adminRouter.get("/api/admin/outreach/:id", getAdminOutreachOne);
+adminRouter.post("/api/admin/outreach/:id/outcome", postAdminOutreachOutcome);
+adminRouter.post("/api/admin/outreach/:id/notes", postAdminOutreachNote);
 adminRouter.post("/api/admin/outreach/:id/send", postAdminOutreachSend);
 adminRouter.get("/api/admin/subscriptions/dunning", getAdminDunning);
 

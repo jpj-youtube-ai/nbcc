@@ -16,6 +16,10 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 // rerun is idempotent. The prefix is also nothing like a real Ayrshire business name, so it cannot
 // collide with seeded donor rows the matcher also reads.
 async function clean() {
+  await pool.query(
+    `DELETE FROM business_outreach_notes WHERE outreach_id IN
+       (SELECT id FROM business_outreach WHERE business_name LIKE 'Zzbdd%')`,
+  );
   await pool.query("DELETE FROM business_outreach WHERE business_name LIKE 'Zzbdd%'");
   await pool.query("DELETE FROM donations WHERE donor_id IN (SELECT id FROM donors WHERE business_name LIKE 'Zzbdd%')");
   await pool.query("DELETE FROM donors WHERE business_name LIKE 'Zzbdd%'");
@@ -200,6 +204,48 @@ When("I send the invitation as {string} with password {string}", async function 
   });
 });
 
+When("I open the business as {string} with password {string}", async function (actor, password) {
+  const token = await login(actor, password);
+  await call(this, `/api/admin/outreach/${this.outId}`, { token });
+});
+
+When("I open business {int} as {string} with password {string}", async function (id, actor, password) {
+  const token = await login(actor, password);
+  await call(this, `/api/admin/outreach/${id}`, { token });
+});
+
+async function recordOutcome(ctx, outcome, askAgainOn, actor, password) {
+  const token = await login(actor, password);
+  await call(ctx, `/api/admin/outreach/${ctx.outId}/outcome`, {
+    method: "POST",
+    token,
+    body: { outcome, askAgainOn },
+  });
+}
+
+When(
+  "I record the outcome {string} as {string} with password {string}",
+  async function (outcome, actor, password) {
+    await recordOutcome(this, outcome, null, actor, password);
+  },
+);
+
+When(
+  "I record the outcome {string} asking again on {string} as {string} with password {string}",
+  async function (outcome, date, actor, password) {
+    await recordOutcome(this, outcome, date, actor, password);
+  },
+);
+
+When("I add the note {string} as {string} with password {string}", async function (body, actor, password) {
+  const token = await login(actor, password);
+  await call(this, `/api/admin/outreach/${this.outId}/notes`, {
+    method: "POST",
+    token,
+    body: { body },
+  });
+});
+
 // --- assertions ---------------------------------------------------------------------------------
 
 Then("the outreach response status should be {int}", function (status) {
@@ -224,6 +270,51 @@ Then("the outreach response should explain the sole trader rule", function () {
   assert.match(error, /sole trader/i);
   // A refusal that does not say what to do instead just gets worked around.
   assert.match(error, /call|letter/i);
+});
+
+Then("the outreach business outcome should be {string}", async function (outcome) {
+  const row = await pool.query("SELECT outcome FROM business_outreach WHERE id = $1", [this.outId]);
+  assert.equal(row.rows[0].outcome, outcome);
+});
+
+// last_engagement_at is what holds off the retention purge and drives the call list, so it is
+// worth asserting directly rather than inferring it from the outcome.
+Then("the outreach business should count as engaged", async function () {
+  const row = await pool.query("SELECT last_engagement_at FROM business_outreach WHERE id = $1", [
+    this.outId,
+  ]);
+  assert.ok(row.rows[0].last_engagement_at, "expected last_engagement_at to be stamped");
+});
+
+Then("the outreach business should not count as engaged", async function () {
+  const row = await pool.query("SELECT last_engagement_at FROM business_outreach WHERE id = $1", [
+    this.outId,
+  ]);
+  assert.equal(row.rows[0].last_engagement_at, null);
+});
+
+Then("the outreach business ask-again date should be {string}", async function (date) {
+  const row = await pool.query("SELECT ask_again_on FROM business_outreach WHERE id = $1", [
+    this.outId,
+  ]);
+  assert.equal(new Date(row.rows[0].ask_again_on).toISOString().slice(0, 10), date);
+});
+
+Then("the outreach business should have no ask-again date", async function () {
+  const row = await pool.query("SELECT ask_again_on FROM business_outreach WHERE id = $1", [
+    this.outId,
+  ]);
+  assert.equal(row.rows[0].ask_again_on, null);
+});
+
+Then("the business should have a note by {string} saying {string}", async function (author, body) {
+  const rows = await pool.query(
+    "SELECT author, body FROM business_outreach_notes WHERE outreach_id = $1",
+    [this.outId],
+  );
+  assert.equal(rows.rows.length, 1);
+  assert.equal(rows.rows[0].author, author);
+  assert.equal(rows.rows[0].body, body);
 });
 
 Then("the outreach response should find nothing", function () {

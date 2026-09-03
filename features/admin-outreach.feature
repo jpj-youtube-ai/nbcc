@@ -69,6 +69,69 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
     Then the outreach response status should be 400
 
+  # TASK-404: the business page, and the two things a volunteer does on it.
+  Scenario: a Viewer can read a business and its notes but cannot change either
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And the business "Zzbdd Electrics" was added with email "hello@zzbddelectrics.example"
+    When I open the business as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the outreach response status should be 200
+    When I record the outcome "interested" as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the outreach response status should be 403
+    When I add the note "Rang and spoke to Jim." as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the outreach response status should be 403
+
+  Scenario: an Editor records what happened, and it sticks
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Electrics" was added with email "hello@zzbddelectrics.example"
+    When I record the outcome "interested" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach business outcome should be "interested"
+    And the outreach business should count as engaged
+
+  # Silence is not contact. Treating it as engagement would keep a dead record alive for ever and
+  # put a business nobody has heard from on the call list.
+  Scenario: recording no reply does not count as the business engaging
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Tyres" was added with email "hello@zzbddtyres.example"
+    When I record the outcome "no_reply" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach business should not count as engaged
+
+  # A decline is an instruction: it has to reach the matcher, or a different volunteer writes to
+  # them again next year.
+  Scenario: recording a decline puts the business beyond the matcher
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Carpets" was added with email "hello@zzbddcarpets.example"
+    When I record the outcome "declined" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    When I check the business "Zzbdd Carpets Ltd" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response should say do not contact
+
+  Scenario: an ask-again date is kept for not this year, and ignored for anything else
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Signs" was added with email "hello@zzbddsigns.example"
+    When I record the outcome "not_this_year" asking again on "2027-08-01" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach business ask-again date should be "2027-08-01"
+    When I record the outcome "interested" asking again on "2027-08-01" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the outreach business should have no ask-again date
+
+  # Append-only, and stamped with who wrote it. A record that can be tidied afterwards is not one.
+  Scenario: a note is kept with its author, and cannot be emptied
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Windows" was added with email "hello@zzbddwindows.example"
+    When I add the note "   " as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 400
+    When I add the note "Rang and spoke to Jim." as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 201
+    And the business should have a note by "editor.admin.bdd@example.com" saying "Rang and spoke to Jim."
+
+  Scenario: a business that does not exist is not found
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    When I open business 999999999 as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 404
+
   # PECR (TASK-403). A sole trader is a person in law, not a company, so an unsolicited marketing
   # email needs their agreement first. Checked on the SERVER: the screen hides the box for a
   # company, but a hidden box is not a legal control.

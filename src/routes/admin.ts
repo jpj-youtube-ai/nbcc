@@ -76,6 +76,8 @@ import {
   listOutreach,
   getOutreach,
   markOutreachSent,
+  listOutreachForTodo,
+  listVolunteers,
   setOutreachOutcome,
   addOutreachNote,
   listOutreachNotes,
@@ -85,6 +87,7 @@ import { sendOutreachInvitation } from "../clients/email";
 import { findMatches, isDoNotContact } from "../outreach/matching";
 import { emailBlockReason } from "../outreach/lawful-basis";
 import { isOutcome, wantsAskAgainDate } from "../outreach/outcomes";
+import { whatIsNeeded, sortTodos } from "../outreach/todo";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
@@ -2485,6 +2488,7 @@ export async function postAdminOutreach(req: Request, res: Response): Promise<Re
       businessType: parsed.data.businessType,
       note: parsed.data.note ?? null,
       warmIntro: parsed.data.warmIntro ?? null,
+      ownerEmail: parsed.data.ownerEmail ?? null,
       detailsSource: parsed.data.detailsSource,
       consentBasis: parsed.data.consentBasis ?? null,
       recordedBy: claims.email,
@@ -2690,6 +2694,57 @@ export async function postAdminOutreachNote(req: Request, res: Response): Promis
 
 adminRouter.get("/api/admin/outreach", getAdminOutreach);
 adminRouter.post("/api/admin/outreach/preview", postAdminOutreachPreview);
+// GET /api/admin/outreach/todo?scope=mine|all — the one list a volunteer opens.
+//
+// Defaults to "mine", which means MINE PLUS ANYTHING UNASSIGNED. Showing everyone's work by
+// default means two volunteers chase the same business; showing only what is assigned means an
+// unassigned business belongs to nobody and quietly rots. Neither is acceptable, so the default
+// is both, and "everything" is one click away.
+export async function getAdminOutreachTodo(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "outreach", "view");
+  if (!claims) return;
+  const scope = req.query.scope === "all" ? "all" : "mine";
+  try {
+    const rows = await listOutreachForTodo();
+    const now = new Date();
+    const mine = (r: { ownerEmail: string | null }) =>
+      scope === "all" || !r.ownerEmail || r.ownerEmail === claims.email;
+    const todos = sortTodos(
+      rows
+        .filter(mine)
+        .map((r) => whatIsNeeded(r, now))
+        .filter((t): t is NonNullable<typeof t> => t !== null),
+    );
+    // The count for the OTHER scope, so the toggle can say what is behind it rather than making
+    // somebody click to find out whether it is worth clicking.
+    const everything = sortTodos(
+      rows.map((r) => whatIsNeeded(r, now)).filter((t): t is NonNullable<typeof t> => t !== null),
+    );
+    return res.status(200).json({ scope, todos, totalEverywhere: everything.length });
+  } catch (err) {
+    console.error("outreach todo failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/outreach/volunteers — who a business can be handed to.
+//
+// The admin users, not the letter-signers the picker used to offer: signing a thank-you letter
+// and chasing a local business are different jobs done by different people, and a volunteer who
+// does the second but not the first could not be assigned anything.
+export async function getAdminOutreachVolunteers(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  try {
+    return res.status(200).json({ volunteers: await listVolunteers() });
+  } catch (err) {
+    console.error("outreach volunteers failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// Registered BEFORE /:id, or Express reads "todo" and "volunteers" as business ids.
+adminRouter.get("/api/admin/outreach/todo", getAdminOutreachTodo);
+adminRouter.get("/api/admin/outreach/volunteers", getAdminOutreachVolunteers);
 adminRouter.get("/api/admin/outreach/:id", getAdminOutreachOne);
 adminRouter.post("/api/admin/outreach/:id/outcome", postAdminOutreachOutcome);
 adminRouter.post("/api/admin/outreach/:id/notes", postAdminOutreachNote);

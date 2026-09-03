@@ -1203,6 +1203,17 @@
               <h2 id="outreach-heading">Contact businesses</h2>
               <p class="admin-view-intro">Ask a local business to become a monthly supporter. Add them, check nobody has approached them already, write a line of your own, and send. One business at a time, always by a person.</p>
 
+              <!-- Needs you today (TASK-405). One list, not three: a separate nudge, call and
+                   ask-again list would be three places to forget instead of one. Above the
+                   forms because it is the reason to open this screen at all. -->
+              <h3 class="admin-subhead">Needs you today</h3>
+              <p class="ty-controls out-scope" id="outTodoScope" role="group" aria-label="Whose list to show">
+                <button class="admin-btn is-active" type="button" data-out-scope="mine" aria-pressed="true">Mine and unassigned</button>
+                <button class="admin-btn" type="button" data-out-scope="all" aria-pressed="false">Everyone&rsquo;s</button>
+                <span class="ty-status" id="outTodoCount" role="status" aria-live="polite"></span>
+              </p>
+              <div id="outTodo" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+
               <div class="admin-stats" id="outStats" aria-live="polite"></div>
 
               <h3 class="admin-subhead">1. Who are we writing to?</h3>
@@ -1307,6 +1318,12 @@
               </div>
 
               <h3 class="admin-subhead">3. Everyone we have contacted</h3>
+              <p class="ty-controls">
+                <label class="ty-inline" for="outSearch">Search
+                  <input id="outSearch" type="search" placeholder="Name, contact or email" style="width:220px" />
+                </label>
+                <span class="ty-status" id="outSearchCount" role="status" aria-live="polite"></span>
+              </p>
               <div class="admin-table-wrap" id="outList" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
             </section>
 

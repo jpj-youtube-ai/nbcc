@@ -1382,3 +1382,10 @@ tr.nl-click:hover { background: var(--tint); }
   .out-todo-open{grid-template-columns:1fr}
   .out-todo-who{grid-column:1}
 }
+
+/* Whether a supporter has been thanked (TASK-411). Green when it has gone, quiet when it has not:
+   "not yet" is a normal state on a fresh supporter, not a problem to alarm anybody about. */
+.fx-ty{display:block;font-weight:600;font-size:.88rem}
+.fx-ty--sent{color:var(--holly-dark)}
+.fx-ty--waiting{color:var(--slate-soft);font-weight:500}
+.fx-ty-who{display:block;font-size:.76rem;color:var(--slate-soft);margin-top:1px}

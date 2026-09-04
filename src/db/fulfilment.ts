@@ -263,6 +263,10 @@ export interface BusinessFulfilmentListRow {
   donor_name: string;
   business_name: string | null;
   band: SupporterBand;
+  /** When the thank-you letter went, or null if this supporter has not been thanked yet. */
+  thank_you_sent_at: string | null;
+  /** "automatic" when the daily pass sent it; an admin address when a person did. */
+  thank_you_sent_by: string | null;
   // Captured preferences (what the business submitted on the thank-you form; captured_at NULL until then).
   credit_name: string | null;
   website: string | null;
@@ -295,9 +299,14 @@ export async function listBusinessFulfilments(): Promise<BusinessFulfilmentListR
             f.want_badge, f.want_certificate, f.certificate_delivery, f.certificate_address,
             f.consent_featured, f.captured_at,
             f.certificate_sent, f.certificate_posted, f.badge_sent, f.social_done, f.added_to_supporters,
-            f.created_at
+            f.created_at,
+            -- Whether this supporter has been thanked, and by whom (TASK-411). One letter per
+            -- donor, so the LEFT JOIN yields at most one row; sent_by is 'automatic' when the
+            -- daily pass sent it and an admin's address when somebody sent it by hand.
+            t.sent_at AS thank_you_sent_at, t.sent_by AS thank_you_sent_by
        FROM business_supporter_fulfilment f
        JOIN donors dn ON dn.id = f.donor_id
+       LEFT JOIN thank_you_sent t ON t.donor_id = f.donor_id
       ORDER BY f.id DESC
       LIMIT ${BUSINESS_FULFILMENT_LIST_LIMIT}`,
   );
@@ -661,12 +670,18 @@ export interface SupporterDueForReminder {
  *
  * The monthly amount comes from a PAID donation. A checkout that was started and never finished
  * is not a reason to thank anybody.
+ *
+ * NEWEST FIRST, and that ordering is load-bearing. The pre-cut-off backlog (see
+ * AUTO_THANK_YOU_FROM) is excluded by the pure rule rather than by this query, so it still comes
+ * back in these rows; oldest-first would let a backlog larger than the limit fill the whole window
+ * and starve every new supporter behind it, for ever. Newest-first means a supporter who signs up
+ * today is always in the window whatever is sitting behind them.
  */
 export async function listSupportersDueForThankYou(now: Date): Promise<SupporterAwaitingThanks[]> {
   const res = await pool.query(
     `SELECT f.id, f.donor_id, f.band, f.invited_at, f.captured_at,
             COALESCE(NULLIF(f.credit_name, ''), dn.business_name, dn.full_name) AS credit_name,
-            dn.full_name, dn.email,
+            dn.full_name, dn.email, f.created_at,
             d.amount_pence, d.gift_aid
        FROM business_supporter_fulfilment f
        JOIN donors dn ON dn.id = f.donor_id
@@ -685,7 +700,7 @@ export async function listSupportersDueForThankYou(now: Date): Promise<Supporter
               f.captured_at IS NOT NULL
            OR (f.invited_at IS NOT NULL AND f.invited_at <= $1::timestamptz - interval '14 days')
         )
-      ORDER BY f.id ASC
+      ORDER BY f.id DESC
       LIMIT ${REMINDER_DUE_LIST_LIMIT}`,
     [now],
   );
@@ -700,6 +715,7 @@ export async function listSupportersDueForThankYou(now: Date): Promise<Supporter
     giftAided: Boolean(r.gift_aid),
     invitedAt: r.invited_at ? new Date(r.invited_at as string) : null,
     capturedAt: r.captured_at ? new Date(r.captured_at as string) : null,
+    becameSupporterAt: r.created_at ? new Date(r.created_at as string) : null,
   }));
 }
 

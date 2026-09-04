@@ -72,6 +72,21 @@ if (require.main === module) {
       } catch (err) {
         console.error("automatic thank-you failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-415: the Monday note. "Needs you today" only works for somebody who opens it, and
+      // these volunteers have jobs and lives, so once a week the list goes to them instead. It
+      // checks the weekday itself and does nothing on the other six, which is cheaper than a
+      // second EventBridge rule nobody would notice had stopped.
+      try {
+        const { runWeeklyDigest } = await import("../outreach/digest-runner");
+        const digest = await runWeeklyDigest();
+        console.error(
+          digest.skipped
+            ? "weekly digest: not today"
+            : `weekly digest: volunteers=${digest.volunteers} sent=${digest.sent} failed=${digest.failed}`,
+        );
+      } catch (err) {
+        console.error("weekly digest failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

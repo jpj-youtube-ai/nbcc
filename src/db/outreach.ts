@@ -26,6 +26,8 @@ export interface OutreachRow {
   ownerEmail: string | null;
   /** Which donor this business became. Linked by a volunteer, never guessed from a name. */
   donorId: number | null;
+  /** Lower-cased, de-duplicated. What the list filters on. */
+  tags: string[];
   /** When the single follow-up went. Once set, this business is never chased again. */
   nudgeSentAt: string | null;
   nudgeSentBy: string | null;
@@ -47,7 +49,7 @@ const ROW_COLUMNS = `id, business_name, contact_name, contact_email, contact_pho
                      business_type, note, owner, sent_by, sent_at, outcome, outcome_at,
                      ask_again_on, last_engagement_at, created_at, owner_email, warm_intro,
                      ctps_checked_at, ctps_checked_by, donor_id, sent_with_personal_message,
-                     nudge_sent_at, nudge_sent_by,
+                     nudge_sent_at, nudge_sent_by, tags,
                      details_source,
                      consent_basis,
                      consent_basis_recorded_by, consent_basis_recorded_at`;
@@ -63,6 +65,7 @@ function toRow(r: Record<string, unknown>): OutreachRow {
     note: (r.note as string) ?? null,
     ownerEmail: (r.owner_email as string) ?? null,
     donorId: (r.donor_id as number) ?? null,
+    tags: (r.tags as string[]) ?? [],
     nudgeSentAt: (r.nudge_sent_at as string) ?? null,
     nudgeSentBy: (r.nudge_sent_by as string) ?? null,
     sentWithPersonalMessage:
@@ -160,6 +163,7 @@ export interface OutreachCreate {
   businessType: "company" | "sole_trader";
   note: string | null;
   warmIntro: string | null;
+  tags: string[];
   detailsSource: string;
   consentBasis: string | null;
   /** Who recorded the basis. Stamped only when there is a basis to attribute. */
@@ -172,9 +176,9 @@ export async function createOutreach(input: OutreachCreate): Promise<OutreachRow
   const res = await pool.query(
     `INSERT INTO business_outreach
        (business_name, contact_name, contact_email, contact_phone, business_type, note, owner,
-        owner_email, warm_intro, details_source, consent_basis, consent_basis_recorded_by,
+        owner_email, warm_intro, tags, details_source, consent_basis, consent_basis_recorded_by,
         consent_basis_recorded_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING ${ROW_COLUMNS}`,
     [
       input.businessName,
@@ -186,6 +190,7 @@ export async function createOutreach(input: OutreachCreate): Promise<OutreachRow
       input.owner,
       input.ownerEmail,
       input.warmIntro,
+      input.tags,
       input.detailsSource,
       input.consentBasis,
       // Stamped together, or not at all: a basis with nobody's name against it cannot be asked

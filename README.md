@@ -2976,6 +2976,31 @@ The **Business supporters** tab shows a "Thank you letter" column: when it went,
 person or the system sent it (`sent_by` is `automatic` for the daily pass). "Not yet" is styled
 quietly — on a fresh supporter it is a normal state, not a problem.
 
+### The list at scale (TASK-416)
+
+**Adding several at once.** Behind a fold, below the single-add form, because one at a time stays
+the front door. Paste a list from a spreadsheet or an email; `src/outreach/paste.ts` splits on tabs
+*or* commas (a volunteer should not have to know which they have) and works out which field is
+which by looking at it, rather than insisting on an order. It shows what it made of the list —
+including the lines it cannot use, **by line number** — before anything is written.
+
+Two things make it safe. It **only adds**: nothing is emailed, and each business still has to be
+opened and sent with its own personal message, so there is no moment where somebody could wonder
+which message went to whom. And each one goes through the **ordinary** add endpoint, so it gets the
+same duplicate check and the same do-not-contact refusal as one typed by hand — a bulk route that
+skipped those would be a way round the rules rather than a shortcut through the typing.
+
+**Tags.** Lower-cased and de-duplicated (`Chamber` and `chamber` are one tag, not two that look
+identical in a filter), capped at ten. The filter offers only tags actually in use, so it can never
+suggest one that would find nothing, and it narrows *together* with the search box.
+
+**Download as a spreadsheet.** Useful as a backup and as something to hand trustees who would
+rather have a file than a login. Fetched with the session rather than followed as a link — an
+`<a download>` sends no `Authorization` header, so a plain link would land on the login page. The
+volunteers' **private notes are deliberately not in it**: a file gets emailed around and left in
+folders, and those notes are disclosable to the business. One click on the business page produces
+them properly when somebody actually asks.
+
 ### The Monday note (TASK-415)
 
 "Needs you today" only works for somebody who opens it, and these volunteers have jobs and lives.

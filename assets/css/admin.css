@@ -1410,3 +1410,14 @@ tr.nl-click:hover { background: var(--tint); }
 .out-report-line strong{color:var(--maroon)}
 .out-report-head{font-family:var(--font-body);font-size:.78rem;font-weight:700;letter-spacing:.09em;
   text-transform:uppercase;color:var(--slate-soft);margin:24px 0 8px}
+
+/* Adding several at once (TASK-416). Behind a fold, because one at a time is the normal way in
+   and this is the exception. */
+.out-paste{margin:0 0 22px;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.out-paste>summary{cursor:pointer;padding:12px 16px;font-weight:600;color:var(--maroon);list-style:revert}
+.out-paste[open]>summary{border-bottom:1px solid var(--line)}
+.out-paste>*:not(summary){margin-left:16px;margin-right:16px}
+.out-paste .ty-field,.out-paste .ty-controls{margin-top:12px}
+.out-paste textarea{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85rem;
+  border:1.6px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--cream);color:var(--slate);resize:vertical}
+.out-paste-count{margin:12px 0 6px;font-weight:600;color:var(--slate)}

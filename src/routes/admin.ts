@@ -102,6 +102,7 @@ import {
   buildPersonalMessageEffect,
 } from "../outreach/reports";
 import { similarity, normaliseBusinessName } from "../outreach/matching";
+import { parsePastedBusinesses, summarisePaste, parseTags } from "../outreach/paste";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
@@ -2502,6 +2503,7 @@ export async function postAdminOutreach(req: Request, res: Response): Promise<Re
       businessType: parsed.data.businessType,
       note: parsed.data.note ?? null,
       warmIntro: parsed.data.warmIntro ?? null,
+      tags: parseTags(parsed.data.tags ?? ""),
       ownerEmail: parsed.data.ownerEmail ?? null,
       detailsSource: parsed.data.detailsSource,
       consentBasis: parsed.data.consentBasis ?? null,
@@ -2714,7 +2716,62 @@ export async function postAdminOutreachNote(req: Request, res: Response): Promis
 }
 
 adminRouter.get("/api/admin/outreach", getAdminOutreach);
+// POST /api/admin/outreach/paste — what a pasted block would become. Reads nothing, writes
+// nothing: it exists so the volunteer sees what they are about to add before they add it.
+export async function postAdminOutreachPaste(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  const text = typeof req.body?.text === "string" ? req.body.text.slice(0, 100_000) : "";
+  return res.status(200).json(summarisePaste(parsePastedBusinesses(text)));
+}
+
+// GET /api/admin/outreach/export — the whole list as a spreadsheet.
+//
+// Viewer+, because it is the same data the list already shows. Useful as a backup, and as
+// something to hand trustees who would rather have a file than a login.
+//
+// The volunteers' private notes are deliberately NOT in it: a file gets emailed around and left in
+// folders, and those notes are disclosable to the business. One click on the business page
+// produces them properly when somebody actually asks.
+export async function getAdminOutreachExport(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  try {
+    const rows = await listOutreach(500, 0);
+    const cell = (v: unknown): string => {
+      const s = v === null || v === undefined ? "" : String(v);
+      // Quote everything: a business name with a comma in it is ordinary, and a lone quote in a
+      // CSV breaks the rest of the file rather than one field.
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+    const header = [
+      "Business", "Contact", "Email", "Phone", "Kind", "Tags", "Looked after by",
+      "Where it stands", "Emailed", "Follow-up sent", "Ask again", "Added",
+    ];
+    const lines = [header.map(cell).join(",")];
+    for (const r of rows) {
+      lines.push(
+        [
+          r.businessName, r.contactName, r.contactEmail, r.contactPhone,
+          r.businessType === "sole_trader" ? "Sole trader or partnership" : "Limited company or LLP",
+          (r.tags ?? []).join(" "), r.owner,
+          r.outcome ?? (r.sentAt ? "Emailed, no answer yet" : "Not emailed yet"),
+          r.sentAt, r.nudgeSentAt, r.askAgainOn, r.createdAt,
+        ].map(cell).join(","),
+      );
+    }
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="nbcc-businesses.csv"');
+    // A BOM, so Excel opens it as UTF-8 and does not mangle the first business with an accent
+    // in its name.
+    return res.status(200).send("\ufeff" + lines.join("\r\n"));
+  } catch (err) {
+    console.error("outreach export failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.post("/api/admin/outreach/preview", postAdminOutreachPreview);
+adminRouter.post("/api/admin/outreach/paste", postAdminOutreachPaste);
+adminRouter.get("/api/admin/outreach/export", getAdminOutreachExport);
 // GET /api/admin/outreach/todo?scope=mine|all — the one list a volunteer opens.
 //
 // Defaults to "mine", which means MINE PLUS ANYTHING UNASSIGNED. Showing everyone's work by

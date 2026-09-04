@@ -6176,6 +6176,7 @@
       contactPhone: (el("outContactPhone").value || "").trim() || null,
       businessType: el("outBusinessType").value,
       warmIntro: (el("outWarmIntro").value || "").trim() || null,
+      tags: (el("outTags").value || "").trim() || null,
       detailsSource: el("outSource").value,
       consentBasis: (el("outConsent").value || "").trim() || null,
       note: (el("outNote").value || "").trim() || null,
@@ -6328,6 +6329,17 @@
       : '<option value="">Nobody is waiting to be emailed</option>';
     if (keep && sendable.some(function (r) { return String(r.id) === keep; })) sel.value = keep;
 
+    // Built from the tags in use, so it never offers one that would find nothing.
+    var tagSel = el("outTagFilter");
+    var tags = {};
+    outRows.forEach(function (r) { (r.tags || []).forEach(function (t) { tags[t] = 1; }); });
+    var keepTag = tagSel.value;
+    tagSel.innerHTML = '<option value="">Any</option>' +
+      Object.keys(tags).sort().map(function (t) {
+        return '<option value="' + H.escapeHtml(t) + '">' + H.escapeHtml(t) + "</option>";
+      }).join("");
+    if (keepTag && tags[keepTag]) tagSel.value = keepTag;
+
     var sent = outRows.filter(function (r) { return r.sentAt; }).length;
     var signed = outRows.filter(function (r) { return r.outcome === "signed_up"; }).length;
     el("outStats").innerHTML =
@@ -6359,6 +6371,9 @@
     });
     var writable = canEdit("outreach");
     el("outAdd").hidden = !writable;
+    // A plain download link sends no Authorization header, so the file is fetched with
+    // the session and handed to the browser as a blob instead.
+    bindClick("outExport", outDownloadCsv);
     el("outSend").hidden = !writable;
     fillSignerSelect(el("outSigner"));
     // The volunteers, not the letter-signers: signing a thank-you letter and chasing a
@@ -6390,6 +6405,12 @@
     });
     tyBindInput("outSearch", function () {
       outSearchTerm = (el("outSearch").value || "").trim().toLowerCase();
+      outRenderList();
+    });
+    bindClick("outPasteCheck", outCheckPaste);
+    bindClick("outPasteAdd", outAddPasted);
+    el("outTagFilter").addEventListener("change", function () {
+      outTagFilter = el("outTagFilter").value;
       outRenderList();
     });
     el("outAddForm").addEventListener("submit", outAdd);
@@ -6499,13 +6520,166 @@
   // Filtered in the browser: the whole list is already here, and a round trip per keystroke would
   // be slower than the filter. Matches on the things somebody actually half-remembers.
   var outSearchTerm = "";
+  var outTagFilter = "";
   function outMatches(r) {
+    // The tag filter and the search box narrow together: somebody who has picked a tag
+    // and then types is asking for both, not either.
+    if (outTagFilter && (r.tags || []).indexOf(outTagFilter) === -1) return false;
     if (!outSearchTerm) return true;
     return [r.businessName, r.contactName, r.contactEmail, r.contactPhone, r.owner]
       .filter(Boolean)
       .join(" ")
       .toLowerCase()
       .indexOf(outSearchTerm) !== -1;
+  }
+
+  // The export is fetched rather than followed: an <a download> sends no Authorization header, so
+  // a plain link would land on the login page instead of a spreadsheet.
+  function outDownloadCsv(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    authFetch("/api/admin/outreach/export")
+      .then(function (r) {
+        if (!r.ok) throw new Error();
+        return r.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = doc.createElement("a");
+        a.href = url;
+        a.download = "nbcc-businesses.csv";
+        doc.body.appendChild(a);
+        a.click();
+        doc.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(function () {
+        el("outSearchCount").textContent = "Could not download that.";
+      });
+  }
+
+  // ---- adding several at once (TASK-416) ----
+  // Below the single-add form and behind a fold, because one at a time stays the front door. This
+  // only ADDS drafts: it never sends, so there is no moment where somebody could wonder which
+  // personal message went to whom.
+  var outPasteRows = [];
+
+  function outPasteSay(msg, cls) {
+    var e = el("outPasteStatus");
+    e.className = "ty-status" + (cls ? " " + cls : "");
+    e.textContent = msg || "";
+  }
+
+  function outCheckPaste() {
+    var text = el("outPasteText").value || "";
+    if (!text.trim()) {
+      outPasteSay("Paste a list first.", "is-error");
+      return;
+    }
+    outPasteSay("Reading it…");
+    authFetch("/api/admin/outreach/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text }),
+    })
+      .then(j)
+      .then(function (d) {
+        outPasteRows = d.usable || [];
+        var problems = d.problems || [];
+        var dupes = d.duplicatedInPaste || [];
+
+        var html = "";
+        if (outPasteRows.length) {
+          html +=
+            '<p class="out-paste-count">' + outPasteRows.length +
+            (outPasteRows.length === 1 ? " business" : " businesses") + " ready to add:</p>" +
+            '<table class="admin-table"><thead><tr><th>Business</th><th>Email</th><th>Phone</th>' +
+            "</tr></thead><tbody>" +
+            outPasteRows
+              .map(function (r) {
+                return "<tr><td>" + H.escapeHtml(r.businessName) + "</td><td>" +
+                  H.escapeHtml(r.contactEmail || "—") + "</td><td>" +
+                  H.escapeHtml(r.contactPhone || "—") + "</td></tr>";
+              })
+              .join("") +
+            "</tbody></table>";
+        }
+        // Named, with their line number, so somebody can go and fix the paste rather than
+        // guessing which of forty lines was wrong.
+        if (problems.length) {
+          html +=
+            '<div class="out-warn out-warn--stop"><p><strong>' + problems.length +
+            (problems.length === 1 ? " line cannot be used" : " lines cannot be used") +
+            ", and will be left out.</strong></p><ul>" +
+            problems
+              .map(function (p) {
+                return "<li>Line " + p.line + ": " + H.escapeHtml(p.problem) +
+                  ' <span class="ty-muted">' + H.escapeHtml(p.raw) + "</span></li>";
+              })
+              .join("") +
+            "</ul></div>";
+        }
+        if (dupes.length) {
+          html +=
+            '<div class="out-warn"><p><strong>Listed more than once in what you pasted.</strong></p><ul>' +
+            dupes.map(function (n) { return "<li>" + H.escapeHtml(n) + "</li>"; }).join("") +
+            '</ul><p class="admin-help">They will each be added once per line. Take the extras out above if that is not what you want.</p></div>';
+        }
+        el("outPastePreview").innerHTML = html;
+        el("outPasteAdd").hidden = !(outPasteRows.length && canEdit("outreach"));
+        outPasteSay("");
+      })
+      .catch(function () { outPasteSay("Could not read that.", "is-error"); });
+  }
+
+  // Added one at a time through the ordinary endpoint, so every business gets the same duplicate
+  // check and the same do-not-contact refusal as one typed by hand. A bulk route that skipped
+  // those would be a way round the rules rather than a shortcut through the typing.
+  function outAddPasted() {
+    var btn = el("outPasteAdd");
+    btn.disabled = true;
+    var added = 0;
+    var refused = [];
+
+    var next = function (i) {
+      if (i >= outPasteRows.length) {
+        btn.disabled = false;
+        el("outPasteAdd").hidden = true;
+        el("outPasteText").value = "";
+        el("outPastePreview").innerHTML = refused.length
+          ? '<div class="out-warn"><p><strong>' + refused.length +
+            " were not added, because we already know them or they have asked us not to write:</strong></p><ul>" +
+            refused.map(function (n) { return "<li>" + H.escapeHtml(n) + "</li>"; }).join("") +
+            '</ul><p class="admin-help">Add any of them one at a time if you are sure they are different businesses.</p></div>'
+          : "";
+        outPasteSay("Added " + added + " of " + outPasteRows.length + ".", "is-ok");
+        loadOutreachList();
+        loadOutreachTodo();
+        return;
+      }
+      var r = outPasteRows[i];
+      authFetch("/api/admin/outreach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          businessName: r.businessName,
+          contactEmail: r.contactEmail,
+          contactPhone: r.contactPhone,
+          businessType: "company",
+          detailsSource: el("outSource").value,
+        }),
+      })
+        .then(function (x) {
+          if (x.ok) added += 1;
+          else refused.push(r.businessName);
+          next(i + 1);
+        })
+        .catch(function () {
+          refused.push(r.businessName);
+          next(i + 1);
+        });
+    };
+    outPasteSay("Adding…");
+    next(0);
   }
 
   // ---- is it working? (TASK-413) ----

@@ -51,6 +51,8 @@ export const outreachCreateSchema = z.object({
    * findable on its own so a chase list can say "ask Sarah first".
    */
   warmIntro: optionalText(400),
+  // Free text from one box, tidied into a list by parseTags (TASK-416).
+  tags: optionalText(400),
   // Where the volunteer got the details, which the email then states (TASK-403, Article 14).
   detailsSource: z
     .enum(["website_or_listing", "given_to_us", "referred", "social"])

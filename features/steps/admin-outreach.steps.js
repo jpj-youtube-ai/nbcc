@@ -312,6 +312,35 @@ Then("the volunteers should include {string}", function (email) {
   assert.ok(emails.includes(email), `expected ${email}, got ${JSON.stringify(emails)}`);
 });
 
+When(
+  "I ask what we hold about the business as {string} with password {string}",
+  async function (actor, password) {
+    const token = await login(actor, password);
+    await call(this, `/api/admin/outreach/${this.outId}/disclosure`, { token });
+  },
+);
+
+When("I confirm the TPS check as {string} with password {string}", async function (actor, password) {
+  const token = await login(actor, password);
+  await call(this, `/api/admin/outreach/${this.outId}/ctps`, { method: "POST", token, body: {} });
+});
+
+Then("what we hold should mention {string}", function (text) {
+  assert.ok(
+    String(this.outBody.text || "").includes(text),
+    `expected the disclosure to mention ${JSON.stringify(text)}`,
+  );
+});
+
+Then("the TPS check should be recorded against {string}", async function (who) {
+  const row = await pool.query(
+    "SELECT ctps_checked_at, ctps_checked_by FROM business_outreach WHERE id = $1",
+    [this.outId],
+  );
+  assert.ok(row.rows[0].ctps_checked_at, "expected a checked-at timestamp");
+  assert.equal(row.rows[0].ctps_checked_by, who);
+});
+
 // --- assertions ---------------------------------------------------------------------------------
 
 Then("the outreach response status should be {int}", function (status) {

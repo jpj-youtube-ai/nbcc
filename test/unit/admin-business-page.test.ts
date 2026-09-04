@@ -169,4 +169,61 @@ describe("the thank-you column", () => {
     expect(css2).toContain(".fx-ty--waiting");
     expect(css2).toContain(".fx-ty--sent");
   });
-});
+});
+
+// TASK-412: the two things that protect the charity rather than the workflow.
+describe("the TPS check before a call", () => {
+  const app3 = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+
+  // Ringing a business on the Corporate TPS register is an offence. Bulk screening needs a paid
+  // licence nobody is buying at this volume, so the control is that the number is not shown until
+  // somebody says they have checked it, and their name and the date are kept.
+  it("hides the number until somebody says they have checked", () => {
+    expect(app3).toContain("Number hidden until checked");
+    expect(app3).toContain("if (r.ctpsCheckedAt)");
+  });
+
+  it("says why, and links the free lookup rather than just refusing", () => {
+    expect(app3).toMatch(/against the law/i);
+    expect(app3).toContain("tpsservices.co.uk");
+  });
+
+  it("keeps who checked it and when, and shows that back", () => {
+    expect(app3).toContain("Checked against the register");
+    expect(app3).toContain("H.escapeHtml(r.ctpsCheckedBy)");
+  });
+
+  it("asks before recording, because it is an assertion a person is making", () => {
+    expect(app3).toMatch(/window\.confirm\([^)]*TPS register/);
+    expect(app3).toContain("Your name and today's date are kept with it.");
+  });
+
+  // A viewer cannot make that assertion, so they are not offered the button.
+  it("offers the button only to somebody who can edit", () => {
+    expect(app3).toMatch(/canEdit\("outreach"\)[\s\S]{0,200}businessCtps/);
+  });
+});
+
+describe("what we hold, if they ask", () => {
+  const app4 = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+  const doc4 = new DOMParser().parseFromString(html, "text/html");
+
+  it("is one button on the business page", () => {
+    expect(doc4.getElementById("businessDisclose")?.textContent).toMatch(/show everything we hold/i);
+    expect(app4).toContain("/disclosure");
+  });
+
+  // It gets pasted into a reply, so copying it has to be one press rather than a careful drag.
+  it("can be copied in one press", () => {
+    expect(doc4.getElementById("businessDiscloseCopy")).not.toBeNull();
+    expect(app4).toContain("navigator.clipboard.writeText");
+    expect(app4).toMatch(/paste it into your reply/i);
+  });
+
+  // The promise the legitimate-interests assessment makes, said on the screen where the notes
+  // are typed as well as in the document itself.
+  it("says on screen that the private notes are included", () => {
+    const view4 = doc4.getElementById("view-business");
+    expect(view4?.textContent).toMatch(/including the private notes/i);
+  });
+});

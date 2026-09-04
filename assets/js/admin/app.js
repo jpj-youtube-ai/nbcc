@@ -6552,6 +6552,30 @@
     return '<div class="out-fact"><dt>' + H.escapeHtml(label) + "</dt><dd>" + value + "</dd></div>";
   }
 
+  // Calling a business on the Corporate TPS register is an offence, and screening in bulk needs a
+  // paid licence nobody is buying at this volume. So the number stays hidden until a volunteer
+  // says they have checked it on the free lookup, and their name and the date are kept. It is a
+  // record rather than a lock - the point is that the check becomes a deliberate act with
+  // evidence, not that the number is unobtainable.
+  function businessPhoneCell(r) {
+    if (!r.contactPhone) return "";
+    if (r.ctpsCheckedAt) {
+      return '<a href="tel:' + H.escapeHtml(r.contactPhone.replace(/\s/g, "")) + '">' +
+        H.escapeHtml(r.contactPhone) + "</a>" +
+        '<span class="out-tps-ok">Checked against the register' +
+        (r.ctpsCheckedBy ? " by " + H.escapeHtml(r.ctpsCheckedBy) : "") +
+        ", " + H.fmtDate(r.ctpsCheckedAt) + "</span>";
+    }
+    return (
+      '<span class="out-tps-hidden">Number hidden until checked</span>' +
+      '<span class="out-tps-why">Ringing a business on the Corporate TPS register is against the law. ' +
+      'Check it on the <a href="https://www.tpsservices.co.uk/" target="_blank" rel="noopener">free TPS lookup</a>, then say so here.</span>' +
+      (canEdit("outreach")
+        ? '<button class="admin-btn out-tps-btn" type="button" id="businessCtps">I have checked this number</button>'
+        : "")
+    );
+  }
+
   function renderBusiness(r, notes) {
     businessRow = r;
     el("business-heading").textContent = r.businessName;
@@ -6559,7 +6583,7 @@
     var contact = [
       r.contactName ? H.escapeHtml(r.contactName) : "",
       r.contactEmail ? '<a href="mailto:' + H.escapeHtml(r.contactEmail) + '">' + H.escapeHtml(r.contactEmail) + "</a>" : "",
-      r.contactPhone ? '<a href="tel:' + H.escapeHtml(r.contactPhone.replace(/\s/g, "")) + '">' + H.escapeHtml(r.contactPhone) + "</a>" : "",
+      businessPhoneCell(r),
     ].filter(Boolean).join("<br />");
 
     var stands = r.outcome
@@ -6707,7 +6731,53 @@
     el("businessOutcomeForm").addEventListener("submit", businessSaveOutcome);
     el("businessNoteForm").addEventListener("submit", businessAddNote);
     el("businessOutcomes").addEventListener("change", businessToggleAskAgain);
+    bindClick("businessDisclose", businessShowDisclosure);
+    bindClick("businessDiscloseCopy", businessCopyDisclosure);
+    // The button only exists once a business has an unchecked number, so it is bound by
+    // delegation from the panel that redraws around it.
+    el("businessDetail").addEventListener("click", function (e) {
+      var b = e.target.closest && e.target.closest("#businessCtps");
+      if (b) businessConfirmCtps();
+    });
     bindClick("businessBack", function () { selectView("outreach"); });
+  }
+
+  function businessShowDisclosure() {
+    var pre = el("businessDisclosure");
+    businessSay("businessDiscloseStatus", "Gathering it…");
+    authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/disclosure")
+      .then(j)
+      .then(function (d) {
+        pre.textContent = d.text || "";
+        pre.hidden = false;
+        el("businessDiscloseCopy").hidden = false;
+        businessSay("businessDiscloseStatus", "");
+      })
+      .catch(function () {
+        businessSay("businessDiscloseStatus", "Could not gather that.", "is-error");
+      });
+  }
+
+  function businessCopyDisclosure() {
+    var text = el("businessDisclosure").textContent || "";
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function () { businessSay("businessDiscloseStatus", "Copied. Paste it into your reply.", "is-ok"); },
+        function () { businessSay("businessDiscloseStatus", "Could not copy. Select it and copy by hand.", "is-error"); },
+      );
+    } else {
+      businessSay("businessDiscloseStatus", "Select it and copy by hand.", "is-error");
+    }
+  }
+
+  function businessConfirmCtps() {
+    if (!window.confirm("Confirm you have checked this number against the TPS register? Your name and today's date are kept with it.")) return;
+    authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/ctps", { method: "POST" })
+      .then(function (x) { if (!x.ok) throw new Error(); return x.json(); })
+      .then(function () { openBusiness(businessId); })
+      .catch(function () {
+        businessSay("businessOutcomeStatus", "Could not record that check.", "is-error");
+      });
   }
 
   function openBusiness(id) {
@@ -6720,6 +6790,9 @@
     businessSay("businessOutcomeStatus", "");
     businessSay("businessNoteStatus", "");
     el("businessDetail").innerHTML = '<p class="admin-loading">Loading…</p>';
+    el("businessDisclosure").hidden = true;
+    el("businessDiscloseCopy").hidden = true;
+    businessSay("businessDiscloseStatus", "");
     authFetch("/api/admin/outreach/" + encodeURIComponent(id))
       .then(j)
       .then(function (d) { renderBusiness(d.business, d.notes || []); })

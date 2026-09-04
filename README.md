@@ -2976,6 +2976,35 @@ The **Business supporters** tab shows a "Thank you letter" column: when it went,
 person or the system sent it (`sent_by` is `automatic` for the daily pass). "Not yet" is styled
 quietly — on a fresh supporter it is a normal state, not a problem.
 
+### Two things that protect the charity rather than the workflow (TASK-412)
+
+**"What do you hold about me?"** One button on the business page produces it: every field, plus the
+volunteers' private notes, in plain English and in the second person, ready to paste into a reply.
+`src/outreach/disclosure.ts` is pure and unit-tested, and the test that matters most is the one
+proving nothing is quietly held back — a response that omits the internal jottings is a half-truth,
+and that is the half somebody asking would most want to see. A sole trader is an individual under
+UK GDPR and can ask by right; where a business cannot, answering plainly is still cheaper than
+arguing about entitlement.
+
+**The phone number is hidden until somebody has checked the TPS register.** Ringing a business on
+the Corporate TPS register is an offence, and screening in bulk needs a paid licence not worth
+buying at this volume. So the control is the honest one: the number is not shown, the screen says
+why and links the free lookup, and confirming it keeps the volunteer's name and the date
+(`outreach.tps_checked` in the audit trail). It is a **record, not a permission** — nothing stops a
+determined person ringing a number found elsewhere; what it does is make the check a deliberate act
+that left evidence, which is what we would be asked for.
+
+Both are promised in `docs/legitimate-interests-assessment-business-outreach.md`, section 5.
+
+### Lapsed monthly gifts already had a home (TASK-412)
+
+Item 20 on the wish list — "a supporter whose payments stop should not vanish" — turned out to be
+built already: `subscription_dunning` has tracked `active → past_due → lapsed` from Stripe webhooks
+since TASK-091, with `GET /api/admin/subscriptions/dunning` behind the **Subscriptions** tab. What
+was missing was any way to know that, so the tab is now called **"Monthly gifts that need
+attention"** and says what it is, what Stripe is doing in the background, and that nearly all of
+these are an expired card rather than somebody changing their mind.
+
 ### Business supporters is its own permission (TASK-406)
 
 The **Business supporters** tab — what each supporter asked to be thanked with, and ticking each

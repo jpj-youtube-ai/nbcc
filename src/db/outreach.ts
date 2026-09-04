@@ -24,6 +24,9 @@ export interface OutreachRow {
   owner: string | null;
   /** What "my businesses" matches on. `owner` stays the label shown on screen. */
   ownerEmail: string | null;
+  /** When a volunteer confirmed they had checked this number against the TPS register. */
+  ctpsCheckedAt: string | null;
+  ctpsCheckedBy: string | null;
   sentBy: string | null;
   sentAt: string | null;
   outcome: string | null;
@@ -36,7 +39,7 @@ export interface OutreachRow {
 const ROW_COLUMNS = `id, business_name, contact_name, contact_email, contact_phone,
                      business_type, note, owner, sent_by, sent_at, outcome, outcome_at,
                      ask_again_on, last_engagement_at, created_at, owner_email, warm_intro,
-                     details_source,
+                     ctps_checked_at, ctps_checked_by, details_source,
                      consent_basis,
                      consent_basis_recorded_by, consent_basis_recorded_at`;
 
@@ -50,6 +53,8 @@ function toRow(r: Record<string, unknown>): OutreachRow {
     businessType: r.business_type === "sole_trader" ? "sole_trader" : "company",
     note: (r.note as string) ?? null,
     ownerEmail: (r.owner_email as string) ?? null,
+    ctpsCheckedAt: (r.ctps_checked_at as string) ?? null,
+    ctpsCheckedBy: (r.ctps_checked_by as string) ?? null,
     warmIntro: (r.warm_intro as string) ?? null,
     detailsSource: (r.details_source as string) ?? "website_or_listing",
     consentBasis: (r.consent_basis as string) ?? null,
@@ -188,6 +193,21 @@ export async function listOutreach(limit = 200, offset = 0): Promise<OutreachRow
     [Math.min(Math.max(limit, 1), 500), Math.max(offset, 0)],
   );
   return res.rows.map(toRow);
+}
+
+/**
+ * Record that somebody checked this number against the TPS register (TASK-412).
+ *
+ * Once only: a second confirmation would overwrite the name and date of the person who actually
+ * did the checking, and that record is the whole point.
+ */
+export async function markCtpsChecked(id: number, by: string): Promise<void> {
+  await pool.query(
+    `UPDATE business_outreach
+        SET ctps_checked_at = now(), ctps_checked_by = $2
+      WHERE id = $1 AND ctps_checked_at IS NULL`,
+    [id, by],
+  );
 }
 
 /** Stamped only after the send succeeds, so a failed send leaves the draft sendable. */

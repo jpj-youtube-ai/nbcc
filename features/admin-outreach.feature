@@ -109,6 +109,30 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     Then the outreach response status should be 200
     And the volunteers should include "editor.admin.bdd@example.com"
 
+  # TASK-412: a subject access response. Viewer+ can read what we already hold; it is the answering
+  # that a person does.
+  Scenario: anyone who can see the list can produce what we hold about a business
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And the business "Zzbdd Glaziers" was added with email "hello@zzbddglaziers.example"
+    When I ask what we hold about the business as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the outreach response status should be 200
+    And what we hold should mention "Zzbdd Glaziers"
+    And what we hold should mention "SC047995"
+
+  # TASK-412: the TPS check. A record rather than a permission, so it is kept with a name.
+  Scenario: a Viewer cannot confirm a TPS check, because it is an assertion a person makes
+    Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"
+    And the business "Zzbdd Fencing" was added with email "hello@zzbddfencing.example"
+    When I confirm the TPS check as "viewer.admin.bdd@example.com" with password "view-pw-123"
+    Then the outreach response status should be 403
+
+  Scenario: an Editor confirms it, and their name and the date are kept
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Fencing" was added with email "hello@zzbddfencing.example"
+    When I confirm the TPS check as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    And the TPS check should be recorded against "editor.admin.bdd@example.com"
+
   # TASK-404: the business page, and the two things a volunteer does on it.
   Scenario: a Viewer can read a business and its notes but cannot change either
     Given an admin user "viewer.admin.bdd@example.com" with role "viewer" and password "view-pw-123"

@@ -1403,3 +1403,10 @@ tr.nl-click:hover { background: var(--tint); }
 .out-disclosure{margin:0 0 20px;padding:16px 18px;background:var(--card);border:1px solid var(--line);
   border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;
   line-height:1.6;color:var(--slate);white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow-y:auto}
+
+/* Is it working? (TASK-413.) Sentences, not a dashboard: the numbers only mean something with the
+   caveat attached, so the caveat is in the same line rather than in a tooltip nobody opens. */
+.out-report-line{margin:10px 0 18px;color:var(--slate);line-height:1.65;max-width:70ch}
+.out-report-line strong{color:var(--maroon)}
+.out-report-head{font-family:var(--font-body);font-size:.78rem;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--slate-soft);margin:24px 0 8px}

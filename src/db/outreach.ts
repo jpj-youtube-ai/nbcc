@@ -24,6 +24,10 @@ export interface OutreachRow {
   owner: string | null;
   /** What "my businesses" matches on. `owner` stays the label shown on screen. */
   ownerEmail: string | null;
+  /** Which donor this business became. Linked by a volunteer, never guessed from a name. */
+  donorId: number | null;
+  /** Whether the volunteer wrote a line of their own. The message itself is not kept. */
+  sentWithPersonalMessage: boolean | null;
   /** When a volunteer confirmed they had checked this number against the TPS register. */
   ctpsCheckedAt: string | null;
   ctpsCheckedBy: string | null;
@@ -39,7 +43,8 @@ export interface OutreachRow {
 const ROW_COLUMNS = `id, business_name, contact_name, contact_email, contact_phone,
                      business_type, note, owner, sent_by, sent_at, outcome, outcome_at,
                      ask_again_on, last_engagement_at, created_at, owner_email, warm_intro,
-                     ctps_checked_at, ctps_checked_by, details_source,
+                     ctps_checked_at, ctps_checked_by, donor_id, sent_with_personal_message,
+                     details_source,
                      consent_basis,
                      consent_basis_recorded_by, consent_basis_recorded_at`;
 
@@ -53,6 +58,11 @@ function toRow(r: Record<string, unknown>): OutreachRow {
     businessType: r.business_type === "sole_trader" ? "sole_trader" : "company",
     note: (r.note as string) ?? null,
     ownerEmail: (r.owner_email as string) ?? null,
+    donorId: (r.donor_id as number) ?? null,
+    sentWithPersonalMessage:
+      r.sent_with_personal_message === null || r.sent_with_personal_message === undefined
+        ? null
+        : Boolean(r.sent_with_personal_message),
     ctpsCheckedAt: (r.ctps_checked_at as string) ?? null,
     ctpsCheckedBy: (r.ctps_checked_by as string) ?? null,
     warmIntro: (r.warm_intro as string) ?? null,
@@ -211,11 +221,80 @@ export async function markCtpsChecked(id: number, by: string): Promise<void> {
 }
 
 /** Stamped only after the send succeeds, so a failed send leaves the draft sendable. */
-export async function markOutreachSent(id: number, sentBy: string): Promise<void> {
+export async function markOutreachSent(
+  id: number,
+  sentBy: string,
+  withPersonalMessage: boolean,
+): Promise<void> {
   await pool.query(
-    `UPDATE business_outreach SET sent_at = now(), sent_by = $2 WHERE id = $1`,
-    [id, sentBy],
+    `UPDATE business_outreach
+        SET sent_at = now(), sent_by = $2, sent_with_personal_message = $3
+      WHERE id = $1`,
+    [id, sentBy, withPersonalMessage],
   );
+}
+
+/** Link a business to the donor it became. Set when a volunteer records the sign-up. */
+export async function linkOutreachDonor(id: number, donorId: number | null): Promise<void> {
+  await pool.query(`UPDATE business_outreach SET donor_id = $2 WHERE id = $1`, [id, donorId]);
+}
+
+/**
+ * Everything the reports read, in one query. The figures themselves are worked out in
+ * src/outreach/reports.ts, where they can be argued with in a unit test.
+ *
+ * raised_pence sums the PAID donations of the donor a volunteer linked. A business marked signed
+ * up but never linked contributes nothing rather than a guess.
+ */
+export async function listOutreachForReports(): Promise<
+  { outcome: string | null; sentAt: string | null; owner: string | null; sentWithPersonalMessage: boolean | null; raisedPence: number }[]
+> {
+  const res = await pool.query(
+    `SELECT b.outcome, b.sent_at, b.owner, b.sent_with_personal_message,
+            COALESCE((
+              SELECT SUM(d.amount_pence - d.refunded_amount_pence)
+                FROM donations d
+               WHERE d.donor_id = b.donor_id AND d.payment_status = 'paid'
+            ), 0) AS raised_pence
+       FROM business_outreach b`,
+  );
+  return res.rows.map((r) => ({
+    outcome: (r.outcome as string) ?? null,
+    sentAt: (r.sent_at as string) ?? null,
+    owner: (r.owner as string) ?? null,
+    sentWithPersonalMessage:
+      r.sent_with_personal_message === null ? null : Boolean(r.sent_with_personal_message),
+    raisedPence: Number(r.raised_pence) || 0,
+  }));
+}
+
+/**
+ * Every business donor who has actually paid, for a volunteer to pick from when recording a
+ * sign-up.
+ *
+ * Deliberately unranked and unfiltered: the ORDERING is the matcher's job, and the matcher is pure
+ * TypeScript in src/outreach/matching.ts. Ranking here would mean a second, different notion of
+ * "these look like the same firm" living in SQL, which is exactly the drift the pure module exists
+ * to prevent.
+ */
+export async function listBusinessDonors(): Promise<
+  { id: number; name: string; email: string | null; totalPence: number }[]
+> {
+  const res = await pool.query(
+    `SELECT dn.id, COALESCE(NULLIF(dn.business_name, ''), dn.full_name) AS name, dn.email,
+            COALESCE(SUM(d.amount_pence - d.refunded_amount_pence), 0) AS total_pence
+       FROM donors dn
+       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid'
+      WHERE COALESCE(dn.business_name, '') <> ''
+      GROUP BY dn.id, dn.business_name, dn.full_name, dn.email
+      ORDER BY name ASC`,
+  );
+  return res.rows.map((r) => ({
+    id: r.id as number,
+    name: r.name as string,
+    email: (r.email as string) ?? null,
+    totalPence: Number(r.total_pence) || 0,
+  }));
 }
 
 // Re-exported from the pure module so callers here have them without a second declaration.

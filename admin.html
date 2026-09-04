@@ -1170,6 +1170,13 @@
               <p class="admin-help">Pick one and press save. This is what puts them on, or takes them off, the list of people who need chasing.</p>
               <form class="ty-panel" id="businessOutcomeForm" autocomplete="off">
                 <div id="businessOutcomes" class="out-outcomes"></div>
+                <!-- Only for a sign-up (TASK-413). Linking the donor is what turns "how much has
+                     this raised?" from a name guess into a fact. -->
+                <div class="ty-field" id="businessDonorField" hidden>
+                  <label for="businessDonor">Which supporter did they become?</label>
+                  <select id="businessDonor"></select>
+                  <span class="ty-hint">Pick them and their giving counts towards what this whole effort has raised. Leave it if you are not sure; you can come back.</span>
+                </div>
                 <div class="ty-field" id="businessAskAgainField" hidden>
                   <label for="businessAskAgain">When should we ask again?</label>
                   <input id="businessAskAgain" type="date" />
@@ -1326,6 +1333,10 @@
                   <iframe id="outPreview" class="out-preview" title="Preview of the email"></iframe>
                 </div>
               </div>
+
+              <h3 class="admin-subhead">Is it working?</h3>
+              <p class="admin-help">Worth a look once a month. It will say very little until a few dozen businesses have been emailed.</p>
+              <div id="outReports" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
 
               <h3 class="admin-subhead">3. Everyone we have contacted</h3>
               <p class="ty-controls">

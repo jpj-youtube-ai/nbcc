@@ -76,6 +76,9 @@ import {
   listOutreach,
   getOutreach,
   markOutreachSent,
+  linkOutreachDonor,
+  listOutreachForReports,
+  listBusinessDonors,
   markCtpsChecked,
   listOutreachForTodo,
   listVolunteers,
@@ -90,6 +93,13 @@ import { emailBlockReason } from "../outreach/lawful-basis";
 import { isOutcome, wantsAskAgainDate } from "../outreach/outcomes";
 import { whatIsNeeded, sortTodos } from "../outreach/todo";
 import { buildDisclosure } from "../outreach/disclosure";
+import {
+  buildFunnel,
+  buildMoneyRaised,
+  buildByVolunteer,
+  buildPersonalMessageEffect,
+} from "../outreach/reports";
+import { similarity, normaliseBusinessName } from "../outreach/matching";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
@@ -2573,7 +2583,9 @@ export async function postAdminOutreachSend(req: Request, res: Response): Promis
 
     // Stamped only AFTER the send succeeds, so a provider failure leaves the draft sendable
     // rather than marking a business as contacted when nothing left the building.
-    await markOutreachSent(id, signerName);
+    // Whether a line of their own went with it - not the line itself, which we have no reason to
+    // keep. It is the only way to ever answer "does taking the extra minute help?" (TASK-413).
+    await markOutreachSent(id, signerName, personalMessage.length > 0);
     return res.status(200).json({ sent: true });
   } catch (err) {
     console.error("outreach send failed:", err instanceof Error ? err.message : err);
@@ -2647,6 +2659,11 @@ export async function postAdminOutreachOutcome(req: Request, res: Response): Pro
     const business = await getOutreach(id);
     if (!business) return res.status(404).json({ error: "Unknown business" });
     await setOutreachOutcome(id, outcome, askAgainOn);
+    // Which donor they became, chosen by the volunteer at the moment they know it. Only
+    // meaningful on a sign-up; clearing it on any other outcome keeps the money report honest if
+    // somebody corrects a mistake.
+    const donorId = Number(req.body?.donorId);
+    await linkOutreachDonor(id, outcome === "signed_up" && Number.isInteger(donorId) && donorId > 0 ? donorId : null);
     await recordAudit({
       actor: claims.email,
       action: "outreach.outcome_recorded",
@@ -2745,6 +2762,47 @@ export async function getAdminOutreachVolunteers(req: Request, res: Response): P
 }
 
 // Registered BEFORE /:id, or Express reads "todo" and "volunteers" as business ids.
+// GET /api/admin/outreach/reports — is any of this working, and what works best?
+export async function getAdminOutreachReports(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  try {
+    const rows = await listOutreachForReports();
+    return res.status(200).json({
+      funnel: buildFunnel(rows),
+      money: buildMoneyRaised(rows),
+      byVolunteer: buildByVolunteer(rows),
+      personalMessage: buildPersonalMessageEffect(rows),
+    });
+  } catch (err) {
+    console.error("outreach reports failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// GET /api/admin/outreach/:id/donors — which donor is this business, for the volunteer to pick.
+//
+// Ranked by the SAME matcher the duplicate check uses, in TypeScript. Ranking in SQL would mean a
+// second notion of "these look like the same firm", and the two would drift.
+export async function getAdminOutreachDonors(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+  try {
+    const business = await getOutreach(id);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    const wanted = normaliseBusinessName(business.businessName);
+    const donors = (await listBusinessDonors())
+      .map((d) => ({ ...d, score: similarity(wanted, normaliseBusinessName(d.name)) }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 25);
+    return res.status(200).json({ donors });
+  } catch (err) {
+    console.error("outreach donors failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/outreach/reports", getAdminOutreachReports);
 adminRouter.get("/api/admin/outreach/todo", getAdminOutreachTodo);
 adminRouter.get("/api/admin/outreach/volunteers", getAdminOutreachVolunteers);
 // GET /api/admin/outreach/:id/disclosure — everything we hold about this business, as text.
@@ -2797,6 +2855,7 @@ export async function postAdminOutreachCtps(req: Request, res: Response): Promis
 adminRouter.get("/api/admin/outreach/:id", getAdminOutreachOne);
 adminRouter.get("/api/admin/outreach/:id/disclosure", getAdminOutreachDisclosure);
 adminRouter.post("/api/admin/outreach/:id/ctps", postAdminOutreachCtps);
+adminRouter.get("/api/admin/outreach/:id/donors", getAdminOutreachDonors);
 adminRouter.post("/api/admin/outreach/:id/outcome", postAdminOutreachOutcome);
 adminRouter.post("/api/admin/outreach/:id/notes", postAdminOutreachNote);
 adminRouter.post("/api/admin/outreach/:id/send", postAdminOutreachSend);

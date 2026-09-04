@@ -2976,6 +2976,39 @@ The **Business supporters** tab shows a "Thank you letter" column: when it went,
 person or the system sent it (`sent_by` is `automatic` for the daily pass). "Not yet" is styled
 quietly — on a fresh supporter it is a normal state, not a problem.
 
+### Is it working? (TASK-413)
+
+At the foot of the Contact businesses screen — interesting once a month, noise every day. Four
+things: the funnel (added → emailed → replied → signed up), what it has raised, how each volunteer
+has got on, and whether a personal message helps. Every figure is worked out in
+`src/outreach/reports.ts`, pure and unit-tested, because these numbers may end up in front of
+trustees.
+
+Three decisions that keep them honest:
+
+- **Both rates are out of those EMAILED, not those added.** A business sitting on the list with no
+  address has not declined to reply, and putting it in the denominator punishes the charity for
+  having a to-do item. The caveat is printed on the line rather than hidden in a tooltip.
+- **A rate that cannot be worked out shows a dash, never `0%`.** Nought per cent means "we tried
+  and nobody said yes"; a dash means "we have not tried yet". On day one that is the difference
+  between a report reading as failure and reading as early.
+- **The comparison refuses to draw a conclusion from too few sends.** With four on one side, one
+  sign-up swings the rate twenty points, and a charity could reasonably change how it works on the
+  strength of nothing. `worthReading` is false until there are ten each way, and the screen says so
+  in words.
+
+**How the money figure is attributed.** When a volunteer records a sign-up they pick the donor —
+ranked by the *same* matcher the duplicate check uses, so the likely one is at the top — and only
+linked businesses count. "Not sure yet" is a real option, because a volunteer forced to guess to get
+past a form turns the figure into fiction.
+
+The alternative was a referral code on the donate link, carried through Stripe checkout into the
+donation. That buys automation rather than accuracy, and it costs a change to the **payment path**
+— the highest-risk change available here — for a reporting figure. Linking at sign-up is exact
+without touching the money. `sent_with_personal_message` records *whether* a line was written, never
+the line itself: we have no reason to keep one business's sentence, but "does the extra minute
+help?" is unanswerable without the flag.
+
 ### Two things that protect the charity rather than the workflow (TASK-412)
 
 **"What do you hold about me?"** One button on the business page produces it: every field, plus the

@@ -6423,6 +6423,7 @@
     outWire();
     loadOutreachTodo();
     loadOutreachList();
+    loadOutreachReports();
   }
 
   // ---- needs you today (TASK-405) ----
@@ -6505,6 +6506,91 @@
       .join(" ")
       .toLowerCase()
       .indexOf(outSearchTerm) !== -1;
+  }
+
+  // ---- is it working? (TASK-413) ----
+  // At the foot of the screen on purpose: interesting once a month, noise every day. Every figure
+  // is worked out on the server in src/outreach/reports.ts, where it can be argued with in a test;
+  // this only renders what comes back.
+  function outMoney(pence) {
+    return "£" + (Math.round(pence) / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // A rate the server could not work out is shown as a dash, never as 0%. Nought per cent means
+  // "we tried and nobody said yes"; a dash means "we have not tried yet", and on day one that is
+  // the difference between a report that reads as failure and one that reads as early.
+  function outRate(v) {
+    return v === null || v === undefined ? "&mdash;" : v + "%";
+  }
+
+  function outRenderReports(d) {
+    var wrap = el("outReports");
+    if (!wrap) return;
+    var f = d.funnel || {};
+    var m = d.money || {};
+    var pm = d.personalMessage || { withMessage: {}, without: {} };
+
+    if (!f.added) {
+      wrap.innerHTML =
+        '<p class="admin-empty">Nothing to report yet. Once businesses have been added and ' +
+        "emailed, this will show how many replied, how many signed up, and what they have given.</p>";
+      return;
+    }
+
+    var funnel =
+      '<div class="admin-stats">' +
+      statCard(f.added, "Added") +
+      statCard(f.emailed, "Emailed") +
+      statCard(f.replied, "Replied") +
+      statCard(f.signedUp, "Signed up") +
+      "</div>" +
+      '<p class="out-report-line">Of the ' + f.emailed + " we emailed, <strong>" + outRate(f.replyRate) +
+      "</strong> replied and <strong>" + outRate(f.signUpRate) + "</strong> became supporters." +
+      ' <span class="ty-muted">Both worked out of those emailed, not everyone on the list &mdash; a business we have not written to yet has not turned us down.</span></p>';
+
+    var money = m.supporters
+      ? '<p class="out-report-line"><strong>' + outMoney(m.totalPence) + "</strong> given by " +
+        m.supporters + (m.supporters === 1 ? " business" : " businesses") + " that came from this," +
+        " an average of " + outMoney(m.averagePence) + " each." +
+        ' <span class="ty-muted">Only counts businesses somebody linked to their donor record when marking them signed up.</span></p>'
+      : '<p class="out-report-line ty-muted">No money counted yet. A business only appears here once somebody has linked it to its donor record, which happens when you mark it as signed up.</p>';
+
+    var byVol = (d.byVolunteer || []).length
+      ? '<table class="admin-table"><thead><tr><th>Volunteer</th><th class="admin-num">Emailed</th>' +
+        '<th class="admin-num">Signed up</th><th class="admin-num">Rate</th></tr></thead><tbody>' +
+        d.byVolunteer
+          .map(function (t) {
+            return "<tr><td>" + H.escapeHtml(t.owner) + '</td><td class="admin-num">' + t.emailed +
+              '</td><td class="admin-num">' + t.signedUp + '</td><td class="admin-num">' +
+              outRate(t.signUpRate) + "</td></tr>";
+          })
+          .join("") +
+        "</tbody></table>"
+      : "";
+
+    // The honest bit. Told outright when the numbers are too thin to act on, rather than left to
+    // be read as a finding.
+    var pmBlock = pm.worthReading
+      ? '<p class="out-report-line">With a personal message: <strong>' + outRate(pm.withMessage.rate) +
+        "</strong> signed up (" + pm.withMessage.signedUp + " of " + pm.withMessage.emailed + ")." +
+        " Without one: <strong>" + outRate(pm.without.rate) + "</strong> (" + pm.without.signedUp +
+        " of " + pm.without.emailed + ").</p>"
+      : '<p class="out-report-line ty-muted">Not enough sent yet to say whether a personal message ' +
+        "helps. It needs at least " + (pm.withMessage.emailed !== undefined ? "10" : "10") +
+        " each way before the difference means anything rather than being luck.</p>";
+
+    wrap.innerHTML =
+      funnel + money +
+      '<h4 class="out-report-head">How each of us has got on</h4>' + byVol +
+      '<h4 class="out-report-head">Does a personal message help?</h4>' + pmBlock;
+  }
+
+  function loadOutreachReports() {
+    authFetch("/api/admin/outreach/reports")
+      .then(j)
+      .then(outRenderReports)
+      .catch(function () {
+        el("outReports").innerHTML = '<p class="admin-empty">Could not load this.</p>';
+      });
   }
 
   // ---- one business (TASK-404) ----
@@ -6643,6 +6729,10 @@
   // that does nothing is a field people fill in anyway.
   function businessToggleAskAgain() {
     var picked = doc.querySelector('input[name="outOutcome"]:checked');
+    // Linking the donor only means anything on a sign-up.
+    var signedUp = picked && picked.value === "signed_up";
+    el("businessDonorField").hidden = !signedUp;
+    if (signedUp && el("businessDonor").options.length <= 1) businessLoadDonors();
     var wants = picked && picked.value === "not_this_year";
     el("businessAskAgainField").hidden = !wants;
     if (wants && !el("businessAskAgain").value) {
@@ -6650,6 +6740,25 @@
       d.setMonth(d.getMonth() + 11);
       el("businessAskAgain").value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-01";
     }
+  }
+
+  // Ranked by the same matcher the duplicate check uses, so the likely one is at the top and
+  // nobody has to scroll a list of every business that has ever given.
+  function businessLoadDonors() {
+    var sel = el("businessDonor");
+    sel.innerHTML = '<option value="">Not sure yet</option>';
+    authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/donors")
+      .then(j)
+      .then(function (d) {
+        (d.donors || []).forEach(function (v) {
+          var o = doc.createElement("option");
+          o.value = v.id;
+          o.textContent = v.name + " — " + outMoney(v.totalPence) + " given so far";
+          sel.appendChild(o);
+        });
+        if (businessRow && businessRow.donorId) sel.value = String(businessRow.donorId);
+      })
+      .catch(function () { /* the picker still offers "not sure yet" */ });
   }
 
   function businessSaveOutcome(e) {
@@ -6671,6 +6780,7 @@
       body: JSON.stringify({
         outcome: picked.value,
         askAgainOn: (el("businessAskAgain").value || "").trim() || null,
+        donorId: Number(el("businessDonor").value) || null,
       }),
     })
       .then(function (x) { return x.json().then(function (b) { return { ok: x.ok, body: b }; }); })
@@ -6683,6 +6793,7 @@
         businessSay("businessOutcomeStatus", "Saved.", "is-ok");
         openBusiness(businessId);
         loadOutreachTodo();
+        loadOutreachReports();
       })
       .catch(function () {
         btn.disabled = false;

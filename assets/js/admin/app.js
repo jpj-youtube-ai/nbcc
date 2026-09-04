@@ -6694,6 +6694,9 @@
         ? H.escapeHtml(r.consentBasis) + (r.consentBasisRecordedBy ? ' <span class="ty-muted">recorded by ' + H.escapeHtml(r.consentBasisRecordedBy) + "</span>" : "")
         : "") +
       factRow("Ask again", r.askAgainOn ? H.fmtDate(r.askAgainOn) : "") +
+      factRow("Follow-up sent", r.nudgeSentAt
+        ? H.fmtDate(r.nudgeSentAt) + (r.nudgeSentBy ? ' <span class="ty-muted">by ' + H.escapeHtml(r.nudgeSentBy) + "</span>" : "")
+        : "") +
       factRow("Why this business", r.note ? H.escapeHtml(r.note) : "") +
       factRow("Added", H.fmtDate(r.createdAt)) +
       "</dl>";
@@ -6706,6 +6709,12 @@
         '<span class="out-outcome-label">' + H.escapeHtml(OUT_OUTCOMES[key]) + "</span>" +
         '<span class="out-outcome-why">' + H.escapeHtml(OUT_MEANINGS[key]) + "</span></label>";
     }).join("");
+
+    // Due only when the first email went, nothing came back, and the one follow-up is unused.
+    // The server refuses a second whatever this decides, but offering a button that will be
+    // refused is its own small unkindness.
+    var nudgeDue = !!r.sentAt && !r.nudgeSentAt && !r.outcome && !!r.contactEmail;
+    el("businessNudge").hidden = !(nudgeDue && canEdit("outreach"));
 
     if (r.askAgainOn) el("businessAskAgain").value = String(r.askAgainOn).slice(0, 10);
     businessToggleAskAgain();
@@ -6843,6 +6852,7 @@
     el("businessNoteForm").addEventListener("submit", businessAddNote);
     el("businessOutcomes").addEventListener("change", businessToggleAskAgain);
     bindClick("businessDisclose", businessShowDisclosure);
+    bindClick("businessNudgeSend", businessSendNudge);
     bindClick("businessDiscloseCopy", businessCopyDisclosure);
     // The button only exists once a business has an unchecked number, so it is bound by
     // delegation from the panel that redraws around it.
@@ -6851,6 +6861,39 @@
       if (b) businessConfirmCtps();
     });
     bindClick("businessBack", function () { selectView("outreach"); });
+  }
+
+  function businessSendNudge() {
+    var who = businessRow ? businessRow.businessName : "this business";
+    // The email promises to be the last one, so the pause says so too.
+    if (!window.confirm("Send the one follow-up to " + who + "? It says it is the last they will hear from us, and it cannot be sent again.")) return;
+    var opt = el("outSigner").selectedOptions[0];
+    var btn = el("businessNudgeSend");
+    btn.disabled = true;
+    businessSay("businessNudgeStatus", "Sending…");
+    authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/nudge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        signerName: opt ? opt.value : "",
+        signerRole: opt ? opt.getAttribute("data-role") : "",
+      }),
+    })
+      .then(function (x) { return x.json().then(function (b) { return { ok: x.ok, body: b }; }); })
+      .then(function (res) {
+        btn.disabled = false;
+        if (!res.ok) {
+          businessSay("businessNudgeStatus", res.body.error || "It could not be sent.", "is-error");
+          return;
+        }
+        businessSay("businessNudgeStatus", "Sent. They will not be chased again.", "is-ok");
+        openBusiness(businessId);
+        loadOutreachTodo();
+      })
+      .catch(function () {
+        btn.disabled = false;
+        businessSay("businessNudgeStatus", "It could not be sent.", "is-error");
+      });
   }
 
   function businessShowDisclosure() {
@@ -6901,6 +6944,8 @@
     businessSay("businessOutcomeStatus", "");
     businessSay("businessNoteStatus", "");
     el("businessDetail").innerHTML = '<p class="admin-loading">Loading…</p>';
+    el("businessNudge").hidden = true;
+    businessSay("businessNudgeStatus", "");
     el("businessDisclosure").hidden = true;
     el("businessDiscloseCopy").hidden = true;
     businessSay("businessDiscloseStatus", "");

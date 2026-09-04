@@ -109,6 +109,33 @@ Feature: Contacting local businesses (REQ-003 · TASK-401)
     Then the outreach response status should be 200
     And the volunteers should include "editor.admin.bdd@example.com"
 
+  # TASK-414: one follow-up, ever. The email promises to be the last, so a second would make the
+  # charity a liar as well as a nuisance.
+  Scenario: the follow-up goes once and cannot go again
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Roofers" was added with email "hello@zzbddroofers.example"
+    When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    When I send the follow-up as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 200
+    When I send the follow-up as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 409
+
+  Scenario: no follow-up before the first email
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Decorators" was added with email "hello@zzbdddecorators.example"
+    When I send the follow-up as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 409
+
+  # Chasing somebody who replied is chasing somebody who replied.
+  Scenario: no follow-up once they have answered
+    Given an admin user "editor.admin.bdd@example.com" with role "editor" and password "edit-pw-123"
+    And the business "Zzbdd Movers" was added with email "hello@zzbddmovers.example"
+    When I send the invitation as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I record the outcome "interested" as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    And I send the follow-up as "editor.admin.bdd@example.com" with password "edit-pw-123"
+    Then the outreach response status should be 409
+
   # TASK-412: a subject access response. Viewer+ can read what we already hold; it is the answering
   # that a person does.
   Scenario: anyone who can see the list can produce what we hold about a business

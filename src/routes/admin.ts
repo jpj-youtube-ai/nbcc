@@ -76,6 +76,7 @@ import {
   listOutreach,
   getOutreach,
   markOutreachSent,
+  markOutreachNudged,
   linkOutreachDonor,
   listOutreachForReports,
   listBusinessDonors,
@@ -87,6 +88,7 @@ import {
   listOutreachNotes,
 } from "../db/outreach";
 import { buildOutreachEmail } from "../outreach/invitation-email";
+import { buildOutreachNudge } from "../outreach/nudge-email";
 import { sendOutreachInvitation } from "../clients/email";
 import { findMatches, isDoNotContact } from "../outreach/matching";
 import { emailBlockReason } from "../outreach/lawful-basis";
@@ -2855,7 +2857,82 @@ export async function postAdminOutreachCtps(req: Request, res: Response): Promis
 adminRouter.get("/api/admin/outreach/:id", getAdminOutreachOne);
 adminRouter.get("/api/admin/outreach/:id/disclosure", getAdminOutreachDisclosure);
 adminRouter.post("/api/admin/outreach/:id/ctps", postAdminOutreachCtps);
+// POST /api/admin/outreach/:id/nudge — the one follow-up.
+//
+// Prepared and sent by a person, never on a timer: everything else here is "always by a person",
+// and a second email that arrived automatically would be the one thing that was not - which is
+// also the thing a business would notice.
+export async function postAdminOutreachNudge(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "outreach", "edit");
+  if (!claims) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+
+  const signerName = typeof req.body?.signerName === "string" ? req.body.signerName.trim() : "";
+  const signerRole = typeof req.body?.signerRole === "string" ? req.body.signerRole.trim() : "";
+  if (!signerName || !signerRole) return res.status(400).json({ error: "Choose who this is from" });
+
+  try {
+    const business = await getOutreach(id);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    if (!business.sentAt) {
+      return res.status(409).json({ error: "They have not had the first email yet" });
+    }
+    if (business.nudgeSentAt) {
+      return res.status(409).json({ error: "They have already had the one follow-up" });
+    }
+    if (business.outcome) {
+      // Somebody has recorded an answer. Chasing after that is chasing a person who replied.
+      return res.status(409).json({ error: "They have already answered, so no follow-up is due" });
+    }
+    const blocked = emailBlockReason(business);
+    if (blocked) return res.status(422).json({ error: blocked });
+    if (!business.contactEmail) {
+      return res.status(400).json({ error: "This business has no email address" });
+    }
+
+    // Claim the single follow-up BEFORE sending. Two volunteers pressing within the same second
+    // would otherwise both pass the checks above and the business would get two emails that each
+    // promise to be the last one.
+    if (!(await markOutreachNudged(id, claims.email))) {
+      return res.status(409).json({ error: "They have already had the one follow-up" });
+    }
+
+    const base = config.PORTAL_BASE_URL.replace(/\/+$/, "");
+    const mail = buildOutreachNudge({
+      businessName: business.businessName,
+      contactName: business.contactName,
+      signerName,
+      signerRole,
+      donateUrl: `${base}/donate`,
+      privacyUrl: `${base}/privacy`,
+    });
+    await sendOutreachInvitation(business.businessName, {
+      email: business.contactEmail,
+      from: config.GIVING_FROM_EMAIL,
+      replyTo: config.GIVING_FROM_EMAIL,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+    await recordAudit({
+      actor: claims.email,
+      action: "outreach.nudge_sent",
+      entity: "business_outreach",
+      entityId: id,
+      data: { businessName: business.businessName },
+    });
+    return res.status(200).json({ sent: true });
+  } catch (err) {
+    console.error("outreach nudge failed:", err instanceof Error ? err.message : err);
+    // The claim above is deliberately NOT undone. A send that threw may still have gone out, and
+    // a business receiving two "one last note" emails is worse than one receiving none.
+    return res.status(502).json({ error: "The email could not be sent. Do not try again; check the email log." });
+  }
+}
+
 adminRouter.get("/api/admin/outreach/:id/donors", getAdminOutreachDonors);
+adminRouter.post("/api/admin/outreach/:id/nudge", postAdminOutreachNudge);
 adminRouter.post("/api/admin/outreach/:id/outcome", postAdminOutreachOutcome);
 adminRouter.post("/api/admin/outreach/:id/notes", postAdminOutreachNote);
 adminRouter.post("/api/admin/outreach/:id/send", postAdminOutreachSend);

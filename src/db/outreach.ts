@@ -26,6 +26,9 @@ export interface OutreachRow {
   ownerEmail: string | null;
   /** Which donor this business became. Linked by a volunteer, never guessed from a name. */
   donorId: number | null;
+  /** When the single follow-up went. Once set, this business is never chased again. */
+  nudgeSentAt: string | null;
+  nudgeSentBy: string | null;
   /** Whether the volunteer wrote a line of their own. The message itself is not kept. */
   sentWithPersonalMessage: boolean | null;
   /** When a volunteer confirmed they had checked this number against the TPS register. */
@@ -44,6 +47,7 @@ const ROW_COLUMNS = `id, business_name, contact_name, contact_email, contact_pho
                      business_type, note, owner, sent_by, sent_at, outcome, outcome_at,
                      ask_again_on, last_engagement_at, created_at, owner_email, warm_intro,
                      ctps_checked_at, ctps_checked_by, donor_id, sent_with_personal_message,
+                     nudge_sent_at, nudge_sent_by,
                      details_source,
                      consent_basis,
                      consent_basis_recorded_by, consent_basis_recorded_at`;
@@ -59,6 +63,8 @@ function toRow(r: Record<string, unknown>): OutreachRow {
     note: (r.note as string) ?? null,
     ownerEmail: (r.owner_email as string) ?? null,
     donorId: (r.donor_id as number) ?? null,
+    nudgeSentAt: (r.nudge_sent_at as string) ?? null,
+    nudgeSentBy: (r.nudge_sent_by as string) ?? null,
     sentWithPersonalMessage:
       r.sent_with_personal_message === null || r.sent_with_personal_message === undefined
         ? null
@@ -232,6 +238,22 @@ export async function markOutreachSent(
       WHERE id = $1`,
     [id, sentBy, withPersonalMessage],
   );
+}
+
+/**
+ * Stamp the follow-up. Guarded in SQL as well as in the rule: two volunteers pressing the button
+ * within the same second would otherwise both pass the read-then-write check, and the second
+ * business would get two "one last note" emails, which is the one thing that email promises not to
+ * do. The UPDATE only matches while nudge_sent_at IS NULL, so exactly one of them wins.
+ */
+export async function markOutreachNudged(id: number, by: string): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE business_outreach
+        SET nudge_sent_at = now(), nudge_sent_by = $2
+      WHERE id = $1 AND nudge_sent_at IS NULL`,
+    [id, by],
+  );
+  return (res.rowCount ?? 0) > 0;
 }
 
 /** Link a business to the donor it became. Set when a volunteer records the sign-up. */

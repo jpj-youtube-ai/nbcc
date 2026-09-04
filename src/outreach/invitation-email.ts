@@ -37,7 +37,7 @@ const PHONE = "01292 811 015";
 const PHONE_TEL = "+441292811015";
 const CONTACT_EMAIL = "info@nbcc.scot";
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")

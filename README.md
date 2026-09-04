@@ -2960,6 +2960,22 @@ Three things worth knowing:
   only *after* the send succeeds, and `sent_by` records `automatic` rather than attributing it to
   whoever happened to be signed in.
 
+**Only from the day it was switched on (TASK-411).** `AUTO_THANK_YOU_FROM` is the cut-off: a
+supporter whose record predates it is never written to automatically. This went live with a backlog
+behind it, some of whom signed up months ago, and a letter dated today for a decision somebody made
+in March reads less like gratitude than like a system catching up with itself. The backlog is
+thanked by hand from the Thank you screen, or not, and that is a person's call. It is a constant
+rather than a config value on purpose — a historical fact that never changes, and a knob there would
+invite somebody to move it and post the whole backlog by accident.
+
+That cut-off is applied by the **rule**, not the query, which makes the due-list's `ORDER BY f.id
+DESC` load-bearing: the backlog still comes back in those rows, and oldest-first would let a backlog
+larger than the row limit fill the window and starve every new supporter behind it, for ever.
+
+The **Business supporters** tab shows a "Thank you letter" column: when it went, and whether a
+person or the system sent it (`sent_by` is `automatic` for the daily pass). "Not yet" is styled
+quietly — on a fresh supporter it is a normal state, not a problem.
+
 ### Business supporters is its own permission (TASK-406)
 
 The **Business supporters** tab — what each supporter asked to be thanked with, and ticking each

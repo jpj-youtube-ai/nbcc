@@ -22,6 +22,21 @@ import type { ThankYouLetterView } from "../thank-you/letter";
 export const THANK_YOU_FALLBACK_DAYS = 14;
 
 /**
+ * The automatic letter applies to supporters who signed up from this day on, and to nobody before
+ * it (TASK-411).
+ *
+ * This went live with a backlog behind it, some of whom signed up months ago. Thanking them
+ * automatically would have sent a letter dated today for a decision somebody made in March -
+ * which reads less like gratitude and more like a system catching up with itself. The backlog is
+ * thanked by hand from the Thank you screen, or not, and that is a person's call rather than a
+ * machine's.
+ *
+ * A constant rather than a config value on purpose: it is a historical fact that never changes,
+ * and a knob here would invite somebody to move it and post the whole backlog by accident.
+ */
+export const AUTO_THANK_YOU_FROM = new Date("2026-09-04T00:00:00Z");
+
+/**
  * Who signs an automatic letter.
  *
  * Nobody read this one before it went, so it is signed by the charity rather than by a volunteer.
@@ -44,6 +59,8 @@ export interface SupporterAwaitingThanks {
   giftAided: boolean;
   invitedAt: Date | null;
   capturedAt: Date | null;
+  /** When their supporter record was created. Null means it predates the column, so: backlog. */
+  becameSupporterAt: Date | null;
 }
 
 /** Why the letter is going now, or null when it is not. */
@@ -52,6 +69,10 @@ export type ThankReason = "captured" | "fallback";
 const DAY = 86_400_000;
 
 export function shouldThankNow(s: SupporterAwaitingThanks, now: Date): ThankReason | null {
+  // The backlog is not ours to write to. Checked first because none of the rules below should
+  // even be consulted for a supporter who was already here when this was switched on.
+  if (!s.becameSupporterAt || s.becameSupporterAt < AUTO_THANK_YOU_FROM) return null;
+
   // No address, no letter. Without this the send would fail on every daily pass for ever.
   if (!s.email) return null;
 

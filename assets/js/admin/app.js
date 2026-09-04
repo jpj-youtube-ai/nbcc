@@ -803,19 +803,36 @@
     }).join(" ");
     return '<div class="admin-fulfil-flags">' + items + "</div>";
   }
+  // Has this supporter been thanked? (TASK-411.) Worth its own column rather than a tick among the
+  // fulfilment flags: it is the one thing on this row that goes out on its own, so "did that
+  // actually happen, and did a person or the system do it?" is a question somebody will ask.
+  function fulfilmentThankYouCell(r) {
+    if (!r.thank_you_sent_at) {
+      return '<span class="fx-ty fx-ty--waiting">Not yet</span>';
+    }
+    var byMachine = r.thank_you_sent_by === "automatic";
+    return (
+      '<span class="fx-ty fx-ty--sent">Sent ' + H.fmtDate(r.thank_you_sent_at) + "</span>" +
+      '<span class="fx-ty-who">' +
+      (byMachine ? "automatically" : "by " + H.escapeHtml(r.thank_you_sent_by || "a volunteer")) +
+      "</span>"
+    );
+  }
+
   function fulfilmentsTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No business supporters yet.</p>';
     var body = rows
       .map(function (r) {
         return (
           "<tr><td>" + fulfilmentBusinessCell(r) + "</td><td>" + fulfilmentBandPill(r.band) + "</td><td>" +
+          fulfilmentThankYouCell(r) + "</td><td>" +
           fulfilmentPrefsCell(r) + "</td><td>" + fulfilmentFlagsCell(r) + "</td></tr>"
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Business</th><th>Band</th><th>Preferences</th>' +
-      "<th>Fulfilment</th></tr></thead><tbody>" + body + "</tbody></table>"
+      '<table class="admin-table"><thead><tr><th>Business</th><th>Band</th><th>Thank you letter</th>' +
+      "<th>Preferences</th><th>Fulfilment</th></tr></thead><tbody>" + body + "</tbody></table>"
     );
   }
   function loadFulfilments() {

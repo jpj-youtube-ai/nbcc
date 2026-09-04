@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import {
+  AUTO_THANK_YOU_FROM,
   shouldThankNow,
   buildAutoThankYouView,
   runAutoThankYouPass,
@@ -27,8 +28,36 @@ const base: SupporterAwaitingThanks = {
   giftAided: false,
   invitedAt: daysAgo(3),
   capturedAt: null,
+  // Everything in this file is a supporter who signed up after the cut-off unless it says
+  // otherwise, because that is now the precondition for any of the rest to matter.
+  becameSupporterAt: new Date("2026-09-10T00:00:00Z"),
 };
 const when = (over: Partial<SupporterAwaitingThanks> = {}) => shouldThankNow({ ...base, ...over }, NOW);
+
+// The letter went live with a backlog of existing supporters behind it, some of whom signed up
+// months ago. Thanking them automatically would have sent a letter dated today for a decision
+// somebody made in March, so the automatic letter applies only from the day it was switched on;
+// the backlog is thanked by hand, or not, which is a person's call and not a machine's.
+describe("supporters who were already here", () => {
+  const before = new Date(AUTO_THANK_YOU_FROM.getTime() - 86_400_000);
+
+  it("never writes to a supporter who signed up before it was switched on", () => {
+    expect(when({ becameSupporterAt: before, capturedAt: daysAgo(1) })).toBeNull();
+  });
+
+  it("not even when they have been waiting far longer than the fallback", () => {
+    expect(when({ becameSupporterAt: before, capturedAt: null, invitedAt: daysAgo(200) })).toBeNull();
+  });
+
+  it("writes to one who signed up on the day it was switched on", () => {
+    expect(when({ becameSupporterAt: AUTO_THANK_YOU_FROM, capturedAt: daysAgo(1) })).toBe("captured");
+  });
+
+  // A record with no date at all is older than the column, so it is part of the backlog.
+  it("treats a supporter with no signup date as part of the backlog", () => {
+    expect(when({ becameSupporterAt: null, capturedAt: daysAgo(1) })).toBeNull();
+  });
+});
 
 describe("when the letter goes", () => {
   // The whole reason for waiting: a Platinum letter cannot be written properly until you know

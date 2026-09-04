@@ -2976,6 +2976,25 @@ The **Business supporters** tab shows a "Thank you letter" column: when it went,
 person or the system sent it (`sent_by` is `automatic` for the daily pass). "Not yet" is styled
 quietly — on a fresh supporter it is a normal state, not a problem.
 
+### The Monday note (TASK-415)
+
+"Needs you today" only works for somebody who opens it, and these volunteers have jobs and lives.
+So once a week the list goes to them: one short email per volunteer with something waiting, counts
+and a link, no business named. `src/outreach/digest.ts` is pure; `digest-runner.ts` wires it, and it
+rides the daily task, checking the weekday itself — a second EventBridge rule would be a second
+thing to notice had stopped, and this one is quiet enough that nobody would.
+
+Two things it deliberately does **not** do:
+
+- **Nothing goes to a volunteer with an empty list.** An email that arrives every Monday saying
+  "nothing to do" teaches people to delete it unread, and then the one that matters goes with it.
+- **Unassigned work is not mailed to everybody.** Five volunteers each receiving the same list of
+  nobody's businesses is how five people each assume one of the others has it. It stays on the
+  screen, visible without being pushed at anyone.
+
+The count is in the subject (`3 businesses waiting on you`) because for most people the subject is
+the whole email, and it has to be judgeable without opening it.
+
 ### One follow-up, ever (TASK-414)
 
 A business that has not replied after a fortnight appears on **Needs you today**, and its page

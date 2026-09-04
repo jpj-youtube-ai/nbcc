@@ -76,6 +76,7 @@ import {
   listOutreach,
   getOutreach,
   markOutreachSent,
+  markCtpsChecked,
   listOutreachForTodo,
   listVolunteers,
   setOutreachOutcome,
@@ -88,6 +89,7 @@ import { findMatches, isDoNotContact } from "../outreach/matching";
 import { emailBlockReason } from "../outreach/lawful-basis";
 import { isOutcome, wantsAskAgainDate } from "../outreach/outcomes";
 import { whatIsNeeded, sortTodos } from "../outreach/todo";
+import { buildDisclosure } from "../outreach/disclosure";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
 import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
@@ -2745,7 +2747,56 @@ export async function getAdminOutreachVolunteers(req: Request, res: Response): P
 // Registered BEFORE /:id, or Express reads "todo" and "volunteers" as business ids.
 adminRouter.get("/api/admin/outreach/todo", getAdminOutreachTodo);
 adminRouter.get("/api/admin/outreach/volunteers", getAdminOutreachVolunteers);
+// GET /api/admin/outreach/:id/disclosure — everything we hold about this business, as text.
+//
+// A subject access response. Viewer+ can read it, because reading what we already hold is not a
+// change; it is the answering that a person does. Plain text, because it gets pasted into a reply.
+export async function getAdminOutreachDisclosure(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "outreach", "view"))) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+  try {
+    const [business, notes] = await Promise.all([getOutreach(id), listOutreachNotes(id)]);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    return res.status(200).json({ text: buildDisclosure(business, notes, new Date()) });
+  } catch (err) {
+    console.error("outreach disclosure failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/outreach/:id/ctps — record that the number was checked against the TPS register.
+//
+// Editor+, because it is an assertion a named person is making. Calling a business on the
+// Corporate TPS register is an offence, and bulk screening needs a paid licence we are not buying
+// at this volume, so this is the honest control: the number stays hidden until somebody says they
+// have checked, and their name and the date are kept.
+export async function postAdminOutreachCtps(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "outreach", "edit");
+  if (!claims) return;
+  const id = outreachId(req, res);
+  if (id === null) return;
+  try {
+    const business = await getOutreach(id);
+    if (!business) return res.status(404).json({ error: "Unknown business" });
+    await markCtpsChecked(id, claims.email);
+    await recordAudit({
+      actor: claims.email,
+      action: "outreach.tps_checked",
+      entity: "business_outreach",
+      entityId: id,
+      data: { businessName: business.businessName },
+    });
+    return res.status(200).json({ checked: true });
+  } catch (err) {
+    console.error("outreach ctps failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 adminRouter.get("/api/admin/outreach/:id", getAdminOutreachOne);
+adminRouter.get("/api/admin/outreach/:id/disclosure", getAdminOutreachDisclosure);
+adminRouter.post("/api/admin/outreach/:id/ctps", postAdminOutreachCtps);
 adminRouter.post("/api/admin/outreach/:id/outcome", postAdminOutreachOutcome);
 adminRouter.post("/api/admin/outreach/:id/notes", postAdminOutreachNote);
 adminRouter.post("/api/admin/outreach/:id/send", postAdminOutreachSend);

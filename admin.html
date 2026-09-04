@@ -205,7 +205,8 @@
 
             <!-- Subscriptions: at-risk / lapsed monthly donations. -->
             <section class="admin-view" id="view-subscriptions" aria-labelledby="subs-heading" hidden>
-              <h2 id="subs-heading">Subscriptions</h2>
+              <h2 id="subs-heading">Monthly gifts that need attention</h2>
+              <p class="admin-view-intro">When a monthly supporter&rsquo;s card fails, Stripe retries it a few times over about a fortnight. This is where those show up while that is happening, and where they stay if it never goes through. Nearly all of them are an expired card rather than somebody changing their mind, so a short note or a call usually puts it right.</p>
               <div class="admin-table-wrap" id="subsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
@@ -1179,6 +1180,15 @@
                   <span class="ty-status" id="businessOutcomeStatus" role="status" aria-live="polite"></span>
                 </p>
               </form>
+
+              <h3 class="admin-subhead">If they ask what we hold</h3>
+              <p class="admin-help">Everything about this business, in plain English and including the private notes below, ready to paste into a reply. A sole trader can ask for this by law, and answering plainly is easier than working out whether they are entitled to.</p>
+              <p class="ty-controls">
+                <button class="admin-btn" type="button" id="businessDisclose">Show everything we hold</button>
+                <button class="admin-btn" type="button" id="businessDiscloseCopy" hidden>Copy it</button>
+                <span class="ty-status" id="businessDiscloseStatus" role="status" aria-live="polite"></span>
+              </p>
+              <pre class="out-disclosure" id="businessDisclosure" hidden></pre>
 
               <h3 class="admin-subhead">Notes</h3>
               <p class="admin-help">Anything worth the next volunteer knowing. Notes cannot be edited or deleted once saved, and the business can ask to see them, so write them as though they will.</p>

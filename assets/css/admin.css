@@ -1389,3 +1389,17 @@ tr.nl-click:hover { background: var(--tint); }
 .fx-ty--sent{color:var(--holly-dark)}
 .fx-ty--waiting{color:var(--slate-soft);font-weight:500}
 .fx-ty-who{display:block;font-size:.76rem;color:var(--slate-soft);margin-top:1px}
+
+/* The TPS check (TASK-412). The hidden number is stated plainly rather than dressed as an error:
+   it is a step somebody has not taken yet, not something that has gone wrong. */
+.out-tps-hidden{display:block;color:var(--slate-soft);font-style:italic}
+.out-tps-why{display:block;font-size:.78rem;color:var(--slate-soft);line-height:1.45;margin-top:3px}
+.out-tps-why a{color:var(--maroon);font-weight:600}
+.out-tps-btn{margin-top:7px;font-size:.82rem;padding:6px 12px}
+.out-tps-ok{display:block;font-size:.74rem;color:var(--holly-dark);margin-top:2px}
+
+/* What we hold about a business, ready to paste into a reply. Monospaced because it is a document
+   with its own line breaks, and they matter when somebody sends it on. */
+.out-disclosure{margin:0 0 20px;padding:16px 18px;background:var(--card);border:1px solid var(--line);
+  border-radius:10px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8rem;
+  line-height:1.6;color:var(--slate);white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow-y:auto}

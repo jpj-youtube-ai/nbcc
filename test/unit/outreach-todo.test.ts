@@ -25,6 +25,7 @@ const base: TodoBusiness = {
   owner: null,
   ownerEmail: null,
   sentAt: null,
+  nudgeSentAt: null,
   outcome: null,
   outcomeAt: null,
   askAgainOn: null,
@@ -122,6 +123,16 @@ describe("silence after an email", () => {
   // Recording "no reply" is a decision, not a dead end: it should stop the nagging.
   it("stops once somebody has recorded that there was no reply", () => {
     expect(need({ sentAt: daysAgo(60), outcome: "no_reply", outcomeAt: daysAgo(30) })).toBeNull();
+  });
+
+  // One follow-up, ever. The email itself promises to be the last, so the list must stop asking
+  // for another however long the silence goes on (TASK-414).
+  it("stops chasing once the one follow-up has gone", () => {
+    expect(need({ sentAt: daysAgo(60), nudgeSentAt: daysAgo(20) })).toBeNull();
+  });
+
+  it("stops even when the silence since the follow-up is longer than the wait", () => {
+    expect(need({ sentAt: daysAgo(300), nudgeSentAt: daysAgo(200) })).toBeNull();
   });
 });
 

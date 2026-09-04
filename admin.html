@@ -1188,6 +1188,17 @@
                 </p>
               </form>
 
+              <!-- The one follow-up (TASK-414). Shown only where one is actually due; the server
+                   refuses a second however this button is reached. -->
+              <div id="businessNudge" hidden>
+                <h3 class="admin-subhead">Send the one follow-up</h3>
+                <p class="admin-help">A short note saying it is the last they will hear from us, with an easy way to say no. It can only be sent once, and after it this business drops off the chasing list for good.</p>
+                <p class="ty-controls">
+                  <button class="btn btn-primary" type="button" id="businessNudgeSend">Send the follow-up</button>
+                  <span class="ty-status" id="businessNudgeStatus" role="status" aria-live="polite"></span>
+                </p>
+              </div>
+
               <h3 class="admin-subhead">If they ask what we hold</h3>
               <p class="admin-help">Everything about this business, in plain English and including the private notes below, ready to paste into a reply. A sole trader can ask for this by law, and answering plainly is easier than working out whether they are entitled to.</p>
               <p class="ty-controls">

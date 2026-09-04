@@ -30,6 +30,8 @@ export interface TodoBusiness {
   owner: string | null;
   ownerEmail: string | null;
   sentAt: string | null;
+  /** When the single follow-up went. Its presence ends the chasing, whatever else is true. */
+  nudgeSentAt: string | null;
   outcome: string | null;
   outcomeAt: string | null;
   askAgainOn: string | null;
@@ -135,6 +137,9 @@ export function whatIsNeeded(b: TodoBusiness, now: Date): Todo | null {
   if (b.outcome === "no_reply") return null;
 
   if (b.sentAt) {
+    // One follow-up, ever. The cap is here rather than in the button so it holds however the send
+    // is reached, and so a business cannot be chased twice by two volunteers on the same morning.
+    if (b.nudgeSentAt) return null;
     const since = daysBetween(b.sentAt, now);
     if (since >= NUDGE_AFTER_DAYS) {
       return todo(

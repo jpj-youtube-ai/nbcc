@@ -2976,6 +2976,29 @@ The **Business supporters** tab shows a "Thank you letter" column: when it went,
 person or the system sent it (`sent_by` is `automatic` for the daily pass). "Not yet" is styled
 quietly — on a fresh supporter it is a normal state, not a problem.
 
+### One follow-up, ever (TASK-414)
+
+A business that has not replied after a fortnight appears on **Needs you today**, and its page
+offers one short second email. `src/outreach/nudge-email.ts` is built entirely around making it
+easy to say no: it states outright that it is **the last they will hear**, the way out ("there is
+nothing you need to do") comes *before* the button rather than after it, and it is under two
+hundred words. A second unanswered email is a nuisance unless it costs the reader nothing.
+
+The subject is **"One last note from us"** — not "Following up" or "Just checking in", which is
+what every unwanted second email says. The list view is where the decision actually gets made.
+
+**Prepared, never automatic.** Everything else on this screen is "always by a person", and a
+follow-up that arrived on a timer would be the one thing that was not — which is also the thing a
+business would notice.
+
+**The cap is enforced three times, deliberately.** The chase rule drops a nudged business off the
+list for good; the endpoint refuses a second, a nudge before the first email, and a nudge to
+somebody who has already answered; and the `UPDATE` only matches while `nudge_sent_at IS NULL`, so
+two volunteers pressing within the same second cannot both win. Without that last one the business
+would receive two emails each promising to be the last, which would make the charity a liar as well
+as a nuisance. On a send that throws, the claim is deliberately **not** released: the email may
+have gone, and one business receiving none is better than one receiving two.
+
 ### Is it working? (TASK-413)
 
 At the foot of the Contact businesses screen — interesting once a month, noise every day. Four

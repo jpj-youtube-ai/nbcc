@@ -227,3 +227,35 @@ describe("what we hold, if they ask", () => {
     expect(view4?.textContent).toMatch(/including the private notes/i);
   });
 });
+
+// TASK-414: the one follow-up.
+describe("the follow-up", () => {
+  const app5 = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+  const doc5 = new DOMParser().parseFromString(html, "text/html");
+
+  // Offered only where one is genuinely due. A button that will be refused is its own small
+  // unkindness, even though the server is what actually decides.
+  it("is hidden until a follow-up is actually due", () => {
+    expect(doc5.getElementById("businessNudge")?.hasAttribute("hidden")).toBe(true);
+    expect(app5).toContain("var nudgeDue = !!r.sentAt && !r.nudgeSentAt && !r.outcome && !!r.contactEmail");
+  });
+
+  // The email promises to be the last one, so the screen has to say the same before sending and
+  // show that it has gone afterwards.
+  it("says it can only be sent once, before and after", () => {
+    const text = doc5.getElementById("businessNudge")?.textContent ?? "";
+    expect(text).toMatch(/only be sent once/i);
+    expect(text).toMatch(/drops off the chasing list/i);
+    expect(app5).toMatch(/it is the last they will hear from us, and it cannot be sent again/);
+    expect(app5).toContain("They will not be chased again.");
+  });
+
+  it("shows on the record that it went, and who sent it", () => {
+    expect(app5).toContain('factRow("Follow-up sent"');
+    expect(app5).toContain("H.escapeHtml(r.nudgeSentBy)");
+  });
+
+  it("says what pressing it does", () => {
+    expect(doc5.getElementById("businessNudgeSend")?.textContent?.trim()).toBe("Send the follow-up");
+  });
+});

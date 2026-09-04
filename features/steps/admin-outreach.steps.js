@@ -320,6 +320,18 @@ When(
   },
 );
 
+When("I send the follow-up as {string} with password {string}", async function (actor, password) {
+  const token = await login(actor, password);
+  await call(this, `/api/admin/outreach/${this.outId}/nudge`, {
+    method: "POST",
+    token,
+    body: {
+      signerName: "Jaimie Wakefield",
+      signerRole: "Project Manager, Night Before Christmas Campaign",
+    },
+  });
+});
+
 When("I confirm the TPS check as {string} with password {string}", async function (actor, password) {
   const token = await login(actor, password);
   await call(this, `/api/admin/outreach/${this.outId}/ctps`, { method: "POST", token, body: {} });

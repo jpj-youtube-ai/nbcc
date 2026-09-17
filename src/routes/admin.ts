@@ -39,7 +39,7 @@ import { ballSettingsUpdateSchema } from "../ball/settings";
 import { hashPassword } from "../admin/password";
 import { bookingsCsv, cateringCsv, doorListCsv } from "../ball/exports";
 import { buildBallReminderEmail } from "../ball/reminder-email";
-import { sendBallReminder } from "../clients/email";
+import { sendBallReminder, sendBallRunUp } from "../clients/email";
 import { availability } from "../ball/capacity";
 import { holdCreateSchema, seatsForHold } from "../ball/holds";
 import { isGateOpen } from "../ball/gate";
@@ -61,12 +61,18 @@ import {
   updateSettings as updateBallSettings,
   listGuestProgress,
   listAbandonedBookings,
+  listMenuProgress,
+  listBookingsNeedingMenuEmail,
+  markMenuEmailSent,
 } from "../db/ball";
 import {
   summariseGuestProgress,
   outstandingBookings,
   guestLinkFor,
 } from "../ball/guest-progress";
+import { summariseMenuProgress, outstandingMenuBookings } from "../ball/menu-progress";
+import { buildMenuReadyEmail } from "../ball/menu-email";
+import { parseMenu } from "../ball/menu";
 import { archiveStory, restoreStory } from "../db/stories";
 import { recordErasure, listErasures } from "../db/erasure-log";
 import { listEmailLog, listRecentEmailFailures } from "../db/email-log";
@@ -3825,6 +3831,99 @@ export async function postAdminBallReminders(req: Request, res: Response): Promi
 }
 
 adminRouter.post("/api/admin/ball/reminders", postAdminBallReminders);
+
+// GET /api/admin/ball/menu-progress — who has chosen what they want to eat, and who has not.
+// Viewer+, the same bar as the guest-progress list it sits beside.
+//
+// menuProgress() has existed since TASK-345 and was wired to nothing, so the day a menu finally
+// arrived there was no way to answer the only question staff had. Carries each buyer's own guest
+// link so somebody can be chased directly, exactly as the guest-name list does.
+export async function getAdminBallMenuProgress(
+  req: Request,
+  res: Response,
+): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "ball", "view"))) return;
+  try {
+    const [rows, settings] = await Promise.all([listMenuProgress(), getBallSettings()]);
+    const menu = parseMenu(settings.menuOptions);
+    return res.status(200).json({
+      summary: summariseMenuProgress(rows, menu),
+      outstanding: outstandingMenuBookings(rows, menu).map((b) => ({
+        ...b,
+        guestLink: guestLinkFor(b, config.BALL_BASE_URL),
+      })),
+    });
+  } catch (err) {
+    console.error("admin ball menu progress failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+// POST /api/admin/ball/menu-email — tell everyone who has paid that the menu exists. Editor+
+// WITH the ball section, like the other writes here.
+//
+// Staff-triggered, never scheduled: a cron misfiring at 3am against four hundred people is a
+// worse failure than a button somebody has to press. Idempotency lives in the query
+// (menu_email_sent_at IS NULL) and each booking is STAMPED AS IT SENDS.
+//
+// REFUSES while there is no menu. An email headed "the menu is here" carrying no menu is worse
+// than no email, and it would burn the one send each booking gets.
+export async function postAdminBallMenuEmail(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  try {
+    const settings = await getBallSettings();
+    const menu = parseMenu(settings.menuOptions);
+    if (menu.length === 0) {
+      return res.status(409).json({ error: "Set the menu before telling anyone it is here" });
+    }
+
+    const targets = await listBookingsNeedingMenuEmail();
+    const base = config.BALL_BASE_URL.replace(/\/+$/, "");
+
+    let sent = 0;
+    const failed: string[] = [];
+    for (const t of targets) {
+      const mail = buildMenuReadyEmail({
+        buyerFirstName: t.buyerFirstName?.trim() || t.buyerName,
+        reference: t.reference,
+        guestLink: t.guestToken ? `${base}/ball/guests/${t.guestToken}` : `${base}/ball`,
+        menu,
+        menuNote: settings.menuNote,
+      });
+      try {
+        await sendBallRunUp({
+          email: t.buyerEmail,
+          from: config.BALL_FROM_EMAIL,
+          replyTo: config.BALL_FROM_EMAIL,
+          subject: mail.subject,
+          html: mail.html,
+          text: mail.text,
+        });
+        await markMenuEmailSent(t.id);
+        sent += 1;
+      } catch {
+        // Not stamped, so this one is picked up next time. Recorded rather than thrown: one bad
+        // address must not stop the other 399 people hearing about the menu.
+        failed.push(t.reference);
+      }
+    }
+    await recordAudit({
+      actor: actorOf(claims),
+      action: "ball.menu_email_sent",
+      entity: "ball_bookings",
+      entityId: null,
+      data: { sent, failed: failed.length },
+    });
+    return res.status(200).json({ sent, failed });
+  } catch (err) {
+    console.error("ball menu email failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/ball/menu-progress", getAdminBallMenuProgress);
+adminRouter.post("/api/admin/ball/menu-email", postAdminBallMenuEmail);
 
 // GET /api/admin/ball/waiting-list — who is waiting, oldest first. Viewer+.
 export async function getAdminBallWaitingList(req: Request, res: Response): Promise<Response | void> {

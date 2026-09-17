@@ -7514,6 +7514,43 @@
     el("ballOutstanding").innerHTML = ballOutstandingTable(d.outstanding || []);
   }
 
+  // TASK-418: the same shape as the guest-details chase above it, because it answers the same
+  // question about a different thing and staff read the two together.
+  function ballMenuOutstandingTable(rows) {
+    if (!rows.length) {
+      return '<p class="admin-empty">Everyone who has been named has chosen what they want.</p>';
+    }
+    var body = rows.map(function (b) {
+      var link = b.guestLink
+        ? '<a href="' + H.escapeHtml(b.guestLink) + '" target="_blank" rel="noopener">Their link</a>'
+        : "<small>No link yet</small>";
+      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+        '<br /><small><a href="mailto:' + H.escapeHtml(b.buyerEmail) + '">' +
+        H.escapeHtml(b.buyerEmail) + "</a></small></td>" +
+        '<td class="admin-num">' + b.chosen + " of " + b.guestsNamed +
+        '</td><td class="admin-num">' + b.missing + "</td><td>" + link + "</td></tr>";
+    }).join("");
+    return '<table class="admin-table"><thead><tr><th>Reference</th><th>Who booked</th>' +
+      "<th>Chosen</th><th>Still to choose</th><th></th></tr></thead><tbody>" + body + "</tbody></table>";
+  }
+
+  function ballMenuProgressRender(d) {
+    var s = d.summary || {};
+    // Before the venue confirms a menu there is nothing outstanding and nothing to chase. Say
+    // that, rather than showing a confident "0%" against a menu that does not exist.
+    if (!s.asking) {
+      el("ballMenuProgress").innerHTML =
+        '<p class="admin-empty">No menu set yet, so there is nothing for anyone to choose.</p>';
+      el("ballMenuOutstanding").innerHTML = "";
+      return;
+    }
+    el("ballMenuProgress").innerHTML =
+      statCard(s.chosen + " of " + s.guestsNamed, "Guests who have chosen") +
+      statCard(s.percentComplete + "%", "Kitchen order ready", s.outstanding > 0) +
+      statCard(s.bookingsOutstanding || 0, "Bookings to chase", s.bookingsOutstanding > 0);
+    el("ballMenuOutstanding").innerHTML = ballMenuOutstandingTable(d.outstanding || []);
+  }
+
   function ballRender(d) {
     ballSettings = d.settings;
     var a = d.availability || {};
@@ -7650,6 +7687,14 @@
         el("ballGuestProgress").innerHTML =
           '<p class="admin-empty">Could not load guest details.</p>';
         el("ballOutstanding").innerHTML = "";
+      });
+    authFetch("/api/admin/ball/menu-progress")
+      .then(j)
+      .then(ballMenuProgressRender)
+      .catch(function () {
+        el("ballMenuProgress").innerHTML =
+          '<p class="admin-empty">Could not load menu choices.</p>';
+        el("ballMenuOutstanding").innerHTML = "";
       });
   }
 
@@ -7805,6 +7850,44 @@
             .catch(function () { window.alert("Could not download that list. Try again."); });
         });
       });
+
+    // TASK-418: "the menu is here". Same shape as the reminder below, same safety: the button
+    // names what it is about to do, and the server refuses while there is no menu to send.
+    var menuBtn = el("ballSendMenuEmail");
+    if (menuBtn) {
+      menuBtn.hidden = !canEdit("ball");
+      menuBtn.addEventListener("click", function () {
+        if (!window.confirm("Email everyone who has paid to say the menu is confirmed? This emails real people, and each booking only gets it once.")) return;
+        menuBtn.disabled = true;
+        ballStatus("ballMenuEmailStatus", "Sending…");
+        authFetch("/api/admin/ball/menu-email", { method: "POST" })
+          .then(j)
+          .then(function (d) {
+            menuBtn.disabled = false;
+            // j() resolves on any status, so a refusal arrives HERE with an error body rather
+            // than in the catch. The one that matters: the server will not send an email headed
+            // "the menu is here" carrying no menu, because that would burn the single send each
+            // booking gets.
+            if (d && d.error) {
+              ballStatus("ballMenuEmailStatus", d.error + ".");
+              return;
+            }
+            var failed = (d.failed || []).length;
+            ballStatus(
+              "ballMenuEmailStatus",
+              d.sent === 0
+                ? "Nobody needed it: everyone who has paid has already been told."
+                : "Sent to " + d.sent + (d.sent === 1 ? " booking." : " bookings.") +
+                    (failed ? " " + failed + " could not be sent and will be retried next time." : "")
+            );
+            loadBall();
+          })
+          .catch(function () {
+            menuBtn.disabled = false;
+            ballStatus("ballMenuEmailStatus", "Could not send. Nothing was emailed; try again.");
+          });
+      });
+    }
 
     var remindBtn = el("ballSendReminders");
     if (remindBtn) {

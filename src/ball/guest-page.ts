@@ -64,7 +64,9 @@ export interface GuestPageInput {
   /** TASK-345: the raw menu from admin. Null or absent renders no menu section at all. */
   menuOptions?: string | null;
   /**
-   * TASK-417: the venue's dietary key, verbatim ("V = Vegetarian, VV = Vegan, ..."). Every dish
+   * TASK-417: the venue's dietary key, verbatim ("V = Vegetarian, GF = Gluten Free, ..."). NBCC
+   * asks guests one thing only, whether they are vegetarian; the rest of the codes are the
+   * venue's own and are reproduced rather than interpreted. Every dish
    * on the confirmed menu carries codes, and a code with no key is jargon.
    */
   menuNote?: string | null;

@@ -770,6 +770,97 @@
 }
 .ball-privacy p:last-child { margin-bottom: 0; }
 
+/* ---- the menu (TASK-417) ---------------------------------------------------------------
+   Printed ONCE above the guests rather than inside each fieldset. A table of ten would
+   otherwise repeat the starter ten times and bury the question each guest is being asked.
+
+   It is also the only place a FIXED course can appear: nobody picks the soup, so no dropdown
+   mentions it, and without this panel a guest never learns what they are eating first. */
+.ball-menu {
+  max-width: 760px;
+  margin: 0 auto 26px;
+  padding: clamp(20px, 3vw, 30px);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+.ball-menu > h2 {
+  margin: 0;
+  font-size: clamp(1.18rem, 2.4vw, 1.45rem);
+  color: var(--maroon);
+}
+.ball-menu-course {
+  padding: 18px 0 16px;
+  border-top: 1px solid var(--line);
+}
+.ball-menu-course:first-of-type { border-top: 0; padding-top: 14px; }
+/* The course name is a label, not a heading to read: small caps in the deep gold, so the eye
+   goes to the dish. */
+.ball-menu-course h3 {
+  margin: 0 0 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold-deep);
+}
+.ball-menu-dish,
+.ball-menu-dishes li {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--slate);
+  max-width: 54ch;
+  margin-inline: auto;
+}
+.ball-menu-dishes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* A spoken "or" between the alternatives. Two dishes stacked with nothing between them read
+   as two courses, which is the one thing this panel must not say. */
+.ball-menu-dishes li + li { margin-top: 12px; }
+.ball-menu-dishes li + li::before {
+  content: "or";
+  display: block;
+  margin-bottom: 12px;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--slate-soft);
+}
+/* Its own colour rather than inheriting: .ball-hint is only given one inside .ball-field. */
+.ball-menu-course .ball-hint {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--slate-soft);
+}
+.ball-menu-key {
+  margin: 4px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--slate-soft);
+}
+.ball-menu > .ball-hint {
+  display: block;
+  margin-top: 14px;
+  font-size: 0.86rem;
+  color: var(--slate);
+}
+
+/* The vegetarian question sits with the guest's own choices, not with the menu: it is a fact
+   about the person, and the answer differs guest by guest on the same table. */
+.ball-veg-check { margin-top: 2px; }
+
 .ball-smallprint {
   margin: 0;
   font-size: 0.84rem;

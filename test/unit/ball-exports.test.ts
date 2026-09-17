@@ -108,7 +108,9 @@ describe("cateringCsv", () => {
 
   it("groups by table so the kitchen can work through the room", () => {
     const lines = cateringCsv(guests).split("\r\n");
-    expect(lines[0]).toBe('"Table","Guest","Menu","Food","Access"');
+    // TASK-417 adds Vegetarian between Guest and Menu: the caterer needs to know which
+    // vegetarian plates are a requirement and which are a preference that could flex.
+    expect(lines[0]).toBe('"Table","Guest","Vegetarian","Menu","Food","Access"');
     expect(lines[1]).toContain("Bakery");
     expect(lines[2]).toContain("Team Ayr");
   });

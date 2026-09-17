@@ -41,6 +41,9 @@ export interface BallSettings {
   // TASK-345: NULL until the venue confirms a menu; the guest form shows no menu section while
   // it is null, rather than an empty picker.
   menuOptions: string | null;
+  // TASK-417: the venue's dietary key, verbatim. Its own column rather than a line inside
+  // menuOptions, which is parsed line by line as courses.
+  menuNote: string | null;
   // The card rate NBCC is actually charged (TASK-317). Data rather than a constant, because
   // the page asks buyers to cover this exact number: a stale rate collects money for a fee
   // that was never charged. Basis points so nothing here is a float — 120 = 1.20%.
@@ -68,6 +71,7 @@ interface SettingsRow {
   line_up_note: string | null;
   guest_details_lock_at: string | null;
   menu_options: string | null;
+  menu_note: string | null;
   card_fee_percent_bp: number;
   card_fee_fixed_pence: number;
 }
@@ -75,7 +79,7 @@ interface SettingsRow {
 const SETTINGS_SQL = `SELECT total_tables, seats_per_table, held_seats, gate_open,
                              gate_opens_at, sales_close_at, sales_closed,
                              arrival_time, included_note, line_up_note,
-                             guest_details_lock_at, menu_options,
+                             guest_details_lock_at, menu_options, menu_note,
                              card_fee_percent_bp, card_fee_fixed_pence
                         FROM ball_settings WHERE id = 1`;
 
@@ -115,6 +119,7 @@ function toSettings(r: SettingsRow): BallSettings {
     lineUpNote: r.line_up_note,
     guestDetailsLockAt: r.guest_details_lock_at,
     menuOptions: r.menu_options,
+    menuNote: r.menu_note,
     cardFeePercentBp: r.card_fee_percent_bp,
     cardFeeFixedPence: r.card_fee_fixed_pence,
   };
@@ -347,6 +352,7 @@ const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
   lineUpNote: "line_up_note",
   guestDetailsLockAt: "guest_details_lock_at",
   menuOptions: "menu_options",
+  menuNote: "menu_note",
   cardFeePercentBp: "card_fee_percent_bp",
   cardFeeFixedPence: "card_fee_fixed_pence",
 };
@@ -562,7 +568,7 @@ export async function updateSettings(
       `UPDATE ball_settings SET ${sets.join(", ")} WHERE id = 1 RETURNING
          total_tables, seats_per_table, held_seats, gate_open, gate_opens_at,
          sales_close_at, sales_closed, arrival_time, included_note, line_up_note,
-         guest_details_lock_at, menu_options`,
+         guest_details_lock_at, menu_options, menu_note`,
       values,
     );
     await insertAudit(client, {
@@ -752,7 +758,7 @@ export async function getBookingByGuestToken(token: string): Promise<BookingByTo
     // menu_choice was already being read back by the mapper below but was never in the SELECT,
     // so every guest's menu choice came back undefined and the form re-rendered blank. Fixed
     // here while adding the name halves, since it is the same list and the same bug shape.
-    `SELECT full_name, first_name, surname, dietary, access_needs, menu_choice FROM ball_guests
+    `SELECT full_name, first_name, surname, dietary, access_needs, menu_choice, is_vegetarian FROM ball_guests
       WHERE booking_id = $1 ORDER BY id ASC`,
     [r.id],
   );
@@ -776,6 +782,7 @@ export async function getBookingByGuestToken(token: string): Promise<BookingByTo
       dietary: g.dietary,
       accessNeeds: g.access_needs,
       menuChoice: g.menu_choice,
+      isVegetarian: g.is_vegetarian,
     })),
   };
 }
@@ -807,8 +814,9 @@ export async function saveGuests(bookingId: number, submission: GuestWrite): Pro
         // the CSV exports, the admin table and the reminder email's read-back all read it. The
         // halves sit beside it for sorting by surname.
         `INSERT INTO ball_guests
-           (booking_id, full_name, first_name, surname, dietary, access_needs, expires_at, menu_choice)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+           (booking_id, full_name, first_name, surname, dietary, access_needs, expires_at,
+            menu_choice, is_vegetarian)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           bookingId,
           g.fullName,
@@ -818,6 +826,9 @@ export async function saveGuests(bookingId: number, submission: GuestWrite): Pro
           g.accessNeeds,
           expires,
           g.menuChoice ?? null,
+          // TASK-417: false rather than null. NULL means nobody ever asked this guest; a save
+          // from the form always asked, so an untouched checkbox is a real "no".
+          g.isVegetarian ?? false,
         ],
       );
     }
@@ -951,7 +962,7 @@ export async function listGuestProgress(): Promise<GuestProgressRow[]> {
 
 export async function listGuestsForExport(): Promise<ExportGuest[]> {
   const res = await pool.query(
-    `SELECT g.full_name, g.surname, g.dietary, g.access_needs, g.menu_choice,
+    `SELECT g.full_name, g.surname, g.dietary, g.access_needs, g.menu_choice, g.is_vegetarian,
             b.table_name, b.reference
        FROM ball_guests g
        JOIN ball_bookings b ON b.id = g.booking_id
@@ -963,6 +974,7 @@ export async function listGuestsForExport(): Promise<ExportGuest[]> {
     dietary: r.dietary,
     accessNeeds: r.access_needs,
     menuChoice: r.menu_choice,
+    isVegetarian: r.is_vegetarian,
     tableName: r.table_name,
     reference: r.reference,
   }));

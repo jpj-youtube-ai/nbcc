@@ -7557,6 +7557,7 @@
           .slice(0, 16)
       : "";
     el("ballMenuOptions").value = ballSettings.menuOptions || "";
+    el("ballMenuNote").value = ballSettings.menuNote || "";
     el("ballArrivalTime").value = ballSettings.arrivalTime || "";
     el("ballIncludedNote").value = ballSettings.includedNote || "";
     el("ballLineUpNote").value = ballSettings.lineUpNote || "";
@@ -7837,7 +7838,15 @@
       e.preventDefault();
       // Empty clears it, which turns the menu section back off for every guest at once - the
       // way back out if the venue changes its mind after this has gone live.
-      ballSave({ menuOptions: el("ballMenuOptions").value }, "ballMenuStatus");
+      // Both in one save: the key is meaningless without the menu it explains, and saving them
+      // separately is how a menu goes live carrying codes nobody can decode.
+      ballSave(
+        {
+          menuOptions: el("ballMenuOptions").value,
+          menuNote: el("ballMenuNote").value,
+        },
+        "ballMenuStatus",
+      );
     });
 
     el("ballLockForm").addEventListener("submit", function (e) {

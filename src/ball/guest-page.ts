@@ -1,5 +1,5 @@
 import { escapeHtml } from "./page";
-import { choosableCourses, parseChoice, parseMenu, type MenuCourse } from "./menu";
+import { choosableCourses, fixedCourses, parseChoice, parseMenu, type MenuCourse } from "./menu";
 
 // TASK-313 (plan 5): the "tell us about your table" form. Pure render — no pool, no config —
 // so it is unit-tested DB-free, mirroring src/thank-you/letter-page.ts.
@@ -33,6 +33,8 @@ import { choosableCourses, parseChoice, parseMenu, type MenuCourse } from "./men
 
 export interface GuestRow {
   fullName: string;
+  /** TASK-417: vegetarian as a requirement, not a preference. NULL on rows saved before it. */
+  isVegetarian?: boolean | null;
   /** TASK-409. NULL on rows saved before the split; the page derives a best-effort prefill. */
   firstName?: string | null;
   surname?: string | null;
@@ -61,6 +63,11 @@ export interface GuestPageBooking {
 export interface GuestPageInput {
   /** TASK-345: the raw menu from admin. Null or absent renders no menu section at all. */
   menuOptions?: string | null;
+  /**
+   * TASK-417: the venue's dietary key, verbatim ("V = Vegetarian, VV = Vegan, ..."). Every dish
+   * on the confirmed menu carries codes, and a code with no key is jargon.
+   */
+  menuNote?: string | null;
   booking: GuestPageBooking;
   guests: GuestRow[];
   token: string;
@@ -117,6 +124,54 @@ function nameParts(guest: GuestRow | undefined): { first: string; last: string }
 // Returns "" while there is nothing to choose from — deliberately. A picker headed "choose your
 // main course" above an empty list is worse than no picker: it looks broken, and it invites an
 // email asking what the options are.
+/**
+ * The menu itself, printed ONCE above the guests.
+ *
+ * Not inside each fieldset, deliberately. A table of ten would otherwise repeat the starter ten
+ * times and bury the question each guest is actually being asked. It is also the only place a
+ * FIXED course can appear: nobody picks the soup, so no dropdown mentions it, and without this
+ * panel a guest never learns what they are eating first.
+ *
+ * Dish text and the dietary key are printed exactly as the venue wrote them.
+ */
+function menuPanel(menu: MenuCourse[], note: string | null): string {
+  if (menu.length === 0) return "";
+  const asked = choosableCourses(menu);
+  const fixed = new Set(fixedCourses(menu).map((c) => c.name));
+
+  const courses = menu
+    .map((course) => {
+      const isFixed = fixed.has(course.name);
+      const body = isFixed
+        ? `<p class="ball-menu-dish">${escapeHtml(course.options[0] ?? course.name)}</p>
+        <small class="ball-hint">Served to everyone.</small>`
+        // No "choose one" caption per course. It said the same thing under every choosable
+        // course and again under the panel, three times on this menu, and the repetition made
+        // the one line that IS different ("served to everyone") easier to skim past.
+        : `<ul class="ball-menu-dishes">${course.options
+            .map((o) => `<li>${escapeHtml(o)}</li>`)
+            .join("")}</ul>`;
+      // A bare line ("Coffee and mints") is its own dish: there is no option to print under it,
+      // so the name carries the whole thing and printing it twice would read as a stutter.
+      const heading = isFixed && course.options.length === 0 ? "" : `<h3>${escapeHtml(course.name)}</h3>`;
+      return `<div class="ball-menu-course">${heading}${body}</div>`;
+    })
+    .join("\n      ");
+
+  const key = note
+    ? `<p class="ball-menu-key">${escapeHtml(note)}</p>`
+    : "";
+
+  return `<section class="ball-menu" aria-labelledby="menu-heading">
+      <h2 id="menu-heading">The menu</h2>
+      ${courses}
+      ${key}
+      ${asked.length > 0
+        ? `<p class="ball-hint">Tell us what each guest would like below. If you are not sure yet, leave it and come back.</p>`
+        : ""}
+    </section>`;
+}
+
 function menuFields(index: number, guest: GuestRow | undefined, menu: MenuCourse[]): string {
   const asked = choosableCourses(menu);
   if (asked.length === 0) return "";
@@ -142,7 +197,15 @@ function menuFields(index: number, guest: GuestRow | undefined, menu: MenuCourse
       </select>
     </label>`;
     })
-    .join("\n    ");
+    .join("\n    ")
+    // TASK-417: why they picked the vegetarian dish, which is a different question from which
+    // dish they picked. A requirement the kitchen must get exactly right reads identically to a
+    // preference that could flex if the numbers move, and only the guest can tell them apart.
+    .concat(`
+    <label class="ball-check ball-veg-check">
+      <input type="checkbox" name="vegetarian${n}" value="yes"${guest?.isVegetarian ? " checked" : ""} />
+      <span><b>This guest is vegetarian.</b> Tick this if the vegetarian dish is a requirement rather than a preference, so the kitchen knows which plates have to be exactly right.</span>
+    </label>`);
 }
 
 function guestFieldset(
@@ -297,6 +360,8 @@ export function renderGuestPage(input: GuestPageInput): string {
       ${notice}
       <p class="ball-progress">${progress} <b>You don't have to do it all at once.</b> Save what you know and come back later.</p>
       <p class="ball-progress ball-closes">${closes}</p>
+
+      ${menuPanel(menu, input.menuNote ?? null)}
 
       <form method="post" action="/ball/guests/${escapeHtml(token)}" class="ball-form ball-guest-form">
         <label class="ball-field ball-group-field">

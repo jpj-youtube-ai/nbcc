@@ -66,6 +66,31 @@ Feature: Festive Ball guest details (TASK-313)
     And the ball export should contain "Pat Brown"
     And the ball export should not contain an email address
 
+  Scenario: the menu shows a fixed course without asking anyone to choose it
+    Given the ball menu is set
+    And a paid ball booking for 1 table with guest token "guest-menu-1"
+    When I open the guest link "guest-menu-1"
+    Then the guest page status should be 200
+    And the guest page should show "Soup"
+    And the guest page should show "Served to everyone."
+    And the guest page should not show a picker for "To start"
+    And the guest page should show "V = Vegetarian"
+
+  Scenario: a guest who is vegetarian is remembered as one
+    Given the ball menu is set
+    And a paid ball booking for 1 table with guest token "guest-menu-2"
+    When I save a vegetarian guest "Sam Bryce" choosing "Vegetarian wellington" on "guest-menu-2"
+    Then the guest page status should be 200
+    And the guest page should list the guest "Sam Bryce"
+    And the guest page should have the vegetarian tick set
+
+  Scenario: nothing about the menu appears before the venue confirms one
+    Given the ball menu is cleared
+    And a paid ball booking for 1 table with guest token "guest-menu-3"
+    When I open the guest link "guest-menu-3"
+    Then the guest page status should be 200
+    And the guest page should not show a picker for "Main course"
+
   Scenario: exports need a login
     When I download the ball "door-list" list without a token
     Then the ball export status should be 401

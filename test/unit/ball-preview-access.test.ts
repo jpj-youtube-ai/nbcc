@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // TASK-320: "may this request see the ball before launch?" now has one implementation,
 // because two places ask it — /ball itself and the home page's promo preview. A second copy
@@ -36,7 +36,21 @@ describe("holdsPreviewCookie", () => {
   beforeEach(() => {
     getPreviewPasswordHash.mockReset();
     getPreviewPasswordHash.mockResolvedValue("stored-hash");
+    // TASK-417: this suite was time-bombed and went off on 15 September 2026.
+    //
+    // The fixture signs a token at a FIXED date (NOW), but holdsPreviewCookie verifies against
+    // the REAL clock. The token carries the fortnight TTL, so every assertion here quietly
+    // depended on the suite being run within fourteen days of 1 September, and fails forever
+    // after. Nothing is wrong in production, where a cookie is signed at the moment it is
+    // issued; it was only ever the test that travelled.
+    //
+    // Only Date is faked. Faking the timers as well is unnecessary here and risks interfering
+    // with the awaited mock.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
   });
+
+  afterEach(() => vi.useRealTimers());
 
   it("accepts a cookie we signed", async () => {
     const token = signGateToken("stored-hash", NOW);

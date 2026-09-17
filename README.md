@@ -2796,6 +2796,39 @@ never selected it, so a saved menu choice never rendered back into the form and 
 re-picking would have wiped it. Latent rather than live, since the picker stays hidden until
 `ball_settings.menu_options` is set.
 
+**TASK-417: the venue confirmed a menu, and it broke three assumptions.** The menu code was
+written in TASK-345 before anybody had seen one.
+
+- **A course with one dish is not a question.** The Park Hotel's starter is fixed: everyone gets
+  the soup. Pasted the natural way (`To start: Soup`) that parsed as a course with ONE option, so
+  the form asked guests to choose soup from a list containing soup, and counted them as
+  outstanding until they did. `choosableCourses` now means "more than one option", and
+  `fixedCourses` is its other half.
+- **The menu is printed once, above the guests, not inside each fieldset.** A table of ten would
+  otherwise repeat the starter ten times. This panel is also the only place a fixed course can
+  appear at all: no dropdown mentions the soup, so without it a guest never learns what they are
+  eating first. Dish text is rendered exactly as the venue wrote it, dietary codes and all.
+- **`ball_settings.menu_note` holds the venue's dietary key** verbatim ("V = Vegetarian, VV =
+  Vegan, …"). Its own column rather than a line inside `menu_options`, which is parsed line by
+  line as courses: a key pasted in there would render to guests as a course called "Dietaries
+  key". Admin saves the menu and the key together, because a menu carrying codes nobody can
+  decode is worse than no codes.
+
+**`ball_guests.is_vegetarian` records WHY a guest picked the vegetarian dish.** Both alternative
+dishes on the confirmed menu are vegetarian, and the plate reaching a vegetarian looks identical
+to the plate reaching someone who simply fancied the wellington. The difference only matters when
+it matters: a requirement has to be exactly right and cannot be swapped if the numbers move, a
+preference can. The column is **nullable and null is meaningful** — rows saved before this were
+never asked, which is a different fact from a guest who was asked and said no. The catering CSV
+gains a `Vegetarian` column, and a declared vegetarian now appears on that list even with no
+allergy and no choice yet, because they are the guest most likely to be handed the wrong plate.
+
+`test/unit/ball-preview-access.test.ts` was **time-bombed and went off on 15 September 2026**: it
+signs a gate token at a hardcoded date and verifies it against the real clock, so every assertion
+quietly depended on the suite running within the fortnight TTL of 1 September. Nothing was wrong
+in production, where a cookie is signed at the moment it is issued. The clock is now frozen at the
+fixture's own date.
+
 ### The admin Festive Ball screen
 
 Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,

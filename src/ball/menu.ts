@@ -43,8 +43,21 @@ export function parseMenu(raw: string | null): MenuCourse[] {
 
 // Only courses that actually ask something. A fixed course is not a question, so it must not
 // count towards "has this guest answered everything".
+//
+// TASK-417: "more than one", not "more than none". The Park Hotel's confirmed menu has a single
+// starter everybody gets, and the natural way to paste that is "To start: Soup" — which parses
+// as a course with ONE option. Under the old rule that became a picker asking a guest to choose
+// soup from a list containing only soup, and it counted against them until they answered it. A
+// course offering one thing is not a question however it was typed.
 export function choosableCourses(menu: MenuCourse[]): MenuCourse[] {
-  return menu.filter((c) => c.options.length > 0);
+  return menu.filter((c) => c.options.length > 1);
+}
+
+// The other half: courses nobody chooses. Either a bare line ("Coffee and mints") or a course
+// with exactly one dish. These are not questions, but they ARE part of the menu, and a guest who
+// never sees them does not know what they are eating first.
+export function fixedCourses(menu: MenuCourse[]): MenuCourse[] {
+  return menu.filter((c) => c.options.length <= 1);
 }
 
 // A guest's answers, stored as "Course: choice" lines — the same shape as the menu itself, so

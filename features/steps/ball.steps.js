@@ -758,6 +758,42 @@ function nameFields(name, n) {
   };
 }
 
+// TASK-417: the confirmed menu, as staff paste it. A fixed starter plus two choosable courses,
+// which is the exact shape The Park Hotel sent.
+Given("the ball menu is set", async function () {
+  await withDb((db) =>
+    db.query(
+      `UPDATE ball_settings
+          SET menu_options = $1, menu_note = $2
+        WHERE id = 1`,
+      [
+        "To start: Soup\nMain course: Turkey | Vegetarian wellington\nTo finish: Mousse | Vegan torte",
+        "V = Vegetarian, VV = Vegan, DF = Dairy Free",
+      ],
+    ),
+  );
+});
+
+Given("the ball menu is cleared", async function () {
+  await withDb((db) =>
+    db.query("UPDATE ball_settings SET menu_options = NULL, menu_note = NULL WHERE id = 1"),
+  );
+});
+
+// The vegetarian tick and a main course, posted the way the form posts them. The unit tests
+// render the page and read the form; only this exercises the round trip through the database
+// and back onto the page, which is where the last name-split regression hid.
+When(
+  "I save a vegetarian guest {string} choosing {string} on {string}",
+  async function (name, main, token) {
+    await postGuests(this, token, {
+      ...nameFields(name, 1),
+      vegetarian1: "yes",
+      menu1_0: main,
+    });
+  },
+);
+
 When("I save guests {string} on {string}", async function (names, token) {
   const form = {};
   names.split(",").forEach(function (name, i) { Object.assign(form, nameFields(name, i + 1)); });
@@ -806,6 +842,21 @@ Then("the guest page should work without JavaScript", function () {
     "saving must be a plain submit, not a scripted handler",
   );
   assert.match(this.guestBody, /data-guest-clear[^>]*hidden/);
+});
+
+Then("the guest page should have the vegetarian tick set", function () {
+  assert.match(
+    this.guestBody,
+    /name="vegetarian1"[^>]*checked/,
+    "expected the saved vegetarian answer to come back ticked",
+  );
+});
+
+Then("the guest page should not show a picker for {string}", function (course) {
+  assert.ok(
+    !this.guestBody.includes(`data-course="${course}"`),
+    `expected no picker for "${course}": a course offering one dish is not a question`,
+  );
 });
 
 Then("the guest page should show {string}", function (text) {

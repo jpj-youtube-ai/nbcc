@@ -72,6 +72,10 @@ export const ballSettingsUpdateSchema = z
     // TASK-345: the menu, one course per line. 4000 rather than 1000: a three-course menu with
     // options runs long, and a silently truncated menu is a guest choosing from half a list.
     menuOptions: nullableText(4000).optional(),
+    // TASK-417: the venue's dietary key, verbatim. Its own field rather than a line inside the
+    // menu, which is parsed line by line as courses: a key pasted in there would render to
+    // guests as a course called "Dietaries key".
+    menuNote: nullableText(500).optional(),
   })
   // .strict() is deliberately NOT used: an unknown key is stripped rather than rejected, so a
   // future admin form field cannot 400 the whole save before the server knows about it. The

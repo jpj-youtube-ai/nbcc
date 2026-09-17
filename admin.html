@@ -1118,9 +1118,13 @@
               <h3 class="admin-subhead">The menu</h3>
               <p class="admin-note">Paste what the venue sends, <b>one course per line</b>, options separated by a vertical bar. A line with no options is a course everybody gets. Leave this empty and guests see no menu section at all &mdash; which is how it ships, because the menu is not confirmed yet.</p>
               <p class="admin-note"><code>Starter: Cullen skink | Haggis bon bons | Melon</code><br /><code>Main: Steak pie | Salmon | Mushroom wellington</code><br /><code>Dessert: Cranachan | Cheesecake</code></p>
+              <p class="admin-note">A course offering only one dish is <b>not a question</b> &mdash; write it as <code>To start: Soup</code> and guests are shown it as "served to everyone" rather than being asked to choose soup from a list containing soup.</p>
               <form id="ballMenuForm" class="ty-controls admin-stack" autocomplete="off">
                 <label class="ty-inline" style="align-items:flex-start">Menu
                   <textarea id="ballMenuOptions" rows="5" maxlength="4000" style="width:min(100%,520px)" placeholder="Leave empty until the venue confirms it"></textarea>
+                </label>
+                <label class="ty-inline" style="align-items:flex-start">Dietary key
+                  <textarea id="ballMenuNote" rows="2" maxlength="500" style="width:min(100%,520px)" placeholder="V = Vegetarian, VV = Vegan, GF = Gluten Free, DF = Dairy Free"></textarea>
                 </label>
                 <button class="btn btn-primary" type="submit">Save the menu</button>
                 <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>

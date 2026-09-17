@@ -19,6 +19,8 @@ export interface ExportGuest {
   dietary: string | null;
   accessNeeds: string | null;
   menuChoice: string | null;
+  /** TASK-417: the vegetarian dish is a requirement, not a preference. NULL on older rows. */
+  isVegetarian?: boolean | null;
   tableName: string | null;
   reference: string;
 }
@@ -87,16 +89,23 @@ export function cateringCsv(guests: ExportGuest[]): string {
   // TASK-345: a menu choice counts as something to tell the kitchen. Once the venue confirms a
   // menu this list stops being a short list of exceptions and becomes the order itself, so a
   // guest with a choice and no allergy has to appear on it.
-  const relevant = guests.filter((g) => g.dietary || g.accessNeeds || g.menuChoice);
+  // TASK-417: a declared vegetarian belongs on this list even with no allergy and no choice yet.
+  // They are the guest most likely to be handed the wrong plate.
+  const relevant = guests.filter(
+    (g) => g.dietary || g.accessNeeds || g.menuChoice || g.isVegetarian,
+  );
   const sorted = [...relevant].sort(
     (a, b) => (a.tableName ?? "").localeCompare(b.tableName ?? "") ||
       a.fullName.localeCompare(b.fullName),
   );
   return csvRows([
-    ["Table", "Guest", "Menu", "Food", "Access"],
+    ["Table", "Guest", "Vegetarian", "Menu", "Food", "Access"],
     ...sorted.map((g) => [
       g.tableName ?? "",
       g.fullName,
+      // The word, not a tick or a TRUE: this is printed and read in a kitchen, and a blank cell
+      // is unambiguous where "FALSE" in a column of "TRUE"s is something to double-take at.
+      g.isVegetarian ? "Vegetarian" : "",
       // One cell, newlines flattened: a spreadsheet cell with hard returns in it is awkward to
       // read down a column, and the caterer reads this as a list.
       (g.menuChoice ?? "").replace(/\r?\n/g, "; "),

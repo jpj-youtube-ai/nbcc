@@ -40,7 +40,11 @@ export const guestSchema = z.object({
   accessNeeds: optionalText(500),
   // TASK-345: "Course: choice" lines, built by the route from the menu itself. 500 covers a
   // three-course menu with long dish names and nothing more - this is a selection, not free text.
+  // The Park Hotel's confirmed menu uses 304 of it, so there is room but not a lot.
   menuChoice: optionalText(500),
+  // TASK-417: vegetarian as a requirement rather than a preference. Optional because rows saved
+  // before this know nothing about it, and because the JSON API may omit it.
+  isVegetarian: z.boolean().optional().transform((v) => v ?? false),
 });
 export type GuestInput = z.infer<typeof guestSchema>;
 
@@ -68,6 +72,9 @@ export interface GuestFormRow {
   dietary: string;
   accessNeeds: string;
   menuChoice: string | null;
+  /** TASK-417: they picked the vegetarian dish BECAUSE they are vegetarian, not because they
+   *  fancied it. The kitchen has to get a requirement exactly right; a preference could flex. */
+  isVegetarian: boolean;
 }
 
 const field = (body: Record<string, unknown>, key: string): string =>
@@ -120,6 +127,9 @@ export function guestsFromForm(
       dietary: field(body, `dietary${n}`),
       accessNeeds: field(body, `accessNeeds${n}`),
       menuChoice: menuChoiceFromForm(body, n, menu),
+      // An unticked checkbox posts nothing at all, and that absence IS the answer rather than a
+      // missing one: they are telling us this is a preference, not a requirement.
+      isVegetarian: field(body, `vegetarian${n}`).length > 0,
     });
   }
   return rows;

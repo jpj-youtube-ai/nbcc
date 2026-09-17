@@ -375,6 +375,7 @@ ballRouter.get("/ball/guests/:token", async (req, res, next) => {
         guests: found.guests,
         token: req.params.token,
         menuOptions: settings.menuOptions,
+        menuNote: settings.menuNote,
         saved: req.query.saved === "1",
         // TASK-409: NULL until it is agreed with the venue, and the page then says the date is
         // still to be confirmed rather than implying the form is open until the night.
@@ -454,6 +455,7 @@ ballRouter.post(
             guests: found.guests,
             token: req.params.token,
             menuOptions: settings.menuOptions,
+        menuNote: settings.menuNote,
             lockAt: settings.guestDetailsLockAt ? new Date(settings.guestDetailsLockAt) : null,
             error:
               "We couldn't save that. Check that every guest you've listed has a name, and that " +

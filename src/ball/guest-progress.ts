@@ -85,7 +85,11 @@ export function outstandingBookings(rows: GuestProgressRow[]): BookingProgress[]
 // The buyer's own guest link, so staff can resend it rather than asking someone to find an email
 // from weeks ago. Null when the booking has no token yet — it is minted with the confirmation,
 // so a booking paid seconds ago can legitimately be without one.
-export function guestLinkFor(row: GuestProgressRow, baseUrl: string): string | null {
+//
+// TASK-418: takes the ONE field it reads rather than a whole GuestProgressRow. The menu chase
+// list needs the same link off a different row shape, and demanding a `needsGiven` this function
+// never looks at would have meant either a fake value or a second copy of two lines.
+export function guestLinkFor(row: Pick<GuestProgressRow, "guestToken">, baseUrl: string): string | null {
   if (!row.guestToken) return null;
   return `${baseUrl.replace(/\/+$/, "")}/ball/guests/${row.guestToken}`;
 }

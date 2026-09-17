@@ -929,6 +929,55 @@ Then("the ball reminder should report {int} sent", function (n) {
   assert.strictEqual(this.ballReminderBody.sent, n);
 });
 
+// --- TASK-418: the menu email, and who has chosen ---------------------------
+
+When(
+  "I send the ball menu email as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/menu-email`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballMenuEmailStatus = res.status;
+    this.ballMenuEmailBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the ball menu email status should be {int}", function (expected) {
+  assert.strictEqual(this.ballMenuEmailStatus, expected);
+});
+
+Then("the ball menu email should report {int} sent", function (n) {
+  assert.strictEqual(this.ballMenuEmailBody.sent, n);
+});
+
+When(
+  "I read the ball menu progress as {string} with password {string}",
+  async function (email, password) {
+    const token = await ballLogin(email, password);
+    const res = await fetch(`${BASE_URL}/api/admin/ball/menu-progress`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    this.ballMenuProgressStatus = res.status;
+    this.ballMenuProgressBody = await res.json().catch(() => ({}));
+  },
+);
+
+Then("the ball menu progress should say it is asking", function () {
+  assert.strictEqual(this.ballMenuProgressStatus, 200);
+  assert.strictEqual(this.ballMenuProgressBody.summary.asking, true);
+});
+
+Then("the ball menu progress should say it is not asking", function () {
+  assert.strictEqual(this.ballMenuProgressStatus, 200);
+  assert.strictEqual(this.ballMenuProgressBody.summary.asking, false);
+});
+
+Then("the ball menu progress should report {int} chosen", function (n) {
+  assert.strictEqual(this.ballMenuProgressBody.summary.chosen, n);
+});
+
 // --- waiting list -----------------------------------------------------------
 
 Given("the ball waiting list is empty", async function () {

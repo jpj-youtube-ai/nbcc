@@ -17,6 +17,7 @@ import type { WaitingListEntry } from "../ball/waiting-list";
 import type { ThankYouBooking } from "../ball/thank-you-page";
 import type { CardFeeRate } from "../ball/pricing";
 import type { GuestProgressRow } from "../ball/guest-progress";
+import type { MenuProgressRow } from "../ball/menu-progress";
 import type { RunUpBooking } from "../ball/run-up";
 import { insertAudit } from "./donations";
 
@@ -936,6 +937,65 @@ export async function listGuestsForBooking(bookingId: number): Promise<GuestRow[
   }));
 }
 
+// TASK-418: every paid booking with its named guests' menu choices, for the chase list.
+//
+// The RAW choices come back rather than a count, because "has this guest chosen?" means "have
+// they answered every course that asks" and only the menu knows which those are. Counting in SQL
+// would hard-code an assumption the venue can change by editing a textarea.
+//
+// array_remove strips the NULLs a LEFT JOIN produces for a booking with no guests, so an empty
+// array means "nobody named yet" rather than "one guest who chose nothing".
+export async function listMenuProgress(): Promise<MenuProgressRow[]> {
+  const res = await pool.query(
+    `SELECT b.reference, b.buyer_name, b.buyer_email, b.seats, b.guest_token,
+            COALESCE(
+              array_agg(g.menu_choice) FILTER (WHERE g.id IS NOT NULL),
+              '{}'
+            ) AS choices
+       FROM ball_bookings b
+       LEFT JOIN ball_guests g ON g.booking_id = b.id
+      WHERE b.status = 'paid'
+      GROUP BY b.id, b.reference, b.buyer_name, b.buyer_email, b.seats, b.guest_token
+      ORDER BY b.created_at ASC`,
+  );
+  return res.rows.map((r) => ({
+    reference: r.reference,
+    buyerName: r.buyer_name,
+    buyerEmail: r.buyer_email,
+    seats: r.seats,
+    guestToken: r.guest_token,
+    choices: (r.choices ?? []) as Array<string | null>,
+  }));
+}
+
+// Everyone who has PAID and has not been told the menu exists. The WHERE clause is the whole
+// idempotency story, exactly as listBookingsNeedingReminder does it: pressing send twice finds
+// nobody the second time.
+export async function listBookingsNeedingMenuEmail(): Promise<MenuEmailTarget[]> {
+  const res = await pool.query(
+    `SELECT id, reference, buyer_name, buyer_first_name, buyer_email, guest_token
+       FROM ball_bookings
+      WHERE status = 'paid' AND menu_email_sent_at IS NULL AND buyer_email <> ''
+      ORDER BY id ASC`,
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    reference: r.reference,
+    buyerName: r.buyer_name,
+    buyerFirstName: r.buyer_first_name,
+    buyerEmail: r.buyer_email,
+    guestToken: r.guest_token,
+  }));
+}
+
+// Stamped per booking as each send succeeds, NOT in one batch at the end: if the provider fails
+// halfway through four hundred, the ones already emailed must not be emailed again on retry.
+export async function markMenuEmailSent(bookingId: number): Promise<void> {
+  await pool.query("UPDATE ball_bookings SET menu_email_sent_at = now() WHERE id = $1", [
+    bookingId,
+  ]);
+}
+
 export async function listGuestProgress(): Promise<GuestProgressRow[]> {
   const res = await pool.query(
     `SELECT b.reference, b.buyer_name, b.buyer_email, b.seats, b.guest_token,
@@ -1010,6 +1070,18 @@ export async function listBookingsForExport(): Promise<ExportBooking[]> {
 }
 
 // --- reminders (plan 5) ------------------------------------------------------
+
+// TASK-418: who to tell that the menu exists. Lighter than ReminderTarget on purpose — this
+// email prints the MENU, which is the same for everybody, so it needs nothing about the table.
+export interface MenuEmailTarget {
+  id: number;
+  reference: string;
+  buyerName: string;
+  /** NULL on bookings taken before TASK-318; the email falls back to the whole name. */
+  buyerFirstName: string | null;
+  buyerEmail: string;
+  guestToken: string | null;
+}
 
 export interface ReminderTarget {
   id: number;

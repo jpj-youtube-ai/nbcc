@@ -112,6 +112,46 @@ Feature: Festive Ball guest details (TASK-313)
     When I send the ball reminders as "ball11.admin.bdd@example.com" with password "pw-ball11"
     Then the ball reminder should report 0 sent
 
+  Scenario: the menu email refuses to go out with no menu in it
+    Given a ball admin "ball13.admin.bdd@example.com" with role "admin" and password "pw-ball13"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And the ball menu is cleared
+    And a paid ball booking for 1 table with guest token "guest-menu-4"
+    When I send the ball menu email as "ball13.admin.bdd@example.com" with password "pw-ball13"
+    Then the ball menu email status should be 409
+
+  Scenario: the menu email goes out once, and pressing send again reaches nobody
+    Given a ball admin "ball14.admin.bdd@example.com" with role "admin" and password "pw-ball14"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And the ball menu is set
+    And a paid ball booking for 1 table with guest token "guest-menu-5"
+    When I send the ball menu email as "ball14.admin.bdd@example.com" with password "pw-ball14"
+    Then the ball menu email status should be 200
+    And the ball menu email should report 1 sent
+    When I send the ball menu email as "ball14.admin.bdd@example.com" with password "pw-ball14"
+    Then the ball menu email should report 0 sent
+
+  Scenario: an editor cannot email four hundred people about the menu either
+    Given a ball admin "ball15.admin.bdd@example.com" with role "editor" and password "pw-ball15"
+    When I send the ball menu email as "ball15.admin.bdd@example.com" with password "pw-ball15"
+    Then the ball menu email status should be 403
+
+  Scenario: staff can see who has chosen and who has not
+    Given a ball admin "ball16.admin.bdd@example.com" with role "admin" and password "pw-ball16"
+    And the ball is reset to 40 tables of 10 with 0 held back
+    And the ball menu is set
+    And a paid ball booking for 1 table with guest token "guest-menu-6"
+    When I save a vegetarian guest "Sam Bryce" choosing "Vegetarian wellington" on "guest-menu-6"
+    And I read the ball menu progress as "ball16.admin.bdd@example.com" with password "pw-ball16"
+    Then the ball menu progress should say it is asking
+    And the ball menu progress should report 0 chosen
+
+  Scenario: nothing is outstanding before the venue confirms a menu
+    Given a ball admin "ball17.admin.bdd@example.com" with role "admin" and password "pw-ball17"
+    And the ball menu is cleared
+    When I read the ball menu progress as "ball17.admin.bdd@example.com" with password "pw-ball17"
+    Then the ball menu progress should say it is not asking
+
   Scenario: an editor cannot email four hundred people
     Given a ball admin "ball12.admin.bdd@example.com" with role "editor" and password "pw-ball12"
     When I send the ball reminders as "ball12.admin.bdd@example.com" with password "pw-ball12"

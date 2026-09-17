@@ -1130,6 +1130,19 @@
                 <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>
               </form>
 
+              <h3 class="admin-subhead">Telling everyone the menu is here</h3>
+              <p class="admin-note">One email to everyone who has paid: the menu itself, so they can read it without clicking anything, the hotel's room rate, and their own link to choose. <b>Nothing sends until you press this</b>, anyone already sent one is skipped, and it refuses while the menu above is empty &mdash; an email headed "the menu is here" carrying no menu would burn the one send each booking gets.</p>
+              <p class="ty-controls">
+                <button class="btn btn-primary" type="button" id="ballSendMenuEmail">Send the menu email</button>
+                <span class="ty-count" id="ballMenuEmailCount" aria-live="polite"></span>
+              </p>
+              <p class="ty-status" id="ballMenuEmailStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="admin-subhead">Who has chosen</h3>
+              <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest-details list above, and a different email fixes it.</p>
+              <div id="ballMenuProgress"></div>
+              <div id="ballMenuOutstanding"></div>
+
               <h3 class="admin-subhead">When guest details close</h3>
               <p class="admin-note">The date the venue needs final numbers by. <b>Nothing is chased until you set this</b> &mdash; an email asking for names with no date in it is just nagging, and it spends the one message people actually read. Once it is set, anyone still outstanding gets a reminder a fortnight before, and a last call on the day itself.</p>
               <form id="ballLockForm" class="ty-controls admin-stack" autocomplete="off">

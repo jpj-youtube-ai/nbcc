@@ -2829,6 +2829,40 @@ quietly depended on the suite running within the fortnight TTL of 1 September. N
 in production, where a cookie is signed at the moment it is issued. The clock is now frozen at the
 fixture's own date.
 
+**TASK-418: knowing who has chosen, and telling people there is anything to choose.**
+
+`menuProgress()` had existed since TASK-345 **wired to nothing** — no admin view, no chase — so
+the day the venue finally confirmed a menu there was no way to answer the only question staff had.
+`src/ball/menu-progress.ts` is the per-booking half, modelled on `guest-progress.ts` and kept
+separate from it because the two are chased at different times by different emails, and a booking
+can be complete on one and not the other. `GET /api/admin/ball/menu-progress` (viewer+) returns
+the summary plus the outstanding bookings, each with the buyer's own guest link so staff can chase
+directly.
+
+Progress is measured against the guests **named**, not the seats bought: you cannot choose a
+dinner for somebody whose name nobody has given you yet, and counting those would blame this list
+for a gap the guest-name chase already owns. A booking with no names is therefore complete here
+and outstanding there, which is the truthful split. The SQL returns the **raw** `menu_choice`
+strings rather than a count, because "has this guest chosen?" means "have they answered every
+course that asks" and only the menu knows which those are — counting in SQL would hard-code an
+assumption the venue can change by editing a textarea.
+
+**The menu-is-ready email** (`src/ball/menu-email.ts`) prints the menu *in the email*, because
+"the menu is ready, click here" is a worse email than one containing it. It carries the fixed
+course no dropdown mentions, the dietary key, the buyer's guest link, and **the Park Hotel's
+£110-per-room-per-night rate for ball guests**. `ball_bookings.menu_email_sent_at` is the
+idempotency, exactly as `reminder_sent_at` is for the week-to-go email: the send query is
+`paid AND menu_email_sent_at IS NULL`, and each booking is stamped **as its send succeeds**, so a
+provider failing halfway through four hundred never re-emails the ones already done. Its own
+column rather than reusing `reminder_sent_at`, because sharing a stamp would mean sending one
+email silently disabled the other.
+
+`POST /api/admin/ball/menu-email` is **editor+ with the ball section**, staff-triggered and never
+scheduled, and **refuses with a 409 while there is no menu**: an email headed "the menu is here"
+carrying no menu would burn the single send each booking gets. `guestLinkFor` now takes
+`Pick<GuestProgressRow, "guestToken">` rather than the whole row, since that is the only field it
+reads and the menu chase needed the same link off a different shape.
+
 ### The admin Festive Ball screen
 
 Under **Content → Festive Ball**. Stats (seats and tables sold, remaining, money taken,

@@ -185,7 +185,12 @@ body.has-ticker{padding-top:var(--ticker-h)}
 .supporter-ticker__track.is-static{animation:none;padding-left:16px}
 @media (prefers-reduced-motion: reduce){
   .supporter-ticker__track{animation:none !important;padding-left:16px}
-  .supporter-ticker__viewport{overflow-x:auto}
+  /* Thin + branded: the platform's own bar is ~15px on Windows/Android inside a 40px band.
+     See test/unit/ticker-reduced-motion.test.ts. -webkit- carries Safari and Chromium < 121. */
+  .supporter-ticker__viewport{overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--cream-24) transparent}
+  .supporter-ticker__viewport::-webkit-scrollbar{height:4px}
+  .supporter-ticker__viewport::-webkit-scrollbar-track{background:transparent}
+  .supporter-ticker__viewport::-webkit-scrollbar-thumb{background:var(--cream-24);border-radius:999px}
 }
 /* On the narrowest screens drop the label so the names get the width. */
 @media (max-width:520px){.supporter-ticker__label{display:none}}

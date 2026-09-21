@@ -2049,7 +2049,29 @@ deletion. Covered by `@thankyou @db` delete/CC scenarios (the CC mapping now liv
 
 **Supporter ticker (REQ-003 · TASK-178).** An admin-curated list of ongoing supporters (businesses or
 people) shown scrolling under the site nav — distinct from the donor-derived Supporters page. The
-`supporter_ticker` table (additive migration; `name`, `active`, `sort_order`) is served two ways: the
+**TASK-420: it looked broken on some devices and fine on others**, which is the signature of a
+platform difference rather than a logic bug. The cause was the reduced-motion fallback, and the
+fallback itself is correct: somebody who has asked their device to stop animating things must not
+be handed a marquee, so `prefers-reduced-motion: reduce` turns the band into a manually scrollable
+strip. What was wrong was how that strip *looked*. macOS and iOS draw overlay scrollbars that stay
+invisible until you scroll, so it looked normal there; Windows and Android draw a permanent one
+about 15px tall, which inside a 40px band sits under the names like broken furniture.
+
+The viewport now asks for `scrollbar-width: thin` with a `scrollbar-color` from the brand, plus
+`::-webkit-scrollbar` at 4px for Safari and Chromium below 121. Measured result: **10px instead of
+~15px, cream on maroon instead of grey**. Note that setting `scrollbar-width` makes Chromium
+*ignore* the `::-webkit-scrollbar` height, so 10px is Chromium's own "thin" — the 4px rule is
+carrying Safari, not Chrome. The scrollbar is deliberately **not** hidden: the viewport has no
+`tabindex`, so hiding it would leave keyboard-only users unable to reach the names that do not
+fit. `test/unit/ticker-reduced-motion.test.ts` pins both the appearance and the two things that
+must not be traded away for it (the animation stays off, the strip stays scrollable).
+
+The comment explaining all this lives in that test rather than in the stylesheet, because
+`styles.css` counts against `donate.html`'s enforced first-paint budget, which had only ~1KB of
+headroom. Worth knowing: after this change it has **~553 bytes**. The next person to add to
+`styles.css`, `donate.html` or `main.js` will need to find room first.
+
+The `supporter_ticker` table (additive migration; `name`, `active`, `sort_order`) is served two ways: the
 ### Covering the card fee on a donation (TASK-321)
 
 Donors may offer to cover Stripe's fee, the way ticket buyers already can. Two things about it

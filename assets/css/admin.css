@@ -43,6 +43,28 @@
 .admin-content{padding:clamp(20px,3vw,36px) clamp(16px,3vw,32px)}
 .admin-view h2{font-size:clamp(1.5rem,1.3rem + 1vw,2rem);margin-bottom:18px}
 .admin-subhead{font-size:1.15rem;color:var(--maroon);margin:28px 0 12px}
+
+/* ---- long views: bands and a jump bar (TASK-422) ----
+   The Festive Ball view was thirteen sections in one scroll with settings, reports and
+   send-buttons interleaved, so you could not predict where anything lived. It is now three
+   bands: set up, where things stand, send something. These rules are what makes a band read
+   as a level ABOVE .admin-subhead rather than competing with it. */
+.admin-band{font-family:var(--font-head);font-size:1.4rem;font-weight:700;color:var(--crimson);
+  margin:44px 0 4px;padding-top:22px;border-top:2px solid var(--line);scroll-margin-top:126px}
+.admin-band:first-of-type{margin-top:8px}
+.admin-band-note{max-width:64ch;margin:0 0 4px}
+/* The first subhead inside a band does not need its usual 28px lead-in on top of the band's. */
+.admin-band-note + .admin-subhead{margin-top:18px}
+
+/* A sticky row of jump links, so a long view can be crossed without scrolling it. */
+.admin-jump{position:sticky;top:60px;z-index:15;display:flex;flex-wrap:wrap;gap:8px;
+  margin:0 0 6px;padding:10px 0;background:var(--cream)}
+.admin-jump a{text-decoration:none;border:1px solid var(--line);border-radius:999px;
+  background:var(--card);color:var(--slate);font-weight:600;font-size:.82rem;padding:6px 14px;
+  transition:background .2s,color .2s,border-color .2s,transform .1s}
+.admin-jump a:hover{background:var(--crimson);border-color:var(--crimson);color:var(--cream)}
+.admin-jump a:active{transform:translateY(1px)}
+.admin-jump a:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
 .admin-loading{color:var(--slate-soft);font-size:.92rem}
 
 /* ---- stats ---- */
@@ -126,9 +148,53 @@
 .btn-danger:hover{background:var(--maroon);border-color:var(--maroon)}
 
 @media (max-width:760px){
-  .admin-body-grid{grid-template-columns:1fr}
-  .admin-nav{position:static;padding:12px}
-  .admin-nav ul{flex-direction:row;flex-wrap:wrap}
+  /* display:block, not a one-column grid. As a grid the nav gets its OWN ROW, and a sticky
+     element can only travel inside its containing block, so a row exactly as tall as the nav
+     gives it nowhere to go and position:sticky silently does nothing. As blocks both children
+     share the parent's full height and the nav sticks as intended. (On desktop the two columns
+     are in the SAME row, which is why sticky has always worked there.) */
+  .admin-body-grid{display:block}
+  /* Stays pinned rather than going static. The complaint was that changing view meant
+     scrolling back up through a long page to reach the nav at all; below this width it
+     becomes one swipeable line that never leaves the top. */
+  /* The topbar stops competing for the top edge here. It is sticky and 84px tall at this width
+     because it wraps, which would either cover the nav or force a magic offset that breaks on a
+     narrower phone. On a screen this size the nav matters more than the sign-out button. */
+  .admin-topbar{position:static}
+  .admin-nav{position:sticky;top:0;z-index:20;padding:8px 12px;background:var(--cream);
+    border-bottom:1px solid var(--line);min-width:0}
+  /* min-width:0 on both, or the grid item takes its content width: 18 nowrap buttons made the
+     nav 2071px wide on a 375px screen and the whole page scrolled sideways. */
+  .admin-nav ul{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:6px;min-width:0;
+    scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  .admin-nav ul::-webkit-scrollbar{height:3px}
+  .admin-nav ul::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px}
+  .admin-nav-link{width:auto;white-space:nowrap;padding:8px 13px;font-size:.86rem}
+  /* Group labels become inline dividers rather than stacked headings. */
+  .admin-nav-group{margin:0;padding:0 4px;border-top:0;align-self:center;font-size:.6rem;
+    color:var(--slate-soft);white-space:nowrap}
+  .admin-nav-group:first-child{margin-top:0}
+  /* The jump bar sits below the now-sticky nav, and swipes like it rather than wrapping. Left to
+     wrap it went to two lines, and since both bars are sticky that is 65px of a phone screen
+     permanently spent on navigation. */
+  .admin-jump{top:52px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .admin-jump::-webkit-scrollbar{display:none}
+  .admin-jump a{flex:0 0 auto}
+  /* Has to clear BOTH sticky bars, not just the nav. At 110px the band heading you just jumped
+     to landed 41px behind the jump bar, so the click appeared to overshoot. */
+  .admin-band{scroll-margin-top:118px}
+  /* Pre-existing, not introduced here: several admin fields carry a hard style="width:420px"
+     (and 220/240px), which on a 375px screen pushed the whole page 148px wider than the
+     viewport and made every view scroll sideways. Capping is safe because it only ever
+     shrinks, and only below this width.
+     The label needs capping as well as the field: a bare max-width on the input resolves
+     against the label, and the label had already sized itself to the 420px it contains, so
+     100% of it was still 420px. */
+  .ty-inline{flex-wrap:wrap;max-width:100%;min-width:0}
+  .ty-inline input,.ty-inline select,.ty-inline textarea{max-width:100%;min-width:0}
+  /* Also pre-existing: the Stories status filter is five pills in a row that cannot wrap, so it
+     came to 386px on a 375px screen and took the page sideways with it. */
+  .admin-segmented{flex-wrap:wrap}
 }
 
 /* Team access matrix (Admin Phase 2 · TASK-186): the 13-section none/view/edit grid reached via

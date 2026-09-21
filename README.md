@@ -2901,6 +2901,49 @@ nothing type-checks that join, so `test/unit/ball-admin-view.test.ts` walks ever
 reaches for and proves the markup provides it. It also asserts the block sits INSIDE the module
 IIFE: appended after the closing `})();` it parses fine but every helper is undefined at runtime.
 
+#### Finding things in it (TASK-422)
+
+The view had grown to thirteen sections and eight forms in one 7,600px scroll, with settings,
+reports and send-buttons interleaved, so there was no way to predict where anything lived. Two
+of those buttons email everyone who has paid and cannot be taken back, and they sat mid-page
+between harmless settings.
+
+It is now three bands, in the order the job is actually done:
+
+| Band | `id` | What it holds |
+|---|---|---|
+| **Set up** | `ball-setup` | The gate, preview password, capacity, held seats, card fee, venue details, the menu, the lock date. Everything the ticket page and the emails read from. |
+| **Where things stand** | `ball-state` | Bookings, who has chosen a menu, whose guest details are still missing. |
+| **Send something** | `ball-send` | The week-before reminder and the menu-is-here email. Last, so you read the numbers before pressing the thing you cannot undo. |
+
+A sticky `.admin-jump` bar of anchor links crosses the view without scrolling it. **Nothing inside
+a section changed** — the reorder moves whole blocks, so the risk was silently dropping one.
+`test/unit/admin-ball-layout.test.ts` is the safety net: it lists all 65 ids the view had
+beforehand *by name*, asserts no duplicates and all eight `<form>`s, and fails by name rather than
+surfacing weeks later as a button that does nothing.
+
+**Narrow screens.** `.admin-nav` used to go `position:static` below 760px, so changing view meant
+scrolling back up the whole page to reach it. It is now sticky at the top as one swipeable line,
+with the jump bar riding at `top:52px` beneath it. Three things had to be true for that to work,
+each of which failed first:
+
+- `.admin-body-grid` uses `display:block`, not a one-column grid. As a grid the nav gets its **own
+  row**, and a sticky element can only travel inside its containing block, so a row exactly as
+  tall as the nav leaves it nowhere to go and `position:sticky` silently does nothing.
+- `min-width:0` on the nav and its `ul`, or the flex item takes its content width: 18 nowrap
+  buttons made the nav 2,071px wide and took the whole page sideways.
+- `.admin-band`'s `scroll-margin-top` must clear **both** sticky bars, not just the nav. At 110px
+  the heading you jumped to landed 41px behind the jump bar, so the click read as an overshoot.
+
+That last one is an invariant with no natural guard, so the test asserts it from the CSS at both
+widths, and separately checks the comment and brace counts balance — one stray `*/` silently
+kills every rule after it, which is how that bug got in.
+
+Two pre-existing overflows were fixed in the same breakpoint, since they made every view scroll
+sideways on a phone: the `style="width:420px"` fields are capped (on the label as well as the
+field, or `max-width:100%` resolves against a label already sized to its 420px content), and
+`.admin-segmented` may wrap. Measured across all 24 views at 375px: no sideways scroll anywhere.
+
 ### Every page wears the same shell (TASK-402)
 
 There are exactly **two** page shells, and a new page must use one of them:

@@ -85,7 +85,11 @@
                 </li>
                 <li class="card contact-point">
                   <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
-                  <span>Annbank Village Hall<small>Annbank, Ayrshire, South West Scotland</small></span>
+                  <!-- Must match POSTAL_ADDRESS_LINES in src/legal/registration.ts, which every
+                       other page renders its footer address from. This card used to carry a
+                       hand-written summary with no street and no postcode, on the one page whose
+                       job is to say where to send a letter. A test pins the two together. -->
+                  <span>The Elves Workshop<small>Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE</small></span>
                 </li>
               </ul>
 

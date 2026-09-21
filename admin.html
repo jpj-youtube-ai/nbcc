@@ -1009,6 +1009,13 @@
 
               <div class="admin-stats" id="ballStats" aria-live="polite"></div>
 
+              <nav class="admin-jump" aria-label="Sections of this page">
+                <a href="#ball-setup">Set up</a>
+                <a href="#ball-state">Where things stand</a>
+                <a href="#ball-send">Send something</a>
+              </nav>
+              <h3 class="admin-band" id="ball-setup">Set up</h3>
+              <p class="admin-note admin-band-note">Everything the ticket page and the emails read from. Set once, change when the venue tells you something new.</p>
               <h3 class="admin-subhead">Is the page public?</h3>
               <p class="admin-note" id="ballGateState" aria-live="polite">Checking…</p>
               <form id="ballGateForm" class="ty-controls" autocomplete="off">
@@ -1107,14 +1114,6 @@
               </form>
               <p class="ty-status" id="ballDetailsStatus" role="status" aria-live="polite"></p>
 
-              <h3 class="admin-subhead">The week-before reminder</h3>
-              <p class="admin-note">One email to everyone who has paid: the practical details, plus a read-back of the guests and dietary notes they gave us, so a mistake gets caught while there is still time to fix it. Anyone already sent one is skipped, so pressing this twice is safe.</p>
-              <p class="ty-controls">
-                <button class="btn btn-primary" type="button" id="ballSendReminders">Send the reminder</button>
-                <span class="ty-count" id="ballReminderCount" aria-live="polite"></span>
-              </p>
-              <p class="ty-status" id="ballReminderStatus" role="status" aria-live="polite"></p>
-
               <h3 class="admin-subhead">The menu</h3>
               <p class="admin-note">Paste what the venue sends, <b>one course per line</b>, options separated by a vertical bar. A line with no options is a course everybody gets. Leave this empty and guests see no menu section at all &mdash; which is how it ships, because the menu is not confirmed yet.</p>
               <p class="admin-note"><code>Starter: Cullen skink | Haggis bon bons | Melon</code><br /><code>Main: Steak pie | Salmon | Mushroom wellington</code><br /><code>Dessert: Cranachan | Cheesecake</code></p>
@@ -1130,19 +1129,6 @@
                 <span class="ty-status" id="ballMenuStatus" role="status" aria-live="polite"></span>
               </form>
 
-              <h3 class="admin-subhead">Telling everyone the menu is here</h3>
-              <p class="admin-note">One email to everyone who has paid: the menu itself, so they can read it without clicking anything, the hotel's room rate, and their own link to choose. <b>Nothing sends until you press this</b>, anyone already sent one is skipped, and it refuses while the menu above is empty &mdash; an email headed "the menu is here" carrying no menu would burn the one send each booking gets.</p>
-              <p class="ty-controls">
-                <button class="btn btn-primary" type="button" id="ballSendMenuEmail">Send the menu email</button>
-                <span class="ty-count" id="ballMenuEmailCount" aria-live="polite"></span>
-              </p>
-              <p class="ty-status" id="ballMenuEmailStatus" role="status" aria-live="polite"></p>
-
-              <h3 class="admin-subhead">Who has chosen</h3>
-              <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest-details list above, and a different email fixes it.</p>
-              <div id="ballMenuProgress"></div>
-              <div id="ballMenuOutstanding"></div>
-
               <h3 class="admin-subhead">When guest details close</h3>
               <p class="admin-note">The date the venue needs final numbers by. <b>Nothing is chased until you set this</b> &mdash; an email asking for names with no date in it is just nagging, and it spends the one message people actually read. Once it is set, anyone still outstanding gets a reminder a fortnight before, and a last call on the day itself.</p>
               <form id="ballLockForm" class="ty-controls admin-stack" autocomplete="off">
@@ -1152,6 +1138,21 @@
                 <button class="btn btn-primary" type="submit">Save the date</button>
                 <span class="ty-status" id="ballLockStatus" role="status" aria-live="polite"></span>
               </form>
+
+              <h3 class="admin-band" id="ball-state">Where things stand</h3>
+              <p class="admin-note admin-band-note">Who has booked, who still owes you an answer, and the lists the venue needs. Read these before you send anything.</p>
+              <h3 class="admin-subhead">Bookings</h3>
+              <p class="admin-note">Three lists. The <b>door list</b> is alphabetical by surname for the welcome desk. The <b>catering list</b> is the one you send the venue: it has food and access notes only, no emails, no references, no money. The <b>bookings list</b> is for your own records.</p>
+              <p class="ty-controls" id="ballExports">
+                <a class="btn btn-ghost" id="ballDoorList" href="#" download>Door list (CSV)</a>
+                <a class="btn btn-ghost" id="ballCatering" href="#" download>Catering list for the venue (CSV)</a>
+                <a class="btn btn-ghost" id="ballBookingsCsv" href="#" download>Bookings (CSV)</a>
+              </p>
+              <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <h3 class="admin-subhead">Who has chosen</h3>
+              <p class="admin-note">Counted against the guests who have been <b>named</b>, not the seats bought: you cannot pick a dinner for somebody whose name nobody has given you yet. That gap is the guest-details list above, and a different email fixes it.</p>
+              <div id="ballMenuProgress"></div>
+              <div id="ballMenuOutstanding"></div>
 
               <h3 class="admin-subhead">Guest details still to come</h3>
               <p class="admin-note">Guest names, dietary requirements and access needs come from the person who booked, through the link in their confirmation email. Most of a table of ten arrives because the buyer chased nine other people, so this is who has not replied yet &mdash; biggest gap first. <b>Their link</b> opens the same page they were emailed, so you can resend it rather than asking them to find an old email.</p>
@@ -1163,14 +1164,24 @@
               </p>
               <p class="admin-note">Sends the same reminder the daily job sends, right now. Anyone already emailed at this stage is skipped, so pressing it twice is safe.</p>
 
-              <h3 class="admin-subhead">Bookings</h3>
-              <p class="admin-note">Three lists. The <b>door list</b> is alphabetical by surname for the welcome desk. The <b>catering list</b> is the one you send the venue: it has food and access notes only, no emails, no references, no money. The <b>bookings list</b> is for your own records.</p>
-              <p class="ty-controls" id="ballExports">
-                <a class="btn btn-ghost" id="ballDoorList" href="#" download>Door list (CSV)</a>
-                <a class="btn btn-ghost" id="ballCatering" href="#" download>Catering list for the venue (CSV)</a>
-                <a class="btn btn-ghost" id="ballBookingsCsv" href="#" download>Bookings (CSV)</a>
+              <h3 class="admin-band" id="ball-send">Send something</h3>
+              <p class="admin-note admin-band-note">Each of these emails everyone who has paid. Nothing sends until you press it, and anyone already sent one is skipped.</p>
+              <h3 class="admin-subhead">The week-before reminder</h3>
+              <p class="admin-note">One email to everyone who has paid: the practical details, plus a read-back of the guests and dietary notes they gave us, so a mistake gets caught while there is still time to fix it. Anyone already sent one is skipped, so pressing this twice is safe.</p>
+              <p class="ty-controls">
+                <button class="btn btn-primary" type="button" id="ballSendReminders">Send the reminder</button>
+                <span class="ty-count" id="ballReminderCount" aria-live="polite"></span>
               </p>
-              <div class="admin-table-wrap" id="ballBookings" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              <p class="ty-status" id="ballReminderStatus" role="status" aria-live="polite"></p>
+
+              <h3 class="admin-subhead">Telling everyone the menu is here</h3>
+              <p class="admin-note">One email to everyone who has paid: the menu itself, so they can read it without clicking anything, the hotel's room rate, and their own link to choose. <b>Nothing sends until you press this</b>, anyone already sent one is skipped, and it refuses while the menu above is empty &mdash; an email headed "the menu is here" carrying no menu would burn the one send each booking gets.</p>
+              <p class="ty-controls">
+                <button class="btn btn-primary" type="button" id="ballSendMenuEmail">Send the menu email</button>
+                <span class="ty-count" id="ballMenuEmailCount" aria-live="polite"></span>
+              </p>
+              <p class="ty-status" id="ballMenuEmailStatus" role="status" aria-live="polite"></p>
+
             </section>
 
             <!-- Audit trail (append-only governance log). -->

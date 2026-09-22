@@ -215,9 +215,13 @@ export const configSchema = z.object({
   GOOGLE_WORKLOAD_IDENTITY_POOL: z.string().default("aws-nbcc"),
   GOOGLE_WORKLOAD_IDENTITY_PROVIDER: z.string().default("aws-provider"),
 
-  // Where a failed or suspicious backup shouts. Silence is the failure mode that matters: backups
-  // stop in February and are discovered in November.
-  BACKUP_ALERT_EMAIL: z.string().default("admin@nbcc.scot"),
+  // Where a failed or suspicious backup shouts: ADMIN_NOTIFICATION_EMAIL, the inbox that already
+  // receives operational notices. No second address for this — one place to watch is the point.
+  //
+  // Note what this alert CANNOT catch: a run that never happened. If the scheduled task fails to
+  // start, nothing in this process is alive to complain. That gap is covered outside the app, by
+  // a CloudWatch alarm on the absence of a success metric (infra/modules/app/backups.tf), because
+  // an alert that shares fate with the thing it watches is not an alert.
 });
 
 export type Config = z.infer<typeof configSchema>;

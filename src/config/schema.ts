@@ -199,6 +199,10 @@ export const configSchema = z.object({
   // proves it is the ECS task role instead (src/clients/google-federation.ts), which means the
   // archive passphrase below is the only secret this feature has.
   BACKUP_S3_BUCKET: z.string().default(""),
+  // Its own key rather than reusing SES_REGION. The two are the same value today, which is
+  // precisely the trap: borrowing SES's region works until someone moves SES, and then the
+  // backup fails with an S3 error that says nothing about why.
+  BACKUP_S3_REGION: z.string().min(1).default("eu-west-2"),
 
   // The one secret. It must ALSO be held outside AWS, in the charity's password manager: an
   // archive whose only passphrase lives in the account we lost is an unopenable file in exactly

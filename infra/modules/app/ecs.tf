@@ -181,6 +181,7 @@ resource "aws_ecs_task_definition" "app" {
       # An empty BACKUP_S3_BUCKET disables the job entirely, which is how every environment
       # except this one stays incapable of writing to the production backup store.
       { name = "BACKUP_S3_BUCKET", value = aws_s3_bucket.backups.id },
+      { name = "BACKUP_S3_REGION", value = var.region },
       { name = "GOOGLE_DRIVE_FOLDER_ID", value = var.google_drive_folder_id },
       { name = "GOOGLE_SERVICE_ACCOUNT_EMAIL", value = var.google_service_account_email },
       { name = "GOOGLE_WORKLOAD_IDENTITY_PROJECT_NUMBER", value = var.google_workload_identity_project_number },

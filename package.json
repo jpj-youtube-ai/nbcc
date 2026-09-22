@@ -23,7 +23,8 @@
     "export:charities-online": "tsx scripts/export-charities-online.mjs",
     "anonymize:retention-expired": "tsx scripts/anonymize-retention-expired.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
-    "admin:set-password": "tsx src/ops/set-admin-password.ts"
+    "admin:set-password": "tsx src/ops/set-admin-password.ts",
+    "backup": "node dist/scripts/run-backup.js"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

@@ -41,6 +41,11 @@ data "aws_iam_policy_document" "exec_secrets" {
       # SES delivery-webhook token (Resend→SES migration): the shared secret in the SNS
       # subscription path, injected via valueFrom, so the exec role must be able to read it.
       aws_ssm_parameter.ses_webhook_token.arn,
+      # Nightly backup (TASK-423): the passphrase that encrypts the archive. The ONLY secret that
+      # feature has — Google auth is keyless — and a copy also lives outside AWS, in the charity's
+      # password manager, because an archive whose only passphrase is in the account we lost is an
+      # unopenable file in exactly the disaster it exists for.
+      aws_ssm_parameter.backup_archive_passphrase.arn,
       aws_ssm_parameter.stripe_price_bronze.arn,
       aws_ssm_parameter.stripe_price_silver.arn,
       aws_ssm_parameter.stripe_price_gold.arn,
@@ -169,6 +174,18 @@ resource "aws_ecs_task_definition" "app" {
       { name = "SES_TRANSACTIONAL_CONFIGURATION_SET", value = local.create_zone ? aws_sesv2_configuration_set.transactional[0].configuration_set_name : "" },
       # From address for app-branded transactional email (the relay's old MAIL_FROM role).
       { name = "MAIL_FROM", value = var.mail_from },
+      # Nightly backup (TASK-423). None of these is secret: a bucket name, a Drive folder id, and
+      # the names of the Google trust configuration. The security lives in WHO may use them —
+      # Google trusts exactly one AWS role — not in the values being hidden.
+      #
+      # An empty BACKUP_S3_BUCKET disables the job entirely, which is how every environment
+      # except this one stays incapable of writing to the production backup store.
+      { name = "BACKUP_S3_BUCKET", value = aws_s3_bucket.backups.id },
+      { name = "GOOGLE_DRIVE_FOLDER_ID", value = var.google_drive_folder_id },
+      { name = "GOOGLE_SERVICE_ACCOUNT_EMAIL", value = var.google_service_account_email },
+      { name = "GOOGLE_WORKLOAD_IDENTITY_PROJECT_NUMBER", value = var.google_workload_identity_project_number },
+      { name = "GOOGLE_WORKLOAD_IDENTITY_POOL", value = var.google_workload_identity_pool },
+      { name = "GOOGLE_WORKLOAD_IDENTITY_PROVIDER", value = var.google_workload_identity_provider },
     ]
 
     # ECS resolves these from SSM at task start and injects them as env vars, so
@@ -186,6 +203,9 @@ resource "aws_ecs_task_definition" "app" {
       # SES delivery-webhook token (Resend→SES migration): a SecureString, injected like a
       # secret — its ARN must also appear in exec_secrets above.
       { name = "SES_WEBHOOK_TOKEN", valueFrom = aws_ssm_parameter.ses_webhook_token.arn },
+      # TASK-423: the archive passphrase. Pasted into SSM by hand from the charity's password
+      # manager; Terraform ignores its value so an apply can never overwrite it.
+      { name = "BACKUP_ARCHIVE_PASSPHRASE", valueFrom = aws_ssm_parameter.backup_archive_passphrase.arn },
       { name = "STRIPE_PRICE_BRONZE", valueFrom = aws_ssm_parameter.stripe_price_bronze.arn },
       { name = "STRIPE_PRICE_SILVER", valueFrom = aws_ssm_parameter.stripe_price_silver.arn },
       { name = "STRIPE_PRICE_GOLD", valueFrom = aws_ssm_parameter.stripe_price_gold.arn },

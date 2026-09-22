@@ -194,3 +194,44 @@ variable "mail_from" {
   type        = string
   default     = "noreply@nbcc.scot"
 }
+
+# --- Nightly off-site backup (TASK-423) ---------------------------------------
+# None of these is a secret. The Drive folder id and the Google pool names are meaningless without
+# the right to use them, and that right is held by one AWS role rather than by knowing a value.
+# The one real secret, the archive passphrase, is an SSM SecureString pasted in by hand.
+
+variable "google_drive_folder_id" {
+  description = "Shared Drive (or folder) that receives the nightly encrypted archive."
+  type        = string
+  default     = ""
+}
+
+variable "google_service_account_email" {
+  description = "The Google service account the backup job acts as. It has no key; AWS federation vouches for it."
+  type        = string
+  default     = ""
+}
+
+variable "google_workload_identity_project_number" {
+  description = "Google Cloud project NUMBER (not the id) holding the workload identity pool."
+  type        = string
+  default     = ""
+}
+
+variable "google_workload_identity_pool" {
+  description = "Workload identity pool id that trusts this AWS account."
+  type        = string
+  default     = "aws-nbcc"
+}
+
+variable "google_workload_identity_provider" {
+  description = "AWS provider id within that pool."
+  type        = string
+  default     = "aws-provider"
+}
+
+variable "backup_alarm_email" {
+  description = "Where the 'no backup in 48 hours' alarm goes. The SNS subscription must be CONFIRMED by clicking the link AWS emails on first apply, or the alarm fires into nothing."
+  type        = string
+  default     = ""
+}

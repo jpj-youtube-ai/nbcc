@@ -16,7 +16,13 @@ export interface AwsCredentials {
   sessionToken?: string;
 }
 
-const sha256Hex = (s: string) => createHash("sha256").update(s, "utf8").digest("hex");
+// Accepts a Buffer as well as a string: TASK-423 signs S3 PUTs whose body is a binary archive,
+// and hashing that through a utf8 string would corrupt it. Node ignores the encoding argument for
+// Buffer input, so the two branches differ only to satisfy the type checker.
+const sha256Hex = (s: string | Buffer) =>
+  typeof s === "string"
+    ? createHash("sha256").update(s, "utf8").digest("hex")
+    : createHash("sha256").update(s).digest("hex");
 const hmac = (key: Buffer | string, s: string) => createHmac("sha256", key).update(s, "utf8").digest();
 
 // RFC 3986 encoding — encodeURIComponent leaves !'()* alone, SigV4 does not.
@@ -27,7 +33,7 @@ export interface SignRequestOptions {
   method: string;
   url: string; // absolute URL; query string (if any) is read from here
   headers?: Record<string, string>; // extra headers to sign (e.g. content-type)
-  body?: string; // empty string for GET
+  body?: string | Buffer; // empty string for GET; Buffer for a binary S3 PUT (TASK-423)
   region: string;
   service: string; // "ses" for the SESv2 API
   credentials: AwsCredentials;

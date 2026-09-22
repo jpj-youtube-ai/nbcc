@@ -440,3 +440,25 @@ export async function sendOutreachInvitation(
 ): Promise<void> {
   await sendVerbatim("outreach", businessName, message);
 }
+
+// --- Backup alerts (TASK-423) ---------------------------------------------------------------
+// An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
+// ship, or reaches only one of its two destinations.
+//
+// Deliberately NOT built through buildKindEmail: plain text, no branded shell, no template. This
+// is the email that has to work on the worst night, and every layer it depends on is a layer that
+// could be the thing that broke. The subject alone should be enough to know whether to get up.
+export interface BackupAlertEmail {
+  email: string; // config.ADMIN_NOTIFICATION_EMAIL
+  subject: string;
+  body: string; // plain text
+}
+
+export async function sendBackupAlert(message: BackupAlertEmail): Promise<void> {
+  await sendAndLog("backupAlert", null, {
+    to: message.email,
+    ...transactional(),
+    subject: message.subject,
+    text: message.body,
+  });
+}

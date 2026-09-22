@@ -44,4 +44,20 @@ module "app" {
   # Google Workspace DKIM public key, ported so mail keeps signing post-delegation.
   # VERIFY against Google Admin (Gmail -> Authenticate email) before relying on it.
   google_dkim_txt = "v=DKIM1;k=rsa;p=MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAj7k5aobirseiSKceRwYu4B4lEnBZSBaNgvnaWQTKIoBjx1FIEaN0c/Dpv4WCQcl0T8mXY1rZGB6pOMROQJP5CKSRuy/8tF7zLbf16meN5jXo4ejzZc7DdKPUZpRpaAPHs/xLtgm0odB473Qe699UUI43uP/2KTdtZMIVhIn77BTtTrKVIlTEIX0ub2I9E+PFQWOVnappKPHjcqRUWlZdYL6cQF/NyY2i5aQ2zYuBCPtt82kEDfJYVx+ahODiMR8dP/GCrU4dhBVOcLIDKpzTrvE9rR/FlzuG1wwt5nKqQWkqRmY1iIFfaBFkWrzGitf1x7p7B0NV1JjyfDO7TRCl2QIDAQAB"
+
+  # Newsletter daily ceiling. Terraform's default is 70, but production has been running at 500
+  # since someone raised it by hand (the SSM parameter is on version 2). That drift was harmless
+  # only while nobody applied infra: the next apply, for any reason at all, would have quietly
+  # reset the cap to 70 and made a newsletter take a week to go out, with nothing to connect the
+  # symptom to the cause. Recording the real value here is what stops that.
+  newsletter_daily_send_cap = 500
+
+  # Nightly off-site backup (TASK-423). The Google side is keyless: the organisation forbids
+  # downloadable service-account keys, so Google is told to trust the ECS task role directly and
+  # nothing here is a credential. The one secret, the archive passphrase, is pasted into SSM by
+  # hand from the charity's password manager and Terraform never sees it.
+  google_drive_folder_id                 = "0AFET5N0mT5uMUk9PVA"
+  google_service_account_email           = "nbcc-backup-writer@nbcc-backups.iam.gserviceaccount.com"
+  google_workload_identity_project_number = "84513277257"
+  backup_alarm_email                     = "admin@nbcc.scot"
 }

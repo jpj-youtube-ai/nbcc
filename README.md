@@ -5133,6 +5133,89 @@ Deploys are tuned to finish quickly: the target group sets
 interval, both in `infra/modules/app/alb.tf`. These are Terraform changes, so
 they take effect only once the **Infra** workflow applies them.
 
+## Backups (TASK-423)
+
+Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a
+one-off Fargate task (the same pattern as the reminders job, `backups.tf`). It
+writes to **two** places, because they defend against different things:
+
+| Where | Protects against | Kept |
+|---|---|---|
+| S3, Object Lock in COMPLIANCE mode | Deletion, ransomware, a mistaken or compromised admin. Nothing can alter it for 35 days — not an admin, not root, not AWS support. | 35 daily, then monthly to **7 years** |
+| Google Drive (Shared Drive), AES-256 | Losing the AWS account altogether: compromise, suspension, closure | 30 daily, 12 monthly |
+
+Neither alone is sufficient. The S3 copy cannot survive losing the account it
+lives in; the Drive copy is not immutable.
+
+### There are THREE databases, not one
+
+This is the trap this feature was built around. `DATABASE_URL` holds 42 tables,
+but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
+(deliberately, so the public story and contact forms can never reach donor
+data). A `pg_dump $DATABASE_URL` captures 42 of **44** tables and silently
+drops every My Story submission and every contact enquiry, while producing a
+file of entirely plausible size.
+
+`src/backup/plan.ts` is the single source of truth, and
+`test/unit/backup-plan.test.ts` reads the migration directories off disk and
+fails if one exists that the backup does not know about. **Adding a fourth
+database will break that test until you add it here too. That is the point.**
+
+### What the archive contains
+
+- a `pg_dump` per database (restore with `pg_restore`)
+- a CSV per table, so the charity can read its own data in Excel without
+  Postgres, a developer, or this codebase
+- `website.tar.gz` — the deployed site itself, so recovery does not depend on
+  GitHub still existing
+- `manifest.json` — every table and its row count. **Check a restore against
+  this** rather than trusting that it looked fine
+- `HOW-TO-RESTORE.txt` in plain English
+
+**Live secrets are deliberately excluded.** Stripe keys, database passwords and
+SES credentials are not in the archive. It is the copy most likely to end up
+somewhere unintended, and whoever held it could otherwise take card payments as
+NBCC. Those live in SSM; recreate them from there.
+
+### The passphrase lives outside AWS
+
+`BACKUP_ARCHIVE_PASSPHRASE` is an SSM SecureString, pasted in by hand, with
+`ignore_changes` so Terraform never overwrites it. **A copy must also be in the
+charity's password manager.** An archive whose only passphrase is in the account
+you just lost is an unopenable file in exactly the disaster it exists for.
+
+### Google auth has no key
+
+The Google organisation enforces `iam.disableServiceAccountKeyCreation`, so
+there is no service-account key. Google is told to trust exactly one AWS role
+(`charity-site-production-task`), the job signs a `GetCallerIdentity` call with
+its task-role credentials, and Google checks that with AWS before issuing a
+token good for under an hour. Nothing to store, rotate or leak. See
+`src/clients/google-federation.ts`.
+
+### How you know it is working
+
+- a **failure alert** by email when the job detects a problem
+- the job **refuses to upload** an incomplete or suddenly-smaller backup, leaving
+  yesterday's good archive untouched, and says so
+- a **CloudWatch alarm** when no success has been recorded for 48 hours. This is
+  the one that matters: the app cannot email about a run that never started, and
+  that is how backups actually die. `treat_missing_data = "breaching"`, because
+  missing data *is* the emergency
+- the alarm's SNS email subscription **must be confirmed** by clicking the link
+  AWS sends on first apply, or it fires into nothing
+
+### Restoring
+
+```bash
+7z x nbcc-backup-YYYY-MM-DD.7z        # password from the password manager
+createdb nbcc_restore && pg_restore -d nbcc_restore main/main.dump
+psql nbcc_restore -c 'SELECT count(*) FROM donors'   # compare with manifest.json
+```
+
+**Last rehearsed:** not yet — see the PR checklist. An unverified backup is a
+belief, not a backup.
+
 ## Configuration
 
 Every config value lives in `src/config/schema.ts` and `.env.example`. Locally

@@ -101,3 +101,30 @@ jobs:
           bash scripts/smoke.sh http://localhost:3000
           npm run test:bdd
           kill $APP_PID
+
+  # TASK-423: the image is never built by PR checks, so a broken Dockerfile used to reach
+  # production before anyone noticed. The nightly backup makes that worse: it needs pg_dump and
+  # 7z INSIDE the image, and the one failure that matters cannot be seen locally.
+  #
+  # pg_dump must be at least the server's major version. RDS runs Postgres 16; Debian bookworm
+  # ships 15, which refuses to dump a 16 server. A 15 that installed cleanly would look perfectly
+  # healthy here, in the image, and everywhere except against the real database at 2am. So this
+  # asserts the MAJOR VERSION, not merely that the binary exists.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the runtime image
+        run: docker build -t nbcc-image-check .
+      - name: pg_dump must be 16 or newer, or the backup cannot dump production
+        run: |
+          set -euo pipefail
+          version=$(docker run --rm nbcc-image-check pg_dump --version)
+          echo "$version"
+          major=$(echo "$version" | grep -oE '[0-9]+' | head -1)
+          if [ "$major" -lt 16 ]; then
+            echo "::error::pg_dump is $major, but RDS runs Postgres 16. It will refuse to dump with 'server version mismatch'. The PGDG apt repo line in the Dockerfile is what fixes this."
+            exit 1
+          fi
+      - name: 7z must exist, or the archive cannot be encrypted
+        run: docker run --rm nbcc-image-check 7z i > /dev/null

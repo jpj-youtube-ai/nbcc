@@ -10,6 +10,32 @@ RUN npm run build
 # ---- runtime ----
 FROM node:20-slim AS runtime
 ENV NODE_ENV=production
+
+# TASK-423: the nightly backup (`npm run backup`) needs pg_dump and 7z.
+#
+# pg_dump MUST be at least the server's major version. RDS runs Postgres 16; Debian bookworm ships
+# postgresql-client 15, which REFUSES to dump a 16 server ("aborting because of server version
+# mismatch"). So this comes from the PostgreSQL project's own apt repo rather than Debian's. If
+# RDS is ever moved to 17 this breaks, and the backup-failure alert is what catches it — there is
+# no way to notice locally, because locally there is no RDS.
+#
+# p7zip gives AES-256 with encrypted headers (-mhe=on). Chosen over a bespoke encrypted blob so
+# that the charity can open a backup with 7-Zip and a password, on any Windows machine, without a
+# developer and without this codebase. A backup only its authors can read is a weak backup.
+#
+# Placed before the npm install so it stays a cached layer that code changes do not invalidate.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl gnupg p7zip-full \
+ && install -d /usr/share/postgresql-common/pgdg \
+ && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+      -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+ && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+      > /etc/apt/sources.list.d/pgdg.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-client-16 \
+ && apt-get purge -y --auto-remove gnupg curl \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev

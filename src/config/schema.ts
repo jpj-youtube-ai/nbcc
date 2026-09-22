@@ -187,6 +187,45 @@ export const configSchema = z.object({
   // it beats every per-send option including "uncapped" (src/newsletter/send-pacing.ts). 0 disables
   // it. NOT a secret - a plain SSM String injected like NEWSLETTER_FROM_EMAIL.
   NEWSLETTER_DAILY_SEND_CAP: z.coerce.number().int().min(0).default(70),
+
+  // --- Nightly off-site backup (TASK-423) ------------------------------------
+  //
+  // Everything here defaults to empty, and an empty BACKUP_S3_BUCKET disables the whole job. That
+  // is what local dev and CI want: a developer machine must never write to, or prune, the
+  // production backup store.
+  //
+  // Note what is NOT here: any Google key material. The organisation enforces
+  // iam.disableServiceAccountKeyCreation, so there is no service-account key to hold. The job
+  // proves it is the ECS task role instead (src/clients/google-federation.ts), which means the
+  // archive passphrase below is the only secret this feature has.
+  BACKUP_S3_BUCKET: z.string().default(""),
+  // Its own key rather than reusing SES_REGION. The two are the same value today, which is
+  // precisely the trap: borrowing SES's region works until someone moves SES, and then the
+  // backup fails with an S3 error that says nothing about why.
+  BACKUP_S3_REGION: z.string().min(1).default("eu-west-2"),
+
+  // The one secret. It must ALSO be held outside AWS, in the charity's password manager: an
+  // archive whose only passphrase lives in the account we lost is an unopenable file in exactly
+  // the disaster it exists for.
+  BACKUP_ARCHIVE_PASSPHRASE: z.string().default(""),
+
+  // Where the daily copy lands, and who we are allowed to be when we put it there.
+  GOOGLE_DRIVE_FOLDER_ID: z.string().default(""),
+  // true when the folder is in a Shared Drive, which owns its own files. A service account has no
+  // storage quota, so uploading into a personal My Drive folder is rejected outright.
+  GOOGLE_DRIVE_SHARED_DRIVE: z.coerce.boolean().default(false),
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().default(""),
+  GOOGLE_WORKLOAD_IDENTITY_PROJECT_NUMBER: z.string().default(""),
+  GOOGLE_WORKLOAD_IDENTITY_POOL: z.string().default("aws-nbcc"),
+  GOOGLE_WORKLOAD_IDENTITY_PROVIDER: z.string().default("aws-provider"),
+
+  // Where a failed or suspicious backup shouts: ADMIN_NOTIFICATION_EMAIL, the inbox that already
+  // receives operational notices. No second address for this — one place to watch is the point.
+  //
+  // Note what this alert CANNOT catch: a run that never happened. If the scheduled task fails to
+  // start, nothing in this process is alive to complain. That gap is covered outside the app, by
+  // a CloudWatch alarm on the absence of a success metric (infra/modules/app/backups.tf), because
+  // an alert that shares fate with the thing it watches is not an alert.
 });
 
 export type Config = z.infer<typeof configSchema>;

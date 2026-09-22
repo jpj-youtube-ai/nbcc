@@ -25,6 +25,41 @@ export type DriveTarget = {
   fetchImpl?: typeof fetch;
 };
 
+/**
+ * Ask Drive what kind of folder this is, rather than trusting a human to have classified it and a
+ * config value not to have drifted.
+ *
+ * It matters because a service account has no Drive storage quota of its own. In a Shared Drive
+ * the drive owns the files and uploads succeed; in someone's personal My Drive the upload is
+ * rejected outright, and the only way round it is to let the service account impersonate a real
+ * user, which is a considerably larger permission. A folder in a Shared Drive carries a driveId.
+ */
+export async function resolveFolderKind(opts: {
+  accessToken: string;
+  folderId: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{ sharedDrive: boolean; name: string }> {
+  const doFetch = opts.fetchImpl ?? fetch;
+  const url = new URL(`${DRIVE_FILES}/${opts.folderId}`);
+  url.searchParams.set("fields", "id,name,driveId");
+  url.searchParams.set("supportsAllDrives", "true");
+
+  const res = await doFetch(url, {
+    headers: { authorization: `Bearer ${opts.accessToken}` },
+  });
+
+  if (res.status === 404) {
+    // Drive reports "not shared with me" as "does not exist", so this is almost never a wrong id.
+    throw new Error(
+      `Drive folder ${opts.folderId} was not found. It is almost certainly not shared with the service account: share the backup folder with GOOGLE_SERVICE_ACCOUNT_EMAIL as an editor.`,
+    );
+  }
+  if (!res.ok) throw new Error(`Drive folder lookup failed: ${res.status} ${await res.text()}`);
+
+  const folder = (await res.json()) as { name: string; driveId?: string };
+  return { sharedDrive: Boolean(folder.driveId), name: folder.name };
+}
+
 function withDriveParams(url: URL, sharedDrive: boolean): URL {
   if (sharedDrive) {
     url.searchParams.set("supportsAllDrives", "true");

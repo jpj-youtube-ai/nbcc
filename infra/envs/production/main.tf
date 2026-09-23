@@ -10,9 +10,32 @@ module "app" {
   public_subnet_cidrs = ["10.30.1.0/24", "10.30.2.0/24"]
   db_subnet_cidrs     = ["10.30.101.0/24", "10.30.102.0/24"]
 
-  desired_count       = 2     # availability
+  # TASK-424: one container, not two. ~$195/year.
+  #
+  # READ THIS BEFORE TRUSTING THE NUMBER. The ECS service sets
+  # lifecycle.ignore_changes = [desired_count], so Terraform set this once at creation and has
+  # ignored it ever since, and the deploy workflow passes only --task-definition. Changing this
+  # line ALONE therefore does nothing at all: it documents intent and takes effect only if the
+  # service is ever recreated. The live count is changed separately, in the console, and
+  # README.md records that this is how it works.
+  desired_count       = 1
   db_instance_class   = "db.t4g.micro"
-  multi_az            = true  # automatic failover
+
+  # TASK-424: no standby database. ~$230/year.
+  #
+  # This costs availability, not durability. Automated RDS backups and 35-day point-in-time
+  # recovery are unaffected, as is the nightly off-site backup (TASK-423). What is given up is
+  # automatic failover: if an availability zone is lost, recovery is a restore of perhaps half an
+  # hour rather than a switch-over of seconds, and up to ~5 minutes of the most recent writes
+  # could be lost in a sudden total instance failure.
+  #
+  # For donations specifically, Stripe is the source of truth and redelivers its webhooks, and
+  # stripe_webhook_events already makes that replay idempotent, so the money is recoverable even
+  # in that window.
+  #
+  # NOTE rds.tf sets apply_immediately = true, so this takes effect when infra is applied rather
+  # than waiting for the maintenance window.
+  multi_az            = false
   deletion_protection = true
   skip_final_snapshot = false
 

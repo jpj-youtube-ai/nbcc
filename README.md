@@ -5133,6 +5133,42 @@ Deploys are tuned to finish quickly: the target group sets
 interval, both in `infra/modules/app/alb.tf`. These are Terraform changes, so
 they take effect only once the **Infra** workflow applies them.
 
+## Resilience and what it costs (TASK-424)
+
+Production runs **one** container and a **single-AZ** database. That is a deliberate trade, made
+once, with the numbers in front of us:
+
+| | Per year | What it buys |
+|---|---|---|
+| Second container | ~$195 | Survives one container dying without a ~1 minute gap |
+| Standby database | ~$230 | Automatic failover instead of a ~30 minute restore |
+
+Both were dropped. Neither protects *data* — automated RDS backups, 35-day point-in-time
+recovery and the nightly off-site backup all run regardless. What they bought was **uptime**, and
+for a charity events site half an hour offline is an inconvenience rather than a crisis.
+
+The residual risk, stated plainly: in a sudden total database failure, up to about **five minutes**
+of recent writes could be lost. For donations that is recoverable anyway — Stripe is the source of
+truth and redelivers its webhooks, and `stripe_webhook_events` makes the replay idempotent.
+
+### `desired_count` in Terraform is documentation, not control
+
+The ECS service sets `lifecycle.ignore_changes = [task_definition, desired_count]`: CI owns the
+running image and scale, Terraform owns everything else. Terraform set `desired_count` once when
+it created the service and has ignored it since, and `deploy-prod.yml` passes only
+`--task-definition`.
+
+**So editing `desired_count` in `infra/envs/production/main.tf` changes nothing.** It takes effect
+only if the service is ever recreated. To change the live count:
+
+```bash
+aws ecs update-service --cluster charity-site-production \
+  --service charity-site-production --desired-count 1 --region eu-west-2
+```
+
+Keep the Terraform value in step with reality anyway, or the next person reads a number that was
+never true.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

@@ -112,6 +112,7 @@
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
     loadMyPermissions();
+    refreshEnquiryNotice();
   }
 
   // Admin Phase 2 (TASK-186): fetch this user's EFFECTIVE per-section permissions and use them to
@@ -157,7 +158,11 @@
   // view. Overview always stays visible - it has no gated route of its own; its widgets call section
   // routes that enforce their own gate. UX only: the server is the real enforcement on every route.
   function applyNavFiltering() {
-    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
+    bindClick("enquiryNoticeGo", function () {
+    selectView("contact");
+  });
+
+  Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       var section = b.getAttribute("data-view");
       if (section === "overview") return;
       // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
@@ -325,11 +330,40 @@
       v.hidden = v.id !== viewId;
     });
   }
+  // TASK-425: enquiries waiting for a reply, on every view.
+  //
+  // A contact enquiry used to be invisible unless you deliberately opened Content > Contact form,
+  // so somebody could write to the charity and simply wait. The label is built by the server
+  // (src/contact/enquiry-summary.ts) rather than here, so the rule that is tested is the rule
+  // that ships.
+  function refreshEnquiryNotice() {
+    var bar = el("enquiryNotice");
+    var text = el("enquiryNoticeText");
+    if (!bar || !text) return;
+    authFetch("/api/admin/contact/unanswered")
+      .then(j)
+      .then(function (d) {
+        if (!d || !d.label) {
+          bar.hidden = true;
+          return;
+        }
+        text.textContent = d.label;
+        bar.hidden = false;
+      })
+      .catch(function () {
+        // Staying hidden is the honest failure. The bar appears only when we KNOW something is
+        // waiting, so a failed count never becomes a confident all-clear, and someone without
+        // permission to read enquiries simply never sees it.
+        bar.hidden = true;
+      });
+  }
+
   function selectView(name) {
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-view") === name);
     });
     showOnly("view-" + name);
+    refreshEnquiryNotice();
     if (name === "search") {
       var q = el("searchQuery");
       if (q && q.focus) q.focus();
@@ -1215,6 +1249,16 @@
       ? '<span class="admin-pill is-replied">Replied</span>'
       : '<span class="admin-pill is-new">New</span>';
   }
+  // TASK-425: the status pill, with who replied and when beneath it. replied_summary arrives
+  // already formatted from the server, and is null whenever there is nothing honest to say.
+  // Putting it in the existing cell rather than a new column keeps the table within the width
+  // that TASK-422 fixed for phones.
+  function contactStatusCell(r) {
+    var badge = contactStatusBadge(r.status);
+    if (!r.replied_summary) return badge;
+    return badge + '<span class="admin-replied-by">' + H.escapeHtml(r.replied_summary) + "</span>";
+  }
+
   function contactTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No enquiries yet.</p>';
     var body = rows
@@ -1222,7 +1266,7 @@
         return (
           "<tr><td>" + window.formatReceived(r.created_at) + "</td><td>" +
           H.escapeHtml(((r.first_name || "") + " " + (r.last_name || "")).trim()) + "</td><td>" +
-          H.escapeHtml(r.email) + "</td><td>" + contactStatusBadge(r.status) + "</td><td>" +
+          H.escapeHtml(r.email) + "</td><td>" + contactStatusCell(r) + "</td><td>" +
           H.escapeHtml(contactSnippet(r.message)) +
           '</td><td><button class="admin-link" type="button" data-contact="' + r.id + '">View</button></td></tr>'
         );
@@ -1312,6 +1356,7 @@
         if (updated) {
           renderContact(updated);
           contactStatus(okMsg);
+          refreshEnquiryNotice(); // one fewer waiting, or one more if it was un-marked
         } else contactStatus(errMsg);
       })
       .catch(function () {

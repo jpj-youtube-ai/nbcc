@@ -111,7 +111,7 @@ import { similarity, normaliseBusinessName } from "../outreach/matching";
 import { parsePastedBusinesses, summarisePaste, parseTags } from "../outreach/paste";
 import { outreachCreateSchema } from "../outreach/model";
 import { parseArchiveView } from "../admin/archive-filter";
-import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry } from "../db/contact";
+import { listEnquiries, getEnquiry, markReplied, deleteEnquiry, archiveEnquiry, restoreEnquiry, countUnanswered } from "../db/contact";
 import { toCharitiesOnlineCsv } from "../claims/charities-online";
 import { verifyPassword } from "../admin/password";
 import { touchLastLogin } from "../db/admin-users";
@@ -3233,6 +3233,24 @@ export async function getAdminContact(req: Request, res: Response): Promise<Resp
   }
 }
 
+// TASK-425: how many enquiries are waiting for a reply. Drives the notice bar on every admin page.
+//
+// Behind the same "contact" view permission as the list. Someone who may not read enquiries must
+// not learn how many are outstanding either: a count is small, but it is still information about
+// the charity's correspondence.
+export async function getAdminContactUnanswered(
+  req: Request,
+  res: Response,
+): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "contact", "view"))) return;
+  try {
+    return res.status(200).json({ count: await countUnanswered() });
+  } catch (err) {
+    console.error("admin contact count failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
 export async function getAdminContactItem(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "contact", "view"))) return;
   const id = contactId(req, res);
@@ -3300,6 +3318,10 @@ export async function deleteAdminContact(req: Request, res: Response): Promise<R
 }
 
 adminRouter.get("/api/admin/contact", getAdminContact);
+// TASK-425: the notice-bar count. A LITERAL path, so it is declared BEFORE /:id or Express
+// captures "unanswered" as an id and the handler 400s on an invalid id. Same ordering trap as the
+// newsletter templates and archived-audiences routes below.
+adminRouter.get("/api/admin/contact/unanswered", getAdminContactUnanswered);
 adminRouter.get("/api/admin/contact/:id", getAdminContactItem);
 adminRouter.patch("/api/admin/contact/:id", patchAdminContact);
 adminRouter.delete("/api/admin/contact/:id", deleteAdminContact);

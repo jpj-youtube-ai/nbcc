@@ -5133,6 +5133,45 @@ Deploys are tuned to finish quickly: the target group sets
 interval, both in `infra/modules/app/alb.tf`. These are Terraform changes, so
 they take effect only once the **Infra** workflow applies them.
 
+## Enquiries waiting for a reply (TASK-425)
+
+A contact enquiry used to be invisible unless you deliberately opened **Content → Contact form**.
+Nothing on the dashboard, no email. Somebody could write to the charity and simply wait.
+
+There is now a notice at the top of **every** admin view when enquiries are outstanding, with a
+button straight to them. It is **hidden whenever nothing is waiting**, and that is deliberate: a
+strip that is always there reading "0 waiting" becomes furniture, and people stop seeing furniture.
+
+The enquiry table also shows **who replied and when**, under the status pill. `replied_at` and
+`replied_by` have been recorded since the feature was built and were never displayed, so that
+information was being collected and thrown away. It only matters on the day two people both answer
+the same person.
+
+### Three things here are less obvious than they look
+
+**The formatting happens on the server.** `assets/js/admin/app.js` is plain browser JavaScript and
+cannot import from `src/`. Formatting the label or the reply summary there would mean two
+implementations of one rule, only one of them tested. So `GET /api/admin/contact/unanswered`
+returns `{count, label}` already worded, and the list rows carry a ready-made `replied_summary`.
+`src/contact/enquiry-summary.ts` is the only implementation, and it is the one under test.
+
+**The month names are ours, not `Intl`'s.** `Intl` is used only to move the instant into UK local
+time, which genuinely needs a timezone database. But `en-GB` abbreviates September as "Sept", so
+the exact string depends on the ICU data of whichever Node runs it, and a test pinning it would
+pass locally and fail in CI. There is a test asserting every month abbreviates to three letters.
+
+**A failed count 500s rather than returning zero.** The bar appears only when we *know* something
+is waiting. A broken query reporting an all-clear while enquiries sat unanswered would be worse
+than the bar never existing.
+
+### Route ordering
+
+`/api/admin/contact/unanswered` is registered **before** `/api/admin/contact/:id`. Express matches
+in registration order, so the other way round captures `unanswered` as an id and 400s it. The same
+trap is flagged on the newsletter-template and archived-audience routes. The handler tests call
+functions directly and cannot catch it, so `admin-contact-routes.test.ts` inspects the real router
+stack instead.
+
 ## Resilience and what it costs (TASK-424)
 
 Production runs **one** container and a **single-AZ** database. That is a deliberate trade, made

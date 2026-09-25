@@ -6,20 +6,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // edit for writes), all via src/db/contact (contactPool), NEVER src/db/pool.ts / the charity DB.
 // Mirrors admin-stories-api.test.ts's mock/req/res style, but mocks ../../src/db/contact directly.
 
-const { listEnquiriesMock, getEnquiryMock, markRepliedMock, deleteEnquiryMock, getUserAuthRowMock } = vi.hoisted(
-  () => ({
-    listEnquiriesMock: vi.fn(),
-    getEnquiryMock: vi.fn(),
-    markRepliedMock: vi.fn(),
-    deleteEnquiryMock: vi.fn(),
-    getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
-  }),
-);
+const {
+  listEnquiriesMock,
+  getEnquiryMock,
+  markRepliedMock,
+  deleteEnquiryMock,
+  countUnansweredMock,
+  getUserAuthRowMock,
+} = vi.hoisted(() => ({
+  listEnquiriesMock: vi.fn(),
+  getEnquiryMock: vi.fn(),
+  markRepliedMock: vi.fn(),
+  deleteEnquiryMock: vi.fn(),
+  countUnansweredMock: vi.fn(), // TASK-425: the notice-bar count
+  getUserAuthRowMock: vi.fn(), // authorizeSection's fresh per-request DB row (Admin Phase 2)
+}));
 vi.mock("../../src/db/contact", () => ({
   listEnquiries: listEnquiriesMock,
   getEnquiry: getEnquiryMock,
   markReplied: markRepliedMock,
   deleteEnquiry: deleteEnquiryMock,
+  countUnanswered: countUnansweredMock,
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
 vi.mock("../../src/config", () => ({
@@ -35,7 +42,14 @@ vi.mock("../../src/config", () => ({
 // stub them minimally so importing the router doesn't require a real pool/DB.
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
-import { getAdminContact, getAdminContactItem, patchAdminContact, deleteAdminContact } from "../../src/routes/admin";
+import {
+  getAdminContact,
+  getAdminContactItem,
+  patchAdminContact,
+  deleteAdminContact,
+  getAdminContactUnanswered,
+  adminRouter,
+} from "../../src/routes/admin";
 import { signAdminSession } from "../../src/admin/session";
 
 const SECRET = "test-admin-secret";
@@ -69,6 +83,7 @@ const runList = async (o: any) => { const res = mockRes(); await getAdminContact
 const runGet = async (o: any) => { const res = mockRes(); await getAdminContactItem(req(o) as any, res as any); return res; };
 const runPatch = async (o: any) => { const res = mockRes(); await patchAdminContact(req(o) as any, res as any); return res; };
 const runDelete = async (o: any) => { const res = mockRes(); await deleteAdminContact(req(o) as any, res as any); return res; };
+const runCount = async (o: any) => { const res = mockRes(); await getAdminContactUnanswered(req(o) as any, res as any); return res; };
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 beforeEach(() => {
@@ -76,6 +91,7 @@ beforeEach(() => {
   getEnquiryMock.mockReset();
   markRepliedMock.mockReset();
   deleteEnquiryMock.mockReset();
+  countUnansweredMock.mockReset();
   getUserAuthRowMock.mockReset();
 });
 
@@ -242,10 +258,102 @@ describe("Admin Phase 2: per-section permission gating on /api/admin/contact", (
     // map, not the role, is what authorizeSection actually checks.
     const token = signAdminSession({ sub: 1, email: "kenny@nbcc.test", role: "editor", now: new Date(), secret: SECRET }).token;
     getUserAuthRowMock.mockResolvedValue({ id: 1, email: "kenny@nbcc.test", status: "active", role: "editor", permissions: { contact: "view" } });
+    listEnquiriesMock.mockResolvedValueOnce([]);
     const readRes = await runList({ token });
     expect(readRes.statusCode).toBe(200);
     const writeRes = await runPatch({ token, body: { status: "replied" } });
     expect(writeRes.statusCode).toBe(403);
     expect(markRepliedMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/admin/contact/unanswered (TASK-425, the notice-bar count)", () => {
+  it("401s with no token", async () => {
+    const res = await runCount({ token: "" });
+    expect(res.statusCode).toBe(401);
+    expect(countUnansweredMock).not.toHaveBeenCalled();
+  });
+
+  it("200s with the count for a Viewer", async () => {
+    countUnansweredMock.mockResolvedValueOnce(3);
+    const res = await runCount({ role: "viewer" });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ count: 3, label: "3 enquiries waiting for a reply" });
+  });
+
+  it("returns zero happily when the inbox is clear", async () => {
+    countUnansweredMock.mockResolvedValueOnce(0);
+    const res = await runCount({ role: "viewer" });
+    expect(res.statusCode).toBe(200);
+    // Nothing waiting means no label, so the bar has nothing to render and stays hidden.
+    expect(res.body).toEqual({ count: 0, label: null });
+  });
+
+  // The important one. If a broken query reported zero, the bar would show a confident all-clear
+  // while enquiries sat unanswered, which is worse than the bar never appearing. It has to fail
+  // loudly enough that the page can tell "none" apart from "do not know".
+  it("500s when the count fails rather than reporting an all-clear", async () => {
+    countUnansweredMock.mockRejectedValueOnce(new Error("contact db is down"));
+    const res = await runCount({ role: "viewer" });
+    expect(res.statusCode).toBe(500);
+    expect(res.body).not.toMatchObject({ count: 0 });
+  });
+});
+
+describe("route ordering: the literal path must beat /:id", () => {
+  // Express matches in registration order, so /api/admin/contact/:id declared first would capture
+  // "unanswered" as an id and 400 it as non-numeric. This repo has hit that trap before, which is
+  // why the newsletter templates and archived-audiences routes carry the same warning. The handler
+  // tests above call functions directly and so cannot catch it; this inspects the real stack.
+  it("registers /api/admin/contact/unanswered before /api/admin/contact/:id", () => {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const paths = (adminRouter as any).stack
+      .filter((layer: any) => layer.route)
+      .map((layer: any) => layer.route.path);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+
+    const literal = paths.indexOf("/api/admin/contact/unanswered");
+    const byId = paths.indexOf("/api/admin/contact/:id");
+
+    expect(literal, "the unanswered route is not registered at all").toBeGreaterThan(-1);
+    expect(byId, "the :id route is not registered at all").toBeGreaterThan(-1);
+    expect(literal).toBeLessThan(byId);
+  });
+});
+
+describe("the list now says who replied and when (TASK-425)", () => {
+  it("adds a formatted replied_summary to each row", async () => {
+    listEnquiriesMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        status: "replied",
+        replied_by: "jaimie@nbcc.scot",
+        replied_at: new Date("2026-09-22T13:03:00.000Z"),
+      },
+      { id: 2, status: "new", replied_by: null, replied_at: null },
+    ]);
+    const res = await runList({ role: "viewer" });
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    const rows = (res.body as any).results;
+    expect(rows[0].replied_summary).toBe("by jaimie@nbcc.scot, 22 Sep 14:03");
+    expect(rows[1].replied_summary).toBeNull();
+  });
+
+  // The spread that adds replied_summary could just as easily drop something. The admin table
+  // renders name, email, status and a message snippet from these rows.
+  it("keeps every original field, so nothing the table already renders disappears", async () => {
+    listEnquiriesMock.mockResolvedValueOnce([
+      { id: 1, first_name: "Aileen", last_name: "Rennie", email: "a@b.c", message: "hi", status: "new" },
+    ]);
+    const res = await runList({ role: "viewer" });
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+    expect((res.body as any).results[0]).toMatchObject({
+      id: 1,
+      first_name: "Aileen",
+      last_name: "Rennie",
+      email: "a@b.c",
+      message: "hi",
+      status: "new",
+    });
   });
 });

@@ -103,3 +103,17 @@ export async function deleteEnquiry(id: number): Promise<boolean> {
   const result = await contactPool.query(`DELETE FROM contact_enquiries WHERE id = $1`, [id]);
   return (result.rowCount ?? 0) > 0;
 }
+
+// TASK-425: how many enquiries are waiting for a reply, for the admin notice bar.
+//
+// A count rather than a list on purpose. This is fetched from every admin page, and there is no
+// reason to ship names, email addresses and message bodies to a page that is only going to render
+// a number. Same "live" archive filter as listEnquiries, so an archived enquiry stops nagging.
+export async function countUnanswered(): Promise<number> {
+  const archived = archiveCondition("live");
+  const where = archived ? ` AND ${archived}` : "";
+  const result = await contactPool.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM contact_enquiries WHERE status = 'new'${where}`,
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}

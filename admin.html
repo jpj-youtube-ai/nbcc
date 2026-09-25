@@ -102,6 +102,18 @@
           </nav>
 
           <div class="admin-content">
+            <!-- TASK-425: enquiries waiting for a reply.
+                 First child of .admin-content so it sits above whichever view is showing, which is
+                 the point: a contact enquiry used to be invisible unless you deliberately clicked
+                 into Content > Contact form, so somebody could write to the charity and wait.
+                 Hidden entirely when nothing is waiting - a permanent "0 waiting" strip becomes
+                 furniture, and people stop seeing furniture. -->
+            <div class="admin-notice" id="enquiryNotice" role="status" aria-live="polite" hidden>
+              <span class="admin-notice-text" id="enquiryNoticeText"></span>
+              <button class="admin-notice-action" type="button" id="enquiryNoticeGo">
+                Open the contact form
+              </button>
+            </div>
             <!-- Overview: the three operational queues at a glance + recent donations. -->
             <section class="admin-view" id="view-overview" aria-labelledby="overview-heading">
               <h2 id="overview-heading">Overview</h2>

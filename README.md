@@ -5280,6 +5280,18 @@ token good for under an hour. Nothing to store, rotate or leak. See
 - the alarm's SNS email subscription **must be confirmed** by clicking the link
   AWS sends on first apply, or it fires into nothing
 
+**AWS deletes an unconfirmed SNS subscription after 3 days, silently.** This has
+already happened once: the infrastructure was applied on 22 September, nobody
+clicked the link, and by the 25th the topic had zero subscriptions and the alarm
+had nowhere to send. Nothing warned about it, because the thing that would have
+warned was the thing that had gone.
+
+So: confirm the link the day it arrives. If it is ever missed, re-running the
+Infra apply recreates the subscription and sends a fresh one, because Terraform
+sees it missing. To check at any time, look at the topic
+`charity-site-production-backup-alarms` in SNS; it should show **1** confirmed
+subscription, not 0.
+
 ### Restoring
 
 ```bash

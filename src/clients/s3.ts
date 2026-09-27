@@ -28,15 +28,28 @@ export function createS3Client(opts: S3ClientOptions): S3Client {
 
   return {
     async put(key, body, contentType = "application/octet-stream") {
-      // S3 refuses a signed request without this header, and it must hash the ACTUAL payload.
-      // Getting it wrong surfaces as an opaque SignatureDoesNotMatch rather than anything useful.
-      const payloadHash = createHash("sha256").update(body).digest("hex");
+      const digest = createHash("sha256").update(body).digest();
       const url = endpoint(key);
 
       const headers = signRequest({
         method: "PUT",
         url,
-        headers: { "content-type": contentType, "x-amz-content-sha256": payloadHash },
+        headers: {
+          "content-type": contentType,
+          // SigV4's payload hash. S3 refuses a signed request without it, and it must hash the
+          // ACTUAL payload; getting it wrong surfaces as an opaque SignatureDoesNotMatch.
+          "x-amz-content-sha256": digest.toString("hex"),
+          // TASK-428: Object Lock will not accept an upload it cannot verify, which is the point
+          // of a write-once store: it declines to immortalise bytes that may have arrived
+          // corrupted. Without this the first real backup was rejected with "Content-MD5 OR
+          // x-amz-checksum- HTTP header is required for Put Object requests with Object Lock
+          // parameters". An ordinary bucket has no such requirement, so nothing but the real
+          // bucket could have shown this.
+          //
+          // BASE64 here, where the payload hash above is HEX. Same digest, two encodings, and
+          // swapping them produces a signature error that says nothing about encoding.
+          "x-amz-checksum-sha256": digest.toString("base64"),
+        },
         body,
         region: opts.region,
         service: "s3",

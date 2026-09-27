@@ -1,5 +1,6 @@
 import { BACKUP_DATABASES, type BackupDatabase } from "./plan";
 import { buildManifest, verifyAgainstPrevious, type Manifest } from "./manifest";
+import { scrubConnectionStrings } from "./pg-tools";
 
 // TASK-423: the nightly backup, as pure orchestration with every real seam injected.
 //
@@ -68,7 +69,9 @@ export async function runBackup(seams: BackupSeams): Promise<BackupOutcome> {
     archive = await seams.packageArchive(manifest);
     manifest = { ...manifest, archiveBytes: archive.byteLength };
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
+    // TASK-427: scrubbed before it reaches an alert email or a log line. A failed pg_dump
+    // rejects with the whole command, and the command used to carry the connection string.
+    const reason = scrubConnectionStrings(err instanceof Error ? err.message : String(err));
     await seams.alert("NBCC backup FAILED", `The backup could not be produced.\n\n${reason}`);
     return { status: "failed", reason };
   }
@@ -100,7 +103,9 @@ export async function runBackup(seams: BackupSeams): Promise<BackupOutcome> {
   try {
     await seams.putToS3(name, archive, manifest);
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
+    // TASK-427: scrubbed before it reaches an alert email or a log line. A failed pg_dump
+    // rejects with the whole command, and the command used to carry the connection string.
+    const reason = scrubConnectionStrings(err instanceof Error ? err.message : String(err));
     await seams.alert("NBCC backup FAILED", `Could not write the backup to S3.\n\n${reason}`);
     return { status: "failed", reason };
   }
@@ -108,7 +113,9 @@ export async function runBackup(seams: BackupSeams): Promise<BackupOutcome> {
   try {
     await seams.putToDrive(name, archive);
   } catch (err) {
-    const reason = err instanceof Error ? err.message : String(err);
+    // TASK-427: scrubbed before it reaches an alert email or a log line. A failed pg_dump
+    // rejects with the whole command, and the command used to carry the connection string.
+    const reason = scrubConnectionStrings(err instanceof Error ? err.message : String(err));
     // Not a disaster: the locked copy exists. But a permanently broken Drive upload would
     // otherwise go unnoticed forever, and Drive is the copy that survives losing AWS.
     await seams.alert(

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { config } from "../config";
 import { expectedTableCount, tablesIn } from "../backup/plan";
 import { runBackup, type BackupSeams } from "../backup/run";
+import { libpqEnvFromUrl, scrubConnectionStrings } from "../backup/pg-tools";
 import type { Manifest } from "../backup/manifest";
 import { createS3Client } from "../clients/s3";
 import { createCredentialProvider } from "../clients/aws-sigv4";
@@ -90,26 +91,30 @@ async function main(): Promise<void> {
       // restore actually uses; the CSVs are there so the charity can read its own data in Excel
       // without Postgres, a developer, or this codebase.
       async dump(db) {
-        const url = config[db.configKey];
+        // TASK-427: the connection travels by ENVIRONMENT, never on the command line.
+        //
+        // Two bugs in one line, both found only against the real database. sslmode=no-verify is a
+        // node-postgres invention that libpq rejects outright, so every run failed with "invalid
+        // sslmode value". And the failure printed the whole command, which carried the connection
+        // string, so the database password went into CloudWatch. Out of argv it cannot reach an
+        // error message, a log line, or `ps` inside the container.
+        const pgEnv = { ...process.env, ...libpqEnvFromUrl(config[db.configKey]) };
         const dir = join(payload, db.label);
         await mkdir(dir, { recursive: true });
 
         const dumpPath = join(dir, `${db.label}.dump`);
-        await run("pg_dump", ["--format=custom", "--no-owner", "--file", dumpPath, url]);
+        await run("pg_dump", ["--format=custom", "--no-owner", "--file", dumpPath], { env: pgEnv });
 
         const tables: Record<string, number> = {};
         for (const table of tablesIn(APP_ROOT, db.migrationsDir)) {
-          await run("psql", [
-            url,
-            "-c",
-            `\\copy (SELECT * FROM ${table}) TO '${join(dir, `${table}.csv`)}' WITH CSV HEADER`,
-          ]);
-          const { stdout } = await run("psql", [
-            url,
-            "-tA",
-            "-c",
-            `SELECT count(*) FROM ${table}`,
-          ]);
+          await run(
+            "psql",
+            ["-c", `\\copy (SELECT * FROM ${table}) TO '${join(dir, `${table}.csv`)}' WITH CSV HEADER`],
+            { env: pgEnv },
+          );
+          const { stdout } = await run("psql", ["-tA", "-c", `SELECT count(*) FROM ${table}`], {
+            env: pgEnv,
+          });
           tables[table] = Number(stdout.trim());
         }
 
@@ -248,7 +253,9 @@ async function main(): Promise<void> {
   }
 }
 
+// Scrubbed even here. This is the path that leaked the database password into CloudWatch:
+// the rejection from a failed pg_dump carried the whole command, connection string included.
 main().catch((err) => {
-  console.error("BACKUP_FAILED", err);
+  console.error("BACKUP_FAILED", scrubConnectionStrings(err instanceof Error ? err.stack || err.message : String(err)));
   process.exitCode = 1;
 });

@@ -5292,6 +5292,39 @@ sees it missing. To check at any time, look at the topic
 `charity-site-production-backup-alarms` in SNS; it should show **1** confirmed
 subscription, not 0.
 
+### pg_dump cannot use the app's connection string as-is (TASK-427)
+
+`DATABASE_URL` ends `sslmode=no-verify`. **That is not a PostgreSQL option.** It is an extension
+invented by node-postgres meaning "encrypt but do not verify the certificate", chosen so the image
+need not carry the RDS CA bundle. `pg_dump` and `psql` use libpq, which has never heard of it:
+
+```
+pg_dump: error: invalid sslmode value: "no-verify"
+```
+
+The nightly backup therefore failed **every night from the day it shipped**. Nothing caught it:
+every unit test mocks the database, and CI's Postgres does not enforce TLS, so no test ever put
+that string in front of a libpq tool. It could only fail against the real RDS instance, at 2am.
+The CloudWatch alarm is what surfaced it, which is the one part of this that worked as designed.
+
+`src/backup/pg-tools.ts` translates the connection into libpq's vocabulary (`no-verify` →
+`require`; same meaning, different word) and passes it as **environment variables, not command-line
+arguments**. A test asserts the output is always one of libpq's six accepted values, whatever
+arrives.
+
+**The default when a URL carries no sslmode is `prefer`, not `require`.** `require` was the first
+instinct and was wrong in the same shape as the original bug: local development and CI run Postgres
+with no TLS, so it would have fixed production and broken everywhere else. Production never reaches
+the default, because Terraform always writes an explicit sslmode.
+
+### Why the connection goes through the environment
+
+Not tidiness. The original failure printed the whole failing command, the command carried the
+connection string, and **the database password went into CloudWatch logs**. Out of `argv` it cannot
+reach an error message, a log line, or `ps` inside the container. `scrubConnectionStrings` masks
+passwords in anything logged anyway, as a second line of defence, and is tested against the exact
+error text that leaked.
+
 ### Restoring
 
 ```bash

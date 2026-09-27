@@ -59,6 +59,38 @@ describe("putting an object", () => {
     );
   });
 
+  // TASK-428. The first real backup got all the way here and was rejected:
+  //
+  //   InvalidRequest: Content-MD5 OR x-amz-checksum- HTTP header is required for Put Object
+  //   requests with Object Lock parameters
+  //
+  // A bucket with Object Lock will not accept an upload it cannot verify, which is the whole
+  // point of a write-once store: it will not immortalise bytes that may have arrived corrupted.
+  // An ordinary bucket has no such requirement, so this could only fail against the real one.
+  //
+  // Note the encodings differ and mixing them gives an opaque signature error:
+  // x-amz-content-sha256 is HEX (SigV4 needs it), x-amz-checksum-sha256 is BASE64.
+  it("sends the checksum Object Lock requires, base64 not hex", async () => {
+    const { calls, fetchImpl } = capture();
+    const body = Buffer.from("the archive bytes");
+    await client(fetchImpl).put("k.7z", body);
+
+    const headers = calls[0].init.headers as Record<string, string>;
+    const digest = createHash("sha256").update(body).digest();
+
+    expect(headers["x-amz-checksum-sha256"]).toBe(digest.toString("base64"));
+    // And the SigV4 payload hash is still hex, unchanged.
+    expect(headers["x-amz-content-sha256"]).toBe(digest.toString("hex"));
+    expect(headers["x-amz-checksum-sha256"]).not.toBe(digest.toString("hex"));
+  });
+
+  it("signs the checksum header, or S3 rejects the signature", async () => {
+    const { calls, fetchImpl } = capture();
+    await client(fetchImpl).put("k.7z", Buffer.from("x"));
+    const headers = calls[0].init.headers as Record<string, string>;
+    expect(headers.authorization).toContain("x-amz-checksum-sha256");
+  });
+
   it("carries the session token, because ECS task-role credentials are always temporary", async () => {
     const { calls, fetchImpl } = capture();
     await client(fetchImpl).put("k.7z", Buffer.from("x"));

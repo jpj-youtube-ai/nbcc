@@ -5325,6 +5325,26 @@ reach an error message, a log line, or `ps` inside the container. `scrubConnecti
 passwords in anything logged anyway, as a second line of defence, and is tested against the exact
 error text that leaked.
 
+### Object Lock requires a checksum on every upload (TASK-428)
+
+The first backup that got past the sslmode bug dumped all three databases, built the archive, and
+was then rejected by S3:
+
+```
+InvalidRequest: Content-MD5 OR x-amz-checksum- HTTP header is required for
+Put Object requests with Object Lock parameters
+```
+
+A write-once bucket will not accept an upload it cannot verify. That is the point of it: having
+accepted the bytes it cannot replace them for 35 days, so it declines to immortalise something that
+may have arrived corrupted. An ordinary bucket has no such requirement, so nothing short of the
+real bucket could have shown this.
+
+`src/clients/s3.ts` sends `x-amz-checksum-sha256`. **Note the two encodings:**
+`x-amz-content-sha256` (SigV4's payload hash) is **hex**, while `x-amz-checksum-sha256` is
+**base64**. Same digest, and swapping them produces a signature error that says nothing about
+encoding.
+
 ### Restoring
 
 ```bash

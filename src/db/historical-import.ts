@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import type { ImportEntry } from "../reconcile/import-plan";
 import { insertAudit } from "./donations";
+import { ensureFulfilmentRecord } from "./fulfilment";
 import { deriveClaimStatus } from "./donations-model";
 
 // TASK-430: writing supporters the charity never knew it had.
@@ -123,21 +125,18 @@ export async function importHistoricalSupporter(entry: ImportEntry): Promise<Imp
 
     let fulfilmentId: number | null = null;
     if (entry.fulfilment) {
-      const existing = await client.query<{ id: number }>(
-        `SELECT id FROM business_supporter_fulfilment WHERE donor_id = $1`,
-        [donorId],
-      );
-      if (existing.rowCount === 0) {
-        const res = await client.query<{ id: number }>(
-          `INSERT INTO business_supporter_fulfilment (donor_id, band, token)
-           VALUES ($1, $2, encode(gen_random_bytes(24), 'hex'))
-           RETURNING id`,
-          [donorId, entry.fulfilment.band],
-        );
-        fulfilmentId = res.rows[0].id;
-      } else {
-        fulfilmentId = existing.rows[0].id;
-      }
+      // Reuse the writer the live webhook uses, rather than hand-rolling the insert. The first
+      // version generated the token in SQL with gen_random_bytes(), which needs the pgcrypto
+      // extension — not installed here, so it failed against production. The application has always
+      // minted this token in JS with randomUUID(); doing the same means these records are
+      // indistinguishable from the ones the webhook writes, and ON CONFLICT (donor_id) keeps a
+      // second run from replacing a token somebody may already have been sent a link for.
+      const { id } = await ensureFulfilmentRecord(client, {
+        donorId,
+        band: entry.fulfilment.band,
+        token: randomUUID(),
+      });
+      fulfilmentId = id;
     }
 
     // An append-only record that this was a hand-run import rather than money arriving normally.

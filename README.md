@@ -5366,6 +5366,15 @@ number in the accounts — these are dated from the Stripe charge, so the May pa
   to be recorded under. Each is skipped *with a reason*, because a silent omission in a financial
   import is the failure mode that matters.
 
+### The supporter record reuses the live writer (TASK-435)
+
+A company's supporter record is written with the same `ensureFulfilmentRecord` the Stripe webhook
+uses, and its secure-thank-you-link token is minted with `randomUUID()` in JS, exactly as the
+webhook does. The first version generated the token in SQL with `gen_random_bytes()`, which needs
+the `pgcrypto` extension — not installed — so it failed against production. Reusing the live writer
+also means `ON CONFLICT (donor_id) DO NOTHING` protects a token somebody may already have been sent
+a link for, and an imported supporter record is indistinguishable from one the webhook created.
+
 ### Running it twice is safe
 
 Idempotent on Stripe's charge id, which is the natural key for "this exact payment". A second run

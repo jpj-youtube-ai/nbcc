@@ -355,8 +355,11 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     // wall reads the form answer live and the badge/certificate links ride the confirmation email,
     // so presenting those as work waiting to be done had somebody "sending" what was already sent.
     expect(openText).toContain("Listed on the supporters page");
-    expect(openText).toContain("Badge sent");
-    expect(openText).toContain("Certificate link sent");
+    // TASK-441: the badge and certificate go the next weekday morning as their own email, so this
+    // reports when it will happen rather than claiming it already has. Acme wants both, so they
+    // travel together.
+    expect(openText).toContain("Badge and certificate sent");
+    expect(openText).toContain("Goes out automatically on the next weekday morning");
     // The postal address for a certificate they asked us to POST. The old page never showed this
     // anywhere, which made the job it asks you to tick off impossible to actually do.
     expect(openText).toContain("1 Office Park");

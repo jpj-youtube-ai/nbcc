@@ -4256,6 +4256,36 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `.fx-hint` now has padding that clears the radius, verified by measurement: text starts 21px in
   against a 16px curve.
 
+  **TASK-441** moved the badge and certificate out of the confirmation email and into their own,
+  sent the **next weekday morning**.
+
+  They used to arrive seconds after a business submitted the form, which reads as a machine because
+  it was one. A business giving £100 a month deserves their recognition to look like somebody put it
+  together. The confirmation still goes **instantly**, because it is a receipt: somebody who fills in
+  a form and hears nothing reasonably assumes it broke. What is delayed is the delivery, not the
+  acknowledgement.
+
+  `shouldSendPerksNow` (pure, `src/business/perks-delivery.ts`) requires all of: they asked for a
+  badge or certificate, they have filled in the form, it has not already gone (`perks_sent_at`), it
+  is **not a weekend**, and it is a **strictly later calendar day** than the capture. So a Friday
+  afternoon signup becomes Monday, a Saturday night one becomes Monday, and a Tuesday morning one is
+  never answered the same morning. "A few hours later" would have produced a 3am Sunday email, which
+  is unmistakably automatic.
+
+  It rides the existing 8am pass and checks the weekday itself rather than adding a second
+  EventBridge rule nobody would notice had stopped — the same trick as the Monday note (TASK-415).
+  `perks_sent_at` is stamped **only after a send succeeds**, so a relay failure is retried tomorrow
+  rather than losing that supporter for good.
+
+  **On sounding human:** the email speaks in the first person, refers to what they chose, and never
+  announces itself as automatic. What it does not do is sign a named person to something nobody read
+  — the line `auto-thank-you.ts` draws, and the right one. Warmth is a matter of how you write; a
+  fake signature is just untrue. It also offers a reply if the certificate is in the wrong name.
+
+  The admin panel now reports when the email **actually** went (`perks_sent_at`), showing an open
+  circle and "Goes out automatically on the next weekday morning" while it is still pending — a tick
+  would claim it was done, which is the mistake that section exists to fix.
+
   **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
   per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).
   The **badge is the same for every supporter**, so it ships as one committed static asset,

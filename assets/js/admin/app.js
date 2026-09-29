@@ -825,16 +825,19 @@
         detail: "Live since " + on + ", the moment they submitted the form.",
       });
     }
-    if (r.want_badge) {
+    // TASK-441: the badge and certificate now go the next weekday morning as their own email, so
+    // this reports when it ACTUALLY went rather than inferring it from the capture date. Older
+    // records have no perks_sent_at, because they were sent the old way with their confirmation.
+    if (r.want_badge || r.want_certificate) {
+      var what = r.want_badge && r.want_certificate
+        ? "Badge and certificate sent"
+        : r.want_badge ? "Badge sent" : "Certificate sent";
       out.push({
-        label: "Badge sent",
-        detail: "Included in their confirmation email on " + on + ".",
-      });
-    }
-    if (r.want_certificate) {
-      out.push({
-        label: "Certificate link sent",
-        detail: "Included in their confirmation email on " + on + ".",
+        label: what,
+        detail: r.perks_sent_at
+          ? "Emailed to them on " + H.fmtDate(r.perks_sent_at) + "."
+          : "Goes out automatically on the next weekday morning.",
+        pending: !r.perks_sent_at,
       });
     }
     return out;
@@ -926,7 +929,8 @@
       items
         .map(function (a) {
           return (
-            '<li><span class="fx-auto-label">' + H.escapeHtml(a.label) + "</span>" +
+            '<li' + (a.pending ? ' class="is-pending"' : "") + '>' +
+            '<span class="fx-auto-label">' + H.escapeHtml(a.label) + "</span>" +
             '<span class="fx-auto-detail">' + H.escapeHtml(a.detail) + "</span></li>"
           );
         })

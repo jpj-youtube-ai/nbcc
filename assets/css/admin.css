@@ -1686,3 +1686,28 @@ tr.nl-click:hover { background: var(--tint); }
   .ty-sent-table td::before{content:attr(data-label);font-size:.78rem;color:var(--slate-soft)}
   .ty-sent-table td:empty{display:none}
 }
+
+/* TASK-447: the monthly givers list. Eight columns, so it takes its own shares rather than eight
+   equal ones, and stacks below 1000px like the sent-letter history - eight columns on a phone is a
+   list nobody reads. Summing to 99 for the same rounding reason as .ty-sent-table. */
+.monthly-table th:nth-child(1),.monthly-table td:nth-child(1){width:22%}  /* Name + email */
+.monthly-table th:nth-child(2),.monthly-table td:nth-child(2){width:10%}  /* Monthly */
+.monthly-table th:nth-child(3),.monthly-table td:nth-child(3){width:11%}  /* Since */
+.monthly-table th:nth-child(4),.monthly-table td:nth-child(4){width:13%}  /* Given so far */
+.monthly-table th:nth-child(5),.monthly-table td:nth-child(5){width:9%}   /* Gift Aid */
+.monthly-table th:nth-child(6),.monthly-table td:nth-child(6){width:12%}  /* Thanked */
+.monthly-table th:nth-child(7),.monthly-table td:nth-child(7){width:15%}  /* State */
+.monthly-table th:nth-child(8),.monthly-table td:nth-child(8){width:7%}   /* View */
+/* Amounts and dates are single tokens and never wrap. */
+.monthly-table td:nth-child(2),.monthly-table td:nth-child(3),.monthly-table td:nth-child(4){white-space:nowrap}
+
+@media (max-width:1000px){
+  .monthly-table,.monthly-table tbody,.monthly-table tr,.monthly-table td{display:block;width:auto}
+  .monthly-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .monthly-table tr{border-bottom:1px solid var(--line);padding:10px 0}
+  .monthly-table tr:last-child{border-bottom:0}
+  .monthly-table td{border-bottom:0;padding:3px 14px;display:grid;
+    grid-template-columns:minmax(0,7.5rem) minmax(0,1fr);gap:10px;align-items:baseline}
+  .monthly-table td::before{content:attr(data-label);font-size:.78rem;color:var(--slate-soft)}
+  .monthly-table td:empty{display:none}
+}

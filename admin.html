@@ -84,6 +84,7 @@
               <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
               <li><button class="admin-nav-link" type="button" data-view="fulfilments" data-edit-gate="business-supporters">Business supporters</button></li>
+                  <li><button class="admin-nav-link" type="button" data-view="monthly">Monthly givers</button></li>
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
@@ -140,6 +141,22 @@
                 </form>
               </div>
               <div class="admin-table-wrap" id="searchResults" aria-live="polite"></div>
+            </section>
+
+            <!-- The individuals giving every month (TASK-447). -->
+            <section class="admin-view" id="view-monthly" aria-labelledby="monthly-heading" hidden>
+              <h2 id="monthly-heading">Monthly givers</h2>
+              <p class="fx-hint" style="padding-left:0">The people giving every month. Businesses have
+                their own tab; this is everybody else.</p>
+              <label class="admin-inline-filter" for="monthlyStateFilter">Show
+                <select id="monthlyStateFilter">
+                  <option value="giving">Still giving</option>
+                  <option value="attention">Needs attention</option>
+                  <option value="">Everyone</option>
+                </select>
+              </label>
+              <p class="admin-action-status" id="monthlySummary" role="status" aria-live="polite"></p>
+              <div class="admin-table-wrap" id="monthlyTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
             </section>
 
             <!-- Browse all donations (paginated). -->

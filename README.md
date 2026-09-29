@@ -5337,6 +5337,36 @@ Below 820px nine columns cannot be read at any width, so the history becomes **s
 each row a card, each value labelled by its own header via `data-label`. Reading down beats
 scrolling across, and scrolling across is the thing we are not doing.
 
+## Monthly givers (TASK-447)
+
+Businesses have had a screen of their own since TASK-208. The people quietly paying £10 a month had
+nothing, and were findable only by paging the whole donations list — which is how three of them went
+four months without a thank-you and nobody noticed (TASK-430).
+
+`GET /api/admin/monthly-supporters`, gated on `donations:view` — the donations list already shows
+every one of these names and addresses, so a separate permission would gate data the same people can
+already read one screen across.
+
+Each row: what they give **now**, when they started, what they have given in total, whether it is
+Gift Aided, whether they have been thanked, and whether their payments are healthy. The monthly
+figure is their **latest** paid gift rather than an average: somebody who moved from £5 to £20 gives
+£20, and £12.50 would be true of nothing.
+
+**A cancellation outranks the status column.** Stripe keeps a cancelled subscription `active` until
+its paid period ends, so reading the status alone would call somebody who has left a current
+supporter — on the one screen that exists to say how much income is dependable. A supporter with no
+dunning row at all (older, or hand-imported) is reported as giving rather than as unknown, because
+reporting it as a fault sends somebody looking for a problem that is not there.
+
+Anonymous donors are **included**: the charity's own record of its regular income is not a public
+listing, and leaving them out would understate it. That is the difference between this screen and
+the supporters wall, which answers a different question.
+
+The summary line totals what is coming in monthly from the people **still giving**, and is computed
+from those rows rather than the filtered view — a total that changed when you changed a filter would
+be a number nobody could trust. It also counts how many are giving without Gift Aid, because on a
+regular gift that is 25% a month, for ever.
+
 ## Monthly or one off, on the donations list (TASK-446)
 
 The list could already be narrowed by payment status, which answers *what failed*. It could not

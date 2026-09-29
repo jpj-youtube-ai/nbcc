@@ -4226,6 +4226,36 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   value beside the two answers it is derived *from* reads as a third, separate consent, and was read
   that way.
 
+  **TASK-440** stopped the page claiming work that had already happened. Three of the five
+  "fulfilment jobs" were never jobs at all:
+
+  - **Listed on the supporters page** — the public wall reads `list_on_supporters` + `captured_at`
+    LIVE (`resolvePublicSupporter`). A business appears the moment they submit the form. Nobody adds
+    them, and nobody ever did.
+  - **Badge** and **certificate link** — both are carried by the confirmation email the capture
+    sends (`buildCaptureConfirmationEmail`, TASK-221), gated on the same perks as the on-page
+    version. They go out minutes after the business replies.
+
+  So the page was offering a **Mark done** button for three things a machine had already finished,
+  which is how somebody ends up "sending" a badge that was sent a fortnight ago. They are now stated
+  under **Already done for you**, each with the date it happened, and there is no button — a button
+  there invites you to redo finished work.
+
+  What is left is what a machine genuinely cannot do: **write a social post**, and **put a printed
+  certificate in an envelope** (only when they chose post over download). Acme's row went from five
+  jobs to two.
+
+  The thank-you letter panel now says **"Goes out automatically"** rather than "Not sent yet". It is
+  sent by the 8am pass once they have filled in the form, or a fortnight after the invite if they
+  never do. "Not sent yet" read as something somebody had forgotten, which is how you get two
+  letters to the same person — and only one is ever sent, so the hand-written one would win.
+
+  Also: `#fulfilmentsTable` IS `.admin-table-wrap`, which pairs `border-radius: 16px` with
+  `overflow-x: auto` — a clipping box. A bare paragraph sitting flush at the top had its first line
+  sliced off by the curve (table cells never showed it, because they carry their own padding).
+  `.fx-hint` now has padding that clears the radius, verified by measurement: text starts 21px in
+  against a 16px curve.
+
   **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
   per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).
   The **badge is the same for every supporter**, so it ships as one committed static asset,

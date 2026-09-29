@@ -351,6 +351,12 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
     const openText = el("fulfilmentsTable").textContent || "";
     expect(openText).toContain("Form submitted");
+    // TASK-440: what the system already did, stated rather than offered as a job. The supporters
+    // wall reads the form answer live and the badge/certificate links ride the confirmation email,
+    // so presenting those as work waiting to be done had somebody "sending" what was already sent.
+    expect(openText).toContain("Listed on the supporters page");
+    expect(openText).toContain("Badge sent");
+    expect(openText).toContain("Certificate link sent");
     // The postal address for a certificate they asked us to POST. The old page never showed this
     // anywhere, which made the job it asks you to tick off impossible to actually do.
     expect(openText).toContain("1 Office Park");
@@ -359,9 +365,15 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(openText).toContain("kenny@nbcc.test");
 
     const markBtn = document.querySelector(
-      '#fulfilmentsTable [data-fulfil-id="1"][data-fulfil-mark="certificate_sent"]',
+      '#fulfilmentsTable [data-fulfil-id="1"][data-fulfil-mark="certificate_posted"]',
     ) as HTMLButtonElement;
     expect(markBtn).not.toBeNull();
+
+    // The automatic three are stated, never clickable: a button there would invite somebody to
+    // redo work that has already happened.
+    for (const gone of ["added_to_supporters", "badge_sent", "certificate_sent"]) {
+      expect(document.querySelector(`#fulfilmentsTable [data-fulfil-mark="${gone}"]`)).toBeNull();
+    }
 
     const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
     const markCalls = () =>
@@ -382,12 +394,12 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(markCall).toBeTruthy();
     const markInit = (markCall as unknown[])[1] as { method?: string; body?: string };
     expect(markInit.method).toBe("POST");
-    expect(JSON.parse(markInit.body || "{}")).toEqual({ flag: "certificate_sent" });
+    expect(JSON.parse(markInit.body || "{}")).toEqual({ flag: "certificate_posted" });
 
     // The row stays open across the refresh, so you can carry on with the next job rather than
     // having to find the supporter again after every single tick.
     expect(document.querySelector('[data-fulfil-toggle="1"]')?.getAttribute("aria-expanded")).toBe("true");
-    expect(el("fulfilmentsTable").textContent).toContain("Certificate sent");
+    expect(el("fulfilmentsTable").textContent).toContain("Certificate posted");
     confirmSpy.mockRestore();
   });
 

@@ -44,6 +44,16 @@ describe("the shared table cells", () => {
   });
 });
 
+describe("cells line up with each other", () => {
+  // A table cell defaults to vertical-align:middle. That was barely visible while nothing wrapped,
+  // and became obvious the moment everything did: a date floating halfway down beside a two line
+  // name, reading as though the columns had come apart. The newsletter and email-audit panels had
+  // already set this locally, which is the same tell the nowrap default gave.
+  it("start at the top, so a one line value sits level with a wrapped one", () => {
+    expect(tableCellRule()).toContain("vertical-align:top");
+  });
+});
+
 describe("the shared table itself", () => {
   // Wrapping stops a long VALUE widening a table. It does nothing about a table with too many
   // COLUMNS: ten columns of padding and minimum content measured 1243px inside a 1058px card.

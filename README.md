@@ -5337,6 +5337,24 @@ Below 820px nine columns cannot be read at any width, so the history becomes **s
 each row a card, each value labelled by its own header via `data-label`. Reading down beats
 scrolling across, and scrolling across is the thing we are not doing.
 
+## Table cells line up (TASK-448)
+
+A table cell defaults to `vertical-align: middle`. That was barely visible while nothing wrapped,
+and became obvious the moment TASK-442 made everything wrap: a date floating halfway down beside a
+two line name, reading as though the columns had come apart. Making the tables wrap is what exposed
+it, so this is the second half of that change rather than a separate fault.
+
+`.admin-table` cells now align to the **top**, so a one line value sits level with a wrapped one.
+The newsletter and email-audit panels had already set it locally — the same tell the `nowrap`
+default gave, and the same lesson: a rule patched in three places separately is a wrong default.
+
+`.fx-table` still centres, deliberately and now with a comment saying why: its rows hold one short
+value per cell, and a band pill pinned to the top beside a two line name reads worse than a centred
+one. The long text on that screen lives in the detail panel below.
+
+Verified by measuring where the first line of text starts in every cell of a row: all at 14px from
+the row top, against a name that wraps to two lines and a gift description that does not.
+
 ## Monthly givers (TASK-447)
 
 Businesses have had a screen of their own since TASK-208. The people quietly paying £10 a month had

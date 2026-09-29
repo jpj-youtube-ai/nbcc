@@ -4213,6 +4213,19 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   the tab's own `data-edit-gate`. They were gated on `donations:edit`, which offered an editor
   controls the server would have refused.
 
+  **TASK-437** fixed two things TASK-436 got wrong. `.admin-table` sets `white-space: nowrap` on
+  **every** cell, and the detail panel is rendered inside a cell — so every sentence in it inherited
+  "never wrap": text ran under the next column, the table grew past its container, and
+  `.admin-table-wrap`'s `overflow-x` turned that into **a scrollbar inside a box**. `.fx-table` now
+  sets `white-space: normal` and `table-layout: fixed` with explicit column widths, so the table
+  cannot outgrow its container however long the content is. Content wraps and the page grows; it
+  never scrolls sideways inside a panel.
+
+  It also stopped showing **"Happy to be featured"**. That is not a question anybody is asked —
+  `resolvePreferences` sets `consentFeatured = listOnSupporters || wantSocial`. Displaying a derived
+  value beside the two answers it is derived *from* reads as a third, separate consent, and was read
+  that way.
+
   **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
   per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).
   The **badge is the same for every supporter**, so it ships as one committed static asset,

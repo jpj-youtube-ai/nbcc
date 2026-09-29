@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { buildCatchupPlan, catchupMessage, type CatchupDonor } from "../../src/outreach/catchup-plan";
 
+// The preference link is injected, so the planner signs nothing and the tests need no secret.
+const linkFor = (donorId: number) => `https://nbcc.scot/preferences/tok-${donorId}`;
+const planFor = (donors: CatchupDonor[]) => buildCatchupPlan(donors, linkFor);
+
 // TASK-438. Fiona McIlloney, Mrs I J McFarlane and Jodie McFarlane have each given £10 a month
 // since May. Until TASK-430 imported them there was no record of any of it, so in four months they
 // have had no thank-you, no receipt and no Gift Aid request.
@@ -36,13 +40,13 @@ describe("what the letter says they gave", () => {
   // signs up when one payment has been taken. This is a catch-up covering five months, so the same
   // choice would thank Fiona for a fifth of what she has actually given.
   it("thanks them for the total, not one month of it", () => {
-    const plan = buildCatchupPlan([fiona()]);
+    const plan = planFor([fiona()]);
     expect(plan.entries[0].letter.giftAmountPence).toBe(5000);
     expect(plan.totalPence).toBe(5000);
   });
 
   it("still knows the monthly figure, for the note", () => {
-    const plan = buildCatchupPlan([fiona()]);
+    const plan = planFor([fiona()]);
     expect(plan.entries[0].monthlyPence).toBe(1000);
     expect(plan.entries[0].months).toBe(5);
   });
@@ -50,12 +54,17 @@ describe("what the letter says they gave", () => {
   // Nobody has declared Gift Aid. A letter saying HMRC adds 25% would tell somebody something
   // untrue about their own tax, which is the one thing in a thank-you that must not be wrong.
   it("never claims Gift Aid was added", () => {
-    expect(buildCatchupPlan([fiona()]).entries[0].letter.giftAided).toBe(false);
+    expect(planFor([fiona()]).entries[0].letter.giftAided).toBe(false);
   });
 });
 
 describe("the note in the letter", () => {
-  const msg = catchupMessage({ monthlyPence: 1000, totalPence: 5000, firstMonth: "May" });
+  const msg = catchupMessage({
+    monthlyPence: 1000,
+    totalPence: 5000,
+    firstMonth: "May",
+    preferencesLink: "https://nbcc.scot/preferences/tok-16",
+  });
 
   it("says what they have given and since when", () => {
     expect(msg).toContain("£10 a month since May");
@@ -74,14 +83,34 @@ describe("the note in the letter", () => {
   // asks, rather than the charity assuming either way.
   it("asks whether they want to hear from us, rather than assuming", () => {
     expect(msg).toMatch(/never asked/i);
-    expect(msg).toContain("nbcc.scot");
-    expect(msg).toMatch(/rather not/i);
+    expect(msg).toMatch(/asking rather than assuming/i);
+  });
+
+  // "Sign up at nbcc.scot" asks somebody to go and find a form. This is their own page, already
+  // addressed to them, with the boxes on it - the difference between a reply and no reply.
+  it("gives them their own one-click link rather than a website to go and find", () => {
+    expect(msg).toContain("https://nbcc.scot/preferences/tok-16");
+    expect(msg).toMatch(/one click/i);
+    expect(msg).toMatch(/nothing to fill in/i);
+  });
+
+  // Doing nothing has to be a real option, and has to be the easy one.
+  it("makes ignoring it a stated choice, not a failure to act", () => {
+    expect(msg).toMatch(/ignore it and nothing will change/i);
+  });
+
+  // The Gift Aid link arrives in its own email (the formal declaration one), so the letter says so
+  // rather than leaving a second message looking like a duplicate.
+  it("tells them the Gift Aid email is coming, and what it is worth", () => {
+    expect(msg).toMatch(/gift aid adds 25%/i);
+    expect(msg).toMatch(/separate email/i);
+    expect(msg).toMatch(/no cost to you/i);
   });
 });
 
 describe("the Gift Aid invitation", () => {
   it("is addressed to one of their donations", () => {
-    const ga = buildCatchupPlan([fiona()]).entries[0].giftAid;
+    const ga = planFor([fiona()]).entries[0].giftAid;
     expect(ga).not.toBeNull();
     expect(ga?.donationId).toBe(5); // the most recent
     expect(ga?.amountPence).toBe(1000);
@@ -96,14 +125,14 @@ describe("the Gift Aid invitation", () => {
         donation(2, "2026-06-19T10:00:00Z", 1000, "sent"),
       ],
     });
-    expect(buildCatchupPlan([partway]).entries[0].giftAid?.donationId).toBe(1);
+    expect(planFor([partway]).entries[0].giftAid?.donationId).toBe(1);
   });
 
   it("offers no invitation when every donation is already spoken for", () => {
     const allSent = fiona({
       donations: [donation(1, "2026-05-21T10:00:00Z", 1000, "completed")],
     });
-    const entry = buildCatchupPlan([allSent]).entries[0];
+    const entry = planFor([allSent]).entries[0];
     expect(entry.giftAid).toBeNull();
     // They are still thanked. The letter does not depend on the declaration.
     expect(entry.letter.giftAmountPence).toBe(1000);
@@ -112,13 +141,13 @@ describe("the Gift Aid invitation", () => {
 
 describe("refusing to send", () => {
   it("will not write to somebody with no email address", () => {
-    const plan = buildCatchupPlan([fiona({ email: null })]);
+    const plan = planFor([fiona({ email: null })]);
     expect(plan.entries).toHaveLength(0);
     expect(plan.skipped[0].reason).toMatch(/email/i);
   });
 
   it("will not thank somebody for nothing", () => {
-    const plan = buildCatchupPlan([fiona({ donations: [] })]);
+    const plan = planFor([fiona({ donations: [] })]);
     expect(plan.entries).toHaveLength(0);
     expect(plan.skipped[0].reason).toMatch(/no paid donations/i);
   });
@@ -126,7 +155,7 @@ describe("refusing to send", () => {
   // One letter per donor is final, everywhere else in this system. A second would undo the meaning
   // of the first, and a re-run of this script must not produce one.
   it("will not thank somebody twice", () => {
-    const plan = buildCatchupPlan([fiona({ alreadyThanked: true })]);
+    const plan = planFor([fiona({ alreadyThanked: true })]);
     expect(plan.entries).toHaveLength(0);
     expect(plan.skipped[0].reason).toMatch(/already thanked/i);
   });
@@ -134,7 +163,7 @@ describe("refusing to send", () => {
 
 describe("all three of them", () => {
   it("totals what is about to go out, so the number can be checked", () => {
-    const plan = buildCatchupPlan([
+    const plan = planFor([
       fiona(),
       fiona({ donorId: 17, fullName: "Mrs I J McFarlane", email: "bellemcf@hotmail.co.uk" }),
       fiona({ donorId: 18, fullName: "Jodie McFarlane", email: "jodie.john@yahoo.co.uk" }),

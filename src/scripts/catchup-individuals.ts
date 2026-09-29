@@ -7,6 +7,7 @@ import { sendThankYou } from "../clients/email";
 import { buildThankYouEmailHtml, buildThankYouEmailText, thankYouSubject } from "../thank-you/letter";
 import { signThankYouLetterToken } from "../thank-you/letter-token";
 import { sendDeclarationConfirmation } from "../db/stripe-webhook";
+import { signUnsubscribeToken } from "../donors/unsubscribe-token";
 
 // TASK-438: thank the three individuals TASK-430 imported, and ask them about Gift Aid.
 //
@@ -38,7 +39,15 @@ async function main(): Promise<void> {
   const commit = process.argv.includes("--commit");
 
   const donors = await listCatchupDonors(RECIPIENTS);
-  const plan = buildCatchupPlan(donors);
+  // Their own preference page, addressed to them and already signed: one click, tick boxes,
+  // nothing to type and no form to go and find. "Sign up at nbcc.scot" is a request to go and
+  // do some work, which is a good way to get no reply from somebody you have ignored for four
+  // months.
+  const plan = buildCatchupPlan(
+    donors,
+    (donorId) =>
+      `${config.PORTAL_BASE_URL}/preferences/${signUnsubscribeToken(donorId, config.ADMIN_SESSION_SECRET)}`,
+  );
 
   console.log("");
   console.log(commit ? "=== SENDING ===" : "=== DRY RUN - nothing will be sent ===");

@@ -79,11 +79,14 @@ export function catchupMessage(input: {
   monthlyPence: number;
   totalPence: number;
   firstMonth: string;
+  /** Their own preference page - one click, tick boxes, no typing and nothing to find. */
+  preferencesLink: string;
 }): string {
   return [
     `Your ${money(input.monthlyPence)} a month since ${input.firstMonth} now comes to ${money(input.totalPence)}, and it has been arriving quietly ever since.`,
     `We are sorry it has taken us until now to say so. You have been supporting us all year and hearing nothing back, and that is our fault rather than yours.`,
-    `We have also never asked whether you would like to hear how the campaign is going - so we are asking now rather than assuming. If you would, you can sign up at nbcc.scot. If you would rather not, you will not hear from us again.`,
+    `We have also never asked whether you would like to hear from us, so we are asking rather than assuming. Tick whatever you would like here: ${input.preferencesLink} - it takes one click and there is nothing to fill in. If you would rather hear nothing at all, ignore it and nothing will change.`,
+    `One more thing: if you pay UK tax, Gift Aid adds 25% to everything you have given us at no cost to you. We have sent you a separate email with a link to add it - it is a couple of boxes and a name.`,
   ].join("\n\n");
 }
 
@@ -100,7 +103,11 @@ export function catchupMessage(input: {
  * one payment has been taken. This is a catch-up covering months, so "thank you for your donation
  * of £10" would thank them for a twentieth of what they have actually given.
  */
-export function buildCatchupPlan(donors: CatchupDonor[]): CatchupPlan {
+export function buildCatchupPlan(
+  donors: CatchupDonor[],
+  // Injected rather than built here, so this file keeps no secret and signs nothing.
+  preferencesLinkFor: (donorId: number) => string,
+): CatchupPlan {
   const entries: CatchupEntry[] = [];
   const skipped: { donorId: number; reason: string }[] = [];
 
@@ -145,6 +152,7 @@ export function buildCatchupPlan(donors: CatchupDonor[]): CatchupPlan {
           monthlyPence,
           totalPence,
           firstMonth: MONTHS[first.paidAt.getUTCMonth()],
+          preferencesLink: preferencesLinkFor(donor.donorId),
         }),
       },
       giftAid: target ? { donationId: target.id, amountPence: target.amountPence } : null,

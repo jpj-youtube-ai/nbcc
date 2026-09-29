@@ -128,9 +128,14 @@
    isabella.mcfarlane-wetherby@averylongdomainname.example.co.uk still sized the column as though it
    were unbreakable, so the table kept demanding more room than the card had: measured 854px inside
    an 843px box. Caught by measuring rather than by reading the rule, which is the only way this
-   particular difference ever shows up. */
+   particular difference ever shows up.
+
+   vertical-align:top (TASK-448) belongs with them. A table cell defaults to middle, which was
+   barely visible while nothing wrapped and became obvious the moment everything did: a date
+   floating halfway down beside a two line name, reading as though the columns had come apart.
+   The newsletter and email-audit panels had already set it locally, the same tell as nowrap. */
 .admin-table th,.admin-table td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);
-  white-space:normal;overflow-wrap:anywhere}
+  white-space:normal;overflow-wrap:anywhere;vertical-align:top}
 .admin-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-soft);font-weight:600}
 .admin-table tbody tr:last-child td{border-bottom:0}
 .admin-table tbody tr:hover{background:var(--tint)}
@@ -1567,6 +1572,9 @@ tr.nl-click:hover { background: var(--tint); }
 .fx-table th,.fx-table td{white-space:normal;overflow-wrap:anywhere}
 .fx-table th:nth-child(2),.fx-table td:nth-child(2){width:120px}
 .fx-table th:nth-child(3),.fx-table td:nth-child(3){width:34%}
+/* Deliberately centred, against the TASK-448 default: these rows hold one short value per cell
+   (a name, a band pill, a state) and a centred pill beside a two line name reads better than a
+   pill pinned to the top. The detail panel below carries the long text. */
 .fx-table td{vertical-align:middle}
 .fx-summary{cursor:pointer;transition:background .15s}
 .fx-summary:hover{background:var(--tint)}

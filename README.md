@@ -5294,6 +5294,27 @@ The nav link is the authority, because it is already gated by permission. Both s
 wrapped, because storage throws in private mode and losing your place is an annoyance while an
 exception there would break navigation outright.
 
+## The sent-letter history, one fact per column (TASK-444)
+
+The recipient's name and email address were crammed into a single cell, and **addressed to** — the
+name at the top of the letter, which is often a person where the thank-you name is their company —
+was not shown at all despite being stored since the feature shipped. Now: *Sent*, *Thank you to*,
+*Addressed to*, *Email*, *Copied to*, *Gift*, *Signed by*, *Sent by*.
+
+**`cc_email` is stored now.** It used to be accepted by the send route, used to address the email,
+and thrown away — so "was anybody copied on that?" had no answer for a letter about a donor's own
+money. Additive nullable column; existing rows stay NULL, which reads correctly as *we do not know*
+rather than *nobody was copied*, because for letters sent before the column existed we genuinely do
+not. Nothing is backfilled for that reason.
+
+Nine columns need help from `table-layout: fixed`, so the table sets its own proportions rather than
+taking nine equal shares. They sum to **99, not 100**: at exactly 100 the rounding of nine
+percentage widths landed a single pixel over the container and produced a scrollbar for it.
+
+Below 820px nine columns cannot be read at any width, so the history becomes **stacked records** —
+each row a card, each value labelled by its own header via `data-label`. Reading down beats
+scrolling across, and scrolling across is the thing we are not doing.
+
 ## Nothing in the admin scrolls sideways (TASK-442)
 
 Reported twice, and it was one line causing all of it: `.admin-table th, .admin-table td` carried
@@ -5307,9 +5328,13 @@ default was wrong rather than the panels.
 
 Two changes, because wrapping alone was not enough:
 
-- **`white-space: normal` + `overflow-wrap: break-word`** stops a long VALUE widening a table.
-  `break-word` rather than `anywhere`, so a date or a reference only breaks when it genuinely cannot
-  fit instead of being snapped in half in a column that had room.
+- **`white-space: normal` + `overflow-wrap: anywhere`** stops a long VALUE widening a table.
+  `anywhere` rather than `break-word`, and the difference is the whole fix (**corrected in
+  TASK-444**): both break a long word that will not fit a line, but only `anywhere` counts that
+  break when the browser works out the table's MINIMUM width. With `break-word` an address like
+  `isabella.mcfarlane-wetherby@averylongdomainname.example.co.uk` still sized its column as though
+  unbreakable, and the table kept demanding more room than its card had. TASK-442 shipped with
+  `break-word` and was therefore an incomplete fix; only measuring it showed that up.
 - **`table-layout: fixed`** stops a table with too many COLUMNS doing it. Ten columns of padding and
   minimum content measured **1243px inside a 1058px card**; fixed layout makes them share the width
   available rather than demand what they would like. The cost is equal columns unless a table says

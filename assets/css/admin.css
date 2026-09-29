@@ -1530,7 +1530,11 @@ tr.nl-click:hover { background: var(--tint); }
    which made the common question — who still needs something from us? — the hardest one to answer,
    and hid the things you actually need to DO the job (the postal address, the website) entirely.
    Now the list answers "who needs me", and opening one supporter answers "what and how". */
-.fx-hint{margin:0 0 10px;font-size:.85rem;color:var(--slate-soft)}
+/* #fulfilmentsTable IS .admin-table-wrap, which pairs border-radius:16px with overflow-x:auto.
+   That makes it a clipping box, so a bare paragraph sitting flush at the top had its first line
+   sliced off by the curve. Table cells never showed it because they carry their own padding.
+   Padding that clears the radius, rather than removing the rounding the rest of the admin uses. */
+.fx-hint{margin:0;padding:20px 18px 12px;font-size:.85rem;color:var(--slate-soft)}
 /* .admin-table sets white-space:nowrap on EVERY cell (line ~111). The detail panel is rendered
    INSIDE a cell, so every sentence in it inherited "never wrap": text ran under the next column,
    the table grew wider than its container, and .admin-table-wrap's overflow-x turned that into a
@@ -1608,3 +1612,13 @@ tr.nl-click:hover { background: var(--tint); }
   .fx-row{grid-template-columns:minmax(0,1fr);gap:1px}
   .fx-task{flex-direction:column;align-items:flex-start;gap:8px}
 }
+
+/* What the system already did. Stated, never actionable: a button here would invite somebody to
+   redo work that is already finished. */
+.fx-auto{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.fx-auto li{display:flex;flex-direction:column;gap:2px;padding-left:22px;position:relative}
+.fx-auto li::before{content:"";position:absolute;left:2px;top:4px;width:11px;height:6px;
+  border-left:2px solid var(--holly-dark);border-bottom:2px solid var(--holly-dark);
+  transform:rotate(-45deg)}
+.fx-auto-label{font-size:.89rem;font-weight:600;color:var(--slate)}
+.fx-auto-detail{font-size:.78rem;color:var(--slate-soft)}

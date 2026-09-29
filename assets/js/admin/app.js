@@ -803,35 +803,60 @@
     return out;
   }
 
-  // The five fulfilment jobs, paired with the preference that ASKS for each one (TASK-436).
-  // Previously every button showed for every supporter, so you could mark "Badge sent" for a
-  // business that never asked for a badge — and nothing on the page would have told you.
-  // `needs` names the preference column; null would mean the job always applies.
+  // What the system does BY ITSELF the moment a business submits the form, and what a person still
+  // has to do. Getting this wrong is worse than useless: the page used to present all five as jobs
+  // waiting to be done, when three of them had already happened automatically minutes after the
+  // business replied. Somebody could have sat there "sending" a badge that was already sent.
+  //
+  //   Listed on the supporters page - the public wall reads list_on_supporters + captured_at LIVE
+  //     (resolvePublicSupporter). They appear the moment they submit. Nobody adds them.
+  //   Badge + certificate link  - both are carried by the confirmation email the capture sends
+  //     (buildCaptureConfirmationEmail, TASK-221), gated on the same perks as the on-page version.
+  //
+  // What is left is the work a machine genuinely cannot do: writing a social post, and putting a
+  // printed certificate in an envelope.
+  function fulfilAutomatic(r) {
+    if (!r.captured_at) return [];
+    var on = H.fmtDate(r.captured_at);
+    var out = [];
+    if (r.list_on_supporters) {
+      out.push({
+        label: "Listed on the supporters page",
+        detail: "Live since " + on + ", the moment they submitted the form.",
+      });
+    }
+    if (r.want_badge) {
+      out.push({
+        label: "Badge sent",
+        detail: "Included in their confirmation email on " + on + ".",
+      });
+    }
+    if (r.want_certificate) {
+      out.push({
+        label: "Certificate link sent",
+        detail: "Included in their confirmation email on " + on + ".",
+      });
+    }
+    return out;
+  }
+
+  // The jobs a person still has to do. Only these.
   var FULFIL_TASKS = [
-    { key: "added_to_supporters", label: "Added to the supporters list", needs: "list_on_supporters",
-      help: "Put them on the public supporters page." },
-    { key: "badge_sent", label: "Badge sent", needs: "want_badge",
-      help: "Email them the supporter badge to use on their own site." },
     { key: "social_done", label: "Social post done", needs: "want_social",
-      help: "Post the thank-you on social media." },
-    { key: "certificate_sent", label: "Certificate sent", needs: "want_certificate",
-      help: "Send them their certificate link." },
+      help: "Write and post the thank-you. This is the one thing the system cannot do for you." },
     { key: "certificate_posted", label: "Certificate posted", needs: "want_certificate",
-      help: "Put the printed certificate in the post." }
+      help: "Put the printed certificate in the post. They asked for a posted one, not a download." }
   ];
 
-  // Which jobs actually apply to this supporter. "Certificate posted" only applies when they chose
-  // post over download — otherwise there is nothing to put in an envelope.
   function fulfilTasksFor(r) {
     return FULFIL_TASKS.filter(function (t) {
+      // A posted certificate is the only manual half of the certificate perk; a download went out
+      // with their confirmation email and needs nobody.
       if (t.key === "certificate_posted") return !!r.want_certificate && r.certificate_delivery === "post";
-      if (t.key === "certificate_sent") return !!r.want_certificate;
       return t.needs ? !!r[t.needs] : true;
     });
   }
 
-  // One plain line saying where this supporter has got to, so the collapsed list answers "who needs
-  // me?" without opening anything.
   function fulfilmentSummary(r) {
     if (!r.captured_at) {
       if (!r.invited_at) return '<span class="fx-state fx-state--todo">Invite not sent yet</span>';
@@ -839,7 +864,6 @@
     }
     var tasks = fulfilTasksFor(r);
     var left = tasks.filter(function (t) { return !r[t.key]; }).length;
-    if (!tasks.length) return '<span class="fx-state fx-state--done">Nothing to send</span>';
     if (!left) return '<span class="fx-state fx-state--done">All done</span>';
     return '<span class="fx-state fx-state--todo">' + left + (left === 1 ? " thing" : " things") + " to do</span>";
   }
@@ -888,14 +912,37 @@
     return '<dl class="fx-dl">' + rows + "</dl>";
   }
 
-  // The jobs, as a checklist. Only the ones they asked for, each saying what it actually means.
+  // What the system already did, so nobody goes looking for a job that does not exist.
+  function fulfilmentAutomatic(r) {
+    if (!r.captured_at) {
+      return '<p class="fx-empty">Nothing happens automatically until they have filled in the form.</p>';
+    }
+    var items = fulfilAutomatic(r);
+    if (!items.length) {
+      return '<p class="fx-empty">They asked for none of the things that are sent automatically.</p>';
+    }
+    return (
+      '<ul class="fx-auto">' +
+      items
+        .map(function (a) {
+          return (
+            '<li><span class="fx-auto-label">' + H.escapeHtml(a.label) + "</span>" +
+            '<span class="fx-auto-detail">' + H.escapeHtml(a.detail) + "</span></li>"
+          );
+        })
+        .join("") +
+      "</ul>"
+    );
+  }
+
+  // The jobs a PERSON still has to do. Only these - everything else already happened by itself.
   function fulfilmentTasks(r) {
     if (!r.captured_at) {
       return '<p class="fx-empty">Nothing to do until they have filled in the form and told us what they want.</p>';
     }
     var tasks = fulfilTasksFor(r);
     if (!tasks.length) {
-      return '<p class="fx-empty">They asked for nothing to be sent, so there is nothing to do here.</p>';
+      return '<p class="fx-empty">Nothing left for you to do. Everything they asked for is sent automatically.</p>';
     }
     var canWrite = canEdit("business-supporters");
     var items = tasks.map(function (t) {
@@ -928,11 +975,16 @@
       return '<p class="fx-letter"><span class="fx-state fx-state--done">Sent ' + H.fmtDate(r.thank_you_sent_at) +
         "</span> " + who + ".</p>";
     }
+    // It sends ITSELF. The daily pass at 8am writes to any supporter who has filled in the form, or
+    // who was invited a fortnight ago and never did. Calling that "not sent yet" made it read as a
+    // job somebody had forgotten, which is how you end up with two letters to the same person.
     return (
-      '<p class="fx-letter"><span class="fx-state fx-state--todo">Not sent yet</span></p>' +
-      '<p class="fx-help">The thank-you letter is a proper letter with the amount and a personal message. ' +
-      'You write and send it on the <button class="admin-link" type="button" data-goto-section="thank-you">' +
-      "Thank you</button> tab. It is a different thing from the invite above.</p>"
+      '<p class="fx-letter"><span class="fx-state fx-state--waiting">Goes out automatically</span></p>' +
+      '<p class="fx-help">Nothing to do. The letter is written and sent by itself in the 8am run, once ' +
+      "they have filled in the form, or a fortnight after their invite if they never do. " +
+      'You can also write a personal one on the <button class="admin-link" type="button" ' +
+      'data-goto-section="thank-you">Thank you</button> tab, but only one letter is ever sent, so ' +
+      "doing that instead of waiting means yours is the one they get.</p>"
     );
   }
 
@@ -1013,7 +1065,8 @@
         '<section class="fx-panel"><h4>Their invite</h4>' + fulfilmentInvite(r) + "</section>" +
         '<section class="fx-panel"><h4>Thank-you letter</h4>' + fulfilmentLetter(r) + "</section>" +
         '<section class="fx-panel"><h4>What they asked for</h4>' + fulfilmentSubmission(r) + "</section>" +
-        '<section class="fx-panel"><h4>What to do next</h4>' + fulfilmentTasks(r) + "</section>" +
+        '<section class="fx-panel"><h4>Already done for you</h4>' + fulfilmentAutomatic(r) + "</section>" +
+        '<section class="fx-panel fx-panel--wide"><h4>What to do next</h4>' + fulfilmentTasks(r) + "</section>" +
         '<section class="fx-panel fx-panel--wide"><h4>History</h4>' +
           '<div class="fx-history" data-fulfil-history="' + r.id + '">' +
           '<p class="admin-loading">Loading…</p></div></section>' +

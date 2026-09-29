@@ -880,8 +880,11 @@
               : '<span class="fx-warn">No address given — ask them before posting</span>')
         : "") +
       fulfilRow("Website", r.website ? '<span class="fx-mono">' + H.escapeHtml(r.website) + "</span>" : "") +
-      fulfilRow("Social accounts", r.socials ? '<span class="fx-mono">' + H.escapeHtml(r.socials) + "</span>" : "") +
-      fulfilRow("Happy to be featured", fulfilYesNo(r.consent_featured));
+      fulfilRow("Social accounts", r.socials ? '<span class="fx-mono">' + H.escapeHtml(r.socials) + "</span>" : "");
+    // "Happy to be featured" is NOT shown, and is not a question anybody was asked: the server sets
+    // consent_featured = listOnSupporters || wantSocial (src/routes/business.ts). Showing a derived
+    // value beside the two answers it is derived FROM reads as a third, separate consent - which is
+    // how it was read.
     return '<dl class="fx-dl">' + rows + "</dl>";
   }
 

@@ -1531,6 +1531,16 @@ tr.nl-click:hover { background: var(--tint); }
    and hid the things you actually need to DO the job (the postal address, the website) entirely.
    Now the list answers "who needs me", and opening one supporter answers "what and how". */
 .fx-hint{margin:0 0 10px;font-size:.85rem;color:var(--slate-soft)}
+/* .admin-table sets white-space:nowrap on EVERY cell (line ~111). The detail panel is rendered
+   INSIDE a cell, so every sentence in it inherited "never wrap": text ran under the next column,
+   the table grew wider than its container, and .admin-table-wrap's overflow-x turned that into a
+   scrollbar inside a box. Content should wrap and the page should grow — never the other way
+   round. table-layout:fixed is the other half: without it the table still sizes itself to its
+   widest content and pushes past the container however the text wraps. */
+.fx-table{table-layout:fixed;width:100%}
+.fx-table th,.fx-table td{white-space:normal;overflow-wrap:anywhere}
+.fx-table th:nth-child(2),.fx-table td:nth-child(2){width:120px}
+.fx-table th:nth-child(3),.fx-table td:nth-child(3){width:34%}
 .fx-table td{vertical-align:middle}
 .fx-summary{cursor:pointer;transition:background .15s}
 .fx-summary:hover{background:var(--tint)}
@@ -1559,14 +1569,14 @@ tr.nl-click:hover { background: var(--tint); }
 .fx-state--todo{color:var(--maroon)}
 
 .fx-dl{margin:0;display:flex;flex-direction:column;gap:7px}
-.fx-row{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:12px;align-items:baseline}
+.fx-row{display:grid;grid-template-columns:minmax(0,9.5rem) minmax(0,1fr);gap:4px 14px;align-items:baseline}
 .fx-row dt{font-size:.82rem;color:var(--slate-soft)}
-.fx-row dd{margin:0;font-size:.88rem;color:var(--slate);min-width:0;overflow-wrap:anywhere}
+.fx-row dd{margin:0;font-size:.88rem;color:var(--slate);min-width:0;overflow-wrap:anywhere;white-space:normal}
 .fx-yes{font-weight:600;color:var(--holly-dark)}
 .fx-no,.fx-none{color:var(--slate-soft)}
 .fx-warn{color:var(--maroon);font-weight:600}
 .fx-address{white-space:pre-line}
-.fx-mono{font-family:var(--font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:.84rem}
+.fx-mono{font-family:var(--font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:.84rem;overflow-wrap:anywhere}
 
 /* The jobs, as a checklist — and only the ones this business actually asked for. */
 .fx-tasks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
@@ -1587,7 +1597,7 @@ tr.nl-click:hover { background: var(--tint); }
 
 .fx-history-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
 .fx-history-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
-.fx-hist-what{font-size:.86rem;font-weight:600;color:var(--slate)}
+.fx-hist-what{font-size:.86rem;font-weight:600;color:var(--slate);overflow-wrap:anywhere}
 .fx-hist-who{font-size:.78rem;color:var(--slate-soft)}
 
 /* Small, but still a 44px target: these are the buttons that write to the record. */

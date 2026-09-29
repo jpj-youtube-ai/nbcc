@@ -853,19 +853,41 @@
     );
   }
 
+  // Has this supporter been sent their thank-you invite? (TASK-431.) Until now the only way to send
+  // one was the button that emails EVERY un-invited supporter at once, so a single business that
+  // slipped through had no way of being reached on its own — which is exactly how RMC Double
+  // Glazing paid every month since May without anybody ever writing to them.
+  function fulfilmentInviteCell(r) {
+    // They already filled the form in, so they plainly got the link. Nothing to send.
+    if (r.captured_at) return '<span class="fx-ty fx-ty--sent">Link used</span>';
+    if (r.invited_at) {
+      return '<span class="fx-ty fx-ty--sent">Sent ' + H.fmtDate(r.invited_at) + "</span>";
+    }
+    if (!canEdit("business-supporters")) {
+      return '<span class="fx-ty fx-ty--waiting">Not sent</span>';
+    }
+    return (
+      '<span class="fx-ty fx-ty--waiting">Not sent</span>' +
+      '<button class="admin-link" type="button" data-send-invite="' + r.id +
+      '" aria-label="Send the thank-you invite to this supporter">Send invite</button>'
+    );
+  }
+
   function fulfilmentsTable(rows) {
     if (!rows.length) return '<p class="admin-empty">No business supporters yet.</p>';
     var body = rows
       .map(function (r) {
         return (
           "<tr><td>" + fulfilmentBusinessCell(r) + "</td><td>" + fulfilmentBandPill(r.band) + "</td><td>" +
+          fulfilmentInviteCell(r) + "</td><td>" +
           fulfilmentThankYouCell(r) + "</td><td>" +
           fulfilmentPrefsCell(r) + "</td><td>" + fulfilmentFlagsCell(r) + "</td></tr>"
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Business</th><th>Band</th><th>Thank you letter</th>' +
+      '<table class="admin-table"><thead><tr><th>Business</th><th>Band</th><th>Invite</th>' +
+      "<th>Thank you letter</th>" +
       "<th>Preferences</th><th>Fulfilment</th></tr></thead><tbody>" + body + "</tbody></table>"
     );
   }
@@ -935,6 +957,28 @@
       });
   }
   bindClick("backfillInvitesBtn", backfillInvites);
+
+  // ---- send ONE supporter their invite (TASK-431) ----
+  // Same endpoint shape as the backfill, scoped to one record. The server re-checks that they are
+  // actually un-invited, so a double-click reports "already invited" rather than emailing twice.
+  function sendSingleInvite(id) {
+    if (!id) return;
+    backfillStatus("Sending…");
+    authFetch("/api/admin/business-supporters/" + encodeURIComponent(id) + "/send-invite", { method: "POST" })
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (out) {
+        if (!out) backfillStatus("Could not send that invite. Please try again.");
+        else if (out.alreadyInvited) backfillStatus("That supporter had already been sent their invite.");
+        else if (out.sent) backfillStatus("Invite sent.");
+        else backfillStatus("The invite could not be delivered. Please try again.");
+        loadFulfilments();
+      })
+      .catch(function () {
+        backfillStatus("Could not send that invite. Please try again.");
+      });
+  }
 
   // ---- stories (Task C): list + filter, detail, status/tags/notes edit (editor+) ----
   Array.prototype.forEach.call(doc.querySelectorAll("#storiesViewFilter .admin-seg"), function (b) {
@@ -5785,6 +5829,8 @@
       if (exp) return exportBatch(exp.getAttribute("data-export-batch"));
       var fulfil = t.closest("[data-fulfil-mark]");
       if (fulfil) return markFulfilment(fulfil.getAttribute("data-fulfil-id"), fulfil.getAttribute("data-fulfil-mark"));
+      var invite = t.closest("[data-send-invite]");
+      if (invite) return sendSingleInvite(invite.getAttribute("data-send-invite"));
     });
   }
 

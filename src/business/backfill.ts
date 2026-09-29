@@ -40,6 +40,13 @@ export interface BusinessInviteBackfillDeps {
   baseUrl: string; // config.PORTAL_BASE_URL — the env-correct public base for the tokenised link
   from: string; // config.GIVING_FROM_EMAIL — the repliable From/Reply-To (verified giving inbox)
   actor: string; // the acting admin's audit actor label (admin:<email>)
+  // TASK-431: how the run labels itself in the audit log. Both default to the bulk backfill's
+  // original values, so the TASK-214 caller is unchanged. The individual send (a list of exactly
+  // one supporter) passes "fulfilment.send_invite" and that supporter's id — otherwise the log
+  // reads as though somebody clicked the bulk button, and "who did we email, and why" stops being
+  // answerable from the audit trail.
+  auditAction?: string;
+  auditEntityId?: number | null;
 }
 
 export async function runBusinessInviteBackfill(
@@ -82,9 +89,9 @@ export async function runBusinessInviteBackfill(
   // already done, so this is appended once at the end rather than per supporter.
   await deps.recordAudit({
     actor: deps.actor,
-    action: "fulfilment.backfill_invites",
+    action: deps.auditAction ?? "fulfilment.backfill_invites",
     entity: "business_supporter_fulfilment",
-    entityId: null,
+    entityId: deps.auditEntityId ?? null,
     data: { pending: result.pending, sent: result.sent, failed: result.failed },
   });
   return result;

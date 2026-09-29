@@ -30,6 +30,7 @@ import {
   FULFILMENT_FLAGS,
   FulfilmentFlagError,
   listUninvitedBusinessSupporters,
+  getUninvitedBusinessSupporter,
   markFulfilmentInvited,
 } from "../db/fulfilment";
 import { runBusinessInviteBackfill } from "../business/backfill";
@@ -3521,6 +3522,50 @@ export async function postAdminBackfillBusinessInvites(req: Request, res: Respon
 }
 
 adminRouter.post("/api/admin/business-supporters/backfill-invites", postAdminBackfillBusinessInvites);
+
+// POST /api/admin/business-supporters/:id/send-invite (TASK-431) — send ONE supporter their
+// catch-up invite. The backfill above is all-or-nothing by design; this exists because the case
+// that prompted it was a single business (RMC Double Glazing, paying since May, never written to)
+// and "email everyone who is un-invited" is not an acceptable way to reach one of them.
+//
+// It is the same run, given a list of one: same builder, same send, same send-then-stamp ordering,
+// same idempotency. A supporter who has already been invited (or who has already used their link)
+// is not returned by the gate, so the list is empty and nothing is sent — a second click reports
+// sent: 0 rather than emailing them twice. Editor+ on business-supporters, because it puts mail in
+// somebody's inbox. Audited as fulfilment.send_invite against that supporter.
+export async function postAdminSendBusinessInvite(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "business-supporters", "edit");
+  if (!claims) return;
+  const id = fulfilmentId(req, res);
+  if (id == null) return;
+  try {
+    const result = await runBusinessInviteBackfill({
+      listUninvited: async () => {
+        const supporter = await getUninvitedBusinessSupporter(id);
+        return supporter ? [supporter] : [];
+      },
+      sendInvite: sendBusinessSupporterInvite,
+      markInvited: markFulfilmentInvited,
+      recordAudit,
+      baseUrl: config.PORTAL_BASE_URL,
+      from: config.GIVING_FROM_EMAIL,
+      actor: actorOf(claims),
+      auditAction: "fulfilment.send_invite",
+      auditEntityId: id,
+    });
+    // pending 0 is not an error: it means "already invited, or already used their link". The
+    // caller is told plainly rather than being shown a failure for a no-op that protected them.
+    return res.status(200).json({
+      ...result,
+      alreadyInvited: result.pending === 0,
+    });
+  } catch (err) {
+    console.error("admin individual business invite failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/business-supporters/:id/send-invite", postAdminSendBusinessInvite);
 
 // --- Festive Ball (TASK-313) --------------------------------------------------
 //

@@ -83,15 +83,24 @@ export async function importHistoricalSupporter(entry: ImportEntry): Promise<Imp
       }
 
       const res = await client.query<{ id: number }>(
+        // mode comes from the planner, not a literal here: the column is
+        // CHECK (mode IN ('once','monthly')) and the first version of this hardcoded
+        // 'subscription', so every insert was rejected.
+        //
+        // currency is 'GBP' upper-case because that is what every other row holds — the live path
+        // calls .toUpperCase() on Stripe's lower-case 'gbp'. There is NO constraint on this column,
+        // so writing 'gbp' would have been accepted and left these five donations quietly
+        // inconsistent with every other donation in the table.
         `INSERT INTO donations
            (donor_id, mode, plan, amount_pence, currency, gift_aid, gasds_eligible,
             payment_channel, claim_status, stripe_subscription_id, stripe_charge_id,
             payment_status, created_at)
-         VALUES ($1, 'subscription', NULL, $2, 'gbp', false, false,
-                 'online', $3, $4, $5, 'paid', $6)
+         VALUES ($1, $2, NULL, $3, 'GBP', false, false,
+                 'online', $4, $5, $6, 'paid', $7)
          RETURNING id`,
         [
           donorId,
+          d.mode,
           d.amountPence,
           // Derived by the SAME function the live money path uses, not hardcoded. My first
           // attempt invented "unclaimed", which is not one of the four values the column's CHECK

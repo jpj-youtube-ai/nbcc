@@ -35,6 +35,14 @@ export type PlannedDonation = {
   stripeChargeId: string;
   stripeSubscriptionId: string | null;
   /**
+   * "monthly" when the charge came from a subscription, "once" otherwise.
+   *
+   * The donations table has `CHECK (mode IN ('once','monthly'))`. The first attempt at this import
+   * hardcoded "subscription", which is not one of them, and every insert was rejected — so the
+   * decision lives here, in the tested planner, rather than as a literal inside the DB write.
+   */
+  mode: "once" | "monthly";
+  /**
    * Always false. A Gift Aid declaration is the DONOR's statement to HMRC; creating one on their
    * behalf would be fabricating a legal document. Individuals are invited to declare instead, and
    * their declaration can cover past gifts if they choose that scope.
@@ -104,6 +112,10 @@ export function buildImportPlan(requests: ImportRequest[]): ImportPlan {
       paidAt: c.paidAt,
       stripeChargeId: c.id,
       stripeSubscriptionId: customer.subscriptionId,
+      // A charge tied to a subscription is a monthly gift; anything else is a one-off. These five
+      // are all standing orders bar the charity's own test, so this is almost always "monthly" —
+      // but deriving it beats assuming it, and the schema only accepts these two words.
+      mode: customer.subscriptionId ? "monthly" : "once",
       giftAid: false,
     }));
 

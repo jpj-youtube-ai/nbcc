@@ -3,6 +3,7 @@ import { pool } from "./pool";
 import type { SupporterAwaitingThanks } from "../business/auto-thank-you";
 import { writeWithAudit } from "./donations";
 import type { SupporterBand } from "../donors/fulfilment";
+import type { PerksAwaitingDelivery } from "../business/perks-delivery";
 
 // The DB-access layer for the business_supporter_fulfilment table (TASK-205 migration 1783961442118
 // + the token column, TASK-206 migration 1783964039569). Small, typed accessors over the pool: the
@@ -204,6 +205,64 @@ export async function getUninvitedBusinessSupporter(
   };
 }
 
+// --- Badge + certificate delivery (TASK-441) ----------------------------------------------------
+// They used to ride the confirmation email, arriving seconds after the business submitted the form.
+// They now go the next WEEKDAY MORNING as their own email, so a business giving £100 a month gets
+// their recognition looking like somebody put it together rather than like a machine answering.
+// perks_sent_at is what stops a second pass sending it twice, and what the admin page reads to say
+// when it actually went.
+
+/** Every captured supporter who is owed a badge or a certificate. The pure rule decides who is due. */
+export async function listSupportersAwaitingPerks(): Promise<PerksAwaitingDelivery[]> {
+  const res = await pool.query<{
+    id: number;
+    token: string;
+    email: string | null;
+    business_name: string | null;
+    full_name: string;
+    want_badge: boolean;
+    want_certificate: boolean;
+    captured_at: Date | null;
+    perks_sent_at: Date | null;
+  }>(
+    `SELECT f.id, f.token, dn.email, dn.business_name, dn.full_name,
+            f.want_badge, f.want_certificate, f.captured_at, f.perks_sent_at
+       FROM business_supporter_fulfilment f
+       JOIN donors dn ON dn.id = f.donor_id
+      WHERE f.perks_sent_at IS NULL
+        AND f.captured_at IS NOT NULL
+        AND f.token IS NOT NULL
+        AND (f.want_badge OR f.want_certificate)
+      ORDER BY f.captured_at ASC
+      LIMIT ${REMINDER_DUE_LIST_LIMIT}`,
+  );
+  return res.rows.map((r) => ({
+    fulfilmentId: r.id,
+    token: r.token,
+    email: r.email,
+    name: (r.business_name ?? "").trim() || r.full_name,
+    wantBadge: r.want_badge,
+    wantCertificate: r.want_certificate,
+    capturedAt: r.captured_at ? new Date(r.captured_at) : null,
+    perksSentAt: r.perks_sent_at ? new Date(r.perks_sent_at) : null,
+  }));
+}
+
+/**
+ * Stamp perks_sent_at, IDEMPOTENTLY: the `AND perks_sent_at IS NULL` guard means a record whose
+ * perks already went matches zero rows and keeps its original timestamp. Mirrors
+ * markFulfilmentInvited. Called only AFTER a send succeeds, so a failed send is retried tomorrow.
+ */
+export async function markPerksSent(id: number): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE business_supporter_fulfilment
+        SET perks_sent_at = now(), updated_at = now()
+      WHERE id = $1 AND perks_sent_at IS NULL`,
+    [id],
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
 // --- Certificate delivery (TASK-211) ------------------------------------------------------------
 // Everything the per-business Platinum certificate page (GET /business/certificate/:token) needs, in
 // ONE read addressed by the secure-thank-you-link token: the recognition band + the certificate
@@ -320,6 +379,8 @@ export interface BusinessFulfilmentListRow {
   captured_at: Date | null;
   /** When their thank-you invite was sent, or null if they are still waiting for it (TASK-431). */
   invited_at: Date | null;
+  /** When their badge/certificate email went (TASK-441), or null if it has not yet. */
+  perks_sent_at: Date | null;
   // Admin fulfilment status flags.
   certificate_sent: boolean;
   certificate_posted: boolean;
@@ -341,6 +402,9 @@ export async function listBusinessFulfilments(): Promise<BusinessFulfilmentListR
             f.consent_featured, f.captured_at,
             f.certificate_sent, f.certificate_posted, f.badge_sent, f.social_done, f.added_to_supporters,
             f.created_at,
+            -- TASK-441: when their badge/certificate email actually went. NULL on older rows,
+            -- which reads correctly as "sent the old way, with their confirmation".
+            f.perks_sent_at,
             -- TASK-431: whether their thank-you invite has been sent, so the list can show who is
             -- still waiting and offer to send to that one supporter. Without it the admin page can
             -- only offer "email everyone un-invited", which is how a business that has been paying

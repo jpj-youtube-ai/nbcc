@@ -166,14 +166,20 @@ export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): 
   // Each choice as an escaped list item (the sentences may carry the escaped credit name / handles).
   const listItems = choices.map((c) => `<li style="margin:0 0 6px">${escapeHtml(c)}</li>`).join("");
 
-  const linkButtons = links.length
-    ? `<div style="text-align:center;margin:20px 0 6px">${links
-        .map(
-          (l) =>
-            `<a href="${escapeHtml(l.url)}" style="display:inline-block;background:${CRIMSON};color:${CREAM};text-decoration:none;font-family:${BODY};font-weight:700;font-size:15px;padding:12px 26px;border-radius:999px;margin:6px 6px">${escapeHtml(l.label)}</a>`,
-        )
-        .join("")}</div>` +
-      bodyP("We have also emailed these links here, so you can always come back to them later.")
+  // TASK-441: what they are owed now FOLLOWS rather than arriving here. Sending a certificate back
+  // within seconds of somebody filling in a form reads as a machine, because it was one. This email
+  // stays instant because it is a receipt; the recognition itself is worth a moment's pause.
+  //
+  // `links` is still computed above: it is how we know whether there is anything to promise, and
+  // promising a badge to somebody who did not ask for one would be worse than saying nothing.
+  const comingSoon = links.length
+    ? bodyP(
+        escapeHtml(
+          links.length > 1
+            ? "We will send your badge and your certificate over in the next day or so, so keep an eye out for those."
+            : `We will send your ${links[0].label.replace("Download your ", "")} over in the next day or so, so keep an eye out for that.`,
+        ),
+      )
     : "";
 
   const html = `<!doctype html>
@@ -202,7 +208,7 @@ export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): 
       ${bodyP(`<strong>${escapeHtml(p2)}</strong>`)}
       <ul style="color:${SLATE};font-family:${BODY};font-size:14px;line-height:1.6;margin:0 0 14px;padding-left:20px">${listItems}</ul>
       <p style="background:${TAN_SOFT};border-left:4px solid ${CRIMSON};border-radius:0 8px 8px 0;padding:12px 18px;margin:6px 0 16px;font-family:${BODY};font-size:14px;color:${SLATE}">${escapeHtml(impact)}</p>
-      ${linkButtons}
+      ${comingSoon}
       <div style="margin-top:18px">
         <p style="color:${SLATE};font-family:${BODY};font-size:14px;margin:0">With warmest thanks,</p>
         <p style="color:${MAROON};font-family:${HEAD};font-weight:700;font-size:16px;margin:2px 0 0">The Night Before Christmas Campaign team</p>
@@ -216,8 +222,13 @@ export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): 
 </body>
 </html>`;
 
-  const textLinks = links.length
-    ? ["", "Your download links:", ...links.map((l) => `${l.label}: ${l.url}`)]
+  const textComing = links.length
+    ? [
+        "",
+        links.length > 1
+          ? "We will send your badge and your certificate over in the next day or so, so keep an eye out for those."
+          : `We will send your ${links[0].label.replace("Download your ", "")} over in the next day or so, so keep an eye out for that.`,
+      ]
     : [];
 
   const text = [
@@ -231,7 +242,7 @@ export function buildCaptureConfirmationEmail(input: CaptureConfirmationInput): 
     ...choices,
     "",
     impact,
-    ...textLinks,
+    ...textComing,
     "",
     "With warmest thanks,",
     "The Night Before Christmas Campaign team",

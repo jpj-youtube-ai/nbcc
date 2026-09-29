@@ -132,25 +132,45 @@ describe("buildCaptureConfirmationEmail — lists the chosen options", () => {
   });
 });
 
-describe("buildCaptureConfirmationEmail — download links (gated, absolute)", () => {
-  it("includes the badge + certificate download links a platinum opt-in earns, on the given base", () => {
+describe("buildCaptureConfirmationEmail — a receipt, not a delivery (TASK-441)", () => {
+  // The badge and certificate used to be IN this email, arriving seconds after a business submitted
+  // the form. That reads as a machine, because it was one. They now follow the next weekday morning
+  // as their own email, and this one only promises them — so it stays instant, which matters:
+  // somebody who fills in a form and hears nothing reasonably assumes it broke.
+  it("carries no download links at all", () => {
     const { html, text } = buildCaptureConfirmationEmail(base);
-    expect(html).toContain('href="https://nbcc.example/assets/img/nbcc-supporter-badge.svg"');
-    expect(html).toContain('href="https://nbcc.example/business/certificate/tok123"');
-    expect(text).toContain("https://nbcc.example/business/certificate/tok123");
+    expect(html).not.toContain("nbcc-supporter-badge.svg");
+    expect(html).not.toContain("/business/certificate/");
+    expect(text).not.toContain("/business/certificate/");
   });
 
-  it("includes NO download links when the supporter declined the badge and certificate", () => {
+  it("promises both when they asked for both", () => {
+    const { html, text } = buildCaptureConfirmationEmail(base);
+    expect(html).toContain("badge and your certificate over in the next day or so");
+    expect(text).toContain("badge and your certificate over in the next day or so");
+  });
+
+  it("promises only the one they asked for", () => {
+    const badgeOnly = {
+      ...base,
+      preferences: { ...platinumYes, wantCertificate: false },
+    };
+    const { html } = buildCaptureConfirmationEmail(badgeOnly);
+    expect(html).toContain("send your badge over in the next day or so");
+    expect(html).not.toContain("certificate over in the next day");
+  });
+
+  // Promising a badge to somebody who did not ask for one would be worse than saying nothing.
+  it("promises nothing when they declined both", () => {
     const noExtras = {
       ...base,
       preferences: { ...platinumYes, wantBadge: false, wantCertificate: false },
     };
     const { html } = buildCaptureConfirmationEmail(noExtras);
-    expect(html).not.toContain("nbcc-supporter-badge.svg");
-    expect(html).not.toContain("/business/certificate/");
+    expect(html).not.toContain("in the next day or so");
   });
 
-  it("includes NO platinum download links for a bronze supporter (not entitled)", () => {
+  it("promises nothing to a bronze supporter, who is not entitled to either", () => {
     const bronze = {
       businessName: "Small Bakery Ltd",
       perks: BRONZE_PERKS,
@@ -159,13 +179,7 @@ describe("buildCaptureConfirmationEmail — download links (gated, absolute)", (
       baseUrl: "https://nbcc.example",
     };
     const { html } = buildCaptureConfirmationEmail(bronze);
-    expect(html).not.toContain("nbcc-supporter-badge.svg");
-    expect(html).not.toContain("/business/certificate/");
-  });
-
-  it("trims a trailing slash on the base and URL-encodes the token in the certificate link", () => {
-    const { html } = buildCaptureConfirmationEmail({ ...base, baseUrl: "https://nbcc.example/", token: "a b" });
-    expect(html).toContain('href="https://nbcc.example/business/certificate/a%20b"');
+    expect(html).not.toContain("in the next day or so");
   });
 });
 

@@ -72,6 +72,19 @@ if (require.main === module) {
       } catch (err) {
         console.error("automatic thank-you failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-441: the badge and certificate. They used to ride the confirmation email and arrive
+      // seconds after a business submitted the form, which reads as a machine because it was one.
+      // They now come the next weekday morning as their own email. The pass checks the weekday
+      // itself and does nothing at the weekend, the same trick as the Monday note below.
+      try {
+        const { runPerksDeliveryPass } = await import("../business/perks-delivery-runner");
+        const perks = await runPerksDeliveryPass();
+        console.error(
+          `supporter perks: due=${perks.due} sent=${perks.sent} failed=${perks.failed}`,
+        );
+      } catch (err) {
+        console.error("supporter perks delivery failed:", err instanceof Error ? err.message : err);
+      }
       // TASK-415: the Monday note. "Needs you today" only works for somebody who opens it, and
       // these volunteers have jobs and lives, so once a week the list goes to them instead. It
       // checks the weekday itself and does nothing on the other six, which is cheaper than a

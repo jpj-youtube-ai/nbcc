@@ -5337,6 +5337,31 @@ Below 820px nine columns cannot be read at any width, so the history becomes **s
 each row a card, each value labelled by its own header via `data-label`. Reading down beats
 scrolling across, and scrolling across is the thing we are not doing.
 
+## Cells that overlap their neighbours (TASK-449)
+
+Reported as "still broken", with a screenshot of "Gift in kind: An Afternoon Tea" printed across two
+columns and a date printed over the name beside it.
+
+**With `table-layout: fixed`, a cell that cannot wrap does not widen its column — it paints OVER the
+next one.** TASK-445 put `white-space: nowrap` on the Gift and Sent columns reasoning that an amount
+and a date are single tokens that should never break. An amount is; that column also holds
+*"Gift in kind: An Afternoon Tea"*. And 8% of the card was narrower than `29/09/2026` once padding
+came off.
+
+So: **no cell in a fixed-layout table carries `nowrap` unless its content is genuinely bounded, and
+almost none is.** Wrapping is the safe failure — a value too big for its column looks cramped, which
+is legible; an overlapping one is not. Guarded by a test that rejects `nowrap` on any table cell
+selector, excepting the visually-hidden header pattern, which is clipped to a pixel and never
+painted.
+
+Measuring that fix found a second, unreported bug: the **stacked layout below 1000px was collapsed**.
+The per-column percentages are `:nth-child` selectors, which outrank the plain `width: auto` in the
+media query, so stacked cells stayed at 9% of the row and the label/value grid resolved to
+`0px 0px`. Both tables now reset the widths at the same specificity, declared later.
+
+Verified with the exact rows from the report at 1500, 1100, 1024 and 375: no cell paints outside its
+own box, nothing scrolls, and the stacked grid measures `120px 175.6px` rather than nothing.
+
 ## Table cells line up (TASK-448)
 
 A table cell defaults to `vertical-align: middle`. That was barely visible while nothing wrapped,

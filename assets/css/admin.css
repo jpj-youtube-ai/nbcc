@@ -1657,24 +1657,28 @@ tr.nl-click:hover { background: var(--tint); }
   transform:none;background:transparent;box-shadow:inset 0 0 0 2px var(--slate-soft)}
 .fx-auto li.is-pending .fx-auto-label{font-weight:500;color:var(--slate-soft)}
 
-/* TASK-445: the shares TASK-444 guessed, corrected against what the columns actually hold.
+/* TASK-449: no cell in a fixed-layout table may carry white-space:nowrap unless its content is
+   genuinely bounded, and almost none is. With table-layout:fixed a cell that cannot wrap does not
+   widen its column - it PAINTS OVER the next one. "Gift in kind: An Afternoon Tea" ran across two
+   neighbours because the column was sized for "£50", and "29/09/2026" ran into the name beside it
+   because 8% of the card was narrower than a date once padding was taken off.
+   Wrapping is the safe failure: a value too big for its column looks cramped, which is legible.
+   An overlapping one is not.
+
+   TASK-445: the shares TASK-444 guessed, corrected against what the columns actually hold.
    The screenshot said it plainly: actions had 5% and broke "View letter" into "Vie w lett er",
    while "The Night Before Christmas Campaign" wrapped over five lines in 10%. Percentages rather
    than pixels so the table still fits whatever width the card has, and summing to 99 rather than
    100 because at exactly 100 the rounding of nine widths landed a pixel over the container. */
-.ty-sent-table th:nth-child(1),.ty-sent-table td:nth-child(1){width:8%}   /* Sent: a date */
+.ty-sent-table th:nth-child(1),.ty-sent-table td:nth-child(1){width:9%}   /* Sent: a date */
 .ty-sent-table th:nth-child(2),.ty-sent-table td:nth-child(2){width:12%}  /* Thank you to */
-.ty-sent-table th:nth-child(3),.ty-sent-table td:nth-child(3){width:12%}  /* Addressed to */
+.ty-sent-table th:nth-child(3),.ty-sent-table td:nth-child(3){width:9%}   /* Addressed to */
 .ty-sent-table th:nth-child(4),.ty-sent-table td:nth-child(4){width:15%}  /* Email */
-.ty-sent-table th:nth-child(5),.ty-sent-table td:nth-child(5){width:11%}  /* Copied to */
-.ty-sent-table th:nth-child(6),.ty-sent-table td:nth-child(6){width:6%}   /* Gift: "£50" */
-.ty-sent-table th:nth-child(7),.ty-sent-table td:nth-child(7){width:13%}  /* Signed by: a long name */
-.ty-sent-table th:nth-child(8),.ty-sent-table td:nth-child(8){width:13%}  /* Sent by: an address */
-.ty-sent-table th:nth-child(9),.ty-sent-table td:nth-child(9){width:9%}   /* actions, stacked */
-
-/* A date and an amount are single tokens: breaking "29/09/2026" across two lines is never right,
-   and both are narrow enough that holding them together cannot widen the table. */
-.ty-sent-table td:nth-child(1),.ty-sent-table td:nth-child(6){white-space:nowrap}
+.ty-sent-table th:nth-child(5),.ty-sent-table td:nth-child(5){width:9%}   /* Copied to */
+.ty-sent-table th:nth-child(6),.ty-sent-table td:nth-child(6){width:14%}  /* Gift, see below */
+.ty-sent-table th:nth-child(7),.ty-sent-table td:nth-child(7){width:12%}  /* Signed by */
+.ty-sent-table th:nth-child(8),.ty-sent-table td:nth-child(8){width:12%}  /* Sent by: an address */
+.ty-sent-table th:nth-child(9),.ty-sent-table td:nth-child(9){width:7%}   /* actions, stacked */
 /* Links break between words, never inside one. The shared `anywhere` is there so a long address
    cannot widen a table; a two word link never could. */
 .ty-actions{display:flex;flex-direction:column;gap:2px;overflow-wrap:normal}
@@ -1686,6 +1690,10 @@ tr.nl-click:hover { background: var(--tint); }
    beats scrolling across, and scrolling across is the thing we are not doing. */
 @media (max-width:1000px){
   .ty-sent-table,.ty-sent-table tbody,.ty-sent-table tr,.ty-sent-table td{display:block;width:auto}
+  /* The per-column percentages above are :nth-child selectors, which outrank a plain
+     `width:auto` here - so without this the stacked cells stay at 9% of the row and the
+     label/value grid collapses to 0px. Same specificity, declared later, so it wins. */
+  .ty-sent-table th:nth-child(n),.ty-sent-table td:nth-child(n){width:auto}
   .ty-sent-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .ty-sent-table tr{border-bottom:1px solid var(--line);padding:10px 0}
   .ty-sent-table tr:last-child{border-bottom:0}
@@ -1706,11 +1714,14 @@ tr.nl-click:hover { background: var(--tint); }
 .monthly-table th:nth-child(6),.monthly-table td:nth-child(6){width:12%}  /* Thanked */
 .monthly-table th:nth-child(7),.monthly-table td:nth-child(7){width:15%}  /* State */
 .monthly-table th:nth-child(8),.monthly-table td:nth-child(8){width:7%}   /* View */
-/* Amounts and dates are single tokens and never wrap. */
-.monthly-table td:nth-child(2),.monthly-table td:nth-child(3),.monthly-table td:nth-child(4){white-space:nowrap}
+
 
 @media (max-width:1000px){
   .monthly-table,.monthly-table tbody,.monthly-table tr,.monthly-table td{display:block;width:auto}
+  /* The per-column percentages above are :nth-child selectors, which outrank a plain
+     `width:auto` here - so without this the stacked cells stay at 9% of the row and the
+     label/value grid collapses to 0px. Same specificity, declared later, so it wins. */
+  .monthly-table th:nth-child(n),.monthly-table td:nth-child(n){width:auto}
   .monthly-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
   .monthly-table tr{border-bottom:1px solid var(--line);padding:10px 0}
   .monthly-table tr:last-child{border-bottom:0}

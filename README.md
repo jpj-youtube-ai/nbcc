@@ -5208,6 +5208,32 @@ aws ecs update-service --cluster charity-site-production \
 Keep the Terraform value in step with reality anyway, or the next person reads a number that was
 never true.
 
+## Reconciling Stripe against the records (TASK-429)
+
+```bash
+npm run reconcile:stripe    # READ ONLY: writes nothing, to either system
+```
+
+RMC Double Glazing (Ayr) Ltd paid £100 a month from 26 May 2026. Five payments, £500, and the
+charity had **no donor, no donations, no supporter listing and no contact with them at all.**
+
+Not a bug. They signed up a month before this software existed: the first commit in this repository
+is dated 23 June. Stripe took the money and there was nothing on this side to hear about it. It
+surfaced only because someone noticed they were missing from the supporters list.
+
+Anyone else who signed up in that window is equally invisible, and nothing in the system would ever
+say so. This compares every paying Stripe customer against the donors and subscriptions on record
+and reports the difference in pounds.
+
+**Matching** is by subscription id first, then email. Email comparison is case-insensitive and
+trimmed, because the live data holds at least one donor in capitals
+(`RYAN@THEDESIGNERROOMS.COM`) and a raw string comparison would report a supporter who is already
+recorded. Customers who have never paid are omitted: they are not missing income, and a report
+padded with non-problems is one people stop reading. A paying customer with no email is reported
+and flagged unmatchable rather than dropped.
+
+Importing what it finds is a **separate, deliberate step**, not something this script does.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

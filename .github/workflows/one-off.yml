@@ -1,0 +1,117 @@
+name: Run a one-off job
+# TASK-434: run one of the hand-run production jobs (the Stripe reconciliation, the historical
+# import, a backup) from the Actions tab, and read its output in the run log.
+#
+# Why this exists: these jobs previously had to be triggered from AWS CloudShell in a browser. That
+# works (scripts/run-oneoff.sh, TASK-432) right up until the browser session quietly disconnects
+# mid-run, which is exactly when you are least able to tell whether the job did anything. This route
+# has no browser in it, leaves an audit trail in Actions, and shows the container's own output.
+#
+# SAFETY: `command` is a fixed choice list, never free text. A workflow_dispatch that accepted an
+# arbitrary string would be a way to run any command inside production with nothing but repo write
+# access — which is a far bigger hole than the inconvenience it would fix. Adding a job here is a
+# reviewed code change, as it should be.
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Which job to run"
+        required: true
+        type: choice
+        options:
+          - "npm run reconcile:stripe"
+          - "npm run import:unrecorded"
+          - "npm run import:unrecorded -- --commit"
+          - "npm run backup"
+
+permissions:
+  id-token: write   # OIDC into AWS
+  contents: read
+
+# Never let two of these overlap: the import is idempotent but the backup is not something you want
+# running twice at once, and concurrent writers make the logs impossible to read afterwards.
+concurrency: one-off-production
+
+env:
+  AWS_REGION: eu-west-2
+  CLUSTER: charity-site-production
+  SERVICE: charity-site-production
+  LOG_GROUP: /ecs/charity-site-production
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    environment: production   # source of AWS_ROLE_ARN
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Everything comes from the service that is actually running, so this can never drift out of
+      # date with the stack and there are no ids to keep in sync here.
+      # Everything comes from the service that is actually running, so this can never drift out of
+      # date with the stack and there are no ids to keep in sync here. Three plain queries rather
+      # than one clever JMESPath join: the join form needs backticks, which are a shell hazard once
+      # this is embedded in YAML.
+      - name: Read the running service
+        run: |
+          Q() { aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query "$1" --output text; }
+          TD=$(Q 'services[0].taskDefinition')
+          SN=$(Q 'services[0].networkConfiguration.awsvpcConfiguration.subnets' | tr '	' ',')
+          SG=$(Q 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups' | tr '	' ',')
+          test -n "$TD" && test "$TD" != "None"
+          echo "TASK_DEF=$TD" >> "$GITHUB_ENV"
+          echo "SUBNETS=$SN" >> "$GITHUB_ENV"
+          echo "SGS=$SG" >> "$GITHUB_ENV"
+          echo "Running against $TD"
+
+      - name: Run it
+        env:
+          CMD: ${{ inputs.command }}
+        run: |
+          # exported, because the python below reads it from the environment.
+          export CONTAINER
+          CONTAINER=$(aws ecs describe-task-definition --task-definition "$TASK_DEF" \
+                        --query 'taskDefinition.containerDefinitions[0].name' --output text)
+          PREFIX=$(aws ecs describe-task-definition --task-definition "$TASK_DEF" \
+                     --query 'taskDefinition.containerDefinitions[0].logConfiguration.options."awslogs-stream-prefix"' \
+                     --output text)
+
+          OVERRIDES=$(python3 -c '
+          import json, os
+          print(json.dumps({"containerOverrides": [
+              {"name": os.environ["CONTAINER"], "command": ["sh", "-c", os.environ["CMD"]]}
+          ]}))')
+
+          TASK=$(aws ecs run-task --cluster "$CLUSTER" --launch-type FARGATE \
+            --task-definition "$TASK_DEF" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SGS],assignPublicIp=ENABLED}" \
+            --overrides "$OVERRIDES" --query 'tasks[0].taskArn' --output text)
+          test -n "$TASK" && test "$TASK" != "None"
+
+          echo "Started ${TASK##*/}; waiting..."
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK"
+
+          echo "::group::output"
+          # The task can stop a moment before CloudWatch has the last lines; printing nothing would
+          # read as "the job produced no output", which is the wrong conclusion to hand somebody.
+          for _ in 1 2 3 4 5 6; do
+            OUT=$(aws logs get-log-events --log-group-name "$LOG_GROUP" \
+                    --log-stream-name "$PREFIX/$CONTAINER/${TASK##*/}" \
+                    --start-from-head --query 'events[].message' --output text 2>/dev/null | tr '\t' '\n')
+            [ -n "$OUT" ] && break
+            sleep 5
+          done
+          echo "$OUT"
+          echo "::endgroup::"
+
+          CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" \
+                   --query 'tasks[0].containers[0].exitCode' --output text)
+          REASON=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK" \
+                     --query 'tasks[0].stoppedReason' --output text)
+          echo "exit code: $CODE"
+          [ "$REASON" = "None" ] || echo "stopped because: $REASON"
+          # A task killed before the container ran reports no exit code at all. Treat that as a
+          # failure rather than letting an empty value read as success.
+          [ "$CODE" = "0" ] || exit 1

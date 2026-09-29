@@ -60,6 +60,31 @@ describe("what gets created", () => {
     ]);
   });
 
+  // The donations table has CHECK (mode IN ('once','monthly')). The first version of this import
+  // hardcoded 'subscription' in the INSERT, which is not one of them, so every row was rejected and
+  // the whole run failed against production. These four tests exist so that cannot come back.
+  it("records a subscription charge as monthly, which is a word the schema accepts", () => {
+    const plan = buildImportPlan([{ customer: rmc, classification: asCompany }]);
+    expect(plan.entries[0].donations.every((d) => d.mode === "monthly")).toBe(true);
+  });
+
+  it("records a charge with no subscription behind it as a one-off", () => {
+    const oneOff: StripeCustomerDetail = { ...fiona, subscriptionId: null };
+    const plan = buildImportPlan([{ customer: oneOff, classification: asIndividual }]);
+    expect(plan.entries[0].donations.every((d) => d.mode === "once")).toBe(true);
+  });
+
+  it("never produces a mode the database would reject", () => {
+    const plan = buildImportPlan([
+      { customer: rmc, classification: asCompany },
+      { customer: fiona, classification: asIndividual },
+      { customer: { ...fiona, id: "cus_x", subscriptionId: null }, classification: asIndividual },
+    ]);
+    const modes = new Set(plan.entries.flatMap((e) => e.donations.map((d) => d.mode)));
+    // Exactly the constraint in migrations/1782923222001_unified-donation-model.js.
+    for (const m of modes) expect(["once", "monthly"]).toContain(m);
+  });
+
   it("totals what it is about to record, so the number can be checked against Stripe", () => {
     const plan = buildImportPlan([
       { customer: rmc, classification: asCompany },

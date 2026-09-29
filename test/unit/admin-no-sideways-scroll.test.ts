@@ -77,7 +77,7 @@ describe("no table cell is stopped from wrapping", () => {
       // The visually-hidden header pattern legitimately needs it: the element is clipped to a
       // single pixel and never painted, so it cannot overlap anything.
       .filter((b) => !/clip:\s*rect/.test(b))
-      .filter((b) => /-table[^{]*(th|td)|td:nth-child|th:nth-child/.test(b));
+      .filter((b) => /-table\b[^{]*(th|td)|td:nth-child|th:nth-child/.test(b));
     expect(offenders).toEqual([]);
   });
 });

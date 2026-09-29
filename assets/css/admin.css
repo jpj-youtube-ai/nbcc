@@ -1524,3 +1524,77 @@ tr.nl-click:hover { background: var(--tint); }
 .out-paste textarea{width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.85rem;
   border:1.6px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--cream);color:var(--slate);resize:vertical}
 .out-paste-count{margin:12px 0 6px;font-weight:600;color:var(--slate)}
+
+/* --- Business supporters: list, then detail on demand (TASK-436) -------------------------------
+   The page used to put every supporter's preferences and all five fulfilment buttons in the row,
+   which made the common question — who still needs something from us? — the hardest one to answer,
+   and hid the things you actually need to DO the job (the postal address, the website) entirely.
+   Now the list answers "who needs me", and opening one supporter answers "what and how". */
+.fx-hint{margin:0 0 10px;font-size:.85rem;color:var(--slate-soft)}
+.fx-table td{vertical-align:middle}
+.fx-summary{cursor:pointer;transition:background .15s}
+.fx-summary:hover{background:var(--tint)}
+.fx-summary:focus-visible{outline:2px solid var(--holly);outline-offset:-2px}
+.fx-summary.is-open{background:var(--tint)}
+/* The caret is drawn rather than typed: a "+"/"−" character shifts the business name sideways as it
+   toggles, and a fixed box keeps the column steady. */
+.fx-caret{display:inline-block;width:14px;margin-right:8px;color:var(--slate-soft);position:relative;top:-1px}
+.fx-caret::before{content:"";display:block;width:6px;height:6px;border-right:1.8px solid currentColor;
+  border-bottom:1.8px solid currentColor;transform:rotate(-45deg);transition:transform .18s ease}
+.fx-summary.is-open .fx-caret::before{transform:rotate(45deg)}
+
+.fx-detail-row>td{padding:0;background:var(--tint)}
+.fx-detail{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;
+  background:var(--line);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.fx-panel{background:var(--card);padding:18px 20px;min-width:0}
+.fx-panel--wide{grid-column:1/-1}
+.fx-panel h4{margin:0 0 10px;font-family:var(--font-body);font-size:.72rem;font-weight:700;
+  letter-spacing:.09em;text-transform:uppercase;color:var(--slate-soft)}
+
+/* One word for where something has got to. Colour carries meaning here and nowhere else on the
+   page, so "needs doing" is findable by scanning rather than by reading every row. */
+.fx-state{font-weight:600;font-size:.88rem}
+.fx-state--done{color:var(--holly-dark)}
+.fx-state--waiting{color:var(--slate-soft)}
+.fx-state--todo{color:var(--maroon)}
+
+.fx-dl{margin:0;display:flex;flex-direction:column;gap:7px}
+.fx-row{display:grid;grid-template-columns:minmax(0,150px) minmax(0,1fr);gap:12px;align-items:baseline}
+.fx-row dt{font-size:.82rem;color:var(--slate-soft)}
+.fx-row dd{margin:0;font-size:.88rem;color:var(--slate);min-width:0;overflow-wrap:anywhere}
+.fx-yes{font-weight:600;color:var(--holly-dark)}
+.fx-no,.fx-none{color:var(--slate-soft)}
+.fx-warn{color:var(--maroon);font-weight:600}
+.fx-address{white-space:pre-line}
+.fx-mono{font-family:var(--font-mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:.84rem}
+
+/* The jobs, as a checklist — and only the ones this business actually asked for. */
+.fx-tasks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.fx-task{display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:9px 0;border-bottom:1px solid var(--line)}
+.fx-task:last-child{border-bottom:0}
+.fx-task-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fx-task-label{font-size:.89rem;font-weight:600;color:var(--slate)}
+.fx-task-help{font-size:.78rem;color:var(--slate-soft)}
+.fx-task.is-done .fx-task-label{font-weight:500;color:var(--slate-soft)}
+.fx-task-done{flex:none;font-size:.82rem;font-weight:600;color:var(--holly-dark)}
+.fx-task-todo{flex:none;font-size:.82rem;color:var(--slate-soft)}
+
+.fx-letter{margin:0 0 6px}
+.fx-help{margin:0;font-size:.82rem;line-height:1.5;color:var(--slate-soft)}
+.fx-help .admin-link{font-size:inherit}
+.fx-empty{margin:0;font-size:.85rem;line-height:1.5;color:var(--slate-soft)}
+
+.fx-history-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.fx-history-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
+.fx-hist-what{font-size:.86rem;font-weight:600;color:var(--slate)}
+.fx-hist-who{font-size:.78rem;color:var(--slate-soft)}
+
+/* Small, but still a 44px target: these are the buttons that write to the record. */
+.admin-btn--small{flex:none;font-size:.82rem;padding:8px 14px;min-height:44px}
+
+@media (max-width:900px){
+  .fx-detail{grid-template-columns:minmax(0,1fr)}
+  .fx-row{grid-template-columns:minmax(0,1fr);gap:1px}
+  .fx-task{flex-direction:column;align-items:flex-start;gap:8px}
+}

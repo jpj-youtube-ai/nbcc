@@ -3492,6 +3492,33 @@ export async function postAdminMarkFulfilment(req: Request, res: Response): Prom
 adminRouter.get("/api/admin/fulfilments", getAdminFulfilments);
 adminRouter.post("/api/admin/fulfilments/:id/mark", postAdminMarkFulfilment);
 
+// GET /api/admin/fulfilments/:id/history (TASK-436) — who did what to this supporter's record, and
+// when. Every fulfilment write already appends an audit row (markFulfilmentFlag, the invite send,
+// the webhook's fulfilment.created); nothing has ever shown them, so "did somebody already post
+// that certificate, and who?" was unanswerable from the page that asks you to decide it.
+//
+// No new storage: the audit log IS the record, and reading it here rather than denormalising
+// who/when onto the row keeps one source of truth. Read-only, same gate as the list it expands.
+export async function getAdminFulfilmentHistory(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "business-supporters", "edit");
+  if (!claims) return;
+  const id = fulfilmentId(req, res);
+  if (id == null) return;
+  try {
+    const { results } = await listAuditLog({
+      entity: "business_supporter_fulfilment",
+      entityId: id,
+      limit: 50,
+    });
+    return res.status(200).json({ results });
+  } catch (err) {
+    console.error("admin fulfilment history failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/fulfilments/:id/history", getAdminFulfilmentHistory);
+
 // POST /api/admin/business-supporters/backfill-invites (TASK-214) — the one-time, idempotent catch-up
 // that emails the thank-you INVITE to business supporters who became supporters BEFORE the going-
 // forward webhook auto-invite (TASK-213) shipped and so never received it. Editor+ (donations:edit),

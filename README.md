@@ -5208,6 +5208,37 @@ aws ecs update-service --cluster charity-site-production \
 Keep the Terraform value in step with reality anyway, or the next person reads a number that was
 never true.
 
+## Running a one-off command in production (TASK-432)
+
+```bash
+# in AWS CloudShell, from a checkout of this repo
+./scripts/run-oneoff.sh "npm run import:unrecorded"
+```
+
+Several of the scripts here are meant to be run by hand against production, occasionally: the Stripe
+reconciliation, the historical import, a backup. There was no good way to do that.
+
+The ECS console's **Run task** form is the documented route and it is unusable for this — it wants a
+VPC, subnets, a security group and a command override typed in by hand, and the form does not
+reliably accept programmatic input. The GitHub Actions route means committing a workflow for every
+one-off. Neither is something you would want to do at speed while something is wrong.
+
+`scripts/run-oneoff.sh` runs the command inside the production app container from **CloudShell**,
+which already has credentials, and derives *everything* from the service that is already running:
+the task definition, the subnets, the security group, the container name, and the log group. There
+are no ids to copy out and no Terraform state to read, so it cannot drift out of date with the
+stack, and the one-off lands in the same subnets with the same security group as the live app — so
+it reaches the database on exactly the same terms the app does.
+
+It waits for the task to stop, prints the container's log output, and **exits with the container's
+own exit code**. A task that is killed before the container runs reports no exit code at all; that
+is treated as a failure rather than letting an empty value read as success, which is the way this
+kind of script usually lies to you.
+
+It does not deploy, does not change the service, and does not touch the running tasks — it starts
+one extra task, runs the command, and stops. The image it runs is whatever the service is currently
+on, so the command must already have shipped.
+
 ## Reconciling Stripe against the records (TASK-429)
 
 ```bash

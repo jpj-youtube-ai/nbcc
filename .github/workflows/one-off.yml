@@ -22,6 +22,8 @@ on:
           - "npm run reconcile:stripe"
           - "npm run import:unrecorded"
           - "npm run import:unrecorded -- --commit"
+          - "npm run catchup:individuals"
+          - "npm run catchup:individuals -- --commit"
           - "npm run backup"
 
 permissions:

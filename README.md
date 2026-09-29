@@ -5435,6 +5435,56 @@ none — it looks complete.
 Every import appends a `donor.historical_import` audit row, so anyone auditing these donations later
 can see why they are dated before the system existed.
 
+## Thanking the three individuals (TASK-438)
+
+```bash
+npm run catchup:individuals              # DRY RUN: prints everything, sends nothing
+npm run catchup:individuals -- --commit  # actually sends
+```
+
+Fiona McIlloney, Mrs I J McFarlane and Jodie McFarlane have each given £10 a month since May. Until
+TASK-430 imported them there was no record of any of it, so in four months they had no thank-you, no
+receipt and no Gift Aid request. Each gets both, once.
+
+**The recipient list is hardcoded**, like the import that created them, so it can never be pointed
+at the whole donor table by accident — which for a script that emails people and opens Gift Aid
+declarations is the failure worth designing out.
+
+### Consent, and why nothing is flipped
+
+All three are recorded as **not** having consented to email. That is because they signed up through
+Stripe before there was a form to ask them on: **they were never asked, they did not decline**, and
+nothing in the database distinguishes those. The charity's decision was that a thank-you for a gift
+somebody made, and a question about that same gift, are administrative rather than marketing.
+
+So both go — and the script **never touches their consent flags**. Recording an agreement nobody was
+ever asked for would be worse than the silence it is fixing. The letter asks them instead, so any
+consent that follows is real. (`deriveSendState` is what marks them "Opted out" in the Thank you
+tab; it is advisory, and the send route itself has never gated on it.)
+
+### What the letter says
+
+The amount is the **total given**, not the monthly figure. The automatic business letter uses the
+monthly amount because it goes out days after signup with one payment taken; this is a catch-up
+covering five months, so the same choice would thank Fiona for a fifth of what she has given.
+`giftAided` is always false — nobody has declared, and a letter saying HMRC adds 25% tells somebody
+something untrue about their own tax.
+
+### The Gift Aid request
+
+The declaration lifecycle is `not_required → pending → sent → completed`, and **only a donation at
+`sent` can be confirmed by the donor**. So `mintDeclarationInvite` stamps a unique token and
+`pending`, and the existing `sendDeclarationConfirmation` emails the link and stamps `sent` — or
+`undelivered` when the send throws, so a link that never arrived is never mistaken for one that did.
+Minting a token and jumping straight to `sent` would have given all three a form that failed on
+submit: three people trying to give the charity Gift Aid and getting an error.
+
+A monthly donation's declaration scope is `enduring` (`declarationScopeForMode`), so a declaration
+covers what they have already given as well as what follows.
+
+Re-running is safe: `recordThankYouSent` is what stops anybody — a person or the daily pass —
+thanking them twice, and a donation already past `not_required` is left alone.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

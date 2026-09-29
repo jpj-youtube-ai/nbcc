@@ -26,7 +26,8 @@
     "admin:set-password": "tsx src/ops/set-admin-password.ts",
     "backup": "node dist/scripts/run-backup.js",
     "reconcile:stripe": "node dist/scripts/reconcile-stripe.js",
-    "import:unrecorded": "node dist/scripts/import-unrecorded.js"
+    "import:unrecorded": "node dist/scripts/import-unrecorded.js",
+    "catchup:individuals": "node dist/scripts/catchup-individuals.js"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

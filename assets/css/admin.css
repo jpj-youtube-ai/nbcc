@@ -106,9 +106,26 @@
 .admin-stat.warn .n{color:var(--maroon)}
 
 /* ---- tables ---- */
+/* A safety net, not a layout: cells wrap now, so a table should never exceed this. Left in
+   place because hiding a column outright is worse than being able to reach it. */
 .admin-table-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
-.admin-table{width:100%;border-collapse:collapse;font-size:.9rem}
-.admin-table th,.admin-table td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+/* TASK-442: fixed layout is the other half of not scrolling sideways. Wrapping alone stops a LONG
+   VALUE widening a table, but not a table with too many COLUMNS: ten columns of padding and
+   minimum content still exceeded the card (measured: 1243px inside a 1058px box). Fixed layout
+   makes the columns share the width available instead of demanding what they would like.
+   The cost is that columns are equal unless a table says otherwise, so a narrow Id column gets the
+   same share as a long email. A cramped column is readable; a column you have to scroll to reach
+   is one nobody looks at. Individual tables can still set their own widths, as .fx-table does. */
+.admin-table{width:100%;border-collapse:collapse;font-size:.9rem;table-layout:fixed}
+/* TASK-442: cells WRAP by default. white-space:nowrap here was the single cause of every
+   sideways-scrolling box in the admin: a cell that cannot wrap makes the table wider than its
+   container, and .admin-table-wrap's overflow-x turns that into a scrollbar inside a panel. Four
+   panels had already patched it individually (.nl-panel, .email-audit-table, .fx-table and two
+   fulfilment cells), which is the sign that the default was wrong rather than the panels.
+   break-word rather than anywhere: a date or a reference only breaks when it genuinely cannot fit,
+   so ordinary values stay on one line without forcing the table wider than the page. */
+.admin-table th,.admin-table td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);
+  white-space:normal;overflow-wrap:break-word}
 .admin-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-soft);font-weight:600}
 .admin-table tbody tr:last-child td{border-bottom:0}
 .admin-table tbody tr:hover{background:var(--tint)}

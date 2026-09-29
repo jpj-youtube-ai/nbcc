@@ -5275,6 +5275,34 @@ Deploys are tuned to finish quickly: the target group sets
 interval, both in `infra/modules/app/alb.tf`. These are Terraform changes, so
 they take effect only once the **Infra** workflow applies them.
 
+## Nothing in the admin scrolls sideways (TASK-442)
+
+Reported twice, and it was one line causing all of it: `.admin-table th, .admin-table td` carried
+`white-space: nowrap`. A cell that cannot wrap makes its table wider than its container, and
+`.admin-table-wrap`'s `overflow-x` turns that into a scrollbar inside a panel. Content hidden inside
+a box is content nobody finds, and on an admin screen that is a job nobody does.
+
+**Four panels had already patched it individually** — `.nl-panel`, `.email-audit-table`, `.fx-table`
+and two fulfilment cells. Each looked local and reasonable; together they were the sign that the
+default was wrong rather than the panels.
+
+Two changes, because wrapping alone was not enough:
+
+- **`white-space: normal` + `overflow-wrap: break-word`** stops a long VALUE widening a table.
+  `break-word` rather than `anywhere`, so a date or a reference only breaks when it genuinely cannot
+  fit instead of being snapped in half in a column that had room.
+- **`table-layout: fixed`** stops a table with too many COLUMNS doing it. Ten columns of padding and
+  minimum content measured **1243px inside a 1058px card**; fixed layout makes them share the width
+  available rather than demand what they would like. The cost is equal columns unless a table says
+  otherwise, so a narrow Id column gets the same share as a long email. A cramped column is
+  readable; a column you have to scroll to reach is one nobody looks at. Individual tables can still
+  set their own widths, as `.fx-table` does.
+
+Verified by measurement at 1280px and 375px: the sent-letter history and a ten column table both
+report `scrollWidth === clientWidth`, and the page itself has no horizontal scroll at either width.
+`test/unit/admin-no-sideways-scroll.test.ts` guards it, because the next person to add a table will
+copy whatever the base rule says.
+
 ## Enquiries waiting for a reply (TASK-425)
 
 A contact enquiry used to be invisible unless you deliberately opened **Content → Contact form**.

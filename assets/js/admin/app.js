@@ -544,7 +544,15 @@
     // TASK-241: optional payment-status filter (paid/pending/failed/refunded); empty = all.
     var payFilter = el("donationsPaymentFilter");
     var pay = payFilter ? payFilter.value : "";
-    authFetch("/api/admin/donations?limit=25&offset=" + donationsOffset + (pay ? "&paymentStatus=" + encodeURIComponent(pay) : ""))
+    // TASK-446: regular giving vs one-off. The two filters combine, so "monthly and failed" is a
+    // question you can ask - which is the one worth asking when a standing order stops.
+    var modeFilter = el("donationsModeFilter");
+    var mode = modeFilter ? modeFilter.value : "";
+    authFetch(
+      "/api/admin/donations?limit=25&offset=" + donationsOffset +
+        (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
+        (mode ? "&mode=" + encodeURIComponent(mode) : ""),
+    )
       .then(j)
       .then(function (d) {
         wrap.innerHTML = donationsTable(d.results || []);
@@ -560,12 +568,16 @@
         wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
       });
   }
-  var donationsPayFilter = el("donationsPaymentFilter");
-  if (donationsPayFilter)
-    donationsPayFilter.addEventListener("change", function () {
-      donationsOffset = 0; // a new filter resets to the first page
-      loadDonations();
-    });
+  // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
+  // different list shows you an empty table and looks like the filter found nothing.
+  ["donationsPaymentFilter", "donationsModeFilter"].forEach(function (id) {
+    var control = el(id);
+    if (control)
+      control.addEventListener("change", function () {
+        donationsOffset = 0;
+        loadDonations();
+      });
+  });
   bindClick("donationsPrev", function () {
     donationsOffset = Math.max(0, donationsOffset - 25);
     loadDonations();

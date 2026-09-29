@@ -10,6 +10,8 @@
 // charity's financial records, and which of four people who have heard silence for four months
 // gets which email — so they are decided in a file with no database and no mail server in it.
 
+import type { SupporterBand } from "../donors/fulfilment";
+
 export type StripeCharge = {
   id: string;
   paidAt: Date;
@@ -25,7 +27,10 @@ export type StripeCustomerDetail = {
 };
 
 export type Classification =
-  | { kind: "company"; band: string }
+  // SupporterBand, not string: the column is CHECK (band IN ('bronze','silver','gold',
+  // 'platinum')), and a plain string would let a typo reach the database and be rejected there
+  // rather than here. It is a pure type with no database dependency, so the planner stays pure.
+  | { kind: "company"; band: SupporterBand }
   | { kind: "individual"; suppressEmails?: boolean };
 
 export type PlannedDonation = {
@@ -65,7 +70,7 @@ export type ImportEntry = {
   donor: PlannedDonor;
   donations: PlannedDonation[];
   /** Companies get a supporter record so they can be listed and badged. Individuals do not. */
-  fulfilment: { band: string } | null;
+  fulfilment: { band: SupporterBand } | null;
   emails: PlannedEmail[];
 };
 

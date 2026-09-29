@@ -85,6 +85,15 @@ describe("what gets created", () => {
     for (const m of modes) expect(["once", "monthly"]).toContain(m);
   });
 
+  // The band reaches a column with CHECK (band IN ('bronze','silver','gold','platinum')). A typo
+  // used to be possible because the planner took a plain string; it is a SupporterBand now, so this
+  // is belt and braces — but the import already failed twice in production on exactly this class of
+  // mistake, where a value the schema rejects is only found out at the INSERT.
+  it("only ever plans a supporter band the database will accept", () => {
+    const plan = buildImportPlan([{ customer: rmc, classification: asCompany }]);
+    expect(["bronze", "silver", "gold", "platinum"]).toContain(plan.entries[0].fulfilment?.band);
+  });
+
   it("totals what it is about to record, so the number can be checked against Stripe", () => {
     const plan = buildImportPlan([
       { customer: rmc, classification: asCompany },

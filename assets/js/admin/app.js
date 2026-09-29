@@ -138,7 +138,11 @@
       // draft is exactly when you most want to start from a template.
       nlRefreshTemplates();
       nlRefreshAudiences(); // TASK-259: fill the audience pickers once permissions are known
-      selectView("overview");
+      // Back to where they were, or the overview on a fresh sign-in. loadOverview() runs either
+      // way: the overview's own figures are cheap, and the notice bar at the top of every screen
+      // reads from them.
+      var resume = restorableView();
+      selectView(resume || "overview");
       loadOverview();
     }
     authFetch("/api/admin/me")
@@ -358,7 +362,39 @@
       });
   }
 
+  // TASK-443: which section you were last on. A refresh used to drop you back on the overview,
+  // which is maddening halfway through working a list: you lose your place and have to navigate
+  // back every time. sessionStorage rather than localStorage, matching where the session token
+  // lives — it survives a refresh, which is the complaint, and dies with the tab, so a shared
+  // machine never reopens on somebody else's last screen.
+  var VIEW_KEY = "nbccAdminView";
+  function rememberView(name) {
+    try {
+      sessionStorage.setItem(VIEW_KEY, name);
+    } catch {
+      // Private mode, or storage disabled. Losing your place is an annoyance; throwing here would
+      // break navigation outright.
+    }
+  }
+  // The remembered section, but ONLY if this user can still see it. Permissions change, and a
+  // viewer restored onto a section their role no longer reaches would land on a blank panel with
+  // no way to tell why. The nav link is the authority: it is already gated by permission, so a
+  // missing or hidden link means "not yours".
+  function restorableView() {
+    var name;
+    try {
+      name = sessionStorage.getItem(VIEW_KEY);
+    } catch {
+      return null;
+    }
+    if (!name) return null;
+    var link = doc.querySelector('.admin-nav-link[data-view="' + name.replace(/"/g, "") + '"]');
+    if (!link || link.hidden || link.offsetParent === null) return null;
+    return name;
+  }
+
   function selectView(name) {
+    rememberView(name);
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-view") === name);
     });

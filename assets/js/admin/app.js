@@ -784,6 +784,7 @@
     { key: "social_done", label: "Social done" },
     { key: "added_to_supporters", label: "Added to Supporters" },
   ];
+  var fulfilOpenId = null;
   function fulfilmentStatus(msg) {
     var s = el("fulfilmentActionStatus");
     if (s) s.textContent = msg || "";
@@ -801,75 +802,219 @@
     }
     return out;
   }
-  function fulfilmentPrefsCell(r) {
-    if (!r.captured_at) return '<span class="admin-pill is-internal">Awaiting preferences</span>';
-    var wants = [];
-    if (r.list_on_supporters) wants.push("Listing");
-    if (r.want_social) wants.push("Social");
-    if (r.want_badge) wants.push("Badge");
-    if (r.want_certificate) {
-      wants.push("Certificate" + (r.certificate_delivery ? " (" + cap(r.certificate_delivery) + ")" : ""));
-    }
-    var pills = wants.length
-      ? wants
-          .map(function (w) {
-            return '<span class="admin-pill">' + H.escapeHtml(w) + "</span>";
-          })
-          .join(" ")
-      : '<span class="admin-fulfil-sub">No extras requested</span>';
-    var credit = r.credit_name
-      ? '<span class="admin-fulfil-credit">Credit as: ' + H.escapeHtml(r.credit_name) + "</span>"
-      : "";
-    return (
-      '<div class="admin-fulfil-prefs"><span class="admin-pill is-replied">Submitted ' + H.fmtDate(r.captured_at) +
-      "</span>" + credit + '<span class="admin-fulfil-wants">' + pills + "</span></div>"
-    );
+
+  // The five fulfilment jobs, paired with the preference that ASKS for each one (TASK-436).
+  // Previously every button showed for every supporter, so you could mark "Badge sent" for a
+  // business that never asked for a badge — and nothing on the page would have told you.
+  // `needs` names the preference column; null would mean the job always applies.
+  var FULFIL_TASKS = [
+    { key: "added_to_supporters", label: "Added to the supporters list", needs: "list_on_supporters",
+      help: "Put them on the public supporters page." },
+    { key: "badge_sent", label: "Badge sent", needs: "want_badge",
+      help: "Email them the supporter badge to use on their own site." },
+    { key: "social_done", label: "Social post done", needs: "want_social",
+      help: "Post the thank-you on social media." },
+    { key: "certificate_sent", label: "Certificate sent", needs: "want_certificate",
+      help: "Send them their certificate link." },
+    { key: "certificate_posted", label: "Certificate posted", needs: "want_certificate",
+      help: "Put the printed certificate in the post." }
+  ];
+
+  // Which jobs actually apply to this supporter. "Certificate posted" only applies when they chose
+  // post over download — otherwise there is nothing to put in an envelope.
+  function fulfilTasksFor(r) {
+    return FULFIL_TASKS.filter(function (t) {
+      if (t.key === "certificate_posted") return !!r.want_certificate && r.certificate_delivery === "post";
+      if (t.key === "certificate_sent") return !!r.want_certificate;
+      return t.needs ? !!r[t.needs] : true;
+    });
   }
-  function fulfilmentFlagsCell(r) {
-    var canWrite = canEdit("donations");
-    var items = FULFILMENT_FLAGS.map(function (f) {
-      if (r[f.key]) return '<span class="admin-pill is-replied" title="Done">' + f.label + "</span>";
-      if (!canWrite) return '<span class="admin-pill is-internal" title="Not done">' + f.label + "</span>";
+
+  // One plain line saying where this supporter has got to, so the collapsed list answers "who needs
+  // me?" without opening anything.
+  function fulfilmentSummary(r) {
+    if (!r.captured_at) {
+      if (!r.invited_at) return '<span class="fx-state fx-state--todo">Invite not sent yet</span>';
+      return '<span class="fx-state fx-state--waiting">Waiting for them to fill in the form</span>';
+    }
+    var tasks = fulfilTasksFor(r);
+    var left = tasks.filter(function (t) { return !r[t.key]; }).length;
+    if (!tasks.length) return '<span class="fx-state fx-state--done">Nothing to send</span>';
+    if (!left) return '<span class="fx-state fx-state--done">All done</span>';
+    return '<span class="fx-state fx-state--todo">' + left + (left === 1 ? " thing" : " things") + " to do</span>";
+  }
+
+  function fulfilRow(label, value) {
+    if (!value) return "";
+    return '<div class="fx-row"><dt>' + H.escapeHtml(label) + "</dt><dd>" + value + "</dd></div>";
+  }
+  function fulfilYesNo(v) {
+    return v ? '<span class="fx-yes">Yes</span>' : '<span class="fx-no">No</span>';
+  }
+
+  // What the business actually told us on the thank-you form. Every one of these was already being
+  // fetched and none of it was shown — including the postal address for a certificate they asked us
+  // to POST, which made that job impossible to finish from the page that asks you to tick it off.
+  function fulfilmentSubmission(r) {
+    if (!r.captured_at) {
+      return '<p class="fx-empty">They have not filled in the form yet, so we do not know how they would like ' +
+        "to be thanked. " +
+        (r.invited_at
+          ? "Their invite was sent on " + H.fmtDate(r.invited_at) + "."
+          : "They have not been sent their invite yet.") +
+        "</p>";
+    }
+    var certificate = r.want_certificate
+      ? (r.certificate_delivery === "post" ? "Yes — by post" : "Yes — to download")
+      : fulfilYesNo(false);
+    var rows =
+      fulfilRow("Credit them as", r.credit_name ? H.escapeHtml(r.credit_name) : '<span class="fx-none">Not given</span>') +
+      fulfilRow("List on the supporters page", fulfilYesNo(r.list_on_supporters)) +
+      fulfilRow("Social media post", fulfilYesNo(r.want_social)) +
+      fulfilRow("Supporter badge", fulfilYesNo(r.want_badge)) +
+      fulfilRow("Certificate", certificate) +
+      (r.want_certificate && r.certificate_delivery === "post"
+        ? fulfilRow("Post the certificate to",
+            r.certificate_address
+              ? '<span class="fx-address">' + H.escapeHtml(r.certificate_address) + "</span>"
+              : '<span class="fx-warn">No address given — ask them before posting</span>')
+        : "") +
+      fulfilRow("Website", r.website ? '<span class="fx-mono">' + H.escapeHtml(r.website) + "</span>" : "") +
+      fulfilRow("Social accounts", r.socials ? '<span class="fx-mono">' + H.escapeHtml(r.socials) + "</span>" : "") +
+      fulfilRow("Happy to be featured", fulfilYesNo(r.consent_featured));
+    return '<dl class="fx-dl">' + rows + "</dl>";
+  }
+
+  // The jobs, as a checklist. Only the ones they asked for, each saying what it actually means.
+  function fulfilmentTasks(r) {
+    if (!r.captured_at) {
+      return '<p class="fx-empty">Nothing to do until they have filled in the form and told us what they want.</p>';
+    }
+    var tasks = fulfilTasksFor(r);
+    if (!tasks.length) {
+      return '<p class="fx-empty">They asked for nothing to be sent, so there is nothing to do here.</p>';
+    }
+    var canWrite = canEdit("business-supporters");
+    var items = tasks.map(function (t) {
+      var done = !!r[t.key];
+      var action = done
+        ? '<span class="fx-task-done">Done</span>'
+        : canWrite
+          ? '<button class="admin-btn admin-btn--small" type="button" data-fulfil-id="' + r.id +
+            '" data-fulfil-mark="' + t.key + '" data-fulfil-label="' + H.escapeHtml(t.label) +
+            '">Mark done</button>'
+          : '<span class="fx-task-todo">Not done</span>';
       return (
-        '<button class="admin-link" type="button" data-fulfil-id="' + r.id + '" data-fulfil-mark="' + f.key +
-        '" title="Mark as done" aria-label="Mark done: ' + f.label + '">' + f.label + "</button>"
+        '<li class="fx-task' + (done ? " is-done" : "") + '">' +
+        '<span class="fx-task-text"><span class="fx-task-label">' + H.escapeHtml(t.label) + "</span>" +
+        '<span class="fx-task-help">' + H.escapeHtml(t.help) + "</span></span>" +
+        action + "</li>"
       );
-    }).join(" ");
-    return '<div class="admin-fulfil-flags">' + items + "</div>";
+    }).join("");
+    return '<ul class="fx-tasks">' + items + "</ul>";
   }
-  // Has this supporter been thanked? (TASK-411.) Worth its own column rather than a tick among the
-  // fulfilment flags: it is the one thing on this row that goes out on its own, so "did that
-  // actually happen, and did a person or the system do it?" is a question somebody will ask.
-  function fulfilmentThankYouCell(r) {
-    if (!r.thank_you_sent_at) {
-      return '<span class="fx-ty fx-ty--waiting">Not yet</span>';
+
+  // The thank-you LETTER is a different thing from the invite, and it is written and sent on the
+  // Thank you tab — which this page never said, so "Not yet" sat here with nothing you could do
+  // about it and no clue where to go.
+  function fulfilmentLetter(r) {
+    if (r.thank_you_sent_at) {
+      var who = r.thank_you_sent_by === "automatic"
+        ? "sent automatically"
+        : "sent by " + H.escapeHtml(r.thank_you_sent_by || "a volunteer");
+      return '<p class="fx-letter"><span class="fx-state fx-state--done">Sent ' + H.fmtDate(r.thank_you_sent_at) +
+        "</span> " + who + ".</p>";
     }
-    var byMachine = r.thank_you_sent_by === "automatic";
     return (
-      '<span class="fx-ty fx-ty--sent">Sent ' + H.fmtDate(r.thank_you_sent_at) + "</span>" +
-      '<span class="fx-ty-who">' +
-      (byMachine ? "automatically" : "by " + H.escapeHtml(r.thank_you_sent_by || "a volunteer")) +
-      "</span>"
+      '<p class="fx-letter"><span class="fx-state fx-state--todo">Not sent yet</span></p>' +
+      '<p class="fx-help">The thank-you letter is a proper letter with the amount and a personal message. ' +
+      'You write and send it on the <button class="admin-link" type="button" data-goto-section="thank-you">' +
+      "Thank you</button> tab. It is a different thing from the invite above.</p>"
     );
   }
 
-  // Has this supporter been sent their thank-you invite? (TASK-431.) Until now the only way to send
-  // one was the button that emails EVERY un-invited supporter at once, so a single business that
-  // slipped through had no way of being reached on its own — which is exactly how RMC Double
-  // Glazing paid every month since May without anybody ever writing to them.
-  function fulfilmentInviteCell(r) {
-    // They already filled the form in, so they plainly got the link. Nothing to send.
-    if (r.captured_at) return '<span class="fx-ty fx-ty--sent">Link used</span>';
+  function fulfilmentInvite(r) {
+    if (r.captured_at) {
+      return '<p class="fx-letter"><span class="fx-state fx-state--done">Form submitted ' +
+        H.fmtDate(r.captured_at) + "</span> — they filled it in, so they plainly received their link.</p>";
+    }
     if (r.invited_at) {
-      return '<span class="fx-ty fx-ty--sent">Sent ' + H.fmtDate(r.invited_at) + "</span>";
+      return '<p class="fx-letter"><span class="fx-state fx-state--waiting">Invite sent ' +
+        H.fmtDate(r.invited_at) + "</span> — waiting for them to fill in the form.</p>";
     }
-    if (!canEdit("business-supporters")) {
-      return '<span class="fx-ty fx-ty--waiting">Not sent</span>';
-    }
+    var canWrite = canEdit("business-supporters");
     return (
-      '<span class="fx-ty fx-ty--waiting">Not sent</span>' +
-      '<button class="admin-link" type="button" data-send-invite="' + r.id +
-      '" aria-label="Send the thank-you invite to this supporter">Send invite</button>'
+      '<p class="fx-letter"><span class="fx-state fx-state--todo">Not sent yet</span></p>' +
+      '<p class="fx-help">This emails them a private link to a short form asking how they would like to be ' +
+      "thanked — listing, badge, social post, certificate." +
+      (canWrite
+        ? ' <button class="admin-btn admin-btn--small" type="button" data-send-invite="' + r.id +
+          '">Send the invite</button>'
+        : "") +
+      "</p>"
+    );
+  }
+
+  // Who did what, and when. Every fulfilment write already appended an audit row; none of it was
+  // ever shown, so "has somebody already posted that certificate?" had no answer on this page.
+  function fulfilmentHistoryList(rows) {
+    if (!rows.length) return '<p class="fx-empty">Nothing recorded yet.</p>';
+    var LABELS = {
+      "fulfilment.created": "Supporter record created",
+      "fulfilment.send_invite": "Invite sent",
+      "fulfilment.backfill_invites": "Invite sent (catch-up run)",
+      "fulfilment.certificate_sent": "Certificate sent",
+      "fulfilment.certificate_posted": "Certificate posted",
+      "fulfilment.badge_sent": "Badge sent",
+      "fulfilment.social_done": "Social post done",
+      "fulfilment.added_to_supporters": "Added to the supporters list",
+      "fulfilment.preferences": "They filled in the form"
+    };
+    return (
+      '<ul class="fx-history-list">' +
+      rows.map(function (a) {
+        var what = LABELS[a.action] || a.action;
+        // Actors are stored as "admin:someone@example.com"; the system jobs as "script:<name>".
+        var who = String(a.actor || "");
+        who = who.indexOf("admin:") === 0 ? who.slice(6)
+            : who.indexOf("script:") === 0 ? "an automatic job"
+            : who || "unknown";
+        return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
+          '<span class="fx-hist-who">' + H.fmtDate(a.created_at) + " · " + H.escapeHtml(who) + "</span></li>";
+      }).join("") +
+      "</ul>"
+    );
+  }
+
+  function loadFulfilmentHistory(id) {
+    var box = document.querySelector('[data-fulfil-history="' + id + '"]');
+    if (!box) return;
+    authFetch("/api/admin/fulfilments/" + encodeURIComponent(id) + "/history")
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (d) {
+        var target = document.querySelector('[data-fulfil-history="' + id + '"]');
+        if (!target) return;
+        target.innerHTML = d
+          ? fulfilmentHistoryList(d.results || [])
+          : '<p class="fx-empty">Could not load the history.</p>';
+      })
+      .catch(function () {
+        var target = document.querySelector('[data-fulfil-history="' + id + '"]');
+        if (target) target.innerHTML = '<p class="fx-empty">Could not load the history.</p>';
+      });
+  }
+
+  function fulfilmentDetail(r) {
+    return (
+      '<div class="fx-detail">' +
+        '<section class="fx-panel"><h4>Their invite</h4>' + fulfilmentInvite(r) + "</section>" +
+        '<section class="fx-panel"><h4>Thank-you letter</h4>' + fulfilmentLetter(r) + "</section>" +
+        '<section class="fx-panel"><h4>What they asked for</h4>' + fulfilmentSubmission(r) + "</section>" +
+        '<section class="fx-panel"><h4>What to do next</h4>' + fulfilmentTasks(r) + "</section>" +
+        '<section class="fx-panel fx-panel--wide"><h4>History</h4>' +
+          '<div class="fx-history" data-fulfil-history="' + r.id + '">' +
+          '<p class="admin-loading">Loading…</p></div></section>' +
+      "</div>"
     );
   }
 
@@ -877,35 +1022,59 @@
     if (!rows.length) return '<p class="admin-empty">No business supporters yet.</p>';
     var body = rows
       .map(function (r) {
+        var open = fulfilOpenId === r.id;
         return (
-          "<tr><td>" + fulfilmentBusinessCell(r) + "</td><td>" + fulfilmentBandPill(r.band) + "</td><td>" +
-          fulfilmentInviteCell(r) + "</td><td>" +
-          fulfilmentThankYouCell(r) + "</td><td>" +
-          fulfilmentPrefsCell(r) + "</td><td>" + fulfilmentFlagsCell(r) + "</td></tr>"
+          '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-fulfil-toggle="' + r.id +
+          '" tabindex="0" role="button" aria-expanded="' + (open ? "true" : "false") + '">' +
+            '<td><span class="fx-caret" aria-hidden="true"></span>' +
+            fulfilmentBusinessCell(r) + "</td>" +
+            "<td>" + fulfilmentBandPill(r.band) + "</td>" +
+            "<td>" + fulfilmentSummary(r) + "</td>" +
+          "</tr>" +
+          (open
+            ? '<tr class="fx-detail-row"><td colspan="3">' + fulfilmentDetail(r) + "</td></tr>"
+            : "")
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Business</th><th>Band</th><th>Invite</th>' +
-      "<th>Thank you letter</th>" +
-      "<th>Preferences</th><th>Fulfilment</th></tr></thead><tbody>" + body + "</tbody></table>"
+      '<p class="fx-hint">Select a business to see what they asked for and what still needs doing.</p>' +
+      '<table class="admin-table fx-table"><thead><tr><th>Business</th><th>Band</th>' +
+      "<th>Where they are up to</th></tr></thead><tbody>" + body + "</tbody></table>"
     );
   }
+
+  function toggleFulfilment(id) {
+    var n = Number(id);
+    fulfilOpenId = fulfilOpenId === n ? null : n;
+    fulfilmentStatus("");
+    loadFulfilments();
+  }
+
   function loadFulfilments() {
     var wrap = el("fulfilmentsTable");
     if (!wrap) return;
-    fulfilmentStatus("");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/fulfilments")
       .then(j)
       .then(function (d) {
         wrap.innerHTML = fulfilmentsTable(d.results || []);
+        // The open row renders a placeholder for its history; fill it in.
+        if (fulfilOpenId != null) loadFulfilmentHistory(fulfilOpenId);
       })
       .catch(function () {
         wrap.innerHTML = '<p class="admin-empty">Business supporters are unavailable.</p>';
       });
   }
-  function markFulfilment(id, flag) {
+  function markFulfilment(id, flag, label, business) {
+    if (
+      !window.confirm(
+        'Mark "' + (label || flag) + '" as done for ' + (business || "this supporter") + "?\n\n" +
+          "This is recorded against your name and cannot be undone."
+      )
+    ) {
+      return;
+    }
     fulfilmentStatus("");
     authFetch("/api/admin/fulfilments/" + id + "/mark", {
       method: "POST",
@@ -916,8 +1085,12 @@
         return res.ok ? res.json() : null;
       })
       .then(function (out) {
-        if (out) loadFulfilments();
-        else fulfilmentStatus("Could not update that supporter. Please try again.");
+        if (out) {
+          fulfilmentStatus("Marked done, and recorded against your name.");
+          loadFulfilments();
+        } else {
+          fulfilmentStatus("Could not update that supporter. Please try again.");
+        }
       })
       .catch(function () {
         fulfilmentStatus("Could not update that supporter. Please try again.");
@@ -5828,9 +6001,40 @@
       var exp = t.closest("[data-export-batch]");
       if (exp) return exportBatch(exp.getAttribute("data-export-batch"));
       var fulfil = t.closest("[data-fulfil-mark]");
-      if (fulfil) return markFulfilment(fulfil.getAttribute("data-fulfil-id"), fulfil.getAttribute("data-fulfil-mark"));
+      if (fulfil) {
+        // Name the business in the confirm, so an accidental click on the wrong row is caught by
+        // reading the question rather than by noticing afterwards.
+        var openRow = document.querySelector(".fx-summary.is-open .admin-fulfil-biz");
+        return markFulfilment(
+          fulfil.getAttribute("data-fulfil-id"),
+          fulfil.getAttribute("data-fulfil-mark"),
+          fulfil.getAttribute("data-fulfil-label"),
+          openRow ? openRow.textContent : null
+        );
+      }
       var invite = t.closest("[data-send-invite]");
       if (invite) return sendSingleInvite(invite.getAttribute("data-send-invite"));
+      var goto = t.closest("[data-goto-section]");
+      if (goto) return selectView(goto.getAttribute("data-goto-section"));
+      // The row toggle is last: the controls above sit INSIDE the detail panel, so testing them
+      // first stops a button press also collapsing the row out from under itself.
+      var toggle = t.closest("[data-fulfil-toggle]");
+      if (toggle) return toggleFulfilment(toggle.getAttribute("data-fulfil-toggle"));
+    });
+
+    // The supporter rows are role="button" tabindex="0", so they have to answer Enter and Space
+    // like a button does. Without this the whole page is unusable from the keyboard: the detail is
+    // the only way to reach the preferences and the buttons, and it could only be opened by mouse.
+    doc.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+      var t = e.target;
+      if (!t || !t.closest) return;
+      // A real control inside the row handles its own keys; only the row itself needs this.
+      if (t.closest("button, a, input, select, textarea")) return;
+      var toggle = t.closest("[data-fulfil-toggle]");
+      if (!toggle) return;
+      e.preventDefault(); // Space would otherwise scroll the page.
+      toggleFulfilment(toggle.getAttribute("data-fulfil-toggle"));
     });
   }
 

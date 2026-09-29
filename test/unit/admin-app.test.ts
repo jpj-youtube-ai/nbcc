@@ -115,6 +115,17 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     if (row) (row as unknown as Record<string, unknown>)[flag] = true;
     return j({ id, flag, value: true, record: row });
   }
+  // TASK-436: the detail panel asks for this supporter's audit trail. Checked BEFORE the list
+  // route, whose prefix it shares.
+  if (/\/api\/admin\/fulfilments\/\d+\/history/.test(url)) {
+    return j({
+      results: [
+        { id: 9, actor: "admin:kenny@nbcc.test", action: "fulfilment.badge_sent",
+          entity: "business_supporter_fulfilment", entity_id: 1, data: {},
+          created_at: "2026-07-02T09:00:00Z" },
+      ],
+    });
+  }
   if (url.includes("/api/admin/fulfilments")) return j({ results: fulfilments });
   return j({ results: [] }); // queues / adjustment-due
 }
@@ -309,42 +320,75 @@ describe("admin app integration (jsdom, TASK-118)", () => {
   // TASK-208: Business supporters tab — an Editor lists the fulfilment records (business name, band,
   // submitted preferences) and marks a recognition step done; the row refetches and the button becomes
   // a Done pill.
-  it("lists business supporters and marks a fulfilment flag done (Editor)", async () => {
+  it("lists supporters, opens one, and marks a job done after confirming", async () => {
+    // Signed in as an ADMIN, not the editor the other tests use. business-supporters is not one of
+    // an editor's default sections - it holds donor-identifying data and is granted per person - so
+    // an editor cannot do this work, and the buttons now say so. They used to be gated on
+    // donations:edit, which showed an editor controls the server would have refused.
+    loginToken = tokenFor("admin");
     await signIn();
 
     (document.querySelector('.admin-nav-link[data-view="fulfilments"]') as HTMLElement).click();
     await flush();
     await flush();
-    const table = document.querySelector("#fulfilmentsTable table");
-    expect(table).not.toBeNull();
-    const tableText = el("fulfilmentsTable").textContent || "";
-    expect(tableText).toContain("Acme Ltd"); // business name
-    expect(tableText).toContain("Platinum"); // band, capitalised
-    expect(tableText).toContain("Submitted"); // captured_at present → preferences submitted
-    expect(tableText).toContain("Awaiting preferences"); // the second row has none yet
-    expect(tableText).toContain("Bramble Cafe Ltd"); // business_name null → donor name fallback
+    expect(document.querySelector("#fulfilmentsTable table")).not.toBeNull();
 
-    // The "Certificate sent" step for supporter 1 is a not-yet-done action button.
+    // The collapsed list answers the question the page is opened to ask: who still needs something?
+    const listText = el("fulfilmentsTable").textContent || "";
+    expect(listText).toContain("Acme Ltd");
+    expect(listText).toContain("Platinum");
+    expect(listText).toContain("Bramble Cafe Ltd"); // business_name null -> donor name fallback
+    expect(listText).toContain("things to do"); // Acme submitted, jobs outstanding
+    expect(listText).toContain("Invite not sent yet"); // Bramble has neither invite nor form
+
+    // Nothing is actionable from the list itself. Previously every button sat in every row, so a
+    // stray click on a row you were only reading could permanently mark a job done.
+    expect(document.querySelector("#fulfilmentsTable [data-fulfil-mark]")).toBeNull();
+
+    (document.querySelector('[data-fulfil-toggle="1"]') as HTMLElement).click();
+    await flush();
+    await flush();
+
+    const openText = el("fulfilmentsTable").textContent || "";
+    expect(openText).toContain("Form submitted");
+    // The postal address for a certificate they asked us to POST. The old page never showed this
+    // anywhere, which made the job it asks you to tick off impossible to actually do.
+    expect(openText).toContain("1 Office Park");
+    // And the audit trail: who did what, which was recorded all along and never surfaced.
+    expect(openText).toContain("Badge sent");
+    expect(openText).toContain("kenny@nbcc.test");
+
     const markBtn = document.querySelector(
       '#fulfilmentsTable [data-fulfil-id="1"][data-fulfil-mark="certificate_sent"]',
     ) as HTMLButtonElement;
     expect(markBtn).not.toBeNull();
 
+    const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
+    const markCalls = () =>
+      fetchMock.mock.calls.filter((c) => /\/api\/admin\/fulfilments\/1\/mark$/.test(String(c[0])));
+
+    // Marking cannot be undone, so it asks first — and saying no writes nothing at all.
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    markBtn.click();
+    await flush();
+    expect(markCalls()).toHaveLength(0);
+
+    confirmSpy.mockReturnValue(true);
     markBtn.click();
     await flush();
     await flush();
 
-    // The mark POSTed the exact flag, and after the refetch the button is gone (now a Done pill).
-    const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
-    const markCall = fetchMock.mock.calls.find((c) => /\/api\/admin\/fulfilments\/1\/mark$/.test(String(c[0])));
+    const markCall = markCalls()[0];
     expect(markCall).toBeTruthy();
     const markInit = (markCall as unknown[])[1] as { method?: string; body?: string };
     expect(markInit.method).toBe("POST");
     expect(JSON.parse(markInit.body || "{}")).toEqual({ flag: "certificate_sent" });
-    expect(
-      document.querySelector('#fulfilmentsTable [data-fulfil-id="1"][data-fulfil-mark="certificate_sent"]'),
-    ).toBeNull();
-    expect(el("fulfilmentsTable").textContent).toContain("Certificate sent"); // still shown, now as a Done pill
+
+    // The row stays open across the refresh, so you can carry on with the next job rather than
+    // having to find the supporter again after every single tick.
+    expect(document.querySelector('[data-fulfil-toggle="1"]')?.getAttribute("aria-expanded")).toBe("true");
+    expect(el("fulfilmentsTable").textContent).toContain("Certificate sent");
+    confirmSpy.mockRestore();
   });
 
   // TASK-208: the tab is an Editor+ area — a Viewer (who has donations:view, not edit) never sees it in

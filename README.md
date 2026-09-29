@@ -1392,6 +1392,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/admin/fulfilments/:id/mark` | **implemented** | TASK-207 (Editor+ / `donations:edit`; set one of the five status flags true, audited `fulfilment.<flag>` in one transaction; unknown flag → 400, unknown id → 404) |
 | `POST /api/admin/business-supporters/backfill-invites` | **implemented** | TASK-214 (Editor+ / `donations:edit`; one-time, idempotent catch-up that emails the thank-you invite to un-invited business supporters — `invited_at IS NULL` + `captured_at IS NULL` + has email; stamps `invited_at` on each success so a repeat run sends 0; best-effort sends; `fulfilment.backfill_invites` audit; returns `{ pending, sent, failed }`) |
 | `POST /api/admin/business-supporters/:id/send-invite` | **implemented** | TASK-431 (`business-supporters:edit`; sends the catch-up invite to **one** supporter — the same `runBusinessInviteBackfill` given a list of one, so same builder/send/stamp/idempotency; the read applies the bulk gate plus `f.id = $1`; already-invited returns `alreadyInvited: true` rather than an error; `fulfilment.send_invite` audit against that supporter) |
+| `GET /api/admin/fulfilments/:id/history` | **implemented** | TASK-436 (`business-supporters:edit`; the audit rows for one supporter, newest first, for the detail panel's History section — reads `listAuditLog({entity, entityId})`, so the audit log stays the single record and nothing is denormalised onto the row) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -4176,6 +4177,41 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   `test/unit/admin-individual-business-invite.test.ts` (401/403/400, that the read is addressed
   **by id rather than listing everyone**, the counts, the `fulfilment.send_invite` audit against
   that supporter, and the already-invited no-op).
+
+  **TASK-436** rebuilt the page around the question it is actually opened to answer. It used to put
+  every supporter's preferences *and* all five fulfilment buttons in the row, which made "who still
+  needs something from us?" the hardest thing to work out — and it showed none of what you need to
+  actually do the work.
+
+  Four things were wrong, and all four were reported by the person using it:
+
+  - **The buttons did not say what they did, or that they were permanent.** `markFulfilmentFlag`
+    only ever sets its column `true`; there is no untick anywhere. A stray click on a row you were
+    only reading set a flag for good, with no warning. Each job now carries a line saying what it
+    means, and marking one asks first, naming the job and the business.
+  - **Every button showed for every supporter**, so you could mark "Badge sent" for a business that
+    never asked for a badge. Only the jobs they actually requested are offered now
+    (`fulfilTasksFor`), and "Certificate posted" appears only when they chose post over download.
+  - **Nothing showed what they submitted.** `website`, `socials`, `consent_featured` and —
+    worst — `certificate_address` were all being fetched and none were rendered. The page asked you
+    to tick "Certificate posted" while withholding the address to post it to.
+  - **"Thank you letter: Not yet" was a dead end.** The letter is composed on the **Thank you** tab,
+    which this page never said. It now says so, and links there.
+
+  The layout is list-then-detail: business, band, and one plain line of where they are up to
+  (*Invite not sent yet* · *Waiting for them to fill in the form* · *3 things to do* · *All done*).
+  Selecting a supporter opens their invite, their letter, everything they asked for, the jobs
+  outstanding, and **who did what and when** — `GET /api/admin/fulfilments/:id/history`, which reads
+  the audit rows every fulfilment write has always appended and nothing ever showed. No new storage:
+  the audit log is the record, so nothing is denormalised onto the row to drift out of step with it.
+  Rows are keyboard-operable (`role="button"`, Enter/Space) because the detail is now the only route
+  to the controls.
+
+  "Link used" also became **"Form submitted"** — the thank-you page is submit-once and token-gated,
+  so a capture means they filled it in, not merely that a link was opened. One genuine behaviour
+  change: the buttons are gated on `business-supporters:edit`, matching what the server enforces and
+  the tab's own `data-edit-gate`. They were gated on `donations:edit`, which offered an editor
+  controls the server would have refused.
 
   **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
   per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).

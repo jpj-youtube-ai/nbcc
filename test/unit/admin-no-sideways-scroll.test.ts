@@ -65,6 +65,23 @@ describe("the shared table itself", () => {
   });
 });
 
+// THE trap, and it cost two rounds of "still broken". With table-layout:fixed a cell that cannot
+// wrap does not widen its column - it paints OVER the next one. "Gift in kind: An Afternoon Tea"
+// ran across two neighbours because its column was sized for "£50".
+describe("no table cell is stopped from wrapping", () => {
+  it("has no nowrap on any admin table cell, however specific the selector", () => {
+    const offenders = css
+      .split("}")
+      .map((b) => b.trim())
+      .filter((b) => /white-space:\s*nowrap/.test(b))
+      // The visually-hidden header pattern legitimately needs it: the element is clipped to a
+      // single pixel and never painted, so it cannot overlap anything.
+      .filter((b) => !/clip:\s*rect/.test(b))
+      .filter((b) => /-table[^{]*(th|td)|td:nth-child|th:nth-child/.test(b));
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe("no admin panel re-introduces nowrap on a table", () => {
   // A per-panel override is how this went unnoticed for so long: each one looked local and
   // reasonable, and together they hid that the default was wrong.

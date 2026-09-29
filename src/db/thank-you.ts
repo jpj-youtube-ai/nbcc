@@ -29,6 +29,7 @@ interface ThankYouSentDbRow {
   signed_by_role: string | null;
   sent_by: string;
   sent_at: string;
+  cc_email: string | null;
 }
 
 export interface ThankYouSent {
@@ -45,6 +46,8 @@ export interface ThankYouSent {
   signedByName: string;
   signedByRole: string | null;
   sentBy: string;
+  /** Who else was copied in, or null. Null on rows predating TASK-444 means unknown. */
+  ccEmail: string | null;
   sentAt: string;
 }
 
@@ -63,6 +66,7 @@ function mapRow(r: ThankYouSentDbRow): ThankYouSent {
     signedByName: r.signed_by_name,
     signedByRole: r.signed_by_role,
     sentBy: r.sent_by,
+    ccEmail: r.cc_email,
     sentAt: r.sent_at,
   };
 }
@@ -72,8 +76,9 @@ export async function insertThankYouSent(client: PoolClient, input: ThankYouInpu
   const res = await client.query<{ id: number }>(
     `INSERT INTO thank_you_sent
        (donor_id, thank_you_name, addressed_to, recipient_email, gift_type,
-        gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name, signed_by_role, sent_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name, signed_by_role,
+        sent_by, cc_email)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
      RETURNING id`,
     [
       input.donorId,
@@ -88,6 +93,7 @@ export async function insertThankYouSent(client: PoolClient, input: ThankYouInpu
       input.signedByName,
       input.signedByRole ?? null,
       input.sentBy,
+      input.ccEmail ?? null,
     ],
   );
   return res.rows[0].id;
@@ -124,7 +130,7 @@ export async function listThankYouSent(
   const res = await pool.query<ThankYouSentDbRow>(
     `SELECT id, donor_id, thank_you_name, addressed_to, recipient_email, gift_type,
             gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name,
-            signed_by_role, sent_by, sent_at
+            signed_by_role, sent_by, cc_email, sent_at
        FROM thank_you_sent
       ORDER BY id DESC
       LIMIT $1 OFFSET $2`,
@@ -140,7 +146,7 @@ export async function getThankYouSentById(id: number): Promise<ThankYouSent | nu
   const res = await pool.query<ThankYouSentDbRow>(
     `SELECT id, donor_id, thank_you_name, addressed_to, recipient_email, gift_type,
             gift_amount_pence, gift_in_kind, gift_aided, personal_message, signed_by_name,
-            signed_by_role, sent_by, sent_at
+            signed_by_role, sent_by, cc_email, sent_at
        FROM thank_you_sent
       WHERE id = $1`,
     [id],

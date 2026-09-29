@@ -444,7 +444,7 @@
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
         return (
-          "<tr><td>" + d.id + "</td><td>" + H.escapeHtml(d.donor_name) + "</td><td>" + gift +
+          "<tr><td>" + d.id + "</td><td>" + H.escapeHtml(d.donor_name) + '</td><td data-label="Gift">' + gift +
           '</td><td class="admin-num">' + H.formatPence(d.amount_pence) + "</td><td>" +
           (d.gift_aid ? '<span class="admin-pill">Gift Aid</span>' : "") + "</td><td>" +
           H.escapeHtml(d.claim_status) + '</td><td><span class="admin-pill admin-pill--' + pay.state +
@@ -740,7 +740,7 @@
         return (
           "<tr><td>" + b.id + '</td><td><span class="admin-pill">' + H.escapeHtml(b.status) + "</span></td><td>" +
           b.donation_count + '</td><td class="admin-num">' + H.formatPence(b.total_pence) + "</td><td>" +
-          H.fmtDate(b.submitted_at) + "</td><td>" + actions + "</td></tr>"
+          H.fmtDate(b.submitted_at) + '</td><td data-label="">' + actions + "</td></tr>"
         );
       })
       .join("");
@@ -6275,14 +6275,30 @@
           ? '<button class="admin-link ty-del" type="button" data-ty-delete="' + r.id + '" data-ty-name="' + H.escapeHtml(r.thankYouName) + '">Delete</button>'
           : "";
         var actions = view + (view && del ? " · " : "") + del;
+        // TASK-444: one fact per column. The name and the email address used to be crammed into a
+        // single cell, and "addressed to" - the name at the top of the letter, which is often a
+        // person where the thank-you name is their company - was not shown at all despite being
+        // stored since the feature shipped.
+        var cc = r.ccEmail
+          ? H.escapeHtml(r.ccEmail)
+          : '<span class="admin-sub">None</span>';
         return (
-          "<tr><td>" + H.fmtDate(r.sentAt) + "</td><td>" + H.escapeHtml(r.thankYouName) + '<span class="admin-sub">' + H.escapeHtml(r.recipientEmail) +
-          "</span></td><td>" + gift + "</td><td>" + H.escapeHtml(r.signedByName) + "</td><td>" + H.escapeHtml(r.sentBy) + "</td><td>" + actions + "</td></tr>"
+          '<tr><td data-label="Sent">' + H.fmtDate(r.sentAt) +
+          '</td><td data-label="Thank you to">' + H.escapeHtml(r.thankYouName) +
+          '</td><td data-label="Addressed to">' + H.escapeHtml(r.addressedTo) +
+          '</td><td data-label="Email">' + H.escapeHtml(r.recipientEmail) +
+          '</td><td data-label="Copied to">' + cc +
+          "</td><td>" + gift +
+          '</td><td data-label="Signed by">' + H.escapeHtml(r.signedByName) +
+          '</td><td data-label="Sent by">' + H.escapeHtml(r.sentBy) +
+          "</td><td>" + actions + "</td></tr>"
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>Sent</th><th>Recipient</th><th>Gift</th><th>Signed by</th><th>By</th><th></th></tr></thead><tbody>' +
+      '<table class="admin-table ty-sent-table"><thead><tr><th>Sent</th><th>Thank you to</th>' +
+      "<th>Addressed to</th><th>Email</th><th>Copied to</th><th>Gift</th><th>Signed by</th>" +
+      "<th>Sent by</th><th></th></tr></thead><tbody>" +
       body +
       "</tbody></table>"
     );

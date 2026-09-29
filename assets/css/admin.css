@@ -122,10 +122,15 @@
    container, and .admin-table-wrap's overflow-x turns that into a scrollbar inside a panel. Four
    panels had already patched it individually (.nl-panel, .email-audit-table, .fx-table and two
    fulfilment cells), which is the sign that the default was wrong rather than the panels.
-   break-word rather than anywhere: a date or a reference only breaks when it genuinely cannot fit,
-   so ordinary values stay on one line without forcing the table wider than the page. */
+   `anywhere`, not `break-word`, and the difference is the whole fix. Both break a long word when it
+   will not fit a line, but only `anywhere` counts that break when the browser works out the
+   table's MINIMUM width. With break-word an address like
+   isabella.mcfarlane-wetherby@averylongdomainname.example.co.uk still sized the column as though it
+   were unbreakable, so the table kept demanding more room than the card had: measured 854px inside
+   an 843px box. Caught by measuring rather than by reading the rule, which is the only way this
+   particular difference ever shows up. */
 .admin-table th,.admin-table td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);
-  white-space:normal;overflow-wrap:break-word}
+  white-space:normal;overflow-wrap:anywhere}
 .admin-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate-soft);font-weight:600}
 .admin-table tbody tr:last-child td{border-bottom:0}
 .admin-table tbody tr:hover{background:var(--tint)}
@@ -1643,3 +1648,33 @@ tr.nl-click:hover { background: var(--tint); }
 .fx-auto li.is-pending::before{border:0;border-radius:50%;width:7px;height:7px;left:3px;top:6px;
   transform:none;background:transparent;box-shadow:inset 0 0 0 2px var(--slate-soft)}
 .fx-auto li.is-pending .fx-auto-label{font-weight:500;color:var(--slate-soft)}
+
+/* TASK-444: the sent-letter history carries nine columns, and table-layout:fixed would otherwise
+   give them equal shares - as much room for a date as for an email address. These are proportions
+   rather than pixels so the table still fits whatever width the card has.
+   They sum to 99, not 100, deliberately: at exactly 100 the rounding of nine percentage widths
+   landed a single pixel over the container and produced a scrollbar for it. Fixed layout hands
+   the spare percent out anyway, so nothing is lost. */
+.ty-sent-table th:nth-child(1),.ty-sent-table td:nth-child(1){width:8%}   /* Sent */
+.ty-sent-table th:nth-child(2),.ty-sent-table td:nth-child(2){width:13%}  /* Thank you to */
+.ty-sent-table th:nth-child(3),.ty-sent-table td:nth-child(3){width:13%}  /* Addressed to */
+.ty-sent-table th:nth-child(4),.ty-sent-table td:nth-child(4){width:16%}  /* Email */
+.ty-sent-table th:nth-child(5),.ty-sent-table td:nth-child(5){width:14%}  /* Copied to */
+.ty-sent-table th:nth-child(6),.ty-sent-table td:nth-child(6){width:10%}  /* Gift */
+.ty-sent-table th:nth-child(7),.ty-sent-table td:nth-child(7){width:10%}  /* Signed by */
+.ty-sent-table th:nth-child(8),.ty-sent-table td:nth-child(8){width:10%}  /* Sent by */
+.ty-sent-table th:nth-child(9),.ty-sent-table td:nth-child(9){width:5%}   /* actions */
+
+/* On a narrow screen nine columns cannot be read whatever the widths, so the history becomes a
+   list of stacked records: each row a card, each cell labelled by its own header. Reading down
+   beats scrolling across, and scrolling across is the thing we are not doing. */
+@media (max-width:820px){
+  .ty-sent-table,.ty-sent-table tbody,.ty-sent-table tr,.ty-sent-table td{display:block;width:auto}
+  .ty-sent-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ty-sent-table tr{border-bottom:1px solid var(--line);padding:10px 0}
+  .ty-sent-table tr:last-child{border-bottom:0}
+  .ty-sent-table td{border-bottom:0;padding:3px 14px;display:grid;
+    grid-template-columns:minmax(0,7.5rem) minmax(0,1fr);gap:10px;align-items:baseline}
+  .ty-sent-table td::before{content:attr(data-label);font-size:.78rem;color:var(--slate-soft)}
+  .ty-sent-table td:empty{display:none}
+}

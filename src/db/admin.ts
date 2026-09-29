@@ -743,6 +743,8 @@ export async function listDonations(opts: {
   status?: string;
   channel?: string;
   paymentStatus?: string;
+  /** TASK-446: 'monthly' or 'once'. Anything else is ignored rather than returning nothing. */
+  mode?: string;
 }): Promise<{ results: AdminDonationRow[]; total: number }> {
   const { limit, offset } = clampPage(opts.limit, opts.offset);
   const where: string[] = [];
@@ -762,6 +764,13 @@ export async function listDonations(opts: {
   } else if (opts.paymentStatus) {
     params.push(opts.paymentStatus);
     where.push(`d.payment_status = $${params.length}`);
+  }
+  // TASK-446: regular giving vs one-off. Checked against the column's own CHECK values rather
+  // than passed through: an unrecognised mode returns everything, which reads as "no filter", where
+  // passing it on would quietly return an empty list and look like there are no donations at all.
+  if (opts.mode === "monthly" || opts.mode === "once") {
+    params.push(opts.mode);
+    where.push(`d.mode = $${params.length}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const totalRes = await pool.query<{ count: number }>(

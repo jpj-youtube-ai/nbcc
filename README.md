@@ -5337,6 +5337,22 @@ Below 820px nine columns cannot be read at any width, so the history becomes **s
 each row a card, each value labelled by its own header via `data-label`. Reading down beats
 scrolling across, and scrolling across is the thing we are not doing.
 
+## Monthly or one off, on the donations list (TASK-446)
+
+The list could already be narrowed by payment status, which answers *what failed*. It could not
+answer *who gives monthly* — the question behind almost everything else: who to thank, who to chase
+when a card expires, and how much of the income is dependable.
+
+`GET /api/admin/donations?mode=monthly|once`, and a **Type** control beside the payment-status one.
+The two combine, so "monthly and failed" is a question you can ask — which is how you find a
+standing order that has stopped without anybody noticing.
+
+An **unrecognised mode returns everything**, checked against the column's own CHECK values rather
+than passed through. Passing it on would quietly return an empty list, which reads as "there are no
+donations" — a much worse answer to give somebody looking at their own charity's income. Changing
+either filter returns to page one, because staying on page 4 of a different list shows an empty
+table and looks like the filter found nothing.
+
 ## Nothing in the admin scrolls sideways (TASK-442)
 
 Reported twice, and it was one line causing all of it: `.admin-table th, .admin-table td` carried

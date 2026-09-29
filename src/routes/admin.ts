@@ -2262,7 +2262,8 @@ export async function getAdminDonations(req: Request, res: Response): Promise<Re
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const channel = typeof req.query.channel === "string" ? req.query.channel : undefined;
     const paymentStatus = typeof req.query.paymentStatus === "string" ? req.query.paymentStatus : undefined;
-    return res.status(200).json(await listDonations({ limit, offset, status, channel, paymentStatus }));
+    const mode = typeof req.query.mode === "string" ? req.query.mode : undefined;
+    return res.status(200).json(await listDonations({ limit, offset, status, channel, paymentStatus, mode }));
   } catch (err) {
     console.error("admin donations list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });

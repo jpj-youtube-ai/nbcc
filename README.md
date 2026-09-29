@@ -5275,6 +5275,25 @@ Deploys are tuned to finish quickly: the target group sets
 interval, both in `infra/modules/app/alb.tf`. These are Terraform changes, so
 they take effect only once the **Infra** workflow applies them.
 
+## The admin remembers where you were (TASK-443)
+
+A refresh used to drop you back on the overview, whatever you were doing. That is maddening halfway
+through working a list: you lose your place and have to navigate back every time.
+
+`selectView` now records the section, and sign-in resumes it. Written inside `selectView` so it
+cannot drift from what is on screen, since every route into a section goes through there including
+the programmatic jumps.
+
+**sessionStorage, not localStorage** — matching where the session token lives. It survives a
+refresh, which is the complaint, and dies with the tab, so a shared machine never reopens on
+somebody else's last screen.
+
+It only restores a section the user can **still** see: permissions change, and a viewer restored
+onto a section their role no longer reaches would land on a blank panel with nothing explaining why.
+The nav link is the authority, because it is already gated by permission. Both storage calls are
+wrapped, because storage throws in private mode and losing your place is an annoyance while an
+exception there would break navigation outright.
+
 ## Nothing in the admin scrolls sideways (TASK-442)
 
 Reported twice, and it was one line causing all of it: `.admin-table th, .admin-table td` carried

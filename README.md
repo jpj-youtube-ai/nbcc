@@ -5272,6 +5272,29 @@ It does not deploy, does not change the service, and does not touch the running 
 one extra task, runs the command, and stops. The image it runs is whatever the service is currently
 on, so the command must already have shipped.
 
+## Running a one-off job from Actions (TASK-434)
+
+**Actions → Run a one-off job → Run workflow**, pick the job, read the output in the run log.
+
+The CloudShell route above works right up until the browser session quietly disconnects mid-run —
+which is precisely when you are least able to tell whether the job did anything. That happened
+while importing the unrecorded supporters: the terminal silently stopped accepting input, and two
+runs' output was unreadable, so the state of the charity's financial records was briefly unknown.
+It was fine, because the import is transactional and idempotent. It should not have been a question.
+
+This route has no browser in it, leaves an audit trail in Actions, and prints the container's own
+output and exit code into the run log.
+
+**`command` is a fixed choice list, never free text.** A `workflow_dispatch` that accepted an
+arbitrary string would let anyone with repo write access run any command inside production — a much
+bigger hole than the inconvenience it fixes. Adding a job to the list is a reviewed code change, as
+it should be.
+
+Like `run-oneoff.sh`, it derives the task definition, subnets, security group, container name and
+log-stream prefix from the **running service**, so it cannot drift out of date with the stack. It is
+serialised with a `concurrency` group: the import is idempotent but a backup is not something to run
+twice at once, and concurrent writers make the log impossible to read afterwards.
+
 ## Reconciling Stripe against the records (TASK-429)
 
 ```bash

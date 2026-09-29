@@ -165,6 +165,45 @@ export async function listUninvitedBusinessSupporters(): Promise<UninvitedBusine
   }));
 }
 
+// ONE un-invited business supporter, for the individual catch-up send (TASK-431). The gate is
+// character-for-character the one above, narrowed to a single id — deliberately, because it is the
+// gate that makes a second click a no-op. Sending to one supporter must not become the way round
+// the protection that stops the bulk run emailing somebody twice. Returns null when the id does not
+// exist OR when they have already been invited or already used their link; the caller cannot tell
+// those apart, and does not need to: in every one of those cases the answer is "send nothing".
+export async function getUninvitedBusinessSupporter(
+  fulfilmentId: number,
+): Promise<UninvitedBusinessSupporter | null> {
+  const res = await pool.query<{
+    id: number;
+    token: string;
+    band: SupporterBand;
+    email: string;
+    business_name: string | null;
+    full_name: string;
+  }>(
+    `SELECT f.id, f.token, f.band, dn.email, dn.business_name, dn.full_name
+       FROM business_supporter_fulfilment f
+       JOIN donors dn ON dn.id = f.donor_id
+      WHERE f.id = $1
+        AND f.invited_at IS NULL
+        AND f.captured_at IS NULL
+        AND f.token IS NOT NULL
+        AND dn.email IS NOT NULL
+        AND dn.email <> ''`,
+    [fulfilmentId],
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+  return {
+    fulfilmentId: r.id,
+    token: r.token,
+    band: r.band,
+    email: r.email,
+    name: (r.business_name ?? "").trim() || r.full_name,
+  };
+}
+
 // --- Certificate delivery (TASK-211) ------------------------------------------------------------
 // Everything the per-business Platinum certificate page (GET /business/certificate/:token) needs, in
 // ONE read addressed by the secure-thank-you-link token: the recognition band + the certificate
@@ -279,6 +318,8 @@ export interface BusinessFulfilmentListRow {
   certificate_address: string | null;
   consent_featured: boolean;
   captured_at: Date | null;
+  /** When their thank-you invite was sent, or null if they are still waiting for it (TASK-431). */
+  invited_at: Date | null;
   // Admin fulfilment status flags.
   certificate_sent: boolean;
   certificate_posted: boolean;
@@ -300,6 +341,11 @@ export async function listBusinessFulfilments(): Promise<BusinessFulfilmentListR
             f.consent_featured, f.captured_at,
             f.certificate_sent, f.certificate_posted, f.badge_sent, f.social_done, f.added_to_supporters,
             f.created_at,
+            -- TASK-431: whether their thank-you invite has been sent, so the list can show who is
+            -- still waiting and offer to send to that one supporter. Without it the admin page can
+            -- only offer "email everyone un-invited", which is how a business that has been paying
+            -- since May goes four months without anybody noticing they were never written to.
+            f.invited_at,
             -- Whether this supporter has been thanked, and by whom (TASK-411). One letter per
             -- donor, so the LEFT JOIN yields at most one row; sent_by is 'automatic' when the
             -- daily pass sent it and an admin's address when somebody sent it by hand.

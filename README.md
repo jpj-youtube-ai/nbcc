@@ -1391,6 +1391,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/admin/fulfilments` | **implemented** | TASK-207 (Editor+ / `donations:edit`; list every business-supporter fulfilment record joined to its donor, most recent first) |
 | `POST /api/admin/fulfilments/:id/mark` | **implemented** | TASK-207 (Editor+ / `donations:edit`; set one of the five status flags true, audited `fulfilment.<flag>` in one transaction; unknown flag → 400, unknown id → 404) |
 | `POST /api/admin/business-supporters/backfill-invites` | **implemented** | TASK-214 (Editor+ / `donations:edit`; one-time, idempotent catch-up that emails the thank-you invite to un-invited business supporters — `invited_at IS NULL` + `captured_at IS NULL` + has email; stamps `invited_at` on each success so a repeat run sends 0; best-effort sends; `fulfilment.backfill_invites` audit; returns `{ pending, sent, failed }`) |
+| `POST /api/admin/business-supporters/:id/send-invite` | **implemented** | TASK-431 (`business-supporters:edit`; sends the catch-up invite to **one** supporter — the same `runBusinessInviteBackfill` given a list of one, so same builder/send/stamp/idempotency; the read applies the bulk gate plus `f.id = $1`; already-invited returns `alreadyInvited: true` rather than an error; `fulfilment.send_invite` audit against that supporter) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -4143,6 +4144,38 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   counted without aborting), the extended `test/unit/stripe-webhook-business-supporter.test.ts`
   (mark-on-success, a failed send left un-stamped, and marking never affecting the webhook), and
   `test/unit/admin-business-invite-backfill.test.ts` (auth 401/403, the counts, and the summary audit).
+
+  **TASK-431** sends that invite to **one** supporter. The backfill above is all-or-nothing by
+  design, and that turned out to be the whole problem: RMC Double Glazing had been paying £100 a
+  month since 26 May, nobody had ever written to them, and the only button available would have
+  emailed every other un-invited supporter at the same time. Nothing on the page even said who was
+  still waiting.
+
+  It is **not a second send path.** `POST /api/admin/business-supporters/:id/send-invite`
+  (`postAdminSendBusinessInvite`, `business-supporters:edit`) calls the *same*
+  `runBusinessInviteBackfill`, handed a list of one — same builder, same send, same
+  send-then-stamp ordering, same idempotency. A parallel implementation would be a second place for
+  the double-send bug to live. The list of one comes from `getUninvitedBusinessSupporter(id)`, whose
+  WHERE clause is the bulk gate character-for-character plus `f.id = $1`: that gate is what makes a
+  second click a no-op, so sending to one supporter must not become the way round the protection
+  that stops the bulk run emailing somebody twice. A supporter who is already invited (or who has
+  already used their link) is simply not returned, so the run sends nothing and the response says
+  `alreadyInvited: true` — a no-op that protected you is not a failure, and is not shown as one.
+
+  The audit row is **`fulfilment.send_invite` against that supporter's id**, not
+  `backfill_invites` against `null` (`auditAction` / `auditEntityId`, both optional and defaulted so
+  the TASK-214 caller is byte-for-byte unchanged). Otherwise the log reads as though somebody
+  clicked the bulk button and "who did we write to, and why" stops being answerable.
+
+  The **Business supporters** table gains an **Invite** column — *Link used*, *Sent \<date\>*, or a
+  **Send invite** button for anyone still waiting (`fulfilmentInviteCell` / `sendSingleInvite` in
+  `assets/js/admin/app.js`); `listBusinessFulfilments` now also selects `invited_at` to feed it.
+  No new dependency, no new config key, no migration. Covered by
+  `test/unit/individual-business-invite.test.ts` (the narrowed gate is identical to the bulk one,
+  the name fallback, send-and-stamp, no-stamp-on-failure, and the audit labelling) and
+  `test/unit/admin-individual-business-invite.test.ts` (401/403/400, that the read is addressed
+  **by id rather than listing everyone**, the counts, the `fulfilment.send_invite` audit against
+  that supporter, and the already-invited no-op).
 
   **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
   per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).

@@ -2070,7 +2070,10 @@ export async function postAdminThankYouSend(req: Request, res: Response): Promis
   }
   const cc = ccRaw || undefined;
   try {
-    const id = await recordThankYouSent(input);
+    // TASK-444: the cc is part of the record now. It used to be used to address the email and then
+    // thrown away, so "was anybody copied on that?" was unanswerable for a letter about a donor's
+    // own money.
+    const id = await recordThankYouSent({ ...input, ccEmail: cc ?? null });
     try {
       // A tokenised link to the public print-your-letter page (the donor prints/saves a PDF there —
       // a link, not an attachment, so deliverability stays clean).

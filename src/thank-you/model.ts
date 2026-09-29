@@ -22,6 +22,9 @@ export const thankYouInputSchema = z
     // a presentation detail stored (TASK-165) so a re-opened letter keeps its role.
     signedByRole: z.string().trim().min(1).nullable().optional(),
     sentBy: z.string().trim().min(1), // the logged-in admin (audit)
+    // TASK-444: who else was copied in. Used to be accepted by the route and thrown away, so
+    // "was anybody copied on that?" had no answer for a letter about somebody's own money.
+    ccEmail: z.string().trim().email().nullable().optional(),
   })
   .refine((v) => (v.giftType === "money" ? v.giftAmountPence != null : v.giftInKind != null), {
     message: "A money gift needs an amount; an in-kind gift needs a description of what was given.",

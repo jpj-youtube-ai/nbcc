@@ -34,10 +34,13 @@ describe("the shared table cells", () => {
     expect(tableCellRule()).not.toContain("nowrap");
   });
 
-  // break-word, not anywhere: a date or a reference should only break when it genuinely cannot fit.
-  // "anywhere" would happily snap 29/09/2026 in half in a column that had room for it.
-  it("break a long value only when it cannot otherwise fit", () => {
-    expect(tableCellRule()).toContain("overflow-wrap:break-word");
+  // `anywhere`, not `break-word`. Both break a long word that will not fit a line, but ONLY
+  // `anywhere` counts that break when the browser computes the table's MINIMUM width. With
+  // break-word a long email address still sized its column as though unbreakable, and the table
+  // kept demanding more room than its card had: measured 854px inside an 843px box.
+  it("breaks long values in a way that also shrinks the table's minimum width", () => {
+    expect(tableCellRule()).toContain("overflow-wrap:anywhere");
+    expect(tableCellRule()).not.toContain("break-word");
   });
 });
 

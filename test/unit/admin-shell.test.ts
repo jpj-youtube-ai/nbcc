@@ -70,6 +70,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "gasds",
       "subscriptions",
       "fulfilments",
+      // TASK-447: the individuals giving monthly, beside the businesses.
+      "monthly",
       "stories",
       "ticker",
       "ball",

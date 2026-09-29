@@ -410,6 +410,7 @@
     else if (name === "gasds") loadGasds();
     else if (name === "subscriptions") loadSubs();
     else if (name === "fulfilments") loadFulfilments();
+    else if (name === "monthly") loadMonthly();
     else if (name === "stories") loadStories();
     else if (name === "contact") loadContact();
     else if (name === "newsletter") loadNewsletters();
@@ -1204,6 +1205,108 @@
         fulfilmentStatus("Could not update that supporter. Please try again.");
       });
   }
+  // ---- monthly givers (TASK-447) ----
+  // The people giving every month. Businesses have had a screen since TASK-208; these donors had
+  // nothing, and were findable only by paging the whole donations list - which is how three of them
+  // went four months without a thank-you and nobody noticed.
+  var monthlyRows = [];
+
+  // What is actually wrong, in the order it matters. A cancellation is settled and needs nothing; a
+  // failing card is money leaving this month and is the reason to open this screen at all.
+  function monthlyState(r) {
+    if (r.state === "cancelled") return { label: "Cancelled", cls: "fx-state--waiting", attention: false };
+    if (r.state === "lapsed") return { label: "Lapsed", cls: "fx-state--todo", attention: true };
+    if (r.state === "past_due") {
+      return {
+        label: r.failedAttempts ? "Payment failing (" + r.failedAttempts + ")" : "Payment failing",
+        cls: "fx-state--todo",
+        attention: true,
+      };
+    }
+    // No dunning row: an older or hand-imported supporter. Not a problem, and saying "unknown"
+    // would send somebody looking for a fault that is not there.
+    if (r.state === "unknown") return { label: "Giving", cls: "fx-state--done", attention: false };
+    return { label: "Giving", cls: "fx-state--done", attention: false };
+  }
+
+  var monthlyGiving = function (r) {
+    return r.state === "active" || r.state === "unknown";
+  };
+
+  function monthlyTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">Nobody matches that.</p>';
+    var body = rows
+      .map(function (r) {
+        var st = monthlyState(r);
+        // Gift Aid on a regular gift is worth 25% a month, for ever. It earns a column of its own
+        // rather than a tick lost among the rest.
+        var ga = r.giftAid
+          ? '<span class="fx-yes">Yes</span>'
+          : '<span class="fx-state fx-state--todo">No</span>';
+        var thanked = r.thankedAt
+          ? H.fmtDate(r.thankedAt)
+          : '<span class="fx-state fx-state--todo">Not yet</span>';
+        return (
+          '<tr><td data-label="Name">' + H.escapeHtml(r.fullName) +
+          '<span class="admin-sub">' + H.escapeHtml(r.email || "No email") + "</span>" +
+          '</td><td data-label="Monthly">' + H.formatPence(r.monthlyPence) +
+          '</td><td data-label="Since">' + H.fmtDate(r.firstPaidAt) +
+          '</td><td data-label="Given so far">' + H.formatPence(r.totalPence) +
+          '<span class="admin-sub">' + r.paymentCount + (r.paymentCount === 1 ? " payment" : " payments") + "</span>" +
+          '</td><td data-label="Gift Aid">' + ga +
+          '</td><td data-label="Thanked">' + thanked +
+          '</td><td data-label="State"><span class="fx-state ' + st.cls + '">' + H.escapeHtml(st.label) + "</span>" +
+          '</td><td data-label=""><button class="admin-link" type="button" data-donor="' + r.donorId + '">View</button></td></tr>'
+        );
+      })
+      .join("");
+    return (
+      '<table class="admin-table monthly-table"><thead><tr><th>Name</th><th>Monthly</th><th>Since</th>' +
+      "<th>Given so far</th><th>Gift Aid</th><th>Thanked</th><th>State</th><th></th>" +
+      "</tr></thead><tbody>" + body + "</tbody></table>"
+    );
+  }
+
+  function renderMonthly() {
+    var filter = el("monthlyStateFilter");
+    var want = filter ? filter.value : "giving";
+    var rows = monthlyRows.filter(function (r) {
+      if (want === "giving") return monthlyGiving(r);
+      if (want === "attention") return monthlyState(r).attention;
+      return true;
+    });
+    el("monthlyTable").innerHTML = monthlyTable(rows);
+
+    // The figure worth knowing: what is coming in every month from the people still giving. Taken
+    // from the rows that are actually giving, never from the filtered view - a total that changed
+    // when you changed a filter would be a number nobody could trust.
+    var giving = monthlyRows.filter(monthlyGiving);
+    var perMonth = giving.reduce(function (sum, r) { return sum + r.monthlyPence; }, 0);
+    var needing = monthlyRows.filter(function (r) { return monthlyState(r).attention; }).length;
+    var noGiftAid = giving.filter(function (r) { return !r.giftAid; }).length;
+    el("monthlySummary").textContent =
+      giving.length + " giving, " + H.formatPence(perMonth) + " a month" +
+      (needing ? " · " + needing + " needing attention" : "") +
+      (noGiftAid ? " · " + noGiftAid + " without Gift Aid" : "");
+  }
+
+  function loadMonthly() {
+    var wrap = el("monthlyTable");
+    if (!wrap) return;
+    wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
+    authFetch("/api/admin/monthly-supporters")
+      .then(j)
+      .then(function (d) {
+        monthlyRows = d.results || [];
+        renderMonthly();
+      })
+      .catch(function () {
+        wrap.innerHTML = '<p class="admin-empty">Monthly givers are unavailable.</p>';
+      });
+  }
+  var monthlyFilter = el("monthlyStateFilter");
+  if (monthlyFilter) monthlyFilter.addEventListener("change", renderMonthly);
+
   // ---- catch up invites (TASK-214): email the thank-you invite to supporters who never got it ----
   // One click POSTs the backfill endpoint (server-side Editor+), then shows how many went out. Safe to
   // click again: the server only emails supporters who have not been invited yet, so a repeat run

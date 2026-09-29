@@ -137,6 +137,7 @@ import { listThankYouEligible, recordThankYouSent, listThankYouSent, deleteThank
 import { DEFAULT_THANK_YOU_THRESHOLD_PENCE, thankYouInputSchema, giftSummary } from "../thank-you/model";
 import { buildThankYouEmailHtml, buildThankYouEmailText, thankYouSubject } from "../thank-you/letter";
 import { signThankYouLetterToken } from "../thank-you/letter-token";
+import { listMonthlySupporters } from "../db/monthly-supporters";
 import { listSupporters, createSupporter, updateSupporter, deleteSupporter } from "../db/ticker";
 import { supporterCreateSchema, supporterUpdateSchema } from "../ticker/model";
 import {
@@ -3492,6 +3493,27 @@ export async function postAdminMarkFulfilment(req: Request, res: Response): Prom
     return res.status(500).json({ error: "Admin update is temporarily unavailable" });
   }
 }
+
+// GET /api/admin/monthly-supporters (TASK-447) — the individuals who give every month.
+//
+// Businesses have had a screen of their own since TASK-208; the people quietly paying £10 a month
+// had nothing, and were findable only by paging the whole donations list. That is how three of them
+// went four months without a thank-you and nobody noticed.
+//
+// Gated on donations:view, matching the donations list, which already shows every one of these
+// names and addresses. A separate permission would be a new gate over data the same people can
+// already read one screen across.
+export async function getAdminMonthlySupporters(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "donations", "view"))) return;
+  try {
+    return res.status(200).json({ results: await listMonthlySupporters() });
+  } catch (err) {
+    console.error("admin monthly supporters failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin is temporarily unavailable" });
+  }
+}
+
+adminRouter.get("/api/admin/monthly-supporters", getAdminMonthlySupporters);
 
 adminRouter.get("/api/admin/fulfilments", getAdminFulfilments);
 adminRouter.post("/api/admin/fulfilments/:id/mark", postAdminMarkFulfilment);

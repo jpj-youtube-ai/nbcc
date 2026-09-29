@@ -25,7 +25,8 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "admin:set-password": "tsx src/ops/set-admin-password.ts",
     "backup": "node dist/scripts/run-backup.js",
-    "reconcile:stripe": "node dist/scripts/reconcile-stripe.js"
+    "reconcile:stripe": "node dist/scripts/reconcile-stripe.js",
+    "import:unrecorded": "node dist/scripts/import-unrecorded.js"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

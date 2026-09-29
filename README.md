@@ -5234,6 +5234,62 @@ and flagged unmatchable rather than dropped.
 
 Importing what it finds is a **separate, deliberate step**, not something this script does.
 
+## Importing what the reconciliation found (TASK-430)
+
+```bash
+npm run import:unrecorded              # DRY RUN: prints everything, writes nothing
+npm run import:unrecorded -- --commit  # actually writes
+```
+
+The reconciliation above found **five** paying customers with no record at all — £660 since late
+May. RMC Double Glazing at £100/month, three individuals at £10/month who had received no
+thank-you, no receipt and no Gift Aid request in four months, and one £10 test payment made by the
+charity itself.
+
+**Dry run by default.** It reads Stripe, works out every donor, donation and supporter record it
+would create, checks each against the database, and prints the lot. Nothing is written until
+`--commit`. Money entering a charity's financial records does not get to be a one-pass operation.
+
+**The customer list is hardcoded in the script, on purpose.** These five were found by the
+reconciliation and classified by a human looking at the names — RMC is a company, three are
+individuals, one is the charity's own test. Hardcoding means the script cannot be pointed at an
+arbitrary customer by accident, and that "is this a business?" was answered by a person rather than
+guessed from the spelling of a name.
+
+### Why it has its own write path
+
+`src/db/historical-import.ts` is deliberately separate from `src/db/donations.ts`. Everything in
+`donations.ts` records money as it arrives, stamped `now()`. This is the only place that can write a
+donation dated in the past, and it lives apart so backdating is something you go looking for rather
+than something the ordinary path can do by accident. A donation recorded on the wrong day is a wrong
+number in the accounts — these are dated from the Stripe charge, so the May payment reads May.
+
+### What it will not do
+
+- **It never creates a Gift Aid declaration.** A declaration is the donor's own statement to HMRC;
+  creating one on their behalf would be fabricating a legal document. Individuals are *invited* to
+  declare, and their declaration can cover past gifts if they choose that scope.
+- **It never sets `email_consent` or `thankyou_consent` true.** These five signed up through Stripe
+  before any of this existed, so none of them passed through the consent flow. Both columns are
+  written `false` explicitly rather than left to default.
+- **It sends no email.** `--commit` creates records only. Correspondence is a separate, deliberate
+  step — see the individual invite below.
+- **It refuses rather than guesses**, and says why: a customer with no email cannot be contacted or
+  matched, one with no successful payment is not missing income, a company with no name has nothing
+  to be recorded under. Each is skipped *with a reason*, because a silent omission in a financial
+  import is the failure mode that matters.
+
+### Running it twice is safe
+
+Idempotent on Stripe's charge id, which is the natural key for "this exact payment". A second run
+finds every charge already recorded and creates nothing. An existing donor with the same email is
+reused rather than duplicated. Each supporter is written in **one transaction**: either all of their
+donations land or none do, because a donor with half their donations is worse than a donor with
+none — it looks complete.
+
+Every import appends a `donor.historical_import` audit row, so anyone auditing these donations later
+can see why they are dated before the system existed.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

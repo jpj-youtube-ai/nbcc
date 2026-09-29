@@ -6274,7 +6274,10 @@
         var del = canWrite
           ? '<button class="admin-link ty-del" type="button" data-ty-delete="' + r.id + '" data-ty-name="' + H.escapeHtml(r.thankYouName) + '">Delete</button>'
           : "";
-        var actions = view + (view && del ? " · " : "") + del;
+        // TASK-445: stacked, not separated by a middot. Side by side, "View letter · Delete" needs
+        // about 160px; the column had 75px and broke the words themselves into "Vie w lett er".
+        // One action per line reads at half the width.
+        var actions = view || del ? '<span class="ty-actions">' + view + del + "</span>" : "";
         // TASK-444: one fact per column. The name and the email address used to be crammed into a
         // single cell, and "addressed to" - the name at the top of the letter, which is often a
         // person where the thank-you name is their company - was not shown at all despite being

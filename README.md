@@ -5294,6 +5294,28 @@ The nav link is the authority, because it is already gated by permission. Both s
 wrapped, because storage throws in private mode and losing your place is an annoyance while an
 exception there would break navigation outright.
 
+## The sent-letter history, readable (TASK-445)
+
+TASK-444 guessed the column shares and got several wrong. The screenshot said it plainly: the
+actions column had **5%** and broke "View letter" into "Vie w lett er", while "The Night Before
+Christmas Campaign" wrapped over five lines in 10% and "29/09/2026" split across two.
+
+The shares are corrected against what the columns actually hold, and three rules stop the shared
+`overflow-wrap: anywhere` doing more harm than good in narrow cells:
+
+- A **date and an amount** are single tokens, so they never wrap. Both are narrow enough that
+  holding them together cannot widen the table.
+- The **actions stack** rather than sitting side by side. "View letter · Delete" needs about 160px
+  in a row; one per line reads at half that.
+- Those links **break between words, never inside one**. `anywhere` exists so a long address cannot
+  widen a table; a two word link never could.
+
+The stacking breakpoint moved from 820px to **1000px**: nine columns at 900px were still unreadable
+even without a scrollbar, which is the wrong thing to have been optimising for.
+
+Verified at 1600, 1200, 900 and 375: nothing scrolls, the date and the sender sit on one line each,
+and below 1000px it is stacked records rather than nine cramped columns.
+
 ## The sent-letter history, one fact per column (TASK-444)
 
 The recipient's name and email address were crammed into a single cell, and **addressed to** — the

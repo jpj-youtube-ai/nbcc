@@ -1713,6 +1713,21 @@ rewritten), **masthead** (the brand signature; its variants already span 16→26
 **divider/image** (no text) take no step — `NO_SIZE_STEP` in `src/newsletter/blocks.ts` is the
 authority, mirrored by `NL_NO_SIZE` in the builder.
 
+**Bold, italic and line breaks in prose, and what a paste keeps (TASK-253, TASK-469).** The four prose
+boxes (Text, Greeting intro, Story body, Spotlight quote) are plain text carrying two markers the server
+turns into emphasis, `**bold**` and `*italic*`, which the **B** / **I** buttons above each box write
+(TASK-253). Their line breaks reach the email as well (TASK-469). `proseHtml` turns a newline into `<br>`
+and a blank line into a paragraph gap (`<br><br>`), after escaping, so `<strong>`, `<em>` and `<br>`
+remain the only tags an author's text can produce. Until then, a second paragraph ran straight on from
+the first, because mail clients collapse a raw newline to a space. A **paste** into one of those boxes
+keeps the basics. `assets/js/admin/paste-prose.js` turns a highlighted selection (clipboard HTML: a
+Claude reply, a social post) or Markdown (Claude's Copy button) into the same markup. Paragraphs, line
+breaks, bold and italic come across; a heading becomes a bold paragraph, and a list item a line starting
+`• ` or its number. A link keeps only its words: the address behind it is dropped, while an address
+written out in the text stays. Fonts, colours, sizes and pictures are dropped, and emoji kept. The
+result goes in with `execCommand("insertText")`, so Ctrl+Z undoes a paste. Every other box pastes plain
+text, as before.
+
 **Deleting a newsletter (TASK-252, hardened by TASK-258).** `DELETE /api/admin/newsletters/:id`,
 **Admin only**. A **draft** (never went anywhere) is really deleted, through `writeWithAudit` so the
 deletion and its `audit_log` row commit atomically. A **sent** newsletter is **immutable — a permanent

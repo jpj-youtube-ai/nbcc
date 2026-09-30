@@ -5438,8 +5438,11 @@ list, found no results in it, and showed an empty table under "0 giving, £0 a m
 worse than an error. `loadMonthly` now throws on any answer that is not OK, as `loadEvents` already
 did, so the screen reads "Monthly givers are unavailable." The rows start as `null` rather than an
 empty list, because no list is not the same as nobody giving: changing **Show** after a failure
-leaves the message in place instead of counting nothing back into a £0 total. A list that did come
-back empty still reads "0 giving, £0 a month", because then it is true.
+leaves the message in place instead of counting nothing back into a £0 total. A failure also
+forgets any list that loaded earlier and clears its total, so figures from a previous visit are
+never taken as current, and **Show** cannot bring them back (after a 403, that would redraw names
+for someone who has just lost access). A list that did come back empty still reads "0 giving, £0 a
+month", because then it is true.
 
 ## Monthly or one off, on the donations list (TASK-446)
 

@@ -1403,6 +1403,10 @@
         renderMonthly();
       })
       .catch(function () {
+        // Whatever loaded before is not what is there now: nothing of it stays up to be taken as
+        // current, or comes back when "Show" is changed.
+        monthlyRows = null;
+        el("monthlySummary").textContent = "";
         wrap.innerHTML = '<p class="admin-empty">Monthly givers are unavailable.</p>';
       });
   }

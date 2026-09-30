@@ -17,6 +17,7 @@ import {
   type SendJob,
 } from "../db/newsletter-send-jobs";
 import { sendNewsletter } from "../clients/email";
+import { newsletterLinkTags } from "../email/tracked-links";
 import { signUnsubscribeTokenV2 } from "../donors/unsubscribe-token";
 import { signSubscriberUnsubscribeToken } from "../donors/unsubscribe-token";
 import { newsletterDocSchema, renderNewsletter } from "./blocks";
@@ -155,6 +156,9 @@ async function runJobTick(job: SendJob, now: Date): Promise<void> {
         // TASK-275: derived from the very html we are sending, so the two can never disagree.
         text: htmlToPlainText(html),
         unsubscribeUrl,
+        // TASK-480: links to our own site say which issue they came from. Added at send time only,
+        // so the stored draft and the admin preview never carry them.
+        links: newsletterLinkTags(job.newsletterId),
       });
       await markRecipientSent(r.id);
       accepted.push({ donorId: r.donorId, email: r.email });

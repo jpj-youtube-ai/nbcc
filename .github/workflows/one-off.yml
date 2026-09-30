@@ -25,6 +25,7 @@ on:
           - "npm run catchup:individuals"
           - "npm run catchup:individuals -- --commit"
           - "npm run backup"
+          - "npm run verify:restore"
 
 permissions:
   id-token: write   # OIDC into AWS

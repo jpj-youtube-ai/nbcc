@@ -18,6 +18,8 @@ export type S3ClientOptions = {
 export type S3Client = {
   put: (key: string, body: Buffer, contentType?: string) => Promise<void>;
   getJson: <T>(key: string) => Promise<T | null>;
+  /** TASK-452: the archive itself, to prove it can be restored. Null when there is no such key. */
+  getBytes: (key: string) => Promise<Buffer | null>;
 };
 
 export function createS3Client(opts: S3ClientOptions): S3Client {
@@ -89,6 +91,29 @@ export function createS3Client(opts: S3ClientOptions): S3Client {
       if (res.status === 404) return null;
       if (!res.ok) throw new Error(`S3 get ${key} failed: ${res.status} ${await res.text()}`);
       return (await res.json()) as T;
+    },
+
+    // The same request as getJson, returning the body rather than parsing it. Separate so a binary
+    // archive is never run through JSON.parse, and so the JSON path keeps its own 404 contract.
+    async getBytes(key: string): Promise<Buffer | null> {
+      const url = endpoint(key);
+      const emptyHash = createHash("sha256").update("").digest("hex");
+
+      const headers = signRequest({
+        method: "GET",
+        url,
+        headers: { "x-amz-content-sha256": emptyHash },
+        body: "",
+        region: opts.region,
+        service: "s3",
+        credentials: await opts.credentials(),
+        now: clock(),
+      });
+
+      const res = await doFetch(url, { method: "GET", headers });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error(`S3 get ${key} failed: ${res.status} ${await res.text()}`);
+      return Buffer.from(await res.arrayBuffer());
     },
   };
 }

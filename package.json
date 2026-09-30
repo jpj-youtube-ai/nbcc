@@ -27,7 +27,8 @@
     "backup": "node dist/scripts/run-backup.js",
     "reconcile:stripe": "node dist/scripts/reconcile-stripe.js",
     "import:unrecorded": "node dist/scripts/import-unrecorded.js",
-    "catchup:individuals": "node dist/scripts/catchup-individuals.js"
+    "catchup:individuals": "node dist/scripts/catchup-individuals.js",
+    "verify:restore": "node dist/scripts/verify-restore.js"
   },
   "dependencies": {
     "exceljs": "^4.4.0",

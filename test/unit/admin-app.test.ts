@@ -563,6 +563,27 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(scrollTo).not.toHaveBeenCalled();
     });
 
+    // Where the browser did keep your place, what is left over can still be a fraction of a pixel
+    // on a phone whose pixels are not whole CSS pixels. Correcting that would fire an instant scroll
+    // in the middle of the flick that closed the menu, and stop it dead, to move nothing you can see.
+    it("leaves the page alone when what moved is less than a pixel", async () => {
+      await signIn();
+      const toggle = el("adminNavToggle");
+      const nav = toggle.closest(".admin-nav") as HTMLElement;
+      const content = document.querySelector(".admin-content") as HTMLElement;
+      const scrollBy = vi.fn();
+      window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+      let navRect = rectAt(0, 685);
+      nav.getBoundingClientRect = () => navRect;
+      content.getBoundingClientRect = () => rectAt(nav.classList.contains("is-open") ? -1000 : -1000.4, 9000);
+      toggle.click();
+      navRect = rectAt(-700, 685);
+      window.dispatchEvent(new Event("scroll"));
+
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(scrollBy).not.toHaveBeenCalled();
+    });
+
     // A list taller than a small phone's screen has to be scrolled to reach its last few sections.
     // Choosing one of those used to leave the page where it was, with the top of the new section
     // hidden under the pinned bar.

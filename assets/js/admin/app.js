@@ -483,9 +483,10 @@
     if (how === "passed" && content) {
       // Closing takes the list's height out of the page above you. Chrome keeps your place by
       // itself; a browser that does not would jump by the height of the list, so put back whatever
-      // moved.
+      // moved. A whole pixel or more only: a fraction left over on a phone whose pixels are not
+      // whole CSS pixels moves nothing you can see, and an instant scroll would stop your flick.
       var moved = content.getBoundingClientRect().top - before;
-      if (moved) window.scrollBy({ top: moved, behavior: "instant" });
+      if (Math.abs(moved) >= 1) window.scrollBy({ top: moved, behavior: "instant" });
     }
     navReturnY = null;
     navSeen = false;

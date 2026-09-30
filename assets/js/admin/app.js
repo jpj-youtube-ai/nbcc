@@ -149,6 +149,9 @@
     currentRole = claims.role || "viewer";
     el("userEmail").textContent = claims.email || "";
     el("userRole").textContent = claims.role || "";
+    // TASK-478: a fresh start for whoever has signed in, so nobody sees the last person's pills.
+    resetWhatsNew();
+    refreshWhatsNew();
     loadMyPermissions();
     refreshEnquiryNotice();
   }
@@ -403,6 +406,100 @@
       });
   }
 
+  // TASK-478: a New pill on each section holding something this person has not seen yet, and on
+  // the things inside it that arrived since their last visit. Per person: the server remembers when
+  // each of us last opened each section (src/routes/admin-whats-new.ts), so one person opening it
+  // clears the pill for them alone.
+  var whatsNew = null; // area -> { new, since }, from the server; null until it first answers
+  var whatsNewLoad = null; // the latest request for it
+  var seenHere = {}; // area -> when this tab recorded a visit, so a slower answer cannot undo it
+  var visitSince = {}; // area -> the "since" this visit's row pills compare against
+  var currentView = null;
+
+  function resetWhatsNew() {
+    whatsNew = null;
+    whatsNewLoad = null;
+    seenHere = {};
+    visitSince = {};
+    currentView = null;
+    renderNewPills();
+  }
+  // The comma is for a screen reader, so the section reads as "Contact form, New".
+  var NEW_PILL = '<span class="admin-new-pill"><span class="sr-only">, </span>New</span>';
+
+  function refreshWhatsNew() {
+    whatsNewLoad = authFetch("/api/admin/whats-new")
+      .then(okJson)
+      .then(function (d) {
+        var next = {};
+        ((d && d.areas) || []).forEach(function (a) {
+          var mine = seenHere[a.area];
+          // An answer worked out before this tab's own visit was recorded is out of date for that
+          // section. Anything the server counted after the visit is trusted as it stands.
+          next[a.area] = mine && mine > a.since ? { new: false, since: mine } : { new: !!a.new, since: a.since };
+        });
+        whatsNew = next;
+      })
+      .catch(function () {
+        // No pills is the honest failure: a pill appears only when we know something is new.
+        if (!whatsNew) whatsNew = {};
+      })
+      .then(renderNewPills);
+    return whatsNewLoad;
+  }
+
+  function renderNewPills() {
+    var any = false;
+    Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link[data-view]"), function (b) {
+      var old = b.querySelector(".admin-new-pill");
+      if (old) old.remove();
+      var area = b.getAttribute("data-view");
+      var isNew = !!(whatsNew && whatsNew[area] && whatsNew[area].new) && area !== currentView && !b.hidden;
+      if (!isNew) return;
+      b.insertAdjacentHTML("beforeend", NEW_PILL);
+      any = true;
+    });
+    var toggle = el("adminNavToggle");
+    if (!toggle) return;
+    var oldT = toggle.querySelector(".admin-new-pill");
+    if (oldT) oldT.remove();
+    if (any) toggle.insertAdjacentHTML("beforeend", NEW_PILL);
+  }
+
+  // Opening a section: keep what it was new since for this visit's row pills, then record the visit.
+  function beginVisit(name) {
+    delete visitSince[name];
+    (whatsNewLoad || refreshWhatsNew()).then(function () {
+      if (currentView !== name || !whatsNew || !whatsNew[name]) return;
+      visitSince[name] = whatsNew[name].since;
+      authFetch("/api/admin/whats-new/seen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ area: name }),
+      })
+        .then(okJson)
+        .then(function (d) {
+          if (!d || !d.seenAt) return;
+          seenHere[name] = d.seenAt;
+          whatsNew[name] = { new: false, since: d.seenAt };
+          renderNewPills();
+        })
+        .catch(function () {
+          // Not recorded: the pill comes back next time, which is the safe way round.
+        });
+    });
+  }
+
+  // A row's pill: it arrived after this person's last visit to the section. Before the server has
+  // answered for this visit, its previous answer stands in (it is from before the visit).
+  function rowNewPill(area, when) {
+    if (currentView !== area) return ""; // the Overview and Search share some of these tables
+    var since = visitSince[area];
+    if (since === undefined && whatsNew && whatsNew[area]) since = whatsNew[area].since;
+    if (!since || !when) return "";
+    return new Date(when) > new Date(since) ? " " + NEW_PILL : "";
+  }
+
   // TASK-443: which section you were last on. A refresh used to drop you back on the overview,
   // which is maddening halfway through working a list: you lose your place and have to navigate
   // back every time. sessionStorage rather than localStorage, matching where the session token
@@ -443,6 +540,11 @@
     closeNav("chosen");
     showOnly("view-" + name);
     refreshEnquiryNotice();
+    // TASK-478: the section you open loses its pill at once; the rest are asked about afresh.
+    currentView = name;
+    refreshWhatsNew();
+    beginVisit(name);
+    renderNewPills();
     if (name === "search") {
       var q = el("searchQuery");
       if (q && q.focus) q.focus();
@@ -584,6 +686,7 @@
           (d.gift_aid ? '<span class="admin-pill">Gift Aid</span>' : "") + "</td><td>" +
           H.escapeHtml(d.claim_status) + '</td><td><span class="admin-pill admin-pill--' + pay.state +
           '">' + H.escapeHtml(pay.label) + "</span></td><td>" + H.fmtDate(d.created_at) +
+          rowNewPill("donations", d.payment_status === "paid" ? d.created_at : null) +
           '</td><td><button class="admin-link" type="button" data-donor="' + d.donor_id + '">View</button></td></tr>'
         );
       })
@@ -1028,7 +1131,7 @@
     if (r.business_name && r.donor_name && r.donor_name !== r.business_name) {
       out += '<span class="admin-fulfil-sub">' + H.escapeHtml(r.donor_name) + "</span>";
     }
-    return out;
+    return out + rowNewPill("fulfilments", r.created_at);
   }
 
   // What the system does BY ITSELF the moment a business submits the form, and what a person still
@@ -1429,7 +1532,7 @@
           '<tr><td data-label="Name">' + H.escapeHtml(r.fullName) +
           '<span class="admin-sub">' + H.escapeHtml(r.email || "No email") + "</span>" +
           '</td><td data-label="Monthly">' + H.formatPence(r.monthlyPence) +
-          '</td><td data-label="Since">' + H.fmtDate(r.firstPaidAt) +
+          '</td><td data-label="Since">' + H.fmtDate(r.firstPaidAt) + rowNewPill("monthly", r.firstPaidAt) +
           '</td><td data-label="Given so far">' + H.formatPence(r.totalPence) +
           '<span class="admin-sub">' + r.paymentCount + (r.paymentCount === 1 ? " payment" : " payments") + "</span>" +
           '</td><td data-label="Gift Aid">' + ga +
@@ -5294,6 +5397,7 @@
         '<tr><td><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
         '</span><span class="nl-meta">' + contact + "</span></td>" +
         '<td><span class="nl-person-nm">' + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") +
+        rowNewPill("newsletter", m.consentSource === "footer" ? m.consentedAt : null) +
         '</span><span class="nl-meta">' + how + "</span></td>" +
         '<td class="nl-r">' +
         (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +
@@ -8529,7 +8633,8 @@
       var what = b.kind === "table"
         ? b.quantity + (b.quantity === 1 ? " table" : " tables")
         : b.quantity + (b.quantity === 1 ? " ticket" : " tickets");
-      return "<tr><td>" + H.escapeHtml(b.reference) + "</td><td>" + H.escapeHtml(b.buyerName) +
+      return "<tr><td>" + H.escapeHtml(b.reference) + rowNewPill("ball", b.status === "paid" ? b.paidAt : null) +
+        "</td><td>" + H.escapeHtml(b.buyerName) +
         "<br /><small>" + H.escapeHtml(b.buyerEmail) + "</small></td><td>" + what +
         '</td><td class="admin-num">' + H.formatPence(b.totalPence) +
         '</td><td class="admin-num">' + (b.donationPence ? H.formatPence(b.donationPence) + (b.giftAid ? " (GA)" : "") : "—") +

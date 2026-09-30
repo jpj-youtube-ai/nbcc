@@ -160,6 +160,11 @@
 .admin-pill.is-replied{background:var(--holly-soft);color:var(--holly-dark)}
 .admin-pill.is-public{background:var(--holly-soft);color:var(--holly-dark)}
 .admin-pill.is-internal{background:color-mix(in srgb,var(--slate-soft) 16%,var(--cream));color:var(--slate-soft)}
+/* TASK-478: something this person has not seen yet: on a menu section, the phone's Menu button, and the
+   rows that arrived since their last visit. Holly, so it never reads as the crimson of the open section
+   or of an unanswered enquiry. */
+.admin-new-pill{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;background:var(--holly);color:var(--cream);font-size:.7rem;font-weight:700;letter-spacing:.02em;line-height:1.5;vertical-align:1px;white-space:nowrap}
+.admin-nav-toggle .admin-new-pill{margin-right:auto}
 /* TASK-241: payment-state pills on the donations list (paymentLabel state). */
 .admin-pill--paid{background:var(--holly-soft);color:var(--holly-dark)}
 .admin-pill--pending{background:color-mix(in srgb,var(--tan) 45%,var(--cream));color:var(--maroon)}

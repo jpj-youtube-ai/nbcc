@@ -30,6 +30,14 @@ Date: 2026-09-30. Task: TASK-478. The client approved it. Their choices:
 
 The access rules are the same gates the menu already uses (`data-view-gate` and `data-edit-gate`).
 
+**Changed while building:**
+- **No row pills in Contact form or Stories.** Their Status column already shows "New", meaning
+  "not yet dealt with", on exactly the rows staff act on. A second "New" meaning "since your
+  last visit" on the same row would read as a mistake. Both still get the menu pill.
+- **Events** is an eighth area, with no arrivals. It carries only the new-feature pill.
+- **Row pills follow the menu's rule.** Donations shows them on paid gifts only, the Ball on
+  paid bookings only, and the Newsletter on website sign-ups only.
+
 ## New parts of the admin
 
 - **A short list in code.** `src/admin/whats-new.ts` holds entries of the form

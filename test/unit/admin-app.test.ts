@@ -111,6 +111,10 @@ const eventRecord = (over: Record<string, unknown>) => ({
 let events: ReturnType<typeof eventRecord>[] = [];
 let eventsFailure = false; // the list answers 500, as the server does when it cannot read them
 let deleteFailure = false; // TASK-468: a delete answers 500
+// TASK-478: which sections are new to the person signed in, as GET /api/admin/whats-new answers
+// (nothing unless a test says so), and whether that request fails.
+let whatsNew: Array<{ area: string; new: boolean; since: string }> = [];
+let whatsNewFailure = false;
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
@@ -188,6 +192,14 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     if (eventsFailure) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j({ pageOn: false, updatedAt: null, updatedBy: null, today: "2026-09-30", events });
   }
+  // TASK-478: the seen POST is checked first, since it shares the list's prefix.
+  if (url.includes("/api/admin/whats-new/seen") && init?.method === "POST") {
+    const area = (JSON.parse(init.body || "{}") as { area?: string }).area;
+    return j({ area, seenAt: "2026-10-06T08:00:00.000Z" });
+  }
+  if (url.includes("/api/admin/whats-new")) {
+    return whatsNewFailure ? j({ error: "Admin is temporarily unavailable" }, 500) : j({ areas: whatsNew });
+  }
   return j({ results: [] }); // queues / adjustment-due
 }
 
@@ -214,6 +226,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     events = [];
     eventsFailure = false;
     deleteFailure = false;
+    whatsNew = [];
+    whatsNewFailure = false;
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -1090,6 +1104,85 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       const link = await arriveFromMenu();
       expect(el("evEditorTitle").textContent).toBe("Editing: Carols at the Cross");
       expect(document.activeElement).toBe(link);
+    });
+  });
+
+  // TASK-478: a New pill on each section holding something this person has not seen. Opening the
+  // section clears it for them; the server keeps everyone else's.
+  describe("New pills (TASK-478)", () => {
+    const link = (view: string) => document.querySelector('.admin-nav-link[data-view="' + view + '"]') as HTMLElement;
+    const pill = (host: Element | null) => host?.querySelector(".admin-new-pill") ?? null;
+    const seenPosts = () =>
+      (globalThis.fetch as unknown as { mock: { calls: Array<[unknown, { method?: string; body?: string }?]> } }).mock.calls
+        .filter(([url, init]) => String(url).includes("/whats-new/seen") && init?.method === "POST")
+        .map(([, init]) => JSON.parse(init?.body || "{}").area);
+    const settle = async () => { for (let i = 0; i < 6; i++) await flush(); };
+
+    it("puts a pill on each section that is new, and on the phone's Menu button", async () => {
+      whatsNew = [
+        { area: "contact", new: true, since: "2026-10-01T00:00:00.000Z" },
+        { area: "donations", new: false, since: "2026-10-01T00:00:00.000Z" },
+      ];
+      await signIn();
+      await settle();
+      expect(pill(link("contact"))).not.toBeNull();
+      // Read aloud as "Contact form, New": the comma is there for a screen reader, not the eye.
+      expect(link("contact").textContent).toBe("Contact form, New");
+      expect(pill(link("donations"))).toBeNull();
+      expect(pill(el("adminNavToggle"))).not.toBeNull();
+    });
+
+    it("clears a section's pill when it is opened, and records the visit", async () => {
+      whatsNew = [{ area: "contact", new: true, since: "2026-10-01T00:00:00.000Z" }];
+      await signIn();
+      await settle();
+      link("contact").click();
+      await settle();
+      expect(pill(link("contact"))).toBeNull();
+      expect(pill(el("adminNavToggle"))).toBeNull();
+      expect(seenPosts()).toEqual(["contact"]);
+    });
+
+    // An answer already on its way when the visit was recorded must not bring the pill back.
+    it("keeps it cleared when a slower answer still says it is new", async () => {
+      whatsNew = [{ area: "contact", new: true, since: "2026-10-01T00:00:00.000Z" }];
+      await signIn();
+      await settle();
+      link("contact").click();
+      await settle();
+      link("donations").click();
+      await settle();
+      expect(pill(link("contact"))).toBeNull();
+    });
+
+    it("marks the rows that arrived since the person's last visit", async () => {
+      whatsNew = [{ area: "donations", new: true, since: "2026-01-01T00:00:00.000Z" }];
+      await signIn();
+      await settle();
+      link("donations").click();
+      await settle();
+      expect(pill(document.querySelector("#donationsTable tbody tr"))).not.toBeNull();
+    });
+
+    it("leaves older rows alone", async () => {
+      whatsNew = [{ area: "donations", new: false, since: "2026-02-01T00:00:00.000Z" }];
+      await signIn();
+      await settle();
+      link("donations").click();
+      await settle();
+      expect(pill(document.querySelector("#donationsTable tbody tr"))).toBeNull();
+    });
+
+    it("shows no pills, and nothing else breaks, when the list cannot be fetched", async () => {
+      whatsNewFailure = true;
+      await signIn();
+      await settle();
+      expect(document.querySelectorAll(".admin-new-pill").length).toBe(0);
+      expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(5);
+      link("donations").click();
+      await settle();
+      expect(document.querySelector("#donationsTable table")).not.toBeNull();
+      expect(seenPosts()).toEqual([]);
     });
   });
 });

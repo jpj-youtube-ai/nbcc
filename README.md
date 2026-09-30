@@ -6485,12 +6485,12 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 46 tables
-(42 when this was built; the Events page added three in TASK-453, and the Festive Ball ticket
-report one in TASK-464),
+This is the trap this feature was built around. `DATABASE_URL` holds 47 tables
+(42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
+report one in TASK-464, and the admin's New pills one, `admin_seen`, in TASK-478),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 46 of **49** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 47 of **50** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

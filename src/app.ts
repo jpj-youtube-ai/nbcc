@@ -6,6 +6,7 @@ import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
+import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { sesWebhookRouter } from "./routes/ses-webhook";
 import { preferencesRouter } from "./routes/preferences";
@@ -55,6 +56,8 @@ export function createApp() {
   // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the
   // :id segment matches, it is not read here); every other newsletter route keeps the 100kb cap.
   app.use("/api/admin/newsletters/:id/attachments", express.json({ limit: "15mb" }));
+  // TASK-461: the old website's My Story export arrives as CSV text, a few KB, up to a 2 MB file.
+  app.use(STORIES_IMPORT_PATH, express.json({ limit: STORIES_IMPORT_BODY_LIMIT }));
   app.use(express.json());
   app.use(apiRouter);
   // Public supporter-ticker feed (TASK-178/REQ-003): GET /api/supporters/ticker.
@@ -67,6 +70,8 @@ export function createApp() {
   app.use(adminUsersRouter);
   // The admin's Events section (TASK-453): events, the page switch, previews, picture uploads.
   app.use(adminEventsRouter);
+  // Stories from the old website's My Story form, from its CSV export (TASK-461).
+  app.use(adminStoriesImportRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

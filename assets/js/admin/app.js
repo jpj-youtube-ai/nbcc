@@ -103,6 +103,7 @@
   }
 
   function showLogin() {
+    storiesImportReset("");
     el("appView").hidden = true;
     el("loginView").hidden = false;
     var email = el("adminEmail");
@@ -1524,6 +1525,8 @@
     );
   }
   function loadStories() {
+    var imp = el("storiesImport");
+    if (imp) imp.hidden = !canEdit("stories");
     var wrap = el("storiesTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     // TASK-311: two independent filters - where a story is in the workflow, and whether it is
@@ -1588,6 +1591,164 @@
         out.innerHTML = '<p class="admin-empty">Could not read the storage details.</p>';
       });
   }
+
+  // ---- stories from the old website, from its CSV export (TASK-461) ----
+  // Editors only (the server checks too). Choosing the file saves nothing: what would be added comes
+  // first, and only "Add" writes. "Add" always sends the text that produced the list on screen, and a
+  // slower reply for a file chosen earlier is ignored. A file that is not valid UTF-8 (one saved from
+  // Excel, say) is read as Windows-1252 instead, rather than garbling people's names.
+  var STORIES_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
+  var storiesImportSeq = 0;
+  function storiesImportSay(msg) {
+    var s = el("storiesImportStatus");
+    if (s) s.textContent = msg || "";
+  }
+  // Clears the list and whatever the page still holds from the file, and outdates any reply on its way.
+  function storiesImportReset(msg) {
+    storiesImportSeq++;
+    var plan = el("storiesImportPlan");
+    if (plan) plan.innerHTML = "";
+    storiesImportSay(msg);
+  }
+  function storiesImportPost(csv, commit) {
+    return authFetch("/api/admin/stories/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(commit ? { csv: csv, commit: true } : { csv: csv }),
+    }).then(function (res) {
+      return res
+        .json()
+        .catch(function () {
+          return {};
+        })
+        .then(function (b) {
+          if (!res.ok) throw new Error(b.error || "That file could not be read. Nothing was saved.");
+          return b;
+        });
+    });
+  }
+  function storiesImportWho(item) {
+    return (
+      "<b>" + H.escapeHtml(item.firstName || "No name given") + "</b>" +
+      (item.town ? ", " + H.escapeHtml(item.town) : "") +
+      (item.sentOn ? ' <span class="admin-muted">sent ' + H.escapeHtml(item.sentOn) + "</span>" : "")
+    );
+  }
+  function storiesImportPills(a) {
+    var pills =
+      '<span class="admin-pill ' + (a.scope === "public" ? "is-public" : "is-internal") + '">' +
+      H.escapeHtml(H.storyLabel("useScope", a.scope)) + "</span>";
+    if (a.shareFirstName) pills += ' <span class="admin-pill">First name</span>';
+    if (a.shareTown) pills += ' <span class="admin-pill">Town</span>';
+    if (a.contact) pills += ' <span class="admin-pill">Happy to be contacted</span>';
+    return pills;
+  }
+  function renderStoriesImportPlan(p, csv) {
+    var adding = p.adding || [];
+    var skipping = p.skipping || [];
+    var html = adding.length
+      ? '<h3 class="admin-subhead">' + (adding.length === 1 ? "1 story to add" : adding.length + " stories to add") + "</h3>" +
+        '<ul class="admin-import-list">' +
+        adding
+          .map(function (a) {
+            return (
+              '<li><p class="admin-import-who">' + storiesImportWho(a) + "</p>" +
+              '<p class="admin-import-opening">' + H.escapeHtml(a.opening) + "</p>" +
+              '<p class="admin-import-pills">' + storiesImportPills(a) + "</p></li>"
+            );
+          })
+          .join("") +
+        "</ul>"
+      : '<p class="admin-empty">Nothing new to add from this file.</p>';
+    if (skipping.length) {
+      html +=
+        '<h3 class="admin-subhead">Not added</h3><ul class="admin-import-list">' +
+        skipping
+          .map(function (s) {
+            return (
+              '<li><p class="admin-import-who">' + storiesImportWho(s) + "</p>" +
+              '<p class="admin-import-reason">' + H.escapeHtml(s.reason) + "</p></li>"
+            );
+          })
+          .join("") +
+        "</ul>";
+    }
+    if (adding.length) {
+      html +=
+        '<button class="btn btn-primary" type="button" id="storiesImportGo">' +
+        (adding.length === 1 ? "Add this story" : "Add these " + adding.length + " stories") + "</button>";
+    }
+    el("storiesImportPlan").innerHTML = html;
+    var go = el("storiesImportGo");
+    if (go) {
+      go.addEventListener("click", function () {
+        addStoriesFromOldSite(csv);
+      });
+    }
+  }
+  function storiesImportText(file) {
+    return file.arrayBuffer().then(function (buf) {
+      try {
+        return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+      } catch (e) {
+        return new TextDecoder("windows-1252").decode(buf);
+      }
+    });
+  }
+  // Signed out (authFetch has already gone back to the sign-in screen): nothing from the file stays.
+  function storiesImportFailed(err) {
+    if (err && err.message === "unauthorized") storiesImportReset("");
+    else storiesImportSay(err ? err.message : "");
+  }
+  function readStoriesImportFile() {
+    var input = el("storiesImportFile");
+    var file = input && input.files && input.files[0];
+    storiesImportReset("");
+    var seq = storiesImportSeq;
+    if (!file) return;
+    if (file.size > STORIES_IMPORT_MAX_BYTES) {
+      storiesImportSay("That file is too big for this. The old form's export is far smaller, so please check it's the right file.");
+      return;
+    }
+    storiesImportSay("Reading the file…");
+    var csv = null;
+    storiesImportText(file)
+      .then(function (text) {
+        csv = text;
+        return seq === storiesImportSeq ? storiesImportPost(csv, false) : null;
+      })
+      .then(function (p) {
+        if (!p || seq !== storiesImportSeq) return;
+        storiesImportSay("");
+        renderStoriesImportPlan(p, csv);
+      })
+      .catch(function (err) {
+        if (seq === storiesImportSeq) storiesImportFailed(err);
+      });
+  }
+  function addStoriesFromOldSite(csv) {
+    var go = el("storiesImportGo");
+    if (go) go.disabled = true;
+    storiesImportSay("Adding…");
+    storiesImportPost(csv, true)
+      .then(function (p) {
+        var n = p.added || 0;
+        storiesImportReset(
+          n === 0
+            ? "Nothing was added: those stories are already here."
+            : n === 1
+              ? "Added 1 story. It's in the list below as New."
+              : "Added " + n + " stories. They're in the list below as New.",
+        );
+        el("storiesImportFile").value = "";
+        loadStories();
+      })
+      .catch(function (err) {
+        if (go) go.disabled = false;
+        storiesImportFailed(err);
+      });
+  }
+  if (el("storiesImportFile")) el("storiesImportFile").addEventListener("change", readStoriesImportFile);
 
   function storyStatus(msg) {
     el("storyActionStatus").textContent = msg || "";

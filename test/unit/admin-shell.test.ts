@@ -124,6 +124,22 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(doc.getElementById("storyActionStatus")?.getAttribute("role")).toBe("status");
   });
 
+  // TASK-461: the old website's stories come in through a closed panel on the Stories view, shown
+  // only once the script knows the person can edit stories.
+  it("has the old website import on the Stories view, hidden until the script allows it", () => {
+    const panel = doc.getElementById("storiesImport")!;
+    expect(panel.tagName).toBe("DETAILS");
+    expect(panel.hasAttribute("hidden")).toBe(true);
+    expect(panel.hasAttribute("open")).toBe(false);
+    expect(panel.closest("#view-stories")).not.toBeNull();
+    const file = doc.getElementById("storiesImportFile") as HTMLInputElement;
+    expect(file.type).toBe("file");
+    expect(file.getAttribute("accept")).toContain(".csv");
+    expect(doc.querySelector('label[for="storiesImportFile"]')).not.toBeNull();
+    expect(doc.getElementById("storiesImportPlan")).not.toBeNull();
+    expect(doc.getElementById("storiesImportStatus")?.getAttribute("role")).toBe("status");
+  });
+
   // TASK-208: the Business supporters (fulfilment) tab — an Editor+ area, gated in the nav on
   // business-supporters:edit (data-edit-gate) to match its server route (TASK-406), with its own
   // table + status region.

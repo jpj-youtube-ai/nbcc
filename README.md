@@ -3299,6 +3299,30 @@ in `migrations/1788100000000_permissions-business-supporters.js`, matching what 
 given. Every future section ships with the same one-line migration; forgetting it fails closed,
 which is what makes the rule safe to keep.
 
+### Access saved before four sections existed (TASK-463)
+
+That rule arrived with TASK-406 on 3 September. Four sections came just before it, and none shipped
+with its migration: **Festive Ball** (`ball`, TASK-313, 31 August 2026), then **Email audit**
+(`email-audit`, TASK-344), **Site pages** (`site`, TASK-352) and **Contact businesses** (`outreach`,
+TASK-354), all on 1 September. Anyone whose access was saved before one of them arrived, and not
+changed since, had no entry for it, which reads as None: that screen was missing from their menu,
+admins included.
+
+`migrations/1790788129056_permissions-backfill-missed-sections.js` gives each of those matrices what
+the person's role gives today: admins edit all four; editors see Festive Ball and Site pages and edit
+Contact businesses; viewers see all but the Email audit, which only admins get. It only adds a section
+a saved matrix does not mention. One that already says None is left alone, because that may be a
+deliberate choice or the TASK-459 fault, and only a person can tell which. Its undo deliberately does
+nothing: most matrices naming these sections were saved by a person after the sections arrived, and
+stripping the keys, as the earlier backfills' undo does, would take those choices away.
+
+`test/unit/permissions-backfill.test.ts` fails if any section added since saved access existed
+(TASK-186) has no migration adding it to the access already saved, so the next one cannot be missed,
+and holds this migration's values to `roleToPermissions`. `features/admin-permissions.feature` runs
+the migration's own SQL against the real database in CI, inside a transaction it rolls back, for an
+admin, an editor and a viewer whose access predates the four sections, and for an editor whose access
+already says None for them.
+
 ### Needs you today (TASK-405)
 
 The screen opens with one list, above the forms, because it is the reason to open the screen at
@@ -5647,10 +5671,11 @@ open **Team → Manage access** for each person, and anyone showing Contact busi
 as None who should have it can be set back to what their role gives and saved. Every save is in
 `audit_log` as `admin_user.permissions_changed`, with the whole matrix in `data`.
 
-**Not fixed here either: four sections never got their migration.** TASK-406 (3 September) set the
-rule that each new section ships with a migration giving it to the matrices already saved
-(`1788100000000_permissions-business-supporters.js`, and `1789100000001_permissions-events.js` since).
-Four sections arrived just before that rule and none has one: `ball` (Festive Ball, TASK-313,
+**Not fixed here either: four sections never got their migration (fixed in TASK-463).** TASK-406
+(3 September) set the rule that each new section ships with a migration giving it to the matrices
+already saved (`1788100000000_permissions-business-supporters.js`, and
+`1789100000001_permissions-events.js` since). Four sections arrived just before that rule and none had
+one: `ball` (Festive Ball, TASK-313,
 31 August), then `email-audit` (Email audit, TASK-344), `site` (Site pages, TASK-352) and `outreach`
 (Contact businesses, TASK-354), all on 1 September. A matrix saved before a section arrived, and not
 changed since, has no entry for it, which reads as None, for admins as much as anyone. For the Email

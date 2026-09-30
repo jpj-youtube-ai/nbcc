@@ -68,3 +68,30 @@ Feature: Admin per-section permission matrix (admin-management Phase 2)
     Given a staff user "care.admin.bdd@example.com" with password "care-pw-123" and only "business-supporters:edit" permission
     When I GET the admin path "/api/admin/fulfilments" as "care.admin.bdd@example.com" with password "care-pw-123"
     Then the admin response status should be 200
+
+  # TASK-463: Festive Ball, Email audit, Site pages and Contact businesses arrived after saved access
+  # existed and before TASK-406's rule that each new section ships with a migration adding it to the
+  # access already saved. The backfill runs against this database inside a transaction that is rolled
+  # back, so the other scenarios never see it.
+  Scenario Outline: access saved before four sections existed gets each at the <role> role's own level
+    Given a user "<email>" with role "<role>" whose saved access predates the four late sections
+    When the TASK-463 permissions backfill runs
+    Then the backfilled access of "<email>" gives "ball" as "<ball>"
+    And the backfilled access of "<email>" gives "email-audit" as "<email_audit>"
+    And the backfilled access of "<email>" gives "site" as "<site>"
+    And the backfilled access of "<email>" gives "outreach" as "<outreach>"
+
+    Examples:
+      | role   | email                            | ball | email_audit | site | outreach |
+      | admin  | old.admin.admin.bdd@example.com  | edit | edit        | edit | edit     |
+      | editor | old.editor.admin.bdd@example.com | view | none        | view | edit     |
+      | viewer | old.viewer.admin.bdd@example.com | view | none        | view | view     |
+
+  # Somebody may have been given None on purpose, or by the TASK-459 fault. Only a person can tell
+  # which, on Team > Manage access, so the backfill never changes a section a matrix already names.
+  Scenario: the backfill leaves alone a section somebody has already been given
+    Given a user "chosen.editor.admin.bdd@example.com" with role "editor" whose saved access already sets the four late sections to "none"
+    When the TASK-463 permissions backfill runs
+    Then the backfilled access of "chosen.editor.admin.bdd@example.com" gives "outreach" as "none"
+    And the backfilled access of "chosen.editor.admin.bdd@example.com" gives "ball" as "none"
+    And the backfilled access of "chosen.editor.admin.bdd@example.com" gives "site" as "none"

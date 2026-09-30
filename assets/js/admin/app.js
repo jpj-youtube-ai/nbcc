@@ -1303,7 +1303,7 @@
   // The people giving every month. Businesses have had a screen since TASK-208; these donors had
   // nothing, and were findable only by paging the whole donations list - which is how three of them
   // went four months without a thank-you and nobody noticed.
-  var monthlyRows = [];
+  var monthlyRows = null; // null until a list has loaded: no list is not the same as nobody giving
 
   // What is actually wrong, in the order it matters. A cancellation is settled and needs nothing; a
   // failing card is money leaving this month and is the reason to open this screen at all.
@@ -1362,6 +1362,9 @@
   }
 
   function renderMonthly() {
+    // "Show" can be changed when no list ever came (TASK-458). Counting nothing would put "0 giving,
+    // £0 a month" back over the message saying the list is unavailable.
+    if (!monthlyRows) return;
     var filter = el("monthlyStateFilter");
     var want = filter ? filter.value : "giving";
     var rows = monthlyRows.filter(function (r) {
@@ -1389,12 +1392,21 @@
     if (!wrap) return;
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/monthly-supporters")
-      .then(j)
+      .then(function (res) {
+        // A failure still answers in JSON, an { error } with no results. Read as a list, it showed
+        // nobody giving and £0 a month on the screen whose job is to say what income is dependable.
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      })
       .then(function (d) {
         monthlyRows = d.results || [];
         renderMonthly();
       })
       .catch(function () {
+        // Whatever loaded before is not what is there now: nothing of it stays up to be taken as
+        // current, or comes back when "Show" is changed.
+        monthlyRows = null;
+        el("monthlySummary").textContent = "";
         wrap.innerHTML = '<p class="admin-empty">Monthly givers are unavailable.</p>';
       });
   }

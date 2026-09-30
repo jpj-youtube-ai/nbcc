@@ -98,6 +98,24 @@ export function nextUpdateAfter(today: string, eventDate: string): string | null
   return null;
 }
 
+const UK_HOUR = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", hourCycle: "h23" });
+/** The hour the daily job runs, UK time. */
+export const REPORT_HOUR = 8;
+
+/**
+ * The day the next report goes, as the admin shows it: this morning, if today is a report day, it
+ * has not gone yet and the 8am job has not run; otherwise the next report day. Null once the last
+ * report before the Ball has gone.
+ */
+export function nextSendDay(o: { now: Date; eventDate: string; sentToday: boolean }): string | null {
+  const today = londonDate(o.now);
+  const beforeTheJob = Number(UK_HOUR.format(o.now)) < REPORT_HOUR;
+  if (REPORT_WEEKDAYS.includes(londonWeekday(o.now)) && !o.sentToday && beforeTheJob && today <= o.eventDate) {
+    return today;
+  }
+  return nextUpdateAfter(today, o.eventDate);
+}
+
 export function daysToGo(today: string, eventDate: string): number {
   return Math.round((midday(eventDate).getTime() - midday(today).getTime()) / 86_400_000);
 }

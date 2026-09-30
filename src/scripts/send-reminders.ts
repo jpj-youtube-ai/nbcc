@@ -58,6 +58,16 @@ if (require.main === module) {
       } catch (err) {
         console.error("ball run-up failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-464: the Festive Ball ticket report, to the organiser and the sponsor on Tuesday and
+      // Thursday mornings. The pass checks the day itself, so on every other morning it does
+      // nothing; its own try/catch, so a failure here cannot stop anything after it.
+      try {
+        const { runBallSalesReport } = await import("../ball/sales-report-runner");
+        const report = await runBallSalesReport();
+        console.error(`ball ticket report: sent=${report.sent} recipients=${report.recipients}`);
+      } catch (err) {
+        console.error("ball ticket report failed:", err instanceof Error ? err.message : err);
+      }
       // TASK-407: the automatic thank-you letter. A business that has signed up and told us how
       // it would like to be thanked gets its letter without anybody having to remember, and one
       // that never answered gets the standard letter after a fortnight rather than nothing at

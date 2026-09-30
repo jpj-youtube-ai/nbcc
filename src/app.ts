@@ -6,6 +6,7 @@ import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
+import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { sesWebhookRouter } from "./routes/ses-webhook";
@@ -70,6 +71,8 @@ export function createApp() {
   app.use(adminUsersRouter);
   // The admin's Events section (TASK-453): events, the page switch, previews, picture uploads.
   app.use(adminEventsRouter);
+  // The Festive Ball ticket report, set up from the Events page (TASK-464).
+  app.use(adminBallReportRouter);
   // Stories from the old website's My Story form, from its CSV export (TASK-461).
   app.use(adminStoriesImportRouter);
   app.use(healthRouter);

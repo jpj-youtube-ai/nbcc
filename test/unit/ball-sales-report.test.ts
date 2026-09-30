@@ -3,6 +3,7 @@ import {
   londonDate,
   londonWeekday,
   nextUpdateAfter,
+  nextSendDay,
   daysToGo,
   reportDue,
   recipientsSchema,
@@ -59,6 +60,24 @@ describe("the next update", () => {
   it("counts the days to go", () => {
     expect(daysToGo("2026-10-06", EVENT)).toBe(32);
     expect(daysToGo("2026-11-07", EVENT)).toBe(0);
+  });
+});
+
+describe("when the next report goes, as the admin shows it", () => {
+  const at = (iso: string, sentToday = false) => nextSendDay({ now: new Date(iso), eventDate: EVENT, sentToday });
+
+  it("is this morning on a report day before 8am, if it has not gone yet", () => {
+    expect(at("2026-10-06T06:30:00Z")).toBe("2026-10-06"); // 7.30am BST on a Tuesday
+  });
+
+  it("is the next report day once this morning's has gone, or 8am has passed", () => {
+    expect(at("2026-10-06T06:30:00Z", true)).toBe("2026-10-08");
+    expect(at("2026-10-06T09:00:00Z")).toBe("2026-10-08"); // 10am BST: the 8am job has run
+    expect(at("2026-10-07T06:30:00Z")).toBe("2026-10-08"); // a Wednesday
+  });
+
+  it("is nothing once the last report before the Ball is past", () => {
+    expect(at("2026-11-05T09:00:00Z")).toBeNull();
   });
 });
 

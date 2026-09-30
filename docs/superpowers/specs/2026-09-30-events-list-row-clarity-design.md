@@ -42,12 +42,16 @@ There is also a fourth problem:
   first, so someone using speech input can still say "click Edit" (WCAG 2.5.3, label in name).
 - **The live region comes off this one list.** The admin's other table lists keep theirs; this one
   redraws itself whenever you open an item. Saving already announces through the
-  save status, deleting through the switch status, and a load failure through the switch state
-  ("Could not check."), so nothing that needed hearing goes quiet.
+  save status, and deleting through the switch status. A load failure's message in the list becomes
+  an alert of its own (below), because the switch state's "Could not check." alone is vague.
 - **Focus moves only when a person presses a row's button.** The editor's heading gets
   `tabindex="-1"` so that it can take focus. Arriving on the screen, which opens the soonest event by
   itself, never moves focus, so the page never jumps away from where someone is. Focus moves with
-  `preventScroll`, and the existing smooth scroll still does the moving.
+  `preventScroll`, and the scroll to the editor does the moving. Added after review: that scroll and
+  the **Add an event** button's no longer force `behavior: "smooth"`. The page's own
+  `scroll-behavior` is smooth, and styles.css turns it off under `prefers-reduced-motion`.
+- **A failed load stays audible.** Its message, written into the list, gets `role="alert"` (added
+  after review), since the list itself is no longer a live region.
 
 ## Rejected
 

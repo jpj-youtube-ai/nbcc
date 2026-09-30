@@ -1095,8 +1095,9 @@
                 </button>
               </div>
               <!-- TASK-465: no aria-live here, unlike the admin's other lists. This one redraws itself every
-                   time an event opens, so a live region read the whole list out again; saving,
-                   deleting and a failed load each announce through their own status line. -->
+                   time an event opens, so a live region read the whole list out again. Saving and
+                   deleting announce through their own status lines, and the message a failed load
+                   leaves here is an alert of its own. -->
               <div class="admin-table-wrap" id="evList"><p class="admin-loading">Loading&hellip;</p></div>
 
               <div class="ev-editor" id="evEditor" hidden>

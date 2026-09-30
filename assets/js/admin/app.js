@@ -8890,7 +8890,8 @@
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
-        el("evList").innerHTML = '<p class="ev-admin-empty">The events could not be loaded just now. Try again in a moment.</p>';
+        // An alert of its own: the list is not a live region (TASK-465), and this must be heard.
+        el("evList").innerHTML = '<p class="ev-admin-empty" role="alert">The events could not be loaded just now. Try again in a moment.</p>';
         el("evSwitchState").textContent = "Could not check.";
       });
   }
@@ -9047,10 +9048,12 @@
   // keyboard focus would fall back to the page. It goes to the editor's heading instead, which is
   // where the page is scrolling anyway. Only ever after a person presses a row's button: arriving on
   // the screen opens the soonest event by itself, and must not pull focus away from wherever it is.
+  // No "smooth" of its own: the page already scrolls smoothly (styles.css), and the site turns that
+  // off for anyone whose device asks for reduced motion, which a forced "smooth" would override.
   function evFocusEditor() {
     var title = el("evEditorTitle");
     if (title && title.focus) title.focus({ preventScroll: true });
-    el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+    el("evEditor").scrollIntoView({ block: "start" });
   }
   function evShowEditor() {
     evDirty = false;
@@ -9457,7 +9460,7 @@
     el("evAdd").addEventListener("click", function () {
       if (!evConfirmLeave()) return;
       evOpenNew();
-      el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+      el("evEditor").scrollIntoView({ block: "start" }); // smooth, or not, as the page's own setting says
     });
     el("evList").addEventListener("click", function (e) {
       var b = e.target.closest("[data-evopen]");

@@ -5731,17 +5731,25 @@ unclear. The wording is the client's choice.
 - **Opening an event no longer reads the list out, or loses your place.** The list redraws itself
   whenever an event opens, so as a live region it was read out again each time, and the redraw took
   away the button just pressed, dropping keyboard focus back to the page. Unlike the admin's other
-  table lists it no longer carries `aria-live`. Saving, deleting and a failed load each announce
-  through their own status line, so nothing that needs hearing went quiet. Pressing a row's button
-  now puts focus on the editor's heading ("Editing: EmpowHer ’26"), where the page scrolls anyway.
-  Arriving on the screen, which opens the soonest event by itself, leaves focus where it is.
+  table lists it no longer carries `aria-live`. Saving and deleting announce through their own
+  status lines, and the message a failed load leaves in the list is now an alert of its own, so
+  nothing that needs hearing went quiet. Pressing a row's button now puts focus on the editor's
+  heading ("Editing: EmpowHer ’26"), where the page scrolls anyway. Saying no to "leave your unsaved
+  changes?" leaves focus on the button you pressed. Arriving on the screen, which opens the soonest
+  event by itself, leaves focus where it is.
+- **The scroll to the editor respects reduced motion.** It and the **Add an event** button used to
+  force a smooth scroll. The page already scrolls smoothly, and turns that off for anyone whose
+  device asks for reduced motion, so they now leave it to the page.
 
 `test/unit/admin-app.test.ts` now drives the Events screen through the real `app.js`, and pins:
 
 - the four labels;
-- the button names, and which button is marked current;
-- that the list is not a live region;
-- where focus goes when a row's button is pressed, and that arriving on the screen moves nothing.
+- the button names for an editor and for a viewer, which button is marked current, and that an
+  event's name stays inside its label however many quotes, ampersands and angle brackets it holds;
+- that the list is not a live region, and that a failed load's message is an alert;
+- where focus goes when a row's button is pressed, that it stays put when you keep unsaved changes,
+  and that arriving on the screen moves nothing;
+- that both scrolls to the editor leave smoothness to the page.
 
 Checked in headless Chrome as well: the labels in the table at 1280px and in the compact rows at
 320px, and focus on the heading after pressing Edit. The TASK-460 layout checks still pass at every

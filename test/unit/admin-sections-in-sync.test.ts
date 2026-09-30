@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SECTIONS } from "../../src/admin/permissions";
+import { SECTIONS, roleToPermissions, type PermissionMap } from "../../src/admin/permissions";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -32,10 +32,52 @@ function parseJsArrayLiteral(source: string, name: string, where: string): strin
     .filter((s) => s.length > 0);
 }
 
+// One named function's source, found by counting braces from its opening one. Enough for the small
+// function it is used on, which has no brace inside a string or a comment.
+function parseJsFunction(source: string, name: string, where: string): string {
+  const start = source.indexOf("function " + name + "(");
+  if (start === -1) throw new Error(`could not find ${name} in ${where}`);
+  let depth = 0;
+  for (let i = source.indexOf("{", start); i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}" && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error(`could not find the end of ${name} in ${where}`);
+}
+
+// The browser's own rolePresetPermissions, run over the browser's own lists, so the check below
+// compares the server with what the Team screen will actually do, not with a restatement of it.
+function browserRolePresets(appJs: string): (role: string) => PermissionMap {
+  const where = "assets/js/admin/app.js";
+  const build = new Function(
+    "SECTIONS",
+    "OPERATIONAL_EDITOR_SECTIONS",
+    "return " + parseJsFunction(appJs, "rolePresetPermissions", where),
+  );
+  return build(
+    parseJsArrayLiteral(appJs, "SECTIONS", where),
+    parseJsArrayLiteral(appJs, "OPERATIONAL_EDITOR_SECTIONS", where),
+  );
+}
+
 describe("admin section list stays in sync", () => {
   it("the browser bundle lists exactly the server's sections, in the same order", () => {
     const appJs = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
     expect(parseJsArrayLiteral(appJs, "SECTIONS", "assets/js/admin/app.js")).toEqual([...SECTIONS]);
+  });
+
+  // TASK-459: the browser mirrors each role's DEFAULT access as well, and drift there raises no error
+  // at all. Team → Manage access pre-fills anyone never given access of their own from the browser's
+  // copy, and Save stores what it shows as their complete access. The server has given editors
+  // Contact businesses since TASK-354; the browser's copy never listed it, so the screen showed None
+  // and every save took the screen away from them.
+  it.each([
+    ["an admin", "admin"],
+    ["an editor", "editor"],
+    ["a viewer", "viewer"],
+  ])("the browser gives %s the same default access as the server", (_who, role) => {
+    const appJs = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+    expect(browserRolePresets(appJs)(role)).toEqual(roleToPermissions(role));
   });
 
   it("the BDD steps list exactly the server's sections", () => {

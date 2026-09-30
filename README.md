@@ -3386,6 +3386,12 @@ They are not cosmetic duplicates: `PATCH /api/admin/users/:id/permissions` valid
 the browser bundle makes **every permissions save fail with a 400 in production**. Adding `ball`
 hit exactly that. `test/unit/admin-sections-in-sync.test.ts` now fails fast if they drift.
 
+So are the **role defaults**: giving a role a section by default means changing `roleToPermissions`
+on the server and `rolePresetPermissions` (with its `OPERATIONAL_EDITOR_SECTIONS`) in `app.js`. Drift
+there raises no error at all. Team → Manage access pre-fills from the browser's copy and saves what
+it shows, so a section missing there is quietly taken away from people (TASK-459). The same test
+checks every role's defaults as well.
+
 **Admin.** A `ball` permission section. Unusually it is **view-only for the editor role by
 default** rather than joining `OPERATIONAL_EDITOR_SECTIONS`: the gate toggle publishes the
 ticket page and puts the ball on the home page, which is a launch decision rather than routine
@@ -5575,6 +5581,41 @@ is 41px wide in a 32px column, so the list scrolls sideways inside its box by 23
 fits from 768px). The page itself does not widen, which is why measuring the page's width does not
 show it. It needs a phone layout of its own, the way the monthly givers table stacks below 1000px, so
 it is a change of its own.
+
+## Saving an editor's access took Contact businesses away (TASK-459)
+
+Editors have been able to use **Contact businesses** since it shipped: TASK-354 put `outreach` in the
+server's `OPERATIONAL_EDITOR_SECTIONS`, the sections the editor role edits by default. The browser
+keeps its own copy of each role's defaults in `assets/js/admin/app.js`, and that copy never got it.
+
+That copy is what **Team → Manage access** shows for anyone who has never had access of their own,
+and what its **Editor** button fills in. So for such an editor the screen said Contact businesses was
+**None** while they were using it, and pressing **Save**, to change something else or nothing at all,
+stored that None as their complete access. Contact businesses vanished from their menu, with no
+error and nothing on the page to say anything had changed.
+
+The copy now matches. `test/unit/admin-sections-in-sync.test.ts` runs the browser's own
+`rolePresetPermissions` for admin, editor and viewer and fails if any differs from the server's
+`roleToPermissions`. `test/unit/admin-app.test.ts` opens an editor's access on the real screen,
+presses Save, and checks that what is sent is exactly the access they already had.
+
+**Not fixed here: anyone it already happened to.** A saved None cannot say whether it was chosen or
+inherited from this fault, so nothing changes anybody's access automatically. The simplest check is
+the screen itself, now that it tells the truth: open **Team → Manage access** for each person, and
+anyone showing Contact businesses as None who should have it can be set to Edit and saved. Every save
+is in `audit_log` as `admin_user.permissions_changed`, with the whole matrix in `data`.
+
+**Not fixed here either: `outreach` never got its migration.** TASK-406 set the rule that each new
+section ships with a migration giving it to the matrices already saved
+(`1788100000000_permissions-business-supporters.js`, and `1789100000001_permissions-events.js` since).
+`outreach` arrived two days earlier, on 1 September 2026, without one. A matrix saved before then
+and not changed since has no Contact businesses entry at all, which reads as None, for admins as
+much as editors.
+
+**And the Editor button cannot be saved.** It fills in only the sections the editor role names, but a
+save must name every section, and it leaves out Business supporters and the email audit, which
+editors do not get. Pressing Save after it says "Could not save that access.", and has done since the
+email audit arrived (TASK-344). It fails loudly and changes nobody's access, so it is a fix of its own.
 
 ## Enquiries waiting for a reply (TASK-425)
 

@@ -9,7 +9,22 @@ const { SEED } = require(resolve(__dirname, "../../../migrations/1789100000002_e
   SEED: Array<Record<string, unknown> & { slug: string }>;
 };
 
-export const SEED_EVENTS: EventRecord[] = SEED.map((raw, i) => ({
+// TASK-456: EmpowHer's leaflet, applied here by the same rule the migration's SQL uses: the picture
+// only onto an event with none, each word only while it is still the seed's.
+type Swap = { field: string; from: unknown; to: unknown };
+const { LEAFLET } = require(resolve(__dirname, "../../../migrations/1789100000003_events-empowher-leaflet.js")) as {
+  LEAFLET: { slug: string; picture: Swap[]; words: Swap[] };
+};
+
+function withLeaflet(raw: Record<string, unknown> & { slug: string }) {
+  if (raw.slug !== LEAFLET.slug) return raw;
+  const out: Record<string, unknown> & { slug: string } = { ...raw };
+  if (out.imageSrc == null) for (const p of LEAFLET.picture) out[p.field] = p.to;
+  for (const w of LEAFLET.words) if (out[w.field] === w.from) out[w.field] = w.to;
+  return out;
+}
+
+export const SEED_EVENTS: EventRecord[] = SEED.map(withLeaflet).map((raw, i) => ({
   ...eventInputSchema.parse(raw),
   id: i + 1,
   slug: raw.slug,

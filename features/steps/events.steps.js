@@ -348,3 +348,38 @@ Then("the audit log records the page being switched on by {string}", async funct
   assert.equal(r.rows[0].actor, `admin:${email}`);
   assert.equal(r.rows[0].data.pageOn, true);
 });
+
+// ---- the events production starts with (TASK-456) ----
+
+function adminEvent(world, slug) {
+  const ev = (world.eventsAdminBody.events || []).find((e) => e.slug === slug);
+  assert.ok(ev, `the admin does not list "${slug}"`);
+  return ev;
+}
+
+When("{string} opens the admin's events", async function (email) {
+  await adminCall(this, email, "GET", "/api/admin/events");
+});
+
+Then("{string} shows the picture {string} whole, on {string}", function (slug, src, ground) {
+  const ev = adminEvent(this, slug);
+  assert.equal(ev.imageSrc, src);
+  assert.equal(ev.imageFit, "whole");
+  assert.equal(ev.imageGround, ground);
+});
+
+Then("{string} is at {string}", function (slug, address) {
+  assert.equal(adminEvent(this, slug).address, address);
+});
+
+Then("{string} is credited on the front as {string}", function (slug, credit) {
+  assert.equal(adminEvent(this, slug).partnerFront, credit);
+});
+
+Then("{string} names {string} first on the back", function (slug, line) {
+  assert.equal(adminEvent(this, slug).whatsOn.split("\n")[0], line);
+});
+
+Then("the visitor is sent a WebP picture", function () {
+  assert.match(this.visitorHeaders.get("content-type") || "", /^image\/webp\b/);
+});

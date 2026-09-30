@@ -55,7 +55,7 @@ describe("a card", () => {
   });
 
   it("makes its own cover from the name when there is no picture, keeping the year in one piece", () => {
-    const art = empowher().querySelector(".ev-front .ev-art")!;
+    const art = fragment(renderCard(seedWith("empowher-2026", { imageSrc: null }))).querySelector(".ev-front .ev-art")!;
     expect(art.classList.contains("ev-art--type")).toBe(true);
     expect(art.classList.contains("ev-art--holly")).toBe(true);
     expect(art.getAttribute("aria-hidden")).toBe("true");
@@ -64,13 +64,13 @@ describe("a card", () => {
   });
 
   it("does not say the town twice on the cover", () => {
-    const html = renderCard(seedWith("empowher-2026", { venue: "Annbank Village Hall", town: "Annbank" }));
+    const html = renderCard(seedWith("empowher-2026", { imageSrc: null, venue: "Annbank Village Hall", town: "Annbank" }));
     expect(fragment(html).querySelector(".ev-art__place")?.textContent).toBe("Annbank Village Hall");
   });
 
   it("gives the front the gist and the three facts", () => {
     const front = empowher().querySelector(".ev-front")!;
-    expect(front.querySelector(".ev-host")?.textContent).toBe("Hosted by AD Autocare");
+    expect(front.querySelector(".ev-host")?.textContent).toBe("Organised by AD Autocare");
     expect(front.querySelector(".ev-flag")?.textContent).toBe("Spaces limited");
     expect(front.querySelector(".ev-tldr")?.textContent).toMatch(/^A free evening of car care/);
     const facts = [...front.querySelectorAll(".ev-facts li")].map((li) => li.textContent);

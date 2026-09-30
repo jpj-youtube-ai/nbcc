@@ -112,3 +112,19 @@ Feature: The Events page, built in the admin and switched on and off from it (TA
     When a visitor opens the uploaded picture
     Then the visitor gets status 200
     And the picture is served as "image/png" and never sniffed
+
+  # ---- the events production starts with ----
+
+  # TASK-456: the migration that gives EmpowHer its leaflet swaps each field only while it still
+  # holds the seed's words, so this is the proof that the swap lands on the seeded row.
+  Scenario: EmpowHer shows the organiser's leaflet, and says what the leaflet says
+    Given an events staff member "v7.events.bdd@example.com" with role "viewer"
+    When "v7.events.bdd@example.com" opens the admin's events
+    Then the events admin status should be 200
+    And "empowher-2026" shows the picture "/assets/img/empowher-2026-leaflet.webp" whole, on "cream"
+    And "empowher-2026" is at "AD Autocare, Wallacetown Drive, Heathfield, Ayr"
+    And "empowher-2026" is credited on the front as "Organised by"
+    And "empowher-2026" names "*Ali Wright* from Now Radio’s Ali and Michael in the Morning, your host for the evening" first on the back
+    When a visitor opens "/assets/img/empowher-2026-leaflet.webp"
+    Then the visitor gets status 200
+    And the visitor is sent a WebP picture

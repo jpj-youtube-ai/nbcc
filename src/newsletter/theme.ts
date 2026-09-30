@@ -90,10 +90,25 @@ function applyEmphasis(escaped: string): string {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>");
 }
 
-// Prose an author wrote: escaped, then emphasised. Use for any field where a paragraph is written —
-// NOT for a title or a button label, where emphasis has no business.
+// TASK-469: line breaks. A prose field reached the email with its raw newlines inside one <p>, which
+// every mail client collapses to a space, so a pasted (or typed) second paragraph ran straight on from
+// the first. A newline becomes <br>, and a blank line a paragraph gap (<br><br>). Like the emphasis
+// pass, this runs on ALREADY-ESCAPED copy, so <br> joins <strong>/<em> as the only tags we add.
+// <br> rather than a <p> per paragraph: every block wraps its prose in its own styled <p> (the quotes
+// add curly quotes around it), and <br> works in every mail client, Outlook included.
+function applyLineBreaks(escaped: string): string {
+  return escaped
+    .replace(/\r\n?/g, "\n") // Windows and old Mac line endings
+    .replace(/^[ \t\u00A0]+$/gm, "") // a line of only spaces is a blank line
+    .replace(/\n{3,}/g, "\n\n") // a run of blank lines is one paragraph gap (first: trimming a long run is slow)
+    .replace(/^\n+|\n+$/g, "") // no blank lines at the very start or end
+    .replace(/\n/g, "<br>");
+}
+
+// Prose an author wrote: escaped, then emphasised, then its line breaks kept. Use for any field where
+// a paragraph is written — NOT for a title or a button label, where emphasis has no business.
 export function proseHtml(text: string): string {
-  return applyEmphasis(escapeHtml(text));
+  return applyLineBreaks(applyEmphasis(escapeHtml(text)));
 }
 
 // Escape the whole string, THEN substitute {{firstName}} with the escaped name — so neither the
@@ -101,9 +116,16 @@ export function proseHtml(text: string): string {
 // The emphasis pass runs BEFORE the substitution, so a donor called "**Bob**" has their name printed
 // rather than bolded: their name is never read for markers.
 export function applyMerge(text: string, ctx: RenderCtx): string {
-  // TASK-292: proseHtml escapes first, so the name is substituted into already-safe copy — the
+  // TASK-292: escaping comes first, so the name is substituted into already-safe copy — the
   // ordering that makes the whole merge safe. mergeName decides what a missing name becomes.
-  return mergeName(proseHtml(text), escapeHtml(ctx.firstName), escapeHtml(ctx.nameFallback ?? ""));
+  // TASK-469: the line breaks come AFTER the merge. mergeName's tidy-up reads a newline as a space;
+  // run on <br> it could not, and a blank name left "<br><br>What a year…" in real donors' emails.
+  const merged = mergeName(
+    applyEmphasis(escapeHtml(text)),
+    escapeHtml(ctx.firstName),
+    escapeHtml(ctx.nameFallback ?? ""),
+  );
+  return applyLineBreaks(merged);
 }
 
 export function brandButton(

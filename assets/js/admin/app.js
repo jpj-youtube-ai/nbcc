@@ -3414,6 +3414,50 @@
     return bar;
   }
 
+  // TASK-469: a paste into a prose box keeps the basics (paragraphs, line breaks, bold and italic),
+  // written as the markers the B and I buttons write, so the preview and the email show them.
+  // paste-prose.js does the converting and is unit-tested on its own; this reads the clipboard and
+  // inserts the result where the author's cursor is. Without the converter, or with nothing to insert,
+  // the browser's own paste goes ahead.
+  function nlPasteProse(e, input) {
+    var P = window.PasteProse;
+    var clip = e.clipboardData;
+    if (!P || !clip) return;
+    var html = clip.getData("text/html");
+    var text;
+    if (html) text = P.htmlToProse(new DOMParser().parseFromString(html, "text/html").body);
+    else {
+      // Words moved within a box arrive as plain text. The line breaks at their ends are part of what
+      // was copied, so they go back on after the Markdown tidy; and if the tidy changed nothing, the
+      // browser's own paste is exactly right.
+      var plain = clip.getData("text/plain").replace(/\r\n?/g, "\n");
+      var body = P.markdownToProse(plain);
+      if (body === plain) return;
+      text = body ? /^\n*/.exec(plain)[0] + body + /\n*$/.exec(plain)[0] : "";
+    }
+    if (!text) return;
+    e.preventDefault();
+    // execCommand keeps Ctrl+Z working and fires "input", which saves the block and refreshes the
+    // preview exactly as typing does. Chrome would fold the paste into the words typed just before it,
+    // so one Ctrl+Z took both: setting the selection afresh first makes the paste its own undo step, as
+    // an ordinary paste is (checked in headless Chrome). Where execCommand is unavailable, insert and
+    // announce by hand.
+    var start = input.selectionStart;
+    var end = input.selectionEnd;
+    input.setSelectionRange(0, 0);
+    input.setSelectionRange(start, end);
+    var inserted = false;
+    try {
+      inserted = typeof doc.execCommand === "function" && doc.execCommand("insertText", false, text);
+    } catch (err) {
+      inserted = false;
+    }
+    if (!inserted) {
+      input.setRangeText(text, input.selectionStart, input.selectionEnd, "end");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
   function nlText(host, obj, key, label, opts) {
     opts = opts || {};
     var wrap = doc.createElement("label");
@@ -3427,7 +3471,12 @@
     else if (opts.type) input.type = opts.type;
     input.value = obj[key] != null ? obj[key] : "";
     if (nlReadOnly()) input.disabled = true;
-    else input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
+    else {
+      input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
+      // TASK-469: a prose box keeps what matters from a paste; a one-line box pastes plain text.
+      // The legacy raw-HTML box (opts.raw) holds HTML source, not prose, so its paste stays the browser's.
+      if (opts.multiline && !opts.raw) input.addEventListener("paste", function (e) { nlPasteProse(e, input); });
+    }
     // TASK-253: a multiline field IS a prose field — the four of them (text, greeting intro, story
     // body, spotlight quote) are exactly the ones the server renders emphasis in, so the buttons and
     // the renderer can't disagree about where **bold** works.
@@ -3694,7 +3743,7 @@
     host.innerHTML = "";
     var def = nlBlockDefs[block.type];
     if (!def) { // legacy rawHtml draft — offer the raw HTML directly
-      nlText(host, block.data, "html", "HTML", { multiline: true });
+      nlText(host, block.data, "html", "HTML", { multiline: true, raw: true });
       return;
     }
     var vdef = nlActiveVariant(block);

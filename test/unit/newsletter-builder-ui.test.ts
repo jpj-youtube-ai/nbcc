@@ -18,6 +18,7 @@ const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
 const appSrc = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
 const helpers = require(resolve(ROOT, "assets/js/admin/helpers.js"));
+const pasteProse = require(resolve(ROOT, "assets/js/admin/paste-prose.js"));
 const bodyHtml = (html.match(/<body[^>]*>([\s\S]*)<\/body>/i) || ["", ""])[1];
 
 const tokenFor = (role: string) =>
@@ -1366,5 +1367,145 @@ describe("audiences (TASK-259)", () => {
     await flush();
     expect(memberDeletes).toEqual(["/api/admin/subscriber-lists/2/members/9"]);
     confirmSpy.mockRestore();
+  });
+});
+
+// TASK-469: a paste into a prose box keeps paragraphs, line breaks, bold and italic, written as the
+// markers the B and I buttons write; a paste into any other box is left to the browser. jsdom has no
+// clipboard, so the paste event carries a stub; it has no execCommand either, so this exercises the
+// setRangeText fallback (a real browser takes the execCommand path, which keeps Ctrl+Z).
+describe("pasting into a prose box (TASK-469)", () => {
+  beforeEach(() => {
+    loginToken = tokenFor("editor");
+    savedRequests.length = 0;
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (window as unknown as { PasteProse: unknown }).PasteProse = pasteProse;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+  });
+
+  // A paste event carrying these clipboard contents, as the browser sends it.
+  function paste(target: HTMLElement, clip: Record<string, string>) {
+    const e = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(e, "clipboardData", { value: { getData: (type: string) => clip[type] || "" } });
+    target.dispatchEvent(e);
+    return e;
+  }
+
+  // The input or textarea under a field label on the canvas.
+  function field(label: string) {
+    const wrap = Array.prototype.find.call(
+      el("nlCanvas").querySelectorAll(".nl-field"),
+      (w: HTMLElement) => (w.querySelector(".nl-field-label")?.textContent || "").trim() === label,
+    ) as HTMLElement;
+    expect(wrap).toBeTruthy();
+    return wrap.querySelector("input, textarea") as HTMLInputElement | HTMLTextAreaElement;
+  }
+
+  async function newTextBox() {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    (el("newsletterSubject") as HTMLInputElement).value = "Pasted";
+    clickPalette("Text");
+    return field("Text") as HTMLTextAreaElement;
+  }
+
+  it("keeps a highlighted reply's paragraphs and bold, inserted where the cursor is, and saves them", async () => {
+    const box = await newTextBox();
+    box.value = "Before  after";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    box.setSelectionRange(7, 7);
+
+    const e = paste(box, {
+      "text/html": "<p>We <strong>did it</strong>.</p><p>Thank you.</p>",
+      "text/plain": "We did it.\n\nThank you.",
+    });
+
+    expect(e.defaultPrevented).toBe(true);
+    expect(box.value).toBe("Before We **did it**.\n\nThank you. after");
+    (el("newsletterForm") as HTMLFormElement).dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    await flush();
+    await flush();
+    const sentDoc = savedRequests[0].body.bodyJson as { blocks: { data: { text?: string } }[] };
+    expect(sentDoc.blocks[0].data.text).toBe("Before We **did it**.\n\nThank you. after");
+  });
+
+  it("tidies Claude's Copy-button Markdown the same way", async () => {
+    const box = await newTextBox();
+    box.value = "";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+
+    paste(box, { "text/plain": "## Our week\n\n- Packed **120** bags\n- Met [the team](https://example.org/team)" });
+
+    expect(box.value).toBe("**Our week**\n\n• Packed **120** bags\n• Met the team");
+  });
+
+  it("goes in through execCommand where the browser has it, once, so the paste is one undoable edit", async () => {
+    const box = await newTextBox();
+    box.value = "";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    const calls: unknown[][] = [];
+    // jsdom has no execCommand: stand one in that does what Chrome's does for a textarea.
+    (document as unknown as { execCommand: unknown }).execCommand = (cmd: string, ui: boolean, value: string) => {
+      calls.push([cmd, ui, value]);
+      box.setRangeText(value, box.selectionStart, box.selectionEnd, "end");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    };
+    try {
+      paste(box, { "text/html": "<p>One <em>two</em></p>" });
+      expect(calls).toEqual([["insertText", false, "One *two*"]]);
+      expect(box.value).toBe("One *two*"); // once, not twice: the fallback stays out of it
+    } finally {
+      delete (document as unknown as { execCommand?: unknown }).execCommand;
+    }
+  });
+
+  // Found in review: copying within a textarea puts only plain text on the clipboard, so moving your
+  // own words used to lose the line breaks at their ends. They are part of what was copied.
+  it("keeps the line breaks at the ends of words moved within a box", async () => {
+    const box = await newTextBox();
+    box.value = "Line one";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    box.setSelectionRange(0, 0);
+
+    paste(box, { "text/plain": "Line two\n" });
+
+    expect(box.value).toBe("Line two\nLine one");
+  });
+
+  // The legacy raw-HTML box holds HTML source, not prose: a paste there is the browser's own.
+  it("leaves a paste into the legacy raw-HTML box to the browser", async () => {
+    newsletterListRows = [
+      { id: 41, subject: legacyNewsletter.subject, status: "draft", sentAt: null, recipientCount: null },
+    ];
+    try {
+      await openNewsletterTab();
+      const toggle = el("nlCanvas").querySelector("[aria-expanded]") as HTMLElement | null;
+      if (toggle && toggle.getAttribute("aria-expanded") === "false") toggle.click();
+      const raw = el("nlCanvas").querySelector("textarea") as HTMLTextAreaElement;
+      expect(raw).toBeTruthy();
+
+      const e = paste(raw, { "text/plain": "- <li>item</li>" });
+
+      expect(e.defaultPrevented).toBe(false);
+    } finally {
+      newsletterListRows = [];
+    }
+  });
+
+  it("leaves a paste into a one-line box to the browser", async () => {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Heading");
+
+    const e = paste(field("Title"), { "text/html": "<b>Bold</b>", "text/plain": "Bold" });
+
+    expect(e.defaultPrevented).toBe(false);
   });
 });

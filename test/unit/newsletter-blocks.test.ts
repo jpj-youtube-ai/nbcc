@@ -1295,3 +1295,66 @@ describe("inline emphasis in prose (TASK-253)", () => {
     expect(heading).toContain("**Not bold**");
   });
 });
+
+// TASK-469: a prose field's line breaks reach the email. They used to arrive as raw newlines inside one
+// <p>, which every mail client collapses to a space, so a second paragraph ran on from the first.
+describe("line breaks and paragraphs in prose (TASK-469)", () => {
+  const text = (body: string) => renderBlock({ type: "text", variant: 0, data: { text: body } }, ctx);
+
+  it("turns a line break into <br> and a blank line into a paragraph gap", () => {
+    const html = text("First paragraph.\n\nSecond paragraph.\nA line straight after.");
+    expect(html).toContain("First paragraph.<br><br>Second paragraph.<br>A line straight after.");
+  });
+
+  it("counts a run of blank lines, or a line of only spaces, as one paragraph gap", () => {
+    expect(text("One.\n\n\n\nTwo.")).toContain("One.<br><br>Two.");
+    expect(text("One.\n   \nTwo.")).toContain("One.<br><br>Two.");
+  });
+
+  it("normalises Windows line endings and drops blank lines at either end", () => {
+    const html = text("\r\n\r\nOne.\r\nTwo.\r\n\r\n");
+    expect(html).toContain(">One.<br>Two.</p>");
+    expect(html).not.toContain("\r");
+  });
+
+  it("still escapes first: a pasted tag stays text, and the only new tag is our own <br>", () => {
+    const html = text("<b>not bold</b>\n<script>x</script>");
+    expect(html).toContain("&lt;b&gt;not bold&lt;/b&gt;<br>&lt;script&gt;");
+    expect(html).not.toContain("<script>");
+  });
+
+  it("keeps bold and italic working on either side of a break", () => {
+    expect(text("**Thank you**\n*so* much")).toContain("<strong>Thank you</strong><br><em>so</em> much");
+  });
+
+  it("does it in every prose field: the greeting intro, a story's body and a spotlight's quote", () => {
+    const greeting = renderBlock({ type: "greeting", variant: 1, data: { lead: "Hello.\n\nWelcome." } }, ctx);
+    expect(greeting).toContain("Hello.<br><br>Welcome.");
+    const story = renderBlock({ type: "story", variant: 2, data: { title: "T", body: "Line one.\nLine two." } }, ctx);
+    expect(story).toContain("Line one.<br>Line two.");
+    const spotlight = renderBlock({ type: "spotlight", variant: 2, data: { name: "N", quote: "Kind.\nTruly.", role: "R" } }, ctx);
+    expect(spotlight).toContain("Kind.<br>Truly.");
+  });
+
+  // Found in review: the name merge must run BEFORE the line breaks become <br>, or its tidy-up (which
+  // reads a newline as a space) cannot see them. The preview always merges a name, so only a real
+  // recipient with no usable first name would ever have seen this.
+  it("tidies a missing name next to a line break as it always did", () => {
+    const blank = { firstName: "", nameFallback: "" };
+    const body = (t: string) => renderBlock({ type: "text", variant: 0, data: { text: t } }, blank);
+    expect(body("{{firstName}},\n\nWhat a year it has been.")).toMatch(/<p [^>]*>What a year it has been\.<\/p>/);
+    expect(body("{{firstName}},\nthanks for everything.")).toMatch(/<p [^>]*>Thanks for everything\.<\/p>/);
+    expect(body("Thank you,\n{{firstName}}.")).toMatch(/<p [^>]*>Thank you\.<\/p>/);
+  });
+
+  it("stays quick on a long run of blank lines", () => {
+    const started = Date.now();
+    text("A" + "\n".repeat(50000) + "B");
+    expect(Date.now() - started).toBeLessThan(300);
+  });
+
+  it("leaves a title alone: a heading is not prose", () => {
+    const heading = renderBlock({ type: "heading", variant: 0, data: { title: "One\nTwo" } }, ctx);
+    expect(heading).not.toContain("<br>");
+  });
+});

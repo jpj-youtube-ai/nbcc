@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { htmlToPlainText } from "../../src/newsletter/plain-text";
+import { renderBlock } from "../../src/newsletter/blocks";
 
 // TASK-275: newsletters went out HTML-only. A missing text/plain part counts against a sender with
 // spam filters, and leaves text-only clients, some screen readers and notification previews with
@@ -64,5 +65,18 @@ describe("htmlToPlainText", () => {
   it("survives an empty or markup-only document without throwing", () => {
     expect(htmlToPlainText("")).toBe("");
     expect(htmlToPlainText("<div></div>")).toBe("");
+  });
+});
+
+// TASK-469: the text part already kept a prose field's paragraphs, because it keeps raw newlines where
+// only the HTML collapsed them. Now the HTML carries them as <br>, and this pins that the text part still
+// reads as the same paragraphs.
+describe("paragraphs written in a prose field (TASK-469)", () => {
+  it("keeps the blank line between paragraphs and the single line break", () => {
+    const html = renderBlock(
+      { type: "text", variant: 0, data: { text: "First paragraph.\n\nSecond paragraph.\nA line after." } },
+      { firstName: "Jane" },
+    );
+    expect(htmlToPlainText(html)).toBe("First paragraph.\n\nSecond paragraph.\nA line after.");
   });
 });

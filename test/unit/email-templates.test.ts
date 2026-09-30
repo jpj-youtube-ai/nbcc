@@ -87,6 +87,18 @@ describe("buildSesSendRequest", () => {
     });
   });
 
+  // TASK-464: the Ball ticket report is one email to everyone on its list, so they can reply to all.
+  it("sends one message to several people when alsoTo is given, and to one otherwise", () => {
+    const req = buildSesSendRequest({ ...base, alsoTo: ["b@example.com", "c@example.com"] }) as Record<string, unknown>;
+    expect((req.Destination as Record<string, unknown>).ToAddresses).toEqual([
+      "donor@example.com",
+      "b@example.com",
+      "c@example.com",
+    ]);
+    const single = buildSesSendRequest({ ...base, alsoTo: [] }) as Record<string, unknown>;
+    expect((single.Destination as Record<string, unknown>).ToAddresses).toEqual(["donor@example.com"]);
+  });
+
   it("carries replyTo, cc and the configuration set when present", () => {
     const req = buildSesSendRequest({ ...base, replyTo: "newsletter@nbcc.scot", cc: "cc@nbcc.scot", configurationSet: "nl" }) as Record<string, unknown>;
     expect(req.ReplyToAddresses).toEqual(["newsletter@nbcc.scot"]);

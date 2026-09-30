@@ -74,18 +74,24 @@ async function logAttempt(
 // original error is ALWAYS rethrown untouched — callers (the newsletter queue's failure
 // classifier above all) depend on the real message.
 async function sendAndLog(kind: string, name: string | null, msg: SesMessage): Promise<void> {
+  // One audit row per person the message went to: almost always just `to`, but the Festive Ball
+  // ticket report (TASK-464) is one message to a small group, and the log lists each of them.
+  const everyone = [msg.to, ...(msg.alsoTo ?? [])];
+  const logEach = async (error: string | null, messageId: string | null = null) => {
+    for (const to of everyone) await logAttempt(kind, to, name, msg.subject, error, messageId);
+  };
   if (useStub) {
-    await logAttempt(kind, msg.to, name, msg.subject, null);
+    await logEach(null);
     return;
   }
   let messageId: string | null = null;
   try {
     messageId = await sendSesEmail(msg);
   } catch (err) {
-    await logAttempt(kind, msg.to, name, msg.subject, err instanceof Error ? err.message : String(err));
+    await logEach(err instanceof Error ? err.message : String(err));
     throw err;
   }
-  await logAttempt(kind, msg.to, name, msg.subject, null, messageId);
+  await logEach(null, messageId);
 }
 
 export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {
@@ -428,6 +434,34 @@ export async function sendBallReminder(message: BallConfirmationMessage): Promis
 // report, and so a change to one cannot silently alter another.
 export async function sendBallRunUp(message: BallConfirmationMessage): Promise<void> {
   await sendVerbatim("ballRunUp", null, message);
+}
+
+// TASK-464: the Festive Ball ticket report, twice a week to the people running the Ball with us.
+// ONE message with everyone on the To line, because they all work together and a reply should reach
+// all of them (Jaimie's call; if the list ever reaches beyond that group, send them separately).
+// From and Reply-To are config.BALL_FROM_EMAIL (events@nbcc.scot). Counts only: no one's details.
+export interface BallReportMessage {
+  to: string[];
+  from: string;
+  replyTo: string;
+  subject: string;
+  html: string;
+  text: string;
+}
+
+export async function sendBallReport(message: BallReportMessage): Promise<void> {
+  const [first, ...rest] = message.to;
+  if (!first) throw new Error("The ticket report has nobody to go to.");
+  await sendAndLog("ballReport", null, {
+    to: first,
+    alsoTo: rest,
+    from: message.from,
+    replyTo: message.replyTo,
+    subject: message.subject,
+    html: message.html,
+    text: message.text,
+    configurationSet: config.SES_TRANSACTIONAL_CONFIGURATION_SET || undefined,
+  });
 }
 
 // TASK-401: the cold approach to a local business. Its own kind, like every other sender here, so

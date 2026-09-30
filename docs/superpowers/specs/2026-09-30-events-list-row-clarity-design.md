@@ -40,8 +40,8 @@ There is also a fourth problem:
 - **The buttons keep their visible text.** The event's name is added in `aria-label`, the way the
   admin already names other row controls ("Role for …", "Select donation …"). The visible word comes
   first, so someone using speech input can still say "click Edit" (WCAG 2.5.3, label in name).
-- **The live region comes off this one list.** Every other admin list keeps its live region; this
-  is the only one that redraws itself when you open an item. Saving already announces through the
+- **The live region comes off this one list.** The admin's other table lists keep theirs; this one
+  redraws itself whenever you open an item. Saving already announces through the
   save status, deleting through the switch status, and a load failure through the switch state
   ("Could not check."), so nothing that needed hearing goes quiet.
 - **Focus moves only when a person presses a row's button.** The editor's heading gets

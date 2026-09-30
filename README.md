@@ -2736,6 +2736,36 @@ stage is skipped, so pressing the button twice is safe.
 Past the lock date the chase stops entirely rather than running to the event: staff work the
 remaining stragglers by hand from the outstanding list.
 
+### The ticket report (TASK-464)
+
+Twice a week, on Tuesday and Thursday mornings, the people running the Ball with us (the organiser,
+the sponsor and our own staff) get one email with its ticket numbers: seats sold of 400 and how
+full, whole tables and single seats, what sold since the last update and in the last 7 days against
+the 7 before, what is still available and kept back for guests, the waiting list and the days to go.
+Counts only: no names, no booking details, no money. Sold means paid. It opens with when the next
+update comes and how to reach us (01292 811 015, events@nbcc.scot), comes From and Reply-To
+`BALL_FROM_EMAIL` in the Ball's own frame (`ballEmailShell`), and goes as ONE email with everyone
+on the To line so they can reply to all: they all work together (Jaimie's call; if the list ever
+reaches beyond that group, send separately instead).
+
+It is set up on Admin → Events, in the **Festive Ball ticket report** card under the page switch:
+the list (a name and an address each, kept in alphabetical order, up to 10), the switch, **Send a
+test to me** (the real email marked "[Test]", to the signed-in person only) and a preview with
+today's numbers. Anyone who can edit Events can change it; viewers can look. It ships switched off,
+and saving it on with nobody to send to is refused. The routes: `GET /api/admin/ball-report`
+(`events:view`), `PUT /api/admin/ball-report` and `POST /api/admin/ball-report/test` (`events:edit`).
+Every save and test writes an `audit_log` row (who was added or removed, and by whom), and the email
+log lists each person a report went to.
+
+It rides the daily 8am task (`npm run reminders`) like the run-up, with no schedule of its own:
+`runBallSalesReport` (`src/ball/sales-report-runner.ts`) sends only on a Tuesday or Thursday, UK
+time, when switched on, with recipients, up to the day of the Ball. It claims the day first in
+`ball_report_sends` (a unique index allows one scheduled report a day), so a second run sends
+nothing, and a failed send gives the day back. The numbers and words are the pure
+`src/ball/sales-report.ts` (`test/unit/ball-sales-report.test.ts`); `features/ball-report.feature`
+covers the admin API against Postgres. `SesMessage` gained an optional `alsoTo` list for this one
+email; every other email is unchanged.
+
 ### The week-before reminder
 
 `POST /api/admin/ball/reminders` (Editor+ with the ball section). The original staff-triggered
@@ -6100,11 +6130,12 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 45 tables
-(42 when this was built; the Events page added three in TASK-453),
+This is the trap this feature was built around. `DATABASE_URL` holds 46 tables
+(42 when this was built; the Events page added three in TASK-453, and the Festive Ball ticket
+report one in TASK-464),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 45 of **47** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 46 of **48** tables and silently
 drops every My Story submission and every contact enquiry, while producing a
 file of entirely plausible size.
 

@@ -159,6 +159,34 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
 describe("the Events screen (TASK-453)", () => {
   const view = () => doc.getElementById("view-events")!;
 
+  // TASK-464: the Festive Ball ticket report, set up under the page switch.
+  it("has the ticket report card: its state, who it goes to, the switch, a test and a preview", () => {
+    const card = doc.getElementById("evReport")!;
+    expect(card.closest("#view-events")).not.toBeNull();
+    expect(card.hasAttribute("hidden")).toBe(true);
+    expect(doc.getElementById("evReportState")?.getAttribute("aria-live")).toBe("polite");
+    const toggle = doc.getElementById("evReportToggle")!;
+    expect(toggle.getAttribute("aria-controls")).toBe("evReportBody");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(doc.getElementById("evReportBody")?.hasAttribute("hidden")).toBe(true);
+    expect(doc.getElementById("evReportList")).not.toBeNull();
+    for (const id of ["evReportName", "evReportEmail"]) {
+      expect(doc.querySelector(`label[for="${id}"]`), id).not.toBeNull();
+    }
+    expect((doc.getElementById("evReportEmail") as HTMLInputElement).type).toBe("email");
+    expect((doc.getElementById("evReportOn") as HTMLInputElement).type).toBe("checkbox");
+    expect(doc.getElementById("evReportSave")).not.toBeNull();
+    expect(doc.getElementById("evReportTest")?.textContent).toContain("Send a test to me");
+    expect(doc.getElementById("evReportStatus")?.getAttribute("role")).toBe("status");
+    // Everyone sees everyone's address: the card says so where the list is built.
+    expect(doc.getElementById("evReportBody")?.textContent).toMatch(/sees everyone else.s address/);
+    const preview = doc.getElementById("evReportPreview")!;
+    expect(preview.tagName).toBe("IFRAME");
+    expect(preview.getAttribute("title")).toBeTruthy();
+    // No scrolling inside the page: the frame is sized to the email.
+    expect(preview.getAttribute("scrolling")).toBe("no");
+  });
+
   it("has the page switch, the list and the form", () => {
     expect(view()).not.toBeNull();
     expect(doc.getElementById("evSwitchBtn")).not.toBeNull();

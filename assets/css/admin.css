@@ -1918,6 +1918,7 @@ tr.nl-click:hover { background: var(--tint); }
 #view-events .ev-f-hint { font-size: 0.82rem; color: var(--slate-soft); line-height: 1.45; }
 #view-events .ev-f-hint--below { margin: 10px 0 0; }
 #view-events .ev-f input[type="text"],
+#view-events .ev-f input[type="email"],
 #view-events .ev-f input[type="date"],
 #view-events .ev-f input[type="time"],
 #view-events .ev-f select,
@@ -2106,3 +2107,56 @@ tr.nl-click:hover { background: var(--tint); }
 .admin-import-list .admin-import-pills{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
 .admin-import-list .admin-import-reason{margin-top:4px;color:var(--slate-soft)}
 .admin-import-who .admin-muted{margin-left:4px;color:var(--slate-soft);font-size:.86rem}
+
+/* TASK-464: the Festive Ball ticket report, the page switch's neighbour and dressed the same way.
+   The list, the form and the preview all grow the page; the preview frame is sized to the email, so
+   nothing scrolls inside anything. */
+#view-events .ev-report {
+  margin: 14px 0 6px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+#view-events .ev-report.is-on { border-color: color-mix(in srgb, var(--holly) 30%, var(--line)); }
+#view-events .ev-report-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
+#view-events .ev-report-text { flex: 1 1 320px; min-width: 0; }
+#view-events .ev-report .admin-subhead { margin: 0 0 4px; }
+#view-events .ev-report-state { margin: 0; max-width: 64ch; font-size: 0.95rem; line-height: 1.5; }
+#view-events .ev-report-state b { color: var(--maroon); }
+#view-events .ev-report.is-on .ev-report-state b { color: var(--holly-dark); }
+#view-events .ev-report-body { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+#view-events .ev-report-intro,
+#view-events .ev-report-note { margin: 0 0 10px; max-width: 72ch; font-size: 0.92rem; line-height: 1.55; }
+#view-events .ev-report-note { color: var(--slate-soft); }
+#view-events .ev-report-list { list-style: none; margin: 14px 0 12px; padding: 0; max-width: 640px; }
+#view-events .ev-report-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+#view-events .ev-report-list li:last-child { border-bottom: 1px solid var(--line); }
+#view-events .ev-report-who { min-width: 0; overflow-wrap: anywhere; }
+#view-events .ev-report-who span { margin-left: 6px; color: var(--slate-soft); }
+#view-events .ev-report-empty { color: var(--slate-soft); }
+#view-events .ev-report-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; max-width: 640px; margin: 4px 0 14px; }
+#view-events .ev-report-add .ev-f { flex: 1 1 200px; min-width: 0; margin: 0; }
+#view-events .ev-report-on { display: flex; align-items: center; gap: 8px; margin: 6px 0 14px; font-weight: 600; }
+#view-events .ev-report-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+#view-events .ev-report-last { margin: 6px 0 0; font-size: 0.85rem; color: var(--slate-soft); }
+#view-events .ev-report-last:empty { display: none; }
+#view-events .ev-report-subhead { margin: 22px 0 10px; font-family: var(--font-head); color: var(--maroon); font-size: 1rem; }
+#view-events .ev-report-preview {
+  display: block;
+  width: 100%;
+  max-width: 680px;
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}

@@ -3430,7 +3430,14 @@
     if (!text) return;
     e.preventDefault();
     // execCommand keeps Ctrl+Z working and fires "input", which saves the block and refreshes the
-    // preview exactly as typing does. Where it is unavailable, insert and announce by hand.
+    // preview exactly as typing does. Chrome would fold the paste into the words typed just before it,
+    // so one Ctrl+Z took both: setting the selection afresh first makes the paste its own undo step, as
+    // an ordinary paste is (checked in headless Chrome). Where execCommand is unavailable, insert and
+    // announce by hand.
+    var start = input.selectionStart;
+    var end = input.selectionEnd;
+    input.setSelectionRange(0, 0);
+    input.setSelectionRange(start, end);
     var inserted = false;
     try {
       inserted = typeof doc.execCommand === "function" && doc.execCommand("insertText", false, text);

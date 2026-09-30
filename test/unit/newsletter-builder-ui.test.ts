@@ -1427,6 +1427,27 @@ describe("pasting into a prose box (TASK-469)", () => {
     expect(box.value).toBe("**Our week**\n\n• Packed **120** bags\n• Met the team");
   });
 
+  it("goes in through execCommand where the browser has it, once, so the paste is one undoable edit", async () => {
+    const box = await newTextBox();
+    box.value = "";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    const calls: unknown[][] = [];
+    // jsdom has no execCommand: stand one in that does what Chrome's does for a textarea.
+    (document as unknown as { execCommand: unknown }).execCommand = (cmd: string, ui: boolean, value: string) => {
+      calls.push([cmd, ui, value]);
+      box.setRangeText(value, box.selectionStart, box.selectionEnd, "end");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    };
+    try {
+      paste(box, { "text/html": "<p>One <em>two</em></p>" });
+      expect(calls).toEqual([["insertText", false, "One *two*"]]);
+      expect(box.value).toBe("One *two*"); // once, not twice: the fallback stays out of it
+    } finally {
+      delete (document as unknown as { execCommand?: unknown }).execCommand;
+    }
+  });
+
   it("leaves a paste into a one-line box to the browser", async () => {
     await openNewsletterTab();
     (el("newsletterNew") as HTMLElement).click();

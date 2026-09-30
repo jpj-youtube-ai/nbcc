@@ -518,6 +518,40 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("teamPermStatus").textContent).toBe("Access updated.");
   });
 
+  // TASK-462: every preset button on Manage access must fill in a matrix the save accepts. The Editor
+  // one never did: it named only the sections the editor role names, the save needs every section,
+  // and all anyone saw was "Could not save that access." (since TASK-313).
+  it.each(["viewer", "editor", "admin"])("saves the %s preset as that role's complete defaults", async (role) => {
+    loginToken = tokenFor("admin");
+    // Saved access that matches no preset, so every button has to change what is on screen: an editor
+    // with no saved access already shows the editor defaults, and a dead Editor button would pass.
+    teamMembers = [
+      {
+        id: 7, email: "ed@nbcc", full_name: "Ed Itor", role: "editor", status: "active",
+        invited_at: "2026-08-01T00:00:00Z", last_login_at: null,
+        permissions: Object.fromEntries(SECTIONS.map((s) => [s, "none"])) as PermissionMap,
+      },
+    ];
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="team"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector('[data-team-perms="7"]') as HTMLElement).click();
+    (document.querySelector(`[data-perm-preset="${role}"]`) as HTMLElement).click();
+    el("teamPermSave").click();
+    await flush();
+    await flush();
+
+    const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
+    const save = fetchMock.mock.calls.find((c) => /\/api\/admin\/users\/7\/permissions$/.test(String(c[0])));
+    expect(save, "Save sent the permissions PATCH").toBeDefined();
+    expect(JSON.parse(((save as unknown[])[1] as { body: string }).body).permissions).toEqual({
+      ...Object.fromEntries(SECTIONS.map((s) => [s, "none"])),
+      ...roleToPermissions(role),
+    });
+    expect(el("teamPermStatus").textContent).toBe("Access updated.");
+  });
+
   // TASK-458: when the list cannot be fetched, the server still answers in JSON, an { error } with no
   // results. Read as a list, that drew an empty table and "0 giving, £0 a month" (formatPence writes
   // a whole pound without pence, so "£0" is the thing to look for, and it covers "£0.00" too). On the

@@ -5652,14 +5652,67 @@ Measured in headless Chrome emulating each phone (the ticket's own method), agai
 every width in the table, and at 393, 412 and 430px. `test/unit/admin-fits-a-phone.test.ts` pins the
 rule, the wrapping row it relies on, and that no rule at any width holds the label to one line again.
 
-**Not fixed here: the list of events on the same screen breaks on a phone.** Its five columns are
-fixed shares of the table's width, and a phone leaves each share too narrow for what is in it. At
-320px the Date and Website headings break a letter at a time, the day and time beside the date badge
-run over the event's name, the "On the page" pill stands one letter per line, and the **Edit** button
-is 41px wide in a 32px column, so the list scrolls sideways inside its box by 23px (15px at 390px; it
-fits from 768px). The page itself does not widen, which is why measuring the page's width does not
-show it. It needs a phone layout of its own, the way the monthly givers table stacks below 1000px, so
-it is a change of its own.
+**Not fixed here: the list of events on the same screen broke on a phone** (**since fixed in
+TASK-460**, which found it breaking on tablets and small laptops as well: see
+[The Events list where the table does not fit](#the-events-list-where-the-table-does-not-fit-task-460)).
+Its five columns are fixed shares of the table's width, and a phone left each share too narrow for
+what is in it. At 320px the Date and Website headings broke a letter at a time, the day and time
+beside the date badge ran over the event's name, the "On the page" pill stood one letter per line,
+and the **Edit** button was 41px wide in a 32px column, so the list scrolled sideways inside its box
+by 23px (15px at 390px, none at 768px). The page itself did not widen, which is why measuring the
+page's width did not show it.
+
+## The Events list where the table does not fit (TASK-460)
+
+The list of events is a five-column table (Date, Event, Run by, Website, and the button), each
+column a fixed share of its width, and it needs the list to be about **850px** wide. TASK-455 found it
+breaking on a phone. Measuring every width showed it breaking much wider than that, because from 861px
+the side menu takes 210px of the screen:
+
+- **below about 850px** the button breaks its own label: "Ed / it", "O / pe / n";
+- **below about 700px** the times break too ("6.30 / pm");
+- **below about 520px** the day and time run into the event's name and the list scrolls sideways
+  inside its box; on a phone the Website heading and the "On the page" pill stand one letter per line.
+
+So it broke on phones, on most tablets, and on laptops up to about 1150px wide.
+
+**Now, wherever the list is narrower than 900px, each event is a compact row** that reads top to
+bottom: the date badge with the day and time, the event's name with its venue and town, "Run by" and
+who runs it, then its status and the **Open**, **Edit** or **View** button on one line. The button is
+44px tall there, the size the admin holds its other phone controls to. From 900px up the table is
+exactly as it was; the before and after screenshots of the list at 1200 and 1280px are identical,
+pixel for pixel. In practice that is compact rows on phones, on most tablets and on laptops narrower
+than about 1,190px, and the table on anything wider (a large tablet on its side gets the table, and
+it fits there).
+
+**Chosen from two prototypes**, both drawn in the real admin with the live events: these compact
+rows, or the stack the monthly givers and sent-letter lists use, with each value on its own labelled
+line. The stack did not suit this list. Its label column took a third of a phone's width, the venue
+fell into the label column (the Event cell holds two lines, which that pattern cannot place), the
+button stretched to the full width, and four events took 1,177px of scrolling against 831px.
+
+**Measured on the list, not the screen.** The rules sit in a container query,
+`@container evlist (max-width: 899px)`, with `#evList` as the container, because what runs out is the
+list's own width, and that depends on the side menu (210px from 861px), the page's padding, its 1280px
+cap and the scrollbar. A screen width standing in for it would be about 1,190px today, would drift
+whenever any of those changed, and would already be 15px out wherever scrollbars sit over the page
+(Macs, iPads, phones). It is the first container query in the admin; a browser without them (iOS
+before 16) keeps the table, which is no worse than before. The headings stay in the page for screen
+readers, hidden the way the stacked lists hide theirs, and the stylesheet writes in "Run by" because
+"NBCC" on its own could mean anything.
+
+The compact rows place each cell by its position, so they follow the columns `evRenderList` draws
+(Date, Event, Run by, Website, the button). **A new or moved column must move the compact-row rules
+too**; a test fails if the headings change order, so it cannot happen silently.
+
+Verified in headless Chrome with the two events production holds (EmpowHer ’26 and Festive Ball 2026)
+plus one of NBCC's own, a scheduled one, a draft and a past one. In the Coming up list at 320, 375,
+390, 430, 768, 861, 960, 1024, 1100, 1180, 1200 and 1280px, and in Drafts and Past at 320px: the page
+is as wide as the screen, the list never scrolls sideways, nothing sticks out of its cell and no word
+breaks mid-word. `test/unit/admin-fits-a-phone.test.ts` pins the rules (its CSS reader now reads
+container queries), including that no rule in the list stops its words wrapping and that no other
+rule, at any width, changes how its rows and cells lay out. The design, with both prototypes' numbers,
+is in `docs/superpowers/specs/2026-09-30-events-list-narrow-layout-design.md`.
 
 ## Saving an editor's access took Contact businesses away (TASK-459)
 
@@ -5697,12 +5750,25 @@ before a section arrived, and not changed since, has no entry for it, which read
 as much as anyone. TASK-463 backfills the first, third and fourth; the Email audit is deliberately left
 to be granted by hand, because it was asked for so that exactly two named admins hold it.
 
-**And the Editor button cannot be saved.** It fills in only the sections the editor role names, but a
-save must name every section, and it leaves out Business supporters and the Email audit, which
-editors do not get. Pressing **Save access** after it says "Could not save that access.", and has
-done since the Festive Ball section arrived (TASK-313, 31 August 2026): the browser's copy has been
-short of at least one section ever since. It fails loudly and changes nobody's access, so it is a fix
-of its own.
+**And the Editor button could not be saved (fixed in TASK-462).** It filled in only the sections the
+editor role names, but a save must name every section, and it left out Business supporters and the
+Email audit, which editors do not get. Pressing **Save access** after it said "Could not save that
+access.", and had done since the Festive Ball section arrived (TASK-313, 31 August 2026): the
+browser's copy had been short of at least one section ever since.
+
+## The Editor button saves (TASK-462)
+
+The **Viewer**, **Editor** and **Admin** buttons on **Team → Manage access** fill the matrix with that
+role's defaults, and the save (`PATCH /api/admin/users/:id/permissions`) refuses anything short of
+every section. The Viewer and Admin defaults are built from the whole list of sections, which is the
+only reason those two buttons worked. The Editor defaults leave out two sections editors get nothing
+in, Business supporters and the Email audit, so the Editor button's matrix could never be saved.
+
+Opening somebody's access already filled every gap with **None**. The buttons now go through the same
+step (`completePermissions` in `assets/js/admin/app.js`), so whatever the matrix shows is what gets
+saved, and the three buttons save exactly the server's `roleToPermissions` for their role, with None
+for everything else. `test/unit/admin-app.test.ts` presses each button and saves, and holds the save to
+the server's own schema.
 
 ## Enquiries waiting for a reply (TASK-425)
 

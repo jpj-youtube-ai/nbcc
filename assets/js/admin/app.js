@@ -9023,7 +9023,8 @@
           // Named after its event, visible word first ("Edit EmpowHer ’26"), so a screen reader going
           // down the list does not hear the same word five times; the open one is the current one.
           '<td><button class="ev-admin-edit" type="button" data-evopen="' + e.id + '" aria-label="' +
-          H.escapeHtml(action + " " + e.name) + '"' + (editing ? ' aria-current="true"' : "") + ">" + action +
+          // TASK-468: with its date, so a recurring event does not sound like its twin.
+          H.escapeHtml(action + " " + e.name + ", " + evShortDate(e.date)) + '"' + (editing ? ' aria-current="true"' : "") + ">" + action +
           "</button></td></tr>"
         );
       }).join("") +
@@ -9045,8 +9046,8 @@
     evCurrentId = null;
     evSavedStatus = null;
     evShowEditor();
-    var name = el("evf-name");
-    if (name && name.focus) name.focus({ preventScroll: true });
+    // No focus here (TASK-468): arriving on an empty list opens a blank event by itself, and arriving
+    // never moves focus. The "Add an event" button puts you in the name field when you ask.
   }
   // TASK-465: opening an event redraws the list, which takes away the button just pressed, and
   // keyboard focus would fall back to the page. It goes to the editor's heading instead, which is
@@ -9262,9 +9263,15 @@
         evDirty = false;
         el("evEditor").hidden = true;
         el("evPagePreviewBox").hidden = true;
+        evRenderList();
+        // TASK-468: the editor, and the Delete button that had focus, are gone. Anyone who may delete
+        // may add, so "Add an event" is there, just above the list: the likeliest next step. Focus
+        // moves before "Deleted." is written, because some screen readers (VoiceOver) drop a polite
+        // message that arrives in the same moment as a focus move.
+        var add = el("evAdd");
+        if (add && !add.hidden && add.focus) add.focus();
         el("evSwitchStatus").className = "ty-status is-ok";
         el("evSwitchStatus").textContent = "Deleted.";
-        evRenderList();
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
@@ -9464,6 +9471,8 @@
     el("evAdd").addEventListener("click", function () {
       if (!evConfirmLeave()) return;
       evOpenNew();
+      var name = el("evf-name");
+      if (name && name.focus) name.focus({ preventScroll: true });
       el("evEditor").scrollIntoView({ block: "start" }); // smooth, or not, as the page's own setting says
     });
     el("evList").addEventListener("click", function (e) {

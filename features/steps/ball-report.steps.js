@@ -57,6 +57,7 @@ async function reset() {
   await pool.query("DELETE FROM ball_report_sends WHERE sent_by LIKE '%report.admin.bdd@example.com'");
   await pool.query("DELETE FROM ball_bookings WHERE buyer_email LIKE '%.report.bdd@example.com'");
   await pool.query("DELETE FROM ball_waiting_list WHERE email LIKE '%.report.bdd@example.com'");
+  await pool.query("DELETE FROM audit_log WHERE action = 'ball_report.send_failed'");
 }
 
 Before({ tags: "@ball-report" }, reset);
@@ -225,4 +226,22 @@ Given(
 
 Then("the preview says {string}", function (words) {
   assert.ok(this.reportBody.preview.html.includes(words), `the preview does not say "${words}"`);
+});
+
+const dayOf = (daysAgo) => new Date(Date.now() - daysAgo * DAY_MS).toISOString().slice(0, 10);
+
+Given("the ticket report could not be sent {int} day(s) ago", async function (days) {
+  await pool.query(
+    `INSERT INTO audit_log (actor, action, entity, entity_id, data, created_at)
+     VALUES ('system:schedule', 'ball_report.send_failed', 'ball_report', NULL, $1, now() - $2::interval)`,
+    [{ sentOn: dayOf(days) }, `${days} days`],
+  );
+});
+
+Then("the card says the report of {int} day(s) ago could not be sent", function (days) {
+  assert.deepEqual(this.reportBody.lastFailure && this.reportBody.lastFailure.sentOn, dayOf(days));
+});
+
+Then("the card shows no failed report", function () {
+  assert.equal(this.reportBody.lastFailure, null);
 });

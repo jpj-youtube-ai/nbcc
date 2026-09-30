@@ -8,6 +8,7 @@ import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
+import { adminWhatsNewRouter } from "./routes/admin-whats-new";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { sesWebhookRouter } from "./routes/ses-webhook";
 import { pulseRouter } from "./routes/pulse";
@@ -79,6 +80,8 @@ export function createApp() {
   app.use(adminBallReportRouter);
   // Stories from the old website's My Story form, from its CSV export (TASK-461).
   app.use(adminStoriesImportRouter);
+  // The New pills in the admin, per person (TASK-478).
+  app.use(adminWhatsNewRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

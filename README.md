@@ -5806,7 +5806,9 @@ These are the three gaps TASK-465's review found.
 - **Deleting leaves you on "Add an event".** Delete hides the editor, and the button that had focus
   goes with it, so keyboard focus used to fall back to the page. It now lands on **Add an event**,
   just above the list. Anyone who may delete may add, so it is always there, and it is the likeliest
-  next step. "Deleted." is still announced.
+  next step. "Deleted." is still announced, and is written just after focus moves, since some screen
+  readers (VoiceOver) drop a message that arrives in the same moment as a focus move. A delete that
+  fails leaves focus on Delete, which is still there.
 - **Arriving never moves focus, even on an empty list.** With no events, the screen opens a blank
   event by itself, and that used to put focus in the name field. Now only pressing **Add an event**
   does that.

@@ -9263,13 +9263,15 @@
         evDirty = false;
         el("evEditor").hidden = true;
         el("evPagePreviewBox").hidden = true;
-        el("evSwitchStatus").className = "ty-status is-ok";
-        el("evSwitchStatus").textContent = "Deleted.";
         evRenderList();
         // TASK-468: the editor, and the Delete button that had focus, are gone. Anyone who may delete
-        // may add, so "Add an event" is there, just above the list: the likeliest next step.
+        // may add, so "Add an event" is there, just above the list: the likeliest next step. Focus
+        // moves before "Deleted." is written, because some screen readers (VoiceOver) drop a polite
+        // message that arrives in the same moment as a focus move.
         var add = el("evAdd");
         if (add && !add.hidden && add.focus) add.focus();
+        el("evSwitchStatus").className = "ty-status is-ok";
+        el("evSwitchStatus").textContent = "Deleted.";
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;

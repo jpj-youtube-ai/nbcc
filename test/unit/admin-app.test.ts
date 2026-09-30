@@ -110,6 +110,7 @@ const eventRecord = (over: Record<string, unknown>) => ({
 });
 let events: ReturnType<typeof eventRecord>[] = [];
 let eventsFailure = false; // the list answers 500, as the server does when it cannot read them
+let deleteFailure = false; // TASK-468: a delete answers 500
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
@@ -180,7 +181,9 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   if (url.includes("/api/admin/events/preview")) {
     return j({ card: "<p>card</p>", page: "<p>page</p>", problems: [], onPage: true });
   }
-  if (/\/api\/admin\/events\/\d+$/.test(url) && init?.method === "DELETE") return j({ deleted: true });
+  if (/\/api\/admin\/events\/\d+$/.test(url) && init?.method === "DELETE") {
+    return deleteFailure ? j({ error: "Admin is temporarily unavailable" }, 500) : j({ deleted: true });
+  }
   if (/\/api\/admin\/events$/.test(url)) {
     if (eventsFailure) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j({ pageOn: false, updatedAt: null, updatedBy: null, today: "2026-09-30", events });
@@ -210,6 +213,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     teamMembers = [];
     events = [];
     eventsFailure = false;
+    deleteFailure = false;
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -1013,12 +1017,24 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(labels).toContain("Edit EmpowHer ’26, 18 Nov");
     });
 
+    // Arrives the way a keyboard user does: focus on the menu's Events link, which must keep it.
+    async function arriveFromMenu() {
+      await signIn();
+      const link = document.querySelector('.admin-nav-link[data-view="events"]') as HTMLElement;
+      link.focus();
+      link.click();
+      await flush();
+      await flush();
+      await flush();
+      return link;
+    }
+
     // Arriving never moves focus, even when there is nothing to list and a blank event opens itself.
     it("leaves focus alone when an empty list opens a blank event by itself", async () => {
       events = [];
-      await openEvents();
+      const link = await arriveFromMenu();
       expect(el("evEditorTitle").textContent).toBe("A new event");
-      expect(document.activeElement).not.toBe(el("evf-name"));
+      expect(document.activeElement).toBe(link);
     });
 
     it("puts you in the name field when you ask for a new event", async () => {
@@ -1044,6 +1060,24 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       }
     });
 
+    // A delete that fails deletes nothing: the editor and its Delete button are still there.
+    it("leaves focus on Delete when the delete fails", async () => {
+      deleteFailure = true;
+      await openEvents();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+      try {
+        el("evDelete").focus();
+        el("evDelete").click();
+        await flush();
+        await flush();
+        expect(el("evSaveState").textContent).toBe("Not deleted. Please try again.");
+        expect(el("evEditor").hidden).toBe(false);
+        expect(document.activeElement).toBe(el("evDelete"));
+      } finally {
+        confirm.mockRestore();
+      }
+    });
+
     it("takes you to the editor from the event already open, too", async () => {
       await openEvents();
       buttons()[0].click();
@@ -1053,8 +1087,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
     // Arriving opens the soonest event by itself, and must not pull focus away from where it is.
     it("leaves focus alone when the screen opens an event by itself", async () => {
-      await openEvents();
-      expect(document.activeElement).not.toBe(el("evEditorTitle"));
+      const link = await arriveFromMenu();
+      expect(el("evEditorTitle").textContent).toBe("Editing: Carols at the Cross");
+      expect(document.activeElement).toBe(link);
     });
   });
 });

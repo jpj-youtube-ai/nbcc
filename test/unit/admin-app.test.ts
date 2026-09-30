@@ -26,6 +26,16 @@ const tokenFor = (role: string) =>
 let loginToken = tokenFor("editor"); // the token the mocked /login hands back (per test)
 // A person's own saved access, which /me returns in place of their role's defaults (per test).
 let storedPermissions: PermissionMap | null = null;
+// TASK-458: who the Monthly givers list holds, and how its request fails when a test wants it to
+// (per test). The server answers a failure in JSON too, just an { error } with no results in it.
+let monthlyGivers: unknown[] = [];
+let monthlyFailure: { status: number; body: unknown } | null = null;
+const monthlyGiver = {
+  donorId: 7, fullName: "Grace Test", email: "grace@x.co", monthlyPence: 1000,
+  firstPaidAt: "2026-05-01T00:00:00Z", mostRecentPaidAt: "2026-09-01T00:00:00Z", paymentCount: 5,
+  totalPence: 5000, giftAid: true, state: "active", cancelledAt: null, lapsedAt: null,
+  failedAttempts: 0, thankedAt: "2026-05-03T00:00:00Z",
+};
 
 const donation = {
   id: 11, donor_id: 5, donor_name: "Ada Test", mode: "monthly", plan: "silver",
@@ -139,6 +149,9 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     });
   }
   if (url.includes("/api/admin/fulfilments")) return j({ results: fulfilments });
+  if (url.includes("/api/admin/monthly-supporters")) {
+    return monthlyFailure ? j(monthlyFailure.body, monthlyFailure.status) : j({ results: monthlyGivers });
+  }
   // TASK-459: saving someone's access is held to the server's own schema, which requires every
   // section, so a save the real endpoint would refuse is refused here too.
   const permsMatch = url.match(/\/api\/admin\/users\/(\d+)\/permissions$/);
@@ -168,6 +181,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
   beforeEach(() => {
     loginToken = tokenFor("editor");
     storedPermissions = null;
+    monthlyGivers = [];
+    monthlyFailure = null;
     fulfilments = makeFulfilments();
     teamMembers = [];
     window.sessionStorage.clear();
@@ -501,6 +516,79 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     };
     expect(sent).toEqual(had);
     expect(el("teamPermStatus").textContent).toBe("Access updated.");
+  });
+
+  // TASK-458: when the list cannot be fetched, the server still answers in JSON, an { error } with no
+  // results. Read as a list, that drew an empty table and "0 giving, £0 a month" (formatPence writes
+  // a whole pound without pence, so "£0" is the thing to look for, and it covers "£0.00" too). On the
+  // screen that exists to say how much regular income is dependable, a false £0 is worse than an error.
+  describe("Monthly givers: a list that never came is not nobody giving (TASK-458)", () => {
+    async function openMonthly() {
+      (document.querySelector('.admin-nav-link[data-view="monthly"]') as HTMLElement).click();
+      await flush();
+      await flush();
+    }
+
+    it.each([
+      [500, { error: "Admin is temporarily unavailable" }],
+      [403, { error: "forbidden" }],
+    ])("says so on a %i, rather than showing nobody giving and £0 a month", async (status, body) => {
+      loginToken = tokenFor("editor");
+      monthlyFailure = { status, body };
+      await signIn();
+      await openMonthly();
+
+      expect(el("view-monthly").textContent).not.toContain("£0");
+      expect(el("monthlyTable").textContent).toContain("Monthly givers are unavailable.");
+    });
+
+    // "Show" stays on screen after the failure, and changing it redraws from whatever list is held.
+    it("keeps saying so when you change what it shows, rather than counting a list that never came", async () => {
+      loginToken = tokenFor("editor");
+      monthlyFailure = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+      await signIn();
+      await openMonthly();
+
+      const show = el("monthlyStateFilter") as HTMLSelectElement;
+      show.value = "";
+      show.dispatchEvent(new Event("change"));
+
+      expect(el("view-monthly").textContent).not.toContain("£0");
+      expect(el("monthlyTable").textContent).toContain("Monthly givers are unavailable.");
+    });
+
+    // A list that loaded once is not what is there now if the next load fails. Leaving it up, or
+    // letting "Show" redraw it, would pass off old figures as current (and, after a 403 for access
+    // just taken away, show names that person may no longer see).
+    it("leaves nothing of an earlier list up when a later load fails", async () => {
+      loginToken = tokenFor("editor");
+      monthlyGivers = [monthlyGiver];
+      await signIn();
+      await openMonthly();
+      expect(el("monthlySummary").textContent).toBe("1 giving, £10 a month");
+
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await flush();
+      monthlyFailure = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+      await openMonthly();
+
+      expect(el("monthlySummary").textContent).toBe("");
+      const show = el("monthlyStateFilter") as HTMLSelectElement;
+      show.value = "";
+      show.dispatchEvent(new Event("change"));
+      expect(el("monthlyTable").textContent).toContain("Monthly givers are unavailable.");
+      expect(el("monthlyTable").textContent).not.toContain("Grace Test");
+    });
+
+    // The other side of the line: a list that did come back, empty, is a true answer.
+    it("still says nobody is giving when the list came back empty, because then it is true", async () => {
+      loginToken = tokenFor("editor");
+      await signIn();
+      await openMonthly();
+
+      expect(el("monthlySummary").textContent).toBe("0 giving, £0 a month");
+      expect(el("monthlyTable").textContent).toContain("Nobody matches that.");
+    });
   });
 
   // TASK-454: below 860px the menu is one button that opens the whole list. jsdom has no layout, so

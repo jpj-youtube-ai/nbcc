@@ -2085,3 +2085,20 @@ tr.nl-click:hover { background: var(--tint); }
    screen sideways in the moment before the zoom is set. */
 #view-events #evPageBox { min-width: 0; overflow: hidden; }
 #view-events .ev-page-frame { display: block; width: 1300px; height: 800px; border: 0; background: transparent; }
+/* TASK-461: stories from the old website. The claims guide's fold-out, and a preview list that grows
+   the page rather than scrolling inside itself. Stories are divided by lines, not boxed, so there are
+   no cards inside the card. */
+.admin-import>summary:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+.admin-import-body{padding:0 18px 16px}
+.admin-import-intro{margin:0 0 14px;color:var(--slate-soft);font-size:.92rem;line-height:1.5}
+.admin-import .admin-field{max-width:520px}
+.admin-import .admin-subhead{margin:18px 0 6px;font-size:1rem}
+.admin-import .admin-empty{padding:4px 0 12px}
+.admin-import-list{list-style:none;margin:0 0 18px;padding:0}
+.admin-import-list li{padding:12px 0;border-top:1px solid var(--line)}
+.admin-import-list li:last-child{border-bottom:1px solid var(--line)}
+.admin-import-list p{margin:0}
+.admin-import-list .admin-import-opening{margin-top:6px;color:var(--slate);line-height:1.5;overflow-wrap:anywhere}
+.admin-import-list .admin-import-pills{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.admin-import-list .admin-import-reason{margin-top:4px;color:var(--slate-soft)}
+.admin-import-who .admin-muted{margin-left:4px;color:var(--slate-soft);font-size:.86rem}

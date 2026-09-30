@@ -1,6 +1,7 @@
 import { storiesPool } from "./stories-pool";
 import { archiveCondition, type ArchiveView } from "../admin/archive-filter";
 import type { StoryRecord } from "../stories/schema";
+import { storyKey, type ImportedStory } from "../stories/old-site-import";
 
 // Task B1: the ONLY write path for My Story submissions. Uses storiesPool exclusively —
 // never src/db/pool.ts — so this feature can never reach the main `charity` DB. A single
@@ -184,4 +185,79 @@ export async function updateStory(id: number, patch: StoryPatch): Promise<StoryR
     params,
   );
   return result.rows[0] ?? null;
+}
+
+// ---- TASK-461: stories from the old website -------------------------------------------------------
+
+// Which of these stories (sent at that moment, in those words) are already here, archived or not.
+export async function storiesAlreadyHere(
+  lookups: Array<{ created_at: string; story_text: string }>,
+): Promise<Set<string>> {
+  if (lookups.length === 0) return new Set();
+  const found = await storiesPool.query<{ created_at: Date; story_text: string }>(
+    "SELECT created_at, story_text FROM stories WHERE created_at = ANY($1::timestamptz[])",
+    [lookups.map((l) => l.created_at)],
+  );
+  return new Set(found.rows.map((r) => storyKey(r.created_at, r.story_text)));
+}
+
+// Adds the stories in one transaction and returns how many went in. The lock, and the second look
+// inside it, mean a double click or two people adding the same file at once cannot add a story
+// twice: whichever arrives second finds it already here. Status "new", so each is reviewed like any
+// other. No audit_log row, for the same reason as insertStory.
+export async function insertImportedStories(stories: ImportedStory[]): Promise<number> {
+  if (stories.length === 0) return 0;
+  const client = await storiesPool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('stories: old website import'))");
+    const found = await client.query<{ created_at: Date; story_text: string }>(
+      "SELECT created_at, story_text FROM stories WHERE created_at = ANY($1::timestamptz[])",
+      [stories.map((s) => s.created_at)],
+    );
+    const here = new Set(found.rows.map((r) => storyKey(r.created_at, r.story_text)));
+    let added = 0;
+    for (const s of stories) {
+      const key = storyKey(s.created_at, s.story_text);
+      if (here.has(key)) continue;
+      await client.query(
+        `INSERT INTO stories (
+           created_at, consent_captured_at, story_text, short_quote, use_scope,
+           consent_share_first_name, consent_share_town, contact_for_more,
+           submitter_first_name, submitter_email, submitter_phone, submitter_town,
+           age_band, gender, recipient_type, heard_about, confirmed_over_16,
+           status, admin_notes
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'new', $18)`,
+        [
+          s.created_at,
+          s.consent_captured_at,
+          s.story_text,
+          s.short_quote,
+          s.use_scope,
+          s.consent_share_first_name,
+          s.consent_share_town,
+          s.contact_for_more,
+          s.submitter_first_name,
+          s.submitter_email,
+          s.submitter_phone,
+          s.submitter_town,
+          s.age_band,
+          s.gender,
+          s.recipient_type,
+          s.heard_about,
+          s.confirmed_over_16,
+          s.admin_notes,
+        ],
+      );
+      here.add(key);
+      added++;
+    }
+    await client.query("COMMIT");
+    return added;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 }

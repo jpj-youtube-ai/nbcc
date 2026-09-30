@@ -22,6 +22,10 @@ export const USE_SCOPES = ["public", "internal_only"] as const;
 
 export const AGE_BANDS = ["16_24", "25_44", "45_64", "65_plus"] as const;
 
+// The longest staff notes on a story may be (PATCH /api/admin/stories/:id). Shared with the old
+// website import (TASK-461), whose notes must fit it, or staff could never save that story again.
+export const MAX_ADMIN_NOTES_LENGTH = 2000;
+
 export const RECIPIENT_TYPES = ["child", "young_person", "vulnerable_adult"] as const;
 
 // A native form POST sends a checked checkbox as the string "on" (or sometimes "true"),

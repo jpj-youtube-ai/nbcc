@@ -1978,6 +1978,33 @@ separate stories database exists so submissions stay behind the consent model, a
 not become a way around it; a BDD scenario asserts the response carries no story text, and another
 that a Viewer gets 403.
 
+**Stories from the old website (TASK-461).** The old website's My Story form has its own CSV export.
+On Admin → Stories, editors and admins open **Add stories from the old website**, choose that file,
+and see what it would add (who, when, the start of each story and its consents) and what it would
+leave out, each with the reason; nothing is saved until **Add**. `POST /api/admin/stories/import`
+(`stories:edit`, its own 3 MB body limit) takes `{ csv, commit }`: without `commit` it only plans,
+and with it the server plans again (never trusting the browser's copy) and saves in one transaction
+under an advisory lock that looks again inside it. Each story keeps the date it was sent as both
+`created_at` and `consent_captured_at`, arrives as New with a note saying where it came from, and is
+recognised by that date and its exact words, archived or not, so the same file never adds a story
+twice. An email or phone number given counts as happy to be contacted, because the old form asked
+for them "just in case you're happy for us to contact you about your story", and the notes say so.
+The notes always fit the admin's own limit on notes (`MAX_ADMIN_NOTES_LENGTH` in
+`src/stories/schema.ts`, shared with the PATCH route), or staff could never save the story again.
+Rows are left out, with a sentence saying why, when the same email (as typed) sent the form again
+within the hour (the earlier go is left out even if the later one withdraws consent, and a kept
+story's note says an earlier one existed), the story is already here, they agreed to no use of it,
+they did not confirm they are over 16, the row has no story or is over 20,000 characters, its date is
+not a full date and time with a time zone (or is before 2000, or after the import), or it has more or
+fewer answers than the form has questions. A file with a quotation mark that is never closed is
+refused whole. Nobody's words are corrected. The mapping is `src/stories/old-site-import.ts` (pure,
+`test/unit/stories-old-site-import.test.ts`), and `features/stories-import.feature` runs it against
+the stories database. The export holds names, emails and phone numbers, so it only ever travels
+through the admin: never the repository, a migration or a workflow. There is no `audit_log` row, as
+for every other stories action; the server logs who ran an import and how many it added. An erased
+story would come back if the same file were added again, so the panel says to delete the file once
+the stories are in.
+
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
 The token is a stateless HMAC of the donor id (`verifyUnsubscribeToken`, signed with

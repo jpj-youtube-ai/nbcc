@@ -35,6 +35,7 @@ import {
 } from "../db/fulfilment";
 import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
+import { MAX_ADMIN_NOTES_LENGTH } from "../stories/schema";
 import { readStoriesDiagnostics } from "../db/stories-diagnostics";
 import { ballSettingsUpdateSchema } from "../ball/settings";
 import { hashPassword } from "../admin/password";
@@ -3136,7 +3137,7 @@ const storyPatchSchema = z
   .object({
     status: z.enum(STORY_STATUSES).optional(),
     adminTags: z.array(z.string().max(100)).max(50).optional(),
-    adminNotes: z.string().max(2000).optional(),
+    adminNotes: z.string().max(MAX_ADMIN_NOTES_LENGTH).optional(),
   })
   .strict()
   .refine((b) => Object.keys(b).length > 0, { message: "no fields to update" });

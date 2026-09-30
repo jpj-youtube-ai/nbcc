@@ -279,6 +279,20 @@
             <section class="admin-view" id="view-stories" aria-labelledby="stories-heading" hidden>
               <h2 id="stories-heading">Stories</h2>
               <p class="admin-view-intro">Submissions from the public "My Story" form. Each carries its own consent: whether it may be used publicly or kept internal only, and whether the submitter's first name / town may be shared. Review a story, tag and note it, and withdraw it if consent is ever revoked.</p>
+              <!-- TASK-461: the old website's My Story submissions, from its CSV export. Editors and
+                   admins only (app.js reveals it). Nothing is saved until "Add" is pressed. -->
+              <details class="admin-guide admin-import" id="storiesImport" hidden>
+                <summary>Add stories from the old website</summary>
+                <div class="admin-import-body">
+                  <p class="admin-import-intro">Choose the My Story CSV exported from the old website's form. You'll see what it would add before anything is saved, and a story that's already here is never added twice. Once they're in, delete the file from your computer: it holds people's contact details, and a story erased from here would come back if the same file were added again.</p>
+                  <div class="admin-field">
+                    <label for="storiesImportFile">The CSV file</label>
+                    <input type="file" id="storiesImportFile" accept=".csv,text/csv" />
+                  </div>
+                  <div id="storiesImportPlan"></div>
+                  <p class="admin-action-status" id="storiesImportStatus" role="status" aria-live="polite"></p>
+                </div>
+              </details>
               <div class="admin-search-bar">
                 <div class="admin-segmented" role="group" aria-label="Filter by status" id="storiesStatusFilter">
                   <button class="admin-seg is-active" type="button" data-status="">All</button>

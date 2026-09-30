@@ -49,6 +49,16 @@ describe("parsePulse", () => {
     expect(parsePulse(body)).toBeNull();
   });
 
+  it("cuts a long tracking word or referrer rather than dropping the view", () => {
+    const parsed = parsePulse(
+      JSON.stringify({ t: "view", v: V, p: "/", r: "https://example.com/" + "r".repeat(1100), u: { c: "c".repeat(300) } }),
+    );
+    expect(parsed?.t).toBe("view");
+    if (parsed?.t !== "view") return;
+    expect(parsed.r).toHaveLength(1024);
+    expect(parsed.u.c).toHaveLength(200);
+  });
+
   it("drops a body over 2 KB", () => {
     expect(PULSE_MAX_BYTES).toBe(2048);
     const body = JSON.stringify({ t: "view", v: V, p: "/", r: "https://example.com/" + "a".repeat(2100) });

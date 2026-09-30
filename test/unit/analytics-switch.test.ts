@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createSwitchCache } from "../../src/analytics/switch-cache";
 import { pulseLimiter } from "../../src/analytics/limiter";
 import { retentionCutoff } from "../../src/analytics/retention";
+import { createConcurrencyGate, BUSY } from "../../src/analytics/gate";
 
 // TASK-479: the switch is read at most every 30 seconds, not on every event.
 
@@ -24,11 +25,13 @@ describe("createSwitchCache", () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it("counts a failed read as off, and tries again next time", async () => {
+  it("counts a failed read as off for a few seconds, so a struggling database is not asked every event", async () => {
     const read = vi.fn().mockRejectedValueOnce(new Error("db down")).mockResolvedValueOnce(true);
-    const cache = createSwitchCache({ ttlMs: 30_000, read });
+    const cache = createSwitchCache({ ttlMs: 0, read, failTtlMs: 5000 });
     expect(await cache.isOn(0)).toBe(false);
-    expect(await cache.isOn(1)).toBe(true);
+    expect(await cache.isOn(4999)).toBe(false);
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(await cache.isOn(5000)).toBe(true);
   });
 
   it("forgets its answer when told the switch has changed", async () => {
@@ -38,6 +41,27 @@ describe("createSwitchCache", () => {
     on = true;
     cache.forget();
     expect(await cache.isOn(1)).toBe(true);
+  });
+});
+
+describe("createConcurrencyGate", () => {
+  it("lets two pieces of work run at once and turns a third away", async () => {
+    const gate = createConcurrencyGate(2);
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const first = gate.tryRun(() => held.then(() => "a"));
+    const second = gate.tryRun(() => held.then(() => "b"));
+    expect(await gate.tryRun(async () => "c")).toBe(BUSY);
+    release();
+    expect(await first).toBe("a");
+    expect(await second).toBe("b");
+    expect(await gate.tryRun(async () => "d")).toBe("d");
+  });
+
+  it("frees its place when the work fails", async () => {
+    const gate = createConcurrencyGate(1);
+    await expect(gate.tryRun(async () => { throw new Error("x"); })).rejects.toThrow("x");
+    expect(await gate.tryRun(async () => "ok")).toBe("ok");
   });
 });
 

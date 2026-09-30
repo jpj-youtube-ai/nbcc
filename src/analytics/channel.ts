@@ -11,17 +11,23 @@ export type Utm = { source?: string; medium?: string; campaign?: string };
 
 type Site = { name: string; host: RegExp; words: string[] };
 
-// A host matches when it IS the site or a subdomain of it: "notgoogle.example.com" is not Google.
+// Hosts are compared without "www.". A search engine matches only its real search hosts, so
+// docs.google.com, sites.google.com or mail.yahoo.com are other websites, not Search. A country
+// ending is allowed where the engine has them: google.com, google.co.uk, google.com.au.
+const TLD = "(com|[a-z]{2}|co\\.[a-z]{2}|com\\.[a-z]{2})";
 const SEARCH: Site[] = [
-  { name: "Google", host: /(^|\.)google\.[a-z.]+$/, words: ["google"] },
-  { name: "Bing", host: /(^|\.)bing\.com$/, words: ["bing"] },
-  { name: "DuckDuckGo", host: /(^|\.)duckduckgo\.com$/, words: ["duckduckgo", "ddg"] },
-  { name: "Yahoo", host: /(^|\.)yahoo\.[a-z.]+$/, words: ["yahoo"] },
-  { name: "Ecosia", host: /(^|\.)ecosia\.org$/, words: ["ecosia"] },
-  { name: "Yandex", host: /(^|\.)yandex\.[a-z.]+$/, words: ["yandex"] },
-  { name: "Brave", host: /(^|\.)search\.brave\.com$/, words: ["brave"] },
-  { name: "Startpage", host: /(^|\.)startpage\.com$/, words: ["startpage"] },
+  { name: "Google", host: new RegExp(`^google\\.${TLD}$`), words: ["google"] },
+  { name: "Bing", host: /^bing\.com$/, words: ["bing"] },
+  { name: "DuckDuckGo", host: /^((html|lite)\.)?duckduckgo\.com$/, words: ["duckduckgo", "ddg"] },
+  { name: "Yahoo", host: /^([a-z]{2}\.)?search\.yahoo\.(com|co\.jp)$/, words: ["yahoo"] },
+  { name: "Ecosia", host: /^ecosia\.org$/, words: ["ecosia"] },
+  { name: "Yandex", host: new RegExp(`^yandex\\.${TLD}$`), words: ["yandex"] },
+  { name: "Brave", host: /^search\.brave\.com$/, words: ["brave"] },
+  { name: "Startpage", host: /^startpage\.(com|nl)$/, words: ["startpage"] },
 ];
+
+// A social site matches itself or any of its subdomains (l.facebook.com, m.facebook.com):
+// "notfacebook.example.com" is not Facebook.
 
 const SOCIAL: Site[] = [
   { name: "Facebook", host: /(^|\.)(facebook\.com|fb\.com|fb\.me)$/, words: ["facebook", "fb"] },
@@ -38,6 +44,13 @@ const SOCIAL: Site[] = [
 
 // The newsletter's own link tracker (and anything else on the newsletter's address).
 const NEWSLETTER_HOST = /(^|\.)news\.nbcc\.scot$/;
+
+// Paying: Stripe's checkout and card check pages. Coming back from them is part of the same visit.
+const PAYMENT_HOST = /(^|\.)stripe\.com$/;
+
+// Where a payment returns the visitor. A bank's own card check page can send them here too, so any
+// website arriving on one of these is treated as the same visit coming back, not a new arrival.
+const PAYMENT_RETURN_PATHS = ["/donate/thank-you", "/business/thank-you", "/ball/thank-you"];
 
 const tidy = (s: string | undefined): string => (s ?? "").trim();
 
@@ -66,7 +79,13 @@ function findBySource(list: Site[], source: string): Site | undefined {
  * The channel for a view, or "internal" when the visitor came from another page of our own site:
  * that is not a new arrival, and the caller keeps the channel of the visit it belongs to.
  */
-export function classifyArrival(input: { referrer: string; utm: Utm; ownHosts: string[] }): Arrival | "internal" {
+export function classifyArrival(input: {
+  referrer: string;
+  utm: Utm;
+  ownHosts: string[];
+  /** The page being viewed, without its query string. */
+  path?: string;
+}): Arrival | "internal" {
   const source = tidy(input.utm.source);
   const medium = tidy(input.utm.medium).toLowerCase();
   const campaign = tidy(input.utm.campaign) || null;
@@ -93,9 +112,11 @@ export function classifyArrival(input: { referrer: string; utm: Utm; ownHosts: s
     // 5. Social sites.
     const social = findByHost(SOCIAL, host);
     if (social) return { channel: "social", source: social.name, campaign: null };
-    // 6. Our own site.
+    // 6. Our own site, or coming back from paying.
     const own = input.ownHosts.map((h) => h.toLowerCase().replace(/^www\./, ""));
-    if (own.includes(host)) return "internal";
+    if (own.includes(host) || PAYMENT_HOST.test(host)) return "internal";
+    const path = (input.path ?? "").replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
+    if (PAYMENT_RETURN_PATHS.includes(path)) return "internal";
     // 7. Any other website.
     return { channel: "other_websites", source: host, campaign: null };
   }

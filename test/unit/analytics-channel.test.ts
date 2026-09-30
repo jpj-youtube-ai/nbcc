@@ -5,8 +5,11 @@ import { classifyArrival, referrerHost } from "../../src/analytics/channel";
 // in the design has its own test here.
 
 const OWN = ["nbcc.scot", "www.nbcc.scot", "localhost"];
-const arrive = (referrer: string, utm: { source?: string; medium?: string; campaign?: string } = {}) =>
-  classifyArrival({ referrer, utm, ownHosts: OWN });
+const arrive = (
+  referrer: string,
+  utm: { source?: string; medium?: string; campaign?: string } = {},
+  path = "/donate",
+) => classifyArrival({ referrer, utm, ownHosts: OWN, path });
 
 describe("rule 1: newsletter", () => {
   it("utm_source=newsletter is the newsletter, with the issue kept", () => {
@@ -99,6 +102,51 @@ describe("rule 6: our own site", () => {
     expect(arrive("https://nbcc.scot/about-us")).toBe("internal");
     expect(arrive("https://www.nbcc.scot/")).toBe("internal");
     expect(arrive("http://localhost:3000/donate")).toBe("internal");
+  });
+});
+
+describe("rule 6: coming back from paying", () => {
+  it.each(["https://checkout.stripe.com/c/pay/cs_test_x", "https://js.stripe.com/v3/", "https://hooks.stripe.com/3d_secure"])(
+    "a return from %s keeps the visit's channel",
+    (referrer) => {
+      expect(arrive(referrer)).toBe("internal");
+    },
+  );
+
+  it.each(["/donate/thank-you", "/business/thank-you", "/ball/thank-you"])(
+    "a bank's card check page returning to %s keeps the visit's channel",
+    (path) => {
+      expect(arrive("https://secure.examplebank.example.com/3ds", {}, path)).toBe("internal");
+    },
+  );
+
+  it("the same bank page is another website anywhere else", () => {
+    expect(arrive("https://secure.examplebank.example.com/3ds", {}, "/about-us").channel).toBe("other_websites");
+  });
+
+  it("does not mistake a lookalike for Stripe", () => {
+    expect(arrive("https://notstripe.example.com/").channel).toBe("other_websites");
+  });
+});
+
+describe("search engines are only their real search pages", () => {
+  it.each([
+    "https://docs.google.com/document/d/x",
+    "https://sites.google.com/view/village",
+    "https://google.anything.com/",
+    "https://mail.yahoo.com/",
+    "https://maps.bing.example.com/",
+  ])("%s is another website, not Search", (referrer) => {
+    expect(arrive(referrer).channel).toBe("other_websites");
+  });
+
+  it.each([
+    ["https://google.com/", "Google"],
+    ["https://www.google.com.au/", "Google"],
+    ["https://search.yahoo.com/", "Yahoo"],
+    ["https://html.duckduckgo.com/html", "DuckDuckGo"],
+  ])("%s is Search (%s)", (referrer, name) => {
+    expect(arrive(referrer)).toEqual({ channel: "search", source: name, campaign: null });
   });
 });
 

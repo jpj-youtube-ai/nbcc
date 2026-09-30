@@ -9,7 +9,9 @@ export type ClickKind = (typeof CLICK_KINDS)[number];
 
 // The page's own random id for one view: 8 random bytes as hex, kept in the page's memory only.
 const viewId = z.string().regex(/^[0-9a-f]{16}$/);
-const short = z.string().max(200);
+// Too long is cut to length rather than dropping the whole view (the body is 2 KB at most anyway).
+const cut = (max: number) => z.string().transform((s) => s.slice(0, max));
+const short = cut(200);
 const whole = (max: number) =>
   z
     .number()
@@ -20,8 +22,8 @@ const whole = (max: number) =>
 const View = z.object({
   t: z.literal("view"),
   v: viewId,
-  p: z.string().max(1024),
-  r: z.string().max(1024).default(""),
+  p: cut(1024),
+  r: cut(1024).default(""),
   u: z
     .object({ s: short.optional(), m: short.optional(), c: short.optional() })
     .default({}),

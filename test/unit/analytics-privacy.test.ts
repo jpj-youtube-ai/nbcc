@@ -30,13 +30,22 @@ describe("privacy notice: Counting visits", () => {
     expect(titles.indexOf("Counting visits")).toBeLessThan(titles.indexOf("How long we keep it"));
   });
 
+  it("does not overclaim", () => {
+    expect(text).not.toMatch(/keep only counts/i);
+    expect(text).not.toMatch(/us included/i);
+  });
+
   it.each([
     ["what is counted", /which page/i],
     ["no cookies", /without cookies/i],
     ["nothing on the device", /nothing is stored on your phone, tablet or computer/i],
     ["the IP address only for the town", /IP address is used .* town or city/i],
     ["the IP address never kept", /never (store|keep) it/i],
-    ["no linking across days", /cannot be linked to a visit (on )?another day|cannot be linked .* next/i],
+    ["no linking across days", /cannot be linked from one day to the next/i],
+    ["a record of each page view", /a record of each page view/i],
+    ["no name, email, IP address or cookie", /no name, email address, IP address or cookie/i],
+    ["the daily code's key deleted after the day", /changes every day, and the key that makes it is deleted/i],
+    ["no tracing back once the day is over", /traced back to an IP address once the day is over/i],
     ["13 months", /13 months/],
     ["Do Not Track", /Do Not Track/],
     ["Global Privacy Control", /Global Privacy Control/],

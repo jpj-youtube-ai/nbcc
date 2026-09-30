@@ -35,6 +35,12 @@ Feature: Counting visits without cookies (TASK-479)
     Then the pulse answer is 204 with nothing in it
     And no page view was kept
 
+  Scenario: another website cannot send made up visits
+    Given site analytics collecting is switched on
+    When another website makes a visitor's browser send a page view of "/donate"
+    Then the pulse answer is 204 with nothing in it
+    And no page view was kept
+
   Scenario: a page that is not one of ours is filed as other
     Given site analytics collecting is switched on
     When a visitor's browser sends a page view of "/no-such-page-bdd"

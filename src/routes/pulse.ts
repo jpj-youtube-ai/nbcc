@@ -2,6 +2,7 @@ import express, { Router } from "express";
 import { config } from "../config";
 import { handlePulse, type PulseRequest } from "../analytics/pulse-handler";
 import { pulseLimiter } from "../analytics/limiter";
+import { createConcurrencyGate } from "../analytics/gate";
 import { PULSE_MAX_BYTES } from "../analytics/payload";
 import { resolvePlace } from "../analytics/place";
 import { createSwitchCache } from "../analytics/switch-cache";
@@ -32,6 +33,8 @@ export const pulseSwitch = createSwitchCache({
 });
 
 const limiter = pulseLimiter();
+// The pool has 5 connections shared with donations: analytics may use at most 2 at once.
+const gate = createConcurrencyGate(2);
 
 function realHandler(req: PulseRequest) {
   return handlePulse(req, {
@@ -44,6 +47,7 @@ function realHandler(req: PulseRequest) {
     recordLeave,
     insertClick,
     resolvePlace,
+    gate,
   });
 }
 
@@ -61,6 +65,13 @@ export function createPulseRouter(handle: (req: PulseRequest) => Promise<unknown
               ip: req.ip ?? "",
               userAgent: req.get("user-agent") ?? "",
               host: req.hostname ?? "",
+              headers: {
+                secFetchSite: req.get("sec-fetch-site"),
+                origin: req.get("origin"),
+                referer: req.get("referer"),
+                dnt: req.get("dnt"),
+                secGpc: req.get("sec-gpc"),
+              },
             });
           }
         } catch (e) {

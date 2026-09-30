@@ -1,6 +1,6 @@
-/* Counts visits, stores nothing on the device. TASK-479 */
+/* Visit counter, stores nothing. TASK-479 */
 (function(w,d,n){if(/^(1|yes)$/.test(n.doNotTrack||w.doNotTrack)||n.globalPrivacyControl)return;
-var U="/api/pulse",L=location,b=new Uint8Array(8),v="",u={},q=new URLSearchParams(L.search),a=0,s=0,A=-1,S=-1,t=Date.now(),i;
+var U="/api/pulse",L=location,b=new Uint8Array(8),v="",u={},q=new URLSearchParams(L.search),a=0,s=0,A=-1,S=-1,t=d.visibilityState!="hidden"&&Date.now(),i;
 w.crypto.getRandomValues(b);for(i=0;i<8;i++)v+=(b[i]+256).toString(16).slice(1);
 ["source","medium","campaign"].forEach(function(x){var y=q.get("utm_"+x);if(y)u[x[0]]=y});
 function send(o){o.v=v;o=JSON.stringify(o);try{if(n.sendBeacon(U,o))return}catch(e){}try{fetch(U,{method:"POST",body:o,keepalive:!0})}catch(e){}}

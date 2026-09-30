@@ -36,10 +36,14 @@ Before({ tags: "@analytics" }, async function () {
 });
 After({ tags: "@analytics" }, clean);
 
-async function pulse(world, body, userAgent = BROWSER) {
+// As a browser on one of our own pages sends it. The server drops events from anywhere else.
+const OUR_PAGE = { "sec-fetch-site": "same-origin", origin: BASE_URL };
+const ANOTHER_SITE = { "sec-fetch-site": "cross-site", origin: "https://elsewhere.example.com" };
+
+async function pulse(world, body, userAgent = BROWSER, from = OUR_PAGE) {
   const res = await fetch(`${BASE_URL}/api/pulse`, {
     method: "POST",
-    headers: { "content-type": "text/plain;charset=UTF-8", "user-agent": userAgent, "x-forwarded-for": VISITOR_IP },
+    headers: { "content-type": "text/plain;charset=UTF-8", "user-agent": userAgent, "x-forwarded-for": VISITOR_IP, ...from },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
   world.pulseStatus = res.status;
@@ -80,6 +84,10 @@ When("a visitor's browser sends a page view of {string} from {string}", async fu
 
 When("a bot sends a page view of {string}", async function (path) {
   await pulse(this, { t: "view", v: this.viewId, p: path, r: "", u: {}, w: 1280 }, BOT);
+});
+
+When("another website makes a visitor's browser send a page view of {string}", async function (path) {
+  await pulse(this, { t: "view", v: this.viewId, p: path, r: "", u: {}, w: 1280 }, BROWSER, ANOTHER_SITE);
 });
 
 When("the browser sends a leave after {int} seconds, scrolled {int} percent", async function (seconds, percent) {

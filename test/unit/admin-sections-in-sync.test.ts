@@ -46,4 +46,24 @@ describe("admin section list stays in sync", () => {
     const listed = parseJsArrayLiteral(steps, "SECTIONS", "the BDD steps");
     expect([...listed].sort()).toEqual([...SECTIONS].sort());
   });
+
+  // A menu link is shown only to people who hold the permission it is gated on, so a link gated on
+  // one that does not exist is shown to nobody at all. That is how Monthly givers went unseen,
+  // admins included, from the day it shipped (TASK-447): it gated on "monthly", which no permission
+  // map has ever held. Gate is data-edit-gate, else data-view-gate, else the link's own data-view,
+  // the same order app.js's applyNavFiltering reads them in.
+  it("gates every menu link on a section the server knows", () => {
+    const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
+    // Any element with the class anywhere in its list, and every one of them: a link this missed
+    // would skip the check while applyNavFiltering still gated it, so the count must match too.
+    const links = [...html.matchAll(/<[a-z]+\b[^>]*\bclass="[^"]*\badmin-nav-link\b[^"]*"[^>]*>/g)].map((m) => m[0]);
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.length, "every admin-nav-link in admin.html was checked").toBe((html.match(/\badmin-nav-link\b/g) || []).length);
+    const attr = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
+    const gatedOnNothing = links
+      .map((tag) => ({ view: attr(tag, "data-view"), gate: attr(tag, "data-edit-gate") ?? attr(tag, "data-view-gate") ?? attr(tag, "data-view") }))
+      .filter(({ gate }) => !(SECTIONS as readonly string[]).includes(gate ?? ""))
+      .map(({ view, gate }) => `${view} is gated on "${gate}"`);
+    expect(gatedOnNothing).toEqual([]);
+  });
 });

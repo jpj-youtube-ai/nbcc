@@ -94,7 +94,10 @@
               <li><button class="admin-nav-link" type="button" data-view="gasds">GASDS</button></li>
               <li><button class="admin-nav-link" type="button" data-view="subscriptions">Subscriptions</button></li>
               <li><button class="admin-nav-link" type="button" data-view="fulfilments" data-edit-gate="business-supporters">Business supporters</button></li>
-                  <li><button class="admin-nav-link" type="button" data-view="monthly">Monthly givers</button></li>
+              <!-- data-view-gate (TASK-457): there is no "monthly" permission. The screen's data comes
+                   from the donations list and its route is gated on donations:view, so the link is
+                   too. Gated on "monthly" it was hidden from everyone, admins included. -->
+              <li><button class="admin-nav-link" type="button" data-view="monthly" data-view-gate="donations">Monthly givers</button></li>
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>

@@ -14,6 +14,7 @@
   // differ from their role once they carry per-section overrides.
   var myPermissions = null; // this user's EFFECTIVE per-section permissions, from GET /api/admin/me
   var donationsOffset = 0; // Donations view paging cursor
+  var donationsShownOffset = 0; // the page the pager last showed, to go back to if a page fails
   var currentDonorId = null; // the donor open in the detail view
   var currentStoryId = null; // the story open in the detail view
   var storiesStatusFilter = ""; // Stories view status filter ("" = all)
@@ -100,6 +101,37 @@
   }
   function j(res) {
     return res.json();
+  }
+  // TASK-476: a panel's data, but only when the server said it was fine. authFetch stops only on a
+  // 401; any other failure still answers in JSON, an { error } with no results in it, and read as
+  // data that drew zeros, empty lists and "nothing due" as if all were well. Throwing sends the
+  // failure to the loader's catch instead, which says the panel could not load.
+  function okJson(res) {
+    if (!res.ok) {
+      var err = new Error("status " + res.status);
+      err.status = res.status; // so a 403 (not in your access) can be told from a failure
+      throw err;
+    }
+    return res.json();
+  }
+  // The same, for an action the server may refuse (a 4xx) with its own reason, such as "Those seats
+  // have already been released.": that reason rides on the error as err.said. A 5xx has nothing
+  // worth repeating ("Admin is temporarily unavailable"), so it is a plain failure.
+  function okJsonOrSaid(res) {
+    if (res.ok || res.status >= 500) return okJson(res);
+    return res.json().then(
+      function (b) {
+        var err = new Error("status " + res.status);
+        err.status = res.status;
+        err.said = b && typeof b.error === "string" ? b.error : "";
+        throw err;
+      },
+      function () { return okJson(res); },
+    );
+  }
+  // What a panel shows in place of its data when that data could not be fetched.
+  function unavailableHtml(message) {
+    return '<p class="admin-empty admin-unavailable">' + H.escapeHtml(message) + "</p>";
   }
 
   function showLogin() {
@@ -562,30 +594,59 @@
       body + "</tbody></table>"
     );
   }
+  // TASK-476: a figure that could not be counted. It keeps its place and its label, so the other
+  // four still read as they always have; only the one that failed says so.
+  function unavailableCard(label) {
+    return (
+      '<div class="admin-stat is-unavailable"><div class="n">Could not load</div><div class="l">' +
+      H.escapeHtml(label) + "</div></div>"
+    );
+  }
+  var OVERVIEW_CARDS = [
+    ["/api/admin/claims/adjustment-due", "Adjustments due", true],
+    ["/api/admin/queues/retention-expiry", "Retention expiring", true],
+    ["/api/admin/queues/awaiting-declaration", "Awaiting declaration", false],
+    ["/api/admin/queues/gasds-deadline", "GASDS deadline near", true],
+    ["/api/admin/queues/declaration-review", "Declaration review due", false],
+  ];
   function loadOverview() {
     var stats = el("overviewStats");
-    Promise.all([
-      authFetch("/api/admin/claims/adjustment-due").then(j),
-      authFetch("/api/admin/queues/retention-expiry").then(j),
-      authFetch("/api/admin/queues/awaiting-declaration").then(j),
-      authFetch("/api/admin/queues/gasds-deadline").then(j),
-      authFetch("/api/admin/queues/declaration-review").then(j),
-    ])
-      .then(function (r) {
-        stats.innerHTML =
-          statCard((r[0].results || []).length, "Adjustments due", true) +
-          statCard((r[1].results || []).length, "Retention expiring", true) +
-          statCard((r[2].results || []).length, "Awaiting declaration", false) +
-          statCard((r[3].results || []).length, "GASDS deadline near", true) +
-          statCard((r[4].results || []).length, "Declaration review due", false);
+    // Each figure on its own (TASK-476). They used to be read together, and a failed one came back
+    // as a count of 0, so "0 Adjustments due" could mean either that none were due or that nobody
+    // could tell.
+    Promise.all(
+      OVERVIEW_CARDS.map(function (c) {
+        return authFetch(c[0])
+          .then(okJson)
+          .then(
+            function (d) { return statCard((d.results || []).length, c[1], c[2]); },
+            function (err) {
+              // A 401 has already gone back to the sign-in screen; nothing to draw.
+              if (err && err.message === "unauthorized") throw err;
+              // A 403 is not a failure: the figure belongs to a section this person's access leaves
+              // out, and saying "Could not load" on every sign in would cry wolf. Leave it out.
+              if (err && err.status === 403) return "";
+              return unavailableCard(c[1]);
+            },
+          );
+      }),
+    )
+      .then(function (cards) {
+        stats.innerHTML = cards.join("");
       })
       .catch(function () {});
     authFetch("/api/admin/donations?limit=10")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("overviewRecent").innerHTML = donationsTable(d.results || []);
       })
-      .catch(function () {});
+      .catch(function (err) {
+        el("overviewRecent").innerHTML = unavailableHtml(
+          err && err.status === 403
+            ? "Recent donations are not part of your access."
+            : "Recent donations are unavailable.",
+        );
+      });
   }
 
   // ---- search ----
@@ -618,7 +679,7 @@
       var out = el("searchResults");
       out.innerHTML = '<p class="admin-loading">Searching…</p>';
       authFetch("/api/admin/search/" + searchKind + "?q=" + encodeURIComponent(q))
-        .then(j)
+        .then(okJson)
         .then(function (data) {
           var rows = data.results || [];
           if (searchKind === "donors") out.innerHTML = donorsSearchTable(rows);
@@ -656,7 +717,7 @@
         (pay ? "&paymentStatus=" + encodeURIComponent(pay) : "") +
         (mode ? "&mode=" + encodeURIComponent(mode) : ""),
     )
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         wrap.innerHTML = donationsTable(d.results || []);
         var total = d.total || 0;
@@ -666,9 +727,12 @@
           : "";
         el("donationsPrev").disabled = donationsOffset <= 0;
         el("donationsNext").disabled = donationsOffset + 25 >= total;
+        donationsShownOffset = donationsOffset;
       })
       .catch(function () {
-        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        wrap.innerHTML = unavailableHtml("Donations are unavailable.");
+        // The pager stays as it was, and so does its place: Previous and Next try that page again.
+        donationsOffset = donationsShownOffset;
       });
   }
   // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
@@ -697,24 +761,30 @@
     var canWrite = canEdit("gasds");
     var actions = el("gasdsActions");
     authFetch("/api/admin/queues/gasds-deadline")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("gasdsTable").innerHTML = gasdsTable(d.results || [], canWrite);
         if (actions) actions.hidden = !(canWrite && (d.results || []).length);
       })
-      .catch(function () {});
+      .catch(function () {
+        // Not "nothing is near its deadline": nobody knows, and a missed deadline is money lost.
+        el("gasdsTable").innerHTML = unavailableHtml("GASDS donations are unavailable.");
+        if (actions) actions.hidden = true;
+      });
     // This year's pool report (REQ-050): three separately-read figures, never conflated.
     var poolEl = el("gasdsPool");
     if (poolEl) {
       authFetch("/api/admin/queues/gasds-pool")
-        .then(j)
+        .then(okJson)
         .then(function (p) {
           poolEl.innerHTML =
             statCard(H.formatPence(p.gasdsPoolTotalPence), "Small donations pool (" + p.year + ")", false) +
             statCard(H.formatPence(p.giftAidClaimedPence), "Gift Aid claimed this year", false) +
             statCard(H.formatPence(p.remainingHeadroomPence), "Remaining GASDS headroom", false);
         })
-        .catch(function () {});
+        .catch(function () {
+          poolEl.innerHTML = unavailableHtml("The small donations pool is unavailable.");
+        });
     }
   }
   function gasdsTable(rows, canWrite) {
@@ -757,13 +827,15 @@
     var actions = el("eligibleActions");
     if (actions) actions.hidden = !canWrite;
     authFetch("/api/admin/claims/eligible")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("eligibleTable").innerHTML = eligibleTable(d.results || [], canWrite);
       })
-      .catch(function () {});
+      .catch(function () {
+        el("eligibleTable").innerHTML = unavailableHtml("Donations waiting to be claimed are unavailable.");
+      });
     authFetch("/api/admin/claim-batches")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var rows = d.results || [];
         el("batchesTable").innerHTML = batchesTable(rows);
@@ -776,13 +848,17 @@
           sel.innerHTML = opts;
         }
       })
-      .catch(function () {});
+      .catch(function () {
+        el("batchesTable").innerHTML = unavailableHtml("Claim batches are unavailable.");
+      });
     authFetch("/api/admin/claims/adjustment-due")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("adjustmentTable").innerHTML = adjustmentTable(d.results || []);
       })
-      .catch(function () {});
+      .catch(function () {
+        el("adjustmentTable").innerHTML = unavailableHtml("Adjustments are unavailable.");
+      });
   }
   function eligibleTable(rows, canWrite) {
     if (!rows.length) return '<p class="admin-empty">No donations are waiting to be claimed.</p>';
@@ -893,7 +969,7 @@
     var wrap = el("subsTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/subscriptions/dunning")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var rows = d.results || [];
         if (!rows.length) {
@@ -916,7 +992,7 @@
         wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Status</th><th>Failed</th><th>Ended</th></tr></thead><tbody>' + body + "</tbody></table>";
       })
       .catch(function () {
-        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        wrap.innerHTML = unavailableHtml("Flagged subscriptions are unavailable.");
       });
   }
 
@@ -1268,7 +1344,7 @@
     if (!wrap) return;
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/fulfilments")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         wrap.innerHTML = fulfilmentsTable(d.results || []);
         // The open row renders a placeholder for its history; fill it in.
@@ -1540,12 +1616,12 @@
     if (storiesArchiveView) query.push("view=" + encodeURIComponent(storiesArchiveView));
     var path = "/api/admin/stories" + (query.length ? "?" + query.join("&") : "");
     authFetch(path)
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         wrap.innerHTML = storiesTable(d.results || []);
       })
       .catch(function () {
-        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        wrap.innerHTML = unavailableHtml("Stories are unavailable.");
       });
   }
   // TASK-309: read the storage diagnostic and lay it out plainly. Deliberately shows SIZES: an
@@ -1556,7 +1632,7 @@
     if (!out) return;
     out.innerHTML = '<p class="admin-loading">Checking…</p>';
     authFetch("/api/admin/diagnostics/stories")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var dbs = d.databasesOnInstance || [];
         var connected = d.connectedDatabase || "(unknown)";
@@ -1772,10 +1848,14 @@
           wrap.innerHTML = '<p class="admin-empty">Story not found.</p>';
           throw new Error("not found");
         }
-        return res.json();
+        return okJson(res);
       })
       .then(renderStory)
-      .catch(function () {});
+      .catch(function (err) {
+        // TASK-476: a failure is not a record with nothing in it. "Not found" has said so already.
+        if (err && err.message === "not found") return;
+        wrap.innerHTML = unavailableHtml("Could not load this story. Please try again.");
+      });
   }
   function renderStory(s) {
     var canWrite = canEdit("stories");
@@ -1986,12 +2066,12 @@
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     var path = "/api/admin/contact" + (contactStatusFilter ? "?status=" + encodeURIComponent(contactStatusFilter) : "");
     authFetch(path)
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         wrap.innerHTML = contactTable(d.results || []);
       })
       .catch(function () {
-        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        wrap.innerHTML = unavailableHtml("Enquiries are unavailable.");
       });
   }
   function contactStatus(msg) {
@@ -2012,10 +2092,14 @@
           wrap.innerHTML = '<p class="admin-empty">Enquiry not found.</p>';
           throw new Error("not found");
         }
-        return res.json();
+        return okJson(res);
       })
       .then(renderContact)
-      .catch(function () {});
+      .catch(function (err) {
+        // TASK-476: a failure is not a record with nothing in it. "Not found" has said so already.
+        if (err && err.message === "not found") return;
+        wrap.innerHTML = unavailableHtml("Could not load this enquiry. Please try again.");
+      });
   }
   function renderContact(c) {
     var canWrite = canEdit("contact");
@@ -2137,7 +2221,7 @@
     var wrap = el("auditTable");
     wrap.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/audit?limit=50")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var rows = d.results || [];
         if (!rows.length) {
@@ -2155,7 +2239,7 @@
         wrap.innerHTML = '<table class="admin-table"><thead><tr><th>ID</th><th>When</th><th>Actor</th><th>Action</th><th>Entity</th></tr></thead><tbody>' + body + "</tbody></table>";
       })
       .catch(function () {
-        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        wrap.innerHTML = unavailableHtml("The audit log is unavailable.");
       });
   }
 
@@ -2179,6 +2263,7 @@
   }
   var EMAIL_AUDIT_PAGE = 50;
   var emailAuditOffset = 0;
+  var emailAuditShownOffset = 0; // the page the pager last showed, to go back to if a page fails
   var emailAuditWired = false;
   function emailStatusPill(r) {
     // OUR attempt failing outranks everything; then the mailbox verdict; then plain Sent.
@@ -2250,7 +2335,7 @@
     if (type) params += "&type=" + encodeURIComponent(type);
     if (status) params += "&status=" + encodeURIComponent(status);
     authFetch("/api/admin/email-log" + params)
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var failures = d.failures || [];
         band.innerHTML = failures.length
@@ -2269,10 +2354,13 @@
           total ? (emailAuditOffset + 1) + "–" + Math.min(emailAuditOffset + EMAIL_AUDIT_PAGE, total) + " of " + total : "";
         el("emailAuditPrev").disabled = emailAuditOffset === 0;
         el("emailAuditNext").disabled = emailAuditOffset + EMAIL_AUDIT_PAGE >= total;
+        emailAuditShownOffset = emailAuditOffset;
       })
       .catch(function () {
         band.innerHTML = "";
-        wrap.innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        wrap.innerHTML = unavailableHtml("The email log is unavailable.");
+        // The pager stays as it was, and so does its place: Newer and Older try that page again.
+        emailAuditOffset = emailAuditShownOffset;
       });
   }
 
@@ -2425,7 +2513,7 @@
     var canWrite = canEdit("site");
     el("siteAliasForm").hidden = !canWrite;
     authFetch("/api/admin/site-pages")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var sel = el("siteAliasTo");
         sel.innerHTML = (d.pages || [])
@@ -2438,7 +2526,7 @@
         renderSiteSeo(d.pages || [], canWrite);
       })
       .catch(function () {
-        el("siteAliasTable").innerHTML = '<p class="admin-empty">Unavailable.</p>';
+        el("siteAliasTable").innerHTML = unavailableHtml("Site pages are unavailable.");
         el("siteSeoTable").innerHTML = "";
         el("siteAllTable").innerHTML = "";
       });
@@ -2509,12 +2597,13 @@
     if (form) form.hidden = !canWrite;
     el("teamTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/users")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         teamRows = d.results || [];
         el("teamTable").innerHTML = teamTable(teamRows, canWrite);
       })
       .catch(function () {
+        teamRows = []; // as before a failure was caught: nothing left over to edit access against
         el("teamTable").innerHTML = '<p class="admin-empty">Could not load the team.</p>';
       });
   }
@@ -4064,7 +4153,7 @@
         testSent: nlTestSent,
       }),
     })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(okJson)
       .then(function (b) {
         var findings = (b && b.findings) || [];
         // Nothing wrong is itself worth SAYING. A silent empty list reads as "the checks did not
@@ -4097,8 +4186,7 @@
         // A failed check must never read like a failed newsletter.
         host.innerHTML =
           '<li><span class="nl-check-mk is-warn" aria-hidden="true"></span><div><b>Could not run the ' +
-          'checks</b><span>The send itself still checks before it goes, so nothing unsafe can slip ' +
-          'through.</span></div></li>';
+          'checks</b><span>The checks could not run. Look over it yourself before sending.</span></div></li>';
       });
   }
 
@@ -4132,7 +4220,7 @@
     el("nlResultsLinks").innerHTML = "";
     el("nlResultsRecord").innerHTML = "";
     authFetch("/api/admin/newsletters/" + id + "/stats")
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(okJson)
       .then(function (st) { nlPaintResults(st, row); })
       .catch(function () {
         el("nlResultsTiles").innerHTML = "";
@@ -4472,7 +4560,7 @@
   function loadNewsletterInto(id, opts) {
     if (!opts || !opts.stay) nlShowPanel("nlPanelWrite"); // open the one you clicked, where you write it
     authFetch("/api/admin/newsletters/" + id)
-      .then(j)
+      .then(okJson)
       .then(function (n) {
         el("newsletterId").value = n.id;
         el("newsletterSubject").value = n.subject;
@@ -4520,7 +4608,11 @@
         nlRefreshAttachments();
         nlRefreshTemplates(); // TASK-249: fill the shared library picker when the tab opens
       })
-      .catch(function () {});
+      .catch(function () {
+        // TASK-476: a failure used to be read as the newsletter, filling the editor with
+        // "undefined". Leave the editor as it was and say the newsletter did not open.
+        el("newsletterMsg").textContent = "Could not open that newsletter. Please try again.";
+      });
   }
 
   // --- TASK-283: the Overview -------------------------------------------------------------------
@@ -4660,7 +4752,7 @@
 
   function loadNewsletters() {
     authFetch("/api/admin/newsletters")
-      .then(j)
+      .then(okJson)
       .then(function (rows) {
         el("newsletterList").innerHTML = renderNewsletterList(rows);
         Array.prototype.forEach.call(doc.querySelectorAll("[data-edit-newsletter]"), function (b) {
@@ -4693,7 +4785,15 @@
         // fired and nothing was shown at all.
         if (NL_COMPOSE_PANELS.indexOf(nlLivePanel()) === -1) nlShowPanel("nlPanelOverview");
       })
-      .catch(function () {});
+      .catch(function () {
+        // TASK-476: say so where you land and in the history, rather than showing nothing at all
+        // (or, from an earlier visit, figures that are no longer current).
+        var msg = unavailableHtml("Newsletters are unavailable.");
+        el("newsletterList").innerHTML = msg;
+        if (el("nlRecentSends")) el("nlRecentSends").innerHTML = msg;
+        if (el("nlOverviewTiles")) el("nlOverviewTiles").innerHTML = "";
+        if (NL_COMPOSE_PANELS.indexOf(nlLivePanel()) === -1) nlShowPanel("nlPanelOverview");
+      });
   }
 
   // TASK-271: "someone asked us to email them again" — switching a donor's email consent back ON is
@@ -4762,7 +4862,7 @@
     var q = el("subSearch") ? el("subSearch").value.trim() : "";
     host.innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/newsletters/subscribers" + (q ? "?q=" + encodeURIComponent(q) : ""))
-      .then(j)
+      .then(okJson)
       .then(function (d) { nlRenderSubscribers(d.subscribers || []); })
       .catch(function () { host.innerHTML = '<p class="admin-empty">Could not load subscribers.</p>'; });
   }
@@ -4860,7 +4960,7 @@
     el("nlAttachTools").hidden = !saved;
     if (!saved) { el("nlAttachList").innerHTML = ""; return; }
     authFetch("/api/admin/newsletters/" + id + "/attachments")
-      .then(j)
+      .then(okJson)
       .then(function (d) { nlRenderAttachments(d.attachments || []); })
       .catch(function () { el("nlAttachList").innerHTML = '<p class="admin-empty">Could not load documents.</p>'; });
   }
@@ -5081,7 +5181,7 @@
     var host = el("suppressionList");
     if (!host) return;
     authFetch("/api/admin/newsletters/suppressions")
-      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(okJson)
       .then(function (rows) {
         var list = Array.isArray(rows) ? rows : [];
         // TASK-283: the Overview needs this number too. Taken from the load that already runs on tab
@@ -5123,7 +5223,12 @@
           });
         });
       })
-      .catch(function () { /* a convenience panel — never block the tab */ });
+      .catch(function () {
+        // A convenience panel, so it never blocks the tab. But "nothing blocked" would be a claim
+        // (TASK-476): unknown instead, which the Overview's Blocked tile already shows as unknown.
+        nlBlockedCount = null;
+        host.innerHTML = unavailableHtml("Blocked addresses are unavailable.");
+      });
   }
 
   // Archived audiences (TASK-270): retired, not deleted. Hidden entirely until there are some.
@@ -5213,9 +5318,14 @@
     var pick = el("audiencePick");
     if (!pick || !pick.value) return;
     authFetch("/api/admin/subscriber-lists/" + pick.value + "/members")
-      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(okJson)
       .then(function (rows) { nlRenderAudienceMembers(Array.isArray(rows) ? rows : []); })
-      .catch(function () { /* the card is a convenience — never block the tab */ });
+      .catch(function () {
+        // The card is a convenience and never blocks the tab, but it must not say nobody is on
+        // the audience when nobody knows (TASK-476).
+        var host = el("audienceMembers");
+        if (host) host.innerHTML = unavailableHtml("Could not load who is on this audience.");
+      });
   }
 
   // --- TASK-283: multi-audience tick lists -------------------------------------------------------
@@ -5373,7 +5483,7 @@
 
   function nlRefreshAudiences() {
     return authFetch("/api/admin/subscriber-lists")
-      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(okJson)
       .then(function (rows) {
         nlAudiences = Array.isArray(rows) ? rows : [];
         nlFillAudienceSelect(el("audiencePick"));
@@ -5393,7 +5503,15 @@
         nlRenderAudienceSnapshot();
         nlRenderAudienceCards();
       })
-      .catch(function () { /* never block the builder on the audience card */ });
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return; // already back at the sign-in screen
+        // Never block the builder on the audience card. But "No audiences yet, add one" is an
+        // invitation to make one that already exists (TASK-476): say they could not be loaded,
+        // and still load the blocked list, which does not depend on them.
+        var cards = el("nlAudienceCards");
+        if (cards) cards.innerHTML = unavailableHtml("Audiences are unavailable.");
+        nlRefreshSuppressions();
+      });
   }
 
   // --- The SHARED saved-template library: helpers (TASK-249) ---------------------------------------
@@ -6204,7 +6322,9 @@
     overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) close(); });
 
     authFetch("/api/admin/newsletters/" + newsletterId + "/send-job/recipients")
-      .then(function (res) { return res.ok ? res.json() : null; })
+      // A newsletter sent before the send queue existed has no per person record, and the server
+      // says so with a 404: a true answer, shown as the message below, not as a failure.
+      .then(function (res) { return res.status === 404 ? null : okJson(res); })
       .then(function (rows) {
         var host = overlay.querySelector(".nl-who-body");
         if (!rows || !rows.length) {
@@ -6338,7 +6458,7 @@
           testSent: nlTestSent,
         }),
       })
-        .then(function (res) { return res.ok ? res.json() : { findings: [] }; })
+        .then(okJson)
         .then(function (r) {
           var findings = (r && r.findings) || [];
           if (!findings.length) { host.hidden = true; return; }
@@ -6358,7 +6478,14 @@
             ack.addEventListener("change", function () { confirmBtn.disabled = !ack.checked; });
           }
         })
-        .catch(function () { /* checks are advisory — never block a send on their failure */ });
+        .catch(function () {
+          // Advisory, so a failure never blocks a send. It used to look exactly like a clean
+          // result, though (TASK-476), so say they did not run, as the Send panel does.
+          host.hidden = false;
+          host.innerHTML =
+            '<p class="nl-preflight-head">Could not run the checks</p>' +
+            '<ul><li class="nl-preflight-warn">The checks could not run. Look over it yourself before sending.</li></ul>';
+        });
     })();
 
     // Populate the recipient count + email list. Send stays available even if this lookup fails —
@@ -6439,10 +6566,14 @@
           wrap.innerHTML = '<p class="admin-empty">Donor not found.</p>';
           throw new Error("not found");
         }
-        return res.json();
+        return okJson(res);
       })
       .then(renderDonor)
-      .catch(function () {});
+      .catch(function (err) {
+        // TASK-476: a failure is not a record with nothing in it. "Not found" has said so already.
+        if (err && err.message === "not found") return;
+        wrap.innerHTML = unavailableHtml("Could not load this donor. Please try again.");
+      });
   }
   // Join the donor's house name/number + address line into one string for display; "None on file"
   // when neither is set. Postcode is shown as its own row (d.postcode).
@@ -6825,7 +6956,7 @@
     var pence = Math.round(thr * 100);
     el("tyEligibleTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/thank-you/eligible?threshold=" + pence)
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var rows = d.results || [];
         tyEligibleById = {};
@@ -6840,13 +6971,14 @@
       })
       .catch(function () {
         el("tyEligibleTable").innerHTML = '<p class="admin-empty">Could not load donors.</p>';
+        el("tyEligibleCount").textContent = "";
       });
   }
   function loadThankYouSent() {
     var canWrite = canEdit("thank-you");
     el("tySentTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/thank-you/sent")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("tySentTable").innerHTML = tySentTable(d.results || [], canWrite);
       })
@@ -7273,7 +7405,7 @@
 
   function loadOutreachList() {
     authFetch("/api/admin/outreach")
-      .then(function (r) { return r.json(); })
+      .then(okJson)
       .then(function (b) {
         outRows = b.results || [];
         outRenderList();
@@ -7281,6 +7413,9 @@
       })
       .catch(function () {
         el("outList").innerHTML = '<p class="admin-empty">Could not load the list.</p>';
+        // The totals above it are counted from the same list: none rather than 0 (TASK-476).
+        el("outStats").innerHTML = "";
+        el("outSearchCount").textContent = "";
       });
   }
 
@@ -7431,7 +7566,7 @@
 
   function loadOutreachTodo() {
     authFetch("/api/admin/outreach/todo?scope=" + encodeURIComponent(outTodoScope))
-      .then(j)
+      .then(okJson)
       .then(outRenderTodo)
       .catch(function () {
         el("outTodo").innerHTML = '<p class="admin-empty">Could not load this list.</p>';
@@ -7503,7 +7638,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text: text }),
     })
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         outPasteRows = d.usable || [];
         var problems = d.problems || [];
@@ -7682,7 +7817,7 @@
 
   function loadOutreachReports() {
     authFetch("/api/admin/outreach/reports")
-      .then(j)
+      .then(okJson)
       .then(outRenderReports)
       .catch(function () {
         el("outReports").innerHTML = '<p class="admin-empty">Could not load this.</p>';
@@ -7996,7 +8131,7 @@
     var pre = el("businessDisclosure");
     businessSay("businessDiscloseStatus", "Gathering it…");
     authFetch("/api/admin/outreach/" + encodeURIComponent(businessId) + "/disclosure")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         pre.textContent = d.text || "";
         pre.hidden = false;
@@ -8046,7 +8181,7 @@
     el("businessDiscloseCopy").hidden = true;
     businessSay("businessDiscloseStatus", "");
     authFetch("/api/admin/outreach/" + encodeURIComponent(id))
-      .then(j)
+      .then(okJson)
       .then(function (d) { renderBusiness(d.business, d.notes || []); })
       .catch(function () {
         el("businessDetail").innerHTML = '<p class="admin-empty">Could not load that business.</p>';
@@ -8090,7 +8225,7 @@
     var canWrite = canEdit("ticker");
     el("tickerTable").innerHTML = '<p class="admin-loading">Loading…</p>';
     authFetch("/api/admin/ticker")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         var rows = d.results || [];
         el("tickerTable").innerHTML = tickerTable(rows, canWrite);
@@ -8099,6 +8234,7 @@
       })
       .catch(function () {
         el("tickerTable").innerHTML = '<p class="admin-empty">Could not load supporters.</p>';
+        el("tickerCount").textContent = "";
       });
   }
   function tickerWire() {
@@ -8193,7 +8329,7 @@
     accountStatus("accountNameStatus", "");
     accountStatus("accountPasswordStatus", "");
     authFetch("/api/admin/me")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("accountEmail").value = d.email || "";
         el("accountName").value = d.fullName || "";
@@ -8357,7 +8493,7 @@
 
   function loadBallHolds() {
     authFetch("/api/admin/ball/holds")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("ballHolds").innerHTML = ballHoldsTable(d.results || []);
         el("ballHolds").addEventListener("click", onReleaseHoldClick);
@@ -8375,11 +8511,15 @@
     authFetch("/api/admin/ball/holds/" + encodeURIComponent(btn.getAttribute("data-release-hold")), {
       method: "DELETE",
     })
-      .then(j)
+      .then(okJsonOrSaid)
       .then(function () { loadBall(); })
-      .catch(function () {
+      .catch(function (err) {
         btn.disabled = false;
-        ballStatus("ballHoldStatus", "Could not release those seats.");
+        if (err && err.message === "unauthorized") return;
+        // The server's own reason when it gave one ("Those seats have already been released."),
+        // then the list as it really is now, so a hold that has gone does not stay on screen.
+        ballStatus("ballHoldStatus", (err && err.said) || "Could not release those seats.");
+        loadBall();
       });
   }
 
@@ -8554,7 +8694,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
     })
-      .then(j)
+      .then(okJson)
       .then(function () {
         ballStatus(statusId, "Saved.");
         loadBall();
@@ -8570,13 +8710,15 @@
     el("ballBookings").innerHTML = '<p class="admin-loading">Loading…</p>';
     loadBallHolds();
     authFetch("/api/admin/ball")
-      .then(j)
+      .then(okJson)
       .then(ballRender)
       .catch(function () {
         el("ballGateState").textContent = "Could not load the ball settings.";
+        // No seats sold and £0 taken would be a claim nobody could make (TASK-476).
+        el("ballStats").innerHTML = "";
       });
     authFetch("/api/admin/ball/bookings")
-      .then(j)
+      .then(okJson)
       .then(function (d) {
         el("ballBookings").innerHTML =
           ballBookingsTable(d.results || []) +
@@ -8603,7 +8745,7 @@
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
       });
     authFetch("/api/admin/ball/guest-progress")
-      .then(j)
+      .then(okJson)
       .then(ballGuestProgressRender)
       .catch(function () {
         el("ballGuestProgress").innerHTML =
@@ -8611,7 +8753,7 @@
         el("ballOutstanding").innerHTML = "";
       });
     authFetch("/api/admin/ball/menu-progress")
-      .then(j)
+      .then(okJson)
       .then(ballMenuProgressRender)
       .catch(function () {
         el("ballMenuProgress").innerHTML =
@@ -8640,11 +8782,15 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note: note }),
     })
-      .then(j)
+      .then(okJsonOrSaid)
       .then(function () { loadBall(); })
-      .catch(function () {
+      .catch(function (err) {
         btn.disabled = false;
-        window.alert("Could not cancel " + reference + ". Nothing has been changed.");
+        if (err && err.message === "unauthorized") return;
+        // The server's own reason when it gave one ("That booking is already cancelled..."), then
+        // the bookings as they really are now.
+        window.alert((err && err.said) || "Could not cancel " + reference + ". Nothing has been changed.");
+        loadBall();
       });
   }
 
@@ -8705,7 +8851,7 @@
           expiresAt: local ? fromLocalInput(local) : null,
         }),
       })
-        .then(j)
+        .then(okJson)
         .then(function () {
           ballStatus("ballHoldStatus", "Held.");
           el("ballHoldName").value = "";
@@ -8821,7 +8967,7 @@
         remindBtn.disabled = true;
         ballStatus("ballReminderStatus", "Sending…");
         authFetch("/api/admin/ball/reminders", { method: "POST" })
-          .then(j)
+          .then(okJson)
           .then(function (d) {
             remindBtn.disabled = false;
             var failed = (d.failed || []).length;
@@ -8870,7 +9016,7 @@
       btn.disabled = true;
       status.textContent = "Sending…";
       authFetch("/api/admin/ball/chase", { method: "POST" })
-        .then(j)
+        .then(okJson)
         .then(function (r) {
           // Count what was SENT, not what was outstanding: the two differ whenever somebody has
           // already been chased at this stage, and reporting the larger number would claim we

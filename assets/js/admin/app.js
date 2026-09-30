@@ -2683,6 +2683,17 @@
     var btn = doc.querySelector('.admin-nav-link[data-view="' + section + '"]');
     return btn ? btn.textContent : cap(section);
   }
+  // A copy of perms naming every section, "none" wherever perms is silent. The permissions PATCH takes
+  // only a complete matrix, and neither a role's defaults nor a map saved before a section existed
+  // names them all, so whatever fills the matrix goes through here (TASK-462: the Editor preset did
+  // not, and could never be saved).
+  function completePermissions(perms) {
+    var full = Object.assign({}, perms);
+    SECTIONS.forEach(function (s) {
+      if (!full[s]) full[s] = "none";
+    });
+    return full;
+  }
   function teamPermMatrixHtml(perms) {
     return SECTIONS.map(function (section) {
       var level = perms[section] || "none";
@@ -2717,12 +2728,7 @@
     var u = teamRows.filter(function (r) { return r.id === id; })[0];
     if (!u) return;
     currentTeamPermUserId = id;
-    teamPermWorking = Object.assign({}, effectiveTeamPermissions(u));
-    // A stored map is always the full 13-section shape (the PATCH schema requires it), but fill any
-    // gap defensively so the matrix always renders all 13 rows.
-    SECTIONS.forEach(function (s) {
-      if (!teamPermWorking[s]) teamPermWorking[s] = "none";
-    });
+    teamPermWorking = completePermissions(effectiveTeamPermissions(u));
     showOnly("view-team-permissions");
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.remove("is-active");
@@ -2782,7 +2788,7 @@
       }
       var presetBtn = t.closest("[data-perm-preset]");
       if (presetBtn) {
-        teamPermWorking = rolePresetPermissions(presetBtn.getAttribute("data-perm-preset"));
+        teamPermWorking = completePermissions(rolePresetPermissions(presetBtn.getAttribute("data-perm-preset")));
         el("teamPermMatrix").innerHTML = teamPermMatrixHtml(teamPermWorking);
         return;
       }

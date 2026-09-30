@@ -15,6 +15,7 @@ const m = vi.hoisted(() => ({
   markSendSent: vi.fn<(id: number, to: string[], figures: SalesInputs, countedTo: Date) => Promise<void>>(),
   releaseClaim: vi.fn<(id: number) => Promise<void>>(),
   recordTestSend: vi.fn<(day: string, to: string, figures: SalesInputs, actor: string) => Promise<void>>(),
+  recordSendFailure: vi.fn<(day: string) => Promise<void>>(),
   sendBallReport: vi.fn<(msg: { to: string[]; subject: string; from: string; replyTo: string }) => Promise<void>>(),
 }));
 
@@ -30,6 +31,7 @@ vi.mock("../../src/db/ball-report", () => ({
   markSendSent: m.markSendSent,
   releaseClaim: m.releaseClaim,
   recordTestSend: m.recordTestSend,
+  recordSendFailure: m.recordSendFailure,
 }));
 
 import { runBallSalesReport, sendTestReport } from "../../src/ball/sales-report-runner";
@@ -72,6 +74,7 @@ beforeEach(() => {
   m.markSendSent.mockResolvedValue(undefined);
   m.releaseClaim.mockResolvedValue(undefined);
   m.recordTestSend.mockResolvedValue(undefined);
+  m.recordSendFailure.mockResolvedValue(undefined);
 });
 
 describe("the scheduled report", () => {
@@ -107,6 +110,25 @@ describe("the scheduled report", () => {
     await expect(runBallSalesReport(MONDAY_8AM)).rejects.toThrow("SES said no");
     expect(m.releaseClaim).toHaveBeenCalledWith(7);
     expect(m.markSendSent).not.toHaveBeenCalled();
+  });
+
+  // TASK-471: a failed report used to show only in the server logs. It is recorded, so the card on
+  // the Events page can say the day's report did not go.
+  it("records a report that could not be sent, so the Events page can say so", async () => {
+    m.sendBallReport.mockRejectedValue(new Error("SES said no"));
+    await expect(runBallSalesReport(MONDAY_8AM)).rejects.toThrow("SES said no");
+    expect(m.recordSendFailure).toHaveBeenCalledWith("2026-10-05");
+  });
+
+  it("still throws the real error when even the record of the failure cannot be written", async () => {
+    m.sendBallReport.mockRejectedValue(new Error("SES said no"));
+    m.recordSendFailure.mockRejectedValue(new Error("database hiccup"));
+    await expect(runBallSalesReport(MONDAY_8AM)).rejects.toThrow("SES said no");
+  });
+
+  it("records no failure when the report went", async () => {
+    await runBallSalesReport(MONDAY_8AM);
+    expect(m.recordSendFailure).not.toHaveBeenCalled();
   });
 
   it("keeps the day when the email went but could not be recorded, so a rerun cannot send it twice", async () => {

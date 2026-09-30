@@ -57,3 +57,32 @@ jobs:
             destroy) terraform destroy -input=false -auto-approve -no-color ;;
             *)       terraform plan    -input=false -no-color ;;
           esac
+
+      # TASK-474: an apply that changes the task definition registers a new revision on Terraform's
+      # placeholder image (var.container_image, nginx), and that revision becomes the family's
+      # latest. The scheduled jobs (the 8am reminders, which send the Ball ticket report, and the 2am
+      # backup) run the family's latest, so until the next deploy they would start nginx instead of
+      # the app. This re-registers Terraform's revision with the image the service is running now,
+      # exactly as deploy-prod.yml does, so the latest revision always runs the app. It never touches
+      # the service itself.
+      - name: Keep the scheduled jobs on the running app image
+        if: inputs.action == 'apply'
+        working-directory: infra/envs/${{ inputs.environment }}
+        run: |
+          CLUSTER=$(terraform output -raw ecs_cluster)
+          SERVICE=$(terraform output -raw ecs_service)
+          TASK_DEF_ARN=$(terraform output -raw task_definition_arn)
+          RUNNING=$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" --query 'services[0].taskDefinition' --output text)
+          IMAGE=$(aws ecs describe-task-definition --task-definition "$RUNNING" --query 'taskDefinition.containerDefinitions[0].image' --output text)
+          case "$IMAGE" in
+            ""|None|*nginx*)
+              echo "The service is not running the app's image yet (a first apply), so there is nothing to keep."
+              exit 0 ;;
+          esac
+          CURRENT=$(aws ecs describe-task-definition --task-definition "$TASK_DEF_ARN" --query 'taskDefinition')
+          NEW=$(echo "$CURRENT" | jq --arg IMG "$IMAGE" '
+            .containerDefinitions[0].image = $IMG
+            | {family, networkMode, requiresCompatibilities, cpu, memory,
+               executionRoleArn, taskRoleArn, containerDefinitions}')
+          ARN=$(aws ecs register-task-definition --cli-input-json "$NEW" --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "Registered $ARN on $IMAGE, so the scheduled jobs run the app."

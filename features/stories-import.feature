@@ -24,6 +24,20 @@ Feature: Bringing the old website's My Story submissions into the admin (TASK-46
     And 0 more stories are added
     And 2 stories from the old website's export are saved
 
+  # TASK-475: erasing remembers a one way fingerprint of the story, so the same file never brings it back.
+  Scenario: a story erased from the admin stays erased when the same file is added again
+    When "editor.import.admin.bdd@example.com" adds the old website's export
+    Then 2 stories from the old website's export are saved
+    When "editor.import.admin.bdd@example.com" archives and erases Morag's story
+    Then the erase status should be 200
+    And 1 stories from the old website's export are saved
+    When "editor.import.admin.bdd@example.com" reads the old website's export
+    Then it would add 0 stories and leave out 3, because "It was erased earlier, so it isn't added again."
+    When "editor.import.admin.bdd@example.com" adds the old website's export
+    Then the import status should be 200
+    And 0 more stories are added
+    And 1 stories from the old website's export are saved
+
   Scenario: bringing stories in needs a session, and edit rights over stories
     When I read the old website's export without a session
     Then the import status should be 401

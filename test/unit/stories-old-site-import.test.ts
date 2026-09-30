@@ -6,6 +6,8 @@ import {
   previewOf,
   lookupsFor,
   storyKey,
+  erasedFingerprint,
+  ERASED_EARLIER,
   openingOf,
   dayInWords,
   MAX_STORY_LENGTH,
@@ -430,5 +432,53 @@ describe("the preview", () => {
 
   it("recognises the same story from a date or its text", () => {
     expect(storyKey(new Date("2026-07-06T19:30:12.345Z"), "A")).toBe(storyKey("2026-07-06T19:30:12.345Z", "A"));
+  });
+});
+
+// TASK-475: a story erased from the admin is remembered by a one way fingerprint, so adding the same
+// old export again never brings it back.
+describe("a story erased earlier", () => {
+  const SENT = "2026-07-06T19:30:12.345Z";
+  const WORDS = "The Red Bag made our Christmas.";
+  const erased = new Set([storyKey(SENT, WORDS)]);
+
+  it("is left out, saying so plainly", () => {
+    const p = planImport(read(csv(answers(), answers({ sent: "2026-07-07T09:00:00Z", first: "Callum", email: "callum@example.com" }))), new Set(), ON, erased);
+    expect(p.add.map((a) => a.row.row)).toEqual([2]);
+    expect(p.skip.map((s) => s.reason)).toEqual([ERASED_EARLIER]);
+    expect(ERASED_EARLIER).toBe("It was erased earlier, so it isn't added again.");
+  });
+
+  it("shows in the preview among the rows left out", () => {
+    const preview = previewOf(planImport(read(csv(answers())), new Set(), ON, erased));
+    expect(preview.adding).toEqual([]);
+    expect(preview.skipping).toEqual([
+      { row: 1, sentOn: "6 July 2026", firstName: "Morag", town: "Irvine", reason: ERASED_EARLIER },
+    ]);
+  });
+
+  it("says it is already here, rather than erased, when it is somehow both", () => {
+    const p = planImport(read(csv(answers())), erased, ON, erased);
+    expect(p.skip.map((s) => s.reason)).toEqual(["It's already in the stories list."]);
+  });
+
+  it("is the same story only when sent at the same moment in the same words", () => {
+    const p = planImport(read(csv(answers({ sent: "2026-07-06T19:30:13.345Z" }), answers({ story: `${WORDS} Again.`, email: "other@example.com" }))), new Set(), ON, erased);
+    expect(p.add).toHaveLength(2);
+  });
+});
+
+describe("the fingerprint an erased story leaves", () => {
+  it("is a sha256 of the moment and the words: 64 hex characters, nothing readable", () => {
+    const f = erasedFingerprint("2026-07-06T19:30:12.345Z", "The Red Bag made our Christmas.");
+    expect(f).toMatch(/^[0-9a-f]{64}$/);
+    expect(f).not.toMatch(/red|bag|christmas/i);
+  });
+
+  it("is the same from a date or its text, and different for different words or moments", () => {
+    const f = erasedFingerprint("2026-07-06T19:30:12.345Z", "A");
+    expect(erasedFingerprint(new Date("2026-07-06T19:30:12.345Z"), "A")).toBe(f);
+    expect(erasedFingerprint("2026-07-06T19:30:12.346Z", "A")).not.toBe(f);
+    expect(erasedFingerprint("2026-07-06T19:30:12.345Z", "B")).not.toBe(f);
   });
 });

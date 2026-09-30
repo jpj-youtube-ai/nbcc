@@ -1962,7 +1962,10 @@ with no record is precisely the silence this exists to prevent.
 Kind, id, when, who, and a typed reason - nothing else. An erasure that quietly kept a copy of the
 personal data in another table would not be an erasure; it would be a compliance failure wearing an
 audit trail’s clothes. It lives in the MAIN database on purpose: stories and contact each have their
-own, and a log kept beside them would be destroyed by the very thing it exists to outlive.
+own, and a log kept beside them would be destroyed by the very thing it exists to outlive. Since
+TASK-475 an erased story also leaves a one way fingerprint in the stories database's
+`erased_stories`, so the old website's export can never bring it back (see **Erased stories stay
+erased** below).
 
 Which rows a view shows is decided by `src/admin/archive-filter.ts` (pure, unit-tested) rather than
 a WHERE clause typed into each query - an archived record leaking into the working list makes the
@@ -2017,9 +2020,28 @@ refused whole. Nobody's words are corrected. The mapping is `src/stories/old-sit
 `test/unit/stories-old-site-import.test.ts`), and `features/stories-import.feature` runs it against
 the stories database. The export holds names, emails and phone numbers, so it only ever travels
 through the admin: never the repository, a migration or a workflow. There is no `audit_log` row, as
-for every other stories action; the server logs who ran an import and how many it added. An erased
-story would come back if the same file were added again, so the panel says to delete the file once
-the stories are in.
+for every other stories action; the server logs who ran an import and how many it added. The panel
+still says to delete the file once the stories are in, because it holds people's contact details.
+
+**Erased stories stay erased (TASK-475).** Erasing a story (`DELETE /api/admin/stories/:id`,
+`deleteStory` in `src/db/stories.ts`) now also remembers a one way fingerprint of it, in the same
+transaction as the delete: the sha256, in hex, of the moment it was sent and its exact words
+(`erasedFingerprint` in `src/stories/old-site-import.ts`), which is the same identity the import
+recognises a story by. It goes in `erased_stories` in the **stories** database
+(`migrations-stories/1790803772256_erased-stories.js`), which holds only that fingerprint and when it
+was taken; a CHECK refuses anything that is not 64 hex characters, so nothing readable can be put
+there, and there is no story id. A fingerprint cannot be turned back into the words; it can only
+confirm a story somebody already holds. If the fingerprint cannot be written, nothing is deleted.
+The import looks the file's stories up by fingerprint (`erasedStoriesAmong`), and again inside its
+lock when adding, and leaves each erased one out with the reason "It was erased earlier, so it isn't
+added again." A story that is somehow both here and remembered shows as already here. **Stories
+erased before this change cannot be remembered** (their words are gone, and `erasure_log` holds only
+an id, a date, who and why), so there is no backfill: if one of those came from the old website, the
+same file would still bring it back, and it would need erasing again. A later submission from the
+same person, sent at a different moment, is a different story and is not blocked. Tested in
+`test/unit/stories-erased.test.ts`, `test/unit/admin-stories-import-erased.test.ts`,
+`test/unit/erased-stories-migration.test.ts` and `test/unit/stories-old-site-import.test.ts`, and end
+to end in `features/stories-import.feature`.
 
 **Public unsubscribe route (REQ-069 · TASK-161 · TASK-297).** `/unsubscribe/:token`
 (`src/routes/unsubscribe.ts`, mounted in `src/app.ts`) is the link every newsletter email carries.
@@ -2781,7 +2803,9 @@ It rides the daily 8am task (`npm run reminders`) like the run-up, with no sched
 time, when switched on, with recipients, up to the day of the Ball. It claims the day first in
 `ball_report_sends` (a unique index allows one scheduled report a day), so a second run sends
 nothing; a failed send gives the day back, and a send that went keeps it even if recording it then
-fails. Each report records `counted_to`, the moment its numbers were counted to, and the next one's
+fails. A failed send is also recorded (`ball_report.send_failed` in `audit_log`, the day only, since
+the error can quote an address), and the card says that day's report could not be sent until the
+next one goes (TASK-471). Each report records `counted_to`, the moment its numbers were counted to, and the next one's
 "since the last update" counts on from exactly there. The numbers (`countSales`) and words are the
 pure `src/ball/sales-report.ts` (`test/unit/ball-sales-report.test.ts`), the wiring is tested in
 `test/unit/ball-sales-report-runner.test.ts`, and `features/ball-report.feature` covers the admin
@@ -5387,6 +5411,14 @@ On the very first apply the ECS service starts with a placeholder image and is
 unhealthy until the first real deploy - so run the deploy pipeline (below)
 right after.
 
+After that, any apply that changes the task definition registers a new revision on the same
+placeholder image, and it becomes the family's latest. The scheduled jobs (the 8am reminders, which
+send the Ball ticket report, and the 2am backup) run the family's latest, so they would start nginx
+until the next deploy. Since TASK-474 the Infra workflow's apply ends by re-registering Terraform's
+revision on the image the service is running, exactly as a deploy does, so the latest revision always
+runs the app. It never touches the service; on a first apply it does nothing
+(`test/unit/infra-workflow.test.ts`).
+
 ## Deploy flow
 
 1. **Open a PR** -> `pr.yml` runs lint, build, migrations, **unit + BDD**.
@@ -6405,8 +6437,8 @@ public will. Everything typed is escaped; `*stars*` become bold only after escap
 adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `events.html` is
 in the Dockerfile's explicit page list.
 
-**EmpowHer's leaflet (TASK-456).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
-leaflet (`assets/img/empowher-2026-leaflet.webp`, 1200px wide, cropped out of the screenshot frame
+**EmpowHer's leaflet (TASK-456, taken off in TASK-472).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
+leaflet (`assets/img/empowher-2026-leaflet.webp`, since deleted, 1200px wide, cropped out of the screenshot frame
 it arrived in) on EmpowHer's card, whole on cream, and brings three details into line with it: Ali
 Wright as the evening's host, from Now Radio's Ali and Michael in the Morning; the Wallacetown Drive
 address; and "Organised by" on the front, so the card never names two hosts. It is compare and
@@ -6416,6 +6448,11 @@ is left alone, so the seed's `down` still removes only rows no person has touche
 helper applies the same rule, so every test renders what production holds;
 `test/unit/events-leaflet.test.ts` pins the swap and the picture, and a scenario in
 `features/events.feature` proves it lands on the seeded row in Postgres.
+
+Jaimie took the picture off in the admin the same day, keeping the words, and TASK-472 deleted the
+file. `1790900000000_events-empowher-leaflet-off.js` takes the leaflet off any database where it is
+still exactly the leaflet (a fresh one, since 1789100000003 still puts it on), so no card points at a
+missing file; on production it matches nothing. Its `down` does nothing, as there is no file to put back.
 
 Covered by `test/unit/events-model.test.ts`, `events-render.test.ts`, `events-nav-link.test.ts`,
 `events-page.test.ts`, the site map and permission tests, and `features/events.feature` (the switch
@@ -6443,8 +6480,10 @@ This is the trap this feature was built around. `DATABASE_URL` holds 46 tables
 report one in TASK-464),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 46 of **48** tables and silently
-drops every My Story submission and every contact enquiry, while producing a
+data). A `pg_dump $DATABASE_URL` captures 46 of **49** tables and silently
+drops every My Story submission (and, since TASK-475, the fingerprints in
+`erased_stories` that keep erased stories from coming back) and every contact
+enquiry, while producing a
 file of entirely plausible size.
 
 `src/backup/plan.ts` is the single source of truth, and

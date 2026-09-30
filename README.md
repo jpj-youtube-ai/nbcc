@@ -5770,6 +5770,36 @@ saved, and the three buttons save exactly the server's `roleToPermissions` for t
 for everything else. `test/unit/admin-app.test.ts` presses each button and saves, and holds the save to
 the server's own schema.
 
+## Newsletter links opened a security warning (TASK-466)
+
+Every link in a newsletter is rewritten so a click can be counted, to `https://links.news.nbcc.scot/…`
+(the newsletter configuration set in `infra/modules/app/ses.tf`, HTTPS required). Since the move to
+Amazon SES on 31 August that name was a bare CNAME to SES's regional tracker,
+`r.eu-west-2.awstrack.me`, which answers with its **own** certificate. That certificate does not cover
+`links.news.nbcc.scot`, so a reader who clicked any link in a newsletter, Donate included, got the
+browser's full-page "Your connection is not private" warning, and the click was never counted. Nothing
+in the send path could notice: the mail itself was delivered normally.
+
+An https tracking domain needs a CDN holding the domain's own certificate. That is AWS's documented
+setup, and it is what is there now:
+
+- a certificate for `links.news.nbcc.scot` in **us-east-1**, the only region CloudFront reads
+  certificates from (so the production root gains an `aws.us_east_1` provider), validated through the
+  zone like the site's own;
+- a **CloudFront distribution** for that name with SES's tracker as its origin, over https, passing the
+  reader's `Host` header through (AWS: "The CDN must pass the Host header supplied by the requester to
+  the origin") and caching nothing, because a cached redirect is a click SES never sees;
+- `links.news` as an A + AAAA alias to it instead of the CNAME.
+
+AWS's own check: `curl --head https://links.news.nbcc.scot/favicon.ico` answers **200** with
+`x-amz-ses-region: eu-west-2` and `x-amz-ses-request-protocol: https`.
+`test/unit/newsletter-click-tracking-https.test.ts` pins the shape, so the name cannot quietly go back to
+a bare CNAME.
+
+The newsletters sent between 31 August and this fix carried the broken links, so their click counts
+are near zero because the clicks never arrived, not because nobody clicked. Their links point at the
+same address, so they should work from now on too.
+
 ## Enquiries waiting for a reply (TASK-425)
 
 A contact enquiry used to be invisible unless you deliberately opened **Content → Contact form**.
@@ -7169,10 +7199,12 @@ provider's **shared** tracking domain — so an email that says it is from `nbcc
 somewhere else entirely. That is the shape of a phishing message, and it is very likely part of why a
 real send reached Hotmail's junk folder.
 
-A tracking CNAME on our own subdomain makes the rewritten links match the sender — since the
-Resend→SES migration that is `links.news.nbcc.scot` → `r.eu-west-2.awstrack.me`, configured on the
-SES newsletter configuration set; the apex tracker is gone because transactional mail no longer
-carries click tracking at all. Same click data, nothing suspicious.
+A tracking domain on our own subdomain makes the rewritten links match the sender — since the
+Resend→SES migration that is `links.news.nbcc.scot`, in front of SES's `r.eu-west-2.awstrack.me`,
+configured on the SES newsletter configuration set; the apex tracker is gone because transactional
+mail no longer carries click tracking at all. Same click data, nothing suspicious. Since TASK-466 it is
+CloudFront holding the domain's own certificate, not a bare CNAME to the tracker: the links are https,
+and a CNAME alone served SES's certificate for our name, so every link failed with a security warning.
 
 **Open tracking stays off.** It works by embedding an invisible image, which Apple Mail and Gmail
 pre-load — so the numbers lie — and some filters read a tracking pixel as a negative signal. Clicks
@@ -7192,7 +7224,7 @@ Since the Resend→SES migration they are (see `infra/modules/app/ses.tf`):
 | `<token>._domainkey.news` ×3 | CNAME | Easy DKIM — **its own keys**, distinct from the apex |
 | `bounce.news` | MX | MAIL FROM / Return-Path: bounce and complaint feedback |
 | `bounce.news` | TXT | SPF (`include:amazonses.com`) |
-| `links.news` | CNAME | click tracking → `r.eu-west-2.awstrack.me` |
+| `links.news` | A + AAAA alias | click tracking → CloudFront (its own certificate) → `r.eu-west-2.awstrack.me` (TASK-466) |
 
 DMARC is inherited from the apex policy (there is no `sp=` tag), so the tightened `p=quarantine`
 covers this subdomain too without a second record.
@@ -7243,8 +7275,8 @@ Cloudflare Worker relay (`services/email-relay/`) and the Resend account are gon
   (schema, `.env.example`, `pr.yml`, SSM, task-def, IAM). The dead contact-forwarding client went
   with them. See **Email keys** under **Configuration**.
 - **DNS** (`ses.tf` + `dns.tf`): Easy-DKIM CNAMEs ×3 per identity, `bounce.`/`bounce.news.` MAIL
-  FROM MX+SPF, `links.news` → `r.eu-west-2.awstrack.me`; every `resend._domainkey`/`send.*` record
-  removed. Root SPF and DMARC values are untouched.
+  FROM MX+SPF, `links.news` → `r.eu-west-2.awstrack.me` (through CloudFront since TASK-466); every
+  `resend._domainkey`/`send.*` record removed. Root SPF and DMARC values are untouched.
 
 ⚠️ **Cutover order matters** (sandbox → production): (1) `infra.yml` plan + apply — creates the
 identities, DNS, configuration sets, SNS topic/subscription and token; DKIM verifies itself in

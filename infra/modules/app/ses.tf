@@ -116,9 +116,10 @@ resource "aws_sesv2_configuration_set" "newsletter" {
   configuration_set_name = "${local.name}-newsletter"
 
   # Click tracking on the newsletter's own subdomain (TASK-295/299: the rewritten link domain
-  # must match the sender, or the mail reads as phishing). links.news.<apex> CNAMEs to SES's
-  # regional tracker in dns.tf. HTTPS required — the old Resend tracker served https links, and
-  # downgrading rewritten links to http would trip the same filters the CNAME exists to appease.
+  # must match the sender, or the mail reads as phishing). HTTPS required — the old Resend tracker
+  # served https links, and downgrading rewritten links to http would trip the same filters. An
+  # https custom domain needs its OWN certificate, so links.news.<apex> is CloudFront in front of
+  # SES's regional tracker (below, TASK-466), not a bare CNAME to it.
   tracking_options {
     custom_redirect_domain = "links.news.${var.domain_name}"
     https_policy           = "REQUIRE"
@@ -130,6 +131,104 @@ resource "aws_sesv2_configuration_set" "newsletter" {
 resource "aws_sesv2_configuration_set" "transactional" {
   count                  = local.create_zone ? 1 : 0
   configuration_set_name = "${local.name}-transactional"
+}
+
+# ---- HTTPS for the click-tracking domain (TASK-466) ----------------------------------------
+# The newsletter configuration set rewrites every link to https://links.news.<apex>/… . Until
+# TASK-466 that name was a bare CNAME to SES's tracker, which answered with its own certificate
+# (r.<region>.awstrack.me): every tracked link in every newsletter stopped at a browser security
+# warning, and no click was counted. This is AWS's documented HTTPS setup
+# (docs.aws.amazon.com/ses/latest/dg/configure-custom-open-click-domains.html): a CDN holding the
+# domain's own certificate in front of the regional tracker, where "the CDN must pass the Host
+# header supplied by the requester to the origin". To check it, AWS's own test:
+#   curl --head https://links.news.<apex>/favicon.ico
+# must answer 200 with x-amz-ses-region: <region> and x-amz-ses-request-protocol: https.
+
+resource "aws_acm_certificate" "links_news" {
+  count             = local.create_zone ? 1 : 0
+  provider          = aws.us_east_1 # CloudFront only reads certificates from us-east-1
+  domain_name       = "links.news.${var.domain_name}"
+  validation_method = "DNS"
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "links_news_cert_validation" {
+  for_each = local.create_zone ? {
+    for dvo in aws_acm_certificate.links_news[0].domain_validation_options : dvo.domain_name => {
+      name   = dvo.resource_record_name
+      type   = dvo.resource_record_type
+      record = dvo.resource_record_value
+    }
+  } : {}
+  zone_id         = local.zone_id
+  name            = each.value.name
+  type            = each.value.type
+  records         = [each.value.record]
+  ttl             = 60
+  allow_overwrite = true
+}
+
+resource "aws_acm_certificate_validation" "links_news" {
+  count                   = local.create_zone ? 1 : 0
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.links_news[0].arn
+  validation_record_fqdns = [for r in aws_route53_record.links_news_cert_validation : r.fqdn]
+}
+
+# AWS-managed policies: pass on everything the reader's browser sent, Host included, and cache
+# nothing. A cached redirect is a click SES never sees.
+data "aws_cloudfront_origin_request_policy" "all_viewer" {
+  count = local.create_zone ? 1 : 0
+  name  = "Managed-AllViewer"
+}
+
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  count = local.create_zone ? 1 : 0
+  name  = "Managed-CachingDisabled"
+}
+
+resource "aws_cloudfront_distribution" "links_news" {
+  count           = local.create_zone ? 1 : 0
+  enabled         = true
+  comment         = "${local.name}: newsletter click tracking, links.news.${var.domain_name} to SES"
+  aliases         = ["links.news.${var.domain_name}"]
+  price_class     = "PriceClass_100" # edges in Europe and North America, where the readers are
+  is_ipv6_enabled = true
+  http_version    = "http2"
+
+  origin {
+    origin_id   = "ses-click-tracker"
+    domain_name = "r.${var.region}.awstrack.me"
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    target_origin_id         = "ses-click-tracker"
+    viewer_protocol_policy   = "redirect-to-https"
+    allowed_methods          = ["GET", "HEAD"]
+    cached_methods           = ["GET", "HEAD"]
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled[0].id
+    origin_request_policy_id = data.aws_cloudfront_origin_request_policy.all_viewer[0].id
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    acm_certificate_arn      = aws_acm_certificate_validation.links_news[0].certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
+  }
 }
 
 # ---- Delivery events: SES → SNS → the app's webhook ----------------------------------------

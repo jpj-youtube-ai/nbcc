@@ -103,13 +103,35 @@ resource "aws_route53_record" "dkim" {
 # Gmail pre-load images, so the numbers lie, and some filters read the pixel as a negative
 # signal). The old apex tracker (links.nbcc.scot) is gone: transactional mail no longer carries
 # click tracking at all, by design.
+#
+# TASK-466: an alias to the CloudFront distribution in ses.tf, which holds this name's own
+# certificate. It used to be a CNAME straight to r.<region>.awstrack.me, whose certificate does not
+# cover this name, so every https tracked link failed with a browser security warning.
 resource "aws_route53_record" "news_tracking" {
   count   = local.create_zone ? 1 : 0
   zone_id = local.zone_id
   name    = "links.news.${var.domain_name}"
-  type    = "CNAME"
-  ttl     = 3600
-  records = ["r.${var.region}.awstrack.me"]
+  type    = "A"
+  alias {
+    name                   = aws_cloudfront_distribution.links_news[0].domain_name
+    zone_id                = aws_cloudfront_distribution.links_news[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+# IPv6 as well. It waits for the record above: changing that one from CNAME to A replaces it
+# (destroy, then create), and Route 53 refuses any other record at a name that still has a CNAME.
+resource "aws_route53_record" "news_tracking_ipv6" {
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
+  name    = "links.news.${var.domain_name}"
+  type    = "AAAA"
+  alias {
+    name                   = aws_cloudfront_distribution.links_news[0].domain_name
+    zone_id                = aws_cloudfront_distribution.links_news[0].hosted_zone_id
+    evaluate_target_health = false
+  }
+  depends_on = [aws_route53_record.news_tracking]
 }
 
 resource "aws_route53_record" "dmarc" {

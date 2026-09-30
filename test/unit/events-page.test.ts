@@ -3,6 +3,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
+import { renderEventsPage, DECK_MARKER } from "../../src/events/render";
+import { SEED_EVENTS } from "./helpers/events-seed";
 
 // TASK-453: the events page. A deck of playing cards: each event is a card with its picture and
 // the gist on the front, and everything else on the back. Hover and it wobbles; click and it
@@ -17,12 +19,24 @@ import { createRequire } from "node:module";
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
-const html = readFileSync(resolve(ROOT, "events.html"), "utf8");
+// events.html is the TEMPLATE; the server fills its deck from the database. These tests run on the
+// page as production will first serve it: the template with the two seeded events.
+const template = readFileSync(resolve(ROOT, "events.html"), "utf8");
+const html = renderEventsPage(template, SEED_EVENTS);
 const css = readFileSync(resolve(ROOT, "assets/css/events.css"), "utf8");
 const { initDeck } = require(resolve(ROOT, "assets/js/events.js"));
 
 const parse = () => new DOMParser().parseFromString(html, "text/html");
 const cssNoComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
+
+describe("the template", () => {
+  // The cards come from the database, so the file itself must hold the marker and nothing else
+  // in the deck: a card left in the template would sit on the page whatever staff did.
+  it("holds exactly one deck marker and no cards of its own", () => {
+    expect(template.split(DECK_MARKER)).toHaveLength(2);
+    expect(template).not.toContain('class="ev-card');
+  });
+});
 
 describe("the deck markup", () => {
   const doc = parse();
@@ -101,6 +115,16 @@ describe("the deck markup", () => {
 
   // The Code of Fundraising Practice, as guarded on the ball's own surfaces (TASK-313): card fees
   // mean "every penny" is not literally true, so the absolute wording must not creep in here.
+  // The copy-rules test scans the template; the cards' words come from the database, so the seeded
+  // ones are held to the same house style here: no hyphens between words, no en or em dashes.
+  it("keeps the seeded cards in house style", () => {
+    const d = parse();
+    d.querySelectorAll("svg, script, style").forEach((el) => el.remove());
+    const text = d.querySelector("[data-deck]")?.textContent ?? "";
+    expect(text).not.toMatch(/[–—]/);
+    expect(text.match(/\w-\w/g) ?? []).toEqual([]);
+  });
+
   it("makes no absolute money claim", () => {
     const text = parse().body.textContent ?? "";
     for (const banned of [/every penny/i, /every pound/i, /100% of your ticket/i]) {

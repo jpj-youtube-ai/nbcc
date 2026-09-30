@@ -71,9 +71,10 @@
         </div>
       </section>
 
-      <!-- The deck. Each <li> is one event, soonest first; past events drop off on their own.
-           When this is wired to the admin, the server renders exactly this markup from the events
-           table, and the face down "more on the way" card always comes last. -->
+      <!-- The deck. The server puts the cards where the marker is (src/events/render.ts): one <li> per
+           event on the page, soonest first, then the face down "more on the way" card. Past events
+           drop off by themselves; drafts never appear. The page is only served while an admin has
+           the Events page switched on. -->
       <section class="section flush-top events-deck" aria-labelledby="deck-heading">
         <div class="wrap">
           <h2 class="sr-only" id="deck-heading">Upcoming events</h2>
@@ -82,146 +83,7 @@
             Turn any card over for the full details.
           </p>
 
-          <ol class="deck" role="list" data-deck>
-            <!-- ============ EmpowHer '26 (no picture uploaded yet: the card sets its own cover) ============ -->
-            <li class="ev-card" id="empowher-2026">
-              <div class="ev-card__inner">
-                <article class="ev-face ev-front" aria-labelledby="empowher-2026-title">
-                  <div class="ev-art ev-art--type ev-art--holly" aria-hidden="true">
-                    <div>
-                      <p class="ev-art__name">EmpowHer<span>&rsquo;26</span></p>
-                      <div class="rule on-dark"><i></i></div>
-                      <p class="ev-art__place">AD Autocare &middot; Heathfield</p>
-                    </div>
-                  </div>
-                  <p class="ev-index" aria-hidden="true"><span class="ev-index__dow">Wed</span><span class="ev-index__day">4</span><span class="ev-index__mon">Nov</span></p>
-                  <div class="ev-body">
-                    <p class="ev-host">Hosted by AD Autocare</p>
-                    <h2 class="ev-title" id="empowher-2026-title">EmpowHer &rsquo;26</h2>
-                    <p class="ev-flag">Spaces limited</p>
-                    <p class="ev-tldr">A free evening of car care workshops, stalls from women in business across Ayrshire, and a raffle for NBCC.</p>
-                    <ul class="ev-facts">
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><span class="sr-only">When: </span>Wed 4 Nov, 6pm to 10pm</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span><span class="sr-only">Where: </span>AD Autocare, Heathfield, Ayr</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a3 3 0 0 0 0 6v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a3 3 0 0 0 0-6z"/><path d="M15 6v12" stroke-dasharray="1.5 2.5"/></svg><span><span class="sr-only">Cost: </span>Free, but please book</span></li>
-                    </ul>
-                    <button class="ev-turn" type="button" aria-controls="empowher-2026-back">See the full details<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg></button>
-                  </div>
-                </article>
-
-                <article class="ev-face ev-back" id="empowher-2026-back" aria-labelledby="empowher-2026-back-title">
-                    <div class="ev-back__head">
-                      <p class="ev-index" aria-hidden="true"><span class="ev-index__dow">Wed</span><span class="ev-index__day">4</span><span class="ev-index__mon">Nov</span></p>
-                      <div class="ev-back__titles">
-                        <h2 class="ev-title" id="empowher-2026-back-title" tabindex="-1">EmpowHer &rsquo;26</h2>
-                        <p class="ev-host">Hosted by AD Autocare</p>
-                      </div>
-                      <button class="ev-turn ev-turn--icon" type="button" aria-label="Turn back to the front"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg></button>
-                    </div>
-                    <ul class="ev-facts">
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><span class="sr-only">When: </span><strong><time datetime="2026-11-04T18:00">Wednesday 4 November 2026</time></strong>, 6pm to 10pm</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span><span class="sr-only">Where: </span>AD Autocare, Heathfield, Ayr</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a3 3 0 0 0 0 6v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a3 3 0 0 0 0-6z"/><path d="M15 6v12" stroke-dasharray="1.5 2.5"/></svg><span><span class="sr-only">Cost: </span>Free. Spaces are limited, so please book your place.</span></li>
-                    </ul>
-                    <h3 class="ev-label">What&rsquo;s on</h3>
-                    <ul class="ev-list">
-                      <li><b>Car care workshops</b> with Andrew and the team: change a tyre, check your oil</li>
-                      <li><b>Stalls</b> from women running businesses across Ayrshire</li>
-                      <li><b>Ali Wright</b> from Now Ayrshire Radio</li>
-                      <li>Mocktails and nibbles</li>
-                      <li>A <b>raffle</b> on the night for NBCC</li>
-                    </ul>
-                    <div class="ev-organiser">
-                      <p class="ev-organiser__by">Organised and paid for by <b>AD Autocare</b></p>
-                      <p>With NBCC as their chosen charity for the night. Thank you to Andrew, CarolAnne and the whole team.</p>
-                    </div>
-                    <div class="ev-book-gap"></div>
-                    <a class="btn btn-primary ev-book ev-book--away" href="https://adautocare.co.uk/empowher" target="_blank" rel="noopener">Book your free place<span class="sr-only"> on the AD Autocare website, opens in a new tab</span></a>
-                    <p class="ev-book-note">Booking is on the AD Autocare website.</p>
-                  </article>
-              </div>
-            </li>
-
-            <!-- ============ Festive Ball 2026 (picture: the gold lockup from the printed poster) ============ -->
-            <li class="ev-card" id="festive-ball-2026">
-              <div class="ev-card__inner">
-                <article class="ev-face ev-front" aria-labelledby="festive-ball-2026-title">
-                  <div class="ev-art ev-art--whole ev-art--night">
-                    <img src="/assets/img/ball-lockup.svg" alt="" width="1306" height="491" loading="lazy" decoding="async" />
-                  </div>
-                  <p class="ev-index" aria-hidden="true"><span class="ev-index__dow">Sat</span><span class="ev-index__day">7</span><span class="ev-index__mon">Nov</span></p>
-                  <div class="ev-body">
-                    <p class="ev-host">Organised by The Designer Rooms</p>
-                    <h2 class="ev-title" id="festive-ball-2026-title">Festive Ball 2026</h2>
-                    <p class="ev-tldr">An elegant evening at The Park Hotel, with dinner, live music and Michelle McManus as your host.</p>
-                    <ul class="ev-facts">
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><span class="sr-only">When: </span>Sat 7 Nov, from 7pm</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span><span class="sr-only">Where: </span>The Park Hotel, Kilmarnock</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a3 3 0 0 0 0 6v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a3 3 0 0 0 0-6z"/><path d="M15 6v12" stroke-dasharray="1.5 2.5"/></svg><span><span class="sr-only">Tickets: </span>&pound;100 each, tables of ten &pound;1,000</span></li>
-                    </ul>
-                    <button class="ev-turn" type="button" aria-controls="festive-ball-2026-back">See the full details<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg></button>
-                  </div>
-                </article>
-
-                <article class="ev-face ev-back" id="festive-ball-2026-back" aria-labelledby="festive-ball-2026-back-title">
-                    <div class="ev-back__head">
-                      <p class="ev-index" aria-hidden="true"><span class="ev-index__dow">Sat</span><span class="ev-index__day">7</span><span class="ev-index__mon">Nov</span></p>
-                      <div class="ev-back__titles">
-                        <h2 class="ev-title" id="festive-ball-2026-back-title" tabindex="-1">Festive Ball 2026</h2>
-                        <p class="ev-host">A Night to Remember</p>
-                      </div>
-                      <button class="ev-turn ev-turn--icon" type="button" aria-label="Turn back to the front"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg></button>
-                    </div>
-                    <ul class="ev-facts">
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span><span class="sr-only">When: </span><strong><time datetime="2026-11-07T19:00">Saturday 7 November 2026</time></strong>, from 7pm (to be confirmed)</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg><span><span class="sr-only">Where: </span>The Park Hotel, Rugby Park, Kilmarnock. Parking at the venue.</span></li>
-                      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9V7a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v2a3 3 0 0 0 0 6v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a3 3 0 0 0 0-6z"/><path d="M15 6v12" stroke-dasharray="1.5 2.5"/></svg><span><span class="sr-only">Tickets: </span>&pound;100 each, or &pound;1,000 for a table of ten. Over 18s only.</span></li>
-                    </ul>
-                    <h3 class="ev-label">On the night</h3>
-                    <ul class="ev-list">
-                      <li><b>Michelle McManus</b>, your host for the evening</li>
-                      <li><b>Clanadonia</b></li>
-                      <li><b>The MacDonald Brothers</b></li>
-                      <li><b>The Kilted DJ</b></li>
-                    </ul>
-                    <p class="ev-note">Your ticket includes a three course meal, a welcome drink and the entertainment. Dress to impress.</p>
-                    <div class="ev-organiser">
-                      <p class="ev-organiser__by">Organised and sponsored by <img src="/assets/img/the-designer-rooms.png" alt="The Designer Rooms" width="486" height="63" loading="lazy" decoding="async" /></p>
-                      <p>They are covering the cost of the night, so your ticket funds NBCC&rsquo;s work.</p>
-                    </div>
-                    <div class="ev-book-gap"></div>
-                    <a class="btn btn-primary ev-book" href="/ball#tickets">Book tickets</a>
-                  </article>
-              </div>
-            </li>
-
-            <!-- ============ Always last: the face down card ============ -->
-            <li class="ev-card ev-card--more" id="more-events">
-              <div class="ev-card__inner">
-                <article class="ev-face ev-front" aria-labelledby="more-events-title">
-                  <div class="ev-cardback">
-                    <div class="ev-cardback__plate">
-                      <img class="ev-cardback__elf" src="/assets/img/nbcc-elf.png" alt="" width="560" height="560" loading="lazy" decoding="async" />
-                      <h2 id="more-events-title">More dates on the way</h2>
-                      <p>Follow us on Facebook and you&rsquo;ll hear about them first.</p>
-                      <button class="ev-turn" type="button" aria-controls="more-events-back">Planning your own?<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg></button>
-                    </div>
-                  </div>
-                </article>
-
-                <article class="ev-face ev-back ev-back--invite" id="more-events-back" aria-labelledby="more-events-back-title">
-                    <button class="ev-turn ev-turn--icon ev-turn--corner" type="button" aria-label="Turn back to the front"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg></button>
-                    <div class="ev-invite">
-                      <h2 class="ev-title" id="more-events-back-title" tabindex="-1">Planning something for NBCC?</h2>
-                      <div class="rule center"><i></i></div>
-                      <p class="ev-note">A coffee morning, a quiz night, a sponsored walk with your work. Whatever you have in mind, tell us about it and we&rsquo;ll help where we can.</p>
-                      <a class="btn btn-primary ev-book" href="/contact">Tell us about it</a>
-                      <a class="ev-link" href="https://www.facebook.com/nbcc.scot" target="_blank" rel="noopener">Follow NBCC on Facebook<span class="sr-only">, opens in a new tab</span></a>
-                    </div>
-                  </article>
-              </div>
-            </li>
-          </ol>
+          <ol class="deck" role="list" data-deck><!-- events:deck --></ol>
         </div>
       </section>
     </main>

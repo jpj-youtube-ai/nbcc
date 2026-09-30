@@ -160,6 +160,11 @@
   object-fit: contain;
 }
 
+/* Behind a whole picture, the colour staff chose for it. */
+.ev-art--ground-cream { background: var(--cream); }
+.ev-art--ground-crimson { background: var(--crimson); }
+.ev-art--ground-holly { background: var(--holly); }
+
 /* The festive ball's own ground: the night sky from the printed poster, with its spotlight. */
 .ev-art--night {
   background:
@@ -396,6 +401,8 @@
 /* Leaving nbcc.scot: an arrow that says so. */
 .ev-book--away::after { content: "\2197"; }
 .ev-book-note { margin: 10px 0 0; font-size: 0.88rem; color: var(--slate-soft); text-align: center; }
+/* With nothing to book, the note stands in for the button, so it reads at body size. */
+.ev-book-note--solo { font-size: 0.98rem; color: var(--slate); }
 .ev-link { display: inline-flex; align-items: center; justify-content: center; gap: 0.4em; margin-top: 14px; font-weight: 600; }
 
 /* ---------- the face down card: more on the way ---------- */

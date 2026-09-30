@@ -54,8 +54,11 @@ describe("admin section list stays in sync", () => {
   // the same order app.js's applyNavFiltering reads them in.
   it("gates every menu link on a section the server knows", () => {
     const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
-    const links = [...html.matchAll(/<button[^>]*class="admin-nav-link[^"]*"[^>]*>/g)].map((m) => m[0]);
+    // Any element with the class anywhere in its list, and every one of them: a link this missed
+    // would skip the check while applyNavFiltering still gated it, so the count must match too.
+    const links = [...html.matchAll(/<[a-z]+\b[^>]*\bclass="[^"]*\badmin-nav-link\b[^"]*"[^>]*>/g)].map((m) => m[0]);
     expect(links.length).toBeGreaterThan(0);
+    expect(links.length, "every admin-nav-link in admin.html was checked").toBe((html.match(/\badmin-nav-link\b/g) || []).length);
     const attr = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
     const gatedOnNothing = links
       .map((tag) => ({ view: attr(tag, "data-view"), gate: attr(tag, "data-edit-gate") ?? attr(tag, "data-view-gate") ?? attr(tag, "data-view") }))

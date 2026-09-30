@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
-import { roleToPermissions } from "../../src/admin/permissions";
+import { roleToPermissions, effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
 
 // TASK-118 (REQ-066): an integration test of the admin dashboard app wiring (assets/js/admin/app.js).
 // It mounts admin.html's <body> into jsdom, stubs window.AdminHelpers + a mocked fetch, evaluates
@@ -24,7 +24,7 @@ const tokenFor = (role: string) =>
 
 let loginToken = tokenFor("editor"); // the token the mocked /login hands back (per test)
 // A person's own saved access, which /me returns in place of their role's defaults (per test).
-let storedPermissions: Record<string, string> | null = null;
+let storedPermissions: PermissionMap | null = null;
 
 const donation = {
   id: 11, donor_id: 5, donor_name: "Ada Test", mode: "monthly", plan: "silver",
@@ -94,8 +94,8 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     const auth = init?.headers?.Authorization || "";
     const claims = helpers.parseClaims(auth.replace(/^Bearer\s+/, "")) as { role?: string; email?: string } | null;
     const role = claims?.role || "viewer";
-    // A stored per-person map when a test sets one, exactly as effectivePermissions prefers it.
-    return j({ email: claims?.email || "", permissions: storedPermissions ?? roleToPermissions(role) });
+    // The server's own rule: a saved per-person map when a test sets one, else the role's defaults.
+    return j({ email: claims?.email || "", permissions: effectivePermissions({ role, permissions: storedPermissions }) });
   }
   if (url.includes("/api/admin/donors/")) return j(snapshot);
   if (url.includes("/api/admin/donations")) return j({ results: [donation], total: 1 });
@@ -441,6 +441,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await signIn();
       const link = document.querySelector('.admin-nav-link[data-view="monthly"]') as HTMLElement;
       expect(link.hidden).toBe(true);
+      // ...and it is the donations gate hiding it, not a failed sign-in that hides everything.
+      expect((document.querySelector('.admin-nav-link[data-view="claims"]') as HTMLElement).hidden).toBe(false);
     } finally {
       storedPermissions = null;
     }

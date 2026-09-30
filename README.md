@@ -5665,10 +5665,10 @@ browser's copy had been short of at least one section ever since.
 ## The Editor button saves (TASK-462)
 
 The **Viewer**, **Editor** and **Admin** buttons on **Team → Manage access** fill the matrix with that
-role's defaults. A role's defaults only name the sections the role gets something in, and the save
-(`PATCH /api/admin/users/:id/permissions`) refuses anything short of every section, so the Editor
-button's matrix could never be saved: it has no entry for Business supporters or the Email audit.
-The Viewer and Admin buttons worked only because those roles happen to name every section.
+role's defaults, and the save (`PATCH /api/admin/users/:id/permissions`) refuses anything short of
+every section. The Viewer and Admin defaults are built from the whole list of sections, which is the
+only reason those two buttons worked. The Editor defaults leave out two sections editors get nothing
+in, Business supporters and the Email audit, so the Editor button's matrix could never be saved.
 
 Opening somebody's access already filled every gap with **None**. The buttons now go through the same
 step (`completePermissions` in `assets/js/admin/app.js`), so whatever the matrix shows is what gets

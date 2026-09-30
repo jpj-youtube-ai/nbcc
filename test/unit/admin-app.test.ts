@@ -523,10 +523,13 @@ describe("admin app integration (jsdom, TASK-118)", () => {
   // and all anyone saw was "Could not save that access." (since TASK-313).
   it.each(["viewer", "editor", "admin"])("saves the %s preset as that role's complete defaults", async (role) => {
     loginToken = tokenFor("admin");
+    // Saved access that matches no preset, so every button has to change what is on screen: an editor
+    // with no saved access already shows the editor defaults, and a dead Editor button would pass.
     teamMembers = [
       {
         id: 7, email: "ed@nbcc", full_name: "Ed Itor", role: "editor", status: "active",
-        invited_at: "2026-08-01T00:00:00Z", last_login_at: null, permissions: {},
+        invited_at: "2026-08-01T00:00:00Z", last_login_at: null,
+        permissions: Object.fromEntries(SECTIONS.map((s) => [s, "none"])) as PermissionMap,
       },
     ];
     await signIn();

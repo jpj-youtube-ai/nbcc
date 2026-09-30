@@ -2684,8 +2684,8 @@
     return btn ? btn.textContent : cap(section);
   }
   // A copy of perms naming every section, "none" wherever perms is silent. The permissions PATCH takes
-  // only a complete matrix, and neither a role's defaults nor a map saved before a section existed
-  // names them all, so whatever fills the matrix goes through here (TASK-462: the Editor preset did
+  // only a complete matrix, and the editor role's defaults, like a map saved before a section existed,
+  // leave some out, so whatever fills the matrix goes through here (TASK-462: the Editor preset did
   // not, and could never be saved).
   function completePermissions(perms) {
     var full = Object.assign({}, perms);

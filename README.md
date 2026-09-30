@@ -5524,10 +5524,57 @@ The jump bar wraps (two rows, 101px, at 390px) and sits at `top:61px` under the 
 Verified in a real browser on all 21 screens at 320, 360, 375, 390, 768, 860, 861 and 1280px, and
 again in headless Chrome emulating a 390px phone (the ticket's own method): `scrollWidth` equals the
 viewport width and nothing scrolls sideways, with one exception outside this change: at 320px the
-Events page switch button is `flex: none`, 302px wide in a 288px card, so that one screen is 19px
-too wide on the smallest phones. Every row of the table above was replayed in headless Chrome with
-smooth scrolling on. Above 860px the admin is unchanged. `test/unit/admin-fits-a-phone.test.ts` pins
-the rules and `admin-app.test.ts` drives the menu's behaviour through the real `app.js`.
+Events page switch button was `flex: none`, 302px wide in a 288px card, so that one screen was 19px
+too wide on the smallest phones (**fixed in TASK-455**, which also found the list of events on that
+screen scrolling sideways inside its box on a phone: see
+[The Events switch fits the smallest phones](#the-events-switch-fits-the-smallest-phones-task-455)).
+Every row of the table above was replayed in headless Chrome with smooth scrolling on. Above 860px the
+admin is unchanged. `test/unit/admin-fits-a-phone.test.ts` pins the rules and `admin-app.test.ts`
+drives the menu's behaviour through the real `app.js`.
+
+## The Events switch fits the smallest phones (TASK-455)
+
+The one screen TASK-454 left too wide. The switch at the top of **Events** (**Put the page on the
+website**, or **Take the page off the website** once it is on) was `flex: none`, so it kept its whole
+label on one line however narrow the screen: 302px of button where its card had 246px to give it at
+320px, and 317px once the page is on. The Events screen scrolled sideways on the smallest phones, by
+19px with the page off and 34px with it on, and up to 360px the button could run out of its card even
+where the page itself fitted.
+
+It now shrinks to its card and its label wraps inside it (`flex: 0 1 auto; max-width: 100%`). It only
+shrinks when it is alone on its line and wider than the room inside the card's padding, so wherever
+it has that room nothing moves: with the page off from 376px, with it on from 391px, and on every
+tablet and desktop. The before and after screenshots at 390px with the page off, and at 768 and
+1280px either way, are identical, pixel for pixel. Below those widths the label now takes two lines,
+including where the old button had squeezed onto one line by running into the card's padding: on a
+375px phone (an iPhone SE or mini) either way, and on a 390px phone with the page on.
+
+| Screen | Before, page off | Before, page on | Now |
+|---|---|---|---|
+| 320px | page 19px too wide | page 34px too wide | fits, the label on two lines |
+| 340px | button 15px out of its card | page 14px too wide | fits, the label on two lines |
+| 360px | button 16px into the card's padding | button 10px out of its card | fits, the label on two lines |
+| 375px | button 1px into the card's padding | button 16px into the card's padding | fits, the label on two lines |
+| 390px | fitted | button 0.6px into the card's padding | page off: unchanged. Page on: the label on two lines |
+| 391px and wider | fitted | fitted | unchanged |
+
+Two lines there is the rule doing what it says: the button keeps inside the card's padding, like the
+words above it. Keeping one line at 375 and 390px would take a slimmer button on phones, and even
+then the longer label would only just fit.
+
+Measured in headless Chrome emulating each phone (the ticket's own method), against the real
+`admin.html` and stylesheets, with the page off and on: `scrollWidth` equals the viewport width at
+every width in the table, and at 393, 412 and 430px. `test/unit/admin-fits-a-phone.test.ts` pins the
+rule, the wrapping row it relies on, and that no rule at any width holds the label to one line again.
+
+**Not fixed here: the list of events on the same screen breaks on a phone.** Its five columns are
+fixed shares of the table's width, and a phone leaves each share too narrow for what is in it. At
+320px the Date and Website headings break a letter at a time, the day and time beside the date badge
+run over the event's name, the "On the page" pill stands one letter per line, and the **Edit** button
+is 41px wide in a 32px column, so the list scrolls sideways inside its box by 23px (15px at 390px; it
+fits from 768px). The page itself does not widen, which is why measuring the page's width does not
+show it. It needs a phone layout of its own, the way the monthly givers table stacks below 1000px, so
+it is a change of its own.
 
 ## Enquiries waiting for a reply (TASK-425)
 

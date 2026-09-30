@@ -7,14 +7,20 @@
 // DB-IP"), which the Docker image downloads at build time to /app/geo/dbip-city-lite.mmdb.
 //
 // A file is: [binary search tree][16 zero bytes][data section]["\xAB\xCD\xEFMaxMind.com"][metadata].
-// The whole file is read into memory once. A lookup walks the tree one address bit at a time to a
-// record in the data section, then reads only the three fields analytics needs, straight out of the
-// buffer: country.iso_code, subdivisions[0].names.en and city.names.en. Nothing is decoded that is
-// not needed and nothing is allocated per lookup except the answer and its strings.
+// A lookup walks the tree one address bit at a time to a record in the data section, then reads only
+// the three fields analytics needs: country.iso_code, subdivisions[0].names.en and city.names.en.
 //
-// lookup() never throws: bad input, an address in no network, and a corrupt record all answer null.
+// MEMORY: opened from a path, the file is NOT read into memory. The web task has 512 MB and the file
+// is about 130 MB, so it is kept open and each lookup reads just the bytes it needs (a few bytes per
+// tree step, a small window for the record) with readSync. The operating system's page cache keeps
+// the busy parts of the file warm, and that cache is reclaimable, so it cannot run the container out
+// of memory. Opened from a Buffer (the tests), the same code reads the Buffer instead: both go
+// through one ByteSource, so the tests exercise the production code path.
+//
+// lookup() never throws: bad input, an address in no network, a corrupt record and a closed file all
+// answer null. Nothing is allocated per lookup except the answer and its strings.
 
-import { existsSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readSync } from "node:fs";
 import { resolve } from "node:path";
 
 export interface Place {
@@ -30,6 +36,8 @@ export interface GeoDb {
   lookup: GeoLookup;
   /** The file's metadata map, decoded (node_count, record_size, ip_version, build_epoch, ...). */
   metadata: Record<string, unknown>;
+  /** Closes the file (a no-op for a Buffer). Lookups afterwards answer null. */
+  close: () => void;
 }
 
 /** Where the Docker image puts the database: /app/geo/ in the image (dist/analytics -> ../..). */
@@ -38,6 +46,10 @@ export const GEO_DB_PATH = resolve(__dirname, "..", "..", "geo", "dbip-city-lite
 const MARKER = Buffer.from([0xab, 0xcd, 0xef, ...Buffer.from("MaxMind.com", "latin1")]);
 const METADATA_MAX = 128 * 1024;
 const SEPARATOR = 16;
+/** Bytes read from the file at a time: one read usually covers a whole record. */
+const WINDOW = 4096;
+/** No single value the reader needs is anywhere near this; a larger one means a corrupt file. */
+const MAX_READ = 1024 * 1024;
 
 // Data section types.
 const T_POINTER = 1;
@@ -63,47 +75,149 @@ const K_EN = Buffer.from("en");
 
 class Corrupt extends Error {}
 
+// ---- where the bytes come from ------------------------------------------------------------------
+
 /**
- * Reads data-section values out of `buf`. Pointers are offsets from `base` (the start of the data
- * section, or of the metadata when reading metadata). `ctl` leaves its answer in `type`, `size` and
- * `at` (where the payload starts) rather than returning an object, so walking a record allocates
- * nothing.
+ * The file's bytes, from memory or from disk. `at(off, len)` makes bytes [off, off + len) readable
+ * and returns the Buffer holding them; byte `p` of the file is then `buf[p - delta]`. The returned
+ * Buffer is only good until the next `at` call, so callers read from it straight away.
+ */
+interface ByteSource {
+  readonly size: number;
+  delta: number;
+  at(off: number, len: number): Buffer;
+  /** A fresh copy of [off, off + len), for the one-off metadata search at open. */
+  copy(off: number, len: number): Buffer;
+  close(): void;
+}
+
+class MemorySource implements ByteSource {
+  readonly size: number;
+  delta = 0;
+
+  constructor(private readonly buf: Buffer) {
+    this.size = buf.length;
+  }
+
+  at(off: number, len: number): Buffer {
+    if (off < 0 || len < 0 || off + len > this.size) throw new Corrupt("read past the end of the file");
+    return this.buf;
+  }
+
+  copy(off: number, len: number): Buffer {
+    this.at(off, len);
+    return Buffer.from(this.buf.subarray(off, off + len));
+  }
+
+  close(): void {}
+}
+
+class FileSource implements ByteSource {
+  readonly size: number;
+  delta = 0;
+  private fd: number | null;
+  private window = Buffer.alloc(WINDOW);
+  private filled = 0;
+
+  constructor(path: string) {
+    const fd = openSync(path, "r");
+    try {
+      this.size = fstatSync(fd).size;
+    } catch (err) {
+      closeSync(fd);
+      throw err;
+    }
+    this.fd = fd;
+  }
+
+  at(off: number, len: number): Buffer {
+    if (off < 0 || len < 0 || off + len > this.size) throw new Corrupt("read past the end of the file");
+    if (off >= this.delta && off + len <= this.delta + this.filled) return this.window;
+    if (len > MAX_READ) throw new Corrupt("value too large");
+    if (len > this.window.length) this.window = Buffer.alloc(len);
+    this.filled = 0; // if the read below fails, nothing stale stays readable
+    this.delta = off;
+    this.filled = this.readInto(this.window, off, Math.min(this.window.length, this.size - off));
+    if (this.filled < len) throw new Corrupt("file shorter than it says");
+    return this.window;
+  }
+
+  copy(off: number, len: number): Buffer {
+    if (off < 0 || len < 0 || off + len > this.size) throw new Corrupt("read past the end of the file");
+    const out = Buffer.alloc(len);
+    if (this.readInto(out, off, len) < len) throw new Corrupt("file shorter than it says");
+    return out;
+  }
+
+  private readInto(buf: Buffer, off: number, want: number): number {
+    if (this.fd === null) throw new Error("location database is closed");
+    let got = 0;
+    while (got < want) {
+      const n = readSync(this.fd, buf, got, want - got, off + got);
+      if (n === 0) break;
+      got += n;
+    }
+    return got;
+  }
+
+  close(): void {
+    this.filled = 0;
+    if (this.fd === null) return;
+    const fd = this.fd;
+    this.fd = null;
+    closeSync(fd);
+  }
+}
+
+// ---- the data section ---------------------------------------------------------------------------
+
+/**
+ * Reads data-section values. Pointers are offsets from `base` (the start of the data section, or of
+ * the metadata when reading metadata); nothing at or past `end` is read. `ctl` leaves its answer in
+ * `type`, `size` and `at` (where the payload starts) rather than returning an object, so walking a
+ * record allocates nothing.
  */
 class Decoder {
   type = 0;
   size = 0;
   at = 0;
+  private vvv = 0;
 
   constructor(
-    private readonly buf: Buffer,
+    private readonly src: ByteSource,
     private readonly base: number,
     private readonly end: number,
   ) {}
 
   /** Reads the control byte(s) of the field at `off`. */
   ctl(off: number): void {
-    const b = this.buf;
+    const src = this.src;
     if (off < 0 || off >= this.end) throw new Corrupt("offset out of range");
-    const c = b[off++];
+    const c = src.at(off, 1)[off - src.delta];
+    off++;
     let type = c >> 5;
     if (type === T_POINTER) {
       // 001SSVVV: SS is the pointer's size; `size` holds SS and `at` the first pointer byte.
       this.type = T_POINTER;
       this.size = (c >> 3) & 3;
+      this.vvv = c & 7;
       this.at = off;
       return;
     }
     if (type === 0) {
       if (off >= this.end) throw new Corrupt("truncated type");
-      type = 7 + b[off++];
+      type = 7 + src.at(off, 1)[off - src.delta];
+      off++;
     }
     let size = c & 0x1f;
     if (size >= 29) {
       const n = size - 28; // 1, 2 or 3 more bytes
       if (off + n > this.end) throw new Corrupt("truncated size");
-      if (n === 1) size = 29 + b[off];
-      else if (n === 2) size = 285 + ((b[off] << 8) | b[off + 1]);
-      else size = 65821 + ((b[off] << 16) | (b[off + 1] << 8) | b[off + 2]);
+      const b = src.at(off, n);
+      const i = off - src.delta;
+      if (n === 1) size = 29 + b[i];
+      else if (n === 2) size = 285 + ((b[i] << 8) | b[i + 1]);
+      else size = 65821 + ((b[i] << 16) | (b[i + 1] << 8) | b[i + 2]);
       off += n;
     }
     this.type = type;
@@ -111,18 +225,19 @@ class Decoder {
     this.at = off;
   }
 
-  /** The absolute offset a pointer (already read by `ctl`) points at, and where it ends. */
+  /** The absolute offset a pointer (already read by `ctl`) points at. */
   private pointerTarget(): number {
-    const b = this.buf;
     const ss = this.size;
     const at = this.at;
     if (at + ss + 1 > this.end) throw new Corrupt("truncated pointer");
-    const vvv = b[at - 1] & 7;
+    const b = this.src.at(at, ss + 1);
+    const i = at - this.src.delta;
+    const vvv = this.vvv;
     let p: number;
-    if (ss === 0) p = (vvv << 8) | b[at];
-    else if (ss === 1) p = ((vvv << 16) | (b[at] << 8) | b[at + 1]) + 2048;
-    else if (ss === 2) p = ((vvv << 24) | (b[at] << 16) | (b[at + 1] << 8) | b[at + 2]) + 526336;
-    else p = b.readUInt32BE(at);
+    if (ss === 0) p = (vvv << 8) | b[i];
+    else if (ss === 1) p = ((vvv << 16) | (b[i] << 8) | b[i + 1]) + 2048;
+    else if (ss === 2) p = ((vvv << 24) | (b[i] << 16) | (b[i + 1] << 8) | b[i + 2]) + 526336;
+    else p = b.readUInt32BE(i);
     return this.base + p;
   }
 
@@ -183,7 +298,12 @@ class Decoder {
     let p = this.at;
     for (let i = 0; i < pairs; i++) {
       if (this.deref(p) !== T_STRING) throw new Corrupt("map key is not a string");
-      const matches = this.size === key.length && this.buf.compare(key, 0, key.length, this.at, this.at + this.size) === 0;
+      let matches = false;
+      if (this.size === key.length) {
+        const b = this.bytes(this.at, this.size);
+        const i0 = this.at - this.src.delta;
+        matches = b.compare(key, 0, key.length, i0, i0 + key.length) === 0;
+      }
       const value = this.skip(p);
       if (matches) return value;
       p = this.skip(value);
@@ -202,45 +322,42 @@ class Decoder {
   string(off: number): string | null {
     if (off < 0) return null;
     if (this.deref(off) !== T_STRING) return null;
-    if (this.at + this.size > this.end) throw new Corrupt("truncated string");
-    return this.buf.toString("utf8", this.at, this.at + this.size);
+    return this.utf8(this.at, this.size);
   }
 
   /** Decodes the whole value at `off` into JavaScript (used for the metadata, once). */
   decode(off: number, depth = 0): unknown {
     if (depth > 32) throw new Corrupt("nested too deeply");
-    const b = this.buf;
     const type = this.deref(off);
     const { size, at } = this;
     switch (type) {
       case T_STRING:
-        this.need(at, size);
-        return b.toString("utf8", at, at + size);
+        return this.utf8(at, size);
       case T_DOUBLE:
         if (size !== 8) throw new Corrupt("double must be 8 bytes");
-        this.need(at, 8);
-        return b.readDoubleBE(at);
+        return this.bytes(at, 8).readDoubleBE(at - this.src.delta);
       case T_FLOAT:
         if (size !== 4) throw new Corrupt("float must be 4 bytes");
-        this.need(at, 4);
-        return b.readFloatBE(at);
-      case T_BYTES:
-        this.need(at, size);
-        return Buffer.from(b.subarray(at, at + size));
+        return this.bytes(at, 4).readFloatBE(at - this.src.delta);
+      case T_BYTES: {
+        const b = this.bytes(at, size);
+        const i = at - this.src.delta;
+        return Buffer.from(b.subarray(i, i + size));
+      }
       case T_UINT16:
       case T_UINT32:
       case T_UINT64:
       case T_UINT128: {
         const max = type === T_UINT16 ? 2 : type === T_UINT32 ? 4 : type === T_UINT64 ? 8 : 16;
         if (size > max) throw new Corrupt("unsigned integer too long");
-        this.need(at, size);
         return this.unsigned(at, size);
       }
       case T_INT32: {
         if (size > 4) throw new Corrupt("int32 too long");
-        this.need(at, size);
+        const b = this.bytes(at, size);
+        const i = at - this.src.delta;
         let v = 0;
-        for (let i = 0; i < size; i++) v = v * 256 + b[at + i];
+        for (let k = 0; k < size; k++) v = v * 256 + b[i + k];
         return size === 4 ? v | 0 : v; // only a full four bytes can carry the sign
       }
       case T_BOOLEAN:
@@ -272,20 +389,29 @@ class Decoder {
     }
   }
 
-  private need(at: number, n: number): void {
+  /** Makes [at, at + n) readable, within this section. */
+  private bytes(at: number, n: number): Buffer {
     if (at + n > this.end) throw new Corrupt("truncated value");
+    return this.src.at(at, n);
+  }
+
+  private utf8(at: number, n: number): string {
+    const b = this.bytes(at, n);
+    const i = at - this.src.delta;
+    return b.toString("utf8", i, i + n);
   }
 
   /** An unsigned big-endian integer: a number while it is exactly representable, else a bigint. */
   private unsigned(at: number, size: number): number | bigint {
-    const b = this.buf;
+    const b = this.bytes(at, size);
+    const i = at - this.src.delta;
     if (size <= 6) {
       let v = 0;
-      for (let i = 0; i < size; i++) v = v * 256 + b[at + i];
+      for (let k = 0; k < size; k++) v = v * 256 + b[i + k];
       return v;
     }
     let v = 0n;
-    for (let i = 0; i < size; i++) v = (v << 8n) | BigInt(b[at + i]);
+    for (let k = 0; k < size; k++) v = (v << 8n) | BigInt(b[i + k]);
     return v <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(v) : v;
   }
 }
@@ -386,16 +512,28 @@ function parseV6(s: string, start: number, end: number): boolean {
 // ---- the database -------------------------------------------------------------------------------
 
 /**
- * Opens a .mmdb file (a path, read once, or its bytes). Throws when the file is not a MaxMind DB
- * this reader understands; after that, lookup() never throws.
+ * Opens a .mmdb database: a path (kept open and read on demand, never loaded whole) or its bytes.
+ * Throws when it is not a MaxMind DB this reader understands; after that, lookup() never throws.
  */
 export function openGeoDb(pathOrBuffer: string | Buffer): GeoDb {
-  const buf = typeof pathOrBuffer === "string" ? readFileSync(pathOrBuffer) : pathOrBuffer;
+  const src: ByteSource =
+    typeof pathOrBuffer === "string" ? new FileSource(pathOrBuffer) : new MemorySource(pathOrBuffer);
+  try {
+    return openSource(src);
+  } catch (err) {
+    src.close();
+    throw err;
+  }
+}
 
-  const markerAt = buf.lastIndexOf(MARKER);
-  if (markerAt < 0 || buf.length - markerAt > METADATA_MAX) throw new Error("not a MaxMind DB file: no metadata");
+function openSource(src: ByteSource): GeoDb {
+  const tailLen = Math.min(src.size, METADATA_MAX);
+  const tailStart = src.size - tailLen;
+  const markerIn = src.copy(tailStart, tailLen).lastIndexOf(MARKER);
+  if (markerIn < 0) throw new Error("not a MaxMind DB file: no metadata");
+  const markerAt = tailStart + markerIn;
   const metaStart = markerAt + MARKER.length;
-  const metadata = new Decoder(buf, metaStart, buf.length).decode(metaStart) as Record<string, unknown>;
+  const metadata = new Decoder(src, metaStart, src.size).decode(metaStart) as Record<string, unknown>;
   if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
     throw new Error("MaxMind DB metadata is not a map");
   }
@@ -415,22 +553,29 @@ export function openGeoDb(pathOrBuffer: string | Buffer): GeoDb {
   const dataStart = treeSize + SEPARATOR;
   if (dataStart > markerAt) throw new Error("MaxMind DB search tree is larger than the file");
 
-  const data = new Decoder(buf, dataStart, markerAt);
+  const data = new Decoder(src, dataStart, markerAt);
 
   const readRecord =
     recordSize === 24
       ? (node: number, bit: number): number => {
-          const o = node * 6 + bit * 3;
-          return (buf[o] << 16) | (buf[o + 1] << 8) | buf[o + 2];
+          const off = node * 6 + bit * 3;
+          const b = src.at(off, 3);
+          const i = off - src.delta;
+          return (b[i] << 16) | (b[i + 1] << 8) | b[i + 2];
         }
       : recordSize === 28
         ? (node: number, bit: number): number => {
-            const o = node * 7;
+            const off = node * 7;
+            const b = src.at(off, 7);
+            const i = off - src.delta;
             return bit === 0
-              ? ((buf[o + 3] & 0xf0) << 20) | (buf[o] << 16) | (buf[o + 1] << 8) | buf[o + 2]
-              : ((buf[o + 3] & 0x0f) << 24) | (buf[o + 4] << 16) | (buf[o + 5] << 8) | buf[o + 6];
+              ? ((b[i + 3] & 0xf0) << 20) | (b[i] << 16) | (b[i + 1] << 8) | b[i + 2]
+              : ((b[i + 3] & 0x0f) << 24) | (b[i + 4] << 16) | (b[i + 5] << 8) | b[i + 6];
           }
-        : (node: number, bit: number): number => buf.readUInt32BE(node * 8 + bit * 4);
+        : (node: number, bit: number): number => {
+            const off = node * 8 + bit * 4;
+            return src.at(off, 4).readUInt32BE(off - src.delta);
+          };
 
   // In an IPv6 tree, IPv4 addresses live under ::/96: find that node once.
   let ipv4Start = 0;
@@ -438,7 +583,7 @@ export function openGeoDb(pathOrBuffer: string | Buffer): GeoDb {
     for (let i = 0; i < 96 && ipv4Start < nodeCount; i++) ipv4Start = readRecord(ipv4Start, 0);
   }
 
-  /** From the node a walk ended on, the record's offset in the buffer, or -1. */
+  /** From the node a walk ended on, the record's offset in the file, or -1. */
   const recordOffset = (node: number): number => {
     if (node <= nodeCount) return -1; // == nodeCount: no data; < nodeCount: ran out of bits
     const off = dataStart + (node - nodeCount - SEPARATOR);
@@ -493,14 +638,15 @@ export function openGeoDb(pathOrBuffer: string | Buffer): GeoDb {
     }
   };
 
-  return { lookup, metadata };
+  return { lookup, metadata, close: () => src.close() };
 }
 
 const warned = new Set<string>();
 
 /**
- * Opens the database at `path`, or answers null (saying why, once per path) when it is missing or
- * unreadable: analytics then records no places rather than the app failing to start.
+ * Opens the database at `path` (read on demand, not loaded into memory), or answers null (saying
+ * why, once per path) when it is missing or unreadable: analytics then records no places rather than
+ * the app failing to start.
  */
 export function loadGeoDbIfPresent(path: string): GeoDb | null {
   try {
@@ -523,7 +669,8 @@ function warnOnce(path: string, message: string): void {
 
 /**
  * Start-up wiring: the lookup for the image's database, or null when there is none. Hand the result
- * to the analytics place resolver (src/analytics/place.ts, TASK-479) at start-up.
+ * to the analytics place resolver (src/analytics/place.ts, TASK-479) at start-up. The file stays open
+ * for the life of the process.
  */
 export function connectGeoDb(path: string = GEO_DB_PATH): GeoLookup | null {
   return loadGeoDbIfPresent(path)?.lookup ?? null;

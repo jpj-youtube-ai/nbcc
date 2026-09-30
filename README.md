@@ -5676,12 +5676,18 @@ the IP itself is then forgotten (see the analytics design,
 
 - **The reader** is `src/analytics/geo-db.ts`, written here from the published MaxMind DB format
   (<https://maxmind.github.io/MaxMind-DB/>), because the npm registry cannot be reached from where
-  this is built. It reads the whole file into memory once (about 130 MB for the current file) and
-  answers `{ country, region, city }` from `country.iso_code`, `subdivisions[0].names.en` and
-  `city.names.en`. It takes IPv4, IPv6, and IPv4 written the way Express gives it
-  (`::ffff:203.0.113.9`). A lookup takes about 2 microseconds and never throws: a malformed
-  address, a private one, or one the database does not know answers `null`.
-  - `openGeoDb(pathOrBuffer)` opens a file (and throws if it is not a MaxMind DB);
+  this is built. It answers `{ country, region, city }` from `country.iso_code`,
+  `subdivisions[0].names.en` and `city.names.en`. It takes IPv4, IPv6, and IPv4 written the way
+  Express gives it (`::ffff:203.0.113.9`). A lookup never throws: a malformed address, a private
+  one, or one the database does not know answers `null`.
+  - **It does not load the file into memory.** The web task has 512 MB and the file is about
+    130 MB, so the reader keeps the file open and reads only the few bytes each lookup needs (about
+    40 small reads). The operating system caches the busy parts of the file, and that cache gives
+    memory back when the app needs it, so the database cannot run the site out of memory. The cost
+    is speed: a lookup from disk took about 150 microseconds on a Windows laptop (from memory it
+    would be about 2), which is nothing for one lookup per visit.
+  - `openGeoDb(pathOrBuffer)` opens a file, read on demand, or bytes already in memory (the
+    tests; the same code reads both). It throws if it is not a MaxMind DB. `close()` shuts the file;
   - `loadGeoDbIfPresent(path)` answers `null`, with one warning in the log, when the file is
     missing or unreadable, so the app still starts and simply records no places;
   - `connectGeoDb()` is the start-up wiring: the lookup for `/app/geo/dbip-city-lite.mmdb`, or `null`.

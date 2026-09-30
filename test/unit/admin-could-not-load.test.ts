@@ -34,6 +34,7 @@ const adminToken = signAdminSession({ sub: 3, email: "admin@nbcc", role: "admin"
 type Failure = { status: number; body?: unknown };
 let failing: Record<string, Failure> = {};
 let served: Record<string, unknown> = {};
+let requested: string[] = [];
 const SERVER_DOWN = { status: 500, body: { error: "Admin is temporarily unavailable" } };
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
@@ -44,6 +45,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     text: () => Promise.resolve(""),
     headers: { get: () => "application/json" },
   });
+  requested.push(url);
   const path = url.split("?")[0];
   const method = (init?.method || "GET").toUpperCase();
   if (path === "/api/admin/login") return j({ token: adminToken, user: { email: "admin@nbcc", role: "admin" } });
@@ -76,6 +78,7 @@ async function open(view: string) {
 beforeEach(() => {
   failing = {};
   served = {};
+  requested = [];
   window.sessionStorage.clear();
   document.body.innerHTML = bodyHtml;
   (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -270,6 +273,12 @@ describe("the figures beside a list go with it when it cannot load (TASK-476)", 
     expect(el("donationsTable").textContent).toContain("Donations are unavailable.");
     expect(el("donationsPager").hidden).toBe(false);
     expect((el("donationsNext") as HTMLButtonElement).disabled).toBe(false); // press it again to retry
+    // The counter goes back to the page on screen, so Next retries page two rather than skipping to three.
+    expect(el("donationsInfo").textContent).toBe("1-25 of 120");
+    const offsets = () => requested.filter((u) => u.startsWith("/api/admin/donations?") && u.includes("offset=")).map((u) => /offset=(\d+)/.exec(u)![1]);
+    el("donationsNext").click();
+    await settle();
+    expect(offsets().slice(-2)).toEqual(["25", "25"]);
   });
 
   it("keeps the email log pager, so you can try that page again", async () => {
@@ -284,6 +293,13 @@ describe("the figures beside a list go with it when it cannot load (TASK-476)", 
     expect(el("emailAuditTable").textContent).toContain("The email log is unavailable.");
     expect(el("emailAuditPager").hidden).toBe(false);
     expect((el("emailAuditNext") as HTMLButtonElement).disabled).toBe(false); // press it again to retry
+    expect((el("emailAuditPrev") as HTMLButtonElement).disabled).toBe(true); // still on the first page
+    const offsets = () => requested.filter((u) => u.startsWith("/api/admin/email-log?") && u.includes("offset=")).map((u) => /offset=(\d+)/.exec(u)![1]);
+    el("emailAuditNext").click();
+    await settle();
+    const tried = offsets().slice(-2);
+    expect(tried[0]).toBe(tried[1]);
+    expect(tried[0]).not.toBe("0");
   });
 
   it("gives no count of donors to thank", async () => {

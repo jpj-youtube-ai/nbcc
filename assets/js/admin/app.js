@@ -14,6 +14,7 @@
   // differ from their role once they carry per-section overrides.
   var myPermissions = null; // this user's EFFECTIVE per-section permissions, from GET /api/admin/me
   var donationsOffset = 0; // Donations view paging cursor
+  var donationsShownOffset = 0; // the page the pager last showed, to go back to if a page fails
   var currentDonorId = null; // the donor open in the detail view
   var currentStoryId = null; // the story open in the detail view
   var storiesStatusFilter = ""; // Stories view status filter ("" = all)
@@ -726,10 +727,12 @@
           : "";
         el("donationsPrev").disabled = donationsOffset <= 0;
         el("donationsNext").disabled = donationsOffset + 25 >= total;
+        donationsShownOffset = donationsOffset;
       })
       .catch(function () {
         wrap.innerHTML = unavailableHtml("Donations are unavailable.");
-        // The pager stays as it was: Previous and Next are how you try this page again.
+        // The pager stays as it was, and so does its place: Previous and Next try that page again.
+        donationsOffset = donationsShownOffset;
       });
   }
   // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
@@ -2260,6 +2263,7 @@
   }
   var EMAIL_AUDIT_PAGE = 50;
   var emailAuditOffset = 0;
+  var emailAuditShownOffset = 0; // the page the pager last showed, to go back to if a page fails
   var emailAuditWired = false;
   function emailStatusPill(r) {
     // OUR attempt failing outranks everything; then the mailbox verdict; then plain Sent.
@@ -2350,11 +2354,13 @@
           total ? (emailAuditOffset + 1) + "–" + Math.min(emailAuditOffset + EMAIL_AUDIT_PAGE, total) + " of " + total : "";
         el("emailAuditPrev").disabled = emailAuditOffset === 0;
         el("emailAuditNext").disabled = emailAuditOffset + EMAIL_AUDIT_PAGE >= total;
+        emailAuditShownOffset = emailAuditOffset;
       })
       .catch(function () {
         band.innerHTML = "";
         wrap.innerHTML = unavailableHtml("The email log is unavailable.");
-        // The pager stays as it was: Newer and Older are how you try this page again.
+        // The pager stays as it was, and so does its place: Newer and Older try that page again.
+        emailAuditOffset = emailAuditShownOffset;
       });
   }
 

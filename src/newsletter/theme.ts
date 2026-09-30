@@ -90,10 +90,25 @@ function applyEmphasis(escaped: string): string {
     .replace(/\*([^*]+)\*/g, "<em>$1</em>");
 }
 
-// Prose an author wrote: escaped, then emphasised. Use for any field where a paragraph is written —
-// NOT for a title or a button label, where emphasis has no business.
+// TASK-469: line breaks. A prose field reached the email with its raw newlines inside one <p>, which
+// every mail client collapses to a space, so a pasted (or typed) second paragraph ran straight on from
+// the first. A newline becomes <br>, and a blank line a paragraph gap (<br><br>). Like the emphasis
+// pass, this runs on ALREADY-ESCAPED copy, so <br> joins <strong>/<em> as the only tags we add.
+// <br> rather than a <p> per paragraph: every block wraps its prose in its own styled <p> (the quotes
+// add curly quotes around it), and <br> works in every mail client, Outlook included.
+function applyLineBreaks(escaped: string): string {
+  return escaped
+    .replace(/\r\n?/g, "\n") // Windows and old Mac line endings
+    .replace(/^[ \t ]+$/gm, "") // a line of only spaces is a blank line
+    .replace(/^\n+|\n+$/g, "") // no blank lines at the very start or end
+    .replace(/\n{3,}/g, "\n\n") // a run of blank lines is one paragraph gap
+    .replace(/\n/g, "<br>");
+}
+
+// Prose an author wrote: escaped, then emphasised, then its line breaks kept. Use for any field where
+// a paragraph is written — NOT for a title or a button label, where emphasis has no business.
 export function proseHtml(text: string): string {
-  return applyEmphasis(escapeHtml(text));
+  return applyLineBreaks(applyEmphasis(escapeHtml(text)));
 }
 
 // Escape the whole string, THEN substitute {{firstName}} with the escaped name — so neither the

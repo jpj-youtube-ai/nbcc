@@ -399,6 +399,8 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-view") === name);
     });
+    // TASK-454: choosing a section from the phone menu closes it, so what you chose is what you see.
+    setNavOpen(false, false);
     showOnly("view-" + name);
     refreshEnquiryNotice();
     if (name === "search") {
@@ -431,6 +433,45 @@
       selectView(b.getAttribute("data-view"));
     });
   });
+
+  // TASK-454: below 860px the sections sit behind one Menu button, because the line of twenty that
+  // used to scroll sideways broke the client's standing rule that nothing in the admin does. The
+  // button is only shown at that width (admin.css), so on a desktop none of this ever runs.
+  var navToggle = el("adminNavToggle");
+  var navBar = navToggle ? navToggle.parentNode : null;
+  var navReturnY = null; // where you were when you opened the menu from further down a long page
+  function setNavOpen(open, backToWhereYouWere) {
+    if (!navBar || navBar.classList.contains("is-open") === open) return;
+    // Read BEFORE the list opens. Opening adds its height to the page above you, and the browser
+    // moves the scroll position to keep your place on screen, so read afterwards it was 614px out
+    // and closing the menu put you that much further down the page.
+    var y = window.pageYOffset;
+    navBar.classList.toggle("is-open", open);
+    navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) {
+      // Open, the list stops being pinned and takes its place in the page (admin.css), so it can be
+      // as long as it needs to be without scrolling inside itself. Opened from further down a long
+      // page that place is above you, so go up to it, remembering where you were. jsdom has no
+      // layout, so its rect is all zeros and it never scrolls.
+      var top = navBar.getBoundingClientRect().top;
+      navReturnY = top < 0 ? y : null;
+      if (top < 0) window.scrollTo(0, window.pageYOffset + top);
+      return;
+    }
+    // Closed without choosing anything: back to where you were, rather than losing your place.
+    if (backToWhereYouWere && navReturnY !== null) window.scrollTo(0, navReturnY);
+    navReturnY = null;
+    // A keyboard user was on a button in a list that has just vanished: put them back on Menu.
+    if (navBar.contains(doc.activeElement)) navToggle.focus();
+  }
+  if (navToggle) {
+    navToggle.addEventListener("click", function () {
+      setNavOpen(!navBar.classList.contains("is-open"), true);
+    });
+    navBar.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") setNavOpen(false, true);
+    });
+  }
 
   // ---- overview ----
   function statCard(n, label, warn) {

@@ -129,25 +129,27 @@ describe("a jump lands somewhere you can see", () => {
   const css = readFileSync(resolve(ROOT, "assets/css/admin.css"), "utf8");
 
   // Split at the breakpoint. Reading the whole file for the desktop case would pick up the
-  // narrow-screen override as the last match and quietly test the phone twice.
-  const breakpoint = css.indexOf("@media (max-width:760px)");
+  // narrow-screen override as the last match and quietly test the phone twice. TASK-454 moved the
+  // shell's breakpoint from 760px to 860px, where the menu stops being a column.
+  const breakpoint = css.indexOf("@media (max-width:860px)");
   const wide = css.slice(0, breakpoint);
   const narrow = css.slice(breakpoint);
 
-  it.each([
-    ["on a wide screen", wide],
-    ["on a phone", narrow],
-  ])("clears both sticky bars %s", (_label, scope) => {
+  // The bar starts at jumpTop. On a wide screen it is one row of pills plus its padding, 56px. On
+  // a phone it wraps rather than scrolling sideways (TASK-454), and at 390px that is two rows and
+  // 101px (both measured in the browser). Anything at or under jumpTop + that height and the
+  // heading lands underneath it.
+  it.each<[string, string, number]>([
+    ["on a wide screen", wide, 56],
+    ["on a phone", narrow, 101],
+  ])("clears both sticky bars %s", (_label, scope, barHeight) => {
     const jumpTop = Number([...scope.matchAll(/\.admin-jump\{[^}]*?top:(\d+)px/g)].pop()?.[1]);
     const bandMargin = Number(
       [...scope.matchAll(/\.admin-band\{[^}]*?scroll-margin-top:(\d+)px/g)].pop()?.[1],
     );
     expect(Number.isFinite(jumpTop)).toBe(true);
     expect(Number.isFinite(bandMargin)).toBe(true);
-    // The bar starts at jumpTop and is 56px tall (measured in the browser at both widths: one
-    // row of pills plus its padding). Anything at or under jumpTop + 56 and the heading lands
-    // underneath it.
-    expect(bandMargin).toBeGreaterThan(jumpTop + 56);
+    expect(bandMargin).toBeGreaterThan(jumpTop + barHeight);
   });
 
   it("keeps the whole file parseable, since one stray */ silently kills every rule after it", () => {
@@ -161,11 +163,14 @@ describe("a jump lands somewhere you can see", () => {
     expect(narrow).toMatch(/\.admin-segmented\{[^}]*flex-wrap:wrap/);
   });
 
-  // The nav going static below 760px was the original complaint: changing view meant scrolling
+  // The nav going static on a phone was the original complaint: changing view meant scrolling
   // all the way back up a seven-thousand-pixel page.
   it("keeps the view switcher pinned on a phone instead of stranding it at the top", () => {
     expect(narrow).toMatch(/\.admin-nav\{[^}]*position:sticky/);
-    expect(narrow).toMatch(/\.admin-nav ul\{[^}]*overflow-x:auto/);
+    // TASK-454: what stays pinned is one Menu button, not a line of twenty that scrolled sideways
+    // (admin-fits-a-phone.test.ts has the rest of that rule).
+    expect(narrow).toMatch(/\.admin-nav-toggle\{display:flex/);
+    expect(narrow).not.toMatch(/\.admin-nav ul\{[^}]*overflow-x/);
     // As a one-column grid the nav gets its own row and sticky has nowhere to travel.
     expect(narrow).toMatch(/\.admin-body-grid\{display:block\}/);
   });

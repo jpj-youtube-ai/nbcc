@@ -415,6 +415,44 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(navLink).not.toBeNull();
     expect(navLink.hidden).toBe(true);
   });
+
+  // TASK-454: below 860px the menu is one button that opens the whole list. jsdom has no layout, so
+  // this pins the wiring rather than the widths (admin-fits-a-phone.test.ts has those): the button
+  // opens the list, and choosing a section closes it again, so the section you picked is what you see.
+  it("opens the phone menu from its button, and closes it when you choose a section", async () => {
+    await signIn();
+    const toggle = el("adminNavToggle");
+    const nav = toggle.closest(".admin-nav") as HTMLElement;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(nav.classList.contains("is-open")).toBe(false);
+
+    toggle.click();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(nav.classList.contains("is-open")).toBe(true);
+
+    (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+    await flush();
+    expect(el("view-donations").hidden).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(nav.classList.contains("is-open")).toBe(false);
+  });
+
+  it("closes the phone menu from its button again, or with Escape", async () => {
+    await signIn();
+    const toggle = el("adminNavToggle");
+    toggle.click();
+    toggle.click();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    // Escape from a keyboard user working down the open list.
+    toggle.click();
+    const link = document.querySelector('.admin-nav-link[data-view="claims"]') as HTMLElement;
+    link.focus();
+    link.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // Back on the button, so they are not left focused on a list that has just vanished.
+    expect(document.activeElement).toBe(toggle);
+  });
 });
 
 // TASK-251: the thank-you letter's signer picker is now built from AdminHelpers.SIGNERS instead of

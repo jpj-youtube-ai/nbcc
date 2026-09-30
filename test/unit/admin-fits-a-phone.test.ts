@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-// TASK-454: the admin fits a phone. At 390px every screen measured 556px wide, so a phone zoomed the
-// whole admin out to fit it and every word on it shrank.
+// TASK-454: the admin fits a phone. At 390px every screen was wider than the phone (535px as
+// reported, 556px measured here with a 26-character email address), so a phone zoomed the whole
+// admin out to fit it and every word on it shrank.
 //
 // Two things did it. The top bar was one row that could not wrap: the email, the role badge and both
 // buttons came to 459px on their own, and pushed the page past the edge of the screen. And below
@@ -41,7 +42,8 @@ function parse(src: string, media: string | null = null): Rule[] {
       if (src[end] === "{") depth++;
       else if (src[end] === "}" && --depth === 0) break;
     }
-    const prelude = src.slice(i, open).trim();
+    // After the last ";" so a statement at-rule (@import, @charset) cannot swallow the rule after it.
+    const prelude = src.slice(i, open).split(";").pop()!.trim();
     const body = src.slice(open + 1, end);
     if (prelude.startsWith("@media") || prelude.startsWith("@supports")) rules.push(...parse(body, prelude));
     else if (!prelude.startsWith("@")) rules.push({ media, selectors: prelude.split(","), body });
@@ -139,29 +141,28 @@ describe("below 860px the menu stops being a column beside the content", () => {
     expect(toggle, "the menu button").not.toBeNull();
     expect(toggle![0]).toContain('aria-expanded="false"');
     expect(toggle![0]).toContain('aria-controls="adminNavList"');
-    expect(html).toMatch(/<ul id="adminNavList">/);
+    expect(html).toMatch(/<ul[^>]*\bid="adminNavList"/);
   });
 });
 
-describe("opening the menu from further down a long page", () => {
+// app.js closes the menu when the screen widens past it (a phone or tablet turned on its side), so it
+// has to be listening at the same width the CSS turns the menu into a button. Where the menu leaves
+// you as it opens and closes is behaviour, and admin-app.test.ts drives the real app.js through it.
+describe("app.js and admin.css agree on where the phone menu starts", () => {
   const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
-  const fn = app.slice(app.indexOf("function setNavOpen"), app.indexOf("navToggle.addEventListener"));
 
-  // Found in the browser at 390px, deep in the Festive Ball. Opening the menu adds its 614px to the
-  // page above where you are, and the browser moves the scroll position down to keep your place on
-  // screen, so a position read AFTER the menu opens is 614px out: closing it again "back where you
-  // were" put you 614px further down the page instead.
-  it("notes where you were before the menu changes the height of the page", () => {
-    const read = fn.indexOf("window.pageYOffset");
-    expect(read, "setNavOpen reads the scroll position").toBeGreaterThan(-1);
-    expect(read).toBeLessThan(fn.indexOf('classList.toggle("is-open"'));
+  it("listens at the same breakpoint the stylesheet uses", () => {
+    expect(RULES.some((r) => r.media === PHONE)).toBe(true);
+    expect(app).toContain('matchMedia("(max-width:860px)")');
   });
 });
 
 describe("nothing in the menu or the jump bar scrolls sideways", () => {
   it("has no rule, at any width, that lines them up in a row wider than the screen", () => {
     const offenders = RULES.filter((r) => r.selectors.some((s) => /admin-nav|admin-jump/.test(s)))
-      .filter((r) => /overflow-x:(auto|scroll)|white-space:nowrap|flex-wrap:nowrap/.test(r.body))
+      // overflow as well as overflow-x: the shorthand makes a scroller just the same. The closed
+      // list's overflow:hidden is a collapse, not a scroller, and is not matched.
+      .filter((r) => /overflow(-x)?:(auto|scroll)|white-space:nowrap|flex-wrap:nowrap/.test(r.body))
       .map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
     expect(offenders).toEqual([]);
   });

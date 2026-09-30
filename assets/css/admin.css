@@ -22,8 +22,8 @@
 
 /* ---- app shell ---- */
 /* flex-wrap (TASK-454): as one row that could not wrap, the email, role and both buttons came to
-   459px on their own, and took every screen of the admin 166px past the edge of a 390px phone, which
-   zoomed the whole admin out to fit. */
+   459px on their own with a 26-character address, and took every screen of the admin 166px past
+   the edge of a 390px phone, which zoomed the whole admin out to fit. */
 .admin-topbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;
   background:var(--maroon);color:var(--cream);padding:12px clamp(16px,3vw,28px)}
 .admin-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--cream);font-family:var(--font-head);font-weight:700;font-size:1.1rem}

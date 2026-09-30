@@ -170,7 +170,7 @@ describe("a jump lands somewhere you can see", () => {
     // TASK-454: what stays pinned is one Menu button, not a line of twenty that scrolled sideways
     // (admin-fits-a-phone.test.ts has the rest of that rule).
     expect(narrow).toMatch(/\.admin-nav-toggle\{display:flex/);
-    expect(narrow).not.toMatch(/\.admin-nav ul\{[^}]*overflow-x/);
+    expect(narrow).not.toMatch(/\.admin-nav ul\{[^}]*overflow(-x)?:(auto|scroll)/);
     // As a one-column grid the nav gets its own row and sticky has nowhere to travel.
     expect(narrow).toMatch(/\.admin-body-grid\{display:block\}/);
   });

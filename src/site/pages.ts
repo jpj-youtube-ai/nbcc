@@ -12,6 +12,9 @@ export interface SitePage {
   // Only meaningful for the ball pages: include them nowhere until the gate is open, so the
   // sitemap cannot leak an unannounced event.
   ballGated?: boolean;
+  // TASK-453: the same for the Events page, which an admin switches on and off. Off, /events is a
+  // 404, so listing it would offer search engines and visitors a dead link.
+  eventsGated?: boolean;
   children?: SitePage[];
 }
 
@@ -31,6 +34,7 @@ export const SITE_PAGES: SitePage[] = [
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
+  { path: "/events", title: "Events", listedByDefault: true, eventsGated: true },
   { path: "/contact", title: "Contact", listedByDefault: true },
   { path: "/privacy", title: "Privacy notice", listedByDefault: true },
   { path: "/donor-portal", title: "Donor portal", listedByDefault: false },
@@ -122,6 +126,8 @@ export const RESERVED_PREFIXES: string[] = [
   "/business",
   "/donate",
   "/donor-portal",
+  // TASK-453: a real page (switched on and off from the admin), so no spare address may shadow it.
+  "/events",
   "/g",
   "/gift-aid",
   "/health",
@@ -181,30 +187,34 @@ export function aliasToProblem(to: string): string | null {
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-// The /sitemap page's tree: nested lists of links, filtered by the ball gate. Pure so the
-// shape is testable; the route drops this into sitemap.html's .sitemap-tree placeholder.
-export function renderSitemapTree(pages: SitePage[], ballOpen: boolean): string {
+// The /sitemap page's tree: nested lists of links, filtered by the ball gate and the Events page
+// switch. Pure so the shape is testable; the route drops this into sitemap.html's .sitemap-tree
+// placeholder.
+export function renderSitemapTree(pages: SitePage[], ballOpen: boolean, eventsOn = false): string {
   const items = pages
     .filter((p) => !p.ballGated || ballOpen)
+    .filter((p) => !p.eventsGated || eventsOn)
     .map((p) => {
-      const kids = p.children ? renderSitemapTree(p.children, ballOpen) : "";
+      const kids = p.children ? renderSitemapTree(p.children, ballOpen, eventsOn) : "";
       return `<li><a href="${escapeHtml(p.path)}">${escapeHtml(p.title)}</a>${kids}</li>`;
     })
     .join("");
   return items ? `<ul>${items}</ul>` : "";
 }
 
-// sitemap.xml: the registry, minus ball-gated pages while the gate is shut, minus anything the
-// admin unticked (overrides) or that is unlisted by default without an admin tick. Absolute
-// URLs on the production origin, as the protocol requires.
+// sitemap.xml: the registry, minus ball-gated pages while the gate is shut, minus the Events page
+// while it is switched off, minus anything the admin unticked (overrides) or that is unlisted by
+// default without an admin tick. Absolute URLs on the production origin, as the protocol requires.
 export function renderSitemapXml(
   pages: SitePage[],
   origin: string,
   overrides: Map<string, boolean>,
   ballOpen: boolean,
+  eventsOn = false,
 ): string {
   const urls = flatten(pages)
     .filter((p) => !p.ballGated || ballOpen)
+    .filter((p) => !p.eventsGated || eventsOn)
     .filter((p) => overrides.get(p.path) ?? p.listedByDefault)
     .map((p) => `  <url><loc>${origin}${p.path === "/" ? "/" : escapeHtml(p.path)}</loc></url>`)
     .join("\n");

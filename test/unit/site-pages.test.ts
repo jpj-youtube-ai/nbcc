@@ -105,3 +105,28 @@ describe("renderSitemapXml", () => {
     expect(xml).not.toContain("/ball");
   });
 });
+
+// TASK-453: the Events page is switched on and off from the admin. Off, it is a 404 - so a search
+// engine offered it would be offered a dead link, and the site map would show a page that is not
+// there.
+describe("the Events page in the site maps", () => {
+  it("is a real page, and no spare address may take its place", () => {
+    expect(isKnownPage("/events")).toBe(true);
+    expect(aliasFromProblem("/events")).not.toBeNull();
+  });
+
+  it("is left out of both maps while the page is switched off", () => {
+    expect(renderSitemapTree(SITE_PAGES, true)).not.toContain('href="/events"');
+    expect(renderSitemapTree(SITE_PAGES, true, false)).not.toContain('href="/events"');
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map([["/events", true]]), true, false)).not.toContain(
+      "/events",
+    );
+  });
+
+  it("is in both maps once the page is switched on", () => {
+    expect(renderSitemapTree(SITE_PAGES, false, true)).toContain('<a href="/events">Events</a>');
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), false, true)).toContain(
+      "<loc>https://nbcc.scot/events</loc>",
+    );
+  });
+});

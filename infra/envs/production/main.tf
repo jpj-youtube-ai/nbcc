@@ -80,7 +80,12 @@ module "app" {
   # nothing here is a credential. The one secret, the archive passphrase, is pasted into SSM by
   # hand from the charity's password manager and Terraform never sees it.
   google_drive_folder_id                 = "0AFET5N0mT5uMUk9PVA"
-  google_service_account_email           = "nbcc-backup-writer@nbcc-backups.iam.gserviceaccount.com"
-  google_workload_identity_project_number = "84513277257"
+  # TASK-450: the project these pointed at did not exist. "nbcc-backups" is not a project on this
+  # Google account, and 84513277257 (eleven digits; Google numbers are twelve) matched nothing, so
+  # every nightly off-site copy has failed since it was built. These are read from the console:
+  # project NBCC / gen-lang-client-0913308980 / number 278676851676, with the pool and provider
+  # created there and verified ACTIVE against AWS account 049164057909.
+  google_service_account_email           = "nbcc-backup-writer@gen-lang-client-0913308980.iam.gserviceaccount.com"
+  google_workload_identity_project_number = "278676851676"
   backup_alarm_email                     = "admin@nbcc.scot"
 }

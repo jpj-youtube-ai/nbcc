@@ -5728,6 +5728,36 @@ covers what they have already given as well as what follows.
 Re-running is safe: `recordThankYouSent` is what stops anybody — a person or the daily pass —
 thanking them twice, and a donation already past `not_required` is left alone.
 
+## The off-site copy pointed at a project that did not exist (TASK-450)
+
+Every nightly backup since this was built reported PARTIAL: safe in AWS, never reaching Google
+Drive, with `invalid_target` from Google's token exchange.
+
+The cause was not a misconfiguration. **The Google side had never been created.** Opening the console
+showed no project called `nbcc-backups` on the account at all, a configured project number of
+`84513277257` that matched nothing (eleven digits; Google's are twelve), and the one NBCC project
+holding **no workload identity pools and no service accounts whatsoever**.
+
+The values had been taken from a chat message and wired in without ever being checked against the
+account. The eleven-digit number should have been the tell.
+
+Now created and verified in project **NBCC / `gen-lang-client-0913308980` / number `278676851676`**:
+a pool `aws-nbcc`, an AWS provider `aws-provider` trusting account `049164057909` (ACTIVE), and a
+service account `nbcc-backup-writer` that exactly one principal may impersonate:
+
+```
+principalSet://iam.googleapis.com/projects/278676851676/locations/global/workloadIdentityPools/
+  aws-nbcc/attribute.aws_role/arn:aws:sts::049164057909:assumed-role/charity-site-production-task
+```
+
+One assumed role, in one AWS account. A different role, a different account or a laptop cannot
+present it. The audience the code builds and the provider Google holds were compared string for
+string rather than assumed to match.
+
+**This is an infra change**, so it needs the Infra workflow applied before the task definition
+carries the new values. The Drive folder must also be shared with the service account, which is the
+one step Google requires a human to do.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

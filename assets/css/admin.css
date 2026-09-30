@@ -1844,6 +1844,37 @@ tr.nl-click:hover { background: var(--tint); }
 #view-events tr.is-editing td { background: color-mix(in srgb, var(--crimson) 7%, var(--card)); }
 #view-events .ev-admin-empty { margin: 0; padding: 22px 18px; color: var(--slate-soft); }
 
+/* TASK-460: wherever the list is too narrow for its table, each event is a compact row instead.
+   The table needs about 850px: below that its buttons break their own label ("Ed / it"), then the
+   times break, the badge runs into the name, and on a phone the list scrolls sideways inside its
+   box. Measured on the list itself, not the screen, because the list is narrowest on a laptop just
+   past 860px, with the side menu beside it. Each event reads top to bottom: the date and time, the
+   event, who runs it, then its status and the button on one line. From 900px up the table is
+   untouched. The headings stay, out of sight, for screen readers. */
+#view-events #evList { container: evlist / inline-size; }
+@container evlist (max-width: 899px) {
+  #view-events .ev-admin-table,
+  #view-events .ev-admin-table tbody { display: block; width: auto; }
+  #view-events .ev-admin-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  #view-events .ev-admin-table tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "when when" "event event" "run run" "state open";
+    column-gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  #view-events .ev-admin-table tr:last-child { border-bottom: 0; }
+  #view-events .ev-admin-table tr.is-editing { background: color-mix(in srgb, var(--crimson) 7%, var(--card)); }
+  #view-events .ev-admin-table td { display: block; width: auto; padding: 0; border: 0; }
+  #view-events .ev-admin-table td:nth-child(1) { grid-area: when; margin-bottom: 10px; }
+  #view-events .ev-admin-table td:nth-child(2) { grid-area: event; }
+  #view-events .ev-admin-table td:nth-child(3) { grid-area: run; margin-top: 4px; font-size: 0.88rem; }
+  #view-events .ev-admin-table td:nth-child(3)::before { content: "Run by "; color: var(--slate-soft); }
+  #view-events .ev-admin-table td:nth-child(4) { grid-area: state; align-self: center; margin-top: 12px; }
+  #view-events .ev-admin-table td:nth-child(5) { grid-area: open; align-self: center; margin-top: 12px; }
+}
+
 /* ---- the editor: the form, and the card beside it ---- */
 #view-events .ev-editor {
   display: grid;

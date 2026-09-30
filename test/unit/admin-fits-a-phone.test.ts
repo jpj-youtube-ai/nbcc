@@ -30,7 +30,8 @@ const css = readFileSync(resolve(ROOT, "assets/css/admin.css"), "utf8")
 
 type Rule = { media: string | null; selectors: string[]; body: string };
 
-// Every declaration block in the file, with the media query it sits in (null at the top level).
+// Every declaration block in the file, with the media or container query it sits in (null at the
+// top level).
 function parse(src: string, media: string | null = null): Rule[] {
   const rules: Rule[] = [];
   let i = 0;
@@ -46,7 +47,7 @@ function parse(src: string, media: string | null = null): Rule[] {
     // After the last ";" so a statement at-rule (@import, @charset) cannot swallow the rule after it.
     const prelude = src.slice(i, open).split(";").pop()!.trim();
     const body = src.slice(open + 1, end);
-    if (prelude.startsWith("@media") || prelude.startsWith("@supports")) rules.push(...parse(body, prelude));
+    if (/^@(media|supports|container)\b/.test(prelude)) rules.push(...parse(body, prelude));
     else if (!prelude.startsWith("@")) rules.push({ media, selectors: prelude.split(","), body });
     i = end + 1;
   }
@@ -191,6 +192,61 @@ describe("the Events page switch fits the smallest phones", () => {
   it("has no rule, at any width, that stops the button shrinking or its label wrapping", () => {
     const offenders = RULES.filter((r) => r.selectors.some((s) => /ev-switch|evSwitchBtn/.test(s)))
       .filter((r) => /flex:(none|0 0)|flex-shrink:0|white-space:(nowrap|pre)|max-width:none|min-width:(max-content|fit-content)/.test(r.body))
+      .map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
+    expect(offenders).toEqual([]);
+  });
+});
+
+// TASK-460: the Events list is a five-column table that needs about 850px. Wherever the list is
+// narrower (every phone and tablet, and laptops up to about 1150px, where the side menu takes the
+// room) its buttons broke their own labels ("Ed / it"), times broke mid-word, the date badge ran
+// into the event's name, and on a phone the list scrolled sideways inside its box. There, each event
+// is now a compact row instead. The switch is measured on the list itself, not the screen, because
+// the list is narrowest on a laptop just past 860px, with the side menu beside it.
+describe("the Events list becomes compact rows wherever its table does not fit", () => {
+  const NARROW = "@container evlist (max-width:899px)";
+
+  it("measures the list itself, so the side menu's squeeze counts as well as a small screen", () => {
+    expect(rule("#view-events #evList")).toContain("container:evlist / inline-size");
+    expect(RULES.some((r) => r.media === NARROW)).toBe(true);
+  });
+
+  it("stops laying the events out as a table, one row per event", () => {
+    expect(rule("#view-events .ev-admin-table", NARROW)).toContain("display:block");
+    expect(rule("#view-events .ev-admin-table tbody", NARROW)).toContain("display:block");
+    expect(rule("#view-events .ev-admin-table tr", NARROW)).toContain("display:grid");
+    expect(rule("#view-events .ev-admin-table td", NARROW)).toContain("display:block");
+  });
+
+  // Top to bottom, like a diary entry: the date and time, the event, who runs it, then where it
+  // stands and the button, sharing the last line.
+  it("reads each event top to bottom, with its status and button on the last line", () => {
+    expect(rule("#view-events .ev-admin-table tr", NARROW)).toContain(
+      'grid-template-areas:"when when" "event event" "run run" "state open"',
+    );
+    ["when", "event", "run", "state", "open"].forEach((area, i) => {
+      expect(rule(`#view-events .ev-admin-table td:nth-child(${i + 1})`, NARROW), area).toContain(`grid-area:${area}`);
+    });
+  });
+
+  // Without its column heading, "NBCC" on its own could be anything.
+  it("says who runs it in words, since the column heading is out of sight", () => {
+    expect(rule("#view-events .ev-admin-table td:nth-child(3)::before", NARROW)).toContain('content:"Run by "');
+  });
+
+  // Hidden the way the house stacks hide theirs: out of sight, but still read out, so a screen
+  // reader keeps the headings.
+  it("keeps the headings for screen readers rather than removing them", () => {
+    const head = rule("#view-events .ev-admin-table thead", NARROW);
+    expect(head).toContain("clip:rect(0 0 0 0)");
+    expect(head).not.toContain("display:none");
+  });
+
+  // A value that cannot wrap would push a compact row wider than its list: the fault this replaces.
+  // The hidden headings' nowrap is the visually-hidden pattern (clipped to a pixel) and is allowed.
+  it("has no rule in the list, at any width, that stops its words wrapping", () => {
+    const offenders = RULES.filter((r) => r.selectors.some((s) => /ev-admin|evList/.test(s)))
+      .filter((r) => /white-space:(nowrap|pre)/.test(r.body) && !/clip:rect/.test(r.body))
       .map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
     expect(offenders).toEqual([]);
   });

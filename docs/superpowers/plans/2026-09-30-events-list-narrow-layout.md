@@ -124,7 +124,7 @@ existing tests PASS, so the parser change has not disturbed them.
 @container evlist (max-width: 899px) {
   #view-events .ev-admin-table,
   #view-events .ev-admin-table tbody { display: block; width: auto; }
-  #view-events .ev-admin-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #view-events .ev-admin-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   #view-events .ev-admin-table tr {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -148,8 +148,9 @@ existing tests PASS, so the parser change has not disturbed them.
 - [ ] **Step 2: Run the two phone test files.**
 
 Run: `npx vitest run test/unit/admin-fits-a-phone.test.ts test/unit/admin-no-sideways-scroll.test.ts`
-Expected: all PASS (22 + 7). The thead's `white-space: nowrap` is allowed by both sweeps, because
-it sits beside `clip: rect`, the visually-hidden pattern.
+Expected: all PASS (22 + 7). The hidden thead carries no `white-space: nowrap` (the sent-letter
+table's does). `admin-no-sideways-scroll`'s "no admin panel re-introduces nowrap" rejects nowrap in
+any rule naming `admin-table`, hidden or not, and a thead clipped to 1px needs no nowrap anyway.
 
 - [ ] **Step 2b: Prove the guards can fail.**
   - Temporarily add `@container evlist (max-width: 899px) { #view-events .ev-admin-name { white-space: nowrap; } }`

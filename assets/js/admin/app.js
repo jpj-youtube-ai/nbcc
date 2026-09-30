@@ -35,9 +35,12 @@
     "ticker", "ball", "events", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
     "business-supporters", "team",
   ];
+  // KEEP IN SYNC with OPERATIONAL_EDITOR_SECTIONS there as well. Not cosmetic either: Manage access
+  // pre-fills from this copy and Save stores what it shows, so a section missing here is silently
+  // taken from editors on save (TASK-459). admin-sections-in-sync.test.ts checks every role.
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
-    "events",
+    "outreach", "events",
   ];
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
   // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.
@@ -913,8 +916,9 @@
   }
 
   // ---- business supporters: fulfilment list + mark-done actions (TASK-208, over TASK-207's API) ----
-  // Editor+ area (the whole tab is gated on donations:edit in the nav via data-edit-gate, matching the
-  // server's authorizeSection("donations","edit") on both endpoints). Lists each business supporter's
+  // Gated on business-supporters:edit since TASK-406, not donations:edit as it was before: the nav
+  // link's data-edit-gate, matching authorizeSection("business-supporters","edit") on the server.
+  // Admins hold it by role, anyone else only if granted it per person. Lists each business supporter's
   // fulfilment record (GET /api/admin/fulfilments), showing the recognition band, whether they have
   // submitted their thank-you preferences and a compact view of those prefs, and the five recognition
   // status flags. Each not-yet-done flag is a button that marks it done

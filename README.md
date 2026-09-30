@@ -3386,6 +3386,12 @@ They are not cosmetic duplicates: `PATCH /api/admin/users/:id/permissions` valid
 the browser bundle makes **every permissions save fail with a 400 in production**. Adding `ball`
 hit exactly that. `test/unit/admin-sections-in-sync.test.ts` now fails fast if they drift.
 
+So are the **role defaults**: giving a role a section by default means changing `roleToPermissions`
+on the server and `rolePresetPermissions` (with its `OPERATIONAL_EDITOR_SECTIONS`) in `app.js`. Drift
+there raises no error at all. Team → Manage access pre-fills from the browser's copy and saves what
+it shows, so a section missing there is quietly taken away from people (TASK-459). The same test
+checks every role's defaults as well.
+
 **Admin.** A `ball` permission section. Unusually it is **view-only for the editor role by
 default** rather than joining `OPERATIONAL_EDITOR_SECTIONS`: the gate toggle publishes the
 ticket page and puts the ball on the home page, which is a launch decision rather than routine
@@ -5588,6 +5594,47 @@ is 41px wide in a 32px column, so the list scrolls sideways inside its box by 23
 fits from 768px). The page itself does not widen, which is why measuring the page's width does not
 show it. It needs a phone layout of its own, the way the monthly givers table stacks below 1000px, so
 it is a change of its own.
+
+## Saving an editor's access took Contact businesses away (TASK-459)
+
+Editors have been able to use **Contact businesses** since it shipped: TASK-354 put `outreach` in the
+server's `OPERATIONAL_EDITOR_SECTIONS`, the sections the editor role edits by default. The browser
+keeps its own copy of each role's defaults in `assets/js/admin/app.js`, and that copy never got it.
+
+That copy is what **Team → Manage access** shows for anyone who has never had access of their own,
+and what its **Editor** button fills in. So for such an editor the screen said Contact businesses was
+**None** while they were using it, and pressing **Save access**, to change something else or nothing
+at all, stored that None as their complete access. Contact businesses vanished from their menu, with no
+error and nothing on the page to say anything had changed.
+
+The copy now matches. `test/unit/admin-sections-in-sync.test.ts` runs the browser's own
+`rolePresetPermissions` for admin, editor and viewer and fails if any differs from the server's
+`roleToPermissions`. `test/unit/admin-app.test.ts` opens an editor's access on the real screen,
+presses Save, and checks that what is sent is exactly the access they already had.
+
+**Not fixed here: anyone it already happened to.** A saved None cannot say whether it was chosen or
+inherited from this fault, so nothing changes anybody's access automatically. Festive Ball had the
+same fault for a day: the browser's editor defaults lacked `ball` from TASK-313 (31 August 2026)
+until TASK-352 (1 September). The simplest check is the screen itself, now that it tells the truth:
+open **Team → Manage access** for each person, and anyone showing Contact businesses or Festive Ball
+as None who should have it can be set back to what their role gives and saved. Every save is in
+`audit_log` as `admin_user.permissions_changed`, with the whole matrix in `data`.
+
+**Not fixed here either: four sections never got their migration.** TASK-406 (3 September) set the
+rule that each new section ships with a migration giving it to the matrices already saved
+(`1788100000000_permissions-business-supporters.js`, and `1789100000001_permissions-events.js` since).
+Four sections arrived just before that rule and none has one: `ball` (Festive Ball, TASK-313,
+31 August), then `email-audit` (Email audit, TASK-344), `site` (Site pages, TASK-352) and `outreach`
+(Contact businesses, TASK-354), all on 1 September. A matrix saved before a section arrived, and not
+changed since, has no entry for it, which reads as None, for admins as much as anyone. For the Email
+audit that only matters to admins: editors and viewers get None for it anyway.
+
+**And the Editor button cannot be saved.** It fills in only the sections the editor role names, but a
+save must name every section, and it leaves out Business supporters and the Email audit, which
+editors do not get. Pressing **Save access** after it says "Could not save that access.", and has
+done since the Festive Ball section arrived (TASK-313, 31 August 2026): the browser's copy has been
+short of at least one section ever since. It fails loudly and changes nobody's access, so it is a fix
+of its own.
 
 ## Enquiries waiting for a reply (TASK-425)
 

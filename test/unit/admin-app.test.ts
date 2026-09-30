@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { signAdminSession } from "../../src/admin/session";
-import { roleToPermissions, effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+import { SECTIONS, roleToPermissions, effectivePermissions, type PermissionMap } from "../../src/admin/permissions";
+import { permissionsSchema } from "../../src/admin/user-schema";
 
 // TASK-118 (REQ-066): an integration test of the admin dashboard app wiring (assets/js/admin/app.js).
 // It mounts admin.html's <body> into jsdom, stubs window.AdminHelpers + a mocked fetch, evaluates
@@ -88,6 +89,14 @@ const makeFulfilments = (): FulfilmentListRow[] => [
 ];
 let fulfilments: FulfilmentListRow[] = makeFulfilments();
 
+// TASK-459: the Team screen's people, as GET /api/admin/users returns them (none unless a test adds
+// some).
+type TeamMember = {
+  id: number; email: string; full_name: string; role: string; status: string;
+  invited_at: string; last_login_at: string | null; permissions: PermissionMap;
+};
+let teamMembers: TeamMember[] = [];
+
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
     status,
@@ -143,6 +152,16 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   if (url.includes("/api/admin/monthly-supporters")) {
     return monthlyFailure ? j(monthlyFailure.body, monthlyFailure.status) : j({ results: monthlyGivers });
   }
+  // TASK-459: saving someone's access is held to the server's own schema, which requires every
+  // section, so a save the real endpoint would refuse is refused here too.
+  const permsMatch = url.match(/\/api\/admin\/users\/(\d+)\/permissions$/);
+  if (permsMatch && init?.method === "PATCH") {
+    const parsed = permissionsSchema.safeParse(JSON.parse(init.body || "{}"));
+    if (!parsed.success) return j({ error: "Invalid permissions update" }, 400);
+    const member = teamMembers.find((m) => m.id === Number(permsMatch[1]));
+    return j({ ...member, permissions: parsed.data.permissions });
+  }
+  if (url.endsWith("/api/admin/users")) return j({ results: teamMembers });
   return j({ results: [] }); // queues / adjustment-due
 }
 
@@ -165,6 +184,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     monthlyGivers = [];
     monthlyFailure = null;
     fulfilments = makeFulfilments();
+    teamMembers = [];
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -336,9 +356,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("eraseStoryBtn")).toBeNull();
   });
 
-  // TASK-208: Business supporters tab — an Editor lists the fulfilment records (business name, band,
-  // submitted preferences) and marks a recognition step done; the row refetches and the button becomes
-  // a Done pill.
+  // TASK-208: Business supporters tab — someone holding business-supporters:edit (an admin here, since
+  // TASK-406) lists the fulfilment records (business name, band, submitted preferences) and marks a
+  // recognition step done; the row refetches and the button becomes a Done pill.
   it("lists supporters, opens one, and marks a job done after confirming", async () => {
     // Signed in as an ADMIN, not the editor the other tests use. business-supporters is not one of
     // an editor's default sections - it holds donor-identifying data and is granted per person - so
@@ -425,8 +445,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     confirmSpy.mockRestore();
   });
 
-  // TASK-208: the tab is an Editor+ area — a Viewer (who has donations:view, not edit) never sees it in
-  // the nav (data-edit-gate="donations" hides it below edit level).
+  // TASK-208: a Viewer never sees the tab in the nav. It is gated on business-supporters:edit
+  // (data-edit-gate="business-supporters", since TASK-406), which a Viewer's role never gives them.
   it("hides the Business supporters tab for a Viewer", async () => {
     loginToken = tokenFor("viewer");
     await signIn();
@@ -461,6 +481,41 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     } finally {
       storedPermissions = null;
     }
+  });
+
+  // TASK-459: opening somebody's access and pressing Save, changing nothing, must leave them with
+  // exactly what they had. For an editor never given access of their own it took Contact businesses
+  // away: the screen pre-filled from the browser's copy of the editor defaults, which had never
+  // listed it, showed None, and Save stored that None as their complete access.
+  it("saves an editor's untouched access as exactly the access they already had", async () => {
+    loginToken = tokenFor("admin");
+    teamMembers = [
+      {
+        id: 7, email: "ed@nbcc", full_name: "Ed Itor", role: "editor", status: "active",
+        invited_at: "2026-08-01T00:00:00Z", last_login_at: null, permissions: {},
+      },
+    ];
+    await signIn();
+    (document.querySelector('.admin-nav-link[data-view="team"]') as HTMLElement).click();
+    await flush();
+    await flush();
+    (document.querySelector('[data-team-perms="7"]') as HTMLElement).click();
+    el("teamPermSave").click();
+    await flush();
+    await flush();
+
+    const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
+    const save = fetchMock.mock.calls.find((c) => /\/api\/admin\/users\/7\/permissions$/.test(String(c[0])));
+    expect(save, "Save sent the permissions PATCH").toBeDefined();
+    const sent = JSON.parse(((save as unknown[])[1] as { body: string }).body).permissions;
+    // What the server gives them today: nothing stored, so the editor defaults, and none for every
+    // section those leave out.
+    const had = {
+      ...Object.fromEntries(SECTIONS.map((s) => [s, "none"])),
+      ...effectivePermissions({ role: "editor", permissions: {} }),
+    };
+    expect(sent).toEqual(had);
+    expect(el("teamPermStatus").textContent).toBe("Access updated.");
   });
 
   // TASK-458: when the list cannot be fetched, the server still answers in JSON, an { error } with no

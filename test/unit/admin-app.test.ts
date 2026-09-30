@@ -180,6 +180,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
   if (url.includes("/api/admin/events/preview")) {
     return j({ card: "<p>card</p>", page: "<p>page</p>", problems: [], onPage: true });
   }
+  if (/\/api\/admin\/events\/\d+$/.test(url) && init?.method === "DELETE") return j({ deleted: true });
   if (/\/api\/admin\/events$/.test(url)) {
     if (eventsFailure) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j({ pageOn: false, updatedAt: null, updatedBy: null, today: "2026-09-30", events });
@@ -920,7 +921,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await openEvents();
       expect(buttons().map((b) => b.textContent)).toEqual(["Open", "Edit", "Edit"]);
       expect(buttons().map((b) => b.getAttribute("aria-label"))).toEqual([
-        "Open Carols at the Cross", "Edit EmpowHer ’26", "Edit Christmas Jumper Day",
+        "Open Carols at the Cross, 20 Oct", "Edit EmpowHer ’26, 4 Nov", "Edit Christmas Jumper Day, 9 Dec",
       ]);
       expect(buttons().map((b) => b.getAttribute("aria-current"))).toEqual(["true", null, null]);
     });
@@ -939,7 +940,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(document.activeElement).toBe(el("evEditorTitle"));
       expect(el("evEditorTitle").textContent).toBe("Editing: Christmas Jumper Day");
       expect(buttons()[2].getAttribute("aria-current")).toBe("true");
-      expect(buttons()[0].getAttribute("aria-label")).toBe("Edit Carols at the Cross");
+      expect(buttons()[0].getAttribute("aria-label")).toBe("Edit Carols at the Cross, 20 Oct");
       // Scrolled there without a "smooth" of its own: the page scrolls smoothly already, and the site
       // turns that off for anyone whose device asks for reduced motion. A forced "smooth" would not.
       expect(scrolls.at(-1)?.el).toBe(el("evEditor"));
@@ -981,7 +982,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       events.push(eventRecord({ id: 6, name: `Tom & Jerry's "Big" <Night>`, date: "2026-12-20", status: "live" }));
       await openEvents();
       const b = buttons().find((x) => x.getAttribute("data-evopen") === "6")!;
-      expect(b.getAttribute("aria-label")).toBe(`Edit Tom & Jerry's "Big" <Night>`);
+      expect(b.getAttribute("aria-label")).toBe(`Edit Tom & Jerry's "Big" <Night>, 20 Dec`);
       expect(b.getAttributeNames()).toEqual(["class", "type", "data-evopen", "aria-label"]);
     });
 
@@ -990,7 +991,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       loginToken = tokenFor("viewer");
       await openEvents();
       expect(buttons().map((b) => b.getAttribute("aria-label"))).toEqual([
-        "Open Carols at the Cross", "View EmpowHer ’26", "View Christmas Jumper Day",
+        "Open Carols at the Cross, 20 Oct", "View EmpowHer ’26, 4 Nov", "View Christmas Jumper Day, 9 Dec",
       ]);
       expect(el("evEditorTitle").textContent).toBe("Carols at the Cross");
     });
@@ -1001,6 +1002,46 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await openEvents();
       const alert = el("evList").querySelector('[role="alert"]');
       expect(alert?.textContent).toBe("The events could not be loaded just now. Try again in a moment.");
+    });
+
+    // TASK-468: the gaps TASK-465's review found. A recurring event must not sound like its twin.
+    it("tells apart events that share a name by their dates", async () => {
+      events.push(eventRecord({ id: 7, name: "EmpowHer ’26", date: "2026-11-18", status: "live" }));
+      await openEvents();
+      const labels = buttons().map((b) => b.getAttribute("aria-label"));
+      expect(labels).toContain("Edit EmpowHer ’26, 4 Nov");
+      expect(labels).toContain("Edit EmpowHer ’26, 18 Nov");
+    });
+
+    // Arriving never moves focus, even when there is nothing to list and a blank event opens itself.
+    it("leaves focus alone when an empty list opens a blank event by itself", async () => {
+      events = [];
+      await openEvents();
+      expect(el("evEditorTitle").textContent).toBe("A new event");
+      expect(document.activeElement).not.toBe(el("evf-name"));
+    });
+
+    it("puts you in the name field when you ask for a new event", async () => {
+      await openEvents();
+      el("evAdd").click();
+      await flush();
+      expect(document.activeElement).toBe(el("evf-name"));
+    });
+
+    // Delete hides the editor and the button with it; focus lands on the likeliest next step.
+    it("leaves focus on Add an event after you delete one", async () => {
+      await openEvents();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+      try {
+        el("evDelete").focus();
+        el("evDelete").click();
+        await flush();
+        await flush();
+        expect(el("evSwitchStatus").textContent).toBe("Deleted.");
+        expect(document.activeElement).toBe(el("evAdd"));
+      } finally {
+        confirm.mockRestore();
+      }
     });
 
     it("takes you to the editor from the event already open, too", async () => {

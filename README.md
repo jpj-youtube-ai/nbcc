@@ -2803,7 +2803,9 @@ It rides the daily 8am task (`npm run reminders`) like the run-up, with no sched
 time, when switched on, with recipients, up to the day of the Ball. It claims the day first in
 `ball_report_sends` (a unique index allows one scheduled report a day), so a second run sends
 nothing; a failed send gives the day back, and a send that went keeps it even if recording it then
-fails. Each report records `counted_to`, the moment its numbers were counted to, and the next one's
+fails. A failed send is also recorded (`ball_report.send_failed` in `audit_log`, the day only, since
+the error can quote an address), and the card says that day's report could not be sent until the
+next one goes (TASK-471). Each report records `counted_to`, the moment its numbers were counted to, and the next one's
 "since the last update" counts on from exactly there. The numbers (`countSales`) and words are the
 pure `src/ball/sales-report.ts` (`test/unit/ball-sales-report.test.ts`), the wiring is tested in
 `test/unit/ball-sales-report-runner.test.ts`, and `features/ball-report.feature` covers the admin

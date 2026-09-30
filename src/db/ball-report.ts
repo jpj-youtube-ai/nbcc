@@ -1,5 +1,5 @@
 import { pool } from "./pool";
-import { insertAudit } from "./donations";
+import { insertAudit, recordAudit } from "./donations";
 import { getCapacityState } from "./ball";
 import { availability } from "../ball/capacity";
 import { countSales, recipientsSchema, type Recipient, type SalesInputs } from "../ball/sales-report";
@@ -20,6 +20,8 @@ export interface ReportSettings {
   recipients: Recipient[];
   lastScheduled: ReportSend | null;
   lastTest: ReportSend | null;
+  /** TASK-471: a scheduled report that could not be sent, since the last one that went. */
+  lastFailure: { sentOn: string; at: string } | null;
 }
 
 interface SendRow {
@@ -52,12 +54,38 @@ export async function getReportSettings(): Promise<ReportSettings> {
     const r = sends.rows.find((x) => x.kind === kind);
     return r ? toSend(r) : null;
   };
+  const failed = await pool.query<{ sent_on: string | null; created_at: Date }>(
+    `SELECT data->>'sentOn' AS sent_on, created_at FROM audit_log
+      WHERE action = 'ball_report.send_failed' ORDER BY id DESC LIMIT 1`,
+  );
+  const lastScheduled = last("scheduled");
+  const f = failed.rows[0];
+  // A failure counts until a scheduled report goes after it.
+  const lastFailure =
+    f && f.sent_on && (!lastScheduled || f.created_at.getTime() > new Date(lastScheduled.sentAt).getTime())
+      ? { sentOn: f.sent_on, at: f.created_at.toISOString() }
+      : null;
   return {
     reportOn: Boolean(row?.report_on),
     recipients: recipients.success ? recipients.data : [],
-    lastScheduled: last("scheduled"),
+    lastScheduled,
     lastTest: last("test"),
+    lastFailure,
   };
+}
+
+/**
+ * TASK-471: a scheduled report that could not be sent. The day only: the error itself goes to the
+ * server log, since it can quote an address.
+ */
+export async function recordSendFailure(sentOn: string): Promise<void> {
+  await recordAudit({
+    actor: "system:schedule",
+    action: "ball_report.send_failed",
+    entity: "ball_report",
+    entityId: null,
+    data: { sentOn },
+  });
 }
 
 /** Saves the switch and the list together, with an audit row saying what changed. */

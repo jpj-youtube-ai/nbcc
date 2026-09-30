@@ -9673,6 +9673,15 @@
     } else {
       html = "<b>Off.</b> " + (n ? "It is ready to go to " + brPeople(n) + " once it is switched on." : "Nobody gets it yet.");
     }
+    // TASK-471: a report that did not go says so here, until the next one goes.
+    if (brData.lastFailure) {
+      html +=
+        '<span class="ev-report-failed">' +
+        H.escapeHtml(brDayWords(brData.lastFailure.sentOn)) +
+        "’s report could not be sent, so nobody got it that day." +
+        (brData.reportOn && brData.nextSend ? " The next one will try again as usual." : "") +
+        "</span>";
+    }
     el("evReportState").innerHTML = html;
     el("evReport").classList.toggle("is-on", !!brData.reportOn);
   }

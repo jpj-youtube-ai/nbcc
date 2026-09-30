@@ -44,13 +44,14 @@ describe("the backup plan covers every database that exists", () => {
 describe("knowing how many tables to expect", () => {
   // A dump that yielded three tables when 44 exist must abort before it overwrites a good backup.
   // 47 since TASK-453 added events, event_images and events_settings; 48 since TASK-464 added
-  // ball_report_sends.
-  it("counts 48 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(48);
+  // ball_report_sends; 49 since TASK-475 added erased_stories to the stories database.
+  it("counts 49 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(49);
   });
 
-  it("finds the two tables that live outside the main database", () => {
-    expect(tablesIn(ROOT, "migrations-stories")).toEqual(["stories"]);
+  it("finds the three tables that live outside the main database", () => {
+    // TASK-475: erased_stories remembers, by fingerprint only, the stories that were erased.
+    expect(tablesIn(ROOT, "migrations-stories")).toEqual(["erased_stories", "stories"]);
     expect(tablesIn(ROOT, "migrations-contact")).toEqual(["contact_enquiries"]);
   });
 

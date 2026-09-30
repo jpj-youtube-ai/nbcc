@@ -25,6 +25,9 @@ const tokenFor = (role: string) =>
 let loginToken = tokenFor("editor"); // the token the mocked /login hands back (per test)
 // A person's own saved access, which /me returns in place of their role's defaults (per test).
 let storedPermissions: PermissionMap | null = null;
+// TASK-458: how the Monthly givers list request fails, when a test wants it to (per test). The
+// server answers a failure in JSON too, just an { error } with no results in it.
+let monthlyFailure: { status: number; body: unknown } | null = null;
 
 const donation = {
   id: 11, donor_id: 5, donor_name: "Ada Test", mode: "monthly", plan: "silver",
@@ -130,6 +133,9 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     });
   }
   if (url.includes("/api/admin/fulfilments")) return j({ results: fulfilments });
+  if (url.includes("/api/admin/monthly-supporters") && monthlyFailure) {
+    return j(monthlyFailure.body, monthlyFailure.status);
+  }
   return j({ results: [] }); // queues / adjustment-due
 }
 
@@ -149,6 +155,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
   beforeEach(() => {
     loginToken = tokenFor("editor");
     storedPermissions = null;
+    monthlyFailure = null;
     fulfilments = makeFulfilments();
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
@@ -446,6 +453,56 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     } finally {
       storedPermissions = null;
     }
+  });
+
+  // TASK-458: when the list cannot be fetched, the server still answers in JSON, an { error } with no
+  // results. Read as a list, that drew an empty table and "0 giving, £0 a month" (formatPence writes
+  // a whole pound without pence, so "£0" is the thing to look for, and it covers "£0.00" too). On the
+  // screen that exists to say how much regular income is dependable, a false £0 is worse than an error.
+  describe("Monthly givers: a list that never came is not nobody giving (TASK-458)", () => {
+    async function openMonthly() {
+      (document.querySelector('.admin-nav-link[data-view="monthly"]') as HTMLElement).click();
+      await flush();
+      await flush();
+    }
+
+    it.each([
+      [500, { error: "Admin is temporarily unavailable" }],
+      [403, { error: "forbidden" }],
+    ])("says so on a %i, rather than showing nobody giving and £0 a month", async (status, body) => {
+      loginToken = tokenFor("editor");
+      monthlyFailure = { status, body };
+      await signIn();
+      await openMonthly();
+
+      expect(el("view-monthly").textContent).not.toContain("£0");
+      expect(el("monthlyTable").textContent).toContain("Monthly givers are unavailable.");
+    });
+
+    // "Show" stays on screen after the failure, and changing it redraws from whatever list is held.
+    it("keeps saying so when you change what it shows, rather than counting a list that never came", async () => {
+      loginToken = tokenFor("editor");
+      monthlyFailure = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+      await signIn();
+      await openMonthly();
+
+      const show = el("monthlyStateFilter") as HTMLSelectElement;
+      show.value = "";
+      show.dispatchEvent(new Event("change"));
+
+      expect(el("view-monthly").textContent).not.toContain("£0");
+      expect(el("monthlyTable").textContent).toContain("Monthly givers are unavailable.");
+    });
+
+    // The other side of the line: a list that did come back, empty, is a true answer.
+    it("still says nobody is giving when the list came back empty, because then it is true", async () => {
+      loginToken = tokenFor("editor");
+      await signIn();
+      await openMonthly();
+
+      expect(el("monthlySummary").textContent).toBe("0 giving, £0 a month");
+      expect(el("monthlyTable").textContent).toContain("Nobody matches that.");
+    });
   });
 
   // TASK-454: below 860px the menu is one button that opens the whole list. jsdom has no layout, so

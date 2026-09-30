@@ -5837,7 +5837,10 @@ The fault was in the tests, not the newsletter.
   at a time. It failed 3 times in 24 runs, and each time the stray request came from a real timer
   started by an earlier test's copy.
 - **The fix.** The file now ends every timer a test started when that test ends. It then passed 48
-  runs out of 48 under the same load.
+  runs out of 48 under the same load. The review's instrumented run found 24 of the file's 58 tests
+  leaving a timer pending, and this clears them all.
+- **Still exposed.** `test/unit/admin-app.test.ts` boots app.js per test the same way, with no such
+  cleanup. Its assertions filter for specific URLs, so the risk there is low today.
 
 No code the admin runs changed.
 

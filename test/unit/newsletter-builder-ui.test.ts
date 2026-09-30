@@ -547,7 +547,9 @@ describe("newsletter live preview debounce (jsdom, TASK-168 Task 25)", () => {
   it("debounces the preview POST to ~300ms after an edit, and posts the current bodyJson", async () => {
     await openNewsletterTab();
     (el("newsletterNew") as HTMLElement).click();
-    clickPalette("Text"); // schedules (and, after flush, fires) one preview
+    // Schedules a preview 300ms out on the real clock; the two flushes below do NOT reach it. The
+    // edit's nlSchedulePreview cancels it (vitest's fake clearTimeout also clears real timers).
+    clickPalette("Text");
     await flush();
     await flush();
 

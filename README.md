@@ -5663,6 +5663,64 @@ Monthly givers and Events, which already check. `test/unit/admin-could-not-load.
 changed panel both ways: its could not load state on a 500 (and a 403), its real answer on a 200,
 and that a 401 still signs you out.
 
+## New pills in the admin, per person (TASK-478)
+
+A green **New** pill shows on a menu section when it holds something you have not seen yet. On a
+phone, the Menu button carries one too whenever any section does. Opening the section clears its
+pill for **you only**: the server remembers when each person last opened each section, so a
+colleague who has not looked yet still sees theirs. Inside the section, the rows that arrived since
+your previous visit carry the same pill for as long as you stay.
+
+| Section | New when, since you last opened it | Row pills |
+|---|---|---|
+| Contact form | an enquiry arrived | none: the Status column already says New |
+| Stories | a story was submitted | none: the Status column already says New |
+| Donations | a paid donation arrived | on paid donations, by date |
+| Monthly givers | somebody's first monthly gift was paid | by "Since" |
+| Business supporters | a business supporter record was created | by name |
+| Festive Ball | a booking was paid | by reference |
+| Newsletter | somebody signed up on the website (not imports or staff additions) | on "Added", for website sign-ups |
+| Events | only when there is a new feature (below) | none |
+
+**The rules** are in `src/admin/whats-new.ts`, tested in `test/unit/whats-new.test.ts`:
+- **You only see pills on sections you can open.** Each section uses the same permission as its
+  menu link (Business supporters needs business-supporters edit).
+- **The first time.** If you have never opened a section, only things that arrived after the pills
+  launched (`LAUNCH_AT`), or after your account was made if that is later, count. Launch day does
+  not light up years of old records.
+- **If a check fails,** that section just shows no pill and the error is logged. The others still
+  answer, and a pill only ever appears when something is known to be new.
+- **A bank transfer (BACS) gift counts from when it was made, not when it was paid.** It is made
+  as pending and turns paid days later, and the donations table does not record when it was paid.
+  So if you open Donations in between, that gift will not light the pill. Card gifts are paid when
+  they are made.
+- **"Since" means at or after, to the millisecond.** Postgres keeps microseconds, but times reach
+  the app cut to milliseconds. The database has already found an arrival strictly later, so
+  something that came within the same millisecond as your last visit still counts. The first CI
+  run failed on exactly that: an account and a sign-up made within one millisecond.
+
+**New parts of the admin get a pill too.** `FEATURES` in `src/admin/whats-new.ts` lists them as
+`{ area, added, what }`. **When you ship a new screen, or a change staff should notice, add a line
+there.** Everyone whose account is older than it sees a pill on that section until they open it.
+
+**Where it lives:**
+- **Table:** `admin_seen (user_id, area, seen_at)` (migration `1790900000001_admin-seen.js`). A
+  person's rows go when their account does.
+- **Routes:** `GET /api/admin/whats-new` returns `{ areas: [{ area, new, since }] }`.
+  `POST /api/admin/whats-new/seen { area }` answers 400 for an unknown section and 403 for one you
+  cannot open.
+- **Queries:** one "latest arrival since" query per section, in `src/db/whats-new.ts`. The contact
+  and stories queries run on their own databases.
+- **Browser:** `assets/js/admin/app.js` asks again each time you change section. It records a visit
+  only after it has kept that visit's "since" for the row pills, and an answer that was already on
+  its way cannot bring back a pill you have just cleared.
+
+**Tests:**
+- `test/unit/admin-whats-new-routes.test.ts` covers the routes;
+- the "New pills" block in `test/unit/admin-app.test.ts` covers the screen;
+- `features/whats-new.feature` covers two admins against a real database: one opens the
+  Newsletter, and only theirs clears.
+
 ## Monthly or one off, on the donations list (TASK-446)
 
 The list could already be narrowed by payment status, which answers *what failed*. It could not
@@ -6485,12 +6543,12 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 46 tables
-(42 when this was built; the Events page added three in TASK-453, and the Festive Ball ticket
-report one in TASK-464),
+This is the trap this feature was built around. `DATABASE_URL` holds 47 tables
+(42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
+report one in TASK-464, and the admin's New pills one, `admin_seen`, in TASK-478),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 46 of **49** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 47 of **50** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

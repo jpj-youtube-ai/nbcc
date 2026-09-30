@@ -44,9 +44,10 @@ describe("the backup plan covers every database that exists", () => {
 describe("knowing how many tables to expect", () => {
   // A dump that yielded three tables when 44 exist must abort before it overwrites a good backup.
   // 47 since TASK-453 added events, event_images and events_settings; 48 since TASK-464 added
-  // ball_report_sends; 49 since TASK-475 added erased_stories to the stories database.
-  it("counts 49 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(49);
+  // ball_report_sends; 49 since TASK-475 added erased_stories to the stories database; 50 since
+  // TASK-478 added admin_seen.
+  it("counts 50 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(50);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -68,7 +69,9 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("events_settings");
     // TASK-464: which Festive Ball ticket reports went out, when, and to whom.
     expect(main).toContain("ball_report_sends");
-    expect(main.length).toBe(46);
+    // TASK-478: when each person last opened each admin section, behind the New pills.
+    expect(main).toContain("admin_seen");
+    expect(main.length).toBe(47);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

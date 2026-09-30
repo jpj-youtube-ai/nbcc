@@ -5663,6 +5663,46 @@ Monthly givers and Events, which already check. `test/unit/admin-could-not-load.
 changed panel both ways: its could not load state on a 500 (and a 403), its real answer on a 200,
 and that a 401 still signs you out.
 
+## The location database (TASK-481)
+
+**IP geolocation by DB-IP** ([db-ip.com](https://db-ip.com)). The site analytics uses DB-IP's free
+"IP to City Lite" database, licensed under
+[Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/);
+that licence asks for the credit above, which the analytics page and privacy notice should also show.
+
+It turns a visitor's IP address into a country, region and town at the moment a visit is counted;
+the IP itself is then forgotten (see the analytics design,
+`docs/superpowers/specs/2026-09-30-site-analytics-design.md`).
+
+- **The reader** is `src/analytics/geo-db.ts`, written here from the published MaxMind DB format
+  (<https://maxmind.github.io/MaxMind-DB/>), because the npm registry cannot be reached from where
+  this is built. It reads the whole file into memory once (about 130 MB for the current file) and
+  answers `{ country, region, city }` from `country.iso_code`, `subdivisions[0].names.en` and
+  `city.names.en`. It takes IPv4, IPv6, and IPv4 written the way Express gives it
+  (`::ffff:203.0.113.9`). A lookup takes about 2 microseconds and never throws: a malformed
+  address, a private one, or one the database does not know answers `null`.
+  - `openGeoDb(pathOrBuffer)` opens a file (and throws if it is not a MaxMind DB);
+  - `loadGeoDbIfPresent(path)` answers `null`, with one warning in the log, when the file is
+    missing or unreadable, so the app still starts and simply records no places;
+  - `connectGeoDb()` is the start-up wiring: the lookup for `/app/geo/dbip-city-lite.mmdb`, or `null`.
+- **Fetching it.** The file is not in the repo. The Docker build downloads it in a `geo` stage of
+  its own, with `scripts/fetch-geo-db.mjs` (Node's own fetch and gzip, so no curl): this month's
+  `https://download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`, else last month's (DB-IP
+  publishes early each month, so on the 1st this month's may not be there yet). It unpacks it to
+  `/app/geo/dbip-city-lite.mmdb` and checks it really is a MaxMind DB. If both months fail it prints
+  `geo: WARNING: ...` in the build log and the build carries on without it.
+- **Refreshing it.** Every production deploy passes the current month as the `GEO_MONTH` build
+  arg (`deploy-prod.yml`), so the cached download is replaced when the month changes; a deploy in
+  a new month picks up the new file. Nothing else refreshes it: a month with no deploys keeps
+  last month's file, which is fine for this purpose.
+- **Trying it locally.** Put a copy at `geo/dbip-city-lite.mmdb` in the repo folder (`/geo/` is
+  gitignored; never commit it) or leave it out and the app runs without places.
+- **Tests** build small `.mmdb` files from invented data with `test/unit/helpers/mmdb-writer.ts`:
+  `test/unit/geo-db.test.ts` (IPv4 and IPv6 trees, IPv4 inside IPv6, 24-, 28- and 32-bit
+  records, every pointer size, every data type, missing city or region, addresses in no network,
+  bad addresses, corrupt files), `test/unit/fetch-geo-db.test.ts` (the month fallback and a bad
+  download) and `test/unit/dockerfile-geo-db.test.ts` (the Dockerfile stage and the monthly build arg).
+
 ## Monthly or one off, on the donations list (TASK-446)
 
 The list could already be narrowed by payment status, which answers *what failed*. It could not

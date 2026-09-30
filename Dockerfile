@@ -7,6 +7,23 @@ COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
 
+# ---- geo (TASK-481) ----
+# DB-IP's free "IP to City Lite" location database (CC BY 4.0, "IP geolocation by DB-IP"), used by
+# the site analytics to turn a visitor's IP into a country, region and town before the IP is thrown
+# away (src/analytics/geo-db.ts). A stage of its own so that:
+#  - ordinary code changes never re-download it (its cache depends only on the script and GEO_MONTH);
+#  - the runtime image gets just the unpacked file: the fetch uses Node's own fetch and zlib, so no
+#    curl, apt step or .gz leftovers.
+# GEO_MONTH (YYYY-MM) is passed by deploy-prod.yml as the current month, which replaces the cached
+# layer each month; left empty (a plain docker build) the script works the month out itself. It tries
+# that month, then the one before; if both fail it warns and the build carries on without the file,
+# and the app then records visits without places.
+FROM node:20-slim AS geo
+WORKDIR /fetch
+COPY scripts/fetch-geo-db.mjs ./
+ARG GEO_MONTH=
+RUN node fetch-geo-db.mjs /geo "$GEO_MONTH" && mkdir -p /geo
+
 # ---- runtime ----
 FROM node:20-slim AS runtime
 ENV NODE_ENV=production
@@ -39,6 +56,9 @@ RUN apt-get update \
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
+# The location database from the geo stage above (TASK-481): after the npm install, so its monthly
+# change does not redo the install, and before the app code, so a code change does not re-copy it.
+COPY --from=geo /geo ./geo
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
 # Stories DB migrations (My Story / TASK-B2): a SEPARATE `stories` database on the same

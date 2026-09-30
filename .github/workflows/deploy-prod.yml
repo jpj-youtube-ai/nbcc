@@ -60,6 +60,9 @@ jobs:
         id: img
         run: |
           echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${DEPLOY_SHA}" >> "$GITHUB_ENV"
+          # TASK-481: the month of DB-IP location database to bake in (the geo stage in the Dockerfile).
+          # A build arg, so the cached download is replaced each month rather than kept forever.
+          echo "GEO_MONTH=$(date -u +%Y-%m)" >> "$GITHUB_ENV"
           # Idempotent by design: the SHA tag is immutable, so if this commit's image is
           # already in ECR (e.g. a re-run after a *later* step failed — a raced infra apply,
           # a flaky migration — or a workflow_dispatch rollback), reuse it instead of
@@ -82,6 +85,7 @@ jobs:
           # the smoke test can prove the deploy actually took (TASK-332).
           build-args: |
             GIT_SHA=${{ env.DEPLOY_SHA }}
+            GEO_MONTH=${{ env.GEO_MONTH }}
           # Most commits change only app code, so the base/npm-install layers restore
           # from the Actions cache instead of rebuilding — build drops from ~40s toward ~15s.
           cache-from: type=gha

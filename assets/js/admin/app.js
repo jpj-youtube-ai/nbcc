@@ -3465,25 +3465,39 @@
   // (so a saved draft opens at full height) and when the canvas changes width (words re-wrap). The
   // height is reset to "auto" first so the box can shrink as well as grow; its rows are the minimum.
   // A box not on screen (a folded block, a hidden panel) measures 0 and is left alone until it shows.
-  function nlFitBox(box) {
-    if (!box || !box.isConnected) return;
-    var y = window.pageYOffset;
-    box.style.height = "auto";
+  // The height a box at "auto" needs for its words, or 0 when it is not on screen. Reads only.
+  function nlBoxHeight(box) {
     var h = box.scrollHeight;
-    if (!h) {
-      box.style.height = "";
-      return;
-    }
+    if (!h) return 0;
     var cs = window.getComputedStyle(box);
     if (cs.boxSizing === "border-box") h += (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
     else h -= (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-    box.style.height = h + "px";
+    return h;
+  }
+  // Every box is set to "auto" first, then all are measured, then all are sized: one layout for the
+  // whole canvas however many boxes it has, rather than one per box.
+  function nlFitBoxes(boxes) {
+    boxes = boxes.filter(function (b) {
+      return b && b.isConnected;
+    });
+    if (!boxes.length) return;
+    var y = window.pageYOffset;
+    boxes.forEach(function (b) {
+      b.style.height = "auto";
+    });
+    var heights = boxes.map(nlBoxHeight);
+    boxes.forEach(function (b, i) {
+      b.style.height = heights[i] ? heights[i] + "px" : "";
+    });
     // The moment at "auto" can shorten the page and nudge the scroll position; put it back.
     if (window.pageYOffset !== y && typeof window.scrollTo === "function") window.scrollTo(window.pageXOffset, y);
   }
+  function nlFitBox(box) {
+    nlFitBoxes([box]);
+  }
   function nlFitAllBoxes() {
     var host = el("nlCanvas");
-    if (host) Array.prototype.forEach.call(host.querySelectorAll("textarea"), nlFitBox);
+    if (host) nlFitBoxes(Array.prototype.slice.call(host.querySelectorAll("textarea")));
   }
 
   function nlText(host, obj, key, label, opts) {
@@ -3866,7 +3880,7 @@
   // resizing is the usual cause; the observer also catches the canvas changing width on its own (the
   // panel appearing, the layout switching at a breakpoint). Only a change of width refits, so the
   // boxes growing (which changes the canvas height) does not set it off again.
-  window.addEventListener("resize", nlFitAllBoxes);
+  // The observer alone covers a window resize; the resize event is only for a browser without one.
   if (el("nlCanvas") && typeof window.ResizeObserver === "function") {
     var nlCanvasWidth = 0;
     new window.ResizeObserver(function (entries) {
@@ -3875,7 +3889,12 @@
       nlCanvasWidth = w;
       nlFitAllBoxes();
     }).observe(el("nlCanvas"));
+  } else {
+    window.addEventListener("resize", nlFitAllBoxes);
   }
+  // The web font arriving re-wraps the words without changing the canvas width, so fit again then:
+  // with no inner scrolling, a box sized before the font could otherwise hide its last line.
+  if (doc.fonts && doc.fonts.ready && typeof doc.fonts.ready.then === "function") doc.fonts.ready.then(nlFitAllBoxes);
 
   if (el("nlPalette")) nlRenderPalette();
 

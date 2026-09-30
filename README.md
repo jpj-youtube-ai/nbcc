@@ -5924,6 +5924,18 @@ public will. Everything typed is escaped; `*stars*` become bold only after escap
 adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `events.html` is
 in the Dockerfile's explicit page list.
 
+**EmpowHer's leaflet (TASK-456).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
+leaflet (`assets/img/empowher-2026-leaflet.webp`, 1200px wide, cropped out of the screenshot frame
+it arrived in) on EmpowHer's card, whole on cream, and brings three details into line with it: Ali
+Wright as the evening's host, from Now Radio's Ali and Michael in the Morning; the Wallacetown Drive
+address; and "Organised by" on the front, so the card never names two hosts. It is compare and
+swap, field by field: a word changes only while it is still the seed's, and the picture goes on
+only if the event has none, so nothing staff have changed in the admin is overwritten. `updated_by`
+is left alone, so the seed's `down` still removes only rows no person has touched. The tests' seed
+helper applies the same rule, so every test renders what production holds;
+`test/unit/events-leaflet.test.ts` pins the swap and the picture, and a scenario in
+`features/events.feature` proves it lands on the seeded row in Postgres.
+
 Covered by `test/unit/events-model.test.ts`, `events-render.test.ts`, `events-nav-link.test.ts`,
 `events-page.test.ts`, the site map and permission tests, and `features/events.feature` (the switch
 off and on, date order, drafts and past and not-yet-scheduled events kept off, the admin API's

@@ -151,8 +151,8 @@ export const configSchema = z.object({
 
   // SES configuration sets: they route delivery/bounce/complaint events to the SNS topic behind
   // POST /api/webhooks/ses. Two sets on purpose — the NEWSLETTER one has click tracking (links
-  // rewritten via links.news.nbcc.scot), the TRANSACTIONAL one does not (a receipt from
-  // events@nbcc.scot carrying links.news.* links is the mismatched-link phishing shape TASK-295
+  // rewritten via click.news.nbcc.scot since TASK-466), the TRANSACTIONAL one does not (a receipt from
+  // events@nbcc.scot carrying click.news.* links is the mismatched-link phishing shape TASK-295
   // removed). Blank = send without a configuration set (no events), so boot never blocks.
   SES_NEWSLETTER_CONFIGURATION_SET: z.string().default(""),
   SES_TRANSACTIONAL_CONFIGURATION_SET: z.string().default(""),

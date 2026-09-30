@@ -1,7 +1,8 @@
 terraform {
   required_version = ">= 1.6"
   required_providers {
-    aws    = { source = "hashicorp/aws", version = "~> 5.0" }
+    # aws.us_east_1: CloudFront only reads certificates from us-east-1 (TASK-466, ses.tf).
+    aws    = { source = "hashicorp/aws", version = "~> 5.0", configuration_aliases = [aws.us_east_1] }
     random = { source = "hashicorp/random", version = "~> 3.0" }
   }
 }

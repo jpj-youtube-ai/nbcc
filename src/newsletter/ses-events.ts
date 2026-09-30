@@ -16,7 +16,16 @@ export interface ParsedEmailEvent {
    * rather than the newest one for that address.
    */
   messageId: string | null;
-  email: string; // first recipient, lowercased — our sends have exactly one
+  /** The first of `recipients`. Until TASK-464 every send had exactly one recipient. */
+  email: string;
+  /**
+   * TASK-464: the people this event is about, lowercased, as SES names them in the event itself: the
+   * bounced recipients of a bounce, the complainants of a complaint, the recipients a delivery
+   * reached. One email can now go to several people (the Ball's ticket report), and an event must
+   * only ever be applied to the people it names. When the event names nobody, the message's first
+   * address, as before.
+   */
+  recipients: string[];
   occurredAt: Date;
   detail: Record<string, unknown> | null; // the bounce object and nothing else — never a whole payload
   // The DESTINATION a clicked event was for (per-link counts are the point of clicks). Null on
@@ -80,9 +89,9 @@ export function parseSesEvent(message: string): ParsedEmailEvent | null {
   let payload: {
     eventType?: unknown;
     mail?: { timestamp?: unknown; destination?: unknown; messageId?: unknown };
-    delivery?: { timestamp?: unknown };
-    bounce?: { timestamp?: unknown; bounceType?: unknown };
-    complaint?: { timestamp?: unknown };
+    delivery?: { timestamp?: unknown; recipients?: unknown };
+    bounce?: { timestamp?: unknown; bounceType?: unknown; bouncedRecipients?: unknown };
+    complaint?: { timestamp?: unknown; complainedRecipients?: unknown };
     click?: { timestamp?: unknown; link?: unknown };
     open?: { timestamp?: unknown };
   };
@@ -122,7 +131,50 @@ export function parseSesEvent(message: string): ParsedEmailEvent | null {
   const mailId = payload?.mail?.messageId;
   const messageId = typeof mailId === "string" && mailId.trim() ? mailId.trim() : null;
 
-  return { eventType, email: first.trim().toLowerCase(), occurredAt, detail, linkUrl, messageId };
+  const named =
+    eventType === "bounced"
+      ? addressesIn(payload?.bounce?.bouncedRecipients, emailAddressOf)
+      : eventType === "complained"
+        ? addressesIn(payload?.complaint?.complainedRecipients, emailAddressOf)
+        : eventType === "delivered"
+          ? addressesIn(payload?.delivery?.recipients)
+          : [];
+  const recipients = named.length > 0 ? named : [first.trim().toLowerCase()];
+
+  return { eventType, email: recipients[0], recipients, occurredAt, detail, linkUrl, messageId };
+}
+
+const emailAddressOf = (item: unknown): unknown =>
+  item && typeof item === "object" ? (item as Record<string, unknown>).emailAddress : undefined;
+
+// The addresses in one of an event's recipient lists: strings with an @, lowercased, each once.
+function addressesIn(list: unknown, pick: (item: unknown) => unknown = (item) => item): string[] {
+  if (!Array.isArray(list)) return [];
+  const out: string[] = [];
+  for (const item of list) {
+    const value = pick(item);
+    if (typeof value !== "string" || !value.includes("@")) continue;
+    const address = value.trim().toLowerCase();
+    if (!out.includes(address)) out.push(address);
+  }
+  return out;
+}
+
+/**
+ * Why this person's email bounced: the provider's diagnostic for THEM where it gave one (an email
+ * to several people can bounce for each for a different reason), else the first one's, else the
+ * bounce sub-type.
+ */
+export function bounceReasonFor(event: ParsedEmailEvent): string | null {
+  const list = event.detail?.bouncedRecipients;
+  const entries = Array.isArray(list)
+    ? list.filter((r): r is Record<string, unknown> => Boolean(r) && typeof r === "object")
+    : [];
+  const theirs =
+    entries.find((r) => typeof r.emailAddress === "string" && r.emailAddress.trim().toLowerCase() === event.email) ??
+    entries[0];
+  const words = theirs?.diagnosticCode ?? event.detail?.bounceSubType ?? null;
+  return typeof words === "string" ? words : null;
 }
 
 // TASK-272 lineage: which events take an address off every future send. Pure, so the rule is
@@ -140,11 +192,5 @@ export function suppressionFor(
   if (event.eventType === "complained") return { reason: "complained", detail: null };
   if (event.eventType !== "bounced") return null;
   if (String(event.detail?.bounceType ?? "").toLowerCase() !== "permanent") return null;
-  const recipients = event.detail?.bouncedRecipients;
-  const diagnostic =
-    Array.isArray(recipients) && recipients[0] && typeof recipients[0] === "object"
-      ? (recipients[0] as Record<string, unknown>).diagnosticCode
-      : null;
-  const words = diagnostic ?? event.detail?.bounceSubType ?? null;
-  return { reason: "bounced", detail: typeof words === "string" ? words : null };
+  return { reason: "bounced", detail: bounceReasonFor(event) };
 }

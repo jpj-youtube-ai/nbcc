@@ -37,6 +37,16 @@ Feature: Email audit page (email-audit feature)
     Then the send with id "msg-older-001" should be marked "bounced"
     And the send with id "msg-newer-002" should be marked "nothing"
 
+  # TASK-464: one email can go to several people (the Ball's ticket report). SES names the person a
+  # bounce is about: it lands on their row only, and only they are taken off future sends.
+  Scenario: on an email to several people, a bounce lands on the person it was for, and nobody else
+    Given one send to "ada.audit.bdd@example.com, bo.audit.bdd@example.com, cy.audit.bdd@example.com" is on record, id "msg-shared-003"
+    When a bounce arrives for message id "msg-shared-003", naming only "bo.audit.bdd@example.com"
+    Then the send with id "msg-shared-003" to "bo.audit.bdd@example.com" should be marked "bounced"
+    And the send with id "msg-shared-003" to "ada.audit.bdd@example.com" should be marked "nothing"
+    And the send with id "msg-shared-003" to "cy.audit.bdd@example.com" should be marked "nothing"
+    And "bo.audit.bdd@example.com" is taken off future sends, and "ada.audit.bdd@example.com" is not
+
   Scenario: the page is its own permission, and no role below admin carries it
     Given a newsletter admin "audit.editor.bdd@example.com" with role "editor" and password "pw-ea3"
     When I fetch the email audit log

@@ -82,6 +82,26 @@ export async function authorizeSection(
   return result.claims;
 }
 
+// TASK-464: authorizeSection for a card on one section's page that shows another section's data
+// (the Festive Ball's ticket report, on the Events page). The user needs every section named, at its
+// level; the same 401s, and one 403 if any is short.
+export async function authorizeSections(
+  req: Request,
+  res: Response,
+  needs: ReadonlyArray<readonly [Section, "view" | "edit"]>,
+): Promise<AdminSessionClaims | null> {
+  const result = await authorizeSession(req, res);
+  if (!result) return null;
+
+  const perms = effectivePermissions(result.row);
+  if (!needs.every(([section, level]) => can(perms, section, level))) {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+
+  return result.claims;
+}
+
 // A lightweight gate for endpoints that need no section/level check, just a valid, non-disabled
 // session — backs GET /api/admin/me (Task 5): any authenticated staff member may read their OWN
 // effective permissions (used by the front-end to filter its nav and gate write controls),

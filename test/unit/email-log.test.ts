@@ -69,6 +69,41 @@ describe("markEmailDelivery", () => {
   });
 });
 
+// TASK-346 matched an outcome to its send by SES message id. TASK-464 sends one email to several
+// people (the Ball's ticket report): each has a row under the same id, so the outcome must land on
+// the row for the address SES named, and only that one.
+describe("markEmailDelivery with a message id", () => {
+  const ID = "0100018f-aaaa-bbbb-cccc-000000000002";
+  const updates = () => queryMock.mock.calls.filter((c) => /update email_log/i.test(String(c[0])));
+
+  it("stamps the row for the person SES named on that message, and nothing else", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    await markEmailDelivery("Bo@Example.com", "bounced", new Date("2026-09-01T10:00:00Z"), "550 no such user", ID);
+    expect(updates()).toHaveLength(1);
+    const [sql, params] = updates()[0] as [string, unknown[]];
+    expect(sql).toMatch(/ses_message_id = \$1 and recipient = lower\(\$5\)/i);
+    expect(params[0]).toBe(ID);
+    expect(params[1]).toBe("bounced");
+    expect(params[4]).toBe("Bo@Example.com");
+  });
+
+  it("on an email to one person, still finds it by id alone if the address was written differently", async () => {
+    queryMock.mockResolvedValueOnce({ rows: [], rowCount: 0 }).mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    await markEmailDelivery("Dora@Example.com", "delivered", new Date("2026-09-01T10:00:00Z"), null, ID);
+    expect(updates()).toHaveLength(2);
+    const second = String(updates()[1][0]);
+    expect(second).toMatch(/ses_message_id = \$1/i);
+    expect(second).toMatch(/count\(\*\) from email_log where ses_message_id = \$1\) = 1/i);
+    expect(second).not.toMatch(/recipient/i);
+  });
+
+  it("falls back to the address and recency only when the id matched nothing", async () => {
+    await markEmailDelivery("Dora@Example.com", "delivered", new Date("2026-09-01T10:00:00Z"), null, ID);
+    expect(updates()).toHaveLength(3);
+    expect(String(updates()[2][0])).toMatch(/order by created_at desc/i);
+  });
+});
+
 describe("listEmailLog", () => {
   it("maps 'failed' to OUR attempt column and 'bounced' to the mailbox verdict column", async () => {
     await listEmailLog({ status: "failed", limit: 50, offset: 0 });

@@ -2736,6 +2736,50 @@ stage is skipped, so pressing the button twice is safe.
 Past the lock date the chase stops entirely rather than running to the event: staff work the
 remaining stragglers by hand from the outstanding list.
 
+### The ticket report (TASK-464)
+
+Twice a week, on Tuesday and Thursday mornings, the people running the Ball with us (the organiser,
+the sponsor and our own staff) get one email with its ticket numbers: seats sold of 400 and how
+full, whole tables and single seats, what sold since the last update and in the last 7 days against
+the 7 before, what is still available and kept back for guests, the people still waiting (anyone
+already offered a place is not counted) and the seats they want, and the days to go. Counts only:
+no names, no booking details, no money. Sold means paid. It opens with when the next
+update comes and how to reach us (01292 811 015, events@nbcc.scot), comes From and Reply-To
+`BALL_FROM_EMAIL` in the Ball's own frame (`ballEmailShell`), and goes as ONE email with everyone
+on the To line so they can reply to all: they all work together (Jaimie's call; if the list ever
+reaches beyond that group, send separately instead).
+
+It is set up on Admin → Events, in the **Festive Ball ticket report** card under the page switch:
+the list (a name and an address each, kept in alphabetical order, up to 10), the switch, **Send a
+test to me** (the real email marked "[Test]", to the signed-in person only) and a preview with
+today's numbers. Anyone who can edit Events can change it; viewers can look. Both also need at
+least view on the Festive Ball, since the numbers are the Ball's (every role has that by default).
+It ships switched off, and saving it on with nobody to send to is refused. The routes:
+`GET /api/admin/ball-report` (`events:view`), `PUT /api/admin/ball-report` and
+`POST /api/admin/ball-report/test` (`events:edit`), each with `ball:view`.
+Every save and test writes an `audit_log` row (who was added or removed, and by whom), and the email
+log lists each person a report went to.
+
+It rides the daily 8am task (`npm run reminders`) like the run-up, with no schedule of its own:
+`runBallSalesReport` (`src/ball/sales-report-runner.ts`) sends only on a Tuesday or Thursday, UK
+time, when switched on, with recipients, up to the day of the Ball. It claims the day first in
+`ball_report_sends` (a unique index allows one scheduled report a day), so a second run sends
+nothing; a failed send gives the day back, and a send that went keeps it even if recording it then
+fails. Each report records `counted_to`, the moment its numbers were counted to, and the next one's
+"since the last update" counts on from exactly there. The numbers (`countSales`) and words are the
+pure `src/ball/sales-report.ts` (`test/unit/ball-sales-report.test.ts`), the wiring is tested in
+`test/unit/ball-sales-report-runner.test.ts`, and `features/ball-report.feature` covers the admin
+API and the numbers against Postgres.
+
+`SesMessage` gained an optional `alsoTo` list for this one email; every other email is unchanged.
+Because one email now reaches several people, one SES event can name several: `parseSesEvent`
+gives each event's own `recipients` (the bounced, the complainants, the delivered), and the webhook
+stamps the email log, records newsletter events and suppresses once per person, so a bounce from
+one never lands on, or suppresses, another (`features/email-audit.feature`).
+
+The list is business contacts, kept until someone removes them: once the Ball is over, switch the
+report off and remove everyone from it.
+
 ### The week-before reminder
 
 `POST /api/admin/ball/reminders` (Editor+ with the ball section). The original staff-triggered
@@ -5811,6 +5855,46 @@ saved, and the three buttons save exactly the server's `roleToPermissions` for t
 for everything else. `test/unit/admin-app.test.ts` presses each button and saves, and holds the save to
 the server's own schema.
 
+## Newsletter links opened a security warning (TASK-466)
+
+Every link in a newsletter is rewritten so a click can be counted, and until this change that was to
+`https://links.news.nbcc.scot/…` (the newsletter configuration set in `infra/modules/app/ses.tf`, HTTPS
+required). Since the move to Amazon SES on 31 August that name was a bare CNAME to SES's regional tracker,
+`r.eu-west-2.awstrack.me`, which answers with its **own** certificate. That certificate does not cover
+`links.news.nbcc.scot`, so a reader who clicked any link in a newsletter, Donate included, got the
+browser's full-page "Your connection is not private" warning, and the click was never counted. Nothing
+in the send path could notice: the mail itself was delivered normally.
+
+An https tracking domain needs a CDN holding the domain's own certificate. That is AWS's documented
+setup, and it is what is there now, on a new address, **`click.news.nbcc.scot`**:
+
+- a certificate for `click.news.nbcc.scot` in **us-east-1**, the only region CloudFront reads
+  certificates from (so the production root gains an `aws.us_east_1` provider), validated through the
+  zone like the site's own;
+- a **CloudFront distribution** for that name with SES's tracker as its origin, over https, passing the
+  reader's `Host` header through (AWS: "The CDN must pass the Host header supplied by the requester to
+  the origin") and caching nothing, because a cached redirect is a click SES never sees;
+- `click.news` as an A + AAAA alias to it;
+- the newsletter configuration set's tracking domain changed to `click.news`, and only once the new
+  address answers (it depends on those records), so nothing sent mid-apply carries a dead link.
+
+**Why a new address rather than fixing `links.news`:** the retired Resend account's CloudFront
+distribution still holds the name `links.news.nbcc.scot` (a CloudFront edge asked for it still
+presents Resend's certificate for it, issued 26 August), and CloudFront gives a name to one
+distribution only, so ours would have been refused (`CNAMEAlreadyExists`). `click.news` was free.
+
+AWS's own check: `curl --head https://click.news.nbcc.scot/favicon.ico` answers **200** with
+`x-amz-ses-region: eu-west-2` and `x-amz-ses-request-protocol: https`.
+`test/unit/newsletter-click-tracking-https.test.ts` pins the shape for whatever domain the configuration
+set names, so it cannot quietly go back to a bare CNAME.
+
+**Not fixed here: the links in newsletters already sent.** The ones sent between 31 August and this
+fix carry `links.news` links and still open the warning; their click counts are near zero because the
+clicks never arrived, not because nobody clicked. `links.news` is left exactly as it was, since removing
+it would only turn those links from a warning into "not found". It could be made to work by having
+Resend release the name (or moving it with CloudFront's alias-transfer, which needs a TXT record
+proving the domain is ours) and adding it to the same distribution.
+
 ## Enquiries waiting for a reply (TASK-425)
 
 A contact enquiry used to be invisible unless you deliberately opened **Content → Contact form**.
@@ -6248,11 +6332,12 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 45 tables
-(42 when this was built; the Events page added three in TASK-453),
+This is the trap this feature was built around. `DATABASE_URL` holds 46 tables
+(42 when this was built; the Events page added three in TASK-453, and the Festive Ball ticket
+report one in TASK-464),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 45 of **47** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 46 of **48** tables and silently
 drops every My Story submission and every contact enquiry, while producing a
 file of entirely plausible size.
 
@@ -6448,7 +6533,8 @@ blocked on the owner's machine). The keys, all defaulted so boot never blocks:
 - `SES_REGION` (default `eu-west-2`) — plain task-def env, matching the stack's region.
 - `SES_NEWSLETTER_CONFIGURATION_SET` / `SES_TRANSACTIONAL_CONFIGURATION_SET` — the two SES
   configuration sets Terraform creates (`ses.tf`): the newsletter one carries click tracking on
-  `links.news.nbcc.scot`, the transactional one deliberately none. Blank = send without events.
+  `click.news.nbcc.scot` (`links.news` before TASK-466), the transactional one deliberately none.
+  Blank = send without events.
 - `MAIL_FROM` (default `noreply@nbcc.scot`) — the From for app-branded transactional email (the
   retired relay's `MAIL_FROM` role).
 - `SES_WEBHOOK_TOKEN` — the ONE email secret: the shared token in the delivery-webhook path
@@ -7210,10 +7296,12 @@ provider's **shared** tracking domain — so an email that says it is from `nbcc
 somewhere else entirely. That is the shape of a phishing message, and it is very likely part of why a
 real send reached Hotmail's junk folder.
 
-A tracking CNAME on our own subdomain makes the rewritten links match the sender — since the
-Resend→SES migration that is `links.news.nbcc.scot` → `r.eu-west-2.awstrack.me`, configured on the
-SES newsletter configuration set; the apex tracker is gone because transactional mail no longer
-carries click tracking at all. Same click data, nothing suspicious.
+A tracking domain on our own subdomain makes the rewritten links match the sender. Since TASK-466
+that is `click.news.nbcc.scot`, in front of SES's `r.eu-west-2.awstrack.me`, configured on the SES
+newsletter configuration set; the apex tracker is gone because transactional mail no longer carries
+click tracking at all. Same click data, nothing suspicious. It is CloudFront holding the domain's own
+certificate, not a bare CNAME to the tracker: the links are https, and the bare CNAME that
+`links.news` was served SES's certificate for our name, so every link failed with a security warning.
 
 **Open tracking stays off.** It works by embedding an invisible image, which Apple Mail and Gmail
 pre-load — so the numbers lie — and some filters read a tracking pixel as a negative signal. Clicks
@@ -7233,7 +7321,8 @@ Since the Resend→SES migration they are (see `infra/modules/app/ses.tf`):
 | `<token>._domainkey.news` ×3 | CNAME | Easy DKIM — **its own keys**, distinct from the apex |
 | `bounce.news` | MX | MAIL FROM / Return-Path: bounce and complaint feedback |
 | `bounce.news` | TXT | SPF (`include:amazonses.com`) |
-| `links.news` | CNAME | click tracking → `r.eu-west-2.awstrack.me` |
+| `click.news` | A + AAAA alias | click tracking → CloudFront (its own certificate) → `r.eu-west-2.awstrack.me` (TASK-466) |
+| `links.news` | CNAME | the old click-tracking address, kept for the links in newsletters sent before TASK-466 → `r.eu-west-2.awstrack.me` (its https does not work; see TASK-466) |
 
 DMARC is inherited from the apex policy (there is no `sp=` tag), so the tightened `p=quarantine`
 covers this subdomain too without a second record.
@@ -7277,15 +7366,17 @@ Cloudflare Worker relay (`services/email-relay/`) and the Resend account are gon
   bounces). Pinned by `test/unit/ses-webhook.test.ts` + the rewritten webhook scenarios in
   `features/newsletter.feature`.
 - **Two configuration sets** (`infra/modules/app/ses.tf`): `…-newsletter` (click tracking on
-  `links.news.nbcc.scot`, HTTPS required) and `…-transactional` (no tracking, no link rewriting) —
+  `click.news.nbcc.scot` since TASK-466, HTTPS required) and `…-transactional` (no tracking, no link
+  rewriting) —
   a receipt must never carry newsletter-tracker links.
 - **Config**: `EMAIL_PROVIDER` (`stub`/`ses`) replaces the `.example`-URL stub seam;
   `RESEND_WEBHOOK_SECRET`, `EMAIL_SEND_URL` and `CONTACT_FORWARD_URL` are removed everywhere
   (schema, `.env.example`, `pr.yml`, SSM, task-def, IAM). The dead contact-forwarding client went
   with them. See **Email keys** under **Configuration**.
 - **DNS** (`ses.tf` + `dns.tf`): Easy-DKIM CNAMEs ×3 per identity, `bounce.`/`bounce.news.` MAIL
-  FROM MX+SPF, `links.news` → `r.eu-west-2.awstrack.me`; every `resend._domainkey`/`send.*` record
-  removed. Root SPF and DMARC values are untouched.
+  FROM MX+SPF, `links.news` → `r.eu-west-2.awstrack.me` (superseded by `click.news` through CloudFront
+  in TASK-466); every `resend._domainkey`/`send.*` record removed. Root SPF and DMARC values are
+  untouched.
 
 ⚠️ **Cutover order matters** (sandbox → production): (1) `infra.yml` plan + apply — creates the
 identities, DNS, configuration sets, SNS topic/subscription and token; DKIM verifies itself in

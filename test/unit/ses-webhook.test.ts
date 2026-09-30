@@ -64,6 +64,7 @@ describe("parseSesEvent", () => {
     expect(parsed).toEqual({
       eventType: "delivered",
       email: "dora@example.com",
+      recipients: ["dora@example.com"],
       occurredAt: new Date("2026-08-31T10:00:01.000Z"),
       detail: null,
       linkUrl: null,
@@ -124,6 +125,69 @@ describe("parseSesEvent", () => {
   it("falls back to mail.timestamp when the per-event timestamp is missing", () => {
     const parsed = parseSesEvent(sesEvent({ delivery: {} }));
     expect(parsed?.occurredAt).toEqual(new Date("2026-08-31T10:00:00.000Z"));
+  });
+
+  // TASK-464: the Ball's ticket report is ONE email to several people, so its events carry several
+  // addresses. Each event names the people it is about (SES lists them per event), and the webhook
+  // acts for exactly those: a bounce from one never lands on, or suppresses, another.
+  describe("on an email to several people", () => {
+    const shared = (over: Record<string, unknown>) =>
+      sesEvent({
+        mail: {
+          timestamp: "2026-08-31T10:00:00.000Z",
+          destination: ["Ada@Example.com", "Bo@Example.com", "Cy@Example.com"],
+          messageId: "0100018f-aaaa-bbbb-cccc-000000000002",
+        },
+        delivery: undefined,
+        ...over,
+      });
+
+    it("a bounce is about the people who bounced, not the first on the list", () => {
+      const parsed = parseSesEvent(
+        shared({
+          eventType: "Bounce",
+          bounce: {
+            timestamp: "2026-08-31T10:00:02.000Z",
+            bounceType: "Permanent",
+            bouncedRecipients: [{ emailAddress: "Bo@Example.com", diagnosticCode: "550 no such user" }],
+          },
+        }),
+      );
+      expect(parsed?.recipients).toEqual(["bo@example.com"]);
+      expect(parsed?.email).toBe("bo@example.com");
+    });
+
+    it("a complaint is about the person who complained", () => {
+      const parsed = parseSesEvent(
+        shared({
+          eventType: "Complaint",
+          complaint: { timestamp: "2026-08-31T10:00:03.000Z", complainedRecipients: [{ emailAddress: "Cy@Example.com" }] },
+        }),
+      );
+      expect(parsed?.recipients).toEqual(["cy@example.com"]);
+    });
+
+    it("a delivery is about everyone it reached", () => {
+      const parsed = parseSesEvent(
+        shared({ delivery: { timestamp: "2026-08-31T10:00:01.000Z", recipients: ["Ada@Example.com", "Cy@Example.com"] } }),
+      );
+      expect(parsed?.recipients).toEqual(["ada@example.com", "cy@example.com"]);
+    });
+
+    it("falls back to the first address when an event names nobody, as it always did", () => {
+      const parsed = parseSesEvent(shared({ delivery: { timestamp: "2026-08-31T10:00:01.000Z" } }));
+      expect(parsed?.recipients).toEqual(["ada@example.com"]);
+      expect(parsed?.email).toBe("ada@example.com");
+    });
+
+    it("ignores anything in the list that is not an address, and names nobody twice", () => {
+      const parsed = parseSesEvent(
+        shared({
+          delivery: { timestamp: "2026-08-31T10:00:01.000Z", recipients: ["Bo@Example.com", 42, "", "bo@example.com"] },
+        }),
+      );
+      expect(parsed?.recipients).toEqual(["bo@example.com"]);
+    });
   });
 
   it("acknowledges-and-drops unconsumed types, malformed bodies, and payloads with no recipient", () => {

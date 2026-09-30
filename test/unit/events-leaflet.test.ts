@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
 import { eventInputSchema, isSafeImageSrc, publishProblems } from "../../src/events/model";
@@ -38,36 +38,39 @@ function sqlOf(run: (pgm: { sql: (s: string) => void }) => void): string {
   return statements.join("\n");
 }
 
-// Width and height from a WebP file's own header, so the test needs no image library.
-function webpSize(bytes: Buffer): { width: number; height: number } {
-  expect(bytes.toString("ascii", 0, 4)).toBe("RIFF");
-  expect(bytes.toString("ascii", 8, 12)).toBe("WEBP");
-  const chunk = bytes.toString("ascii", 12, 16);
-  if (chunk === "VP8X") return { width: 1 + bytes.readUIntLE(24, 3), height: 1 + bytes.readUIntLE(27, 3) };
-  if (chunk === "VP8 ") return { width: bytes.readUInt16LE(26) & 0x3fff, height: bytes.readUInt16LE(28) & 0x3fff };
-  if (chunk === "VP8L") {
-    const bits = bytes.readUInt32LE(21);
-    return { width: (bits & 0x3fff) + 1, height: ((bits >> 14) & 0x3fff) + 1 };
-  }
-  throw new Error(`not a WebP: ${chunk}`);
-}
+// TASK-472: Jaimie took the leaflet off the card in the admin, and the file has left the site. A
+// later migration takes it off every other database too, so no card points at a missing file.
+const off = require(resolve(REPO, "migrations/1790900000000_events-empowher-leaflet-off.js")) as {
+  LEAFLET_OFF: { slug: string; src: string; picture: Swap[] };
+  up: (pgm: { sql: (s: string) => void }) => void;
+  down: (pgm: { sql: (s: string) => void }) => void;
+};
 
-describe("the leaflet itself", () => {
-  it("is one of the site's own pictures, at an address the admin itself would accept", () => {
-    const src = LEAFLET.picture.find((p) => p.field === "imageSrc")!.to;
-    expect(src).toBe(LEAFLET_SRC);
-    expect(isSafeImageSrc(src)).toBe(true);
+describe("the leaflet, taken off again (TASK-472)", () => {
+  it("is gone from the site, and was at an address the admin itself would accept", () => {
+    expect(off.LEAFLET_OFF.src).toBe(LEAFLET_SRC);
+    expect(isSafeImageSrc(LEAFLET_SRC)).toBe(true);
+    expect(existsSync(resolve(REPO, LEAFLET_SRC.slice(1)))).toBe(false);
   });
 
-  it("is sharp enough for the widest card on a sharp screen, and light enough for a phone", () => {
-    const bytes = readFileSync(resolve(REPO, LEAFLET_SRC.slice(1)));
-    const { width, height } = webpSize(bytes);
-    // The widest a whole picture is ever drawn is about 520px (two cards to a row); twice that keeps
-    // the leaflet's lettering crisp on a phone or a retina screen.
-    expect(width).toBeGreaterThanOrEqual(1040);
-    // The leaflet's own shape, with the dark frame of the screenshot it came in cropped away.
-    expect(width / height).toBeCloseTo(1938 / 1063, 1);
-    expect(bytes.length).toBeLessThan(80_000);
+  it("comes off only where it is still exactly the leaflet, back to the event's own settings", () => {
+    const up = sqlOf(off.up);
+    expect(up).toContain(`WHERE slug = 'empowher-2026' AND image_src = '${LEAFLET_SRC}'`);
+    for (const p of off.LEAFLET_OFF.picture) {
+      expect(up).toContain(`${p.column} = ${quoted(p.to as string | null)}`);
+      // Back to exactly what the first migration replaced.
+      const before = LEAFLET.picture.find((q) => q.field === p.field)!;
+      expect(p.to).toBe(before.from);
+      expect(p.from).toBe(before.to);
+    }
+  });
+
+  it("leaves the words, updated_by and every table alone, and has nothing to put back", () => {
+    const up = sqlOf(off.up);
+    for (const w of LEAFLET.words) expect(up).not.toContain(w.column + " =");
+    expect(up).not.toMatch(/updated_by/);
+    expect(up).not.toMatch(/\b(alter|drop|create|insert|delete)\b/i);
+    expect(sqlOf(off.down)).toBe("");
   });
 });
 
@@ -133,13 +136,11 @@ describe("the card, as production will show it", () => {
     return t.content;
   };
 
-  it("shows the leaflet whole on cream, clear of the date in the corner", () => {
+  it("has no picture, as Jaimie chose, and makes its own cover from the name", () => {
     const art = card().querySelector(".ev-front .ev-art")!;
-    expect(art.className).toBe("ev-art ev-art--whole ev-art--ground-cream");
-    const img = art.querySelector("img")!;
-    expect(img.getAttribute("src")).toBe(LEAFLET_SRC);
-    // Everything the leaflet says, the card says in words, so a screen reader does not hear it twice.
-    expect(img.getAttribute("alt")).toBe("");
+    expect(art.classList.contains("ev-art--type")).toBe(true);
+    expect(card().querySelector(".ev-front img")).toBeNull();
+    expect(card().querySelector(`[src="${LEAFLET_SRC}"]`)).toBeNull();
   });
 
   it("names Ali Wright as the host the way the leaflet does, and AD Autocare as the organiser", () => {

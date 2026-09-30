@@ -6360,8 +6360,8 @@ public will. Everything typed is escaped; `*stars*` become bold only after escap
 adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `events.html` is
 in the Dockerfile's explicit page list.
 
-**EmpowHer's leaflet (TASK-456).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
-leaflet (`assets/img/empowher-2026-leaflet.webp`, 1200px wide, cropped out of the screenshot frame
+**EmpowHer's leaflet (TASK-456, taken off in TASK-472).** `1789100000003_events-empowher-leaflet.js` puts the organiser's
+leaflet (`assets/img/empowher-2026-leaflet.webp`, since deleted, 1200px wide, cropped out of the screenshot frame
 it arrived in) on EmpowHer's card, whole on cream, and brings three details into line with it: Ali
 Wright as the evening's host, from Now Radio's Ali and Michael in the Morning; the Wallacetown Drive
 address; and "Organised by" on the front, so the card never names two hosts. It is compare and
@@ -6371,6 +6371,11 @@ is left alone, so the seed's `down` still removes only rows no person has touche
 helper applies the same rule, so every test renders what production holds;
 `test/unit/events-leaflet.test.ts` pins the swap and the picture, and a scenario in
 `features/events.feature` proves it lands on the seeded row in Postgres.
+
+Jaimie took the picture off in the admin the same day, keeping the words, and TASK-472 deleted the
+file. `1790900000000_events-empowher-leaflet-off.js` takes the leaflet off any database where it is
+still exactly the leaflet (a fresh one, since 1789100000003 still puts it on), so no card points at a
+missing file; on production it matches nothing. Its `down` does nothing, as there is no file to put back.
 
 Covered by `test/unit/events-model.test.ts`, `events-render.test.ts`, `events-nav-link.test.ts`,
 `events-page.test.ts`, the site map and permission tests, and `features/events.feature` (the switch

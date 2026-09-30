@@ -71,3 +71,35 @@ describe("the TASK-463 backfill", () => {
     expect(source()).not.toContain("'email-audit'");
   });
 });
+
+// TASK-479: site analytics arrives with its own backfill, the TASK-463 way.
+describe("the TASK-479 analytics backfill", () => {
+  const ANALYTICS_BACKFILL = "1791000000001_permissions-analytics.js";
+  const source = () => withoutComments(readFileSync(resolve(MIGRATIONS, ANALYTICS_BACKFILL), "utf8"));
+
+  it("gives each role what roleToPermissions gives it", () => {
+    const found = [
+      ...source().matchAll(
+        /jsonb_build_object\(\s*'analytics',\s*CASE role WHEN 'admin' THEN '(\w+)' WHEN 'editor' THEN '(\w+)' ELSE '(\w+)' END/g,
+      ),
+    ];
+    expect(found).toHaveLength(1);
+    const [, admin, editor, anyoneElse] = found[0];
+    expect({ admin, editor, anyoneElse }).toEqual({
+      admin: roleToPermissions("admin").analytics ?? "none",
+      editor: roleToPermissions("editor").analytics ?? "none",
+      anyoneElse: roleToPermissions("viewer").analytics ?? "none",
+    });
+  });
+
+  it("records every key it adds in the audit log, by migration:TASK-479", () => {
+    expect(source()).toContain("INSERT INTO audit_log");
+    expect(source()).toContain("'migration:TASK-479'");
+    expect(source()).toContain("'admin_user.permissions_backfilled'");
+  });
+
+  it("sorts after every other migration, so production runs it", () => {
+    const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".js")).sort();
+    expect(files.slice(-2)).toEqual(["1791000000000_site-analytics.js", ANALYTICS_BACKFILL]);
+  });
+});

@@ -1729,6 +1729,16 @@ result goes in with `execCommand("insertText")`, so Ctrl+Z undoes a paste, and t
 afresh first so that the paste is its own undo step. Otherwise Chrome folds it into the words typed just
 before it, and one Ctrl+Z takes both. Every other box pastes plain text, as before.
 
+**The text boxes grow to fit, with no scrolling inside them (TASK-477).** Every multiline box in the
+builder (the four prose boxes, and the legacy raw HTML box) is as tall as its words, so it never shows
+a scrollbar of its own: the page grows instead. `nlFitBox` in `assets/js/admin/app.js` sets the height
+from `scrollHeight` after resetting it to `auto`, so a box shrinks as well as grows, and its three rows
+are the minimum. It runs on every edit (typing, a paste, the B and I buttons, Ctrl+Z), whenever the
+canvas is drawn (so a saved draft opens at full height), when the Write panel is shown, and when the
+canvas changes width (the window resizing, or a `ResizeObserver` on the canvas), because narrower
+boxes wrap onto more lines. A box that is not on screen, such as one in a folded block, measures
+nothing and is fitted when it shows. `admin.css` hides the inner scrollbar and the drag handle.
+
 **Deleting a newsletter (TASK-252, hardened by TASK-258).** `DELETE /api/admin/newsletters/:id`,
 **Admin only**. A **draft** (never went anywhere) is really deleted, through `writeWithAudit` so the
 deletion and its `audit_log` row commit atomically. A **sent** newsletter is **immutable — a permanent

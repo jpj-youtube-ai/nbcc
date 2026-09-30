@@ -3314,6 +3314,7 @@
 
       host.appendChild(li);
     });
+    nlFitAllBoxes(); // TASK-477: a draft opens with every prose box already tall enough for its words
   }
 
   function nlMove(i, delta) {
@@ -3379,6 +3380,7 @@
     }
     input.value = next;
     obj[key] = next;
+    nlFitBox(input); // the markers can push the words onto another line
     // Keep the same words selected, so a second click toggles the same thing rather than the author
     // having to re-select after every press.
     input.setSelectionRange(caret, caret + sel.length);
@@ -3458,6 +3460,32 @@
     }
   }
 
+  // TASK-477: a prose box grows to fit its words, so it never scrolls inside itself; the page grows
+  // instead. Called on every edit (typing, a paste, Ctrl+Z all fire "input"), after the canvas is drawn
+  // (so a saved draft opens at full height) and when the canvas changes width (words re-wrap). The
+  // height is reset to "auto" first so the box can shrink as well as grow; its rows are the minimum.
+  // A box not on screen (a folded block, a hidden panel) measures 0 and is left alone until it shows.
+  function nlFitBox(box) {
+    if (!box || !box.isConnected) return;
+    var y = window.pageYOffset;
+    box.style.height = "auto";
+    var h = box.scrollHeight;
+    if (!h) {
+      box.style.height = "";
+      return;
+    }
+    var cs = window.getComputedStyle(box);
+    if (cs.boxSizing === "border-box") h += (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+    else h -= (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+    box.style.height = h + "px";
+    // The moment at "auto" can shorten the page and nudge the scroll position; put it back.
+    if (window.pageYOffset !== y && typeof window.scrollTo === "function") window.scrollTo(window.pageXOffset, y);
+  }
+  function nlFitAllBoxes() {
+    var host = el("nlCanvas");
+    if (host) Array.prototype.forEach.call(host.querySelectorAll("textarea"), nlFitBox);
+  }
+
   function nlText(host, obj, key, label, opts) {
     opts = opts || {};
     var wrap = doc.createElement("label");
@@ -3472,7 +3500,11 @@
     input.value = obj[key] != null ? obj[key] : "";
     if (nlReadOnly()) input.disabled = true;
     else {
-      input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
+      input.addEventListener("input", function () {
+        obj[key] = input.value;
+        if (opts.multiline) nlFitBox(input);
+        nlSchedulePreview();
+      });
       // TASK-469: a prose box keeps what matters from a paste; a one-line box pastes plain text.
       // The legacy raw-HTML box (opts.raw) holds HTML source, not prose, so its paste stays the browser's.
       if (opts.multiline && !opts.raw) input.addEventListener("paste", function (e) { nlPasteProse(e, input); });
@@ -3830,6 +3862,20 @@
     el("nlPreview").addEventListener("load", nlPreviewOnLoad);
     window.addEventListener("resize", nlFitPreview);
   }
+  // TASK-477: a narrower or wider canvas re-wraps the words, so the prose boxes fit again. The window
+  // resizing is the usual cause; the observer also catches the canvas changing width on its own (the
+  // panel appearing, the layout switching at a breakpoint). Only a change of width refits, so the
+  // boxes growing (which changes the canvas height) does not set it off again.
+  window.addEventListener("resize", nlFitAllBoxes);
+  if (el("nlCanvas") && typeof window.ResizeObserver === "function") {
+    var nlCanvasWidth = 0;
+    new window.ResizeObserver(function (entries) {
+      var w = Math.round(entries[0].contentRect.width);
+      if (w === nlCanvasWidth) return;
+      nlCanvasWidth = w;
+      nlFitAllBoxes();
+    }).observe(el("nlCanvas"));
+  }
 
   if (el("nlPalette")) nlRenderPalette();
 
@@ -3959,6 +4005,8 @@
     // The preview cannot size itself while hidden (see nlFitPreview), so re-fit the moment the
     // Write panel is on screen and has a real width.
     if (panelId === "nlPanelWrite" && typeof nlFitPreview === "function") nlFitPreview();
+    // Same for the prose boxes (TASK-477): drawn while the panel was hidden, they measured nothing.
+    if (panelId === "nlPanelWrite") nlFitAllBoxes();
     if (panelId === "nlPanelWho") nlRenderAudienceCards();
     if (panelId === "nlPanelSend") { nlPaintSendSummary(); nlRunChecks(); }
     // Coming back to a destination should start at the top of it, not wherever the composer was

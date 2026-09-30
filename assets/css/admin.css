@@ -521,6 +521,10 @@
   width: 100%; font-family: var(--font-body); font-size: .92rem; color: var(--slate);
   background: var(--cream); border: 1.4px solid var(--line); border-radius: 10px; padding: 9px 11px; resize: vertical;
 }
+/* TASK-477: a prose box is sized to fit its words by app.js (nlFitBox), so there is never anything
+   to scroll inside it and the page grows instead. No drag handle: dragging it smaller would only hide
+   words behind the edge. Its three rows are the minimum. */
+.nl-block .nl-field textarea { overflow-y: hidden; resize: none; }
 .nl-block .nl-field input:focus, .nl-block .nl-field textarea:focus {
   outline: none; border-color: var(--crimson); box-shadow: 0 0 0 3px rgba(192,34,56,.12);
 }

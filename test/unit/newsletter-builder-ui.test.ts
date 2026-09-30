@@ -1509,3 +1509,163 @@ describe("pasting into a prose box (TASK-469)", () => {
     expect(e.defaultPrevented).toBe(false);
   });
 });
+
+// TASK-477: a prose box grows to fit its words, so it never scrolls inside itself; the page grows
+// instead. jsdom has no layout, so scrollHeight is stood in for by a small model of a real textarea:
+// 20px a line plus 18px of padding, lines wrapping every `charsPerLine` characters (narrower window,
+// more lines), and never less than the box's own height, which is its three rows while the height is
+// "auto" and whatever it was set to otherwise (so a box that never resets to "auto" can never shrink).
+describe("prose boxes grow to fit (TASK-477)", () => {
+  let charsPerLine = 40;
+  const LINE = 20;
+  const PAD = 18;
+  const contentLines = (value: string) =>
+    value.split("\n").reduce((n, line) => n + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+  const px = (lines: number) => lines * LINE + PAD + "px";
+
+  beforeEach(() => {
+    charsPerLine = 40;
+    loginToken = tokenFor("editor");
+    singleNewsletter = legacyNewsletter;
+    newsletterListRows = [];
+    savedRequests.length = 0;
+    window.sessionStorage.clear();
+    document.body.innerHTML = bodyHtml;
+    Object.defineProperty(window.HTMLTextAreaElement.prototype, "scrollHeight", {
+      configurable: true,
+      get(this: HTMLTextAreaElement) {
+        const own = this.style.height && this.style.height !== "auto"
+          ? parseFloat(this.style.height)
+          : (this.rows || 2) * LINE + PAD;
+        return Math.max(contentLines(this.value) * LINE + PAD, own);
+      },
+    });
+    (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
+    (window as unknown as { PasteProse: unknown }).PasteProse = pasteProse;
+    (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: unknown, init?: unknown) =>
+      Promise.resolve(respond(String(url), init as { method?: string; body?: string; headers?: Record<string, string> })),
+    );
+    // eslint-disable-next-line no-eval
+    (0, eval)(appSrc);
+  });
+
+  afterEach(() => {
+    delete (window.HTMLTextAreaElement.prototype as unknown as { scrollHeight?: number }).scrollHeight;
+    singleNewsletter = legacyNewsletter;
+    newsletterListRows = [];
+  });
+
+  async function newTextBox() {
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    clickPalette("Text");
+    return el("nlCanvas").querySelector("textarea") as HTMLTextAreaElement;
+  }
+
+  function type(box: HTMLTextAreaElement, value: string) {
+    box.value = value;
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  it("starts at its three-line minimum and grows line by line as you type", async () => {
+    const box = await newTextBox();
+    expect(box.style.height).toBe(px(3));
+
+    type(box, "One\nTwo\nThree\nFour\nFive\nSix");
+    expect(box.style.height).toBe(px(6));
+  });
+
+  it("shrinks back when words are taken out (as an undo does), but never below three lines", async () => {
+    const box = await newTextBox();
+    type(box, "1\n2\n3\n4\n5\n6\n7\n8");
+    expect(box.style.height).toBe(px(8));
+
+    type(box, "1\n2\n3\n4\n5"); // Ctrl+Z fires the same input event
+    expect(box.style.height).toBe(px(5));
+
+    type(box, "");
+    expect(box.style.height).toBe(px(3));
+  });
+
+  it("grows to fit a pasted run of paragraphs", async () => {
+    const box = await newTextBox();
+    type(box, "");
+
+    paste(box, {
+      "text/html": "<p>First.</p><p>Second.</p><p>Third.</p><p>Fourth.</p><p>Fifth.</p>",
+    });
+
+    expect(box.value).toBe("First.\n\nSecond.\n\nThird.\n\nFourth.\n\nFifth.");
+    expect(box.style.height).toBe(px(9));
+  });
+
+  it("opens a saved draft with every prose box already tall enough for its words", async () => {
+    const text = ["Dear friends,", "", "What a year it has been.", "", "Thank you.", "", "The team", "x"].join("\n");
+    singleNewsletter = {
+      id: 41,
+      subject: "Autumn news",
+      status: "draft",
+      sentAt: null,
+      recipientCount: null,
+      bodyHtml: null,
+      bodyJson: {
+        blocks: [
+          { type: "text", variant: 0, data: { text } },
+          { type: "spotlight", variant: 2, data: { name: "Sam", quote: "A\nB\nC\nD\nE", role: "Volunteer" } },
+        ],
+      },
+    };
+    newsletterListRows = [{ id: 41, subject: "Autumn news", status: "draft", sentAt: null, recipientCount: null }];
+    await openNewsletterTab();
+    await flush();
+    Array.prototype.forEach.call(el("nlCanvas").querySelectorAll('.nl-block-toggle[aria-expanded="false"]'), (t: HTMLElement) =>
+      t.click(),
+    );
+
+    const boxes = el("nlCanvas").querySelectorAll("textarea");
+    expect(boxes).toHaveLength(2);
+    expect((boxes[0] as HTMLTextAreaElement).style.height).toBe(px(8));
+    expect((boxes[1] as HTMLTextAreaElement).style.height).toBe(px(5));
+  });
+
+  it("fits again when the window gets narrower and the words wrap onto more lines", async () => {
+    const box = await newTextBox();
+    type(box, "x".repeat(120)); // three lines at 40 a line
+    expect(box.style.height).toBe(px(3));
+
+    charsPerLine = 20; // six lines at 20 a line
+    window.dispatchEvent(new Event("resize"));
+    expect(box.style.height).toBe(px(6));
+  });
+
+  it("fits again after the B button adds its markers", async () => {
+    const box = await newTextBox();
+    type(box, "y".repeat(119));
+    expect(box.style.height).toBe(px(3));
+    box.setSelectionRange(0, 119);
+
+    const bold = el("nlCanvas").querySelector(".nl-emph") as HTMLButtonElement;
+    bold.click();
+
+    expect(box.value).toBe("**" + "y".repeat(119) + "**");
+    expect(box.style.height).toBe(px(4));
+  });
+
+  // Never a scrollbar inside the box: its height is set to fit, so there is nothing to scroll, and
+  // the drag handle goes too (dragging it smaller would hide words behind the edge).
+  it("styles the prose boxes with no inner scrollbar and no drag handle", () => {
+    const css = readFileSync(resolve(ROOT, "assets/css/admin.css"), "utf8");
+    // Its own rule, not the one it shares with the one-line inputs.
+    const rule = css.match(/(?:^|\n)\.nl-block \.nl-field textarea\s*\{([^}]*)\}/);
+    expect(rule, "expected a rule for .nl-block .nl-field textarea").toBeTruthy();
+    expect(rule![1]).toMatch(/overflow-y:\s*hidden/);
+    expect(rule![1]).toMatch(/resize:\s*none/);
+  });
+
+  function paste(target: HTMLElement, clip: Record<string, string>) {
+    const e = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(e, "clipboardData", { value: { getData: (t: string) => clip[t] || "" } });
+    target.dispatchEvent(e);
+    return e;
+  }
+});

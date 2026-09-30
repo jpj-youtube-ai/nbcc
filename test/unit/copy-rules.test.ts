@@ -33,6 +33,7 @@ const PAGES = [
   "privacy.html",
   "404.html",
   "sitemap.html",
+  "events.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];

@@ -14,9 +14,9 @@ import { resolve } from "node:path";
 // a section nobody opens.
 //
 // Measured in a real browser at 390px after the fix: every screen's scrollWidth equals the viewport
-// width, and nothing on any screen scrolls sideways (TASK-455 found one box that still does: the
-// list of events). These are the rules that make that true, so the next change to the shell cannot
-// quietly undo it.
+// width, and nothing on any screen scrolls sideways (TASK-455 found one box that still did, the list
+// of events, and TASK-460 fixed it). These are the rules that make that true, so the next change to
+// the shell cannot quietly undo it.
 
 const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
@@ -198,11 +198,12 @@ describe("the Events page switch fits the smallest phones", () => {
 });
 
 // TASK-460: the Events list is a five-column table that needs about 850px. Wherever the list is
-// narrower (every phone and tablet, and laptops up to about 1150px, where the side menu takes the
-// room) its buttons broke their own labels ("Ed / it"), times broke mid-word, the date badge ran
-// into the event's name, and on a phone the list scrolled sideways inside its box. There, each event
-// is now a compact row instead. The switch is measured on the list itself, not the screen, because
-// the list is narrowest on a laptop just past 860px, with the side menu beside it.
+// narrower (phones, most tablets, and laptops up to about 1150px, where the side menu takes 210px)
+// its buttons broke their own labels ("Ed / it"), times broke mid-word, the day and time ran into
+// the event's name, and on a phone the list scrolled sideways inside its box. There, each event is
+// now a compact row instead. The switch is measured on the list's own width, because that is what
+// runs out. It depends on the side menu, the page's padding, its 1280px cap and the scrollbar, so a
+// screen width standing in for it (about 1190px today) would drift whenever any of those changed.
 describe("the Events list becomes compact rows wherever its table does not fit", () => {
   const NARROW = "@container evlist (max-width:899px)";
 
@@ -243,11 +244,34 @@ describe("the Events list becomes compact rows wherever its table does not fit",
   });
 
   // A value that cannot wrap would push a compact row wider than its list: the fault this replaces.
-  // The hidden headings' nowrap is the visually-hidden pattern (clipped to a pixel) and is allowed.
   it("has no rule in the list, at any width, that stops its words wrapping", () => {
     const offenders = RULES.filter((r) => r.selectors.some((s) => /ev-admin|evList/.test(s)))
-      .filter((r) => /white-space:(nowrap|pre)/.test(r.body) && !/clip:rect/.test(r.body))
+      .filter((r) => /white-space:(nowrap|pre)/.test(r.body))
       .map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
     expect(offenders).toEqual([]);
+  });
+
+  // A later rule could undo the compact rows while every rule above still exists: a row put back to
+  // table-row, or a column width that outranks the cells' width:auto (the trap .ty-sent-table's
+  // comment describes). Only the compact rows may say how the list's rows and cells lay out.
+  it("lets no other rule, at any width, change how the list's rows and cells lay out", () => {
+    const layout = RULES.filter((r) => r.selectors.some((s) => /\.ev-admin-table (tbody|tr|td)/.test(s)));
+    const offenders = [
+      ...layout.filter((r) => r.media !== NARROW && /(^|;)display:/.test(r.body)),
+      ...layout.filter((r) => r.selectors.some((s) => /\.ev-admin-table[^,]*\btd\b/.test(s)) && /(^|;)width:(?!auto)/.test(r.body)),
+    ].map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
+    expect(offenders).toEqual([]);
+  });
+
+  // The rows place each cell by its position and write "Run by " before the third, so they are only
+  // right while the table keeps these columns in this order. A new or moved column moves them too.
+  it("depends on the columns app.js draws, in the order it draws them", () => {
+    const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+    expect(app).toContain("<th>Date</th><th>Event</th><th>Run by</th><th>Website</th><th>");
+  });
+
+  // WCAG 2.5.5, the size this file already holds the admin's other phone controls to.
+  it("gives each event's button a target a thumb can hit", () => {
+    expect(rule("#view-events .ev-admin-table .ev-admin-edit", NARROW)).toContain("min-height:44px");
   });
 });

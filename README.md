@@ -5635,14 +5635,16 @@ the side menu takes 210px of the screen:
 - **below about 520px** the day and time run into the event's name and the list scrolls sideways
   inside its box; on a phone the Website heading and the "On the page" pill stand one letter per line.
 
-So it broke on every phone and tablet, and on laptops up to about 1150px wide.
+So it broke on phones, on most tablets, and on laptops up to about 1150px wide.
 
 **Now, wherever the list is narrower than 900px, each event is a compact row** that reads top to
 bottom: the date badge with the day and time, the event's name with its venue and town, "Run by" and
-who runs it, then its status and the **Open**, **Edit** or **View** button on one line. From 900px up
-the table is exactly as it was; the before and after screenshots of the list at 1200 and 1280px are
-identical, pixel for pixel. In practice that is compact rows on every phone and tablet and on laptops
-narrower than about 1,190px, and the table on anything wider.
+who runs it, then its status and the **Open**, **Edit** or **View** button on one line. The button is
+44px tall there, the size the admin holds its other phone controls to. From 900px up the table is
+exactly as it was; the before and after screenshots of the list at 1200 and 1280px are identical,
+pixel for pixel. In practice that is compact rows on phones, on most tablets and on laptops narrower
+than about 1,190px, and the table on anything wider (a large tablet on its side gets the table, and
+it fits there).
 
 **Chosen from two prototypes**, both drawn in the real admin with the live events: these compact
 rows, or the stack the monthly givers and sent-letter lists use, with each value on its own labelled
@@ -5651,19 +5653,26 @@ fell into the label column (the Event cell holds two lines, which that pattern c
 button stretched to the full width, and four events took 1,177px of scrolling against 831px.
 
 **Measured on the list, not the screen.** The rules sit in a container query,
-`@container evlist (max-width: 899px)`, with `#evList` as the container. The list is narrowest on a
-laptop just past 860px, beside the side menu, not on the smallest screen, so no media query could say
-where it stops fitting. It is the first container query in the admin; a browser without them (iOS
+`@container evlist (max-width: 899px)`, with `#evList` as the container, because what runs out is the
+list's own width, and that depends on the side menu (210px from 861px), the page's padding, its 1280px
+cap and the scrollbar. A screen width standing in for it would be about 1,190px today, would drift
+whenever any of those changed, and would already be 15px out wherever scrollbars sit over the page
+(Macs, iPads, phones). It is the first container query in the admin; a browser without them (iOS
 before 16) keeps the table, which is no worse than before. The headings stay in the page for screen
 readers, hidden the way the stacked lists hide theirs, and the stylesheet writes in "Run by" because
 "NBCC" on its own could mean anything.
 
+The compact rows place each cell by its position, so they follow the columns `evRenderList` draws
+(Date, Event, Run by, Website, the button). **A new or moved column must move the compact-row rules
+too**; a test fails if the headings change order, so it cannot happen silently.
+
 Verified in headless Chrome with the two events production holds (EmpowHer ’26 and Festive Ball 2026)
-plus a scheduled, a draft and a past one. In the Coming up list at 320, 375, 390, 430, 768, 861, 960,
-1024, 1100, 1180, 1200 and 1280px, and in Drafts and Past at 320px: the page is as wide as the screen,
-the list never scrolls sideways, nothing sticks out of its cell and no word breaks mid-word.
-`test/unit/admin-fits-a-phone.test.ts` pins the rules (its CSS reader now reads container queries),
-including that no rule in the list stops its words wrapping. The design, with both prototypes' numbers,
+plus one of NBCC's own, a scheduled one, a draft and a past one. In the Coming up list at 320, 375,
+390, 430, 768, 861, 960, 1024, 1100, 1180, 1200 and 1280px, and in Drafts and Past at 320px: the page
+is as wide as the screen, the list never scrolls sideways, nothing sticks out of its cell and no word
+breaks mid-word. `test/unit/admin-fits-a-phone.test.ts` pins the rules (its CSS reader now reads
+container queries), including that no rule in the list stops its words wrapping and that no other
+rule, at any width, changes how its rows and cells lay out. The design, with both prototypes' numbers,
 is in `docs/superpowers/specs/2026-09-30-events-list-narrow-layout-design.md`.
 
 ## Saving an editor's access took Contact businesses away (TASK-459)

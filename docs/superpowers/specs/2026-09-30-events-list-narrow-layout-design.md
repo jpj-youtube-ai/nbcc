@@ -19,7 +19,7 @@ It needs the list to be about **850px wide**. Below that it breaks, a little mor
   sideways inside its box, by 23px on a 320px phone. The Website heading and the "On the page" pill
   then stand one letter per line.
 
-The list is narrower than 850px on every phone and tablet. It is also narrower on laptops up to
+The list is narrower than 850px on phones and most tablets. It is also narrower on laptops up to
 about 1150px wide, where the 210px side menu takes the room. The page itself never widens, which is
 why TASK-454 measured the admin clean.
 
@@ -29,8 +29,8 @@ Where the list is narrower than 900px, each event becomes a **compact row** (opt
 up the table is exactly as it is now.
 
 900 rather than 850 leaves a margin. The tightest fit at 850 is the button's label, and "Open" is
-already the longest one the list uses. A longer time such as "12.30pm" still has 95px of room in the
-Date column at 900px.
+already the longest one the list uses. A longer time such as "12.30pm" still has about 93px of room
+in the Date column at 900px.
 
 ### Option B, chosen: compact rows
 
@@ -40,7 +40,9 @@ Each event reads top to bottom, like a diary entry:
 2. the event's name, with its venue and town underneath;
 3. "Run by NBCC", or "Run by" and the partner's name, with the words "Run by" drawn by the
    stylesheet;
-4. the status pill on the left and the Open / Edit / View button on the right, on one line.
+4. the status pill on the left and the Open / Edit / View button on the right, on one line. The
+   button is 44px tall there, the size the admin holds its other phone controls to (added after
+   review; the prototype's was 36px).
 
 There are no repeated column labels: the badge already says it is a date, and the pill already says
 where the event stands. The row being edited keeps its tint across the whole row. Rows are divided by
@@ -65,9 +67,12 @@ In this pattern each cell becomes a labelled row. The prototype at 320px showed 
   in the compact rows, the way the house stacks hide theirs.
 - **A container query, not a media query.** The list gets `container: evlist / inline-size`, and
   the rules sit in `@container evlist (max-width: 899px)`.
-  - The narrowest list is on a laptop just past 860px, with the side menu beside it, not on the
-    narrowest screen. So no single screen width marks where the table stops fitting; the list's own
-    width does.
+  - What runs out is the list's own width. It depends on the side menu (210px from 861px), the
+    page's padding, its 1280px cap and the scrollbar. A screen width standing in for it would be
+    about 1,190px today, would drift whenever any of those changed, and would already be 15px out
+    wherever scrollbars sit over the page (Macs, iPads, phones).
+  - The cells are placed by position, so the rules follow the columns `evRenderList` draws. A test
+    pins the headings' order, so moving a column cannot silently break the compact rows.
   - This is the repo's first container query. Browsers without them (iOS before 16) keep today's
     table, so they are no worse off than now.
 - **The row is a grid** with the areas `when`, `event`, `run` and `state open`, and 14px 16px of

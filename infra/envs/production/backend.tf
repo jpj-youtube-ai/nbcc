@@ -26,3 +26,17 @@ provider "aws" {
     }
   }
 }
+
+# CloudFront only reads certificates from us-east-1: the newsletter's click-tracking domain needs
+# one there (TASK-466, infra/modules/app/ses.tf). Nothing else runs in this region.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+  default_tags {
+    tags = {
+      Project     = "charity-site"
+      Environment = "production"
+      ManagedBy   = "terraform"
+    }
+  }
+}

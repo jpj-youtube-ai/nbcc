@@ -1,5 +1,9 @@
 module "app" {
   source = "../../modules/app"
+  providers = {
+    aws           = aws
+    aws.us_east_1 = aws.us_east_1 # the click-tracking certificate (TASK-466)
+  }
 
   project     = "charity-site"
   environment = "production"

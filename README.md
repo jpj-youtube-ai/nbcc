@@ -5780,6 +5780,42 @@ round.
 Pinned by a test, so nobody tightens it back on the reasoning that a narrower scope must be safer.
 It is narrower, and it does not work.
 
+## Proving the backup can be restored (TASK-452)
+
+```bash
+npm run verify:restore    # or Actions -> Run a one-off job
+```
+
+Everything else proves a FILE is produced and stored in two places. It does not prove the file is
+worth anything. **A backup nobody has restored is a hope**, and the way you find out otherwise is the
+morning you need it.
+
+This pulls the archive back out of S3, unpacks it with the real passphrase, rebuilds every database
+into a **throwaway** copy, counts the rows, compares them to the manifest, and drops the copies.
+
+It restores the archive the **manifest describes**, not today's: verifying a different file from the
+one whose row counts you are comparing against would pass or fail for the wrong reasons.
+
+### It cannot write to a live database
+
+That is the whole safety of the exercise, because a restore overwrites its target — so the one
+unrecoverable mistake available is pointing it at a real database, destroying the data the backup
+exists to protect, using the backup, while checking the backup.
+
+`assertSafeRestoreTarget` refuses anything without the `restorecheck_` prefix, refuses every name in
+`BACKUP_DATABASES` (derived from the plan, so a fourth database is protected the day it is added),
+and refuses a name that is not a plain identifier. It is called immediately before **every** create,
+restore and drop rather than once at the top — a guard you can walk past is not a guard. The
+throwaways are dropped in a `finally`, so a failure does not leave a copy of every donor record
+sitting beside the real one.
+
+### A missing table is not zero
+
+Counts come from asking the restored database what tables it **has**, not from looking up the
+manifest's names. A table that failed to restore is then absent rather than counted as zero against
+a name we supplied ourselves — and "no such table" is reported as exactly that. Counts are exact
+(`count(*)`), never `n_live_tup`: an estimate that happened to match would prove nothing.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

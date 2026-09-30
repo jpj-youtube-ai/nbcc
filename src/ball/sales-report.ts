@@ -2,7 +2,7 @@ import { z } from "zod";
 import { ballEmailShell, factsCard, BALL_TEXT_FOOTER, BALL_EMAIL, BALL_PHONE } from "./email-shell";
 import { CRIMSON, SLATE, SLATE_SOFT, HEAD, BODY_FONT } from "../email/brand";
 
-// TASK-464: the Festive Ball ticket report. Twice a week (Tuesday and Thursday mornings) the people
+// TASK-464: the Festive Ball ticket report. Twice a week (Monday and Thursday mornings, TASK-467) the people
 // running the Ball with us, the organiser and the sponsor among them, get one email with the numbers:
 // how many seats are sold, what sold lately, what is left, the waiting list and the days to go.
 //
@@ -13,8 +13,8 @@ import { CRIMSON, SLATE, SLATE_SOFT, HEAD, BODY_FONT } from "../email/brand";
 // and the day; the admin's preview and test send use the same render, so what staff check is what
 // goes out.
 
-/** The report goes on Tuesdays and Thursdays (0 is Sunday). */
-export const REPORT_WEEKDAYS: readonly number[] = [2, 4];
+/** The report goes on Mondays and Thursdays (0 is Sunday). Jaimie moved Tuesday to Monday in TASK-467. */
+export const REPORT_WEEKDAYS: readonly number[] = [1, 4];
 export const MAX_RECIPIENTS = 10;
 
 // ---- who it goes to ----
@@ -89,7 +89,7 @@ export function dayInWords(day: string): string {
   return DAY_WORDS.format(midday(day));
 }
 
-/** The next Tuesday or Thursday after today, or null when that would be after the Ball. */
+/** The next Monday or Thursday after today, or null when that would be after the Ball. */
 export function nextUpdateAfter(today: string, eventDate: string): string | null {
   for (let n = 1; n <= 7; n++) {
     const day = plusDays(today, n);
@@ -121,7 +121,7 @@ export function daysToGo(today: string, eventDate: string): number {
 }
 
 /**
- * Whether the scheduled report should go now: a Tuesday or Thursday in the UK, switched on, with
+ * Whether the scheduled report should go now: a Monday or Thursday in the UK, switched on, with
  * someone to send it to, not already sent today, and the Ball not yet past.
  */
 export function reportDue(o: {

@@ -9571,7 +9571,7 @@
   }
 
   // ---- the Festive Ball ticket report (TASK-464) ----
-  // A card under the page switch. Counts only, on Tuesday and Thursday mornings, to the people running
+  // A card under the page switch. Counts only, on Monday and Thursday mornings, to the people running
   // the Ball with us. The list is edited here and saved together with the switch; "Send a test to me"
   // sends the real email, marked as a test, to the signed-in person only. The preview frame is sized
   // to the email, and sized again when the window changes, so nothing scrolls inside the page.
@@ -9608,7 +9608,7 @@
     var html;
     if (brData.reportOn) {
       html =
-        "<b>On.</b> It goes to " + brPeople(n) + " on Tuesdays and Thursdays at 8am. " +
+        "<b>On.</b> It goes to " + brPeople(n) + " on Mondays and Thursdays at 8am. " +
         (brData.nextSend
           ? "The next one is on " + H.escapeHtml(brDayWords(brData.nextSend)) + "."
           : "There are no more before the Ball.");

@@ -2738,7 +2738,7 @@ remaining stragglers by hand from the outstanding list.
 
 ### The ticket report (TASK-464)
 
-Twice a week, on Tuesday and Thursday mornings, the people running the Ball with us (the organiser,
+Twice a week, on Monday and Thursday mornings (Tuesday until TASK-467), the people running the Ball with us (the organiser,
 the sponsor and our own staff) get one email with its ticket numbers: seats sold of 400 and how
 full, whole tables and single seats, what sold since the last update and in the last 7 days against
 the 7 before, what is still available and kept back for guests, the people still waiting (anyone
@@ -2761,7 +2761,7 @@ Every save and test writes an `audit_log` row (who was added or removed, and by 
 log lists each person a report went to.
 
 It rides the daily 8am task (`npm run reminders`) like the run-up, with no schedule of its own:
-`runBallSalesReport` (`src/ball/sales-report-runner.ts`) sends only on a Tuesday or Thursday, UK
+`runBallSalesReport` (`src/ball/sales-report-runner.ts`) sends only on a Monday or Thursday, UK
 time, when switched on, with recipients, up to the day of the Ball. It claims the day first in
 `ball_report_sends` (a unique index allows one scheduled report a day), so a second run sends
 nothing; a failed send gives the day back, and a send that went keeps it even if recording it then

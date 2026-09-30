@@ -34,7 +34,8 @@ vi.mock("../../src/db/ball-report", () => ({
 
 import { runBallSalesReport, sendTestReport } from "../../src/ball/sales-report-runner";
 
-const TUESDAY_8AM = new Date("2026-10-06T07:00:00Z"); // 8am in the UK
+const MONDAY_8AM = new Date("2026-10-05T07:00:00Z"); // 8am in the UK
+const TUESDAY_8AM = new Date("2026-10-06T07:00:00Z");
 const WEDNESDAY_8AM = new Date("2026-10-07T07:00:00Z");
 const LAST_COUNTED = new Date("2026-10-01T07:00:02Z");
 const INPUTS: SalesInputs = {
@@ -75,17 +76,17 @@ beforeEach(() => {
 
 describe("the scheduled report", () => {
   it("sends one email to everyone on the list, and records what it counted and up to when", async () => {
-    expect(await runBallSalesReport(TUESDAY_8AM)).toEqual({ sent: true, recipients: 2 });
-    expect(m.claimScheduledSend).toHaveBeenCalledWith("2026-10-06", "system:schedule");
-    expect(m.readSalesInputs).toHaveBeenCalledWith(TUESDAY_8AM, LAST_COUNTED);
+    expect(await runBallSalesReport(MONDAY_8AM)).toEqual({ sent: true, recipients: 2 });
+    expect(m.claimScheduledSend).toHaveBeenCalledWith("2026-10-05", "system:schedule");
+    expect(m.readSalesInputs).toHaveBeenCalledWith(MONDAY_8AM, LAST_COUNTED);
     expect(m.sendBallReport).toHaveBeenCalledTimes(1);
     expect(m.sendBallReport.mock.calls[0][0]).toMatchObject({
       to: ["ada@example.com", "bo@planner.example"],
       from: "events@nbcc.scot",
       replyTo: "events@nbcc.scot",
-      subject: "Festive Ball tickets: Tuesday 6 October update",
+      subject: "Festive Ball tickets: Monday 5 October update",
     });
-    expect(m.markSendSent).toHaveBeenCalledWith(7, ["ada@example.com", "bo@planner.example"], INPUTS, TUESDAY_8AM);
+    expect(m.markSendSent).toHaveBeenCalledWith(7, ["ada@example.com", "bo@planner.example"], INPUTS, MONDAY_8AM);
     expect(m.releaseClaim).not.toHaveBeenCalled();
   });
 
@@ -97,13 +98,13 @@ describe("the scheduled report", () => {
 
   it("sends nothing when another run has already claimed the day", async () => {
     m.claimScheduledSend.mockResolvedValue(null);
-    expect(await runBallSalesReport(TUESDAY_8AM)).toEqual({ sent: false, recipients: 0 });
+    expect(await runBallSalesReport(MONDAY_8AM)).toEqual({ sent: false, recipients: 0 });
     expect(m.sendBallReport).not.toHaveBeenCalled();
   });
 
   it("gives the day back when the email could not be sent, so a rerun can try again", async () => {
     m.sendBallReport.mockRejectedValue(new Error("SES said no"));
-    await expect(runBallSalesReport(TUESDAY_8AM)).rejects.toThrow("SES said no");
+    await expect(runBallSalesReport(MONDAY_8AM)).rejects.toThrow("SES said no");
     expect(m.releaseClaim).toHaveBeenCalledWith(7);
     expect(m.markSendSent).not.toHaveBeenCalled();
   });
@@ -111,7 +112,7 @@ describe("the scheduled report", () => {
   it("keeps the day when the email went but could not be recorded, so a rerun cannot send it twice", async () => {
     const said = vi.spyOn(console, "error").mockImplementation(() => undefined);
     m.markSendSent.mockRejectedValue(new Error("database hiccup"));
-    expect(await runBallSalesReport(TUESDAY_8AM)).toEqual({ sent: true, recipients: 2 });
+    expect(await runBallSalesReport(MONDAY_8AM)).toEqual({ sent: true, recipients: 2 });
     expect(m.releaseClaim).not.toHaveBeenCalled();
     expect(said).toHaveBeenCalled();
     said.mockRestore();

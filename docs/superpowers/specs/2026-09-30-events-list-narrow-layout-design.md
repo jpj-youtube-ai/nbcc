@@ -14,10 +14,10 @@ It needs the list to be about **850px wide**. Below that it breaks, a little mor
 
 - **Below about 850px**, the Open and Edit buttons break their own label mid-word ("Ed / it",
   "O / pe / n").
-- **Below about 700px**, the times break mid-word ("6.30 / pm"), and the date badge runs into the
-  event's name.
-- **Below about 520px**, the list also scrolls sideways inside its box, by 23px on a 320px phone.
-  The Website heading and the "On the page" pill then stand one letter per line.
+- **Below about 700px**, the times break mid-word ("6.30 / pm").
+- **Below about 520px**, the day and time run into the event's name, and the list also scrolls
+  sideways inside its box, by 23px on a 320px phone. The Website heading and the "On the page" pill
+  then stand one letter per line.
 
 The list is narrower than 850px on every phone and tablet. It is also narrower on laptops up to
 about 1150px wide, where the 210px side menu takes the room. The page itself never widens, which is

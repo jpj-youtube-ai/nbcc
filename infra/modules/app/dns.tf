@@ -104,34 +104,44 @@ resource "aws_route53_record" "dkim" {
 # signal). The old apex tracker (links.nbcc.scot) is gone: transactional mail no longer carries
 # click tracking at all, by design.
 #
-# TASK-466: an alias to the CloudFront distribution in ses.tf, which holds this name's own
-# certificate. It used to be a CNAME straight to r.<region>.awstrack.me, whose certificate does not
-# cover this name, so every https tracked link failed with a browser security warning.
+# TASK-466: this is the address the newsletters sent from 31 August to TASK-466 carry, and it stays
+# as it was. Its https cannot work: SES's tracker answers with its own certificate, and this name
+# cannot be given one of ours, because the retired Resend's CloudFront distribution still holds it.
+# New newsletters use click.news instead (below). Removing this record would only turn those older
+# links from a security warning into "not found".
 resource "aws_route53_record" "news_tracking" {
   count   = local.create_zone ? 1 : 0
   zone_id = local.zone_id
   name    = "links.news.${var.domain_name}"
+  type    = "CNAME"
+  ttl     = 3600
+  records = ["r.${var.region}.awstrack.me"]
+}
+
+# TASK-466: the newsletter's click-tracking address, click.news.<apex>: an alias to the CloudFront
+# distribution in ses.tf, which holds this name's own certificate.
+resource "aws_route53_record" "news_click_tracking" {
+  count   = local.create_zone ? 1 : 0
+  zone_id = local.zone_id
+  name    = "click.news.${var.domain_name}"
   type    = "A"
   alias {
-    name                   = aws_cloudfront_distribution.links_news[0].domain_name
-    zone_id                = aws_cloudfront_distribution.links_news[0].hosted_zone_id
+    name                   = aws_cloudfront_distribution.click_tracking[0].domain_name
+    zone_id                = aws_cloudfront_distribution.click_tracking[0].hosted_zone_id
     evaluate_target_health = false
   }
 }
 
-# IPv6 as well. It waits for the record above: changing that one from CNAME to A replaces it
-# (destroy, then create), and Route 53 refuses any other record at a name that still has a CNAME.
-resource "aws_route53_record" "news_tracking_ipv6" {
+resource "aws_route53_record" "news_click_tracking_ipv6" {
   count   = local.create_zone ? 1 : 0
   zone_id = local.zone_id
-  name    = "links.news.${var.domain_name}"
+  name    = "click.news.${var.domain_name}"
   type    = "AAAA"
   alias {
-    name                   = aws_cloudfront_distribution.links_news[0].domain_name
-    zone_id                = aws_cloudfront_distribution.links_news[0].hosted_zone_id
+    name                   = aws_cloudfront_distribution.click_tracking[0].domain_name
+    zone_id                = aws_cloudfront_distribution.click_tracking[0].hosted_zone_id
     evaluate_target_health = false
   }
-  depends_on = [aws_route53_record.news_tracking]
 }
 
 resource "aws_route53_record" "dmarc" {

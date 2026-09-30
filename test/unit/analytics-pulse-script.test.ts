@@ -21,6 +21,7 @@ function load(opts: {
   dnt?: string;
   gpc?: boolean;
   beacon?: boolean | "fails";
+  hidden?: boolean;
 } = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${opts.body ?? ""}</body></html>`, {
     url: opts.url ?? "https://nbcc.scot/donate",
@@ -52,7 +53,7 @@ function load(opts: {
     return Promise.resolve();
   };
   Object.defineProperty(w.document.documentElement, "scrollHeight", { value: 2000, configurable: true });
-  let visibility = "visible";
+  let visibility = opts.hidden ? "hidden" : "visible";
   Object.defineProperty(w.document, "visibilityState", { get: () => visibility, configurable: true });
   w.eval(script());
   return {
@@ -175,6 +176,15 @@ describe("the leave", () => {
       [10, 38],
       [15, 100],
     ]);
+  });
+
+  it("starts the clock only once a page opened in a background tab is looked at", () => {
+    const bg = load({ hidden: true });
+    bg.tick(60_000); // opened behind the current tab
+    bg.show();
+    bg.tick(7000);
+    bg.hide();
+    expect(bg.sent.filter((s) => s.body.t === "leave").map((s) => s.body.a)).toEqual([7]);
   });
 
   it("caps the time at 30 minutes", () => {

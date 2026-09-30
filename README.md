@@ -3540,7 +3540,7 @@ its own CSS and JS. The budget has been raised five times already; the next chan
 should either buy it back (the 105KB unminified `main.js` is the obvious candidate) or raise the
 cap as a deliberate, discussed decision rather than a reflex.
 
-TASK-479 raised it again, 260 to 262KB, for `assets/js/pulse.js` (the visit counter, 2,006
+TASK-479 raised it again, 260 to 262KB, for `assets/js/pulse.js` (the visit counter, 2,021
 bytes plus a 50 byte script tag), which donate.html could not fit in the ~550 bytes it had left.
 It is deferred, so it never delays first paint; the weight review is still the real fix.
 
@@ -6508,13 +6508,15 @@ the page. The work is `src/analytics/pulse-handler.ts`, with every rule in its o
 
 | Module | Rule |
 |---|---|
+| `src/analytics/pulse-handler.ts` | `sentByOurOwnPage`: an event is dropped unless `Sec-Fetch-Site` is `same-origin` or, when a browser sends no such header, its `Origin` (else `Referer`) is one of our own hosts, so no other website can make its visitors send us made up events. A `DNT: 1` or `Sec-GPC: 1` header is honoured here too, not only by the script |
 | `src/analytics/limiter.ts` | 120 events a minute per IP, in memory (the house `createRateLimiter`) |
-| `src/analytics/switch-cache.ts` | the switch is remembered 30 seconds in production (read every time elsewhere, so BDD can flip it); a failed read counts as off |
+| `src/analytics/gate.ts` | at most 2 events at the database at once in each task; any more are dropped, never queued, because analytics shares the 5 connection pool with donations |
+| `src/analytics/switch-cache.ts` | the switch is remembered 30 seconds in production (read every time elsewhere, so BDD can flip it); a failed read counts as off, and is remembered for 5 seconds so a struggling database is not asked by every event |
 | `src/analytics/user-agent.ts` | bots, crawlers, spiders, headless browsers and preview fetchers dropped; device `phone`/`tablet`/`computer`, browser (Chrome, Safari, Edge, Firefox, Samsung Internet, Other), operating system |
-| `src/analytics/payload.ts` | the zod shape of the three events; anything else, or over 2 KB, is dropped |
+| `src/analytics/payload.ts` | the zod shape of the three events; anything else, or over 2 KB, is dropped. A long referrer (1,024) or tracking word (200) is cut to length rather than losing the view |
 | `src/analytics/paths.ts` | the path kept is the page's canonical path from the site map (`src/site/pages.ts`), plus `/sitemap`, `/business/thank-you` and `/gift-aid/declare` (every Gift Aid form, never its token), or `other`. The query string is thrown away first |
 | `src/analytics/visitor.ts` | the visitor id is `sha256(daily salt + IP + user agent)`, 16 hex characters. The salt is random, made by the first event of each UK day (`analytics_salts`), and deleted the next morning |
-| `src/analytics/channel.ts` | the channel, first match wins: newsletter (`utm_source=newsletter` or a referrer on `news.nbcc.scot`), email (`utm_medium=email`), any other `utm_source` (a search engine, a social site, or other websites named after it), search engines, social sites, our own site (keeps the channel of the visitor's latest view that day, or direct), any other website (by host), direct. Only the referrer's host is kept |
+| `src/analytics/channel.ts` | the channel, first match wins: newsletter (`utm_source=newsletter` or a referrer on `news.nbcc.scot`), email (`utm_medium=email`), any other `utm_source` (a search engine, a social site, or other websites named after it), search engines (only their real search hosts, so `docs.google.com` is another website), social sites, our own site or a return from paying (a `stripe.com` referrer, or any referrer on `/donate/thank-you`, `/business/thank-you` or `/ball/thank-you`, where a bank's card check page can send people): these keep the channel of the visitor's latest view that day, or direct, any other website (by host), direct. Only the referrer's host is kept |
 | `src/analytics/place.ts` | `setPlaceResolver(fn)` and `resolvePlace(ip)`. Records no place until TASK-481 connects the DB-IP database at start-up; a failing lookup records no place rather than losing the view |
 
 The IP address and user agent are used for the limit, the id, the place and the device, and then
@@ -6539,7 +6541,7 @@ views and clicks older than 13 months and every salt older than today (`pruneAna
 adds it to every saved matrix that lacks it (admin edit, anyone else none) with an
 `admin_user.permissions_backfilled` audit row each, by `migration:TASK-479`, the TASK-463 way.
 
-**The privacy notice** has a new section, "Counting visits", saying all of this in plain words.
+**The privacy notice** has a new section, "Counting visits", saying all of this in plain words: a record of each page view with no name, email address, IP address or cookie, and a visitor code whose key is deleted after the day, so visits cannot be linked across days or traced back to an IP address once the day is over. (Within the day the salt is in the database, so someone with that day's copy could in principle test likely addresses against it; the notice does not claim otherwise.)
 
 **Tests.** Unit: `test/unit/analytics-*.test.ts` (every channel rule, the path allowlist, the
 visitor id across days, user agent and bot reading, the payload, the limiter, the switch cache,

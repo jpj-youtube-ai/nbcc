@@ -43,7 +43,7 @@ const BUDGET = {
   // of room so the next small change does not fail a build for a reason nobody can act on.
   //
   // Raised 260 -> 262 (TASK-479, site analytics): assets/js/pulse.js, the visit counter on every
-  // public page, is 2,006 bytes plus its 50 byte script tag, and donate.html had ~550 bytes spare.
+  // public page, is 2,021 bytes plus its 50 byte script tag, and donate.html had ~550 bytes spare.
   // It is deferred and does nothing until the page has loaded, so it never delays what a visitor
   // sees. The weight review above is still the real fix.
   maxTransferKB: 262,

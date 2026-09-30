@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { handlePulse, type PulseDeps } from "../../src/analytics/pulse-handler";
+import { handlePulse, type PulseDeps, type PulseRequest } from "../../src/analytics/pulse-handler";
+import { BUSY } from "../../src/analytics/gate";
 import { visitorId } from "../../src/analytics/visitor";
 
 // TASK-479: what POST /api/pulse does with one event, with every seam (the switch, the limiter,
@@ -21,15 +22,17 @@ function deps(overrides: Partial<PulseDeps> = {}): PulseDeps {
     recordLeave: vi.fn(async () => {}),
     insertClick: vi.fn(async () => {}),
     resolvePlace: vi.fn(() => ({ country: "GB", region: "Scotland", city: "Glenmorrow" })),
+    gate: { tryRun: (work) => work() },
     ...overrides,
   };
 }
 
-const request = (body: unknown, extra: Partial<{ ip: string; userAgent: string; host: string }> = {}) => ({
+const request = (body: unknown, extra: Partial<PulseRequest> = {}): PulseRequest => ({
   body: typeof body === "string" ? body : JSON.stringify(body),
   ip: IP,
   userAgent: UA,
   host: "nbcc.scot",
+  headers: { secFetchSite: "same-origin" },
   ...extra,
 });
 
@@ -59,6 +62,50 @@ describe("handlePulse: when nothing is kept", () => {
   it("keeps nothing from a body that does not fit", async () => {
     const d = deps();
     expect(await handlePulse(request("{nope"), d)).toBe("invalid");
+    expect(d.insertView).not.toHaveBeenCalled();
+  });
+});
+
+describe("handlePulse: only our own pages may send", () => {
+  it.each([
+    ["another website's page (Sec-Fetch-Site cross-site)", { secFetchSite: "cross-site" }],
+    ["a sister site (Sec-Fetch-Site same-site)", { secFetchSite: "same-site" }],
+    ["no Sec-Fetch-Site and a foreign Origin", { origin: "https://evil.example.com" }],
+    ["no Sec-Fetch-Site and a foreign Referer", { referer: "https://evil.example.com/page" }],
+    ["no Sec-Fetch-Site, Origin or Referer at all", {}],
+  ])("keeps nothing from %s", async (_name, headers) => {
+    const d = deps();
+    expect(await handlePulse(request(view(), { headers }), d)).toBe("foreign");
+    expect(d.insertView).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["Sec-Fetch-Site same-origin", { secFetchSite: "same-origin" }],
+    ["no Sec-Fetch-Site but our Origin", { origin: "https://nbcc.scot" }],
+    ["no Sec-Fetch-Site but our www Referer", { referer: "https://www.nbcc.scot/donate" }],
+    ["no Sec-Fetch-Site but this server's own host", { origin: "http://localhost:3000" }],
+  ])("keeps a view sent with %s", async (_name, headers) => {
+    const d = deps();
+    const host = "origin" in headers && headers.origin?.includes("localhost") ? "localhost" : "nbcc.scot";
+    expect(await handlePulse(request(view(), { headers, host }), d)).toBe("kept");
+  });
+});
+
+describe("handlePulse: Do Not Track and Global Privacy Control headers", () => {
+  it.each([
+    ["DNT: 1", { secFetchSite: "same-origin", dnt: "1" }],
+    ["Sec-GPC: 1", { secFetchSite: "same-origin", secGpc: "1" }],
+  ])("keeps nothing from a browser sending %s, even without the script's own check", async (_name, headers) => {
+    const d = deps();
+    expect(await handlePulse(request(view(), { headers }), d)).toBe("dnt");
+    expect(d.insertView).not.toHaveBeenCalled();
+  });
+});
+
+describe("handlePulse: never crowding out donations", () => {
+  it("keeps nothing when two events are already being written", async () => {
+    const d = deps({ gate: { tryRun: async () => BUSY } });
+    expect(await handlePulse(request(view()), d)).toBe("busy");
     expect(d.insertView).not.toHaveBeenCalled();
   });
 });
@@ -113,6 +160,15 @@ describe("handlePulse: a view", () => {
     expect(d.lastArrival).toHaveBeenCalledWith("2026-10-01", visitorId("salt-of-the-day", IP, UA));
     const row = (d.insertView as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect([row.channel, row.source]).toEqual(["social", "Facebook"]);
+  });
+
+  it("keeps the visit's channel on the thank-you page after paying through Stripe", async () => {
+    const d = deps({
+      lastArrival: vi.fn(async () => ({ channel: "newsletter" as const, source: null, campaign: "12" })),
+    });
+    await handlePulse(request(view({ p: "/donate/thank-you?session_id=cs_test_1", r: "https://checkout.stripe.com/" })), d);
+    const row = (d.insertView as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect([row.path, row.channel, row.campaign]).toEqual(["/donate/thank-you", "newsletter", "12"]);
   });
 
   it("counts a move from our own page as Direct when there is no earlier view today", async () => {

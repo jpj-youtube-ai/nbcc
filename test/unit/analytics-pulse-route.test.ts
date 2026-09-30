@@ -7,6 +7,7 @@ vi.mock("../../src/config", () => ({ config: { NODE_ENV: "development", DATABASE
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
 import { createPulseRouter } from "../../src/routes/pulse";
+import type { PulseRequest } from "../../src/analytics/pulse-handler";
 
 // TASK-479: POST /api/pulse always answers 204 with an empty body, whatever happens behind it, so
 // a page can never tell whether its event was kept, and never shows an error for one.
@@ -17,7 +18,7 @@ afterEach(() => {
   server = null;
 });
 
-async function start(handle: (req: { body: string; ip: string; userAgent: string; host: string }) => Promise<unknown>) {
+async function start(handle: (req: PulseRequest) => Promise<unknown>) {
   const app = express();
   app.set("trust proxy", 1);
   app.use(createPulseRouter(handle));
@@ -43,6 +44,26 @@ describe("POST /api/pulse", () => {
     expect(arg.userAgent).toBe("ExampleBrowser/1.0");
     expect(arg.ip).toMatch(/127\.0\.0\.1/);
     expect(arg.host).toBe("127.0.0.1");
+  });
+
+  it("hands over the headers that say where the event came from and what the browser asked", async () => {
+    const handle = vi.fn(async () => "kept");
+    const url = await start(handle);
+    await fetch(url, {
+      method: "POST",
+      body: "{}",
+      headers: {
+        "content-type": "text/plain",
+        "sec-fetch-site": "same-origin",
+        origin: "https://nbcc.scot",
+        referer: "https://nbcc.scot/donate",
+        dnt: "1",
+        "sec-gpc": "1",
+      },
+    });
+    expect((handle.mock.calls[0] as unknown[])[0]).toMatchObject({
+      headers: { secFetchSite: "same-origin", origin: "https://nbcc.scot", referer: "https://nbcc.scot/donate", dnt: "1", secGpc: "1" },
+    });
   });
 
   it("reads a body sent as JSON the same way", async () => {

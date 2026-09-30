@@ -5799,6 +5799,25 @@ Checked in headless Chrome as well: the labels in the table at 1280px and in the
 320px, and focus on the heading after pressing Edit. The TASK-460 layout checks still pass at every
 width. Design: `docs/superpowers/specs/2026-09-30-events-list-row-clarity-design.md`.
 
+## Keyboard focus on the Events screen, finished (TASK-468)
+
+These are the three gaps TASK-465's review found.
+
+- **Deleting leaves you on "Add an event".** Delete hides the editor, and the button that had focus
+  goes with it, so keyboard focus used to fall back to the page. It now lands on **Add an event**,
+  just above the list. Anyone who may delete may add, so it is always there, and it is the likeliest
+  next step. "Deleted." is still announced.
+- **Arriving never moves focus, even on an empty list.** With no events, the screen opens a blank
+  event by itself, and that used to put focus in the name field. Now only pressing **Add an event**
+  does that.
+- **Each button's name carries the event's date**, visible word first, for example "Edit Red Bag
+  packing morning, 18 Sep". Events that share a name, such as a recurring one, no longer sound alike
+  to a screen reader. The visible text is unchanged.
+
+`test/unit/admin-app.test.ts` pins all three, and they were checked in headless Chrome: focus in the
+name field after "Add an event", focus on "Add an event" after deleting, and the dated names.
+Design: `docs/superpowers/specs/2026-09-30-events-screen-focus-design.md`.
+
 ## Saving an editor's access took Contact businesses away (TASK-459)
 
 Editors have been able to use **Contact businesses** since it shipped: TASK-354 put `outreach` in the

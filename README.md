@@ -1322,6 +1322,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
+| `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
 | `PATCH /api/portal/:token` | **implemented** | REQ-061 (donor portal update) |
 | `POST /api/portal/:token/subscription/cancel` | **implemented** | REQ-055 (reduce-instead-then-cancel) |
@@ -3538,6 +3539,10 @@ real (LF) total is **260,988 of 261,120 bytes — 132 bytes of headroom.** Anyth
 its own CSS and JS. The budget has been raised five times already; the next change that needs room
 should either buy it back (the 105KB unminified `main.js` is the obvious candidate) or raise the
 cap as a deliberate, discussed decision rather than a reflex.
+
+TASK-479 raised it again, 260 to 262KB, for `assets/js/pulse.js` (the visit counter, 2,006
+bytes plus a 50 byte script tag), which donate.html could not fit in the ~550 bytes it had left.
+It is deferred, so it never delays first paint; the weight review is still the real fix.
 
 **Adding an admin section is a three-file change.** The list lives in
 `src/admin/permissions.ts`, `assets/js/admin/app.js` and `features/steps/admin-permissions.steps.js`.
@@ -6469,6 +6474,79 @@ Covered by `test/unit/events-model.test.ts`, `events-render.test.ts`, `events-na
 off and on, date order, drafts and past and not-yet-scheduled events kept off, the admin API's
 permissions, validation, audit rows, previews and picture uploads).
 
+## Site analytics (TASK-479)
+
+Counting visits the way Plausible or Fathom do: **no cookies, no banner, nothing stored on the
+visitor's device, no IP address stored.** The design is
+`docs/superpowers/specs/2026-09-30-site-analytics-design.md`; this is part 1 of 4 (counting). The
+email link words (TASK-480), the town and city database (TASK-481) and Admin > Analytics (TASK-482)
+follow.
+
+**It ships switched off.** Nothing is kept until an admin turns collecting on
+(`analytics_settings.collecting`, default `false`). Until TASK-482 adds the switch to the admin,
+it can only be changed in the database. `src/db/analytics.ts` has `getAnalyticsSettings` and
+`setCollecting(on, actor)` (which writes an `analytics.collecting_switched` audit row) ready for it.
+
+**The script.** `assets/js/pulse.js` (under 2 KB, no libraries) is loaded with `defer` on every
+public page (index, about, donate, events, ball, ball terms, Gift Aid, contact, My Story,
+supporters, hub, privacy, site map, both thank-you pages and the 404), and deliberately not on
+admin, the donor portal or set password. It does nothing at all under Do Not Track or Global
+Privacy Control. It never touches cookies, localStorage or sessionStorage: the page view's random
+id lives in memory only. It sends, by `navigator.sendBeacon` with a `fetch` `keepalive` fallback,
+as JSON in a `text/plain` body (so no CORS preflight):
+
+| Event | When | Fields |
+|---|---|---|
+| `view` | on load | `v` the view's random id (16 hex), `p` the path, `r` the referrer, `u` `{s, m, c}` from `utm_source`, `utm_medium`, `utm_campaign`, `w` the screen width |
+| `leave` | when the page is hidden or left | `a` seconds actually visible (capped at 1,800), `s` furthest scroll in percent; sent again only if either grew |
+| `click` | a link or button that matters | `k` one of `donate`, `tickets`, `phone`, `email`, `download`, `outbound`; `l` a label (the host for outbound, the file name for a download, the words otherwise), 80 characters at most |
+
+**The endpoint.** `POST /api/pulse` (`src/routes/pulse.ts`, mounted before `express.json` so
+its own 2 KB text parser reads every body) **always answers 204 with nothing in it**: kept,
+switched off, rate limited, a bot, malformed, too big or a database failure all look the same to
+the page. The work is `src/analytics/pulse-handler.ts`, with every rule in its own pure module:
+
+| Module | Rule |
+|---|---|
+| `src/analytics/limiter.ts` | 120 events a minute per IP, in memory (the house `createRateLimiter`) |
+| `src/analytics/switch-cache.ts` | the switch is remembered 30 seconds in production (read every time elsewhere, so BDD can flip it); a failed read counts as off |
+| `src/analytics/user-agent.ts` | bots, crawlers, spiders, headless browsers and preview fetchers dropped; device `phone`/`tablet`/`computer`, browser (Chrome, Safari, Edge, Firefox, Samsung Internet, Other), operating system |
+| `src/analytics/payload.ts` | the zod shape of the three events; anything else, or over 2 KB, is dropped |
+| `src/analytics/paths.ts` | the path kept is the page's canonical path from the site map (`src/site/pages.ts`), plus `/sitemap`, `/business/thank-you` and `/gift-aid/declare` (every Gift Aid form, never its token), or `other`. The query string is thrown away first |
+| `src/analytics/visitor.ts` | the visitor id is `sha256(daily salt + IP + user agent)`, 16 hex characters. The salt is random, made by the first event of each UK day (`analytics_salts`), and deleted the next morning |
+| `src/analytics/channel.ts` | the channel, first match wins: newsletter (`utm_source=newsletter` or a referrer on `news.nbcc.scot`), email (`utm_medium=email`), any other `utm_source` (a search engine, a social site, or other websites named after it), search engines, social sites, our own site (keeps the channel of the visitor's latest view that day, or direct), any other website (by host), direct. Only the referrer's host is kept |
+| `src/analytics/place.ts` | `setPlaceResolver(fn)` and `resolvePlace(ip)`. Records no place until TASK-481 connects the DB-IP database at start-up; a failing lookup records no place rather than losing the view |
+
+The IP address and user agent are used for the limit, the id, the place and the device, and then
+forgotten with the request. Neither is stored anywhere.
+
+**The tables** (`migrations/1791000000000_site-analytics.js`, additive):
+
+| Table | Columns |
+|---|---|
+| `analytics_settings` | one row, `id = 1`: `collecting` (default false), `updated_at`, `updated_by` |
+| `analytics_salts` | `day` (date, key), `salt` |
+| `analytics_views` | `id`, `view_id` (unique), `at`, `day` (UK date), `path`, `visitor`, `channel` (`newsletter`, `email`, `search`, `social`, `other_websites`, `direct`), `source`, `campaign`, `country`, `region`, `city`, `device`, `browser`, `os`, `active_seconds` (null until a leave), `max_scroll` (null until a leave). Indexed on `day` and `(day, visitor)` |
+| `analytics_clicks` | `id`, `view_id`, `at`, `day`, `kind`, `label`. Indexed on `day`. A click is kept only for a view that was |
+
+A repeated view id is ignored; a leave only ever raises `active_seconds` and `max_scroll`.
+
+**Retention.** The daily 8am job (`src/scripts/send-reminders.ts`, its own try/catch) deletes
+views and clicks older than 13 months and every salt older than today (`pruneAnalytics`).
+
+**Access.** A new permission section, `analytics`: admins `edit` by role, editors and viewers
+`none`, given to anyone else from Team > Manage access. `migrations/1791000000001_permissions-analytics.js`
+adds it to every saved matrix that lacks it (admin edit, anyone else none) with an
+`admin_user.permissions_backfilled` audit row each, by `migration:TASK-479`, the TASK-463 way.
+
+**The privacy notice** has a new section, "Counting visits", saying all of this in plain words.
+
+**Tests.** Unit: `test/unit/analytics-*.test.ts` (every channel rule, the path allowlist, the
+visitor id across days, user agent and bot reading, the payload, the limiter, the switch cache,
+the place seam, the handler, the SQL, the route's 204s, pulse.js itself in jsdom, the pages that
+carry it, the retention wiring and the privacy section). BDD: `features/analytics-pulse.feature`
+against Postgres, and the backfill scenarios in `features/admin-permissions.feature`.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a
@@ -6485,12 +6563,12 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 46 tables
-(42 when this was built; the Events page added three in TASK-453, and the Festive Ball ticket
-report one in TASK-464),
+This is the trap this feature was built around. `DATABASE_URL` holds 50 tables
+(42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
+report one in TASK-464, and site analytics four in TASK-479),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 46 of **49** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 50 of **53** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

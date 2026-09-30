@@ -81,7 +81,10 @@ carries HTML (a highlighted selection, a social post), it goes through `DOMParse
 that goes through `markdownToProse`. The result is
 inserted at the selection with `document.execCommand("insertText")`, so Ctrl+Z undoes it and the
 box's own `input` handler updates the block and the preview exactly as typing does
-(`setRangeText` is the fallback where that command is unavailable). If the converter is missing or
+(`setRangeText` is the fallback where that command is unavailable). The selection is set afresh just
+before, because Chrome otherwise folds the insert into the words typed before it and one Ctrl+Z takes
+both (found in headless Chrome while verifying; the paste is now its own undo step, as a normal paste
+is). If the converter is missing or
 returns nothing, the browser's ordinary paste goes ahead.
 
 Nothing from the clipboard reaches the server except the plain-text result, which the server

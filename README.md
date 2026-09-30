@@ -1725,8 +1725,9 @@ Claude reply, a social post) or Markdown (Claude's Copy button) into the same ma
 breaks, bold and italic come across; a heading becomes a bold paragraph, and a list item a line starting
 `• ` or its number. A link keeps only its words: the address behind it is dropped, while an address
 written out in the text stays. Fonts, colours, sizes and pictures are dropped, and emoji kept. The
-result goes in with `execCommand("insertText")`, so Ctrl+Z undoes a paste. Every other box pastes plain
-text, as before.
+result goes in with `execCommand("insertText")`, so Ctrl+Z undoes a paste, and the selection is set
+afresh first so that the paste is its own undo step. Otherwise Chrome folds it into the words typed just
+before it, and one Ctrl+Z takes both. Every other box pastes plain text, as before.
 
 **Deleting a newsletter (TASK-252, hardened by TASK-258).** `DELETE /api/admin/newsletters/:id`,
 **Admin only**. A **draft** (never went anywhere) is really deleted, through `writeWithAudit` so the

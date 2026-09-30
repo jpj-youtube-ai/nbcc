@@ -437,6 +437,14 @@ When("I preview the current block document", async function () {
   this.previewHtml = r.json.html || "";
 });
 
+// TASK-469: a text block's paragraphs and line breaks reach the preview (and so the email).
+When("I preview a block document whose text reads:", async function (text) {
+  const bodyJson = { blocks: [{ type: "text", variant: 0, data: { text } }] };
+  const r = await authFetch("/api/admin/newsletters/preview", "POST", { bodyJson }, this.token);
+  this.previewStatus = r.status;
+  this.previewHtml = r.json.html || "";
+});
+
 Then("the preview response status should be {int}", function (expected) {
   assert.equal(this.previewStatus, expected);
 });

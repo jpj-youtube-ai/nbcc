@@ -79,6 +79,18 @@ Feature: Admin newsletter (REQ-069)
     And the preview HTML should contain "Dear Jane,"
     And the preview HTML should contain "SC047995"
 
+  Scenario: a text block written in two paragraphs previews as two paragraphs
+    Given a newsletter admin "paste.editor.newsletter.bdd@example.com" with role "editor" and password "pw-paste"
+    When I preview a block document whose text reads:
+      """
+      First paragraph.
+
+      Second paragraph.
+      And a line straight after.
+      """
+    Then the preview response status should be 200
+    And the preview HTML should contain "First paragraph.<br><br>Second paragraph.<br>And a line straight after."
+
   Scenario: an Editor uploads an image and it serves back
     Given a newsletter admin "editor4.newsletter.bdd@example.com" with role "editor" and password "pw-e4"
     When I upload a newsletter image

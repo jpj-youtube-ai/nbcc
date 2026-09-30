@@ -5690,6 +5690,10 @@ your previous visit carry the same pill for as long as you stay.
   not light up years of old records.
 - **If a check fails,** that section just shows no pill and the error is logged. The others still
   answer, and a pill only ever appears when something is known to be new.
+- **"Since" means at or after, to the millisecond.** Postgres keeps microseconds, but times reach
+  the app cut to milliseconds. The database has already found an arrival strictly later, so
+  something that came within the same millisecond as your last visit still counts. The first CI
+  run failed on exactly that: an account and a sign-up made within one millisecond.
 
 **New parts of the admin get a pill too.** `FEATURES` in `src/admin/whats-new.ts` lists them as
 `{ area, added, what }`. **When you ship a new screen, or a change staff should notice, add a line

@@ -77,7 +77,16 @@ When("{string} opens {string}", async function (email, area) {
 Then("{string} is new to {string}", async function (area, email) {
   const found = (await areasFor(this, email)).find((a) => a.area === area);
   assert.ok(found, `${area} was not listed for ${email}`);
-  assert.equal(found.new, true, `${area} should be new to ${email}`);
+  if (found.new !== true) {
+    // The database's own times, to the microsecond, so a failure says which came first. The first CI
+    // run failed on an account and a sign-up made within one millisecond of each other.
+    const times = await pool.query(
+      `SELECT (SELECT created_at::text FROM users WHERE email = $1) AS account_made,
+              (SELECT max(consented_at)::text FROM list_subscribers WHERE email = $2) AS signed_up`,
+      [email, SIGNUP],
+    );
+    assert.fail(`${area} should be new to ${email}: answered ${JSON.stringify(found)}, ${JSON.stringify(times.rows[0])}`);
+  }
 });
 
 Then("{string} is not new to {string}", async function (area, email) {

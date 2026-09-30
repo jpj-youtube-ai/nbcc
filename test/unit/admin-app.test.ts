@@ -1164,6 +1164,17 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(pill(document.querySelector("#donationsTable tbody tr"))).not.toBeNull();
     });
 
+    // The server counts an arrival within the same millisecond as new (times reach us cut to
+    // milliseconds), so the row that lit the menu pill must carry one too.
+    it("marks a row from the same millisecond as the last visit", async () => {
+      whatsNew = [{ area: "donations", new: true, since: "2026-01-02T00:00:00.000Z" }];
+      await signIn();
+      await settle();
+      link("donations").click();
+      await settle();
+      expect(pill(document.querySelector("#donationsTable tbody tr"))).not.toBeNull();
+    });
+
     it("leaves older rows alone", async () => {
       whatsNew = [{ area: "donations", new: false, since: "2026-02-01T00:00:00.000Z" }];
       await signIn();

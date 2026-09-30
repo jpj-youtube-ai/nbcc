@@ -83,6 +83,14 @@ describe("is a section new to a person", () => {
     expect(isNew({ ...base, area: "contact", seenAt: null, latestArrival: null })).toBe(false);
   });
 
+  // Postgres keeps microseconds; a JavaScript Date keeps milliseconds. An arrival the database has
+  // already found later than the visit can come back looking like the same moment (TASK-478's first
+  // CI run: an account and a sign-up made within one millisecond).
+  it("is when something arrived in the same millisecond as the visit", () => {
+    const moment = at("2026-10-05T09:00:00.123Z");
+    expect(isNew({ ...base, area: "contact", seenAt: moment, latestArrival: new Date(moment) })).toBe(true);
+  });
+
   it("is when a new part of the admin arrived there, even with no arrivals", () => {
     const features = [{ area: "events" as const, added: at("2026-09-30T12:00:00Z"), what: "The Events page" }];
     expect(isNew({ ...base, features, area: "events", seenAt: null, latestArrival: null })).toBe(true);

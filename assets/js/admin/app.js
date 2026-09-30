@@ -497,7 +497,9 @@
     var since = visitSince[area];
     if (since === undefined && whatsNew && whatsNew[area]) since = whatsNew[area].since;
     if (!since || !when) return "";
-    return new Date(when) > new Date(since) ? " " + NEW_PILL : "";
+    // At or after, matching the server: times reach us cut to milliseconds, so an arrival the database
+    // found later than the visit can look like the same moment (src/admin/whats-new.ts, isNew).
+    return new Date(when) >= new Date(since) ? " " + NEW_PILL : "";
   }
 
   // TASK-443: which section you were last on. A refresh used to drop you back on the overview,

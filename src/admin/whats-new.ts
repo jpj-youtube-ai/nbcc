@@ -68,6 +68,9 @@ export function isNew(input: {
   features?: ReadonlyArray<{ area: Area; added: Date }>;
 }): boolean {
   const since = arrivalsSince(input.seenAt, input.accountCreatedAt);
-  if (input.latestArrival && input.latestArrival > since) return true;
+  // At or after, not strictly after: the database keeps microseconds and has already found this
+  // arrival strictly later than `since`, but both reach us cut to milliseconds, so one that came in
+  // within the same millisecond looks equal here. `>` would throw it away.
+  if (input.latestArrival && input.latestArrival >= since) return true;
   return featureIsNew(input.area, input.seenAt, input.accountCreatedAt, input.features);
 }

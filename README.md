@@ -1382,6 +1382,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `PATCH /api/admin/events/settings` | **implemented** | TASK-453 (events: edit **and** the admin role; `{pageOn}` switches the whole page. Audited as `events.page_switched`) |
 | `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/events`) |
 | `POST /api/admin/event-images` | **implemented** | TASK-453 (events: edit; base64 upload, raster only, 2 MB, returns `/media/events/<uuid>`) |
+| `GET /api/admin/analytics?days=7\|30\|90` | **implemented** | TASK-482 (analytics: view; every panel of Admin > Analytics for the period and the one before, in one payload) |
+| `GET/PUT /api/admin/analytics/settings` | **implemented** | TASK-482 (analytics: view / edit; `{collecting}` switches counting on or off. Audited as `analytics.collecting_switched`) |
 | `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
 | `GET /api/admin/contact` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; list enquiries, optional `?status=new\|replied`) |
 | `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
@@ -6483,9 +6485,9 @@ email link words (TASK-480), the town and city database (TASK-481) and Admin > A
 follow.
 
 **It ships switched off.** Nothing is kept until an admin turns collecting on
-(`analytics_settings.collecting`, default `false`). Until TASK-482 adds the switch to the admin,
-it can only be changed in the database. `src/db/analytics.ts` has `getAnalyticsSettings` and
-`setCollecting(on, actor)` (which writes an `analytics.collecting_switched` audit row) ready for it.
+(`analytics_settings.collecting`, default `false`), from the switch at the top of Admin > Analytics
+(TASK-482, below). `setCollecting(on, actor)` in `src/db/analytics.ts` writes an
+`analytics.collecting_switched` audit row for every change.
 
 **The script.** `assets/js/pulse.js` (under 2 KB, no libraries) is loaded with `defer` on every
 public page (index, about, donate, events, ball, ball terms, Gift Aid, contact, My Story,
@@ -6548,6 +6550,54 @@ visitor id across days, user agent and bot reading, the payload, the limiter, th
 the place seam, the handler, the SQL, the route's 204s, pulse.js itself in jsdom, the pages that
 carry it, the retention wiring and the privacy section). BDD: `features/analytics-pulse.feature`
 against Postgres, and the backfill scenarios in `features/admin-permissions.feature`.
+
+## Admin > Analytics (TASK-482)
+
+Part 4 of site analytics: the page that shows the numbers TASK-479 counts. Admin > Analytics, in the
+Admin group of the menu, shown only to people with the `analytics` permission (admins by role; the
+group's label now shows for anyone with Team or Analytics).
+
+**The switch** sits at the top, as a card like the Events page's. Off, it says what switching on
+starts counting and links the privacy notice's "Counting visits" section; on, it says since when and
+who switched it. Only `analytics: edit` can flip it (after a confirmation); anyone with view sees it
+read only. The change is saved through `setCollecting` (audited) and then
+`pulseSwitch.forget()`, so `POST /api/pulse` on the same task takes it up at once rather than within
+its 30 second memory.
+
+**The numbers**, for the last 7, 30 or 90 UK days (the chips), each beside the same number of days
+before:
+
+| Panel | What it shows |
+|---|---|
+| Figures | visitors, visits, page views, and the share of visits that saw one page, each with its change on the period before (a share changes in points) |
+| Visitors each day | an inline SVG line (no library) with the period before dashed under it, the day under the pointer on hover, and a sentence for screen readers instead of the drawing |
+| Where they came from | visits by channel (Newsletter, Email, Search, Social, Other websites, Direct) as bars with their share; the top other websites by name; the visits each newsletter issue brought, named by the newsletter's subject where the campaign is a newsletter id (TASK-480 tags links with it), else the campaign as it came |
+| Where they are | visitors by town or city and by country (named from the ISO code with `Intl.DisplayNames`), with the credit "IP geolocation by DB-IP" linked to db-ip.com, as its CC BY 4.0 licence requires |
+| What they looked at | each page: views, visitors, average time on screen and average scroll (both ignore views not yet left), and the share of visits that began there. A table on a desktop, one block per page on a phone |
+| What they clicked | clicks by kind (Donate and ticket buttons, phone and email links, downloads, links to other websites) and by each button or link |
+| What they used | visitors by phone, tablet or computer, and by browser |
+| Right now | people with a page view in the last 5 minutes, with "Check again" |
+
+**The definitions** (`src/analytics/report.ts`, pure and unit tested): a visitor is a distinct
+(day, visitor id) pair, so the same person on two days is two; a visit is one visitor's views on one
+day, split wherever the gap between two views is more than 30 minutes, and its first view is its
+entry page and decides its channel; a one page visit is a bounce; averages ignore missing values.
+`src/db/analytics-report.ts` reads the rows of both periods in one go (views; clicks added up by day,
+kind and label; newsletter subjects; right now), one query after another so analytics never holds
+more than one of the pool's connections, and builds every panel for each period.
+
+Nothing scrolls inside a box: a list longer than ten shows its top ten and "Show all" grows the
+page. A panel with nothing in it says "Not enough visits yet"; if the numbers cannot be loaded,
+every panel says so rather than showing zeros (TASK-476).
+
+**Tests.** Unit: `test/unit/analytics-report.test.ts` (periods, visits split at 30 minutes, bounce,
+averages, entry pages, places, clicks, devices, newsletter labels, from invented rows),
+`test/unit/admin-analytics-routes.test.ts` (401, 403 for editors and viewers, view against edit, the
+audit actor, `forget`, bad days and bodies, failures) and `test/unit/admin-analytics-page.test.ts`
+(the page in the admin's jsdom harness: the nav item, the switch off, on, read only, flipped,
+cancelled and failed, the chips, the figures, the line's summary, every panel filled, empty and
+failed, the DB-IP credit, and Show all). BDD: `features/analytics-admin.feature` (the permission,
+the audited switch, and the figures from seeded page views).
 
 ## Backups (TASK-423)
 

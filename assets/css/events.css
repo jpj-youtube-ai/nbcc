@@ -192,6 +192,10 @@
 /* A year or a number travels as one piece: never "EmpowHer'2" with a lonely "6" underneath. */
 .ev-art__name span { display: inline-block; white-space: nowrap; color: var(--tan-light); }
 .ev-art .rule { margin: 16px auto 0; max-width: 170px; }
+/* The divider's diamond is crimson, which vanishes on a crimson or maroon cover. Cream there; on holly
+   the site's own pairing, crimson on green, stays. */
+.ev-art--type .rule i { background: var(--cream); }
+.ev-art--holly .rule i { background: var(--crimson); }
 .ev-art__place {
   margin: 14px 0 0;
   font-size: 0.74rem;

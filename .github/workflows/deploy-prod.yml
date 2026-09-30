@@ -60,9 +60,9 @@ jobs:
         id: img
         run: |
           echo "IMAGE=${{ steps.ecr.outputs.registry }}/${PROJECT}:${DEPLOY_SHA}" >> "$GITHUB_ENV"
-          # TASK-481: the month of DB-IP location database to bake in (the geo stage in the Dockerfile).
-          # A build arg, so the cached download is replaced each month rather than kept forever.
-          echo "GEO_MONTH=$(date -u +%Y-%m)" >> "$GITHUB_ENV"
+          # TASK-481: today's date keys the DB-IP location database download (the geo stage in the
+          # Dockerfile), so a failed or fallback download is cached for a day at most, not a month.
+          echo "GEO_DAY=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
           # Idempotent by design: the SHA tag is immutable, so if this commit's image is
           # already in ECR (e.g. a re-run after a *later* step failed — a raced infra apply,
           # a flaky migration — or a workflow_dispatch rollback), reuse it instead of
@@ -85,11 +85,24 @@ jobs:
           # the smoke test can prove the deploy actually took (TASK-332).
           build-args: |
             GIT_SHA=${{ env.DEPLOY_SHA }}
-            GEO_MONTH=${{ env.GEO_MONTH }}
+            GEO_DAY=${{ env.GEO_DAY }}
           # Most commits change only app code, so the base/npm-install layers restore
           # from the Actions cache instead of rebuilding — build drops from ~40s toward ~15s.
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # TASK-481: the build carries on without the location database when DB-IP cannot be reached,
+      # so say so loudly here. Never fails the deploy (the site works without it; visits are just
+      # counted without places), and the next day's first deploy tries the download again.
+      - name: Check the location database is in the image (warns, never fails)
+        if: steps.img.outputs.exists == 'false'
+        continue-on-error: true
+        run: |
+          if docker run --rm --entrypoint sh "$IMAGE" -c 'test -s /app/geo/dbip-city-lite.mmdb'; then
+            echo "Location database present in the image."
+          else
+            echo "::warning title=No location database in the image::$IMAGE has no /app/geo/dbip-city-lite.mmdb (the DB-IP download failed at build time; see the geo stage in the build log). Site analytics will count visits without places until a deploy on a later day fetches it."
+          fi
 
       - name: Cache Terraform providers
         uses: actions/cache@v4

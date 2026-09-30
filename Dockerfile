@@ -11,18 +11,23 @@ RUN npm run build
 # DB-IP's free "IP to City Lite" location database (CC BY 4.0, "IP geolocation by DB-IP"), used by
 # the site analytics to turn a visitor's IP into a country, region and town before the IP is thrown
 # away (src/analytics/geo-db.ts). A stage of its own so that:
-#  - ordinary code changes never re-download it (its cache depends only on the script and GEO_MONTH);
+#  - ordinary code changes never re-download it (its cache depends only on the script and GEO_DAY);
 #  - the runtime image gets just the unpacked file: the fetch uses Node's own fetch and zlib, so no
 #    curl, apt step or .gz leftovers.
-# GEO_MONTH (YYYY-MM) is passed by deploy-prod.yml as the current month, which replaces the cached
-# layer each month; left empty (a plain docker build) the script works the month out itself. It tries
-# that month, then the one before; if both fail it warns and the build carries on without the file,
-# and the app then records visits without places.
+# GEO_DAY (YYYY-MM-DD) is passed by deploy-prod.yml as today's date. Keyed on the DAY, not the month:
+# the script always succeeds (so a bad download never fails a build), which means a failed download,
+# or last month's file on the 1st before DB-IP publishes the new one, is cached too. Keyed on the day,
+# that lasts until the next day's first deploy at most, and there is at most one download a day.
+# Left empty (a plain docker build) the script works the month out itself. It tries that month, then
+# the one before, each within a time limit; if both fail it warns and the build carries on without
+# the file, and the app then records visits without places. deploy-prod.yml then warns loudly.
+# GEO_SKIP=1 (pr.yml's image check) skips the download entirely: an empty /geo, no 60 MB per PR.
 FROM node:20-slim AS geo
 WORKDIR /fetch
 COPY scripts/fetch-geo-db.mjs ./
-ARG GEO_MONTH=
-RUN node fetch-geo-db.mjs /geo "$GEO_MONTH" && mkdir -p /geo
+ARG GEO_DAY=
+ARG GEO_SKIP=
+RUN if [ -n "$GEO_SKIP" ]; then echo "geo: GEO_SKIP is set; building without the location database"; else node fetch-geo-db.mjs /geo "$GEO_DAY"; fi && mkdir -p /geo
 
 # ---- runtime ----
 FROM node:20-slim AS runtime

@@ -115,7 +115,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the runtime image
-        run: docker build -t nbcc-image-check .
+        # GEO_SKIP=1: this check does not need the 60 MB location database (TASK-481).
+        run: docker build --build-arg GEO_SKIP=1 -t nbcc-image-check .
       - name: pg_dump must be 16 or newer, or the backup cannot dump production
         run: |
           set -euo pipefail

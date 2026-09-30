@@ -5695,19 +5695,28 @@ the IP itself is then forgotten (see the analytics design,
   its own, with `scripts/fetch-geo-db.mjs` (Node's own fetch and gzip, so no curl): this month's
   `https://download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`, else last month's (DB-IP
   publishes early each month, so on the 1st this month's may not be there yet). It unpacks it to
-  `/app/geo/dbip-city-lite.mmdb` and checks it really is a MaxMind DB. If both months fail it prints
-  `geo: WARNING: ...` in the build log and the build carries on without it.
-- **Refreshing it.** Every production deploy passes the current month as the `GEO_MONTH` build
-  arg (`deploy-prod.yml`), so the cached download is replaced when the month changes; a deploy in
-  a new month picks up the new file. Nothing else refreshes it: a month with no deploys keeps
-  last month's file, which is fine for this purpose.
+  `/app/geo/dbip-city-lite.mmdb` and checks it really is a MaxMind DB. Each attempt has two
+  minutes, from asking to the last byte, so a stalled server cannot hang a build. If both months
+  fail it prints `geo: WARNING: ...` in the build log and the build carries on without it.
+- **Knowing it is there.** After building, the production deploy checks the image has the file. If
+  not, the deploy shows a yellow warning ("No location database in the image") but still goes
+  ahead: the site works without it, and visits are just counted without places until the next day.
+- **Refreshing it.** Every production deploy passes today's date as the `GEO_DAY` build arg
+  (`deploy-prod.yml`). The download is cached for the rest of that day, so there is at most one
+  download a day however many deploys there are. The first deploy of a new day fetches again, which
+  is how a new month's file arrives, and how a failed download or a fallback to last month's file
+  (the 1st of a month, before DB-IP publishes) puts itself right. Nothing else refreshes it: weeks
+  with no deploys keep the file they have, which is fine for this purpose.
+- **PR builds skip it.** `pr.yml`'s image check builds with `GEO_SKIP=1`, which leaves `/geo`
+  empty instead of downloading 60 MB on every pull request. Production never passes it.
 - **Trying it locally.** Put a copy at `geo/dbip-city-lite.mmdb` in the repo folder (`/geo/` is
   gitignored; never commit it) or leave it out and the app runs without places.
 - **Tests** build small `.mmdb` files from invented data with `test/unit/helpers/mmdb-writer.ts`:
   `test/unit/geo-db.test.ts` (IPv4 and IPv6 trees, IPv4 inside IPv6, 24-, 28- and 32-bit
   records, every pointer size, every data type, missing city or region, addresses in no network,
-  bad addresses, corrupt files), `test/unit/fetch-geo-db.test.ts` (the month fallback and a bad
-  download) and `test/unit/dockerfile-geo-db.test.ts` (the Dockerfile stage and the monthly build arg).
+  bad addresses, corrupt files), `test/unit/fetch-geo-db.test.ts` (the month fallback, a bad
+  download, and a server that stalls) and `test/unit/dockerfile-geo-db.test.ts` (the Dockerfile stage, the daily build arg, the
+  image check in the deploy, and the PR skip).
 
 ## Monthly or one off, on the donations list (TASK-446)
 

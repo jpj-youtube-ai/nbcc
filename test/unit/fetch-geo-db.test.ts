@@ -26,6 +26,12 @@ describe("geoMonths", () => {
     expect(geoMonths(new Date("2026-10-01T00:00:00Z"), "2026-13")).toEqual(["2026-10", "2026-09"]);
     expect(geoMonths(new Date("2026-10-01T00:00:00Z"), "latest")).toEqual(["2026-10", "2026-09"]);
   });
+
+  it("takes a day too, as the production build passes it (GEO_DAY)", () => {
+    expect(geoMonths(new Date("2026-10-01T00:00:00Z"), "2026-10-01")).toEqual(["2026-10", "2026-09"]);
+    expect(geoMonths(new Date("2026-10-01T00:00:00Z"), "2027-01-15")).toEqual(["2027-01", "2026-12"]);
+    expect(geoMonths(new Date("2026-10-01T00:00:00Z"), "2026-10-1")).toEqual(["2026-10", "2026-09"]);
+  });
 });
 
 describe("geoUrl", () => {
@@ -58,7 +64,7 @@ describe("installGeoDb", () => {
     const got = await installGeoDb({ dir, months: ["2026-10", "2026-09"], fetch, log: quiet });
     expect(got).toBe("2026-10");
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(fetch).toHaveBeenCalledWith(geoUrl("2026-10"));
+    expect(fetch).toHaveBeenCalledWith(geoUrl("2026-10"), { signal: expect.any(AbortSignal) });
     expect(openGeoDb(join(dir, GEO_FILE)).lookup("192.0.2.9")?.city).toBe("Madeupton");
     expect(readdirSync(dir)).toEqual([GEO_FILE]); // no half-written temporary file left behind
   });
@@ -79,6 +85,52 @@ describe("installGeoDb", () => {
     ];
     const fetch = vi.fn(async () => answers.shift() as Response);
     expect(await installGeoDb({ dir, months: ["2026-10", "2026-09", "2026-08"], fetch, log: quiet })).toBe("2026-08");
+  });
+
+  it("gives up on a server that never answers, and falls back", async () => {
+    const dir = tmp();
+    const fetch = vi.fn(
+      (url: string, init?: { signal?: AbortSignal }) =>
+        url.includes("2026-10")
+          ? new Promise<Response>((_, reject) => init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)))
+          : Promise.resolve(ok()),
+    );
+    const log = vi.fn();
+    const got = await installGeoDb({ dir, months: ["2026-10", "2026-09"], fetch, log, timeoutMs: 50 });
+    expect(got).toBe("2026-09");
+    expect(log.mock.calls.flat().join(" ")).toMatch(/2026-10.*(timeout|aborted)/i);
+  });
+
+  it("gives up on a download that stalls part way through, and leaves nothing behind", async () => {
+    const dir = tmp();
+    const stalled = () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new Uint8Array(gzipSync(mmdb).subarray(0, 100))); // then nothing, ever
+          },
+        }),
+        { status: 200 },
+      );
+    const fetch = vi.fn(async () => stalled());
+    const started = Date.now();
+    const got = await installGeoDb({ dir, months: ["2026-10", "2026-09"], fetch, log: quiet, timeoutMs: 50 });
+    expect(got).toBeNull();
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("allows two minutes by default", async () => {
+    const seen: AbortSignal[] = [];
+    const fetch = vi.fn(async (_url: string, init?: { signal?: AbortSignal }) => {
+      if (init?.signal) seen.push(init.signal);
+      return notFound();
+    });
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    await installGeoDb({ dir: tmp(), months: ["2026-10"], fetch, log: quiet });
+    expect(timeout).toHaveBeenCalledWith(120_000);
+    expect(seen).toHaveLength(1);
+    timeout.mockRestore();
   });
 
   it("carries on without a file, and says so, when every month fails", async () => {

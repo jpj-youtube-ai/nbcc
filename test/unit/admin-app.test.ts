@@ -97,6 +97,19 @@ type TeamMember = {
 };
 let teamMembers: TeamMember[] = [];
 
+// TASK-465: the Events screen's events, as GET /api/admin/events returns them (none unless a test
+// adds some). Every field the list and the editor read, with a test's own values laid on top.
+const eventRecord = (over: Record<string, unknown>) => ({
+  id: 1, slug: "e", name: "An event", subtitle: "", gist: "", date: "2026-11-04", start: "18:00",
+  end: "22:00", timeTbc: false, venue: "The Hall", town: "Ayr", address: "", access: [],
+  imageSrc: null, imageFit: "cover", imageGround: "night", imageAlt: "", cover: "crimson",
+  costFront: "", costBack: "", flag: "", listHeading: "", whatsOn: "", note: "", runBy: "nbcc",
+  partnerName: "", partnerFront: "Organised by", partnerCredit: "Organised by", partnerLogoSrc: null,
+  partnerLine: "", bookingHow: "none", bookingUrl: "", bookingLabel: "", bookingNote: "",
+  status: "live", showFrom: null, ...over,
+});
+let events: ReturnType<typeof eventRecord>[] = [];
+
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
     status,
@@ -162,6 +175,13 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     return j({ ...member, permissions: parsed.data.permissions });
   }
   if (url.endsWith("/api/admin/users")) return j({ results: teamMembers });
+  // TASK-465: the Events screen. The preview is checked first, since it shares the list's prefix.
+  if (url.includes("/api/admin/events/preview")) {
+    return j({ card: "<p>card</p>", page: "<p>page</p>", problems: [], onPage: true });
+  }
+  if (/\/api\/admin\/events$/.test(url)) {
+    return j({ pageOn: false, updatedAt: null, updatedBy: null, today: "2026-09-30", events });
+  }
   return j({ results: [] }); // queues / adjustment-due
 }
 
@@ -185,6 +205,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     monthlyFailure = null;
     fulfilments = makeFulfilments();
     teamMembers = [];
+    events = [];
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -839,6 +860,91 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     } finally {
       window.matchMedia = realMatchMedia;
     }
+  });
+
+  // TASK-465: each Events list row clear on its own. In TASK-460's compact rows the column headings
+  // are out of sight, so a scheduled event's "From 14 Oct" read like the event's own date, the status
+  // said "On the page" where the editor says "On the website", and every button was a bare "Edit".
+  // Opening an event also redrew the list inside a live region, so the list was read out again and
+  // the button just pressed was gone.
+  describe("the Events list: each row clear on its own (TASK-465)", () => {
+    const realScrollIntoView = Element.prototype.scrollIntoView;
+    beforeEach(() => {
+      // jsdom does no layout, so it has no scrollIntoView, and the list's buttons scroll to the editor.
+      Element.prototype.scrollIntoView = vi.fn();
+      events = [
+        eventRecord({ id: 1, name: "EmpowHer ’26", date: "2026-11-04", status: "live" }),
+        eventRecord({ id: 2, name: "Christmas Jumper Day", date: "2026-12-09", status: "scheduled", showFrom: "2026-10-14" }),
+        eventRecord({ id: 3, name: "Carols at the Cross", date: "2026-10-20", status: "scheduled", showFrom: "2026-09-20" }),
+        eventRecord({ id: 4, name: "Festive Quiz Night", date: "2026-11-14", status: "draft" }),
+        eventRecord({ id: 5, name: "Red Bag packing morning", date: "2026-09-18", status: "live" }),
+      ];
+    });
+    afterEach(() => {
+      Element.prototype.scrollIntoView = realScrollIntoView;
+    });
+
+    // Arriving opens the soonest event by itself: Carols at the Cross, on 20 Oct.
+    async function openEvents() {
+      await signIn();
+      (document.querySelector('.admin-nav-link[data-view="events"]') as HTMLElement).click();
+      await flush();
+      await flush();
+      await flush();
+    }
+    const pills = () => Array.from(el("evList").querySelectorAll(".admin-pill")).map((p) => p.textContent);
+    const buttons = () => Array.from(el("evList").querySelectorAll<HTMLButtonElement>(".ev-admin-edit"));
+
+    it("says an event that is up is on the website, and when one that is waiting goes up", async () => {
+      await openEvents();
+      expect(pills()).toEqual(["On the website", "On the website", "Goes up 14 Oct"]);
+      expect(el("evList").textContent).not.toContain("On the page");
+
+      (document.querySelector('[data-evlist="drafts"]') as HTMLElement).click();
+      expect(pills()).toEqual(["Draft"]);
+      (document.querySelector('[data-evlist="past"]') as HTMLElement).click();
+      expect(pills()).toEqual(["Past"]);
+    });
+
+    // The visible word first, so "click Edit" still works for someone using speech input.
+    it("names each event's button after its event, and marks the one that is open", async () => {
+      await openEvents();
+      expect(buttons().map((b) => b.textContent)).toEqual(["Open", "Edit", "Edit"]);
+      expect(buttons().map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Open Carols at the Cross", "Edit EmpowHer ’26", "Edit Christmas Jumper Day",
+      ]);
+      expect(buttons().map((b) => b.getAttribute("aria-current"))).toEqual(["true", null, null]);
+    });
+
+    // It redraws whenever an event opens. Saving, deleting and a failed load each announce through
+    // their own status line.
+    it("is not a live region, so opening an event does not read the whole list out again", async () => {
+      await openEvents();
+      expect(el("evList").hasAttribute("aria-live")).toBe(false);
+    });
+
+    it("takes you to the editor when you open an event, rather than losing your place", async () => {
+      await openEvents();
+      buttons()[2].click();
+      await flush();
+      expect(document.activeElement).toBe(el("evEditorTitle"));
+      expect(el("evEditorTitle").textContent).toBe("Editing: Christmas Jumper Day");
+      expect(buttons()[2].getAttribute("aria-current")).toBe("true");
+      expect(buttons()[0].getAttribute("aria-label")).toBe("Edit Carols at the Cross");
+    });
+
+    it("takes you to the editor from the event already open, too", async () => {
+      await openEvents();
+      buttons()[0].click();
+      await flush();
+      expect(document.activeElement).toBe(el("evEditorTitle"));
+    });
+
+    // Arriving opens the soonest event by itself, and must not pull focus away from where it is.
+    it("leaves focus alone when the screen opens an event by itself", async () => {
+      await openEvents();
+      expect(document.activeElement).not.toBe(el("evEditorTitle"));
+    });
   });
 });
 

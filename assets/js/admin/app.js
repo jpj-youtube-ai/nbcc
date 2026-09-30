@@ -9001,9 +9001,12 @@
         var pill;
         if (e.date < today) pill = '<span class="admin-pill admin-pill--cancelled">Past</span>';
         else if (e.status === "draft") pill = '<span class="admin-pill">Draft</span>';
-        else if (e.status === "scheduled" && !evIsOnPage(e)) pill = '<span class="admin-pill admin-pill--pending">From ' + H.escapeHtml(evShortDate(e.showFrom)) + "</span>";
-        else pill = '<span class="admin-pill admin-pill--active">On the page</span>';
+        // TASK-465: the editor's own words ("On the website", "Goes up by itself"). In the compact
+        // rows the Website heading is out of sight, and "From 14 Oct" read like the event's own date.
+        else if (e.status === "scheduled" && !evIsOnPage(e)) pill = '<span class="admin-pill admin-pill--pending">Goes up ' + H.escapeHtml(evShortDate(e.showFrom)) + "</span>";
+        else pill = '<span class="admin-pill admin-pill--active">On the website</span>';
         var editing = e.id === evCurrentId;
+        var action = editing ? "Open" : evCanWrite() ? "Edit" : "View";
         return (
           '<tr class="' + (editing ? "is-editing" : "") + '"><td><div class="ev-admin-when"><span class="ev-mini-index"><b>' + p.day +
           "</b><span>" + p.mon + "</span></span><span>" + p.dow + '<span class="ev-admin-sub">' +
@@ -9012,8 +9015,11 @@
           H.escapeHtml([e.venue, e.town].filter(Boolean).join(", ")) + "</span></td>" +
           "<td>" + H.escapeHtml(e.runBy === "partner" ? e.partnerName || "A partner" : "NBCC") + "</td>" +
           "<td>" + pill + "</td>" +
-          '<td><button class="ev-admin-edit" type="button" data-evopen="' + e.id + '">' +
-          (editing ? "Open" : evCanWrite() ? "Edit" : "View") + "</button></td></tr>"
+          // Named after its event, visible word first ("Edit EmpowHer ’26"), so a screen reader going
+          // down the list does not hear the same word five times; the open one is the current one.
+          '<td><button class="ev-admin-edit" type="button" data-evopen="' + e.id + '" aria-label="' +
+          H.escapeHtml(action + " " + e.name) + '"' + (editing ? ' aria-current="true"' : "") + ">" + action +
+          "</button></td></tr>"
         );
       }).join("") +
       "</tbody></table>";
@@ -9036,6 +9042,15 @@
     evShowEditor();
     var name = el("evf-name");
     if (name && name.focus) name.focus({ preventScroll: true });
+  }
+  // TASK-465: opening an event redraws the list, which takes away the button just pressed, and
+  // keyboard focus would fall back to the page. It goes to the editor's heading instead, which is
+  // where the page is scrolling anyway. Only ever after a person presses a row's button: arriving on
+  // the screen opens the soonest event by itself, and must not pull focus away from wherever it is.
+  function evFocusEditor() {
+    var title = el("evEditorTitle");
+    if (title && title.focus) title.focus({ preventScroll: true });
+    el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   function evShowEditor() {
     evDirty = false;
@@ -9450,12 +9465,12 @@
       var id = Number(b.getAttribute("data-evopen"));
       var record = (evData.events || []).filter(function (x) { return x.id === id; })[0];
       if (!record || (id === evCurrentId)) {
-        el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+        evFocusEditor();
         return;
       }
       if (!evConfirmLeave()) return;
       evOpen(record);
-      el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+      evFocusEditor();
     });
     Array.prototype.forEach.call(doc.querySelectorAll("[data-evlist]"), function (b) {
       b.addEventListener("click", function () {

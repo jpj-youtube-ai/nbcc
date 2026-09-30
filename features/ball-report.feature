@@ -79,3 +79,13 @@ Feature: The Festive Ball ticket report, set up from the Events page (TASK-464)
     Then the report status should be 403
     When "noball.report.admin.bdd@example.com" sends a test ticket report
     Then the report status should be 403
+
+  # TASK-471: a report that could not be sent is on the card until the next one goes.
+  Scenario: a report that could not be sent shows on the card until the next one goes
+    Given the ticket report could not be sent 1 day ago
+    When "editor.report.admin.bdd@example.com" reads the ticket report settings
+    Then the report status should be 200
+    And the card says the report of 1 day ago could not be sent
+    Given the last ticket report counted up to 0 days ago
+    When "editor.report.admin.bdd@example.com" reads the ticket report settings
+    Then the card shows no failed report

@@ -1,7 +1,7 @@
 import { storiesPool } from "./stories-pool";
 import { archiveCondition, type ArchiveView } from "../admin/archive-filter";
 import type { StoryRecord } from "../stories/schema";
-import { storyKey, type ImportedStory } from "../stories/old-site-import";
+import { erasedFingerprint, storyKey, type ImportedStory } from "../stories/old-site-import";
 
 // Task B1: the ONLY write path for My Story submissions. Uses storiesPool exclusively —
 // never src/db/pool.ts — so this feature can never reach the main `charity` DB. A single
@@ -159,9 +159,37 @@ export async function restoreStory(id: number): Promise<boolean> {
 // and this page exists partly to withdraw a story if consent is revoked. The route above it now
 // insists the story is archived first and that a reason is given, and writes an erasure_log
 // tombstone before calling this - so what is gone is knowable even though it is gone.
+//
+// TASK-475: and it stays gone. In the same transaction as the delete, it remembers a one way
+// fingerprint of the story (erasedFingerprint: a sha256 of when it was sent and its words) in
+// erased_stories, so adding the old website's export again never brings it back. If the fingerprint
+// cannot be written, nothing is deleted: an erased story that could quietly return is the failure
+// this exists to prevent. The row is locked while it is read, so what is fingerprinted is what goes.
 export async function deleteStory(id: number): Promise<boolean> {
-  const result = await storiesPool.query(`DELETE FROM stories WHERE id = $1`, [id]);
-  return (result.rowCount ?? 0) > 0;
+  const client = await storiesPool.connect();
+  try {
+    await client.query("BEGIN");
+    const found = await client.query<{ created_at: Date; story_text: string }>(
+      "SELECT created_at, story_text FROM stories WHERE id = $1 FOR UPDATE",
+      [id],
+    );
+    const story = found.rows[0];
+    if (!story) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await client.query("INSERT INTO erased_stories (fingerprint) VALUES ($1) ON CONFLICT (fingerprint) DO NOTHING", [
+      erasedFingerprint(story.created_at, story.story_text),
+    ]);
+    const result = await client.query("DELETE FROM stories WHERE id = $1", [id]);
+    await client.query("COMMIT");
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateStory(id: number, patch: StoryPatch): Promise<StoryRow | null> {
@@ -201,9 +229,24 @@ export async function storiesAlreadyHere(
   return new Set(found.rows.map((r) => storyKey(r.created_at, r.story_text)));
 }
 
+// TASK-475: which of these stories were erased from the admin earlier, as storyKeys. Asks by
+// fingerprint only, so no story's words are sent to find out.
+export async function erasedStoriesAmong(
+  lookups: Array<{ created_at: string; story_text: string }>,
+): Promise<Set<string>> {
+  if (lookups.length === 0) return new Set();
+  const keyOf = new Map(lookups.map((l) => [erasedFingerprint(l.created_at, l.story_text), storyKey(l.created_at, l.story_text)]));
+  const found = await storiesPool.query<{ fingerprint: string }>(
+    "SELECT fingerprint FROM erased_stories WHERE fingerprint = ANY($1::text[])",
+    [[...keyOf.keys()]],
+  );
+  return new Set(found.rows.flatMap((r) => keyOf.get(r.fingerprint) ?? []));
+}
+
 // Adds the stories in one transaction and returns how many went in. The lock, and the second look
 // inside it, mean a double click or two people adding the same file at once cannot add a story
-// twice: whichever arrives second finds it already here. Status "new", so each is reviewed like any
+// twice: whichever arrives second finds it already here. The second look also leaves out a story
+// erased since the preview (TASK-475). Status "new", so each is reviewed like any
 // other. No audit_log row, for the same reason as insertStory.
 export async function insertImportedStories(stories: ImportedStory[]): Promise<number> {
   if (stories.length === 0) return 0;
@@ -216,10 +259,16 @@ export async function insertImportedStories(stories: ImportedStory[]): Promise<n
       [stories.map((s) => s.created_at)],
     );
     const here = new Set(found.rows.map((r) => storyKey(r.created_at, r.story_text)));
+    // TASK-475: nor one erased in the meantime.
+    const erased = await client.query<{ fingerprint: string }>(
+      "SELECT fingerprint FROM erased_stories WHERE fingerprint = ANY($1::text[])",
+      [stories.map((s) => erasedFingerprint(s.created_at, s.story_text))],
+    );
+    const gone = new Set(erased.rows.map((r) => r.fingerprint));
     let added = 0;
     for (const s of stories) {
       const key = storyKey(s.created_at, s.story_text);
-      if (here.has(key)) continue;
+      if (here.has(key) || gone.has(erasedFingerprint(s.created_at, s.story_text))) continue;
       await client.query(
         `INSERT INTO stories (
            created_at, consent_captured_at, story_text, short_quote, use_scope,

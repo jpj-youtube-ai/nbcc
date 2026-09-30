@@ -6,6 +6,7 @@ import {
   lastCountedTo,
   markSendSent,
   readSalesInputs,
+  recordSendFailure,
   recordTestSend,
   releaseClaim,
   scheduledSendExists,
@@ -52,6 +53,8 @@ export async function runBallSalesReport(now = new Date()): Promise<ReportRunRes
     await sendBallReport({ to, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...email });
   } catch (err) {
     await releaseClaim(claim).catch(() => undefined);
+    // TASK-471: kept on record, so the card on the Events page can say this day's report did not go.
+    await recordSendFailure(today).catch(() => undefined);
     throw err;
   }
   try {

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { AGE_BANDS, MAX_ADMIN_NOTES_LENGTH, RECIPIENT_TYPES } from "./schema";
 
@@ -257,6 +258,19 @@ export function storyKey(createdAt: string | Date, storyText: string): string {
   return `${new Date(createdAt).toISOString()}|${storyText}`;
 }
 
+/**
+ * TASK-475: what an erased story leaves behind. The sha256, in hex, of its storyKey: the same
+ * identity the import recognises a story by, so the import can tell an erased story when it meets it
+ * again, while the fingerprint itself holds nothing readable. It cannot be turned back into the
+ * words; it can only confirm a story someone already holds.
+ */
+export function erasedFingerprint(createdAt: string | Date, storyText: string): string {
+  return createHash("sha256").update(storyKey(createdAt, storyText), "utf8").digest("hex");
+}
+
+/** Why a story erased from the admin is not brought back by the same file. */
+export const ERASED_EARLIER = "It was erased earlier, so it isn't added again.";
+
 // Who sent a row, as far as the file can tell: the email exactly as typed, whether or not it is a
 // whole address, so two goes with the same mistyped address are still one person.
 function senderOf(row: OldSiteRow): string | null {
@@ -361,13 +375,19 @@ export function lookupsFor(rows: OldSiteRow[]): Array<{ created_at: string; stor
 
 /**
  * What to add and what to leave out, in the file's order. `alreadyHere` holds the storyKey of each
- * story already in the database, archived or not.
+ * story already in the database, archived or not, and `erasedEarlier` the storyKey of each one that
+ * was erased from the admin (TASK-475), which is never added again.
  *
  * Someone who sent the form again within the hour sent a new version: their later go stands, even
  * when it takes the story back (it is then left out for its own reason, and so is the earlier one).
  * Every go is counted, whatever it said, as long as it is a readable, undamaged row with a story.
  */
-export function planImport(rows: OldSiteRow[], alreadyHere: Set<string>, importedOn: Date): ImportPlan {
+export function planImport(
+  rows: OldSiteRow[],
+  alreadyHere: Set<string>,
+  importedOn: Date,
+  erasedEarlier: Set<string> = new Set(),
+): ImportPlan {
   const sends = new Map<string, number[]>();
   for (const row of rows) {
     const sender = senderOf(row);
@@ -397,6 +417,10 @@ export function planImport(rows: OldSiteRow[], alreadyHere: Set<string>, importe
     const key = storyKey(reading.story.created_at, reading.story.story_text);
     if (alreadyHere.has(key)) {
       plan.skip.push({ row, reason: "It's already in the stories list." });
+      continue;
+    }
+    if (erasedEarlier.has(key)) {
+      plan.skip.push({ row, reason: ERASED_EARLIER });
       continue;
     }
     if (planned.has(key)) {

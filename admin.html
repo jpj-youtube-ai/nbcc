@@ -1126,11 +1126,15 @@
                   Add an event
                 </button>
               </div>
-              <div class="admin-table-wrap" id="evList" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+              <!-- TASK-465: no aria-live here, unlike the admin's other lists. This one redraws itself every
+                   time an event opens, so a live region read the whole list out again. Saving and
+                   deleting announce through their own status lines, and the message a failed load
+                   leaves here is an alert of its own. -->
+              <div class="admin-table-wrap" id="evList"><p class="admin-loading">Loading&hellip;</p></div>
 
               <div class="ev-editor" id="evEditor" hidden>
                 <div class="ev-editor-head">
-                  <h3 id="evEditorTitle">A new event</h3>
+                  <h3 id="evEditorTitle" tabindex="-1">A new event</h3>
                   <p id="evEditorHint">The card changes as you type.</p>
                 </div>
 

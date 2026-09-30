@@ -5758,6 +5758,47 @@ container queries), including that no rule in the list stops its words wrapping 
 rule, at any width, changes how its rows and cells lay out. The design, with both prototypes' numbers,
 is in `docs/superpowers/specs/2026-09-30-events-list-narrow-layout-design.md`.
 
+## Each Events list row clear on its own (TASK-465)
+
+TASK-460's compact rows hide the list's column headings, and its review found what that left
+unclear. The wording is the client's choice.
+
+- **The status says it plainly.** A live event's label said **On the page** where the editor, and
+  the switch's own sentence ("Visitors see every event marked 'On the website'"), say **On the
+  website**. A scheduled event's **From 14 Oct**, under an event dated 9 Dec with no heading in
+  sight, read like the event's own date. They now say **On the website** and **Goes up 14 Oct**,
+  the editor's words ("Goes up by itself") and the save message's ("Saved. It goes up on 14 Oct.").
+  Draft and Past are unchanged.
+- **Each button is named after its event.** The visible text is still **Edit**, **Open** or
+  **View**, but a screen reader hears "Edit EmpowHer ’26", with the visible word first so "click Edit"
+  still works for speech input. The event open in the editor is marked as the current one.
+- **Opening an event no longer reads the list out, or loses your place.** The list redraws itself
+  whenever an event opens, so as a live region it was read out again each time, and the redraw took
+  away the button just pressed, dropping keyboard focus back to the page. Unlike the admin's other
+  table lists it no longer carries `aria-live`. Saving and deleting announce through their own
+  status lines, and the message a failed load leaves in the list is now an alert of its own, so
+  nothing that needs hearing went quiet. Pressing a row's button now puts focus on the editor's
+  heading ("Editing: EmpowHer ’26"), where the page scrolls anyway. Saying no to "leave your unsaved
+  changes?" leaves focus on the button you pressed. Arriving on the screen, which opens the soonest
+  event by itself, leaves focus where it is.
+- **The scroll to the editor respects reduced motion.** It and the **Add an event** button used to
+  force a smooth scroll. The page already scrolls smoothly, and turns that off for anyone whose
+  device asks for reduced motion, so they now leave it to the page.
+
+`test/unit/admin-app.test.ts` now drives the Events screen through the real `app.js`, and pins:
+
+- the four labels;
+- the button names for an editor and for a viewer, which button is marked current, and that an
+  event's name stays inside its label however many quotes, ampersands and angle brackets it holds;
+- that the list is not a live region, and that a failed load's message is an alert;
+- where focus goes when a row's button is pressed, that it stays put when you keep unsaved changes,
+  and that arriving on the screen moves nothing;
+- that both scrolls to the editor leave smoothness to the page.
+
+Checked in headless Chrome as well: the labels in the table at 1280px and in the compact rows at
+320px, and focus on the heading after pressing Edit. The TASK-460 layout checks still pass at every
+width. Design: `docs/superpowers/specs/2026-09-30-events-list-row-clarity-design.md`.
+
 ## Saving an editor's access took Contact businesses away (TASK-459)
 
 Editors have been able to use **Contact businesses** since it shipped: TASK-354 put `outreach` in the

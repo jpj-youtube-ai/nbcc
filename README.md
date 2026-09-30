@@ -5758,6 +5758,28 @@ string rather than assumed to match.
 carries the new values. The Drive folder must also be shared with the service account, which is the
 one step Google requires a human to do.
 
+## drive.file cannot see a folder you shared with it (TASK-451)
+
+With the federation finally working, every upload still failed with *"Drive folder was not found"* —
+while the service account was, verifiably, a **Content manager** on that shared drive.
+
+The message was misleading and the cause was the scope. The token was requested with
+`https://www.googleapis.com/auth/drive.file`, on the reasoning that a token which can only touch
+files the service account itself created cannot read the rest of the charity's Drive even if stolen.
+
+**The instinct was right and the scope was wrong.** `drive.file` grants access only to files the app
+*created*. A folder a human shares with the service account is not one of them, so it is invisible
+no matter how correctly it is shared — which reads as a permissions problem and is not one.
+
+Now `https://www.googleapis.com/auth/drive`, and the blast radius is not what that name suggests: a
+token is bounded by what the **identity** can reach, and this service account is a member of exactly
+one shared drive — the backup one. It has no access to the charity's other files to lose. What keeps
+this small is the membership, not the scope string, and the original comment had that the wrong way
+round.
+
+Pinned by a test, so nobody tightens it back on the reasoning that a narrower scope must be safer.
+It is narrower, and it does not work.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

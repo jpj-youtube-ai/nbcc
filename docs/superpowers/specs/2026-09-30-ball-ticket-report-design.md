@@ -17,7 +17,7 @@ see it read only):
 - the recipients: a name and an email address each, added and removed one at a
   time, with a line above the list: everyone on it sees everyone else's address, so only add people
   who already work together;
-- "Tuesdays and Thursdays at 8am" and when it last went, to how many people;
+- "Mondays and Thursdays at 8am" (Tuesdays until TASK-467) and when it last went, to how many people;
 - **Send a test to me**: the real email, to the signed-in person only, marked as a test;
 - a preview of the exact email with today's numbers.
 
@@ -35,7 +35,7 @@ us, then the numbers:
 > Here's how Festive Ball ticket sales stand this morning. Your next update will be on Thursday 8
 > October. Any questions in the meantime, call us on 01292 811 015 or email events@nbcc.scot.
 
-The next update is the next Tuesday or Thursday after today. When that would fall after the Ball,
+The next update is the next Monday or Thursday after today. When that would fall after the Ball,
 the line says instead that this is the last update before the Ball on Saturday 7 November. The
 numbers:
 
@@ -56,7 +56,7 @@ beyond the shell's own.
 ## When
 
 The existing daily 8am job (`npm run reminders`, which already runs the Ball's run-up emails) gets
-one more step, in its own try/catch. On a Tuesday or Thursday (UK time), with the switch on, at
+one more step, in its own try/catch. On a Monday or Thursday (UK time), with the switch on, at
 least one recipient, the Ball not yet past, and no scheduled send recorded for today, it builds the
 numbers, sends, and records the send. The day is claimed first (a unique index on the date), so a
 second run the same day sends nothing; a failed send releases the claim, and a send that went

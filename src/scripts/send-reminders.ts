@@ -58,7 +58,7 @@ if (require.main === module) {
       } catch (err) {
         console.error("ball run-up failed:", err instanceof Error ? err.message : err);
       }
-      // TASK-464: the Festive Ball ticket report, to the organiser and the sponsor on Tuesday and
+      // TASK-464: the Festive Ball ticket report, to the organiser and the sponsor on Monday and
       // Thursday mornings. The pass checks the day itself, so on every other morning it does
       // nothing; its own try/catch, so a failure here cannot stop anything after it.
       try {

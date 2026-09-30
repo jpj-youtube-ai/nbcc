@@ -49,15 +49,16 @@ describe("the day, where the charity is", () => {
 });
 
 describe("the next update", () => {
-  it("is the next Tuesday or Thursday", () => {
-    expect(nextUpdateAfter("2026-10-06", EVENT)).toBe("2026-10-08"); // Tuesday to Thursday
-    expect(nextUpdateAfter("2026-10-08", EVENT)).toBe("2026-10-13"); // Thursday to Tuesday
-    expect(nextUpdateAfter("2026-10-07", EVENT)).toBe("2026-10-08"); // a Wednesday test send
-    expect(nextUpdateAfter("2026-11-03", EVENT)).toBe("2026-11-05");
+  it("is the next Monday or Thursday", () => {
+    expect(nextUpdateAfter("2026-10-05", EVENT)).toBe("2026-10-08"); // Monday to Thursday
+    expect(nextUpdateAfter("2026-10-08", EVENT)).toBe("2026-10-12"); // Thursday to Monday
+    expect(nextUpdateAfter("2026-10-06", EVENT)).toBe("2026-10-08"); // a Tuesday test send
+    expect(nextUpdateAfter("2026-10-10", EVENT)).toBe("2026-10-12"); // a Saturday test send
+    expect(nextUpdateAfter("2026-11-02", EVENT)).toBe("2026-11-05");
   });
 
   it("does not exist after the Thursday before the Ball", () => {
-    expect(nextUpdateAfter("2026-11-05", EVENT)).toBeNull(); // Tuesday 10 November is after the Ball
+    expect(nextUpdateAfter("2026-11-05", EVENT)).toBeNull(); // Monday 9 November is after the Ball
   });
 
   it("counts the days to go", () => {
@@ -70,13 +71,14 @@ describe("when the next report goes, as the admin shows it", () => {
   const at = (iso: string, sentToday = false) => nextSendDay({ now: new Date(iso), eventDate: EVENT, sentToday });
 
   it("is this morning on a report day before 8am, if it has not gone yet", () => {
-    expect(at("2026-10-06T06:30:00Z")).toBe("2026-10-06"); // 7.30am BST on a Tuesday
+    expect(at("2026-10-05T06:30:00Z")).toBe("2026-10-05"); // 7.30am BST on a Monday
   });
 
   it("is the next report day once this morning's has gone, or 8am has passed", () => {
-    expect(at("2026-10-06T06:30:00Z", true)).toBe("2026-10-08");
-    expect(at("2026-10-06T09:00:00Z")).toBe("2026-10-08"); // 10am BST: the 8am job has run
-    expect(at("2026-10-07T06:30:00Z")).toBe("2026-10-08"); // a Wednesday
+    expect(at("2026-10-05T06:30:00Z", true)).toBe("2026-10-08");
+    expect(at("2026-10-05T09:00:00Z")).toBe("2026-10-08"); // 10am BST: the 8am job has run
+    expect(at("2026-10-06T06:30:00Z")).toBe("2026-10-08"); // a Tuesday
+    expect(at("2026-10-08T09:00:00Z")).toBe("2026-10-12"); // Thursday after 8am: next Monday
   });
 
   it("is nothing once the last report before the Ball is past", () => {
@@ -88,23 +90,23 @@ describe("whether a report is due", () => {
   const due = (at: string, over: Partial<Parameters<typeof reportDue>[0]> = {}) =>
     reportDue({ now: new Date(at), reportOn: true, recipients: 2, eventDate: EVENT, sentToday: false, ...over });
 
-  it("is due on Tuesday and Thursday mornings, and on no other day", () => {
-    expect(due("2026-10-06T07:00:00Z")).toBe(true); // Tuesday 8am BST
+  it("is due on Monday and Thursday mornings, and on no other day", () => {
+    expect(due("2026-10-05T07:00:00Z")).toBe(true); // Monday 8am BST
     expect(due("2026-10-08T07:00:00Z")).toBe(true); // Thursday
-    for (const other of ["2026-10-04", "2026-10-05", "2026-10-07", "2026-10-09", "2026-10-10"]) {
+    for (const other of ["2026-10-04", "2026-10-06", "2026-10-07", "2026-10-09", "2026-10-10"]) {
       expect(due(`${other}T07:00:00Z`), other).toBe(false);
     }
   });
 
   it("waits for the switch, a recipient, and a day not already sent", () => {
-    expect(due("2026-10-06T07:00:00Z", { reportOn: false })).toBe(false);
-    expect(due("2026-10-06T07:00:00Z", { recipients: 0 })).toBe(false);
-    expect(due("2026-10-06T07:00:00Z", { sentToday: true })).toBe(false);
+    expect(due("2026-10-05T07:00:00Z", { reportOn: false })).toBe(false);
+    expect(due("2026-10-05T07:00:00Z", { recipients: 0 })).toBe(false);
+    expect(due("2026-10-05T07:00:00Z", { sentToday: true })).toBe(false);
   });
 
   it("stops once the Ball is past", () => {
     expect(due("2026-11-05T08:00:00Z")).toBe(true); // the Thursday before, in GMT again
-    expect(due("2026-11-10T08:00:00Z")).toBe(false); // the Tuesday after
+    expect(due("2026-11-09T08:00:00Z")).toBe(false); // the Monday after
   });
 });
 

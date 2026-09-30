@@ -100,8 +100,8 @@ function applyLineBreaks(escaped: string): string {
   return escaped
     .replace(/\r\n?/g, "\n") // Windows and old Mac line endings
     .replace(/^[ \t\u00A0]+$/gm, "") // a line of only spaces is a blank line
+    .replace(/\n{3,}/g, "\n\n") // a run of blank lines is one paragraph gap (first: trimming a long run is slow)
     .replace(/^\n+|\n+$/g, "") // no blank lines at the very start or end
-    .replace(/\n{3,}/g, "\n\n") // a run of blank lines is one paragraph gap
     .replace(/\n/g, "<br>");
 }
 
@@ -116,9 +116,16 @@ export function proseHtml(text: string): string {
 // The emphasis pass runs BEFORE the substitution, so a donor called "**Bob**" has their name printed
 // rather than bolded: their name is never read for markers.
 export function applyMerge(text: string, ctx: RenderCtx): string {
-  // TASK-292: proseHtml escapes first, so the name is substituted into already-safe copy — the
+  // TASK-292: escaping comes first, so the name is substituted into already-safe copy — the
   // ordering that makes the whole merge safe. mergeName decides what a missing name becomes.
-  return mergeName(proseHtml(text), escapeHtml(ctx.firstName), escapeHtml(ctx.nameFallback ?? ""));
+  // TASK-469: the line breaks come AFTER the merge. mergeName's tidy-up reads a newline as a space;
+  // run on <br> it could not, and a blank name left "<br><br>What a year…" in real donors' emails.
+  const merged = mergeName(
+    applyEmphasis(escapeHtml(text)),
+    escapeHtml(ctx.firstName),
+    escapeHtml(ctx.nameFallback ?? ""),
+  );
+  return applyLineBreaks(merged);
 }
 
 export function brandButton(

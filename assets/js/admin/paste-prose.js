@@ -271,7 +271,8 @@
       if (fenced) out.push(ln);
       else if (/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(ln)) out.push(""); // --- : a paragraph break
       else if ((m = /^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$/.exec(ln))) {
-        var title = inlineMarkdown(m[1]).replace(/\*\*/g, "").trim();
+        // The whole heading is bold, so any emphasis marker inside it would only leave stray asterisks.
+        var title = inlineMarkdown(m[1]).replace(/\*+/g, "").trim();
         out.push("", title ? "**" + title + "**" : "", ""); // a heading: its own bold paragraph
       } else if ((m = /^\s*[-*+]\s+(.*)$/.exec(ln))) out.push("• " + inlineMarkdown(m[1]));
       else if ((m = /^\s*>\s?(.*)$/.exec(ln))) out.push(inlineMarkdown(m[1]));

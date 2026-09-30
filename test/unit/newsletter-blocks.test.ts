@@ -1336,6 +1336,23 @@ describe("line breaks and paragraphs in prose (TASK-469)", () => {
     expect(spotlight).toContain("Kind.<br>Truly.");
   });
 
+  // Found in review: the name merge must run BEFORE the line breaks become <br>, or its tidy-up (which
+  // reads a newline as a space) cannot see them. The preview always merges a name, so only a real
+  // recipient with no usable first name would ever have seen this.
+  it("tidies a missing name next to a line break as it always did", () => {
+    const blank = { firstName: "", nameFallback: "" };
+    const body = (t: string) => renderBlock({ type: "text", variant: 0, data: { text: t } }, blank);
+    expect(body("{{firstName}},\n\nWhat a year it has been.")).toMatch(/<p [^>]*>What a year it has been\.<\/p>/);
+    expect(body("{{firstName}},\nthanks for everything.")).toMatch(/<p [^>]*>Thanks for everything\.<\/p>/);
+    expect(body("Thank you,\n{{firstName}}.")).toMatch(/<p [^>]*>Thank you\.<\/p>/);
+  });
+
+  it("stays quick on a long run of blank lines", () => {
+    const started = Date.now();
+    text("A" + "\n".repeat(50000) + "B");
+    expect(Date.now() - started).toBeLessThan(300);
+  });
+
   it("leaves a title alone: a heading is not prose", () => {
     const heading = renderBlock({ type: "heading", variant: 0, data: { title: "One\nTwo" } }, ctx);
     expect(heading).not.toContain("<br>");

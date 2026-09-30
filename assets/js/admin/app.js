@@ -3424,9 +3424,17 @@
     var clip = e.clipboardData;
     if (!P || !clip) return;
     var html = clip.getData("text/html");
-    var text = html
-      ? P.htmlToProse(new DOMParser().parseFromString(html, "text/html").body)
-      : P.markdownToProse(clip.getData("text/plain"));
+    var text;
+    if (html) text = P.htmlToProse(new DOMParser().parseFromString(html, "text/html").body);
+    else {
+      // Words moved within a box arrive as plain text. The line breaks at their ends are part of what
+      // was copied, so they go back on after the Markdown tidy; and if the tidy changed nothing, the
+      // browser's own paste is exactly right.
+      var plain = clip.getData("text/plain").replace(/\r\n?/g, "\n");
+      var body = P.markdownToProse(plain);
+      if (body === plain) return;
+      text = body ? /^\n*/.exec(plain)[0] + body + /\n*$/.exec(plain)[0] : "";
+    }
     if (!text) return;
     e.preventDefault();
     // execCommand keeps Ctrl+Z working and fires "input", which saves the block and refreshes the
@@ -3466,7 +3474,8 @@
     else {
       input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
       // TASK-469: a prose box keeps what matters from a paste; a one-line box pastes plain text.
-      if (opts.multiline) input.addEventListener("paste", function (e) { nlPasteProse(e, input); });
+      // The legacy raw-HTML box (opts.raw) holds HTML source, not prose, so its paste stays the browser's.
+      if (opts.multiline && !opts.raw) input.addEventListener("paste", function (e) { nlPasteProse(e, input); });
     }
     // TASK-253: a multiline field IS a prose field — the four of them (text, greeting intro, story
     // body, spotlight quote) are exactly the ones the server renders emphasis in, so the buttons and
@@ -3734,7 +3743,7 @@
     host.innerHTML = "";
     var def = nlBlockDefs[block.type];
     if (!def) { // legacy rawHtml draft — offer the raw HTML directly
-      nlText(host, block.data, "html", "HTML", { multiline: true });
+      nlText(host, block.data, "html", "HTML", { multiline: true, raw: true });
       return;
     }
     var vdef = nlActiveVariant(block);

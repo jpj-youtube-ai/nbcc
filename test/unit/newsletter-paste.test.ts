@@ -24,6 +24,8 @@ describe("markdownToProse: Claude's Copy button writes Markdown as plain text", 
       "Intro line.\n\n**What we did**\n\nWe packed.",
     );
     expect(markdownToProse("# **Already bold**")).toBe("**Already bold**");
+    // An italic word inside would leave stray asterisks once the whole heading is bold.
+    expect(markdownToProse("## What *you* made possible")).toBe("**What you made possible**");
   });
 
   it("puts each bullet on its own line with a •, and leaves numbered items as they are", () => {

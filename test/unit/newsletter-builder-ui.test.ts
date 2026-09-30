@@ -1448,6 +1448,39 @@ describe("pasting into a prose box (TASK-469)", () => {
     }
   });
 
+  // Found in review: copying within a textarea puts only plain text on the clipboard, so moving your
+  // own words used to lose the line breaks at their ends. They are part of what was copied.
+  it("keeps the line breaks at the ends of words moved within a box", async () => {
+    const box = await newTextBox();
+    box.value = "Line one";
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    box.setSelectionRange(0, 0);
+
+    paste(box, { "text/plain": "Line two\n" });
+
+    expect(box.value).toBe("Line two\nLine one");
+  });
+
+  // The legacy raw-HTML box holds HTML source, not prose: a paste there is the browser's own.
+  it("leaves a paste into the legacy raw-HTML box to the browser", async () => {
+    newsletterListRows = [
+      { id: 41, subject: legacyNewsletter.subject, status: "draft", sentAt: null, recipientCount: null },
+    ];
+    try {
+      await openNewsletterTab();
+      const toggle = el("nlCanvas").querySelector("[aria-expanded]") as HTMLElement | null;
+      if (toggle && toggle.getAttribute("aria-expanded") === "false") toggle.click();
+      const raw = el("nlCanvas").querySelector("textarea") as HTMLTextAreaElement;
+      expect(raw).toBeTruthy();
+
+      const e = paste(raw, { "text/plain": "- <li>item</li>" });
+
+      expect(e.defaultPrevented).toBe(false);
+    } finally {
+      newsletterListRows = [];
+    }
+  });
+
   it("leaves a paste into a one-line box to the browser", async () => {
     await openNewsletterTab();
     (el("newsletterNew") as HTMLElement).click();

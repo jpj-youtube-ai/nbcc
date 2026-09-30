@@ -21,17 +21,26 @@
 .admin-login-error{color:var(--maroon);font-weight:600;font-size:.88rem;background:var(--tan-soft);border-radius:10px;padding:10px 12px;margin:0 0 14px}
 
 /* ---- app shell ---- */
-.admin-topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;
+/* flex-wrap (TASK-454): as one row that could not wrap, the email, role and both buttons came to
+   459px on their own with a 26-character address, and took every screen of the admin 166px past
+   the edge of a 390px phone, which zoomed the whole admin out to fit. */
+.admin-topbar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px 16px;
   background:var(--maroon);color:var(--cream);padding:12px clamp(16px,3vw,28px)}
 .admin-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--cream);font-family:var(--font-head);font-weight:700;font-size:1.1rem}
-.admin-user{display:flex;align-items:center;gap:12px;font-size:.9rem}
-.admin-user-email{color:var(--cream-82)}
+/* Two groups, who is signed in and what they can do, so a narrow screen breaks between them rather
+   than leaving "Sign out" on a line of its own whenever an email happens to be that length. */
+.admin-user{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0;font-size:.9rem}
+.admin-user-who,.admin-user-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;min-width:0}
+/* anywhere, not break-word: only anywhere lets a long address shrink the bar's minimum width too. */
+.admin-user-email{color:var(--cream-82);min-width:0;overflow-wrap:anywhere}
 .admin-role-badge{text-transform:uppercase;letter-spacing:.08em;font-size:.68rem;font-weight:600;background:var(--cream-16);border:1px solid var(--cream-24);border-radius:999px;padding:3px 10px}
 .admin-logout{background:none;border:1.6px solid var(--cream-24);color:var(--cream);border-radius:999px;padding:7px 16px;font-family:var(--font-body);font-weight:600;font-size:.85rem;cursor:pointer;transition:background .2s}
 .admin-logout:hover{background:var(--cream-12)}
 
 .admin-body-grid{display:grid;grid-template-columns:210px 1fr;align-items:start;max-width:1280px;margin-inline:auto}
 .admin-nav{position:sticky;top:60px;padding:18px 12px}
+/* The phone menu's button (TASK-454). Wider than 860px the list is always open beside the content. */
+.admin-nav-toggle{display:none}
 .admin-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
 .admin-nav-link{width:100%;text-align:left;background:none;border:0;border-radius:10px;padding:10px 14px;font-family:var(--font-body);font-weight:600;font-size:.93rem;color:var(--slate);cursor:pointer;transition:background .15s,color .15s}
 .admin-nav-link:hover{background:var(--card)}
@@ -205,42 +214,61 @@
 .btn-danger{background:var(--crimson);color:var(--cream);border:1.6px solid var(--crimson)}
 .btn-danger:hover{background:var(--maroon);border-color:var(--maroon)}
 
-@media (max-width:760px){
+/* ---- the shell on a phone or small tablet (TASK-454) ----
+   Below 860px the menu leaves its 210px column, which left too little room for the content beside
+   it, and becomes one pinned Menu button that opens the whole list. What it replaced below 760px was
+   one line of twenty buttons that scrolled sideways inside its own strip: 2247px of buttons in 366px
+   at 390px wide. The client's standing rule for this admin is that nothing scrolls sideways, inside a
+   box or otherwise, because a section you have to swipe to find is a section nobody opens. */
+@media (max-width:860px){
   /* display:block, not a one-column grid. As a grid the nav gets its OWN ROW, and a sticky
      element can only travel inside its containing block, so a row exactly as tall as the nav
      gives it nowhere to go and position:sticky silently does nothing. As blocks both children
      share the parent's full height and the nav sticks as intended. (On desktop the two columns
      are in the SAME row, which is why sticky has always worked there.) */
   .admin-body-grid{display:block}
-  /* Stays pinned rather than going static. The complaint was that changing view meant
-     scrolling back up through a long page to reach the nav at all; below this width it
-     becomes one swipeable line that never leaves the top. */
-  /* The topbar stops competing for the top edge here. It is sticky and 84px tall at this width
-     because it wraps, which would either cover the nav or force a magic offset that breaks on a
-     narrower phone. On a screen this size the nav matters more than the sign-out button. */
+  /* The topbar stops competing for the top edge here. It wraps at this width, so pinned it would
+     either cover the menu or need a magic offset that breaks on a narrower phone. */
   .admin-topbar{position:static}
+  /* Pinned rather than static. The complaint was that changing view meant scrolling back up
+     through a long page to reach the nav at all. 61px tall: 8 + the 44px button + 8 + the 1px
+     rule, which is what .admin-jump's top below is measured against. */
   .admin-nav{position:sticky;top:0;z-index:20;padding:8px 12px;background:var(--cream);
-    border-bottom:1px solid var(--line);min-width:0}
-  /* min-width:0 on both, or the grid item takes its content width: 18 nowrap buttons made the
-     nav 2071px wide on a 375px screen and the whole page scrolled sideways. */
-  .admin-nav ul{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:6px;min-width:0;
-    scrollbar-width:thin;scrollbar-color:var(--line) transparent}
-  .admin-nav ul::-webkit-scrollbar{height:3px}
-  .admin-nav ul::-webkit-scrollbar-thumb{background:var(--line);border-radius:999px}
-  .admin-nav-link{width:auto;white-space:nowrap;padding:8px 13px;font-size:.86rem}
-  /* Group labels become inline dividers rather than stacked headings. */
-  .admin-nav-group{margin:0;padding:0 4px;border-top:0;align-self:center;font-size:.6rem;
-    color:var(--slate-soft);white-space:nowrap}
-  .admin-nav-group:first-child{margin-top:0}
-  /* The jump bar sits below the now-sticky nav, and swipes like it rather than wrapping. Left to
-     wrap it went to two lines, and since both bars are sticky that is 65px of a phone screen
-     permanently spent on navigation. */
-  .admin-jump{top:52px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
-  .admin-jump::-webkit-scrollbar{display:none}
-  .admin-jump a{flex:0 0 auto}
-  /* Has to clear BOTH sticky bars, not just the nav. At 110px the band heading you just jumped
-     to landed 41px behind the jump bar, so the click appeared to overshoot. */
-  .admin-band{scroll-margin-top:118px}
+    border-bottom:1px solid var(--line)}
+  .admin-nav-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;
+    min-height:44px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;
+    font-family:var(--font-body);font-weight:600;font-size:.93rem;color:var(--slate);cursor:pointer}
+  .admin-nav-toggle::after{content:"";width:8px;height:8px;margin-right:4px;border-right:2px solid currentColor;
+    border-bottom:2px solid currentColor;transform:translateY(-2px) rotate(45deg)}
+  .admin-nav-toggle[aria-expanded="true"]::after{transform:translateY(2px) rotate(-135deg)}
+  .admin-nav-toggle:focus-visible{outline:3px solid var(--crimson);outline-offset:2px}
+  /* Open, the list takes its place in the page instead of staying pinned. Pinned, a list taller
+     than the screen could not be scrolled to its end, and a scrollbar of its own would be the
+     scrolling box the client has ruled out. app.js takes you up to it if you opened it from
+     further down a long page, and back again if you close it without choosing. */
+  .admin-nav.is-open{position:static}
+  .admin-nav ul{flex-direction:row;flex-wrap:wrap;gap:6px}
+  .admin-nav.is-open ul{margin-top:10px}
+  /* Closed with visibility, NEVER display:none. restorableView (TASK-443) treats a menu link with
+     no offsetParent as a section your permissions hide, and display:none leaves every link inside
+     it without one: the refresh that should return you to your section would land on the Overview.
+     visibility also takes the closed links out of the tab order and away from screen readers. */
+  .admin-nav:not(.is-open) ul{height:0;overflow:hidden;visibility:hidden}
+  .admin-nav-link{width:auto;min-height:44px}
+  /* Each group starts its own line under its label, so the open menu reads as the same five
+     groups as the desktop column rather than one long run of buttons. */
+  .admin-nav-group{flex-basis:100%;margin:10px 0 0;padding:10px 2px 0}
+  /* The jump bar sits below the pinned menu, and wraps rather than swiping: at 390px its three
+     links came to 381px in 358px, and "Send something" ran off the edge of the screen. */
+  .admin-jump{top:61px}
+  /* Has to clear BOTH pinned bars: the menu's 61px, plus the jump bar at its tallest, which is two
+     rows and 101px at 390px, plus 15px so the heading does not sit flush against it. (At 110px,
+     back when the menu was 52px, the band heading you had just jumped to landed 41px behind the
+     jump bar, so the click appeared to overshoot.) */
+  .admin-band{scroll-margin-top:177px}
+}
+
+@media (max-width:760px){
   /* Pre-existing, not introduced here: several admin fields carry a hard style="width:420px"
      (and 220/240px), which on a 375px screen pushed the whole page 148px wider than the
      viewport and made every view scroll sideways. Capping is safe because it only ever

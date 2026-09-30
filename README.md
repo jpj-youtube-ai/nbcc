@@ -2934,15 +2934,18 @@ beforehand *by name*, asserts no duplicates and all eight `<form>`s, and fails b
 surfacing weeks later as a button that does nothing.
 
 **Narrow screens.** `.admin-nav` used to go `position:static` below 760px, so changing view meant
-scrolling back up the whole page to reach it. It is now sticky at the top as one swipeable line,
-with the jump bar riding at `top:52px` beneath it. Three things had to be true for that to work,
-each of which failed first:
+scrolling back up the whole page to reach it. It became sticky at the top as one swipeable line,
+with the jump bar riding at `top:52px` beneath it (**replaced in TASK-454**: a line that scrolls
+sideways breaks the client's standing rule, so below 860px it is now one pinned Menu button, with
+the jump bar at `top:61px` — see [The admin fits a phone](#the-admin-fits-a-phone-task-454)). Three
+things had to be true for that to work, each of which failed first:
 
 - `.admin-body-grid` uses `display:block`, not a one-column grid. As a grid the nav gets its **own
   row**, and a sticky element can only travel inside its containing block, so a row exactly as
   tall as the nav leaves it nowhere to go and `position:sticky` silently does nothing.
 - `min-width:0` on the nav and its `ul`, or the flex item takes its content width: 18 nowrap
-  buttons made the nav 2,071px wide and took the whole page sideways.
+  buttons made the nav 2,071px wide and took the whole page sideways. (History since TASK-454:
+  nothing in the menu is nowrap any more, so the rule went with the strip.)
 - `.admin-band`'s `scroll-margin-top` must clear **both** sticky bars, not just the nav. At 110px
   the heading you jumped to landed 41px behind the jump bar, so the click read as an overshoot.
 
@@ -5466,6 +5469,56 @@ Verified by measurement at 1280px and 375px: the sent-letter history and a ten c
 report `scrollWidth === clientWidth`, and the page itself has no horizontal scroll at either width.
 `test/unit/admin-no-sideways-scroll.test.ts` guards it, because the next person to add a table will
 copy whatever the base rule says.
+
+## The admin fits a phone (TASK-454)
+
+At 390px every screen of the admin was wider than the phone (535px as reported, 556px when measured
+here with a 26-character email address), so a phone zoomed the whole admin out to fit it and every
+word on it shrank. Two things did it, and a third broke the rule TASK-442 set, that nothing in the
+admin scrolls sideways, inside a box or otherwise:
+
+- **The top bar could not wrap.** The email, the role badge and both buttons came to 459px on their
+  own. The bar now wraps, in two groups (who is signed in, and what they can do), so a narrow screen
+  breaks between them rather than leaving "Sign out" on a line of its own. A long email breaks with
+  `overflow-wrap: anywhere` instead of setting the width.
+- **The menu was a line of twenty buttons that scrolled sideways** below 760px: 2,247px of buttons
+  in a 366px strip.
+- **So was the Festive Ball's jump bar**: 381px in 358px, with "Send something" off the edge.
+
+Below **860px** (it was 760px) the menu leaves its 210px column and becomes one pinned **Menu**
+button that opens the whole list, wrapped into its five groups, every button at least 44px tall.
+Pinned, because the complaint that pinned it in TASK-422 still stands: changing section should
+never mean scrolling back up a long page. Where closing leaves you depends on why it closed:
+
+| Closed by | Leaves you |
+|---|---|
+| **Menu** again, or **Escape** | Back where you were when you opened it. Escape also puts you back on the button. |
+| **Choosing a section** | At the top of that section, just under the pinned bar, even if you had to scroll down a list taller than the screen to reach it. |
+| **Scrolling on past it** without choosing | Exactly where you are, with the pinned button back. Not while it is taking you up to the list, which starts off above the screen. |
+| **Turning the screen past 860px** | Where you are; open means nothing at that width. |
+
+Two details are deliberate, and each was found by measuring:
+
+- **Open, the list sits in the page, not pinned over it.** A pinned list taller than the screen
+  cannot be scrolled to its end, and a scrollbar of its own would be the box the client has ruled
+  out. Opened from further down a long page it takes you up to it. The position is read *before*
+  the list opens: opening adds 614px above you and Chrome shifts the scroll position to keep your
+  place, so read afterwards it was 614px out. When it closes itself, anything the collapse moved is
+  put back, for browsers (Safari) that do not keep your place on their own.
+- **Closed with `visibility`, never `display:none`.** TASK-443's `restorableView` treats a menu link
+  with no `offsetParent` as a section your permissions hide, and `display:none` leaves every link
+  without one, so a refresh on a phone would always land on the Overview.
+
+The jump bar wraps (two rows, 101px, at 390px) and sits at `top:61px` under the menu, and
+`.admin-band`'s `scroll-margin-top` is 177px there, so a jumped-to heading clears both bars.
+
+Verified in a real browser on all 21 screens at 320, 360, 375, 390, 768, 860, 861 and 1280px, and
+again in headless Chrome emulating a 390px phone (the ticket's own method): `scrollWidth` equals the
+viewport width and nothing scrolls sideways, with one exception outside this change: at 320px the
+Events page switch button is `flex: none`, 302px wide in a 288px card, so that one screen is 19px
+too wide on the smallest phones. Every row of the table above was replayed in headless Chrome with
+smooth scrolling on. Above 860px the admin is unchanged. `test/unit/admin-fits-a-phone.test.ts` pins
+the rules and `admin-app.test.ts` drives the menu's behaviour through the real `app.js`.
 
 ## Enquiries waiting for a reply (TASK-425)
 

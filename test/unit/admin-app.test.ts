@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createRequire } from "node:module";
@@ -414,6 +414,222 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     const navLink = document.querySelector('.admin-nav-link[data-view="fulfilments"]') as HTMLElement;
     expect(navLink).not.toBeNull();
     expect(navLink.hidden).toBe(true);
+  });
+
+  // TASK-454: below 860px the menu is one button that opens the whole list. jsdom has no layout, so
+  // this pins the wiring rather than the widths (admin-fits-a-phone.test.ts has those): the button
+  // opens the list, and choosing a section closes it again, so the section you picked is what you see.
+  it("opens the phone menu from its button, and closes it when you choose a section", async () => {
+    await signIn();
+    const toggle = el("adminNavToggle");
+    const nav = toggle.closest(".admin-nav") as HTMLElement;
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(nav.classList.contains("is-open")).toBe(false);
+
+    toggle.click();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(nav.classList.contains("is-open")).toBe(true);
+
+    (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+    await flush();
+    expect(el("view-donations").hidden).toBe(false);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(nav.classList.contains("is-open")).toBe(false);
+  });
+
+  it("closes the phone menu from its button again, or with Escape", async () => {
+    await signIn();
+    const toggle = el("adminNavToggle");
+    toggle.click();
+    toggle.click();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    // Escape from a keyboard user working down the open list.
+    toggle.click();
+    const link = document.querySelector('.admin-nav-link[data-view="claims"]') as HTMLElement;
+    link.focus();
+    link.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // Back on the button, so they are not left focused on a list that has just vanished.
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  // jsdom has no layout, so these give the menu a place on the page by hand and stand in for the
+  // browser's scrolling, then put jsdom's own back afterwards.
+  describe("the phone menu and where it leaves you", () => {
+    const realScrollTo = window.scrollTo;
+    const realScrollBy = window.scrollBy;
+    const realOffset = Object.getOwnPropertyDescriptor(window, "pageYOffset");
+    let y = 0;
+    const scrollTo = vi.fn((_x: number, top: number) => {
+      y = top;
+    });
+    const rectAt = (top: number, height: number) =>
+      ({ top, bottom: top + height, left: 0, right: 390, width: 390, height, x: 0, y: top, toJSON() {} }) as DOMRect;
+
+    beforeEach(() => {
+      y = 0;
+      scrollTo.mockClear();
+      Object.defineProperty(window, "pageYOffset", { configurable: true, get: () => y });
+      window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+    });
+    afterEach(() => {
+      window.scrollTo = realScrollTo;
+      window.scrollBy = realScrollBy;
+      if (realOffset) Object.defineProperty(window, "pageYOffset", realOffset);
+      else delete (window as unknown as Record<string, unknown>).pageYOffset;
+    });
+
+    // Found in the browser, deep in the Festive Ball. Laying out the opened list adds its 614px to
+    // the page above you, and the browser moves the scroll position down to keep your place on
+    // screen, so a position read after the menu opened was 614px out and "back where you were"
+    // put you that much further down the page.
+    it("takes you up to the menu from further down, and back to exactly where you were", async () => {
+      await signIn();
+      const toggle = el("adminNavToggle");
+      const nav = toggle.closest(".admin-nav") as HTMLElement;
+      y = 4000;
+      let anchored = false;
+      nav.getBoundingClientRect = () => {
+        const open = nav.classList.contains("is-open");
+        if (open && !anchored) {
+          anchored = true;
+          y += 614; // the browser keeping your place on screen as the list opens above you
+        }
+        return rectAt(open ? 3500 - y : 0, open ? 685 : 61);
+      };
+
+      toggle.click();
+      expect(scrollTo).toHaveBeenLastCalledWith(0, 3500);
+      toggle.click();
+      expect(scrollTo).toHaveBeenLastCalledWith(0, 4000);
+    });
+
+    // The pinned button exists so changing section never means scrolling back up. An open list you
+    // scroll on past without choosing has been dismissed: close it, and the pinned button is back.
+    it("closes the open menu once you scroll on past it, so the pinned button comes back", async () => {
+      await signIn();
+      const toggle = el("adminNavToggle");
+      const nav = toggle.closest(".admin-nav") as HTMLElement;
+      let navRect = rectAt(0, 685);
+      nav.getBoundingClientRect = () => navRect;
+      toggle.click();
+
+      navRect = rectAt(-300, 685); // part of the list still on screen: still reading it
+      window.dispatchEvent(new Event("scroll"));
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+      navRect = rectAt(-700, 685); // all of it gone past the top of the screen
+      window.dispatchEvent(new Event("scroll"));
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    });
+
+    // ...but not on the way up to it. Opened from further down, the list starts off above the
+    // screen while the page scrolls up to it, and that is not you scrolling past it.
+    it("keeps it open while taking you up to it", async () => {
+      await signIn();
+      const toggle = el("adminNavToggle");
+      const nav = toggle.closest(".admin-nav") as HTMLElement;
+      y = 6000;
+      let navRect = rectAt(0, 61);
+      nav.getBoundingClientRect = () => navRect;
+      navRect = rectAt(-5861, 685);
+      toggle.click();
+
+      navRect = rectAt(-3000, 685); // still travelling up to it
+      window.dispatchEvent(new Event("scroll"));
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    // Closing the list takes its height out of the page above you. Chrome keeps your place by itself;
+    // a browser that does not would jump the page by the height of the list, so put back whatever
+    // moved.
+    it("keeps your place on the page when it closes itself", async () => {
+      await signIn();
+      const toggle = el("adminNavToggle");
+      const nav = toggle.closest(".admin-nav") as HTMLElement;
+      const content = document.querySelector(".admin-content") as HTMLElement;
+      const scrollBy = vi.fn();
+      window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+      let navRect = rectAt(0, 685);
+      nav.getBoundingClientRect = () => navRect;
+      content.getBoundingClientRect = () => rectAt(nav.classList.contains("is-open") ? -1000 : -1624, 9000);
+      toggle.click();
+      navRect = rectAt(-700, 685);
+      window.dispatchEvent(new Event("scroll"));
+
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(scrollBy).toHaveBeenCalledWith({ top: -624, behavior: "instant" });
+      expect(scrollTo).not.toHaveBeenCalled();
+    });
+
+    // Where the browser did keep your place, what is left over can still be a fraction of a pixel
+    // on a phone whose pixels are not whole CSS pixels. Correcting that would fire an instant scroll
+    // in the middle of the flick that closed the menu, and stop it dead, to move nothing you can see.
+    it("leaves the page alone when what moved is less than a pixel", async () => {
+      await signIn();
+      const toggle = el("adminNavToggle");
+      const nav = toggle.closest(".admin-nav") as HTMLElement;
+      const content = document.querySelector(".admin-content") as HTMLElement;
+      const scrollBy = vi.fn();
+      window.scrollBy = scrollBy as unknown as typeof window.scrollBy;
+      let navRect = rectAt(0, 685);
+      nav.getBoundingClientRect = () => navRect;
+      content.getBoundingClientRect = () => rectAt(nav.classList.contains("is-open") ? -1000 : -1000.4, 9000);
+      toggle.click();
+      navRect = rectAt(-700, 685);
+      window.dispatchEvent(new Event("scroll"));
+
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(scrollBy).not.toHaveBeenCalled();
+    });
+
+    // A list taller than a small phone's screen has to be scrolled to reach its last few sections.
+    // Choosing one of those used to leave the page where it was, with the top of the new section
+    // hidden under the pinned bar.
+    it("lands you at the top of the section you chose, not partway down it", async () => {
+      await signIn();
+      const toggle = el("adminNavToggle");
+      const nav = toggle.closest(".admin-nav") as HTMLElement;
+      const grid = document.querySelector(".admin-body-grid") as HTMLElement;
+      nav.getBoundingClientRect = () => rectAt(0, 685);
+      toggle.click();
+      y = 250; // scrolled down the open list to reach Team
+      grid.getBoundingClientRect = () => rectAt(-111, 3000);
+
+      (document.querySelector('.admin-nav-link[data-view="team"]') as HTMLElement).click();
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(scrollTo).toHaveBeenLastCalledWith(0, 139);
+    });
+  });
+
+  // Turning a phone or a tablet on its side can take the screen past 860px with the menu open. The
+  // open state means nothing at that width, and left behind it would leave aria-expanded saying
+  // "true" on a button nobody can see.
+  it("closes the phone menu when the screen widens past it", async () => {
+    let widened: ((e: { matches: boolean }) => void) | null = null;
+    const realMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: (_type: string, fn: (e: { matches: boolean }) => void) => {
+        if (query === "(max-width:860px)") widened = fn;
+      },
+    })) as unknown as typeof window.matchMedia;
+    try {
+      document.body.innerHTML = bodyHtml;
+      // eslint-disable-next-line no-eval
+      (0, eval)(appSrc);
+      await signIn();
+      const toggle = el("adminNavToggle");
+      toggle.click();
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(widened, "app.js listens for the 860px breakpoint").not.toBeNull();
+      widened!({ matches: false });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    } finally {
+      window.matchMedia = realMatchMedia;
+    }
   });
 });
 

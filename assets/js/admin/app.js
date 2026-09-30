@@ -399,6 +399,8 @@
     Array.prototype.forEach.call(doc.querySelectorAll(".admin-nav-link"), function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-view") === name);
     });
+    // TASK-454: choosing a section from the phone menu closes it, so what you chose is what you see.
+    closeNav("chosen");
     showOnly("view-" + name);
     refreshEnquiryNotice();
     if (name === "search") {
@@ -431,6 +433,93 @@
       selectView(b.getAttribute("data-view"));
     });
   });
+
+  // TASK-454: below 860px the sections sit behind one Menu button, because the line of twenty that
+  // used to scroll sideways broke the client's standing rule that nothing in the admin does. The
+  // button is only shown at that width (admin.css), so on a desktop none of this ever runs.
+  var navToggle = el("adminNavToggle");
+  var navBar = navToggle ? navToggle.closest(".admin-nav") : null;
+  var navReturnY = null; // where you were when you opened the menu from further down a long page
+  var navSeen = false; // the open list has been on screen, so scrolling past it means you are done
+  function navIsOpen() {
+    return !!navBar && navBar.classList.contains("is-open");
+  }
+  function markNav(open) {
+    navBar.classList.toggle("is-open", open);
+    navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  function openNav() {
+    if (!navBar || navIsOpen()) return;
+    // Read BEFORE the list opens. Opening adds its height to the page above you, and the browser
+    // moves the scroll position to keep your place on screen, so read afterwards it was 614px out
+    // and closing the menu put you that much further down the page.
+    var y = window.pageYOffset;
+    markNav(true);
+    // Open, the list stops being pinned and takes its place in the page (admin.css), so it can be
+    // as long as it needs to be without scrolling inside itself. Opened from further down a long
+    // page that place is above you, so go up to it, remembering where you were. jsdom has no
+    // layout, so its rect is all zeros and it never scrolls.
+    var top = navBar.getBoundingClientRect().top;
+    navReturnY = top < 0 ? y : null;
+    navSeen = top >= 0;
+    if (top < 0) window.scrollTo(0, window.pageYOffset + top);
+  }
+  // Where closing leaves you depends on why it closed:
+  //   "back"   - Menu again, or Escape: back to where you were when you opened it
+  //   "chosen" - you picked a section: the top of it, just under the pinned bar
+  //   "passed" - you scrolled on past it: exactly where you are
+  function closeNav(how) {
+    if (!navIsOpen()) return;
+    var content = navBar.nextElementSibling;
+    var before = how === "passed" && content ? content.getBoundingClientRect().top : 0;
+    markNav(false);
+    if (how === "back" && navReturnY !== null) window.scrollTo(0, navReturnY);
+    if (how === "chosen") {
+      // A list taller than the screen has to be scrolled to reach its last sections, and choosing
+      // one used to leave the top of the new section hidden under the pinned bar.
+      var gridTop = navBar.parentNode.getBoundingClientRect().top;
+      if (gridTop < 0) window.scrollTo(0, window.pageYOffset + gridTop);
+    }
+    if (how === "passed" && content) {
+      // Closing takes the list's height out of the page above you. Chrome keeps your place by
+      // itself; a browser that does not would jump by the height of the list, so put back whatever
+      // moved. A whole pixel or more only: a fraction left over on a phone whose pixels are not
+      // whole CSS pixels moves nothing you can see, and an instant scroll would stop your flick.
+      var moved = content.getBoundingClientRect().top - before;
+      if (Math.abs(moved) >= 1) window.scrollBy({ top: moved, behavior: "instant" });
+    }
+    navReturnY = null;
+    navSeen = false;
+    // A keyboard user was on a button in a list that has just vanished: put them back on Menu.
+    if (navBar.contains(doc.activeElement)) navToggle.focus({ preventScroll: true });
+  }
+  if (navToggle) {
+    navToggle.addEventListener("click", function () {
+      if (navIsOpen()) closeNav("back");
+      else openNav();
+    });
+    navBar.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeNav("back");
+    });
+    // The pinned button exists so changing section never means scrolling back up for it. An open
+    // list you scroll on past without choosing has been dismissed, so close it and the pinned
+    // button is back. Not on the way up to it, though: opened from further down, the list starts
+    // above the screen while the page scrolls up to it.
+    window.addEventListener("scroll", function () {
+      if (!navIsOpen()) return;
+      if (navBar.getBoundingClientRect().bottom > 0) navSeen = true;
+      else if (navSeen) closeNav("passed");
+    }, { passive: true });
+    // A phone or tablet turned on its side can take the screen past the width where the menu is a
+    // button (admin.css). Open means nothing there, and left behind it would leave aria-expanded
+    // saying "true" on a button nobody can see.
+    var phoneWidth = window.matchMedia ? window.matchMedia("(max-width:860px)") : null;
+    if (phoneWidth && phoneWidth.addEventListener) {
+      phoneWidth.addEventListener("change", function (e) {
+        if (!e.matches) closeNav("passed");
+      });
+    }
+  }
 
   // ---- overview ----
   function statCard(n, label, warn) {

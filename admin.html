@@ -61,20 +61,30 @@
       <div class="admin-app" id="appView" hidden>
         <header class="admin-topbar" data-region="admin-topbar">
           <a class="admin-brand" href="/admin"><img src="/assets/img/nbcc-logo-white.svg" alt="" width="34" height="34" /><span>NBCC Admin</span></a>
+          <!-- TASK-454: two groups, who is signed in and what they can do, so a narrow screen breaks
+               the bar between them rather than wherever this particular email runs out of room. -->
           <div class="admin-user">
-            <span class="admin-user-email" id="userEmail"></span>
-            <span class="admin-role-badge" id="userRole"></span>
-            <!-- My account (Admin Phase 4, TASK-197): every signed-in user can manage their own
-                 name/password from here, regardless of section permissions - so it lives in the
-                 topbar, not the permission-filtered left nav. -->
-            <button class="admin-logout" id="accountBtn" type="button">My account</button>
-            <button class="admin-logout" id="logoutBtn" type="button">Sign out</button>
+            <span class="admin-user-who">
+              <span class="admin-user-email" id="userEmail"></span>
+              <span class="admin-role-badge" id="userRole"></span>
+            </span>
+            <span class="admin-user-actions">
+              <!-- My account (Admin Phase 4, TASK-197): every signed-in user can manage their own
+                   name/password from here, regardless of section permissions - so it lives in the
+                   topbar, not the permission-filtered left nav. -->
+              <button class="admin-logout" id="accountBtn" type="button">My account</button>
+              <button class="admin-logout" id="logoutBtn" type="button">Sign out</button>
+            </span>
           </div>
         </header>
 
         <div class="admin-body-grid">
           <nav class="admin-nav" aria-label="Dashboard sections">
-            <ul>
+            <!-- TASK-454: below 860px the sections sit behind this button (admin.css hides it wider
+                 than that), which opens the whole list wrapped into its groups. It replaces a line of
+                 twenty buttons that scrolled sideways. -->
+            <button class="admin-nav-toggle" id="adminNavToggle" type="button" aria-expanded="false" aria-controls="adminNavList">Menu</button>
+            <ul id="adminNavList">
               <li class="admin-nav-group" aria-hidden="true">Monitor</li>
               <li><button class="admin-nav-link is-active" type="button" data-view="overview">Overview</button></li>
               <li><button class="admin-nav-link" type="button" data-view="search">Search</button></li>

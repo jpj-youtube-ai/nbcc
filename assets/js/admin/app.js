@@ -104,6 +104,7 @@
 
   function showLogin() {
     storiesImportReset("");
+    brReset();
     el("appView").hidden = true;
     el("loginView").hidden = false;
     var email = el("adminEmail");
@@ -428,7 +429,10 @@
     else if (name === "outreach") loadOutreach();
     else if (name === "ticker") loadTicker();
     else if (name === "ball") loadBall();
-    else if (name === "events") loadEvents();
+    else if (name === "events") {
+      loadEvents();
+      loadBallReport();
+    }
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "site") loadSite();
@@ -2167,7 +2171,7 @@
     ["lapsedAdmin", "Lapsed (admin)"], ["newsletter", "Newsletter"], ["thankYou", "Thank-you letter"],
     ["businessInvite", "Business invite"], ["businessCapture", "Business confirmation"],
     ["businessReminder", "Business reminder"], ["ballConfirmation", "Ball confirmation"],
-    ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"],
+    ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"], ["ballReport", "Ball ticket report"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -9546,5 +9550,280 @@
       evFitPage();
       evFitCard();
     });
+  }
+
+  // ---- the Festive Ball ticket report (TASK-464) ----
+  // A card under the page switch. Counts only, on Tuesday and Thursday mornings, to the people running
+  // the Ball with us. The list is edited here and saved together with the switch; "Send a test to me"
+  // sends the real email, marked as a test, to the signed-in person only. The preview frame is sized
+  // to the email, and sized again when the window changes, so nothing scrolls inside the page.
+  var BR_MAX = 10;
+  // The same rule the server checks addresses by (zod's), so a slip is caught when it is added.
+  var BR_EMAIL = /^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
+  var brData = null;
+  var brDraft = [];
+  var brDirty = false;
+  var brWired = false;
+
+  function brSay(msg) {
+    var s = el("evReportStatus");
+    if (s) s.textContent = msg || "";
+  }
+  function brDayWords(day) {
+    return new Date(day + "T12:00:00Z").toLocaleDateString("en-GB", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      timeZone: "UTC",
+    });
+  }
+  function brPeople(n) {
+    return n === 1 ? "1 person" : n + " people";
+  }
+  function brSorted(list) {
+    return list.slice().sort(function (a, b) {
+      return a.name.localeCompare(b.name, "en-GB", { sensitivity: "base" }) || a.email.localeCompare(b.email);
+    });
+  }
+  function brRenderState() {
+    var n = brData.recipients.length;
+    var html;
+    if (brData.reportOn) {
+      html =
+        "<b>On.</b> It goes to " + brPeople(n) + " on Tuesdays and Thursdays at 8am. " +
+        (brData.nextSend
+          ? "The next one is on " + H.escapeHtml(brDayWords(brData.nextSend)) + "."
+          : "There are no more before the Ball.");
+    } else {
+      html = "<b>Off.</b> " + (n ? "It is ready to go to " + brPeople(n) + " once it is switched on." : "Nobody gets it yet.");
+    }
+    el("evReportState").innerHTML = html;
+    el("evReport").classList.toggle("is-on", !!brData.reportOn);
+  }
+  function brRenderList() {
+    var canWrite = canEdit("events");
+    var ul = el("evReportList");
+    if (!brDraft.length) {
+      ul.innerHTML = '<li class="ev-report-empty">Nobody on the list yet.</li>';
+      return;
+    }
+    ul.innerHTML = brDraft
+      .map(function (r, i) {
+        return (
+          '<li><span class="ev-report-who"><b>' + H.escapeHtml(r.name) + "</b> <span>" + H.escapeHtml(r.email) + "</span></span>" +
+          (canWrite
+            ? '<button class="ev-link-btn" type="button" data-brremove="' + i + '" aria-label="Remove ' + H.escapeHtml(r.name) + '">Remove</button>'
+            : "") +
+          "</li>"
+        );
+      })
+      .join("");
+  }
+  function brRenderLast() {
+    var parts = [];
+    if (brData.lastScheduled) {
+      parts.push("Last sent on " + brDayWords(brData.lastScheduled.sentOn) + " to " + brPeople(brData.lastScheduled.recipients.length) + ".");
+    }
+    if (brData.lastTest) {
+      parts.push("Last test on " + brDayWords(brData.lastTest.sentOn) + ", to " + brData.lastTest.recipients.join(", ") + ".");
+    }
+    el("evReportLast").textContent = parts.join(" ");
+  }
+  // Shrinks the frame to nothing first, so it can get smaller as well as bigger, then fits the email.
+  function brFitPreview() {
+    var frame = el("evReportPreview");
+    if (!frame || el("evReportBody").hidden) return;
+    try {
+      var cdoc = frame.contentDocument;
+      if (!cdoc || !cdoc.body) return;
+      frame.style.height = "0px";
+      // The frame's own border counts inside its height, so it is added on, or the foot is cut off.
+      var edges = frame.offsetHeight - frame.clientHeight;
+      frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + edges + "px";
+    } catch (e) {
+      /* a preview that cannot be measured keeps its minimum height */
+    }
+  }
+  function brRenderPreview() {
+    var frame = el("evReportPreview");
+    if (!brData.preview) return;
+    frame.onload = function () {
+      brFitPreview();
+      var cdoc = frame.contentDocument;
+      if (cdoc && cdoc.fonts && cdoc.fonts.ready) cdoc.fonts.ready.then(brFitPreview);
+    };
+    frame.srcdoc = brData.preview.html;
+  }
+  function brRender() {
+    var canWrite = canEdit("events");
+    el("evReport").hidden = false;
+    Array.prototype.forEach.call(doc.querySelectorAll("#evReport [data-reportwrite]"), function (n) {
+      n.hidden = !canWrite;
+    });
+    if (!brDirty) el("evReportOn").checked = !!brData.reportOn;
+    brRenderState();
+    brRenderList();
+    brRenderLast();
+    brRenderPreview();
+  }
+  function brTake(d) {
+    brData = d;
+    // Coming back to Events reloads the card: changes nobody has saved yet are kept, not lost.
+    if (!brDirty) brDraft = brSorted(d.recipients || []);
+    brRender();
+  }
+  // Signing out forgets the card, so the next person to sign in never sees someone else's edits.
+  function brReset() {
+    brData = null;
+    brDraft = [];
+    brDirty = false;
+  }
+  function loadBallReport() {
+    brWire();
+    authFetch("/api/admin/ball-report")
+      .then(function (res) {
+        return res.ok ? res.json() : null;
+      })
+      .then(function (d) {
+        if (!d) {
+          el("evReport").hidden = true;
+          return;
+        }
+        brTake(d);
+      })
+      .catch(function () {
+        /* the rest of the Events page still works without it */
+      });
+  }
+  function brMarkDirty() {
+    brDirty = true;
+    brSay("Press Save to keep these changes.");
+  }
+  function brAdd() {
+    var name = el("evReportName").value.trim();
+    var email = el("evReportEmail").value.trim().toLowerCase();
+    if (!name) {
+      brSay("Add their name.");
+      el("evReportName").focus();
+      return;
+    }
+    if (!BR_EMAIL.test(email)) {
+      brSay("That isn't a whole email address.");
+      el("evReportEmail").focus();
+      return;
+    }
+    var already = brDraft.some(function (r) {
+      return r.email === email;
+    });
+    if (already) {
+      brSay("That address is already on the list.");
+      el("evReportEmail").focus();
+      return;
+    }
+    if (brDraft.length >= BR_MAX) {
+      brSay("The report can go to up to " + BR_MAX + " people. Remove someone to add another.");
+      return;
+    }
+    brDraft = brSorted(brDraft.concat([{ name: name, email: email }]));
+    el("evReportName").value = "";
+    el("evReportEmail").value = "";
+    brRenderList();
+    brMarkDirty();
+    el("evReportName").focus();
+  }
+  function brJson(res, fallback) {
+    return res
+      .json()
+      .catch(function () {
+        return {};
+      })
+      .then(function (b) {
+        if (!res.ok) {
+          var err = new Error(b.error || fallback);
+          err.path = b.path;
+          throw err;
+        }
+        return b;
+      });
+  }
+  function brFailed(err) {
+    if (!err || err.message === "unauthorized") return;
+    // A refused list says which entry: name the person, so the fix is obvious.
+    var who = err.path && typeof err.path[0] === "number" ? brDraft[err.path[0]] : null;
+    brSay(who ? who.name + " (" + who.email + "): " + err.message : err.message);
+  }
+  function brSave() {
+    var b = el("evReportSave");
+    b.disabled = true;
+    brSay("Saving…");
+    authFetch("/api/admin/ball-report", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reportOn: el("evReportOn").checked, recipients: brDraft }),
+    })
+      .then(function (res) {
+        return brJson(res, "The report could not be saved. Please try again.");
+      })
+      .then(function (d) {
+        brDirty = false;
+        brTake(d);
+        brSay("Saved.");
+      })
+      .catch(brFailed)
+      .then(function () {
+        b.disabled = false;
+      });
+  }
+  function brTest() {
+    var b = el("evReportTest");
+    b.disabled = true;
+    brSay("Sending a test to you…");
+    authFetch("/api/admin/ball-report/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })
+      .then(function (res) {
+        return brJson(res, "The test could not be sent. Please try again.");
+      })
+      .then(function (d) {
+        brSay(
+          "Sent to " + (d.sentTo || []).join(", ") + ". Have a look in your inbox." +
+            (brDirty ? " Your changes to the list are not saved yet." : ""),
+        );
+        loadBallReport();
+      })
+      .catch(brFailed)
+      .then(function () {
+        b.disabled = false;
+      });
+  }
+  function brWire() {
+    if (brWired) return;
+    brWired = true;
+    el("evReportToggle").addEventListener("click", function () {
+      var body = el("evReportBody");
+      var open = body.hidden;
+      body.hidden = !open;
+      this.setAttribute("aria-expanded", open ? "true" : "false");
+      this.textContent = open ? "Close" : "Open";
+      if (open && brData) brRenderPreview();
+    });
+    el("evReportAdd").addEventListener("click", brAdd);
+    ["evReportName", "evReportEmail"].forEach(function (id) {
+      el(id).addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          brAdd();
+        }
+      });
+    });
+    el("evReportList").addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest("[data-brremove]") : null;
+      if (!btn) return;
+      brDraft.splice(Number(btn.getAttribute("data-brremove")), 1);
+      brRenderList();
+      brMarkDirty();
+    });
+    el("evReportOn").addEventListener("change", brMarkDirty);
+    el("evReportSave").addEventListener("click", brSave);
+    el("evReportTest").addEventListener("click", brTest);
+    window.addEventListener("resize", brFitPreview);
   }
 })();

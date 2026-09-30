@@ -5,6 +5,9 @@
 
 export interface SesMessage {
   to: string;
+  // TASK-464: more people on the same To line, for the one email that goes to a small group who all
+  // work together (the Festive Ball ticket report) and can reply to all. Every other email is to one.
+  alsoTo?: string[];
   from: string;
   replyTo?: string;
   cc?: string;
@@ -39,7 +42,7 @@ export function buildSesSendRequest(msg: SesMessage): Record<string, unknown> {
   return {
     FromEmailAddress: msg.from,
     Destination: {
-      ToAddresses: [msg.to],
+      ToAddresses: [msg.to, ...(msg.alsoTo ?? [])],
       ...(msg.cc ? { CcAddresses: [msg.cc] } : {}),
     },
     ...(msg.replyTo ? { ReplyToAddresses: [msg.replyTo] } : {}),

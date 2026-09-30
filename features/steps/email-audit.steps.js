@@ -100,6 +100,70 @@ Then(
   },
 );
 
+// TASK-464: one email to several people, as the Ball's ticket report goes: a row each, one SES id.
+Given("one send to {string} is on record, id {string}", async function (list, messageId) {
+  this.sharedTo = list.split(", ");
+  await pool.query("DELETE FROM email_suppressions WHERE lower(email) = ANY($1)", [this.sharedTo]);
+  for (const email of this.sharedTo) {
+    await pool.query(
+      `INSERT INTO email_log (kind, recipient, subject, status, ses_message_id)
+       VALUES ('ballReport', lower($1), 'Festive Ball tickets', 'sent', $2)`,
+      [email, messageId],
+    );
+  }
+});
+
+When(
+  "a bounce arrives for message id {string}, naming only {string}",
+  async function (messageId, bounced) {
+    const now = new Date().toISOString();
+    const sesEvent = {
+      eventType: "Bounce",
+      mail: { timestamp: now, destination: this.sharedTo, messageId },
+      bounce: {
+        timestamp: now,
+        bounceType: "Permanent",
+        bounceSubType: "General",
+        bouncedRecipients: [{ emailAddress: bounced, diagnosticCode: "550 5.1.1 user unknown" }],
+      },
+    };
+    const res = await fetch(
+      `${BASE_URL}/api/webhooks/ses/${process.env.SES_WEBHOOK_TOKEN || "ci-ses-webhook-token"}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "text/plain; charset=UTF-8" },
+        body: JSON.stringify({
+          Type: "Notification",
+          MessageId: `sns-${messageId}`,
+          TopicArn: "arn:aws:sns:eu-west-1:000000000000:bdd-ses-events",
+          Message: JSON.stringify(sesEvent),
+          Timestamp: now,
+        }),
+      },
+    );
+    assert.strictEqual(res.status, 200, "expected the SES webhook to accept the event");
+  },
+);
+
+Then(
+  "the send with id {string} to {string} should be marked {string}",
+  async function (messageId, email, expected) {
+    const res = await pool.query(
+      "SELECT delivery_status FROM email_log WHERE ses_message_id = $1 AND recipient = lower($2)",
+      [messageId, email],
+    );
+    assert.strictEqual(res.rowCount, 1, `expected one row for ${email} on ${messageId}`);
+    assert.strictEqual(res.rows[0].delivery_status, expected === "nothing" ? null : expected);
+  },
+);
+
+Then("{string} is taken off future sends, and {string} is not", async function (gone, kept) {
+  const active = (email) =>
+    pool.query("SELECT 1 FROM email_suppressions WHERE lower(email) = lower($1) AND removed_at IS NULL", [email]);
+  assert.strictEqual((await active(gone)).rowCount, 1, `${gone} was not taken off future sends`);
+  assert.strictEqual((await active(kept)).rowCount, 0, `${kept} was taken off future sends`);
+});
+
 async function fetchEmailAudit(world, query) {
   const res = await fetch(`${BASE_URL}/api/admin/email-log${query || ""}`, {
     headers: { Authorization: `Bearer ${world.token}` },

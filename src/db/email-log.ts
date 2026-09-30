@@ -61,14 +61,24 @@ export async function markEmailDelivery(
   messageId: string | null = null,
 ): Promise<void> {
   if (messageId) {
+    // TASK-464: one email can go to several people (the Ball's ticket report), each with a row
+    // under the same id. The outcome belongs to the row for the address SES named, and only that.
     const exact = await pool.query(
       `UPDATE email_log SET delivery_status = $2, delivery_at = $3::timestamptz, delivery_detail = $4
-        WHERE ses_message_id = $1`,
+        WHERE ses_message_id = $1 AND recipient = lower($5)`,
+      [messageId, deliveryStatus, occurredAt.toISOString(), detail ? detail.slice(0, DETAIL_LIMIT) : null, recipient],
+    );
+    if ((exact.rowCount ?? 0) > 0) return;
+    // An email to one person: its id alone is exact, however SES wrote the address.
+    const only = await pool.query(
+      `UPDATE email_log SET delivery_status = $2, delivery_at = $3::timestamptz, delivery_detail = $4
+        WHERE ses_message_id = $1
+          AND (SELECT count(*) FROM email_log WHERE ses_message_id = $1) = 1`,
       [messageId, deliveryStatus, occurredAt.toISOString(), detail ? detail.slice(0, DETAIL_LIMIT) : null],
     );
     // Only fall back when the id matched nothing — an id we have never seen is an email from
     // before this shipped, or from another sender on the same SES identity.
-    if ((exact.rowCount ?? 0) > 0) return;
+    if ((only.rowCount ?? 0) > 0) return;
   }
   await pool.query(
     `UPDATE email_log SET delivery_status = $2, delivery_at = $3::timestamptz, delivery_detail = $4

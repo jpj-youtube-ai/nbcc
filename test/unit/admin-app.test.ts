@@ -341,9 +341,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("eraseStoryBtn")).toBeNull();
   });
 
-  // TASK-208: Business supporters tab — an Editor lists the fulfilment records (business name, band,
-  // submitted preferences) and marks a recognition step done; the row refetches and the button becomes
-  // a Done pill.
+  // TASK-208: Business supporters tab — someone holding business-supporters:edit (an admin here, since
+  // TASK-406) lists the fulfilment records (business name, band, submitted preferences) and marks a
+  // recognition step done; the row refetches and the button becomes a Done pill.
   it("lists supporters, opens one, and marks a job done after confirming", async () => {
     // Signed in as an ADMIN, not the editor the other tests use. business-supporters is not one of
     // an editor's default sections - it holds donor-identifying data and is granted per person - so
@@ -491,6 +491,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
     const fetchMock = globalThis.fetch as unknown as { mock: { calls: unknown[][] } };
     const save = fetchMock.mock.calls.find((c) => /\/api\/admin\/users\/7\/permissions$/.test(String(c[0])));
+    expect(save, "Save sent the permissions PATCH").toBeDefined();
     const sent = JSON.parse(((save as unknown[])[1] as { body: string }).body).permissions;
     // What the server gives them today: nothing stored, so the editor defaults, and none for every
     // section those leave out.

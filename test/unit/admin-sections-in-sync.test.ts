@@ -49,11 +49,14 @@ function parseJsFunction(source: string, name: string, where: string): string {
 // compares the server with what the Team screen will actually do, not with a restatement of it.
 function browserRolePresets(appJs: string): (role: string) => PermissionMap {
   const where = "assets/js/admin/app.js";
-  const build = new Function(
-    "SECTIONS",
-    "OPERATIONAL_EDITOR_SECTIONS",
-    "return " + parseJsFunction(appJs, "rolePresetPermissions", where),
-  );
+  const source = parseJsFunction(appJs, "rolePresetPermissions", where);
+  let build: (sections: string[], operational: string[]) => (role: string) => PermissionMap;
+  try {
+    build = new Function("SECTIONS", "OPERATIONAL_EDITOR_SECTIONS", "return " + source) as typeof build;
+  } catch (err) {
+    // Most likely a brace inside a string or a comment, which parseJsFunction's count cannot see.
+    throw new Error(`could not rebuild rolePresetPermissions from ${where}: ${(err as Error).message}`);
+  }
   return build(
     parseJsArrayLiteral(appJs, "SECTIONS", where),
     parseJsArrayLiteral(appJs, "OPERATIONAL_EDITOR_SECTIONS", where),

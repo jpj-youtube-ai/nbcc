@@ -3299,6 +3299,45 @@ in `migrations/1788100000000_permissions-business-supporters.js`, matching what 
 given. Every future section ships with the same one-line migration; forgetting it fails closed,
 which is what makes the rule safe to keep.
 
+### Access saved before three sections existed (TASK-463)
+
+That rule arrived with TASK-406 on 3 September. Four sections came just before it, and none shipped
+with its migration: **Festive Ball** (`ball`, TASK-313, 31 August 2026), then **Email audit**
+(`email-audit`, TASK-344), **Site pages** (`site`, TASK-352) and **Contact businesses** (`outreach`,
+TASK-354), all on 1 September. Anyone whose access was saved before one of them arrived, and not
+changed since, had no entry for it, which reads as None: that screen was missing from their menu,
+admins included.
+
+`migrations/1790788129056_permissions-backfill-missed-sections.js` gives those matrices Festive Ball,
+Site pages and Contact businesses at the level the person's role gives today: admins edit all three;
+editors see Festive Ball and Site pages and edit Contact businesses; viewers see all three.
+
+**The Email audit is deliberately left out.** It was asked for so that exactly two named admins hold it
+and grant it to anyone else, and it lists who was sent which email. Filling it in would hand it to
+every admin account whose access predates it, so a missing entry stays None. That fails closed, and
+editors and viewers get None for it anyway; give it to somebody on Team → Manage access.
+
+It only adds a section a saved matrix does not mention. One that already says None is left alone,
+because that may be a deliberate choice, the TASK-459 fault, or Manage access filling a gap with None
+when an older matrix was saved again, and only a person can tell which. Every entry it adds is written
+to `audit_log` as `admin_user.permissions_backfilled` by `migration:TASK-463`, with the section and
+level, so whose access it changed is on the record like any change made on Manage access. Its undo
+deliberately does nothing: most matrices naming these sections were saved by a person after the
+sections arrived, and stripping the keys, as the earlier backfills' undo does, would take those
+choices away. To take something back from one person, use Team → Manage access.
+
+It is numbered from the clock, `1790788129056`, which is above the hand-rounded `17891…` numbers, so
+the next migration must be numbered above it too (see **How to add things** in `CLAUDE.md`).
+
+`test/unit/permissions-backfill.test.ts` fails if any section added since saved access existed
+(TASK-186) has no migration adding it to the access already saved, unless it is named as deliberately
+left out, so the next one cannot be missed. It also holds this migration's values to
+`roleToPermissions` and checks it never touches the Email audit, with comments stripped so text in a
+comment cannot pass for SQL. `features/admin-permissions.feature` runs the migration's own SQL against
+the real database in CI, inside a transaction it rolls back. It covers an admin, an editor and a viewer
+whose access predates the late sections, an editor whose access already says None for them, and
+somebody with no saved access, who must stay on their role's defaults.
+
 ### Needs you today (TASK-405)
 
 The screen opens with one list, above the forms, because it is the reason to open the screen at
@@ -5696,18 +5735,20 @@ presses Save, and checks that what is sent is exactly the access they already ha
 inherited from this fault, so nothing changes anybody's access automatically. Festive Ball had the
 same fault for a day: the browser's editor defaults lacked `ball` from TASK-313 (31 August 2026)
 until TASK-352 (1 September). The simplest check is the screen itself, now that it tells the truth:
-open **Team → Manage access** for each person, and anyone showing Contact businesses or Festive Ball
-as None who should have it can be set back to what their role gives and saved. Every save is in
+open **Team → Manage access** for each person, and anyone showing Contact businesses, Festive Ball or
+Site pages as None who should have it can be set back to what their role gives and saved (and the
+Email audit, for the admins who should hold it). Every save is in
 `audit_log` as `admin_user.permissions_changed`, with the whole matrix in `data`.
 
-**Not fixed here either: four sections never got their migration.** TASK-406 (3 September) set the
-rule that each new section ships with a migration giving it to the matrices already saved
-(`1788100000000_permissions-business-supporters.js`, and `1789100000001_permissions-events.js` since).
-Four sections arrived just before that rule and none has one: `ball` (Festive Ball, TASK-313,
-31 August), then `email-audit` (Email audit, TASK-344), `site` (Site pages, TASK-352) and `outreach`
-(Contact businesses, TASK-354), all on 1 September. A matrix saved before a section arrived, and not
-changed since, has no entry for it, which reads as None, for admins as much as anyone. For the Email
-audit that only matters to admins: editors and viewers get None for it anyway.
+**Not fixed here either: four sections never got their migration (three fixed in TASK-463).**
+TASK-406 (3 September) set the rule that each new section ships with a migration giving it to the
+matrices already saved (`1788100000000_permissions-business-supporters.js`, and
+`1789100000001_permissions-events.js` since). Four sections arrived just before that rule and none had
+one: `ball` (Festive Ball, TASK-313, 31 August), then `email-audit` (Email audit, TASK-344), `site`
+(Site pages, TASK-352) and `outreach` (Contact businesses, TASK-354), all on 1 September. A matrix saved
+before a section arrived, and not changed since, has no entry for it, which reads as None, for admins
+as much as anyone. TASK-463 backfills the first, third and fourth; the Email audit is deliberately left
+to be granted by hand, because it was asked for so that exactly two named admins hold it.
 
 **And the Editor button could not be saved (fixed in TASK-462).** It filled in only the sections the
 editor role names, but a save must name every section, and it left out Business supporters and the

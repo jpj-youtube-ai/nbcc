@@ -88,6 +88,7 @@
               <li class="admin-nav-group" aria-hidden="true">Content</li>
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="events">Events</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
               <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
@@ -1033,6 +1034,306 @@
               </form>
               <p class="ty-status" id="tickerStatus" role="status" aria-live="polite"></p>
               <div class="admin-table-wrap" id="tickerTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- Events (TASK-453). The public /events page: a deck of cards, one per event, built here.
+                 The whole page sits behind a switch only an admin can flip; switched off, /events is a
+                 404 and no page's menu mentions it. Everything else here follows the "events" section
+                 of the permission matrix. The previews are the real renderer's output, in frames
+                 sized to their content so nothing scrolls inside them. -->
+            <section class="admin-view" id="view-events" aria-labelledby="events-heading" hidden>
+              <h2 id="events-heading">Events</h2>
+              <p class="admin-view-intro">Everything on the website&rsquo;s Events page. Each event here is one card on the page, in date order, soonest first. The morning after an event happens it moves to Past by itself.</p>
+
+              <div class="ev-switch" id="evSwitch">
+                <div class="ev-switch-text">
+                  <h3 class="admin-subhead">Is the Events page on the website?</h3>
+                  <p class="ev-switch-state" id="evSwitchState" aria-live="polite">Checking&hellip;</p>
+                  <p class="ev-switch-who" id="evSwitchWho"></p>
+                </div>
+                <button class="btn" type="button" id="evSwitchBtn" hidden>Loading&hellip;</button>
+                <p class="ev-switch-note" id="evSwitchNote" hidden>Only an admin can put the page on the website or take it off.</p>
+              </div>
+              <p class="ty-status" id="evSwitchStatus" role="status" aria-live="polite"></p>
+
+              <div class="ev-admin-bar">
+                <div class="admin-segmented" role="group" aria-label="Which events to list">
+                  <button class="admin-seg is-active" type="button" data-evlist="upcoming" aria-pressed="true">Coming up (<span data-evcount="upcoming">0</span>)</button>
+                  <button class="admin-seg" type="button" data-evlist="drafts" aria-pressed="false">Drafts (<span data-evcount="drafts">0</span>)</button>
+                  <button class="admin-seg" type="button" data-evlist="past" aria-pressed="false">Past (<span data-evcount="past">0</span>)</button>
+                </div>
+                <button class="admin-btn ev-admin-add" id="evAdd" type="button" hidden>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                  Add an event
+                </button>
+              </div>
+              <div class="admin-table-wrap" id="evList" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+
+              <div class="ev-editor" id="evEditor" hidden>
+                <div class="ev-editor-head">
+                  <h3 id="evEditorTitle">A new event</h3>
+                  <p id="evEditorHint">The card changes as you type.</p>
+                </div>
+
+                <form class="ev-form" id="evForm" novalidate>
+                  <fieldset class="ev-step">
+                    <legend><span>1</span>The basics</legend>
+                    <div class="ev-f">
+                      <label for="evf-name">Name of the event</label>
+                      <span class="ev-f-hint">As people know it, for example Festive Ball 2026.</span>
+                      <input type="text" id="evf-name" data-evk="name" data-evmax="60" autocomplete="off" />
+                      <output class="ev-count" data-evcountfor="evf-name"></output>
+                    </div>
+                    <div class="ev-f">
+                      <label for="evf-subtitle">A second line (optional)</label>
+                      <span class="ev-f-hint">Shown under the name on the back of the card, for example A Night to Remember.</span>
+                      <input type="text" id="evf-subtitle" data-evk="subtitle" autocomplete="off" />
+                    </div>
+                    <div class="ev-f">
+                      <label for="evf-gist">The gist, for the front of the card</label>
+                      <span class="ev-f-hint">One or two sentences. What is it, and why come?</span>
+                      <textarea id="evf-gist" data-evk="gist" data-evmax="140" rows="3"></textarea>
+                      <output class="ev-count" data-evcountfor="evf-gist"></output>
+                    </div>
+                    <div class="ev-f">
+                      <label for="evf-flag">A note in the corner (optional)</label>
+                      <span class="ev-f-hint">Only ever something true. The Code of Fundraising Practice rules out invented urgency.</span>
+                      <select id="evf-flag" data-evk="flag">
+                        <option value="">None</option>
+                        <option>Spaces limited</option>
+                        <option>Selling fast</option>
+                        <option>Last few tickets</option>
+                        <option>Sold out</option>
+                        <option>Free entry</option>
+                        <option>Family friendly</option>
+                      </select>
+                    </div>
+                  </fieldset>
+
+                  <fieldset class="ev-step">
+                    <legend><span>2</span>When</legend>
+                    <p class="ev-step-note">The date puts the card in its place on the page, and takes it off the morning after.</p>
+                    <div class="ev-row ev-row--3">
+                      <div class="ev-f"><label for="evf-date">Date</label><input type="date" id="evf-date" data-evk="date" /></div>
+                      <div class="ev-f"><label for="evf-start">Starts</label><input type="time" id="evf-start" data-evk="start" /></div>
+                      <div class="ev-f"><label for="evf-end">Finishes (optional)</label><input type="time" id="evf-end" data-evk="end" /></div>
+                    </div>
+                    <div class="ev-f ev-f--after">
+                      <label class="ev-check"><input type="checkbox" data-evk="timeTbc" /> The time is still to be confirmed</label>
+                    </div>
+                  </fieldset>
+
+                  <fieldset class="ev-step">
+                    <legend><span>3</span>Where</legend>
+                    <div class="ev-row ev-row--2">
+                      <div class="ev-f"><label for="evf-venue">Venue</label><input type="text" id="evf-venue" data-evk="venue" autocomplete="off" /></div>
+                      <div class="ev-f"><label for="evf-town">Town or area</label><input type="text" id="evf-town" data-evk="town" autocomplete="off" /></div>
+                    </div>
+                    <div class="ev-f ev-f--after">
+                      <label for="evf-address">Full address and how to get there (optional)</label>
+                      <span class="ev-f-hint">Shown on the back. For example: The Park Hotel, Rugby Park, Kilmarnock. Parking at the venue.</span>
+                      <textarea id="evf-address" data-evk="address" rows="2"></textarea>
+                    </div>
+                    <div class="ev-f">
+                      <span class="ev-f-label">Access: tick only what the venue has confirmed</span>
+                      <span class="ev-f-hint">Printed on the back, so a disabled guest can decide without having to ask.</span>
+                      <div class="ev-checks">
+                        <label class="ev-check"><input type="checkbox" data-evk="access" value="step free entry" /> Step free entry</label>
+                        <label class="ev-check"><input type="checkbox" data-evk="access" value="accessible toilets" /> Accessible toilets</label>
+                        <label class="ev-check"><input type="checkbox" data-evk="access" value="a hearing loop" /> Hearing loop</label>
+                        <label class="ev-check"><input type="checkbox" data-evk="access" value="blue badge parking" /> Blue badge parking</label>
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  <fieldset class="ev-step">
+                    <legend><span>4</span>Picture</legend>
+                    <div class="ev-drop">
+                      <span class="ev-drop-thumb" id="evThumb" aria-hidden="true"></span>
+                      <div>
+                        <p id="evThumbName">No picture yet.</p>
+                        <div class="ev-drop-actions">
+                          <span class="ev-file admin-btn" data-evwrite>Choose a picture<input type="file" id="evPicture" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Choose a picture" /></span>
+                          <button class="ev-link-btn" type="button" id="evRemovePic" data-evwrite>Remove the picture</button>
+                        </div>
+                        <p class="ty-status" id="evPictureStatus" role="status" aria-live="polite"></p>
+                      </div>
+                    </div>
+                    <p class="ev-f-hint ev-f-hint--below">A photo, or the event&rsquo;s poster. Photos straight off a phone are fine: they are shrunk before they upload.</p>
+
+                    <div class="ev-sub" id="evImageOptions" hidden>
+                      <div class="ev-f">
+                        <span class="ev-f-label">How should it sit on the card?</span>
+                        <div class="ev-choices">
+                          <label class="ev-choice"><input type="radio" name="evFit" data-evk="imageFit" value="cover" /><span>Fill the space<small>Best for photos. The edges may be trimmed.</small></span></label>
+                          <label class="ev-choice"><input type="radio" name="evFit" data-evk="imageFit" value="whole" /><span>Show the whole picture<small>Best for posters with words on them.</small></span></label>
+                        </div>
+                      </div>
+                      <div class="ev-f" id="evGround" hidden>
+                        <span class="ev-f-label">Colour around it</span>
+                        <div class="ev-choices">
+                          <label class="ev-choice"><input type="radio" name="evGroundPick" data-evk="imageGround" value="night" /><span class="ev-swatch ev-swatch--night"></span>Night sky</label>
+                          <label class="ev-choice"><input type="radio" name="evGroundPick" data-evk="imageGround" value="cream" /><span class="ev-swatch ev-swatch--cream"></span>Cream</label>
+                          <label class="ev-choice"><input type="radio" name="evGroundPick" data-evk="imageGround" value="crimson" /><span class="ev-swatch ev-swatch--crimson"></span>NBCC red</label>
+                          <label class="ev-choice"><input type="radio" name="evGroundPick" data-evk="imageGround" value="holly" /><span class="ev-swatch ev-swatch--holly"></span>Holly green</label>
+                        </div>
+                      </div>
+                      <div class="ev-f">
+                        <label for="evf-alt">Describe the picture</label>
+                        <span class="ev-f-hint">For people who cannot see it. Leave it empty if the picture only repeats the event&rsquo;s name.</span>
+                        <input type="text" id="evf-alt" data-evk="imageAlt" autocomplete="off" />
+                      </div>
+                    </div>
+
+                    <div class="ev-sub" id="evCoverOptions">
+                      <div class="ev-f">
+                        <span class="ev-f-label">No picture? The card makes its own cover from the name. Pick its colour:</span>
+                        <div class="ev-choices">
+                          <label class="ev-choice"><input type="radio" name="evCover" data-evk="cover" value="crimson" /><span class="ev-swatch ev-swatch--crimson"></span>NBCC red</label>
+                          <label class="ev-choice"><input type="radio" name="evCover" data-evk="cover" value="holly" /><span class="ev-swatch ev-swatch--holly"></span>Holly green</label>
+                          <label class="ev-choice"><input type="radio" name="evCover" data-evk="cover" value="maroon" /><span class="ev-swatch ev-swatch--maroon"></span>Deep red</label>
+                        </div>
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  <fieldset class="ev-step">
+                    <legend><span>5</span>Tickets and booking</legend>
+                    <div class="ev-row ev-row--2">
+                      <div class="ev-f">
+                        <label for="evf-costFront">Price, for the front</label>
+                        <span class="ev-f-hint">Short. For example: Free, but please book.</span>
+                        <input type="text" id="evf-costFront" data-evk="costFront" data-evmax="60" autocomplete="off" />
+                        <output class="ev-count" data-evcountfor="evf-costFront"></output>
+                      </div>
+                      <div class="ev-f">
+                        <label for="evf-costBack">Price, for the back</label>
+                        <span class="ev-f-hint">The full version, with anything people should know first.</span>
+                        <input type="text" id="evf-costBack" data-evk="costBack" autocomplete="off" />
+                      </div>
+                    </div>
+                    <div class="ev-f ev-f--after">
+                      <span class="ev-f-label">How do people book?</span>
+                      <div class="ev-choices">
+                        <label class="ev-choice"><input type="radio" name="evHow" data-evk="bookingHow" value="site" /><span>Here on nbcc.scot<small>Our own booking page, like the Festive Ball</small></span></label>
+                        <label class="ev-choice"><input type="radio" name="evHow" data-evk="bookingHow" value="away" /><span>On another website<small>Like EmpowHer, booked through AD Autocare</small></span></label>
+                        <label class="ev-choice"><input type="radio" name="evHow" data-evk="bookingHow" value="none" /><span>No booking needed<small>People just turn up</small></span></label>
+                      </div>
+                    </div>
+                    <div class="ev-row ev-row--2 ev-f--after" id="evBookUrl">
+                      <div class="ev-f"><label for="evf-bookingUrl" id="evBookUrlLabel">Which page on nbcc.scot</label><span class="ev-f-hint" id="evBookUrlHint">For example /ball</span><input type="text" id="evf-bookingUrl" data-evk="bookingUrl" autocomplete="off" /></div>
+                      <div class="ev-f"><label for="evf-bookingLabel">Words on the button</label><span class="ev-f-hint">For example Book tickets</span><input type="text" id="evf-bookingLabel" data-evk="bookingLabel" autocomplete="off" /></div>
+                    </div>
+                    <div class="ev-f ev-f--after" id="evBookNote" hidden>
+                      <label for="evf-bookingNote">A line under the button</label>
+                      <span class="ev-f-hint">So nobody is surprised to land on someone else&rsquo;s website.</span>
+                      <input type="text" id="evf-bookingNote" data-evk="bookingNote" autocomplete="off" />
+                    </div>
+                  </fieldset>
+
+                  <fieldset class="ev-step">
+                    <legend><span>6</span>The back of the card</legend>
+                    <div class="ev-f">
+                      <label for="evf-listHeading">Heading for the list</label>
+                      <span class="ev-f-hint">For example What&rsquo;s on, or On the night.</span>
+                      <input type="text" id="evf-listHeading" data-evk="listHeading" autocomplete="off" />
+                    </div>
+                    <div class="ev-f">
+                      <label for="evf-whatsOn">What&rsquo;s on, one thing per line</label>
+                      <span class="ev-f-hint">Put a name between *stars* to make it bold, the way WhatsApp does: *Michelle McManus*, your host.</span>
+                      <textarea id="evf-whatsOn" data-evk="whatsOn" rows="5"></textarea>
+                    </div>
+                    <div class="ev-f">
+                      <label for="evf-note">Anything else worth knowing (optional)</label>
+                      <span class="ev-f-hint">What the ticket includes, a dress code, an age limit.</span>
+                      <textarea id="evf-note" data-evk="note" rows="2"></textarea>
+                    </div>
+                  </fieldset>
+
+                  <fieldset class="ev-step">
+                    <legend><span>7</span>Who&rsquo;s running it</legend>
+                    <div class="ev-choices">
+                      <label class="ev-choice"><input type="radio" name="evRunBy" data-evk="runBy" value="nbcc" /><span>NBCC<small>We are running it ourselves</small></span></label>
+                      <label class="ev-choice"><input type="radio" name="evRunBy" data-evk="runBy" value="partner" /><span>Someone else, for NBCC<small>A business or a supporter, in aid of us</small></span></label>
+                    </div>
+                    <div class="ev-sub" id="evPartner" hidden>
+                      <div class="ev-row ev-row--2">
+                        <div class="ev-f"><label for="evf-partnerName">Their name</label><input type="text" id="evf-partnerName" data-evk="partnerName" autocomplete="off" /></div>
+                        <div class="ev-f">
+                          <label for="evf-partnerFront">On the front of the card</label>
+                          <select id="evf-partnerFront" data-evk="partnerFront">
+                            <option>Organised by</option>
+                            <option>Hosted by</option>
+                            <option>In partnership with</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="ev-f ev-f--after">
+                        <label for="evf-partnerCredit">Their credit on the back</label>
+                        <select id="evf-partnerCredit" data-evk="partnerCredit">
+                          <option>Organised by</option>
+                          <option>Organised and sponsored by</option>
+                          <option>Organised and paid for by</option>
+                          <option>Hosted by</option>
+                        </select>
+                      </div>
+                      <div class="ev-f">
+                        <span class="ev-f-label">Their logo (optional)</span>
+                        <div class="ev-drop-actions">
+                          <span class="ev-file admin-btn" data-evwrite>Choose a logo<input type="file" id="evLogo" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="Choose a logo" /></span>
+                          <span class="ev-f-hint" id="evLogoState"></span>
+                          <button class="ev-link-btn" type="button" id="evRemoveLogo" data-evwrite>Remove the logo</button>
+                        </div>
+                      </div>
+                      <div class="ev-f">
+                        <label for="evf-partnerLine">What they are doing for us</label>
+                        <span class="ev-f-hint">They get a band of their own on the back, so the card never reads as NBCC advertising them.</span>
+                        <textarea id="evf-partnerLine" data-evk="partnerLine" rows="2"></textarea>
+                      </div>
+                    </div>
+                  </fieldset>
+
+                  <fieldset class="ev-step">
+                    <legend><span>8</span>On the website</legend>
+                    <div class="ev-choices">
+                      <label class="ev-choice"><input type="radio" name="evStatus" data-evk="status" value="live" /><span>On the website<small>As soon as it is saved</small></span></label>
+                      <label class="ev-choice"><input type="radio" name="evStatus" data-evk="status" value="scheduled" /><span>From a date<small>Goes up by itself</small></span></label>
+                      <label class="ev-choice"><input type="radio" name="evStatus" data-evk="status" value="draft" /><span>Not yet<small>Kept as a draft</small></span></label>
+                    </div>
+                    <div class="ev-f ev-f--after" id="evShowFrom" hidden>
+                      <label for="evf-showFrom">Put it on the website on</label>
+                      <input type="date" id="evf-showFrom" data-evk="showFrom" class="ev-input-date" />
+                    </div>
+                    <p class="ev-step-note ev-step-note--last">It only shows while the Events page itself is switched on (at the top of this screen). Every save goes in the Audit log: who changed what, and when.</p>
+                  </fieldset>
+
+                  <div class="ev-problems" id="evProblems" role="alert" hidden></div>
+
+                  <div class="ev-save" id="evSave">
+                    <span class="spacer" id="evSaveState" role="status" aria-live="polite"></span>
+                    <button class="ev-save-ghost ev-save-delete" type="button" id="evDelete" hidden>Delete</button>
+                    <!-- One button, saying exactly what saving will do: it follows the choice in step 8. -->
+                    <button class="admin-btn" type="button" id="evSaveBtn">Save as a draft</button>
+                  </div>
+                </form>
+
+                <aside class="ev-preview" aria-labelledby="evPreviewHead">
+                  <h4 id="evPreviewHead">How it will look</h4>
+                  <div class="admin-segmented" role="group" aria-label="Which side of the card">
+                    <button class="admin-seg is-active" type="button" data-evside="front" aria-pressed="true">Front</button>
+                    <button class="admin-seg" type="button" data-evside="back" aria-pressed="false">Back</button>
+                  </div>
+                  <iframe class="ev-card-frame" id="evCardPreview" title="The card as visitors will see it" scrolling="no"></iframe>
+                  <p class="ev-preview-note">Hover over the card to see it wobble, and click it to turn it over, just as visitors will.</p>
+                  <p class="ev-preview-where" id="evWhere"></p>
+                </aside>
+              </div>
+
+              <section class="ev-page-preview" id="evPagePreviewBox" aria-labelledby="evPagePrevHead" hidden>
+                <h3 id="evPagePrevHead">The Events page, as visitors would see it</h3>
+                <p id="evPagePrevNote">Every event on the page in date order, with the face down card last.</p>
+                <div id="evPageBox"><iframe class="ev-page-frame" id="evPagePreview" title="The Events page, as visitors would see it" scrolling="no"></iframe></div>
+              </section>
             </section>
 
             <!-- Festive Ball 2026 (TASK-313). The launch controls: the gate that publishes the

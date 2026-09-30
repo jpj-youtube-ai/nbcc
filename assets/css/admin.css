@@ -1730,3 +1730,330 @@ tr.nl-click:hover { background: var(--tint); }
   .monthly-table td::before{content:attr(data-label);font-size:.78rem;color:var(--slate-soft)}
   .monthly-table td:empty{display:none}
 }
+
+/* =================================================================
+   EVENTS (TASK-453) - the Events page's section. Everything here is
+   scoped to #view-events so nothing else in the admin can change.
+   The cards themselves are never styled here: both previews are the
+   real page's markup and stylesheets, inside frames.
+   ================================================================= */
+
+/* ---- the page switch ---- */
+#view-events .ev-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 0 6px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+#view-events .ev-switch.is-on { background: var(--holly-soft); border-color: color-mix(in srgb, var(--holly) 30%, var(--line)); }
+#view-events .ev-switch-text { flex: 1 1 320px; min-width: 0; }
+#view-events .ev-switch .admin-subhead { margin: 0 0 4px; }
+#view-events .ev-switch-state { margin: 0; max-width: 64ch; font-size: 0.95rem; line-height: 1.5; }
+#view-events .ev-switch-state b { color: var(--maroon); }
+#view-events .ev-switch.is-on .ev-switch-state b { color: var(--holly-dark); }
+#view-events .ev-switch-who { margin: 4px 0 0; font-size: 0.82rem; color: var(--slate-soft); }
+#view-events .ev-switch-who:empty { display: none; }
+#view-events .ev-switch-note { margin: 0; font-size: 0.85rem; color: var(--slate-soft); }
+#view-events .ev-switch .btn { flex: none; }
+
+/* ---- the list ---- */
+#view-events .ev-admin-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 22px 0 14px;
+}
+#view-events .ev-admin-add { display: inline-flex; align-items: center; gap: 8px; }
+#view-events .ev-admin-add svg { flex: none; }
+#view-events .ev-admin-table th:nth-child(1) { width: 19%; }
+#view-events .ev-admin-table th:nth-child(2) { width: 36%; }
+#view-events .ev-admin-table th:nth-child(3) { width: 19%; }
+#view-events .ev-admin-table th:nth-child(4) { width: 14%; }
+#view-events .ev-admin-table th:nth-child(5) { width: 11%; }
+#view-events .ev-admin-table td { vertical-align: middle; }
+#view-events .ev-admin-when { display: flex; align-items: center; gap: 10px; }
+#view-events .ev-mini-index {
+  display: grid;
+  flex: none;
+  justify-items: center;
+  gap: 3px;
+  min-width: 42px;
+  padding: 5px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--cream);
+  line-height: 1;
+}
+#view-events .ev-mini-index b { display: block; font-family: var(--font-head); font-size: 1.15rem; font-weight: 800; color: var(--crimson); }
+#view-events .ev-mini-index span { display: block; font-size: 0.6rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--maroon); }
+#view-events .ev-admin-name { font-weight: 600; color: var(--maroon); }
+#view-events .ev-admin-sub { display: block; font-size: 0.8rem; color: var(--slate-soft); }
+#view-events .ev-admin-edit {
+  border: 1.6px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 7px 14px;
+  cursor: pointer;
+}
+#view-events .ev-admin-edit:hover { border-color: var(--maroon); }
+#view-events tr.is-editing td { background: color-mix(in srgb, var(--crimson) 7%, var(--card)); }
+#view-events .ev-admin-empty { margin: 0; padding: 22px 18px; color: var(--slate-soft); }
+
+/* ---- the editor: the form, and the card beside it ---- */
+#view-events .ev-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 30px;
+  padding-top: 26px;
+  border-top: 2px solid var(--line);
+}
+@media (min-width: 1180px) {
+  #view-events .ev-editor { grid-template-columns: minmax(0, 1fr) 420px; align-items: start; }
+  #view-events .ev-preview { position: sticky; top: 78px; }
+}
+@media (max-width: 1179px) {
+  /* No room beside the form, so the card comes first. */
+  #view-events .ev-editor-head { order: -2; }
+  #view-events .ev-preview { order: -1; }
+}
+#view-events .ev-editor-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+#view-events .ev-editor-head h3 { margin: 0; font-size: 1.45rem; color: var(--crimson); }
+#view-events .ev-editor-head p { margin: 0; color: var(--slate-soft); font-size: 0.9rem; }
+
+/* styles.css boxes every <form> as a card (for the public pages); here the steps are the cards. */
+#view-events .ev-form { display: grid; gap: 18px; min-width: 0; background: none; border: 0; border-radius: 0; padding: 0; box-shadow: none; }
+#view-events .ev-step {
+  min-width: 0;
+  margin: 0;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+#view-events .ev-step legend {
+  float: left;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 0;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--maroon);
+}
+#view-events .ev-step legend span {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--crimson);
+  color: var(--cream);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  vertical-align: 2px;
+}
+#view-events .ev-step legend + * { clear: left; }
+#view-events .ev-step-note { margin: 0 0 12px; color: var(--slate-soft); font-size: 0.88rem; line-height: 1.5; max-width: 60ch; }
+#view-events .ev-step-note--last { margin: 14px 0 0; }
+
+#view-events .ev-row { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) {
+  #view-events .ev-row--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-events .ev-row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* align-content: start, so a field never stretches to match a taller neighbour in its row. */
+#view-events .ev-f { display: grid; gap: 6px; align-content: start; min-width: 0; margin: 0 0 14px; }
+#view-events .ev-row .ev-f { margin-bottom: 0; }
+#view-events .ev-f--after { margin-top: 14px; }
+#view-events .ev-f > label,
+#view-events .ev-f > .ev-f-label { font-weight: 600; font-size: 0.9rem; color: var(--slate); }
+#view-events .ev-f-hint { font-size: 0.82rem; color: var(--slate-soft); line-height: 1.45; }
+#view-events .ev-f-hint--below { margin: 10px 0 0; }
+#view-events .ev-f input[type="text"],
+#view-events .ev-f input[type="date"],
+#view-events .ev-f input[type="time"],
+#view-events .ev-f select,
+#view-events .ev-f textarea {
+  width: 100%;
+  min-width: 0;
+  font-family: var(--font-body);
+  font-size: 0.97rem;
+  color: var(--slate);
+  background: var(--cream);
+  border: 1.6px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+/* A text box grows with what is typed (no scrollbar inside it), where the browser can do that. */
+#view-events .ev-f textarea { min-height: 88px; resize: vertical; line-height: 1.5; field-sizing: content; }
+#view-events .ev-f input:focus,
+#view-events .ev-f select:focus,
+#view-events .ev-f textarea:focus { border-color: var(--holly); outline: none; }
+#view-events .ev-f input:disabled,
+#view-events .ev-f select:disabled,
+#view-events .ev-f textarea:disabled { opacity: 0.75; cursor: not-allowed; }
+#view-events .ev-input-date { max-width: 220px; }
+#view-events .ev-count { justify-self: end; font-size: 0.78rem; color: var(--slate-soft); font-variant-numeric: tabular-nums; }
+#view-events .ev-count.is-over { color: var(--crimson); font-weight: 600; }
+/* What the server said about one field, under that field. */
+#view-events .ev-f-error { margin: 0; font-size: 0.85rem; font-weight: 600; color: var(--crimson); }
+#view-events .ev-f.has-error input,
+#view-events .ev-f.has-error select,
+#view-events .ev-f.has-error textarea { border-color: var(--crimson); }
+
+#view-events .ev-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+#view-events .ev-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 14px;
+  border: 1.6px solid var(--line);
+  border-radius: 12px;
+  background: var(--cream);
+  cursor: pointer;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+#view-events .ev-choice input { margin: 2px 0 0; accent-color: var(--crimson); }
+#view-events .ev-choice small { display: block; color: var(--slate-soft); font-size: 0.8rem; }
+#view-events .ev-choice:has(input:checked) { border-color: var(--crimson); background: color-mix(in srgb, var(--crimson) 6%, var(--cream)); }
+#view-events .ev-choice:has(input:focus-visible) { outline: 3px solid var(--holly); outline-offset: 2px; }
+#view-events .ev-choice:has(input:disabled) { cursor: not-allowed; }
+#view-events .ev-swatch { flex: none; width: 18px; height: 18px; margin-top: 1px; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--slate) 15%, transparent); }
+#view-events .ev-swatch--night { background: #0B1020; }
+#view-events .ev-swatch--cream { background: var(--cream); }
+#view-events .ev-swatch--crimson { background: var(--crimson); }
+#view-events .ev-swatch--holly { background: var(--holly); }
+#view-events .ev-swatch--maroon { background: var(--maroon); }
+#view-events .ev-checks { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+#view-events .ev-check { display: flex; gap: 8px; align-items: flex-start; font-size: 0.92rem; }
+#view-events .ev-check input { margin-top: 3px; accent-color: var(--crimson); }
+
+#view-events .ev-drop {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1.6px dashed var(--tan);
+  border-radius: 14px;
+  background: var(--cream);
+}
+#view-events .ev-drop-thumb {
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--tint) center / cover no-repeat;
+}
+#view-events .ev-drop-thumb.is-whole { background-size: contain; background-color: #0B1020; }
+#view-events .ev-drop p { margin: 0 0 8px; font-size: 0.88rem; color: var(--slate-soft); line-height: 1.45; overflow-wrap: anywhere; }
+#view-events .ev-drop .ty-status { margin: 8px 0 0; }
+#view-events .ev-drop-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+#view-events .ev-link-btn {
+  padding: 6px 2px;
+  border: 0;
+  background: none;
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+#view-events .ev-file { position: relative; overflow: hidden; }
+#view-events .ev-file input { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+#view-events .ev-file:focus-within { outline: 3px solid var(--holly); outline-offset: 2px; }
+#view-events .ev-sub { margin-top: 14px; padding: 14px; border-radius: 12px; background: var(--tint); }
+#view-events .ev-sub .ev-f:last-child { margin-bottom: 0; }
+
+/* What still stands between this event and the website, said plainly. */
+#view-events .ev-problems {
+  padding: 14px 18px;
+  border: 1.6px solid color-mix(in srgb, var(--crimson) 40%, var(--line));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--crimson) 6%, var(--card));
+  font-size: 0.92rem;
+}
+#view-events .ev-problems p { margin: 0 0 6px; font-weight: 600; color: var(--maroon); }
+#view-events .ev-problems ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+
+/* The save bar stays in reach at the foot of the screen while the form is long. */
+#view-events .ev-save {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 -10px 30px -18px rgba(128, 0, 0, 0.3);
+}
+#view-events .ev-save .spacer { margin-right: auto; font-size: 0.88rem; color: var(--slate-soft); }
+#view-events .ev-save .spacer.is-ok { color: var(--holly-dark); font-weight: 600; }
+#view-events .ev-save .spacer.is-error { color: var(--crimson); font-weight: 600; }
+#view-events .ev-save-ghost {
+  border: 1.6px solid var(--line);
+  border-radius: 10px;
+  background: var(--cream);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 9px 16px;
+  cursor: pointer;
+}
+#view-events .ev-save-ghost:hover { border-color: var(--maroon); }
+#view-events .ev-save .admin-btn { background: var(--crimson); }
+#view-events .ev-save .admin-btn:hover { background: var(--maroon); }
+#view-events .ev-save button:disabled { opacity: 0.6; cursor: progress; }
+
+/* ---- the previews: the real page, in frames sized to what they hold ---- */
+#view-events .ev-preview { display: grid; gap: 12px; min-width: 0; align-content: start; }
+#view-events .ev-preview h4 { margin: 0; font-size: 1.05rem; color: var(--maroon); }
+#view-events .ev-preview > .admin-segmented { justify-self: start; }
+#view-events .ev-card-frame { display: block; width: 100%; max-width: 420px; height: 700px; border: 0; background: transparent; }
+#view-events .ev-preview-note { margin: 0; font-size: 0.85rem; color: var(--slate-soft); line-height: 1.45; }
+#view-events .ev-preview-where {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--holly-soft);
+  color: var(--holly-dark);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+#view-events .ev-preview-where:empty { display: none; }
+#view-events .ev-page-preview {
+  margin-top: 36px;
+  padding: clamp(18px, 3vw, 30px);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--cream);
+}
+#view-events .ev-page-preview h3 { margin: 0 0 4px; font-size: 1.35rem; color: var(--crimson); }
+#view-events .ev-page-preview > p { margin: 0 0 16px; color: var(--slate-soft); font-size: 0.9rem; }
+/* The frame is the real page's width, zoomed to fit (see evFitPage); this only stops it pushing the
+   screen sideways in the moment before the zoom is set. */
+#view-events #evPageBox { min-width: 0; overflow: hidden; }
+#view-events .ev-page-frame { display: block; width: 1300px; height: 800px; border: 0; background: transparent; }

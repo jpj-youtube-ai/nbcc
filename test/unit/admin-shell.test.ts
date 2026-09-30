@@ -74,6 +74,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "monthly",
       "stories",
       "ticker",
+      // TASK-453: the Events page's events and its switch, beside the other website content.
+      "events",
       "ball",
       "contact",
       "newsletter",
@@ -92,6 +94,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "fulfilments",
       "stories",
       "ticker",
+      "events",
       "contact",
       "newsletter",
       "thank-you",
@@ -131,5 +134,37 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(doc.getElementById("view-fulfilments")).not.toBeNull();
     expect(doc.getElementById("fulfilmentsTable")).not.toBeNull();
     expect(doc.getElementById("fulfilmentActionStatus")?.getAttribute("role")).toBe("status");
+  });
+});
+
+// TASK-453: the Events screen. The page switch, the list, the eight-step form and the two previews.
+// The previews are frames holding the real page's markup and stylesheets, sized to what they hold:
+// the client's standing rule is that nothing in the admin scrolls inside a box.
+describe("the Events screen (TASK-453)", () => {
+  const view = () => doc.getElementById("view-events")!;
+
+  it("has the page switch, the list and the form", () => {
+    expect(view()).not.toBeNull();
+    expect(doc.getElementById("evSwitchBtn")).not.toBeNull();
+    expect(doc.getElementById("evSwitchState")?.getAttribute("aria-live")).toBe("polite");
+    expect(doc.getElementById("evList")).not.toBeNull();
+    expect(view().querySelectorAll("#evForm fieldset.ev-step")).toHaveLength(8);
+  });
+
+  it("names every form answer after the field the API expects", () => {
+    const keys = new Set([...view().querySelectorAll("[data-evk]")].map((i) => i.getAttribute("data-evk")));
+    for (const k of ["name", "gist", "date", "start", "venue", "town", "imageFit", "cover", "costFront", "bookingHow",
+      "bookingUrl", "whatsOn", "runBy", "partnerName", "partnerCredit", "status", "showFrom"]) {
+      expect(keys.has(k), k).toBe(true);
+    }
+  });
+
+  it("shows the previews in frames that never scroll inside themselves", () => {
+    for (const id of ["evCardPreview", "evPagePreview"]) {
+      const frame = doc.getElementById(id)!;
+      expect(frame.tagName).toBe("IFRAME");
+      expect(frame.getAttribute("scrolling")).toBe("no");
+      expect(frame.getAttribute("title")).toBeTruthy();
+    }
   });
 });

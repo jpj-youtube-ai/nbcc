@@ -142,7 +142,9 @@ host-free. The `_redirects` file also works as-is on a static host
 Every page mounts the same sticky top nav in its `<header class="nav">` slot
 (REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
 links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
-Donate button, and a mobile burger.
+Donate button, and a mobile burger. Two items are added by the server rather than written into
+the files: "Festive Ball" while the ball is published (TASK-326) and "Events", after About, while
+the Events page is switched on (TASK-453).
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -1372,6 +1374,13 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
+| `GET /events` | **implemented** | TASK-453 (the Events page, rendered from the `events` table. Served only while an admin has the page switched on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
+| `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
+| `POST /api/admin/events`, `PUT/DELETE /api/admin/events/:id` | **implemented** | TASK-453 (events: edit; drafts may be half finished, live or scheduled events must pass `publishProblems`. Audited as `events.created` / `events.updated` / `events.deleted`) |
+| `PATCH /api/admin/events/settings` | **implemented** | TASK-453 (events: edit **and** the admin role; `{pageOn}` switches the whole page. Audited as `events.page_switched`) |
+| `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/events`) |
+| `POST /api/admin/event-images` | **implemented** | TASK-453 (events: edit; base64 upload, raster only, 2 MB, returns `/media/events/<uuid>`) |
 | `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
 | `GET /api/admin/contact` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; list enquiries, optional `?status=new\|replied`) |
 | `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
@@ -5816,6 +5825,57 @@ manifest's names. A table that failed to restore is then absent rather than coun
 a name we supplied ourselves — and "no such table" is reported as exactly that. Counts are exact
 (`count(*)`), never `n_live_tup`: an estimate that happened to match would prove nothing.
 
+## The Events page (TASK-453)
+
+A public page at **`/events`**: every upcoming event as a card in a deck, soonest first, with a face
+down "more on the way" card last. The front of a card is the picture and the gist, with the date in
+the corner where a playing card keeps its index; the back holds everything else and the booking
+button. A card wobbles when a mouse passes over it and turns over when clicked or tapped (keyboard:
+the buttons, and Escape to turn back). Nothing scrolls inside a card: both faces share one grid
+cell, so a card is as tall as its longer face. Motion is off for anyone who asks their device for
+less of it, and without JavaScript the two faces simply stack.
+
+**It ships switched off.** The admin's **Events** section (under Content) has a switch, admins
+only, that decides whether the page exists at all. Off: `/events` is a real 404, no menu offers it,
+and neither site map lists it. On: the page is served, every page's menu gets "Events" after About
+(`src/events/nav-link.ts`, added the way the Festive Ball item is), and both site maps list it.
+`/events` is a reserved path, so no spare address can shadow it.
+
+**Building events.** Editors and admins (the new `events` permission section; viewers may look)
+fill in an eight-step form: the basics, when, where, a picture (shrunk in the browser like a
+newsletter picture, or none, and the card sets its own cover from the name), tickets and booking,
+the back of the card, who is running it, and whether it is on the website (now, from a date, or a
+draft). A live preview beside the form, and a miniature of the whole page under it, are the real
+renderer's output in frames sized to their content.
+
+**The rules** live in one pure file, `src/events/model.ts`, shared by the admin API, the database
+layer and the page:
+
+- a picture is an upload (`/media/events/<uuid>`) or one of the site's own images, never a link
+  to another website;
+- a booking link is a real `https://` address, or a path on nbcc.scot, never anything that could
+  run script;
+- the corner note is one of a fixed list of true statements (the Code of Fundraising Practice
+  rules out invented urgency);
+- a draft may be saved half finished, but nothing goes live without a gist, a venue, a booking
+  link (unless there is nothing to book) and, for someone else's event, their name;
+- an event is on the page up to and including its own day (UK time), then moves to Past.
+
+**One renderer**, `src/events/render.ts`, fills `events.html` (the template's deck holds a
+`<!-- events:deck -->` marker) and produces the admin's previews, so staff see exactly what the
+public will. Everything typed is escaped; `*stars*` become bold only after escaping.
+
+**Data.** Three new tables (additive): `events_settings` (one row, the switch, off by default),
+`events` (a column per form field, with CHECK constraints matching the validation) and
+`event_images`. Every change writes its `audit_log` row in the same transaction. The seed migration
+adds EmpowHer '26 and the Festive Ball as live events, with the switch still off. `events.html` is
+in the Dockerfile's explicit page list.
+
+Covered by `test/unit/events-model.test.ts`, `events-render.test.ts`, `events-nav-link.test.ts`,
+`events-page.test.ts`, the site map and permission tests, and `features/events.feature` (the switch
+off and on, date order, drafts and past and not-yet-scheduled events kept off, the admin API's
+permissions, validation, audit rows, previews and picture uploads).
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a
@@ -5832,10 +5892,11 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 42 tables,
+This is the trap this feature was built around. `DATABASE_URL` holds 45 tables
+(42 when this was built; the Events page added three in TASK-453),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 42 of **44** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 45 of **47** tables and silently
 drops every My Story submission and every contact enquiry, while producing a
 file of entirely plausible size.
 

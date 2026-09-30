@@ -32,11 +32,12 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
+    "ticker", "ball", "events", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
     "business-supporters", "team",
   ];
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
+    "events",
   ];
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
   // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.
@@ -418,6 +419,7 @@
     else if (name === "outreach") loadOutreach();
     else if (name === "ticker") loadTicker();
     else if (name === "ball") loadBall();
+    else if (name === "events") loadEvents();
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "site") loadSite();
@@ -8499,6 +8501,775 @@
         includedNote: el("ballIncludedNote").value,
         lineUpNote: el("ballLineUpNote").value,
       }, "ballDetailsStatus");
+    });
+  }
+  // ---- Events (TASK-453) ----
+  // The public /events page: a switch for the whole page (admins only), the list of events, the
+  // eight-step form, and two previews. The previews are not an imitation: they are what
+  // POST /api/admin/events/preview renders with the real page's renderer and stylesheets, shown in
+  // frames sized to what they hold, so nothing scrolls inside them.
+  var evData = null; // the last GET /api/admin/events
+  var evListView = "upcoming";
+  var evCurrent = null; // the event in the form, in the API's shape
+  var evCurrentId = null; // null while it is new and unsaved
+  var evSavedStatus = null; // the status it was saved with, so the button can say "Save changes"
+  var evDirty = false;
+  var evFlipped = false;
+  var evPreviewTimer = null;
+  var evPreviewSeq = 0;
+  var evWired = false;
+  var EV_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  var EV_DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  var EV_PAGE_WIDTH = 1300; // the real page's widest deck; the page preview is laid out at this, then zoomed
+
+  function evCanWrite() {
+    return canEdit("events");
+  }
+  function evToday() {
+    if (evData && evData.today) return evData.today;
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function evAddDays(iso, days) {
+    var p = iso.split("-").map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + days));
+    return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0") + "-" + String(d.getUTCDate()).padStart(2, "0");
+  }
+  function evParts(iso) {
+    var p = String(iso || "").split("-").map(Number);
+    var d = new Date(Date.UTC(p[0], (p[1] || 1) - 1, p[2] || 1));
+    return { dow: EV_DOW[d.getUTCDay()], day: d.getUTCDate(), mon: EV_MON[d.getUTCMonth()] };
+  }
+  function evShortDate(iso) {
+    var p = evParts(iso);
+    return p.day + " " + p.mon;
+  }
+  function evTime12(hhmm) {
+    if (!hhmm) return "";
+    var h = Number(hhmm.slice(0, 2)), m = Number(hhmm.slice(3, 5));
+    if (h === 12 && m === 0) return "12 noon";
+    return (h % 12 || 12) + (m ? "." + String(m).padStart(2, "0") : "") + (h >= 12 ? "pm" : "am");
+  }
+  function evTimeText(e) {
+    if (!e.start) return e.timeTbc ? "time to come" : "";
+    return e.end ? evTime12(e.start) + " to " + evTime12(e.end) : "from " + evTime12(e.start);
+  }
+  // The same rule as isOnPage in src/events/model.ts, for the words on this screen only. The server
+  // decides what is really on the page.
+  function evIsOnPage(e) {
+    if (e.date < evToday()) return false;
+    if (e.status === "live") return true;
+    if (e.status === "scheduled") return !!e.showFrom && e.showFrom <= evToday();
+    return false;
+  }
+
+  var EV_FIELDS = [
+    "name", "subtitle", "gist", "date", "start", "end", "timeTbc", "venue", "town", "address", "access",
+    "imageSrc", "imageFit", "imageGround", "imageAlt", "cover", "costFront", "costBack", "flag", "listHeading",
+    "whatsOn", "note", "runBy", "partnerName", "partnerFront", "partnerCredit", "partnerLogoSrc", "partnerLine",
+    "bookingHow", "bookingUrl", "bookingLabel", "bookingNote", "status", "showFrom",
+  ];
+
+  function evBlank() {
+    return {
+      name: "", subtitle: "", gist: "", date: evAddDays(evToday(), 30), start: "19:00", end: "", timeTbc: false,
+      venue: "", town: "", address: "", access: [], imageSrc: "", imageFit: "cover", imageGround: "night",
+      imageAlt: "", cover: "crimson", costFront: "", costBack: "", flag: "", listHeading: "What’s on",
+      whatsOn: "", note: "", runBy: "nbcc", partnerName: "", partnerFront: "Organised by",
+      partnerCredit: "Organised by", partnerLogoSrc: "", partnerLine: "", bookingHow: "site", bookingUrl: "",
+      bookingLabel: "Book your place", bookingNote: "", status: "draft", showFrom: "",
+    };
+  }
+  function evFromRecord(r) {
+    var e = {};
+    EV_FIELDS.forEach(function (f) {
+      var v = r[f];
+      e[f] = v === null || v === undefined ? (f === "access" ? [] : f === "timeTbc" ? false : "") : v;
+    });
+    e.access = (r.access || []).slice();
+    return e;
+  }
+
+  // ---- loading ----
+  function loadEvents() {
+    evWire();
+    authFetch("/api/admin/events")
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      })
+      .then(function (d) {
+        evData = d;
+        evRenderSwitch();
+        evRenderList();
+        el("evAdd").hidden = !evCanWrite();
+        // Arriving on the screen opens the soonest event, so there is always a card to look at.
+        if (!evCurrent) {
+          var upcoming = evSorted(d.events).filter(function (e) { return e.date >= evToday(); });
+          if (upcoming.length) evOpen(upcoming[0]);
+          else if (d.events.length) evOpen(d.events[0]);
+          else if (evCanWrite()) evOpenNew();
+        } else {
+          evRenderList();
+        }
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        el("evList").innerHTML = '<p class="ev-admin-empty">The events could not be loaded just now. Try again in a moment.</p>';
+        el("evSwitchState").textContent = "Could not check.";
+      });
+  }
+
+  function evSorted(list) {
+    return (list || []).slice().sort(function (a, b) {
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      if ((a.start || "99") !== (b.start || "99")) return (a.start || "99") < (b.start || "99") ? -1 : 1;
+      return String(a.name).localeCompare(String(b.name));
+    });
+  }
+
+  // ---- the switch ----
+  function evRenderSwitch() {
+    var on = !!(evData && evData.pageOn);
+    var box = el("evSwitch");
+    box.classList.toggle("is-on", on);
+    el("evSwitchState").innerHTML = on
+      ? "<b>Yes.</b> The page is at nbcc.scot/events, and every page’s menu offers it. Visitors see every event marked “On the website”."
+      : "<b>No.</b> The page is switched off: nobody can see it and no menu mentions it. Build and check events here, then switch it on when you are ready.";
+    el("evSwitchWho").textContent = evData && evData.updatedBy && evData.updatedBy.indexOf("admin:") === 0
+      ? "Last " + (on ? "switched on" : "switched off") + " by " + evData.updatedBy.slice(6) + " on " + H.fmtDate(evData.updatedAt) + "."
+      : "";
+    var btn = el("evSwitchBtn");
+    var mayFlip = isAdmin() && evCanWrite();
+    btn.hidden = !mayFlip;
+    el("evSwitchNote").hidden = mayFlip;
+    btn.textContent = on ? "Take the page off the website" : "Put the page on the website";
+    btn.className = on ? "btn btn-ghost" : "btn btn-primary";
+    evUpdateWhere();
+  }
+
+  function evFlipSwitch() {
+    var on = !!(evData && evData.pageOn);
+    var question = on
+      ? "Take the Events page off the website? It will disappear from the site and from every page’s menu straight away."
+      : "Put the Events page on the website? Everyone will be able to see it, and every page’s menu will offer it, straight away.";
+    if (!window.confirm(question)) return;
+    var btn = el("evSwitchBtn");
+    var status = el("evSwitchStatus");
+    btn.disabled = true;
+    status.className = "ty-status";
+    status.textContent = on ? "Taking the page off…" : "Putting the page on…";
+    authFetch("/api/admin/events/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageOn: !on }),
+    })
+      .then(function (res) {
+        return res.json().then(function (b) { return { ok: res.ok, body: b }; });
+      })
+      .then(function (r) {
+        btn.disabled = false;
+        if (!r.ok) {
+          status.className = "ty-status is-error";
+          status.textContent = r.body.error || "That did not work. Please try again.";
+          return;
+        }
+        evData.pageOn = r.body.pageOn;
+        evData.updatedAt = r.body.updatedAt;
+        evData.updatedBy = r.body.updatedBy;
+        status.className = "ty-status is-ok";
+        status.textContent = r.body.pageOn ? "The Events page is now on the website." : "The Events page is now off the website.";
+        evRenderSwitch();
+        evSchedulePreview(0);
+      })
+      .catch(function () {
+        btn.disabled = false;
+        status.className = "ty-status is-error";
+        status.textContent = "That did not work. Please try again.";
+      });
+  }
+
+  // ---- the list ----
+  function evRenderList() {
+    var events = (evData && evData.events) || [];
+    var today = evToday();
+    var counts = { upcoming: 0, drafts: 0, past: 0 };
+    events.forEach(function (e) {
+      if (e.date < today) counts.past += 1;
+      else if (e.status === "draft") counts.drafts += 1;
+      else counts.upcoming += 1;
+    });
+    Object.keys(counts).forEach(function (k) {
+      var c = doc.querySelector('[data-evcount="' + k + '"]');
+      if (c) c.textContent = counts[k];
+    });
+    var rows = evSorted(events).filter(function (e) {
+      if (evListView === "past") return e.date < today;
+      if (evListView === "drafts") return e.date >= today && e.status === "draft";
+      return e.date >= today && e.status !== "draft";
+    });
+    if (evListView === "past") rows.reverse(); // most recent first when looking back
+    var wrap = el("evList");
+    if (!rows.length) {
+      var empty = {
+        upcoming: "Nothing is coming up yet. Add an event and put it on the website, and it appears here.",
+        drafts: "No drafts. An event saved as a draft waits here, off the website, until you put it up.",
+        past: "Nothing yet. Events move here by themselves the morning after they happen, and stay for your records.",
+      }[evListView];
+      wrap.innerHTML = '<p class="ev-admin-empty">' + empty + "</p>";
+      return;
+    }
+    wrap.innerHTML =
+      '<table class="admin-table ev-admin-table"><thead><tr><th>Date</th><th>Event</th><th>Run by</th><th>Website</th><th><span class="sr-only">Open</span></th></tr></thead><tbody>' +
+      rows.map(function (e) {
+        var p = evParts(e.date);
+        var pill;
+        if (e.date < today) pill = '<span class="admin-pill admin-pill--cancelled">Past</span>';
+        else if (e.status === "draft") pill = '<span class="admin-pill">Draft</span>';
+        else if (e.status === "scheduled" && !evIsOnPage(e)) pill = '<span class="admin-pill admin-pill--pending">From ' + H.escapeHtml(evShortDate(e.showFrom)) + "</span>";
+        else pill = '<span class="admin-pill admin-pill--active">On the page</span>';
+        var editing = e.id === evCurrentId;
+        return (
+          '<tr class="' + (editing ? "is-editing" : "") + '"><td><div class="ev-admin-when"><span class="ev-mini-index"><b>' + p.day +
+          "</b><span>" + p.mon + "</span></span><span>" + p.dow + '<span class="ev-admin-sub">' +
+          H.escapeHtml(evTimeText(e) || "no time yet") + "</span></span></div></td>" +
+          '<td><span class="ev-admin-name">' + H.escapeHtml(e.name) + '</span><span class="ev-admin-sub">' +
+          H.escapeHtml([e.venue, e.town].filter(Boolean).join(", ")) + "</span></td>" +
+          "<td>" + H.escapeHtml(e.runBy === "partner" ? e.partnerName || "A partner" : "NBCC") + "</td>" +
+          "<td>" + pill + "</td>" +
+          '<td><button class="ev-admin-edit" type="button" data-evopen="' + e.id + '">' +
+          (editing ? "Open" : evCanWrite() ? "Edit" : "View") + "</button></td></tr>"
+        );
+      }).join("") +
+      "</tbody></table>";
+  }
+
+  // ---- the form ----
+  function evConfirmLeave() {
+    return !evDirty || window.confirm("You have changes to this event that are not saved. Leave them?");
+  }
+  function evOpen(record) {
+    evCurrent = evFromRecord(record);
+    evCurrentId = record.id;
+    evSavedStatus = record.status;
+    evShowEditor();
+  }
+  function evOpenNew() {
+    evCurrent = evBlank();
+    evCurrentId = null;
+    evSavedStatus = null;
+    evShowEditor();
+    var name = el("evf-name");
+    if (name && name.focus) name.focus({ preventScroll: true });
+  }
+  function evShowEditor() {
+    evDirty = false;
+    evFlipped = false;
+    el("evEditor").hidden = false;
+    el("evPagePreviewBox").hidden = false;
+    evFillForm();
+    evClearErrors();
+    evSetSaveState("", "");
+    evRenderList();
+    evSchedulePreview(0);
+  }
+
+  function evFillForm() {
+    var form = el("evForm");
+    var write = evCanWrite();
+    Array.prototype.forEach.call(form.querySelectorAll("[data-evk]"), function (input) {
+      var k = input.getAttribute("data-evk");
+      var v = evCurrent[k];
+      if (input.type === "radio") input.checked = String(v) === input.value;
+      else if (input.type === "checkbox" && k === "access") input.checked = evCurrent.access.indexOf(input.value) !== -1;
+      else if (input.type === "checkbox") input.checked = !!v;
+      else input.value = v === null || v === undefined ? "" : v;
+      input.disabled = !write;
+    });
+    Array.prototype.forEach.call(form.querySelectorAll("[data-evwrite]"), function (c) { c.hidden = !write; });
+    el("evSave").hidden = !write;
+    el("evDelete").hidden = !write || evCurrentId === null;
+    el("evEditorTitle").textContent = evCurrentId === null ? "A new event" : (write ? "Editing: " : "") + (evCurrent.name || "Untitled event");
+    el("evEditorHint").textContent = write ? "The card changes as you type." : "You can look, but only someone with edit access to Events can change it.";
+    evSyncConditional();
+    evSyncCounts();
+    evSyncPictures();
+    evSyncSaveLabel();
+  }
+
+  function evReadField(input) {
+    var k = input.getAttribute("data-evk");
+    if (input.type === "radio") {
+      if (input.checked) evCurrent[k] = input.value;
+    } else if (input.type === "checkbox" && k === "access") {
+      var order = ["step free entry", "accessible toilets", "a hearing loop", "blue badge parking"];
+      var list = evCurrent.access.filter(function (a) { return a !== input.value; });
+      if (input.checked) list.push(input.value);
+      evCurrent.access = order.filter(function (a) { return list.indexOf(a) !== -1; });
+    } else if (input.type === "checkbox") {
+      evCurrent[k] = input.checked;
+    } else {
+      evCurrent[k] = input.value;
+    }
+  }
+
+  function evSyncConditional() {
+    var hasImage = !!evCurrent.imageSrc;
+    el("evImageOptions").hidden = !hasImage;
+    el("evCoverOptions").hidden = hasImage;
+    el("evGround").hidden = !(hasImage && evCurrent.imageFit === "whole");
+    el("evPartner").hidden = evCurrent.runBy !== "partner";
+    var how = evCurrent.bookingHow;
+    el("evBookUrl").hidden = how === "none";
+    el("evBookNote").hidden = how !== "away";
+    el("evBookUrlLabel").textContent = how === "away" ? "Their booking page" : "Which page on nbcc.scot";
+    el("evBookUrlHint").textContent = how === "away" ? "Paste the full web address, starting https://" : "For example /ball";
+    el("evShowFrom").hidden = evCurrent.status !== "scheduled";
+  }
+
+  function evSyncCounts() {
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-evcountfor]"), function (out) {
+      var input = el(out.getAttribute("data-evcountfor"));
+      var max = Number(input.getAttribute("data-evmax"));
+      var n = input.value.length;
+      out.textContent = n + " of " + max;
+      out.classList.toggle("is-over", n > max);
+    });
+  }
+
+  function evSyncPictures() {
+    var thumb = el("evThumb");
+    var src = evCurrent.imageSrc;
+    thumb.style.backgroundImage = src ? "url(" + JSON.stringify(src) + ")" : "none";
+    thumb.classList.toggle("is-whole", !!src && evCurrent.imageFit === "whole");
+    el("evThumbName").textContent = src ? "A picture is chosen." : "No picture yet. The card makes its own cover from the name.";
+    el("evRemovePic").hidden = !src || !evCanWrite();
+    el("evLogoState").textContent = evCurrent.partnerLogoSrc ? "A logo is chosen." : "No logo: their name is shown in words.";
+    el("evRemoveLogo").hidden = !evCurrent.partnerLogoSrc || !evCanWrite();
+  }
+
+  function evSyncSaveLabel() {
+    var s = evCurrent.status;
+    var label;
+    if (s === "draft") label = "Save as a draft";
+    else if (s === "scheduled") label = evCurrent.showFrom ? "Save, to go up on " + evShortDate(evCurrent.showFrom) : "Save";
+    else label = evSavedStatus === "live" ? "Save the changes" : "Save and put it on the website";
+    el("evSaveBtn").textContent = label;
+  }
+
+  function evSetSaveState(text, kind) {
+    var s = el("evSaveState");
+    s.textContent = text;
+    s.className = "spacer" + (kind ? " is-" + kind : "");
+  }
+
+  function evClearErrors() {
+    Array.prototype.forEach.call(el("evForm").querySelectorAll(".ev-f-error"), function (p) { p.remove(); });
+    Array.prototype.forEach.call(el("evForm").querySelectorAll(".ev-f.has-error"), function (f) { f.classList.remove("has-error"); });
+    el("evProblems").hidden = true;
+    el("evProblems").innerHTML = "";
+  }
+
+  // After a save: every marked answer, the list of what is missing, and the cursor on the first one.
+  // From the live preview (focus false): the marks only, so the cursor never jumps out of the box
+  // somebody is typing in.
+  function evShowErrors(fields, problems, focus) {
+    evClearErrors();
+    var first = null;
+    Object.keys(fields || {}).forEach(function (key) {
+      var input = el("evForm").querySelector('[data-evk="' + key.split(".")[0] + '"]');
+      var box = input && input.closest(".ev-f");
+      if (!box) return;
+      box.classList.add("has-error");
+      var p = doc.createElement("p");
+      p.className = "ev-f-error";
+      p.textContent = fields[key];
+      box.appendChild(p);
+      if (!first) first = input;
+    });
+    if (problems && problems.length) {
+      el("evProblems").innerHTML =
+        "<p>Before this can go on the website:</p><ul>" +
+        problems.map(function (m) { return "<li>" + H.escapeHtml(m) + "</li>"; }).join("") + "</ul>";
+      el("evProblems").hidden = false;
+    }
+    if (focus !== false && first && first.focus) first.focus();
+  }
+
+  // ---- saving ----
+  function evSave() {
+    if (!evCanWrite()) return;
+    var btn = el("evSaveBtn");
+    btn.disabled = true;
+    evSetSaveState("Saving…", "");
+    var isNew = evCurrentId === null;
+    authFetch(isNew ? "/api/admin/events" : "/api/admin/events/" + evCurrentId, {
+      method: isNew ? "POST" : "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(evCurrent),
+    })
+      .then(function (res) {
+        return res.json().then(function (b) { return { status: res.status, body: b }; });
+      })
+      .then(function (r) {
+        btn.disabled = false;
+        if (r.status === 400) {
+          evShowErrors(r.body.fields, r.body.problems);
+          evSetSaveState(r.body.problems ? "Not saved: a few things are missing." : "Not saved: have a look at the marked answers.", "error");
+          return;
+        }
+        if (r.status === 404) {
+          evSetSaveState("Not saved: someone has deleted this event.", "error");
+          return;
+        }
+        if (r.status >= 300) {
+          evSetSaveState(r.body.error || "Not saved. Please try again.", "error");
+          return;
+        }
+        var saved = r.body.event;
+        evCurrent = evFromRecord(saved);
+        evCurrentId = saved.id;
+        evSavedStatus = saved.status;
+        evDirty = false;
+        evClearErrors();
+        evFillForm();
+        var where = saved.status === "draft"
+          ? "Saved as a draft."
+          : evIsOnPage(saved)
+            ? (evData && evData.pageOn ? "Saved, and on the website." : "Saved. It will show once the Events page is switched on.")
+            : saved.status === "scheduled" ? "Saved. It goes up on " + evShortDate(saved.showFrom) + "." : "Saved.";
+        evSetSaveState(where, "ok");
+        var i = evData.events.findIndex(function (e) { return e.id === saved.id; });
+        if (i === -1) evData.events.push(saved);
+        else evData.events[i] = saved;
+        evRenderList();
+        evSchedulePreview(0);
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (err && err.message === "unauthorized") return;
+        evSetSaveState("Not saved: the connection dropped. Please try again.", "error");
+      });
+  }
+
+  function evDelete() {
+    if (!evCanWrite() || evCurrentId === null) return;
+    if (!window.confirm('Delete "' + (evCurrent.name || "this event") + '" for good? It comes off the website straight away. The Audit log keeps a record that it existed.')) return;
+    var id = evCurrentId;
+    authFetch("/api/admin/events/" + id, { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok && res.status !== 404) throw new Error("status " + res.status);
+        evData.events = evData.events.filter(function (e) { return e.id !== id; });
+        evCurrent = null;
+        evCurrentId = null;
+        evDirty = false;
+        el("evEditor").hidden = true;
+        el("evPagePreviewBox").hidden = true;
+        el("evSwitchStatus").className = "ty-status is-ok";
+        el("evSwitchStatus").textContent = "Deleted.";
+        evRenderList();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        evSetSaveState("Not deleted. Please try again.", "error");
+      });
+  }
+
+  // ---- pictures ----
+  function evUpload(file, statusEl, done) {
+    if (!file) return;
+    if (!/^image\//.test(file.type)) {
+      statusEl.className = "ty-status is-error";
+      statusEl.textContent = "That file is not a picture. Try a JPG or PNG.";
+      return;
+    }
+    statusEl.className = "ty-status";
+    statusEl.textContent = "Uploading…";
+    function send(mime, base64) {
+      authFetch("/api/admin/event-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mime: mime, dataBase64: base64, filename: file.name }),
+      })
+        .then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (b) { return { status: res.status, body: b }; });
+        })
+        .then(function (r) {
+          if (r.status !== 201) {
+            statusEl.className = "ty-status is-error";
+            statusEl.textContent = r.body.error || nlUploadHttpMessage(r.status);
+            return;
+          }
+          statusEl.className = "ty-status is-ok";
+          statusEl.textContent = "Uploaded.";
+          done(r.body.src);
+        })
+        .catch(function (err) {
+          if (err && err.message === "unauthorized") return;
+          statusEl.className = "ty-status is-error";
+          statusEl.textContent = "Upload failed. Please try again.";
+        });
+    }
+    // Shrunk in the browser first, exactly as a newsletter picture is (TASK-300): phone photos are
+    // bigger than the upload allows.
+    nlShrinkImage(file, function (shrunk) {
+      if (shrunk) return send(shrunk.mime, shrunk.base64);
+      var reader = new window.FileReader();
+      reader.onload = function () {
+        var url = String(reader.result);
+        send(file.type, url.slice(url.indexOf(",") + 1));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // ---- the previews ----
+  function evSchedulePreview(delay) {
+    if (evPreviewTimer) clearTimeout(evPreviewTimer);
+    evPreviewTimer = setTimeout(evRefreshPreview, delay === undefined ? 350 : delay);
+  }
+
+  function evRefreshPreview() {
+    if (!evCurrent) return;
+    var seq = ++evPreviewSeq;
+    authFetch("/api/admin/events/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: evCurrent, id: evCurrentId }),
+    })
+      .then(function (res) {
+        return res.json().then(function (b) { return { ok: res.ok, body: b }; });
+      })
+      .then(function (r) {
+        if (seq !== evPreviewSeq) return; // an older answer arriving late must not overwrite a newer one
+        if (!r.ok) {
+          // The preview keeps showing the last good card; the marked answer says what to change.
+          if (r.body.fields) evShowErrors(r.body.fields, null, false);
+          return;
+        }
+        el("evCardPreview").srcdoc = r.body.card;
+        el("evPagePreview").srcdoc = r.body.page;
+        evUpdateWhere();
+      })
+      .catch(function () {});
+  }
+
+  function evFrameDoc(frame) {
+    try {
+      return frame.contentDocument;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function evFitCard() {
+    var frame = el("evCardPreview");
+    var cdoc = evFrameDoc(frame);
+    if (!cdoc || !cdoc.body) return;
+    frame.style.height = "0px";
+    frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
+  }
+
+  // The real page is laid out at its own width and zoomed to fit the box, the way the newsletter
+  // preview fits an email. Too narrow for a readable miniature (a phone), it shows the cards full
+  // size in one column instead.
+  function evFitPage() {
+    var frame = el("evPagePreview");
+    var box = el("evPageBox");
+    var cdoc = evFrameDoc(frame);
+    if (!cdoc || !cdoc.body || !box.clientWidth) return;
+    var mini = box.clientWidth >= 640;
+    frame.style.width = (mini ? EV_PAGE_WIDTH : box.clientWidth) + "px";
+    frame.style.height = "0px";
+    frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + "px";
+    frame.style.zoom = mini ? String(Math.min(1, box.clientWidth / EV_PAGE_WIDTH)) : "";
+  }
+
+  function evApplySide() {
+    var frame = el("evCardPreview");
+    var win = frame.contentWindow;
+    var cdoc = evFrameDoc(frame);
+    var card = cdoc && cdoc.querySelector(".ev-card");
+    if (card && win && win.nbccEvents) win.nbccEvents.setFace(card, evFlipped, false);
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-evside]"), function (b) {
+      var on = (b.getAttribute("data-evside") === "back") === evFlipped;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+  }
+
+  function evUpdateWhere() {
+    var where = el("evWhere");
+    var note = el("evPagePrevNote");
+    if (!evCurrent || !where) return;
+    var pageOff = !(evData && evData.pageOn);
+    var tail = pageOff ? " The Events page itself is switched off, so only staff can see this for now." : "";
+    note.textContent = "Every event on the page in date order, with this one where its date puts it and the face down card last." + tail;
+    var today = evToday();
+    if (evCurrent.date && evCurrent.date < today) {
+      where.textContent = "This date has passed, so the card is not on the page. It is kept under Past.";
+      return;
+    }
+    if (evCurrent.status === "draft") {
+      where.textContent = "Kept as a draft, so this card is not on the website. Choose “On the website” in step 8 to put it up.";
+      return;
+    }
+    if (evCurrent.status === "scheduled" && evCurrent.showFrom > today) {
+      where.textContent = "It goes up on " + evShortDate(evCurrent.showFrom) + ". Until then it is not on the page." + tail;
+      return;
+    }
+    var others = ((evData && evData.events) || []).filter(function (e) { return e.id !== evCurrentId && evIsOnPage(e); });
+    var list = evSorted(others.concat([Object.assign({ id: -1 }, evCurrent)]));
+    var pos = -1;
+    list.forEach(function (e, i) { if (e.id === -1) pos = i; });
+    var before = list[pos - 1];
+    var after = list[pos + 1];
+    where.textContent =
+      "Card " + (pos + 1) + " of " + list.length + " on the page" +
+      (before ? ", after " + before.name + " (" + evShortDate(before.date) + ")" : ", first in the deck") +
+      (after ? ", and before " + after.name + " (" + evShortDate(after.date) + ")." : ". The face down “more on the way” card follows it.") +
+      tail;
+  }
+
+  // ---- wiring (once) ----
+  function evWire() {
+    if (evWired) return;
+    evWired = true;
+    var form = el("evForm");
+
+    function onEdit(e) {
+      var t = e.target;
+      if (!t.hasAttribute || !t.hasAttribute("data-evk") || !evCurrent || !evCanWrite()) return;
+      evReadField(t);
+      evDirty = true;
+      var box = t.closest(".ev-f");
+      if (box && box.classList.contains("has-error")) {
+        box.classList.remove("has-error");
+        var err = box.querySelector(".ev-f-error");
+        if (err) err.remove();
+      }
+      evSyncConditional();
+      evSyncCounts();
+      evSyncSaveLabel();
+      if (t.getAttribute("data-evk") === "imageFit") evSyncPictures();
+      if (t.getAttribute("data-evk") === "name") el("evEditorTitle").textContent = (evCurrentId === null ? "A new event: " : "Editing: ") + (evCurrent.name || "untitled");
+      evSetSaveState("Not saved yet.", "");
+      evUpdateWhere();
+      evSchedulePreview();
+    }
+    form.addEventListener("input", onEdit);
+    form.addEventListener("change", onEdit);
+    form.addEventListener("submit", function (e) { e.preventDefault(); });
+
+    el("evSaveBtn").addEventListener("click", evSave);
+    el("evDelete").addEventListener("click", evDelete);
+    el("evSwitchBtn").addEventListener("click", evFlipSwitch);
+    el("evAdd").addEventListener("click", function () {
+      if (!evConfirmLeave()) return;
+      evOpenNew();
+      el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    el("evList").addEventListener("click", function (e) {
+      var b = e.target.closest("[data-evopen]");
+      if (!b) return;
+      var id = Number(b.getAttribute("data-evopen"));
+      var record = (evData.events || []).filter(function (x) { return x.id === id; })[0];
+      if (!record || (id === evCurrentId)) {
+        el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (!evConfirmLeave()) return;
+      evOpen(record);
+      el("evEditor").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-evlist]"), function (b) {
+      b.addEventListener("click", function () {
+        evListView = b.getAttribute("data-evlist");
+        Array.prototype.forEach.call(doc.querySelectorAll("[data-evlist]"), function (x) {
+          x.classList.toggle("is-active", x === b);
+          x.setAttribute("aria-pressed", String(x === b));
+        });
+        evRenderList();
+      });
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-evside]"), function (b) {
+      b.addEventListener("click", function () {
+        evFlipped = b.getAttribute("data-evside") === "back";
+        evApplySide();
+      });
+    });
+
+    el("evPicture").addEventListener("change", function (e) {
+      var file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      evUpload(file, el("evPictureStatus"), function (src) {
+        evCurrent.imageSrc = src;
+        evDirty = true;
+        evSyncConditional();
+        evSyncPictures();
+        evSetSaveState("Not saved yet.", "");
+        evSchedulePreview(0);
+      });
+    });
+    el("evRemovePic").addEventListener("click", function () {
+      evCurrent.imageSrc = "";
+      evDirty = true;
+      evSyncConditional();
+      evSyncPictures();
+      evSetSaveState("Not saved yet.", "");
+      evSchedulePreview(0);
+    });
+    el("evLogo").addEventListener("change", function (e) {
+      var file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      evUpload(file, el("evPictureStatus"), function (src) {
+        evCurrent.partnerLogoSrc = src;
+        evDirty = true;
+        evSyncPictures();
+        evSetSaveState("Not saved yet.", "");
+        evSchedulePreview(0);
+      });
+    });
+    el("evRemoveLogo").addEventListener("click", function () {
+      evCurrent.partnerLogoSrc = "";
+      evDirty = true;
+      evSyncPictures();
+      evSetSaveState("Not saved yet.", "");
+      evSchedulePreview(0);
+    });
+
+    // Each preview document loads its own stylesheets and fonts, so it is measured when it has
+    // loaded and again once its fonts are in: a heading that re-wraps in the brand font changes height.
+    el("evCardPreview").addEventListener("load", function () {
+      var frame = el("evCardPreview");
+      var cdoc = evFrameDoc(frame);
+      evFitCard();
+      evApplySide();
+      if (cdoc && cdoc.fonts && cdoc.fonts.ready) cdoc.fonts.ready.then(evFitCard);
+      // Clicking the card inside the frame turns it, so keep the Front/Back buttons telling the truth.
+      if (cdoc) {
+        cdoc.addEventListener("click", function () {
+          setTimeout(function () {
+            var card = cdoc.querySelector(".ev-card");
+            if (!card) return;
+            evFlipped = card.classList.contains("is-flipped");
+            Array.prototype.forEach.call(doc.querySelectorAll("[data-evside]"), function (b) {
+              var on = (b.getAttribute("data-evside") === "back") === evFlipped;
+              b.classList.toggle("is-active", on);
+              b.setAttribute("aria-pressed", String(on));
+            });
+          }, 0);
+        });
+      }
+    });
+    el("evPagePreview").addEventListener("load", function () {
+      var cdoc = evFrameDoc(el("evPagePreview"));
+      evFitPage();
+      if (cdoc && cdoc.fonts && cdoc.fonts.ready) cdoc.fonts.ready.then(evFitPage);
+    });
+    window.addEventListener("resize", function () {
+      evFitPage();
+      evFitCard();
     });
   }
 })();

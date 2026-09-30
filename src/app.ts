@@ -5,6 +5,7 @@ import { apiRouter, rejectOversizedMyStoryJson } from "./routes/api";
 import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
+import { adminEventsRouter } from "./routes/admin-events";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { sesWebhookRouter } from "./routes/ses-webhook";
 import { preferencesRouter } from "./routes/preferences";
@@ -13,6 +14,7 @@ import { unsubscribeRouter } from "./routes/unsubscribe";
 import { thankYouLetterRouter } from "./routes/thank-you";
 import { businessRouter } from "./routes/business";
 import { newsletterImagesRouter } from "./routes/newsletter-images";
+import { eventImagesRouter } from "./routes/event-images";
 import { IMAGE_JSON_BODY_LIMIT } from "./newsletter/image-validation";
 import { newsletterDocumentsRouter } from "./routes/newsletter-documents";
 import { tickerRouter } from "./routes/ticker";
@@ -46,6 +48,8 @@ export function createApp() {
   // the global express.json 100kb cap. Give just this path a larger parser BEFORE the global one;
   // body-parser then sees the body already parsed and skips it. Mirrors the /api/my-story guard.
   app.use("/api/admin/newsletter-images", express.json({ limit: IMAGE_JSON_BODY_LIMIT }));
+  // TASK-453: event pictures and organiser logos arrive the same way, so the same limit.
+  app.use("/api/admin/event-images", express.json({ limit: IMAGE_JSON_BODY_LIMIT }));
   // Hosted-document uploads (TASK-265): same problem, bigger files — the 10 MB document cap is
   // ~13.7 MB base64-encoded, so without this the parser 413s a real certificate BEFORE auth runs
   // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the
@@ -61,6 +65,8 @@ export function createApp() {
   app.use(adminRouter);
   // Admin user management + forgot/set-password (admin-management Phase 1, Task 5).
   app.use(adminUsersRouter);
+  // The admin's Events section (TASK-453): events, the page switch, previews, picture uploads.
+  app.use(adminEventsRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.
@@ -75,6 +81,8 @@ export function createApp() {
   app.use(businessRouter);
   // Public newsletter image serve — before the site catch-all so /media/* isn't shadowed.
   app.use(newsletterImagesRouter);
+  // Public event picture serve (TASK-453) — before the site catch-all, like the one above.
+  app.use(eventImagesRouter);
   // Public hosted newsletter documents (viewer page + file) — before the site catch-all so
   // /newsletter/document/* isn't shadowed.
   app.use(newsletterDocumentsRouter);

@@ -1,0 +1,518 @@
+/* =================================================================
+   EVENTS: page stylesheet
+
+   Loaded ONLY by /events, for the same reason ball.css is separate: the
+   shared bundle is on an enforced first-paint budget and donate.html, the
+   money path, sits just under it.
+
+   The idea is a hand of playing cards. Each event is a card: its picture on
+   top, the gist underneath, and the date in the corner where a playing card
+   carries its index. Turn a card over for everything else.
+
+   Two rules hold everything else up:
+
+   1. NOTHING SCROLLS INSIDE A CARD. Both faces sit in the same grid cell, so
+      a card is exactly as tall as its longer face and the back can hold as
+      much as an event needs. Cards in a row share a height, like a real
+      deck, and the picture on the front grows to take up the slack.
+   2. WITHOUT JAVASCRIPT THE FACES SIMPLY STACK, front then back, so every
+      detail and every booking link is still on the page. The flip only
+      switches on once events.js adds .deck--flip.
+   ================================================================= */
+
+.events-deck {
+  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-sine: cubic-bezier(0.37, 0, 0.63, 1);
+  --night: #0B1020;
+  --card-r: 22px;
+  --face-pad: clamp(20px, 2.1vw, 26px);
+}
+
+/* ---------- the hint above the deck ---------- */
+.deck-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55em;
+  margin: 0 auto clamp(22px, 3vw, 34px);
+  color: var(--slate-soft);
+  font-size: 0.98rem;
+  text-align: center;
+}
+.deck-hint svg { flex: none; color: var(--crimson); }
+
+/* ---------- the deck: one column, then two, then three ---------- */
+/* The deck gets a slightly wider table than the site's 1180px column: three cards need about 380px
+   each to hold a full back without turning into tall thin strips. */
+.events-deck .wrap { max-width: 1300px; }
+.deck {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  display: grid;
+  gap: clamp(22px, 2.6vw, 32px);
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 440px;
+}
+@media (min-width: 720px) {
+  /* 1fr rows: every card in the deck is the height of the tallest one. */
+  .deck { max-width: none; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 1fr; }
+}
+@media (min-width: 1200px) {
+  .deck { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ---------- a card and its two faces ---------- */
+.ev-card {
+  position: relative;
+  min-width: 0;
+  perspective: 1800px;
+  transform-origin: 50% 70%;
+}
+.ev-card__inner { position: relative; height: 100%; }
+
+.ev-face {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--card-r);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+/* Stacked (no JavaScript): a little air between the front and the back. */
+.ev-back { margin-top: 16px; }
+
+/* ---------- the corner index: the date, where a playing card keeps its rank ---------- */
+.ev-index {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  min-width: 60px;
+  margin: 0;
+  padding: 11px 10px 9px;
+  background: var(--cream);
+  border-radius: 13px;
+  box-shadow: 0 8px 18px -10px rgba(11, 16, 32, 0.55);
+  line-height: 1;
+  text-align: center;
+}
+/* The crimson tab the site's cards wear, shrunk to fit the index. */
+.ev-index::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 22px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--crimson);
+  transform: translateX(-50%);
+}
+.ev-index__dow,
+.ev-index__mon {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.ev-index__dow { color: var(--slate-soft); }
+.ev-index__mon { color: var(--maroon); }
+.ev-index__day {
+  margin: 4px 0 3px;
+  font-family: var(--font-head);
+  font-size: 2.05rem;
+  font-weight: 800;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--crimson);
+}
+
+/* ---------- the picture ---------- */
+.ev-art {
+  position: relative;
+  flex: 1 0 auto;
+  min-height: clamp(210px, 22vw, 250px);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--tint);
+}
+.ev-art img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* "Show the whole picture": for posters with words on them, which cropping would cut in half. The
+   picture keeps clear of the date in the corner, so nothing on a poster is ever hidden behind it. */
+.ev-art--whole img {
+  top: 106px;
+  left: 20px;
+  width: calc(100% - 40px);
+  height: calc(100% - 136px);
+  object-fit: contain;
+}
+
+/* Behind a whole picture, the colour staff chose for it. */
+.ev-art--ground-cream { background: var(--cream); }
+.ev-art--ground-crimson { background: var(--crimson); }
+.ev-art--ground-holly { background: var(--holly); }
+
+/* The festive ball's own ground: the night sky from the printed poster, with its spotlight. */
+.ev-art--night {
+  background:
+    radial-gradient(90% 75% at 50% 0%, rgba(228, 200, 122, 0.22), transparent 70%),
+    var(--night);
+}
+
+/* No picture uploaded? The card sets its own cover from the event's name, in the charity's colours. */
+.ev-art--type {
+  padding: 84px var(--face-pad) 30px;
+  color: var(--cream);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(248, 245, 238, 0.12), transparent 62%),
+    var(--art-ground, var(--crimson));
+  text-align: center;
+}
+.ev-art--holly { --art-ground: var(--holly); }
+.ev-art--maroon { --art-ground: var(--maroon); }
+.ev-art__name {
+  margin: 0;
+  font-family: var(--font-head);
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(2.3rem, 1.9rem + 1.2vw, 3rem);
+  line-height: 0.98;
+  letter-spacing: -0.01em;
+  overflow-wrap: break-word;
+  text-wrap: balance;
+}
+/* A year or a number travels as one piece: never "EmpowHer'2" with a lonely "6" underneath. */
+.ev-art__name span { display: inline-block; white-space: nowrap; color: var(--tan-light); }
+.ev-art .rule { margin: 16px auto 0; max-width: 170px; }
+/* The divider's diamond is crimson, which vanishes on a crimson or maroon cover. Cream there; on holly
+   the site's own pairing, crimson on green, stays. */
+.ev-art--type .rule i { background: var(--cream); }
+.ev-art--holly .rule i { background: var(--crimson); }
+.ev-art__place {
+  margin: 14px 0 0;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cream-90);
+}
+
+/* A true, organiser-supplied note such as "Spaces limited". Never invented urgency. */
+.ev-flag {
+  position: absolute;
+  top: 16px;
+  right: 14px;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--cream);
+  color: var(--maroon);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  box-shadow: 0 8px 18px -10px rgba(11, 16, 32, 0.55);
+}
+
+/* ---------- the front: the gist ---------- */
+.ev-body {
+  display: flex;
+  flex-direction: column;
+  padding: 20px var(--face-pad) var(--face-pad);
+}
+.ev-host {
+  margin: 0 0 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--holly);
+}
+.ev-title {
+  margin: 0;
+  font-size: clamp(1.45rem, 1.3rem + 0.5vw, 1.7rem);
+  line-height: 1.12;
+  color: var(--maroon);
+  text-wrap: balance;
+}
+.ev-tldr {
+  margin: 10px 0 0;
+  font-size: 1rem;
+  line-height: 1.55;
+  color: var(--slate);
+  text-wrap: pretty;
+}
+.ev-facts {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  display: grid;
+  gap: 7px;
+  border-top: 1px solid var(--line);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+.ev-facts li { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; text-wrap: pretty; }
+.ev-facts svg { margin-top: 2px; color: var(--crimson); }
+
+/* ---------- the turn-over controls ---------- */
+.ev-turn {
+  display: none; /* only once the flip is switched on: without JavaScript there is nothing to turn */
+  align-items: center;
+  justify-content: center;
+  gap: 0.55em;
+  min-height: 48px;
+  margin-top: 18px;
+  padding: 10px 20px;
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-size: 0.98rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+}
+.ev-turn:hover { border-color: var(--maroon); background: var(--tint); }
+.ev-turn svg { flex: none; transition: transform 0.45s var(--ease-quart); }
+.ev-turn:hover svg { transform: rotate(-180deg); }
+.deck--flip .ev-turn { display: inline-flex; }
+
+/* ---------- the back: everything else ---------- */
+.ev-back { padding: 16px var(--face-pad) var(--face-pad); }
+/* The date in the same corner it sat in on the front, the name beside it, and the way back. */
+.ev-back__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: center;
+}
+.ev-back__head .ev-index {
+  position: relative;
+  top: auto;
+  left: auto;
+  min-width: 52px;
+  padding: 9px 8px 7px;
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.ev-back__head .ev-index__day { font-size: 1.6rem; margin: 3px 0 2px; }
+.ev-back__head .ev-index__dow,
+.ev-back__head .ev-index__mon { font-size: 0.66rem; }
+.ev-back__head--plain { grid-template-columns: minmax(0, 1fr) auto; }
+.ev-back .ev-title { font-size: clamp(1.25rem, 1.15rem + 0.35vw, 1.45rem); }
+.ev-back .ev-title:focus { outline: none; }
+.ev-back .ev-title:focus-visible { outline: 3px solid var(--holly); outline-offset: 4px; }
+.ev-back .ev-host { margin: 4px 0 0; }
+
+/* Round, icon only: the same turn mark as the front's button, and the whole card turns on a tap too. */
+.ev-turn--corner { position: absolute; top: 14px; right: 14px; }
+.deck--flip .ev-turn--icon {
+  align-self: start;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
+/* The back's facts: the front's three, in full. */
+.ev-back .ev-facts { margin-top: 16px; gap: 9px; font-size: 0.96rem; }
+.ev-facts strong { font-weight: 600; color: var(--maroon); }
+
+.ev-label {
+  margin: 16px 0 7px;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--crimson);
+}
+.ev-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.ev-list li {
+  position: relative;
+  padding-left: 20px;
+  font-size: 0.96rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+/* The crimson diamond from the site's signature divider, as the bullet. */
+.ev-list li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 7px;
+  height: 7px;
+  background: var(--crimson);
+  transform: rotate(45deg);
+}
+.ev-list b { font-weight: 600; color: var(--maroon); }
+.ev-note { margin: 10px 0 0; font-size: 0.96rem; line-height: 1.55; text-wrap: pretty; }
+
+/* The organiser gets their own band, clearly theirs, so the card never reads as NBCC advertising them. */
+.ev-organiser {
+  display: grid;
+  gap: 6px;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--tint);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.ev-organiser p { margin: 0; text-wrap: pretty; }
+.ev-organiser__by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--slate-soft);
+}
+.ev-organiser__by img { width: auto; height: 24px; margin-top: 2px; }
+.ev-organiser__by b { font-size: 0.92rem; letter-spacing: 0; text-transform: none; color: var(--maroon); }
+
+/* The booking button always sits at the foot of the back, whatever is above it: the gap grows to
+   fill any spare height, and never shrinks below 20px when the back is the taller face. */
+.ev-book-gap { flex: 1 0 20px; }
+.ev-book { width: 100%; justify-content: center; }
+/* Leaving nbcc.scot: an arrow that says so. */
+.ev-book--away::after { content: "\2197"; }
+.ev-book-note { margin: 10px 0 0; font-size: 0.88rem; color: var(--slate-soft); text-align: center; }
+/* With nothing to book, the note stands in for the button, so it reads at body size. */
+.ev-book-note--solo { font-size: 0.98rem; color: var(--slate); }
+.ev-link { display: inline-flex; align-items: center; justify-content: center; gap: 0.4em; margin-top: 14px; font-weight: 600; }
+
+/* ---------- the face down card: more on the way ---------- */
+/* Its back is short, so it sits as one centred block rather than a heading marooned above a button. */
+.ev-back--invite { justify-content: center; padding-top: 70px; text-align: center; }
+.ev-invite { display: grid; justify-items: center; }
+.ev-invite .rule { margin: 14px auto 2px; max-width: 180px; }
+.ev-invite .ev-book { margin-top: 22px; }
+.ev-card--more .ev-front { padding: 10px; background: var(--cream); }
+.ev-cardback {
+  flex: 1 0 auto;
+  display: grid;
+  place-items: center;
+  min-height: 420px;
+  padding: 96px 22px 30px;
+  border-radius: 15px;
+  background-color: var(--crimson);
+  background-image:
+    repeating-linear-gradient(45deg, rgba(128, 0, 0, 0.6) 0 1.5px, transparent 1.5px 15px),
+    repeating-linear-gradient(-45deg, rgba(128, 0, 0, 0.6) 0 1.5px, transparent 1.5px 15px);
+  /* The inset hairline frame every card back has. */
+  box-shadow: inset 0 0 0 9px var(--crimson), inset 0 0 0 10.5px rgba(248, 245, 238, 0.6);
+}
+.ev-cardback__plate {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  padding: 30px 22px 22px;
+  border-radius: 16px;
+  background: var(--cream);
+  text-align: center;
+  box-shadow: 0 18px 40px -22px rgba(40, 0, 0, 0.7);
+}
+/* The NBCC elf, peering over the top of the panel. Its own drawn ledge IS the panel's top edge.
+   Only the top of the picture is shown: below the ledge the file carries the NBCC wordmark in
+   white, which would ghost through the cream panel. */
+.ev-cardback__elf {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  width: 150px;
+  height: 98px;
+  max-width: none;
+  object-fit: cover;
+  object-position: 50% 0;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+}
+.ev-cardback__plate h2 { font-size: 1.45rem; line-height: 1.15; color: var(--maroon); }
+.ev-cardback__plate p { margin: 8px 0 0; font-size: 0.97rem; line-height: 1.55; }
+.ev-cardback__plate .ev-turn { width: 100%; }
+
+/* =================================================================
+   THE FLIP. Switched on by events.js; everything above works without it.
+   ================================================================= */
+.deck--flip .ev-card__inner {
+  display: grid;
+  transform-style: preserve-3d;
+  transition: transform 0.72s var(--ease-quart);
+}
+.deck--flip .ev-face {
+  grid-area: 1 / 1;
+  margin: 0;
+  cursor: pointer;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+.deck--flip .ev-back { transform: rotateY(180deg); }
+.deck--flip .ev-card.is-flipped .ev-card__inner { transform: rotateY(180deg); }
+/* Text you might want to select and copy (an address, a list) keeps the text cursor. */
+.deck--flip .ev-details dd,
+.deck--flip .ev-list li { cursor: text; }
+
+/* ---------- dealt onto the table as they come into view ---------- */
+.deck--flip .ev-card.is-waiting { opacity: 0; transform: translateY(26px) rotate(-1.4deg); }
+.deck--flip .ev-card.is-dealt {
+  transition: opacity 0.6s var(--ease-quart) var(--deal-delay, 0ms), transform 0.7s var(--ease-quart) var(--deal-delay, 0ms);
+}
+
+/* ---------- picked up: a lift and a wobble, with a mouse or trackpad only ---------- */
+@media (hover: hover) and (pointer: fine) {
+  .ev-face { transition: box-shadow 0.35s var(--ease-quart); }
+  .deck--flip .ev-card:hover .ev-face { box-shadow: var(--shadow-lg); }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .deck--flip .ev-card { transition: translate 0.35s var(--ease-quart); }
+  .deck--flip .ev-card:hover { translate: 0 -6px; animation: ev-wobble 0.7s var(--ease-sine) both; }
+}
+/* A damped wobble: each swing smaller than the last, then still. Deliberately not an elastic easing
+   curve, which would overshoot on every state change; this is one small flourish, once per hover. */
+@keyframes ev-wobble {
+  0% { rotate: 0deg; }
+  16% { rotate: -2.2deg; }
+  34% { rotate: 1.7deg; }
+  52% { rotate: -0.95deg; }
+  70% { rotate: 0.45deg; }
+  86% { rotate: -0.15deg; }
+  100% { rotate: 0deg; }
+}
+
+/* ---------- reduced motion: no wobble, no lift, no spin. The faces swap with a short fade. ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .deck--flip .ev-card__inner { transition: none; transform: none !important; }
+  .deck--flip .ev-back { transform: none; }
+  .deck--flip .ev-card:not(.is-flipped) .ev-back,
+  .deck--flip .ev-card.is-flipped .ev-front { visibility: hidden; }
+  .deck--flip .ev-card.is-flipped .ev-back,
+  .deck--flip .ev-card:not(.is-flipped) .ev-front { animation: ev-fade 0.2s linear; }
+  .deck--flip .ev-card.is-waiting { opacity: 1; transform: none; }
+  .ev-turn svg { transition: none; }
+  .ev-turn:hover svg { transform: none; }
+}
+@keyframes ev-fade { from { opacity: 0; } to { opacity: 1; } }

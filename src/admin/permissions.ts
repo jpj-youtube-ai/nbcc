@@ -12,6 +12,9 @@ export const SECTIONS = [
   "stories",
   "ticker",
   "ball",
+  // TASK-453: the Events page's events. Content work like Stories, so editors edit by default.
+  // Switching the whole page on or off is admin-only in the route, whatever this matrix says.
+  "events",
   "contact",
   "newsletter",
   "thank-you",
@@ -57,6 +60,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
   "thank-you",
   "search",
   "outreach",
+  "events",
 ];
 
 /**

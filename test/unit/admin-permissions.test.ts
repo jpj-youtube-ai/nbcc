@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 18 matrix sections", () => {
+  it("lists exactly the 19 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -33,6 +33,7 @@ describe("SECTIONS", () => {
       "stories",
       "ticker",
       "ball",
+      "events",
       "contact",
       "newsletter",
       "thank-you",
@@ -43,7 +44,7 @@ describe("SECTIONS", () => {
       "business-supporters",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(18);
+    expect(SECTIONS).toHaveLength(19);
   });
 });
 
@@ -67,6 +68,18 @@ describe("outreach defaults", () => {
     expect(roleToPermissions("admin").outreach).toBe("edit");
     expect(roleToPermissions("editor").outreach).toBe("edit");
     expect(can(roleToPermissions("viewer"), "outreach", "edit")).toBe(false);
+  });
+});
+
+// TASK-453: building events is content work, like Stories, so editors get it with the other
+// operational sections and viewers may look. Turning the whole Events page on or off is a launch
+// decision and is admin-only in the route, whatever this matrix says.
+describe("events defaults", () => {
+  it("admins and editors build events, viewers may look", () => {
+    expect(roleToPermissions("admin").events).toBe("edit");
+    expect(roleToPermissions("editor").events).toBe("edit");
+    expect(roleToPermissions("viewer").events).toBe("view");
+    expect(can(roleToPermissions("viewer"), "events", "edit")).toBe(false);
   });
 });
 

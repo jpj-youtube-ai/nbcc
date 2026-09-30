@@ -254,6 +254,32 @@ describe("turning a card over (events.js)", () => {
     window.getSelection()!.removeAllRanges();
   });
 
+  // The admin's previews redraw on every pause in typing; dealing the cards in each time would have
+  // them jumping about under staff's hands. data-no-deal is how the preview says so.
+  it("deals the cards in on the real page, but not in a preview that asks it not to", () => {
+    const observed: Element[] = [];
+    const win = window as unknown as { IntersectionObserver?: unknown };
+    win.IntersectionObserver = class {
+      observe(el: Element) {
+        observed.push(el);
+      }
+      unobserve() {}
+      disconnect() {}
+    };
+    try {
+      document.documentElement.innerHTML = parse().documentElement.innerHTML;
+      initDeck(document, window);
+      expect(document.querySelectorAll(".ev-card.is-waiting").length).toBeGreaterThan(0);
+
+      document.documentElement.innerHTML = parse().documentElement.innerHTML;
+      document.querySelector("[data-deck]")!.setAttribute("data-no-deal", "");
+      initDeck(document, window);
+      expect(document.querySelectorAll(".ev-card.is-waiting")).toHaveLength(0);
+    } finally {
+      delete win.IntersectionObserver;
+    }
+  });
+
   it("turns each card on its own", () => {
     (front.querySelector(".ev-turn") as HTMLButtonElement).click();
     expect(doc.getElementById("empowher-2026")!.classList.contains("is-flipped")).toBe(false);

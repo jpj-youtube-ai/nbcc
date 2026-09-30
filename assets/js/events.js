@@ -20,6 +20,8 @@
   if (typeof module === "object" && module.exports) {
     module.exports = api;
   } else if (typeof document !== "undefined") {
+    // The admin's preview frames reach in through this to turn the card to the side staff asked for.
+    root.nbccEvents = api;
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", function () {
         api.initDeck(document, window);
@@ -75,7 +77,9 @@
   function dealIn(deck, cards, doc, win) {
     var reduced =
       typeof win.matchMedia === "function" && win.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduced || !win.IntersectionObserver) return;
+    // data-no-deal: the admin's previews redraw as staff type, and a deal on every redraw would be
+    // a card jumping about under their hands.
+    if (reduced || !win.IntersectionObserver || deck.hasAttribute("data-no-deal")) return;
 
     var cols = columnCount(deck, win);
     cards.forEach(function (card, i) {

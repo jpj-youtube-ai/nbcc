@@ -106,8 +106,27 @@
   // data that drew zeros, empty lists and "nothing due" as if all were well. Throwing sends the
   // failure to the loader's catch instead, which says the panel could not load.
   function okJson(res) {
-    if (!res.ok) throw new Error("status " + res.status);
+    if (!res.ok) {
+      var err = new Error("status " + res.status);
+      err.status = res.status; // so a 403 (not in your access) can be told from a failure
+      throw err;
+    }
     return res.json();
+  }
+  // The same, for an action the server may refuse (a 4xx) with its own reason, such as "Those seats
+  // have already been released.": that reason rides on the error as err.said. A 5xx has nothing
+  // worth repeating ("Admin is temporarily unavailable"), so it is a plain failure.
+  function okJsonOrSaid(res) {
+    if (res.ok || res.status >= 500) return okJson(res);
+    return res.json().then(
+      function (b) {
+        var err = new Error("status " + res.status);
+        err.status = res.status;
+        err.said = b && typeof b.error === "string" ? b.error : "";
+        throw err;
+      },
+      function () { return okJson(res); },
+    );
   }
   // What a panel shows in place of its data when that data could not be fetched.
   function unavailableHtml(message) {
@@ -603,6 +622,9 @@
             function (err) {
               // A 401 has already gone back to the sign-in screen; nothing to draw.
               if (err && err.message === "unauthorized") throw err;
+              // A 403 is not a failure: the figure belongs to a section this person's access leaves
+              // out, and saying "Could not load" on every sign in would cry wolf. Leave it out.
+              if (err && err.status === 403) return "";
               return unavailableCard(c[1]);
             },
           );
@@ -617,8 +639,12 @@
       .then(function (d) {
         el("overviewRecent").innerHTML = donationsTable(d.results || []);
       })
-      .catch(function () {
-        el("overviewRecent").innerHTML = unavailableHtml("Recent donations are unavailable.");
+      .catch(function (err) {
+        el("overviewRecent").innerHTML = unavailableHtml(
+          err && err.status === 403
+            ? "Recent donations are not part of your access."
+            : "Recent donations are unavailable.",
+        );
       });
   }
 
@@ -703,8 +729,7 @@
       })
       .catch(function () {
         wrap.innerHTML = unavailableHtml("Donations are unavailable.");
-        el("donationsPager").hidden = true;
-        el("donationsInfo").textContent = "";
+        // The pager stays as it was: Previous and Next are how you try this page again.
       });
   }
   // Both filters behave the same way: change it, go back to page one. Staying on page 4 of a
@@ -2329,8 +2354,7 @@
       .catch(function () {
         band.innerHTML = "";
         wrap.innerHTML = unavailableHtml("The email log is unavailable.");
-        el("emailAuditPager").hidden = true;
-        el("emailAuditPageInfo").textContent = "";
+        // The pager stays as it was: Newer and Older are how you try this page again.
       });
   }
 
@@ -4089,8 +4113,7 @@
         // A failed check must never read like a failed newsletter.
         host.innerHTML =
           '<li><span class="nl-check-mk is-warn" aria-hidden="true"></span><div><b>Could not run the ' +
-          'checks</b><span>The send itself still checks before it goes, so nothing unsafe can slip ' +
-          'through.</span></div></li>';
+          'checks</b><span>The checks could not run. Look over it yourself before sending.</span></div></li>';
       });
   }
 
@@ -6226,7 +6249,9 @@
     overlay.addEventListener("mousedown", function (e) { if (e.target === overlay) close(); });
 
     authFetch("/api/admin/newsletters/" + newsletterId + "/send-job/recipients")
-      .then(okJson)
+      // A newsletter sent before the send queue existed has no per person record, and the server
+      // says so with a 404: a true answer, shown as the message below, not as a failure.
+      .then(function (res) { return res.status === 404 ? null : okJson(res); })
       .then(function (rows) {
         var host = overlay.querySelector(".nl-who-body");
         if (!rows || !rows.length) {
@@ -6386,7 +6411,7 @@
           host.hidden = false;
           host.innerHTML =
             '<p class="nl-preflight-head">Could not run the checks</p>' +
-            '<ul><li class="nl-preflight-warn">The send itself still checks before it goes, so nothing unsafe can slip through.</li></ul>';
+            '<ul><li class="nl-preflight-warn">The checks could not run. Look over it yourself before sending.</li></ul>';
         });
     })();
 
@@ -8413,11 +8438,15 @@
     authFetch("/api/admin/ball/holds/" + encodeURIComponent(btn.getAttribute("data-release-hold")), {
       method: "DELETE",
     })
-      .then(okJson)
+      .then(okJsonOrSaid)
       .then(function () { loadBall(); })
-      .catch(function () {
+      .catch(function (err) {
         btn.disabled = false;
-        ballStatus("ballHoldStatus", "Could not release those seats.");
+        if (err && err.message === "unauthorized") return;
+        // The server's own reason when it gave one ("Those seats have already been released."),
+        // then the list as it really is now, so a hold that has gone does not stay on screen.
+        ballStatus("ballHoldStatus", (err && err.said) || "Could not release those seats.");
+        loadBall();
       });
   }
 
@@ -8680,11 +8709,15 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note: note }),
     })
-      .then(okJson)
+      .then(okJsonOrSaid)
       .then(function () { loadBall(); })
-      .catch(function () {
+      .catch(function (err) {
         btn.disabled = false;
-        window.alert("Could not cancel " + reference + ". Nothing has been changed.");
+        if (err && err.message === "unauthorized") return;
+        // The server's own reason when it gave one ("That booking is already cancelled..."), then
+        // the bookings as they really are now.
+        window.alert((err && err.said) || "Could not cancel " + reference + ". Nothing has been changed.");
+        loadBall();
       });
   }
 

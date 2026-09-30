@@ -112,6 +112,20 @@ describe("the Overview's figures say when they could not be counted (TASK-476)",
     for (const [, label] of cards) expect(card(label).querySelector(".n")?.textContent).toBe("2");
   });
 
+  // Review of #600: a person whose saved access leaves out a section gets a 403 for its figure on
+  // every sign in. That is not a failure to report; the figure is simply not theirs to see.
+  it("leaves out a figure that is not in your access, rather than saying it could not load", async () => {
+    failing["/api/admin/claims/adjustment-due"] = { status: 403, body: { error: "forbidden" } };
+    failing["/api/admin/donations"] = { status: 403, body: { error: "forbidden" } };
+    await signIn();
+
+    expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(4);
+    expect(card("Adjustments due")).toBeUndefined();
+    expect(el("overviewStats").textContent).not.toContain("Could not load");
+    expect(el("overviewRecent").textContent).toContain("Recent donations are not part of your access.");
+    expect(el("overviewRecent").textContent).not.toContain("unavailable");
+  });
+
   it.each(cards)("says %s could not load, not 0, and leaves the other figures alone", async (path, label) => {
     failing[path] = SERVER_DOWN;
     await signIn();
@@ -243,12 +257,33 @@ describe("each panel says it could not load, instead of looking empty (TASK-476)
 });
 
 describe("the figures beside a list go with it when it cannot load (TASK-476)", () => {
-  it("clears the donations pager", async () => {
-    failing["/api/admin/donations"] = SERVER_DOWN;
+  // Review of #600: the pager is how someone on page 4 tries again, so a failure leaves it alone.
+  it("keeps the donations pager, so you can try that page again", async () => {
+    served["/api/admin/donations"] = { results: [], total: 120 };
     await signIn();
     await open("donations");
-    expect(el("donationsPager").hidden).toBe(true);
-    expect(el("donationsInfo").textContent).toBe("");
+    expect(el("donationsPager").hidden).toBe(false);
+
+    failing["/api/admin/donations"] = SERVER_DOWN;
+    el("donationsNext").click();
+    await settle();
+    expect(el("donationsTable").textContent).toContain("Donations are unavailable.");
+    expect(el("donationsPager").hidden).toBe(false);
+    expect((el("donationsNext") as HTMLButtonElement).disabled).toBe(false); // press it again to retry
+  });
+
+  it("keeps the email log pager, so you can try that page again", async () => {
+    served["/api/admin/email-log"] = { results: [], failures: [], total: 120 };
+    await signIn();
+    await open("email-audit");
+    expect(el("emailAuditPager").hidden).toBe(false);
+
+    failing["/api/admin/email-log"] = SERVER_DOWN;
+    el("emailAuditNext").click();
+    await settle();
+    expect(el("emailAuditTable").textContent).toContain("The email log is unavailable.");
+    expect(el("emailAuditPager").hidden).toBe(false);
+    expect((el("emailAuditNext") as HTMLButtonElement).disabled).toBe(false); // press it again to retry
   });
 
   it("gives no count of donors to thank", async () => {
@@ -462,6 +497,9 @@ describe("newsletters: nothing reads a failure as all clear (TASK-476)", () => {
     await settle();
     expect(el("nlChecks").textContent).toContain("Could not run the checks");
     expect(el("nlChecks").textContent).not.toContain("Everything checks out");
+    // Review of #600: the send does not run these checks itself, so nothing may say it does.
+    expect(el("nlChecks").textContent).toContain("The checks could not run. Look over it yourself before sending.");
+    expect(el("nlChecks").textContent).not.toContain("nothing unsafe");
   });
 
   it("the pre-send checks still say everything checks out when they ran clean", async () => {
@@ -496,6 +534,39 @@ describe("newsletters: nothing reads a failure as all clear (TASK-476)", () => {
     (document.querySelector("[data-who-got]") as HTMLElement).click();
     await settle();
     expect(el("nlResultsNote").textContent).toBe("Could not load the figures for this send.");
+  });
+
+  // Review of #600: a newsletter sent before the send queue existed has no per person record, and
+  // the server says so with a 404. That is a true answer, not a failure.
+  it("who a send reached, for a send from before the send queue, says there is no per person record", async () => {
+    served["/api/admin/newsletters"] = [sentNewsletter];
+    served["/api/admin/newsletters/1"] = sentNewsletter;
+    failing["/api/admin/newsletters/1/send-job/recipients"] = { status: 404, body: { error: "No send for this newsletter" } };
+    await signIn();
+    await open("newsletter");
+    (document.querySelector("[data-who-got]") as HTMLElement).click();
+    await settle();
+    el("nlResultsWho").click();
+    await settle();
+    const body = document.querySelector(".nl-who-body") as HTMLElement;
+    expect(body.textContent).toContain("No per-person record for this send.");
+    expect(body.textContent).not.toContain("Could not load");
+  });
+
+  it("the send confirmation says the checks did not run, without claiming the send checks instead", async () => {
+    const draft = { ...sentNewsletter, status: "draft", sentAt: null };
+    served["/api/admin/newsletters"] = [draft];
+    served["/api/admin/newsletters/1"] = draft;
+    failing["POST /api/admin/newsletters/preflight"] = SERVER_DOWN;
+    await signIn();
+    await open("newsletter");
+    el("newsletterSend").click();
+    await settle();
+    const preflight = document.querySelector(".nl-modal .nl-preflight") as HTMLElement;
+    expect(preflight.hidden).toBe(false);
+    expect(preflight.textContent).toContain("Could not run the checks");
+    expect(preflight.textContent).toContain("The checks could not run. Look over it yourself before sending.");
+    expect(preflight.textContent).not.toContain("nothing unsafe");
   });
 
   it("who a send reached, when that could not load, says so", async () => {
@@ -559,8 +630,21 @@ describe("the ball: a change the server refused is never reported as done (TASK-
     expect(el("ballGateStatus").textContent).toBe("Saved.");
   });
 
-  it("releasing a hold that had already gone", async () => {
+  // Review of #600: a hold released elsewhere meanwhile. Say what the server said, and reload, so
+  // the stale row goes and the screen matches what is really held.
+  it("releasing a hold that had already gone says so and shows the list as it is now", async () => {
     failing["DELETE /api/admin/ball/holds/6"] = { status: 409, body: { error: "Those seats have already been released." } };
+    await signIn();
+    await open("ball");
+    served["/api/admin/ball/holds"] = { results: [] };
+    (document.querySelector("#ballHolds [data-release-hold]") as HTMLElement).click();
+    await settle();
+    expect(el("ballHoldStatus").textContent).toBe("Those seats have already been released.");
+    expect(el("ballHolds").textContent).toContain("Nothing is held back.");
+  });
+
+  it("releasing a hold when the server is down gives the general message", async () => {
+    failing["DELETE /api/admin/ball/holds/6"] = SERVER_DOWN;
     await signIn();
     await open("ball");
     (document.querySelector("#ballHolds [data-release-hold]") as HTMLElement).click();
@@ -568,10 +652,24 @@ describe("the ball: a change the server refused is never reported as done (TASK-
     expect(el("ballHoldStatus").textContent).toBe("Could not release those seats.");
   });
 
-  it("cancelling a booking the server would not cancel", async () => {
+  it("cancelling a booking already cancelled says so and shows the bookings as they are now", async () => {
     const alerts: string[] = [];
     window.alert = (m?: unknown) => { alerts.push(String(m)); };
-    failing["POST /api/admin/ball/bookings/NBCC-TEST1/cancel"] = { status: 409, body: { error: "Already cancelled." } };
+    const refusal = "That booking is already cancelled, so there are no seats to give back.";
+    failing["POST /api/admin/ball/bookings/NBCC-TEST1/cancel"] = { status: 409, body: { error: refusal } };
+    await signIn();
+    await open("ball");
+    served["/api/admin/ball/bookings"] = { results: [{ ...booking, status: "cancelled" }] };
+    (document.querySelector("#ballBookings [data-cancel-booking]") as HTMLElement).click();
+    await settle();
+    expect(alerts).toEqual([refusal]);
+    expect(document.querySelector("#ballBookings [data-cancel-booking]")).toBeNull();
+  });
+
+  it("cancelling a booking when the server is down gives the general message", async () => {
+    const alerts: string[] = [];
+    window.alert = (m?: unknown) => { alerts.push(String(m)); };
+    failing["POST /api/admin/ball/bookings/NBCC-TEST1/cancel"] = SERVER_DOWN;
     await signIn();
     await open("ball");
     (document.querySelector("#ballBookings [data-cancel-booking]") as HTMLElement).click();

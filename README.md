@@ -5586,14 +5586,15 @@ refused for lack of seats said "Held.".
 
 One helper in `assets/js/admin/app.js`, `okJson(res)`, now reads a response only when it is OK and
 otherwise throws, so the failure reaches the loader's `catch`. Each `catch` says, in that panel, that
-it could not load (built with `unavailableHtml(message)`), and clears any count or pager that sits
-beside the list, so nothing from an earlier load is left looking current. `authFetch` is unchanged:
+it could not load (built with `unavailableHtml(message)`), and clears any count that sits beside the
+list, so nothing from an earlier load is left looking current. A pager is left as it was, because
+pressing Next or Older again is how you retry that page. `authFetch` is unchanged:
 a 401 still signs you out. A list that did come back empty still says so, because then it is true.
 
 | Panel | On a failure it used to show | Now |
 |---|---|---|
-| Overview figures (each one on its own) | 0 | Could not load (the other figures still show) |
-| Overview recent donations | nothing | Recent donations are unavailable. |
+| Overview figures (each one on its own) | 0 | Could not load (the other figures still show). A figure from a section your access leaves out (a 403) is left out rather than reported every sign in. |
+| Overview recent donations | nothing | Recent donations are unavailable. (On a 403: Recent donations are not part of your access.) |
 | Donations | No donations yet. | Donations are unavailable. |
 | GASDS deadline | No GASDS donations are approaching the claim deadline. | GASDS donations are unavailable. |
 | GASDS pool | nothing | The small donations pool is unavailable. |
@@ -5603,12 +5604,13 @@ a 401 still signs you out. A list that did come back empty still says so, becaus
 | A donor, story or enquiry opened | a blank record | Could not load this donor (story, enquiry). Please try again. |
 | Search | No results. | Search is unavailable. |
 | Newsletters: list, blocked addresses, audiences, who is on one | no newsletters, nothing blocked, no audiences, nobody | Newsletters / Blocked addresses / Audiences are unavailable, Could not load who is on this audience. |
-| Newsletter pre-send checks (Send panel and the confirmation) | Everything checks out / nothing | Could not run the checks |
+| Newsletter pre-send checks (Send panel and the confirmation) | Everything checks out / nothing | Could not run the checks. The checks could not run. Look over it yourself before sending. (The send does not run them itself, so nothing says it does.) |
 | Opening a newsletter | "undefined" in the editor | Could not open that newsletter. Please try again. |
-| A send's figures, and who it reached | No figures / No per-person record | Could not load the figures / the recipient list. |
+| A send's figures, and who it reached | No figures / No per-person record | Could not load the figures / the recipient list. A send from before the send queue (the server answers 404) still says it has no per-person record, because that is true. |
 | Thank you, Outreach (list, today, reports, a business, its disclosure, a pasted list), Ticker, My account | empty lists, 0 totals, a blank disclosure | the message each already had for a lost connection |
 | Ball: settings, bookings, guest details, menu choices | 0 seats and £0, No menu set yet | Could not load..., and no figures |
-| Ball: save settings, hold, release, cancel, chase, week before reminders | Saved. / Held. / Sent undefined emails. | the message each already had for a failure |
+| Ball: save settings, hold, chase, week before reminders | Saved. / Held. / Sent undefined emails. | the message each already had for a failure |
+| Ball: release a hold, cancel a booking | reloaded as if done | the server's own reason when it refuses (a 4xx, read by `okJsonOrSaid`), such as "Those seats have already been released.", else the general message; then the list reloads so it shows what is really there |
 
 Deliberately left as they were, because empty is harmless there or they already handle a failure:
 the permissions read at sign-in (falls back to showing nothing), the enquiries notice (stays hidden

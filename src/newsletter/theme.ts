@@ -99,7 +99,7 @@ function applyEmphasis(escaped: string): string {
 function applyLineBreaks(escaped: string): string {
   return escaped
     .replace(/\r\n?/g, "\n") // Windows and old Mac line endings
-    .replace(/^[ \t ]+$/gm, "") // a line of only spaces is a blank line
+    .replace(/^[ \t\u00A0]+$/gm, "") // a line of only spaces is a blank line
     .replace(/^\n+|\n+$/g, "") // no blank lines at the very start or end
     .replace(/\n{3,}/g, "\n\n") // a run of blank lines is one paragraph gap
     .replace(/\n/g, "<br>");

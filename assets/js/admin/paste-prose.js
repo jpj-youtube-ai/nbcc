@@ -183,7 +183,7 @@
         var parts = text.replace(/\r\n?/g, "\n").split("\n");
         for (var k = 0; k < parts.length; k++) {
           if (k > 0) newline();
-          words(parts[k].replace(/[ \t ]+/g, " "), fmt);
+          words(parts[k].replace(/[ \t\u00A0]+/g, " "), fmt);
         }
         return;
       }

@@ -60,6 +60,13 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
     expect(html).toContain('src="/assets/js/admin/app.js"');
   });
 
+  // TASK-469: app.js reads window.PasteProse when a prose box is pasted into, so it must be there first.
+  it("loads the paste converter before the app that uses it", () => {
+    const at = html.indexOf('src="/assets/js/admin/paste-prose.js"');
+    expect(at).toBeGreaterThan(-1);
+    expect(at).toBeLessThan(html.indexOf('src="/assets/js/admin/app.js"'));
+  });
+
   it("has the nav sections + the donor detail view (TASK-117 · TASK-138 gasds · TASK-161 newsletter · TASK-163 thank-you · 2026-07-10 contact inbox · TASK-208 business supporters · TASK-401 outreach)", () => {
     const navViews = [...doc.querySelectorAll(".admin-nav-link")].map((b) => b.getAttribute("data-view"));
     expect(navViews).toEqual([

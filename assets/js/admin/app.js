@@ -3414,6 +3414,35 @@
     return bar;
   }
 
+  // TASK-469: a paste into a prose box keeps the basics (paragraphs, line breaks, bold and italic),
+  // written as the markers the B and I buttons write, so the preview and the email show them.
+  // paste-prose.js does the converting and is unit-tested on its own; this reads the clipboard and
+  // inserts the result where the author's cursor is. Without the converter, or with nothing to insert,
+  // the browser's own paste goes ahead.
+  function nlPasteProse(e, input) {
+    var P = window.PasteProse;
+    var clip = e.clipboardData;
+    if (!P || !clip) return;
+    var html = clip.getData("text/html");
+    var text = html
+      ? P.htmlToProse(new DOMParser().parseFromString(html, "text/html").body)
+      : P.markdownToProse(clip.getData("text/plain"));
+    if (!text) return;
+    e.preventDefault();
+    // execCommand keeps Ctrl+Z working and fires "input", which saves the block and refreshes the
+    // preview exactly as typing does. Where it is unavailable, insert and announce by hand.
+    var inserted = false;
+    try {
+      inserted = typeof doc.execCommand === "function" && doc.execCommand("insertText", false, text);
+    } catch (err) {
+      inserted = false;
+    }
+    if (!inserted) {
+      input.setRangeText(text, input.selectionStart, input.selectionEnd, "end");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
   function nlText(host, obj, key, label, opts) {
     opts = opts || {};
     var wrap = doc.createElement("label");
@@ -3427,7 +3456,11 @@
     else if (opts.type) input.type = opts.type;
     input.value = obj[key] != null ? obj[key] : "";
     if (nlReadOnly()) input.disabled = true;
-    else input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
+    else {
+      input.addEventListener("input", function () { obj[key] = input.value; nlSchedulePreview(); });
+      // TASK-469: a prose box keeps what matters from a paste; a one-line box pastes plain text.
+      if (opts.multiline) input.addEventListener("paste", function (e) { nlPasteProse(e, input); });
+    }
     // TASK-253: a multiline field IS a prose field — the four of them (text, greeting intro, story
     // body, spotlight quote) are exactly the ones the server renders emphasis in, so the buttons and
     // the renderer can't disagree about where **bold** works.

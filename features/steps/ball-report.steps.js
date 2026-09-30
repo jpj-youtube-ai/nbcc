@@ -57,7 +57,6 @@ async function reset() {
   await pool.query("DELETE FROM ball_report_sends WHERE sent_by LIKE '%report.admin.bdd@example.com'");
   await pool.query("DELETE FROM ball_bookings WHERE buyer_email LIKE '%.report.bdd@example.com'");
   await pool.query("DELETE FROM ball_waiting_list WHERE email LIKE '%.report.bdd@example.com'");
-  await pool.query("DELETE FROM audit_log WHERE action = 'ball_report.send_failed'");
 }
 
 Before({ tags: "@ball-report" }, reset);
@@ -230,6 +229,8 @@ Then("the preview says {string}", function (words) {
 
 const dayOf = (daysAgo) => new Date(Date.now() - daysAgo * DAY_MS).toISOString().slice(0, 10);
 
+// audit_log is append-only, so this row stays after the scenario. It is harmless: the card only
+// shows a failure newer than the last report that went, and no other scenario asks.
 Given("the ticket report could not be sent {int} day(s) ago", async function (days) {
   await pool.query(
     `INSERT INTO audit_log (actor, action, entity, entity_id, data, created_at)

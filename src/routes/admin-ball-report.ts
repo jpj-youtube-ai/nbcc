@@ -1,16 +1,13 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { authorizeSection } from "./admin-authz";
+import { authorizeSections } from "./admin-authz";
 import { actorOf } from "./admin";
-import { config } from "../config";
-import { sendBallReport } from "../clients/email";
 import { londonDate, nextSendDay, recipientsSchema, renderReport } from "../ball/sales-report";
-import { BALL_DAY } from "../ball/sales-report-runner";
+import { BALL_DAY, sendTestReport } from "../ball/sales-report-runner";
 import {
   getReportSettings,
-  lastScheduledSendAt,
+  lastCountedTo,
   readSalesInputs,
-  recordTestSend,
   saveReportSettings,
   scheduledSendExists,
 } from "../db/ball-report";
@@ -21,16 +18,22 @@ import {
 //   PUT  /api/admin/ball-report        { reportOn, recipients }                              events: edit
 //   POST /api/admin/ball-report/test   the real email, marked as a test, to the person asking events: edit
 //
+// Every one also needs the Festive Ball at view or above: the numbers are the Ball's, and access
+// that leaves the Ball out must not see them by way of Events. Every role has that by default.
+//
 // The report itself is counts only (src/ball/sales-report.ts). The recipients are business
 // contacts, and every change to them writes an audit row saying who was added or removed, and by
 // whom (src/db/ball-report.ts).
+
+const VIEW = [["events", "view"], ["ball", "view"]] as const;
+const EDIT = [["events", "edit"], ["ball", "view"]] as const;
 
 export const adminBallReportRouter = Router();
 
 async function reportPayload(now = new Date()) {
   const settings = await getReportSettings();
   const today = londonDate(now);
-  const inputs = await readSalesInputs(now, await lastScheduledSendAt());
+  const inputs = await readSalesInputs(now, await lastCountedTo());
   const preview = renderReport(inputs, { today, eventDate: BALL_DAY, test: false });
   const next =
     settings.reportOn && settings.recipients.length > 0
@@ -40,7 +43,7 @@ async function reportPayload(now = new Date()) {
 }
 
 adminBallReportRouter.get("/api/admin/ball-report", async (req: Request, res: Response) => {
-  if (!(await authorizeSection(req, res, "events", "view"))) return;
+  if (!(await authorizeSections(req, res, VIEW))) return;
   try {
     res.json(await reportPayload());
   } catch (err) {
@@ -52,7 +55,7 @@ adminBallReportRouter.get("/api/admin/ball-report", async (req: Request, res: Re
 const saveBody = z.object({ reportOn: z.boolean(), recipients: z.array(z.unknown()) }).strict();
 
 adminBallReportRouter.put("/api/admin/ball-report", async (req: Request, res: Response) => {
-  const claims = await authorizeSection(req, res, "events", "edit");
+  const claims = await authorizeSections(req, res, EDIT);
   if (!claims) return;
   const body = saveBody.safeParse(req.body);
   if (!body.success) {
@@ -79,16 +82,10 @@ adminBallReportRouter.put("/api/admin/ball-report", async (req: Request, res: Re
 });
 
 adminBallReportRouter.post("/api/admin/ball-report/test", async (req: Request, res: Response) => {
-  const claims = await authorizeSection(req, res, "events", "edit");
+  const claims = await authorizeSections(req, res, EDIT);
   if (!claims) return;
-  const now = new Date();
-  const today = londonDate(now);
   try {
-    const inputs = await readSalesInputs(now, await lastScheduledSendAt());
-    const email = renderReport(inputs, { today, eventDate: BALL_DAY, test: true });
-    // Only ever to the person asking: a test must never reach the organiser or the sponsor.
-    await sendBallReport({ to: [claims.email], from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...email });
-    await recordTestSend(today, claims.email, inputs, actorOf(claims));
+    await sendTestReport({ to: claims.email, actor: actorOf(claims), now: new Date() });
     res.json({ sentTo: [claims.email] });
   } catch (err) {
     console.error("ball report test failed:", err instanceof Error ? err.message : err);

@@ -1,6 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import express, { Router, type Request, type Response } from "express";
-import { parseSnsEnvelope, parseSesEvent, suppressionFor, type ParsedEmailEvent } from "../newsletter/ses-events";
+import {
+  parseSnsEnvelope,
+  parseSesEvent,
+  suppressionFor,
+  bounceReasonFor,
+  type ParsedEmailEvent,
+} from "../newsletter/ses-events";
 import { recordEmailEvent, countBounces } from "../db/newsletter-events";
 import { suppressEmail } from "../db/email-suppressions";
 import { markEmailDelivery } from "../db/email-log";
@@ -34,14 +40,7 @@ const REPEAT_BOUNCE_LIMIT = 3;
 // The short human-readable reason stored beside a bounce/complaint on the audit page: the
 // provider's diagnostic where it gave one, else the bounce sub-type; null for a clean delivery.
 function deliveryDetailOf(event: ParsedEmailEvent): string | null {
-  if (event.eventType !== "bounced") return null;
-  const recipients = event.detail?.bouncedRecipients;
-  const diagnostic =
-    Array.isArray(recipients) && recipients[0] && typeof recipients[0] === "object"
-      ? (recipients[0] as Record<string, unknown>).diagnosticCode
-      : null;
-  const words = diagnostic ?? event.detail?.bounceSubType ?? null;
-  return typeof words === "string" ? words : null;
+  return event.eventType === "bounced" ? bounceReasonFor(event) : null;
 }
 
 export const sesWebhookRouter = Router();
@@ -79,47 +78,53 @@ async function postSesWebhook(req: Request, res: Response): Promise<Response> {
   const parsed = parseSesEvent(envelope.message);
   if (!parsed) return res.status(200).json({ outcome: "ignored" });
 
+  // TASK-464: one email can go to several people (the Ball's ticket report), and SES names the
+  // people each event is about. Everything below happens once for each person named, so a bounce
+  // from one of them never lands on, or suppresses, another. Every other email has one person.
+  const people: ParsedEmailEvent[] = parsed.recipients.map((email) => ({ ...parsed, email }));
+
   // Email-audit enrichment: stamp the mailbox-side outcome onto the newest matching email_log
   // row (src/db/email-log.ts). Best-effort and FIRST, so a failure in the newsletter recording
   // below cannot cost the audit page its delivery truth (and vice versa — each is independent).
   if (parsed.eventType === "delivered" || parsed.eventType === "bounced" || parsed.eventType === "complained") {
-    try {
-      // TASK-346: the message id makes this land on the exact send. Null for an email sent
-      // before that shipped, in which case markEmailDelivery falls back to the old
-      // recipient-and-recency guess rather than dropping the outcome.
-      await markEmailDelivery(
-        parsed.email,
-        parsed.eventType,
-        parsed.occurredAt,
-        deliveryDetailOf(parsed),
-        parsed.messageId,
-      );
-    } catch (err) {
-      console.error("email log delivery stamp failed:", err instanceof Error ? err.message : err);
+    for (const one of people) {
+      try {
+        // TASK-346: the message id makes this land on the exact send. Null for an email sent
+        // before that shipped, in which case markEmailDelivery falls back to the old
+        // recipient-and-recency guess rather than dropping the outcome.
+        await markEmailDelivery(one.email, parsed.eventType, one.occurredAt, deliveryDetailOf(one), one.messageId);
+      } catch (err) {
+        console.error("email log delivery stamp failed:", err instanceof Error ? err.message : err);
+      }
     }
   }
 
   try {
-    const outcome = await recordEmailEvent(envelope.messageId, parsed);
-    // TASK-272 lineage: a complaint or a PERMANENT bounce takes the address out of every future
-    // send. This runs even when the event matched no newsletter (outcome 'unmatched') — the
-    // address is just as dead whether or not we can tie the bounce to a particular send, and a
-    // big send can outrun the correlation window. Suppression is independent of attribution on
-    // purpose.
-    const suppression = suppressionFor(parsed);
-    if (suppression) {
-      await suppressEmail(parsed.email, suppression.reason, suppression.detail);
-    } else if (parsed.eventType === "bounced") {
-      // TASK-277 (letter R): a transient bounce does not suppress on its own — a full mailbox is
-      // temporary. But an address that keeps bouncing is dead in practice whatever the provider
-      // calls it, and mailing it forever is what damages a sender's reputation. Repetition is the
-      // signal.
-      const bounces = await countBounces(parsed.email);
-      if (bounces >= REPEAT_BOUNCE_LIMIT) {
-        await suppressEmail(parsed.email, "bounced", `bounced ${bounces} times`);
+    const outcomes: string[] = [];
+    for (const [i, one] of people.entries()) {
+      // The first person keeps SNS's own id, exactly as before; anyone after gets their own, so an
+      // SNS retry of the same notification is still a duplicate for each of them.
+      outcomes.push(await recordEmailEvent(i === 0 ? envelope.messageId : `${envelope.messageId}:${i}`, one));
+      // TASK-272 lineage: a complaint or a PERMANENT bounce takes the address out of every future
+      // send. This runs even when the event matched no newsletter (outcome 'unmatched') — the
+      // address is just as dead whether or not we can tie the bounce to a particular send, and a
+      // big send can outrun the correlation window. Suppression is independent of attribution on
+      // purpose.
+      const suppression = suppressionFor(one);
+      if (suppression) {
+        await suppressEmail(one.email, suppression.reason, suppression.detail);
+      } else if (one.eventType === "bounced") {
+        // TASK-277 (letter R): a transient bounce does not suppress on its own — a full mailbox is
+        // temporary. But an address that keeps bouncing is dead in practice whatever the provider
+        // calls it, and mailing it forever is what damages a sender's reputation. Repetition is the
+        // signal.
+        const bounces = await countBounces(one.email);
+        if (bounces >= REPEAT_BOUNCE_LIMIT) {
+          await suppressEmail(one.email, "bounced", `bounced ${bounces} times`);
+        }
       }
     }
-    return res.status(200).json({ outcome });
+    return res.status(200).json({ outcome: outcomes.join(",") });
   } catch (err) {
     // A DB hiccup is worth a retry from SNS's side — this is the one path where 500 is right.
     console.error("ses webhook recording failed:", err instanceof Error ? err.message : err);

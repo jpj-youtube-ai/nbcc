@@ -17,7 +17,7 @@ vi.mock("../../src/config", () => ({
   },
 }));
 
-import { authorizeSection, authorizeAny, loadEffectivePermissions } from "../../src/routes/admin-authz";
+import { authorizeSection, authorizeSections, authorizeAny, loadEffectivePermissions } from "../../src/routes/admin-authz";
 import { signAdminSession } from "../../src/admin/session";
 import type { PermissionMap } from "../../src/admin/permissions";
 
@@ -140,6 +140,43 @@ describe("authorizeSection (Admin Phase 2, Task 3)", () => {
     expect(res.statusCode).toBe(401);
     expect(res.body).toEqual({ error: "Invalid or expired admin session" });
     expect(getUserAuthRowMock).not.toHaveBeenCalled();
+  });
+});
+
+// TASK-464: a card on one section's page that shows another section's data (the Festive Ball's
+// ticket report, on the Events page) needs both. Access that leaves the Ball out must not see the
+// Ball's numbers by way of Events.
+describe("authorizeSections (TASK-464): every section named, at its level", () => {
+  const BOTH = [["events", "edit"], ["ball", "view"]] as const;
+
+  it("returns the claims when the user holds every one", async () => {
+    getUserAuthRowMock.mockResolvedValue(authRow({ role: "editor" })); // editor: events edit, ball view
+    const res = mockRes();
+    const claims = await authorizeSections(req(tokenFor(1, "editor")), res as any, BOTH);
+    expect(claims).toMatchObject({ sub: 1, role: "editor" });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("returns 403 when any one is missing", async () => {
+    getUserAuthRowMock.mockResolvedValue(authRow({ permissions: { events: "edit", ball: "none" } }));
+    const res = mockRes();
+    expect(await authorizeSections(req(tokenFor(1, "viewer")), res as any, BOTH)).toBeNull();
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({ error: "forbidden" });
+  });
+
+  it("returns 403 when a level is too low, even if the others are fine", async () => {
+    getUserAuthRowMock.mockResolvedValue(authRow({ permissions: { events: "view", ball: "edit" } }));
+    const res = mockRes();
+    expect(await authorizeSections(req(tokenFor(1, "viewer")), res as any, BOTH)).toBeNull();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns 401 exactly as authorizeSection does without a session", async () => {
+    const res = mockRes();
+    expect(await authorizeSections(req(), res as any, BOTH)).toBeNull();
+    expect(res.statusCode).toBe(401);
+    expect(res.body).toEqual({ error: "Missing admin session token" });
   });
 });
 

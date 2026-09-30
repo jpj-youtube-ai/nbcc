@@ -1,4 +1,4 @@
-const { When, Then, Before, After, AfterAll } = require("@cucumber/cucumber");
+const { Given, When, Then, Before, After, AfterAll } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const { Pool } = require("pg");
 
@@ -11,6 +11,7 @@ const { Pool } = require("pg");
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const PASSWORD = "report-pw-123";
+const DAY_MS = 86_400_000;
 
 async function login(email) {
   const res = await fetch(`${BASE_URL}/api/admin/login`, {
@@ -54,6 +55,8 @@ function people(list) {
 async function reset() {
   await pool.query("UPDATE ball_settings SET report_on = false, report_recipients = '[]'::jsonb WHERE id = 1");
   await pool.query("DELETE FROM ball_report_sends WHERE sent_by LIKE '%report.admin.bdd@example.com'");
+  await pool.query("DELETE FROM ball_bookings WHERE buyer_email LIKE '%.report.bdd@example.com'");
+  await pool.query("DELETE FROM ball_waiting_list WHERE email LIKE '%.report.bdd@example.com'");
 }
 
 Before({ tags: "@ball-report" }, reset);
@@ -150,4 +153,76 @@ Then("the preview is the Festive Ball ticket report, with no money and no one's 
   assert.ok(!preview.html.includes("£"), "the preview shows money");
   const addresses = preview.html.match(/[\w.+-]+@[\w.-]+\.\w+/g) || [];
   assert.deepEqual([...new Set(addresses)], ["events@nbcc.scot"]);
+});
+
+Then("the refusal points at the {string} of person {int}", function (field, n) {
+  assert.deepEqual(this.reportBody.path, [n - 1, field]);
+});
+
+Then("the audit log records a test sent by {string}", async function (email) {
+  const r = await pool.query(
+    `SELECT actor, data FROM audit_log WHERE action = 'ball_report.test_sent' ORDER BY id DESC LIMIT 1`,
+  );
+  assert.equal(r.rows.length, 1, "no audit row for the test");
+  assert.equal(r.rows[0].actor, `admin:${email}`);
+  assert.equal(r.rows[0].data.to, email);
+});
+
+// Invented buyers, one row per line of the table. "paid days ago" is blank for a booking that was
+// never paid.
+Given("these Festive Ball bookings exist:", async function (table) {
+  let n = 0;
+  for (const row of table.hashes()) {
+    n += 1;
+    const ago = row["paid days ago"];
+    await pool.query(
+      `INSERT INTO ball_bookings
+         (reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence, total_pence, status, paid_at)
+       VALUES ($1, $2, $3, $4, 'Report Buyer', $5, 0, 0, $6, $7)`,
+      [
+        `BALL-RPT${String(n).padStart(3, "0")}`,
+        row.kind,
+        Number(row.quantity),
+        Number(row.seats),
+        `buyer${n}.report.bdd@example.com`,
+        row.status,
+        ago ? new Date(Date.now() - Number(ago) * DAY_MS) : null,
+      ],
+    );
+  }
+});
+
+// A scheduled report that went before, marked with this feature's sender so the reset removes it.
+Given("the last ticket report counted up to {int} days ago", async function (days) {
+  const at = new Date(Date.now() - days * DAY_MS);
+  await pool.query(
+    `INSERT INTO ball_report_sends (sent_on, kind, status, recipients, figures, counted_to, sent_at, sent_by)
+     VALUES ($1::date, 'scheduled', 'sent', '{}', '{}'::jsonb, $2, $2, 'system:schedule.report.admin.bdd@example.com')`,
+    [at.toISOString().slice(0, 10), at],
+  );
+});
+
+// The waiting list is emptied first, as "the ball is reset" empties the bookings: the count must be
+// this scenario's own. The first person wants the seats the others do not.
+Given(
+  "{int} people want {int} seats on the Ball's waiting list, and {int} more has been offered a place",
+  async function (people, seats, offered) {
+    await pool.query("DELETE FROM ball_waiting_list");
+    for (let i = 0; i < people; i++) {
+      await pool.query(
+        "INSERT INTO ball_waiting_list (name, email, seats_wanted) VALUES ('Waiting Person', $1, $2)",
+        [`waiting${i}.report.bdd@example.com`, i === 0 ? seats - (people - 1) : 1],
+      );
+    }
+    for (let i = 0; i < offered; i++) {
+      await pool.query(
+        "INSERT INTO ball_waiting_list (name, email, seats_wanted, offered_at) VALUES ('Offered Person', $1, 3, now())",
+        [`offered${i}.report.bdd@example.com`],
+      );
+    }
+  },
+);
+
+Then("the preview says {string}", function (words) {
+  assert.ok(this.reportBody.preview.html.includes(words), `the preview does not say "${words}"`);
 });

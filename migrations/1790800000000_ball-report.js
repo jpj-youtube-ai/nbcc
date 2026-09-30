@@ -28,6 +28,10 @@ exports.up = (pgm) => {
     status: { type: "text", notNull: true, default: "claimed" },
     recipients: { type: "text[]", notNull: true, default: pgm.func("'{}'::text[]") },
     figures: { type: "jsonb", comment: "The numbers that went out: counts only, never anyone's details." },
+    counted_to: {
+      type: "timestamptz",
+      comment: "The moment its numbers were counted to. The next report counts on from exactly here.",
+    },
     sent_at: { type: "timestamptz", notNull: true, default: pgm.func("now()") },
     sent_by: { type: "text", notNull: true },
   });

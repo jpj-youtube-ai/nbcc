@@ -2,7 +2,7 @@ import { pool } from "./pool";
 import { insertAudit } from "./donations";
 import { getCapacityState } from "./ball";
 import { availability } from "../ball/capacity";
-import { recipientsSchema, type Recipient, type SalesInputs } from "../ball/sales-report";
+import { countSales, recipientsSchema, type Recipient, type SalesInputs } from "../ball/sales-report";
 
 // TASK-464: the Festive Ball ticket report's settings, its numbers, and the record of what went out.
 // The decisions (is it due, what does it say) are in the pure src/ball/sales-report.ts; this file
@@ -103,47 +103,50 @@ export async function saveReportSettings(
 }
 
 /**
- * Everything the report counts. Sold means paid: pending, refunded and cancelled bookings are not
- * sales. `since` is the last scheduled report's time, or null before the first.
+ * Everything the report counts, as at `now`. `since` is the moment the last scheduled report
+ * counted to, or null before the first. The counting rules (sold means paid, which sale falls in
+ * which window) are the pure countSales, so they are tested without a database.
  */
 export async function readSalesInputs(now: Date, since: Date | null): Promise<SalesInputs> {
-  const sold = await pool.query<Record<string, string>>(
-    `SELECT
-       COALESCE(SUM(seats) FILTER (WHERE status = 'paid'), 0)                         AS seats_sold,
-       COALESCE(SUM(quantity) FILTER (WHERE status = 'paid' AND kind = 'table'), 0)  AS tables_sold,
-       COALESCE(SUM(seats) FILTER (WHERE status = 'paid' AND kind = 'seat'), 0)      AS single_seats,
-       COALESCE(SUM(seats) FILTER (WHERE status = 'paid' AND $1::timestamptz IS NOT NULL
-                                     AND paid_at > $1::timestamptz AND paid_at <= $2), 0) AS since_last,
-       COALESCE(SUM(seats) FILTER (WHERE status = 'paid' AND paid_at > $2::timestamptz - interval '7 days'
-                                     AND paid_at <= $2), 0)                            AS last_7,
-       COALESCE(SUM(seats) FILTER (WHERE status = 'paid' AND paid_at > $2::timestamptz - interval '14 days'
-                                     AND paid_at <= $2::timestamptz - interval '7 days'), 0) AS previous_7
-     FROM ball_bookings`,
-    [since, now],
+  const bookings = await pool.query<{
+    kind: string;
+    status: string;
+    quantity: number;
+    seats: number;
+    paid_at: Date | null;
+  }>("SELECT kind, status, quantity, seats, paid_at FROM ball_bookings");
+  // Still waiting: anyone already offered a released place is being looked after.
+  const waiting = await pool.query<{ people: string; seats: string }>(
+    `SELECT count(*) AS people, COALESCE(sum(seats_wanted), 0) AS seats
+       FROM ball_waiting_list WHERE offered_at IS NULL`,
   );
-  const waiting = await pool.query<{ n: string }>("SELECT count(*) AS n FROM ball_waiting_list");
   const state = await getCapacityState();
   const left = availability(state);
-  const r = sold.rows[0];
+  const sold = countSales(
+    bookings.rows.map((b) => ({
+      kind: b.kind,
+      status: b.status,
+      quantity: Number(b.quantity),
+      seats: Number(b.seats),
+      paidAt: b.paid_at,
+    })),
+    { now, since },
+  );
   return {
     totalSeats: left.totalSeats,
-    seatsSold: Number(r.seats_sold),
-    tablesSold: Number(r.tables_sold),
-    singleSeatsSold: Number(r.single_seats),
+    ...sold,
     seatsRemaining: left.seatsRemaining,
     tablesRemaining: left.tablesRemaining,
     heldSeats: state.heldSeats,
-    soldSinceLast: since === null ? null : Number(r.since_last),
-    soldLast7Days: Number(r.last_7),
-    soldPrevious7Days: Number(r.previous_7),
-    waitingList: Number(waiting.rows[0].n),
+    waitingList: Number(waiting.rows[0]?.people ?? 0),
+    waitingSeats: Number(waiting.rows[0]?.seats ?? 0),
   };
 }
 
-/** When the last scheduled report actually went, or null before the first. */
-export async function lastScheduledSendAt(): Promise<Date | null> {
+/** The moment the last scheduled report counted its numbers to, or null before the first. */
+export async function lastCountedTo(): Promise<Date | null> {
   const r = await pool.query<{ at: Date | null }>(
-    "SELECT max(sent_at) AS at FROM ball_report_sends WHERE kind = 'scheduled' AND status = 'sent'",
+    "SELECT max(counted_to) AS at FROM ball_report_sends WHERE kind = 'scheduled' AND status = 'sent'",
   );
   return r.rows[0]?.at ?? null;
 }
@@ -167,10 +170,18 @@ export async function claimScheduledSend(sentOn: string, by: string): Promise<nu
   return r.rows[0]?.id ?? null;
 }
 
-export async function markSendSent(id: number, recipients: string[], figures: SalesInputs): Promise<void> {
+/** Records the report as gone: to whom, the numbers it carried, and the moment they were counted to. */
+export async function markSendSent(
+  id: number,
+  recipients: string[],
+  figures: SalesInputs,
+  countedTo: Date,
+): Promise<void> {
   await pool.query(
-    "UPDATE ball_report_sends SET status = 'sent', recipients = $2, figures = $3::jsonb, sent_at = now() WHERE id = $1",
-    [id, recipients, JSON.stringify(figures)],
+    `UPDATE ball_report_sends
+        SET status = 'sent', recipients = $2, figures = $3::jsonb, counted_to = $4, sent_at = now()
+      WHERE id = $1`,
+    [id, recipients, JSON.stringify(figures), countedTo],
   );
 }
 

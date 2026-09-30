@@ -156,7 +156,48 @@ export interface SalesInputs {
   soldSinceLast: number | null;
   soldLast7Days: number;
   soldPrevious7Days: number;
+  /** People still waiting for a place: anyone already offered one is being looked after. */
   waitingList: number;
+  /** The seats those people want between them. */
+  waitingSeats: number;
+}
+
+/** One booking, as the numbers need it. */
+export interface BookingRow {
+  kind: string;
+  status: string;
+  quantity: number;
+  seats: number;
+  paidAt: Date | null;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * What has sold, counted from the bookings. Sold means paid: a booking waiting for its card
+ * payment, refunded or cancelled is not a sale. Everything is counted up to `now`, and the next
+ * report counts on from exactly there (`since` is the moment the last one counted to), so a sale
+ * is never in two reports' "since the last update", and never in neither. A paid booking with no
+ * payment time (set by hand) is in the totals but in no window.
+ */
+export function countSales(
+  bookings: readonly BookingRow[],
+  o: { now: Date; since: Date | null },
+): Pick<SalesInputs, "seatsSold" | "tablesSold" | "singleSeatsSold" | "soldSinceLast" | "soldLast7Days" | "soldPrevious7Days"> {
+  const now = o.now.getTime();
+  const paid = bookings.filter((b) => b.status === "paid" && (b.paidAt === null || b.paidAt.getTime() <= now));
+  const seatsPaidBetween = (from: number, to: number) =>
+    paid
+      .filter((b) => b.paidAt !== null && b.paidAt.getTime() > from && b.paidAt.getTime() <= to)
+      .reduce((n, b) => n + b.seats, 0);
+  return {
+    seatsSold: paid.reduce((n, b) => n + b.seats, 0),
+    tablesSold: paid.filter((b) => b.kind === "table").reduce((n, b) => n + b.quantity, 0),
+    singleSeatsSold: paid.filter((b) => b.kind === "seat").reduce((n, b) => n + b.seats, 0),
+    soldSinceLast: o.since === null ? null : seatsPaidBetween(o.since.getTime(), now),
+    soldLast7Days: seatsPaidBetween(now - 7 * DAY_MS, now),
+    soldPrevious7Days: seatsPaidBetween(now - 14 * DAY_MS, now - 7 * DAY_MS),
+  };
 }
 
 export interface ReportContext {
@@ -175,7 +216,8 @@ const counted = (n: number, one: string, many: string) => `${n} ${n === 1 ? one 
 
 // Every line of the report, in the words both the HTML and the text version use.
 function reportLines(i: SalesInputs, ctx: ReportContext) {
-  const percent = i.totalSeats > 0 ? Math.round((i.seatsSold / i.totalSeats) * 100) : 0;
+  // Rounded down, so the email never says 100% while a seat is still for sale.
+  const percent = i.totalSeats > 0 ? Math.floor((i.seatsSold / i.totalSeats) * 100) : 0;
   const how = [
     i.tablesSold > 0 ? counted(i.tablesSold, "whole table", "whole tables") : "",
     i.singleSeatsSold > 0 ? counted(i.singleSeatsSold, "single seat", "single seats") : "",
@@ -183,12 +225,15 @@ function reportLines(i: SalesInputs, ctx: ReportContext) {
     .filter(Boolean)
     .join(" and ");
   const next = nextUpdateAfter(ctx.today, ctx.eventDate);
+  const days = daysToGo(ctx.today, ctx.eventDate);
+  // Only a preview or a test can go on the day of the Ball or after it: the schedule has stopped.
+  const whatNext = next
+    ? `Your next update will be on ${dayInWords(next)}.`
+    : days > 0
+      ? `This is the last update before the Ball on ${dayInWords(ctx.eventDate)}.`
+      : "There are no more updates planned.";
   return {
-    opening: `Here's how Festive Ball ticket sales stand this morning. ${
-      next
-        ? `Your next update will be on ${dayInWords(next)}.`
-        : `This is the last update before the Ball on ${dayInWords(ctx.eventDate)}.`
-    } Any questions in the meantime, call us on ${BALL_PHONE} or email ${BALL_EMAIL}.`,
+    opening: `Here's how Festive Ball ticket sales stand this morning. ${whatNext} Any questions in the meantime, call us on ${BALL_PHONE} or email ${BALL_EMAIL}.`,
     sold: [`${i.seatsSold} of ${i.totalSeats} seats (${percent}%)`, how].filter(Boolean),
     lately: [
       i.soldSinceLast === null
@@ -197,13 +242,22 @@ function reportLines(i: SalesInputs, ctx: ReportContext) {
       `${counted(i.soldLast7Days, "seat", "seats")} in the last 7 days (the 7 days before: ${i.soldPrevious7Days})`,
     ],
     left: [
-      `${counted(i.seatsRemaining, "seat", "seats")}, including ${counted(i.tablesRemaining, "whole table", "whole tables")}`,
+      i.seatsRemaining === 0
+        ? "Sold out"
+        : i.tablesRemaining === 0
+          ? `${counted(i.seatsRemaining, "seat", "seats")}, but no whole tables`
+          : `${counted(i.seatsRemaining, "seat", "seats")}, including ${counted(i.tablesRemaining, "whole table", "whole tables")}`,
       i.heldSeats > 0 ? `${counted(i.heldSeats, "seat is", "seats are")} kept back for guests` : "",
       i.waitingList === 0
-        ? "Nobody on the waiting list yet"
-        : `${counted(i.waitingList, "person", "people")} on the waiting list`,
+        ? "Nobody on the waiting list"
+        : `${counted(i.waitingList, "person", "people")} on the waiting list, wanting ${counted(i.waitingSeats, "seat", "seats")}`,
     ].filter(Boolean),
-    countdown: `${counted(daysToGo(ctx.today, ctx.eventDate), "day", "days")} to go`,
+    countdown:
+      days > 0
+        ? `${counted(days, "day", "days")} to go`
+        : days === 0
+          ? "The Ball is tonight"
+          : `The Ball was on ${dayInWords(ctx.eventDate)}`,
   };
 }
 

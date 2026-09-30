@@ -104,6 +104,7 @@
 
   function showLogin() {
     storiesImportReset("");
+    brReset();
     el("appView").hidden = true;
     el("loginView").hidden = false;
     var email = el("adminEmail");
@@ -2170,7 +2171,7 @@
     ["lapsedAdmin", "Lapsed (admin)"], ["newsletter", "Newsletter"], ["thankYou", "Thank-you letter"],
     ["businessInvite", "Business invite"], ["businessCapture", "Business confirmation"],
     ["businessReminder", "Business reminder"], ["ballConfirmation", "Ball confirmation"],
-    ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"],
+    ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"], ["ballReport", "Ball ticket report"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -9555,7 +9556,10 @@
   // A card under the page switch. Counts only, on Tuesday and Thursday mornings, to the people running
   // the Ball with us. The list is edited here and saved together with the switch; "Send a test to me"
   // sends the real email, marked as a test, to the signed-in person only. The preview frame is sized
-  // to the email, so nothing scrolls inside the page.
+  // to the email, and sized again when the window changes, so nothing scrolls inside the page.
+  var BR_MAX = 10;
+  // The same rule the server checks addresses by (zod's), so a slip is caught when it is added.
+  var BR_EMAIL = /^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
   var brData = null;
   var brDraft = [];
   var brDirty = false;
@@ -9625,15 +9629,28 @@
     }
     el("evReportLast").textContent = parts.join(" ");
   }
+  // Shrinks the frame to nothing first, so it can get smaller as well as bigger, then fits the email.
+  function brFitPreview() {
+    var frame = el("evReportPreview");
+    if (!frame || el("evReportBody").hidden) return;
+    try {
+      var cdoc = frame.contentDocument;
+      if (!cdoc || !cdoc.body) return;
+      frame.style.height = "0px";
+      // The frame's own border counts inside its height, so it is added on, or the foot is cut off.
+      var edges = frame.offsetHeight - frame.clientHeight;
+      frame.style.height = Math.max(cdoc.body.scrollHeight, cdoc.documentElement.scrollHeight) + edges + "px";
+    } catch (e) {
+      /* a preview that cannot be measured keeps its minimum height */
+    }
+  }
   function brRenderPreview() {
     var frame = el("evReportPreview");
     if (!brData.preview) return;
     frame.onload = function () {
-      try {
-        frame.style.height = frame.contentDocument.documentElement.scrollHeight + "px";
-      } catch (e) {
-        /* a preview that cannot be measured keeps its minimum height */
-      }
+      brFitPreview();
+      var cdoc = frame.contentDocument;
+      if (cdoc && cdoc.fonts && cdoc.fonts.ready) cdoc.fonts.ready.then(brFitPreview);
     };
     frame.srcdoc = brData.preview.html;
   }
@@ -9643,7 +9660,7 @@
     Array.prototype.forEach.call(doc.querySelectorAll("#evReport [data-reportwrite]"), function (n) {
       n.hidden = !canWrite;
     });
-    el("evReportOn").checked = !!brData.reportOn;
+    if (!brDirty) el("evReportOn").checked = !!brData.reportOn;
     brRenderState();
     brRenderList();
     brRenderLast();
@@ -9651,9 +9668,15 @@
   }
   function brTake(d) {
     brData = d;
-    brDraft = brSorted(d.recipients || []);
-    brDirty = false;
+    // Coming back to Events reloads the card: changes nobody has saved yet are kept, not lost.
+    if (!brDirty) brDraft = brSorted(d.recipients || []);
     brRender();
+  }
+  // Signing out forgets the card, so the next person to sign in never sees someone else's edits.
+  function brReset() {
+    brData = null;
+    brDraft = [];
+    brDirty = false;
   }
   function loadBallReport() {
     brWire();
@@ -9684,7 +9707,7 @@
       el("evReportName").focus();
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!BR_EMAIL.test(email)) {
       brSay("That isn't a whole email address.");
       el("evReportEmail").focus();
       return;
@@ -9695,6 +9718,10 @@
     if (already) {
       brSay("That address is already on the list.");
       el("evReportEmail").focus();
+      return;
+    }
+    if (brDraft.length >= BR_MAX) {
+      brSay("The report can go to up to " + BR_MAX + " people. Remove someone to add another.");
       return;
     }
     brDraft = brSorted(brDraft.concat([{ name: name, email: email }]));
@@ -9711,12 +9738,19 @@
         return {};
       })
       .then(function (b) {
-        if (!res.ok) throw new Error(b.error || fallback);
+        if (!res.ok) {
+          var err = new Error(b.error || fallback);
+          err.path = b.path;
+          throw err;
+        }
         return b;
       });
   }
   function brFailed(err) {
-    if (err && err.message !== "unauthorized") brSay(err.message);
+    if (!err || err.message === "unauthorized") return;
+    // A refused list says which entry: name the person, so the fix is obvious.
+    var who = err.path && typeof err.path[0] === "number" ? brDraft[err.path[0]] : null;
+    brSay(who ? who.name + " (" + who.email + "): " + err.message : err.message);
   }
   function brSave() {
     var b = el("evReportSave");
@@ -9731,6 +9765,7 @@
         return brJson(res, "The report could not be saved. Please try again.");
       })
       .then(function (d) {
+        brDirty = false;
         brTake(d);
         brSay("Saved.");
       })
@@ -9752,7 +9787,7 @@
           "Sent to " + (d.sentTo || []).join(", ") + ". Have a look in your inbox." +
             (brDirty ? " Your changes to the list are not saved yet." : ""),
         );
-        if (!brDirty) loadBallReport();
+        loadBallReport();
       })
       .catch(brFailed)
       .then(function () {
@@ -9789,5 +9824,6 @@
     el("evReportOn").addEventListener("change", brMarkDirty);
     el("evReportSave").addEventListener("click", brSave);
     el("evReportTest").addEventListener("click", brTest);
+    window.addEventListener("resize", brFitPreview);
   }
 })();

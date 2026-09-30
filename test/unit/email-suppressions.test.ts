@@ -70,6 +70,21 @@ describe("suppressionFor — which events stop future sending (pure)", () => {
     expect(suppressionFor(event({ eventType: "opened" }))).toBeNull();
   });
 
+  // TASK-464: an email to several people can bounce for more than one of them, each for its own
+  // reason. The webhook handles each person on their own, and the reason kept is theirs.
+  it("keeps the reason for the person it is about, when several bounced", () => {
+    const detail = {
+      bounceType: "Permanent",
+      bouncedRecipients: [
+        { emailAddress: "ada@example.com", diagnosticCode: "550 mailbox full forever" },
+        { emailAddress: "Bo@Example.com", diagnosticCode: "550 no such user" },
+      ],
+    };
+    expect(suppressionFor(event({ email: "bo@example.com", detail }))?.detail).toBe("550 no such user");
+    expect(suppressionFor(event({ email: "ada@example.com", detail }))?.detail).toBe("550 mailbox full forever");
+    expect(suppressionFor(event({ email: "someone.else@example.com", detail }))?.detail).toBe("550 mailbox full forever");
+  });
+
   it("matches the permanent type case-insensitively", () => {
     expect(suppressionFor(event({ detail: { bounceType: "PERMANENT" } }))?.reason).toBe("bounced");
   });

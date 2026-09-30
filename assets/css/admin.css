@@ -1789,7 +1789,11 @@ tr.nl-click:hover { background: var(--tint); }
 #view-events .ev-switch-who { margin: 4px 0 0; font-size: 0.82rem; color: var(--slate-soft); }
 #view-events .ev-switch-who:empty { display: none; }
 #view-events .ev-switch-note { margin: 0; font-size: 0.85rem; color: var(--slate-soft); }
-#view-events .ev-switch .btn { flex: none; }
+/* TASK-455: shrinks to its card and wraps its label, rather than keep it on one line and take the
+   screen sideways on the smallest phones (317px of button where the card had 246px of room at
+   320px). It only shrinks when it is alone on its line and wider than the room inside the card's
+   padding, so wherever it has that room it looks exactly as before. */
+#view-events .ev-switch .btn { flex: 0 1 auto; max-width: 100%; }
 
 /* ---- the list ---- */
 #view-events .ev-admin-bar {

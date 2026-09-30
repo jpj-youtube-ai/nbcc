@@ -14,8 +14,9 @@ import { resolve } from "node:path";
 // a section nobody opens.
 //
 // Measured in a real browser at 390px after the fix: every screen's scrollWidth equals the viewport
-// width, and nothing on any screen scrolls sideways. These are the rules that make that true, so the
-// next change to the shell cannot quietly undo it.
+// width, and nothing on any screen scrolls sideways (TASK-455 found one box that still does: the
+// list of events). These are the rules that make that true, so the next change to the shell cannot
+// quietly undo it.
 
 const ROOT = resolve(__dirname, "../..");
 const html = readFileSync(resolve(ROOT, "admin.html"), "utf8");
@@ -163,6 +164,33 @@ describe("nothing in the menu or the jump bar scrolls sideways", () => {
       // overflow as well as overflow-x: the shorthand makes a scroller just the same. The closed
       // list's overflow:hidden is a collapse, not a scroller, and is not matched.
       .filter((r) => /overflow(-x)?:(auto|scroll)|white-space:nowrap|flex-wrap:nowrap/.test(r.body))
+      .map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
+    expect(offenders).toEqual([]);
+  });
+});
+
+// TASK-455: the one screen TASK-454 left too wide. The Events page switch (TASK-453) was flex:none,
+// so it kept its whole label on one line: at 320px, 302px of "Put the page on the website" in a
+// card with 246px to give it, and 317px once the page is on and it reads "Take the page off the
+// website". The Events screen scrolled sideways on the smallest phones, by 34px when the page was
+// on. Wherever the label already fits on one line, a tablet or a desktop, nothing may change.
+describe("the Events page switch fits the smallest phones", () => {
+  it("lets the button shrink to its card and wrap its label, rather than push past the edge", () => {
+    const button = rule("#view-events .ev-switch .btn");
+    expect(button).toContain("flex:0 1 auto");
+    expect(button).toContain("max-width:100%");
+  });
+
+  // What keeps a tablet or a desktop exactly as it was: in a row that wraps, the button shares a
+  // line with the words only when both fit, so it shrinks only when it is alone and too wide.
+  it("keeps the switch a row that wraps, so the button shrinks only on a line of its own", () => {
+    expect(rule("#view-events .ev-switch")).toContain("flex-wrap:wrap");
+  });
+
+  // A later rule, or one for a narrower screen, could quietly hold it to one line again.
+  it("has no rule, at any width, that stops the button shrinking or its label wrapping", () => {
+    const offenders = RULES.filter((r) => r.selectors.some((s) => /ev-switch|evSwitchBtn/.test(s)))
+      .filter((r) => /flex:(none|0 0)|flex-shrink:0|white-space:(nowrap|pre)|max-width:none|min-width:(max-content|fit-content)/.test(r.body))
       .map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
     expect(offenders).toEqual([]);
   });

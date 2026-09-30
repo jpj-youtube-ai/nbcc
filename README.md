@@ -5411,6 +5411,14 @@ On the very first apply the ECS service starts with a placeholder image and is
 unhealthy until the first real deploy - so run the deploy pipeline (below)
 right after.
 
+After that, any apply that changes the task definition registers a new revision on the same
+placeholder image, and it becomes the family's latest. The scheduled jobs (the 8am reminders, which
+send the Ball ticket report, and the 2am backup) run the family's latest, so they would start nginx
+until the next deploy. Since TASK-474 the Infra workflow's apply ends by re-registering Terraform's
+revision on the image the service is running, exactly as a deploy does, so the latest revision always
+runs the app. It never touches the service; on a first apply it does nothing
+(`test/unit/infra-workflow.test.ts`).
+
 ## Deploy flow
 
 1. **Open a PR** -> `pr.yml` runs lint, build, migrations, **unit + BDD**.

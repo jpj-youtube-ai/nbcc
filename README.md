@@ -5656,12 +5656,25 @@ Four sections arrived just before that rule and none has one: `ball` (Festive Ba
 changed since, has no entry for it, which reads as None, for admins as much as anyone. For the Email
 audit that only matters to admins: editors and viewers get None for it anyway.
 
-**And the Editor button cannot be saved.** It fills in only the sections the editor role names, but a
-save must name every section, and it leaves out Business supporters and the Email audit, which
-editors do not get. Pressing **Save access** after it says "Could not save that access.", and has
-done since the Festive Ball section arrived (TASK-313, 31 August 2026): the browser's copy has been
-short of at least one section ever since. It fails loudly and changes nobody's access, so it is a fix
-of its own.
+**And the Editor button could not be saved (fixed in TASK-462).** It filled in only the sections the
+editor role names, but a save must name every section, and it left out Business supporters and the
+Email audit, which editors do not get. Pressing **Save access** after it said "Could not save that
+access.", and had done since the Festive Ball section arrived (TASK-313, 31 August 2026): the
+browser's copy had been short of at least one section ever since.
+
+## The Editor button saves (TASK-462)
+
+The **Viewer**, **Editor** and **Admin** buttons on **Team → Manage access** fill the matrix with that
+role's defaults, and the save (`PATCH /api/admin/users/:id/permissions`) refuses anything short of
+every section. The Viewer and Admin defaults are built from the whole list of sections, which is the
+only reason those two buttons worked. The Editor defaults leave out two sections editors get nothing
+in, Business supporters and the Email audit, so the Editor button's matrix could never be saved.
+
+Opening somebody's access already filled every gap with **None**. The buttons now go through the same
+step (`completePermissions` in `assets/js/admin/app.js`), so whatever the matrix shows is what gets
+saved, and the three buttons save exactly the server's `roleToPermissions` for their role, with None
+for everything else. `test/unit/admin-app.test.ts` presses each button and saves, and holds the save to
+the server's own schema.
 
 ## Enquiries waiting for a reply (TASK-425)
 

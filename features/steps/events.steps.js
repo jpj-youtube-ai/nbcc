@@ -368,6 +368,13 @@ Then("{string} shows the picture {string} whole, on {string}", function (slug, s
   assert.equal(ev.imageGround, ground);
 });
 
+Then("{string} has no picture", function (slug) {
+  const ev = adminEvent(this, slug);
+  assert.equal(ev.imageSrc, null);
+  assert.equal(ev.imageFit, "cover");
+  assert.equal(ev.imageGround, "night");
+});
+
 Then("{string} is at {string}", function (slug, address) {
   assert.equal(adminEvent(this, slug).address, address);
 });

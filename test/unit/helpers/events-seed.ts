@@ -24,7 +24,19 @@ function withLeaflet(raw: Record<string, unknown> & { slug: string }) {
   return out;
 }
 
-export const SEED_EVENTS: EventRecord[] = SEED.map(withLeaflet).map((raw, i) => ({
+// TASK-472: and the leaflet taken off again, wherever it is still exactly the leaflet. The words stay.
+const { LEAFLET_OFF } = require(resolve(__dirname, "../../../migrations/1790900000000_events-empowher-leaflet-off.js")) as {
+  LEAFLET_OFF: { slug: string; src: string; picture: Swap[] };
+};
+
+function withoutLeaflet(raw: Record<string, unknown> & { slug: string }) {
+  if (raw.slug !== LEAFLET_OFF.slug || raw.imageSrc !== LEAFLET_OFF.src) return raw;
+  const out: Record<string, unknown> & { slug: string } = { ...raw };
+  for (const p of LEAFLET_OFF.picture) out[p.field] = p.to;
+  return out;
+}
+
+export const SEED_EVENTS: EventRecord[] = SEED.map(withLeaflet).map(withoutLeaflet).map((raw, i) => ({
   ...eventInputSchema.parse(raw),
   id: i + 1,
   slug: raw.slug,

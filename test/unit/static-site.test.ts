@@ -11,6 +11,9 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 const CSS_PATH = "assets/css/styles.css";
 const JS_PATH = "assets/js/main.js";
+// TASK-479: the visit counter, the one other script every public page carries. Small, deferred and
+// separate from main.js so it can be left off the pages that are not public.
+const PULSE_PATH = "/assets/js/pulse.js";
 
 const PAGES = [
   { file: "index.html", label: "Home" },
@@ -34,8 +37,13 @@ function cssHrefs(html: string): string[] {
   return [...html.matchAll(/<link[^>]+href="([^"]+\.css)"/gi)].map((m) => m[1]);
 }
 
-function jsSrcs(html: string): string[] {
+function allJsSrcs(html: string): string[] {
   return [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi)].map((m) => m[1]);
+}
+
+// Every script but the visit counter, which is checked on its own.
+function jsSrcs(html: string): string[] {
+  return allJsSrcs(html).filter((src) => src !== PULSE_PATH);
 }
 
 describe("static site shared assets", () => {
@@ -74,9 +82,11 @@ for (const { file, label } of PAGES) {
       expect(cssHrefs(html)).toEqual([CSS_PATH]);
     });
 
-    it("loads the one shared script with defer, and no other JS", () => {
+    it("loads the one shared script with defer, and no other JS but the visit counter", () => {
       expect(html).toContain(`<script defer src="${JS_PATH}"></script>`);
       expect(jsSrcs(html)).toEqual([JS_PATH]);
+      expect(html).toContain(`<script defer src="${PULSE_PATH}"></script>`);
+      expect(allJsSrcs(html).filter((src) => src === PULSE_PATH)).toHaveLength(1);
     });
 
     it("has no inline <style> or inline <script> blocks", () => {

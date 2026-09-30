@@ -106,10 +106,18 @@ git switch -c "task-${NEXT}-<slug>"
     production** (unless the merge was docs-only — `deploy-prod.yml` has
     `paths-ignore: **/*.md`, so a pure `.md` change deploys nothing; skip the
     watch and say so):
+    Pick the run by the **merge commit**, never by "newest on main": the
+    `--branch main` filter has returned a month-old run for minutes after a
+    merge, so the watch "passed" at once and reported an old deploy as today's
+    (TASK-473). The run can take a few seconds to appear after the merge.
     ```bash
-    RID=$(gh run list --workflow=deploy-prod.yml --branch main --limit 1 --json databaseId --jq '.[0].databaseId')
-    gh run watch "$RID"
+    SHA=$(gh pr view "$PR" --json mergeCommit --jq .mergeCommit.oid)
+    RID=$(gh run list --workflow=deploy-prod.yml --commit "$SHA" --limit 1 --json databaseId --jq '.[0].databaseId')
+    [ -n "$RID" ] || { sleep 20; RID=$(gh run list --workflow=deploy-prod.yml --commit "$SHA" --limit 1 --json databaseId --jq '.[0].databaseId'); }
+    gh run watch "$RID" --exit-status
     ```
+    Then confirm the live build is that commit: `curl -s https://nbcc.scot/health`
+    reports `"version"` as the merge SHA.
 11. **Report.** On deploy green, report the production URL (the ALB
     `public_url` — https://nbcc.scot) and the deployed SHA
     (`git rev-parse HEAD` on the merged commit). The deploy run also pushed a
@@ -128,8 +136,9 @@ git switch -c "task-${NEXT}-<slug>"
 
 ## Common mistakes
 
-- **Watching the wrong run** — after merge, filter runs by
-  `--workflow=deploy-prod.yml --branch main` and take the newest; the merge
+- **Watching the wrong run** — after merge, select the Deploy production run
+  by the merge commit (`gh run list --workflow=deploy-prod.yml --commit <sha>`),
+  as in step 10. "Newest on `--branch main`" can be an old run, and the merge
   also kicks other workflows.
 - **Forgetting the infra race (step 9)** — a config/secret change that needs
   `infra/` applied will fail the production task start if the deploy wins the

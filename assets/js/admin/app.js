@@ -172,9 +172,12 @@
       if (section === "overview") return;
       // A tab may gate on EDIT of another permission section (data-edit-gate) rather than on its own
       // data-view - e.g. Business supporters gates on business-supporters:edit, matching its server
-      // route. Everything else gates on view of its own section, as before.
+      // route. Or on VIEW of another section (data-view-gate), when its screen has no permission of
+      // its own: Monthly givers reads the donations list's data, so it shows to anyone who may see
+      // donations (TASK-457). Everything else gates on view of its own section, as before.
       var editGate = b.getAttribute("data-edit-gate");
-      b.hidden = editGate ? !canEdit(editGate) : !canView(section);
+      var viewGate = b.getAttribute("data-view-gate");
+      b.hidden = editGate ? !canEdit(editGate) : !canView(viewGate || section);
     });
     var teamNavGroup = el("teamNavGroup");
     if (teamNavGroup) teamNavGroup.hidden = !canView("team");

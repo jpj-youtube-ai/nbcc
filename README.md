@@ -5402,6 +5402,15 @@ four months without a thank-you and nobody noticed (TASK-430).
 every one of these names and addresses, so a separate permission would gate data the same people can
 already read one screen across.
 
+**The menu link was hidden from everyone until TASK-457**, admins included, from the day the screen
+shipped. It was gated on its own `data-view`, "monthly", and there is no "monthly" permission: no
+role default or saved matrix has ever held one, so `canView("monthly")` was false for every user,
+and a refresh on the screen fell back to the Overview (TASK-443 only restores a section whose link
+you can see). The link now carries `data-view-gate="donations"`, honoured by `applyNavFiltering`
+beside `data-edit-gate`, so it shows to exactly the people its route serves.
+`test/unit/admin-sections-in-sync.test.ts` now fails, naming the link, if any menu link is gated on
+a section the server does not know.
+
 Each row: what they give **now**, when they started, what they have given in total, whether it is
 Gift Aided, whether they have been thanked, and whether their payments are healthy. The monthly
 figure is their **latest** paid gift rather than an average: somebody who moved from £5 to £20 gives

@@ -23,6 +23,8 @@ const tokenFor = (role: string) =>
   signAdminSession({ sub: 3, email: role + "@nbcc", role, now: new Date(), secret: "s" }).token;
 
 let loginToken = tokenFor("editor"); // the token the mocked /login hands back (per test)
+// A person's own saved access, which /me returns in place of their role's defaults (per test).
+let storedPermissions: Record<string, string> | null = null;
 
 const donation = {
   id: 11, donor_id: 5, donor_name: "Ada Test", mode: "monthly", plan: "silver",
@@ -92,7 +94,8 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     const auth = init?.headers?.Authorization || "";
     const claims = helpers.parseClaims(auth.replace(/^Bearer\s+/, "")) as { role?: string; email?: string } | null;
     const role = claims?.role || "viewer";
-    return j({ email: claims?.email || "", permissions: roleToPermissions(role) });
+    // A stored per-person map when a test sets one, exactly as effectivePermissions prefers it.
+    return j({ email: claims?.email || "", permissions: storedPermissions ?? roleToPermissions(role) });
   }
   if (url.includes("/api/admin/donors/")) return j(snapshot);
   if (url.includes("/api/admin/donations")) return j({ results: [donation], total: 1 });
@@ -145,6 +148,7 @@ async function signIn() {
 describe("admin app integration (jsdom, TASK-118)", () => {
   beforeEach(() => {
     loginToken = tokenFor("editor");
+    storedPermissions = null;
     fulfilments = makeFulfilments();
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
@@ -414,6 +418,32 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     const navLink = document.querySelector('.admin-nav-link[data-view="fulfilments"]') as HTMLElement;
     expect(navLink).not.toBeNull();
     expect(navLink.hidden).toBe(true);
+  });
+
+  // Monthly givers was hidden from everyone, admins included, from the day it shipped (TASK-447).
+  // Its link was gated on a "monthly" permission that does not exist, where the screen's own data
+  // is gated on donations:view. Anyone who may see the donations list may see this screen.
+  it.each([
+    ["an admin", "admin"],
+    ["an editor", "editor"],
+    ["a viewer", "viewer"],
+  ])("shows Monthly givers to %s, who may see donations", async (_who, role) => {
+    loginToken = tokenFor(role);
+    await signIn();
+    const link = document.querySelector('.admin-nav-link[data-view="monthly"]') as HTMLElement;
+    expect(link.hidden).toBe(false);
+  });
+
+  it("hides Monthly givers from someone whose access leaves out donations", async () => {
+    loginToken = tokenFor("viewer");
+    storedPermissions = { ...roleToPermissions("viewer"), donations: "none" };
+    try {
+      await signIn();
+      const link = document.querySelector('.admin-nav-link[data-view="monthly"]') as HTMLElement;
+      expect(link.hidden).toBe(true);
+    } finally {
+      storedPermissions = null;
+    }
   });
 
   // TASK-454: below 860px the menu is one button that opens the whole list. jsdom has no layout, so

@@ -126,10 +126,18 @@ export async function exchangeForFederatedToken(opts: {
 }
 
 /**
- * Swap the federated token for the service account's own token, scoped to drive.file.
+ * Swap the federated token for the service account's own token.
  *
- * drive.file, not drive: the token can only touch files this service account itself created, so
- * even a stolen token cannot read the rest of the charity's Drive.
+ * SCOPE. This asked for drive.file, reasoning that a token which can only touch files the service
+ * account itself created cannot read the rest of the charity's Drive even if stolen. The instinct
+ * was right and the scope was wrong: drive.file grants access ONLY to files the app created, so it
+ * cannot see a folder a human shared with it. Every upload failed with "folder not found" no matter
+ * how correctly the folder was shared, which reads as a permissions problem and is not one.
+ *
+ * drive, therefore - but the blast radius is not what that name suggests. A token is bounded by what
+ * the IDENTITY can reach, and this service account is a member of exactly one shared drive: the
+ * backup one. It has no access to the charity's other files to lose. What actually keeps this small
+ * is the membership, not the scope string, and the original comment had that the wrong way round.
  */
 export async function impersonateServiceAccount(opts: {
   federatedToken: string;
@@ -145,7 +153,7 @@ export async function impersonateServiceAccount(opts: {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      scope: ["https://www.googleapis.com/auth/drive.file"],
+      scope: ["https://www.googleapis.com/auth/drive"],
       lifetime: "3600s",
     }),
   });

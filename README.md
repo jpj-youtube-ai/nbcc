@@ -5576,6 +5576,49 @@ never taken as current, and **Show** cannot bring them back (after a 403, that w
 for someone who has just lost access). A list that did come back empty still reads "0 giving, £0 a
 month", because then it is true.
 
+## Admin panels say when they could not load (TASK-476)
+
+TASK-458 fixed Monthly givers; the same fault was in most of the admin. Loaders read the JSON of any
+answer, and a failure's `{ error }` has no results in it, so it drew as zeros, an empty list or an
+all clear: the Overview said "0 Adjustments due", the GASDS screen said nothing was near its claim
+deadline, the pre-send checks said "Everything checks out", and on the ball screen a hold the server
+refused for lack of seats said "Held.".
+
+One helper in `assets/js/admin/app.js`, `okJson(res)`, now reads a response only when it is OK and
+otherwise throws, so the failure reaches the loader's `catch`. Each `catch` says, in that panel, that
+it could not load (built with `unavailableHtml(message)`), and clears any count or pager that sits
+beside the list, so nothing from an earlier load is left looking current. `authFetch` is unchanged:
+a 401 still signs you out. A list that did come back empty still says so, because then it is true.
+
+| Panel | On a failure it used to show | Now |
+|---|---|---|
+| Overview figures (each one on its own) | 0 | Could not load (the other figures still show) |
+| Overview recent donations | nothing | Recent donations are unavailable. |
+| Donations | No donations yet. | Donations are unavailable. |
+| GASDS deadline | No GASDS donations are approaching the claim deadline. | GASDS donations are unavailable. |
+| GASDS pool | nothing | The small donations pool is unavailable. |
+| Claims: waiting, batches, adjustments | No donations are waiting / No claim batches / No adjustments due | Donations waiting to be claimed / Claim batches / Adjustments are unavailable. |
+| Flagged subscriptions | No flagged subscriptions. | Flagged subscriptions are unavailable. |
+| Business supporters, Stories, Enquiries, Audit, Email log, Site pages, Team | the empty list | that list is unavailable (or could not load) |
+| A donor, story or enquiry opened | a blank record | Could not load this donor (story, enquiry). Please try again. |
+| Search | No results. | Search is unavailable. |
+| Newsletters: list, blocked addresses, audiences, who is on one | no newsletters, nothing blocked, no audiences, nobody | Newsletters / Blocked addresses / Audiences are unavailable, Could not load who is on this audience. |
+| Newsletter pre-send checks (Send panel and the confirmation) | Everything checks out / nothing | Could not run the checks |
+| Opening a newsletter | "undefined" in the editor | Could not open that newsletter. Please try again. |
+| A send's figures, and who it reached | No figures / No per-person record | Could not load the figures / the recipient list. |
+| Thank you, Outreach (list, today, reports, a business, its disclosure, a pasted list), Ticker, My account | empty lists, 0 totals, a blank disclosure | the message each already had for a lost connection |
+| Ball: settings, bookings, guest details, menu choices | 0 seats and £0, No menu set yet | Could not load..., and no figures |
+| Ball: save settings, hold, release, cancel, chase, week before reminders | Saved. / Held. / Sent undefined emails. | the message each already had for a failure |
+
+Deliberately left as they were, because empty is harmless there or they already handle a failure:
+the permissions read at sign-in (falls back to showing nothing), the enquiries notice (stays hidden
+unless something is known to be waiting), the outreach volunteer and donor pickers, the newsletter
+preview, the in-flight send strip and send progress, archived audiences and the template library
+(both hidden when empty), the menu email button (it reads the server's refusal on purpose), and
+Monthly givers and Events, which already check. `test/unit/admin-could-not-load.test.ts` proves each
+changed panel both ways: its could not load state on a 500 (and a 403), its real answer on a 200,
+and that a 401 still signs you out.
+
 ## Monthly or one off, on the donations list (TASK-446)
 
 The list could already be narrowed by payment status, which answers *what failed*. It could not

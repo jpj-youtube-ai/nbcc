@@ -32,11 +32,12 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
+    "ticker", "ball", "events", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
     "business-supporters", "team",
   ];
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
+    "events",
   ];
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
   // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.

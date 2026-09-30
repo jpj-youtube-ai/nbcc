@@ -217,7 +217,9 @@
       b.hidden = editGate ? !canEdit(editGate) : !canView(viewGate || section);
     });
     var teamNavGroup = el("teamNavGroup");
-    if (teamNavGroup) teamNavGroup.hidden = !canView("team");
+    // The Admin group's label shows over any link in it that is shown: Analytics (TASK-482) can be
+    // given to someone who cannot see Team.
+    if (teamNavGroup) teamNavGroup.hidden = !canView("team") && !canView("analytics");
   }
 
   // Fetch an admin API path with the bearer token; a 401 means the session is gone -> back to login.
@@ -467,6 +469,7 @@
     }
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
+    else if (name === "analytics") loadAnalytics();
     else if (name === "site") loadSite();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
@@ -10123,5 +10126,486 @@
     el("evReportSave").addEventListener("click", brSave);
     el("evReportTest").addEventListener("click", brTest);
     window.addEventListener("resize", brFitPreview);
+  }
+  // ---- Analytics (TASK-482) ----
+  // Admin > Analytics: the collecting switch, then how many people visited, where they came from,
+  // where they are, what they looked at and clicked, and what they used, for the last 7, 30 or 90
+  // days next to the period before. Every panel comes from one GET /api/admin/analytics; the server
+  // does the counting (src/analytics/report.ts), this only draws it.
+  //
+  // Nothing scrolls inside a box (the client's standing rule): a list longer than ten shows its top
+  // ten and a "Show all" button that grows the page. A panel with nothing in it says "Not enough
+  // visits yet", and one whose numbers failed to load says so rather than showing zeros (TASK-476).
+  var AN_TOP = 10;
+  var anDays = 30;
+  var anSettings = null;
+  var anReport = null;
+  var anFailed = false;
+  var anExpanded = {};
+  var anWired = false;
+  var anSeq = 0;
+
+  var AN_CHANNELS = {
+    newsletter: "Newsletter",
+    email: "Email",
+    search: "Search",
+    social: "Social",
+    other_websites: "Other websites",
+    direct: "Direct: typed in, a bookmark or an app",
+  };
+  var AN_KINDS = {
+    donate: "Donate buttons",
+    tickets: "Ticket buttons",
+    phone: "Phone links",
+    email: "Email links",
+    download: "Downloads",
+    outbound: "Links to other websites",
+  };
+  var AN_KIND_ONE = {
+    donate: "donate button",
+    tickets: "ticket button",
+    phone: "phone link",
+    email: "email link",
+    download: "download",
+    outbound: "link to another website",
+  };
+  var AN_DEVICES = { phone: "Phone", tablet: "Tablet", computer: "Computer" };
+  var AN_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  var AN_EMPTY = '<p class="admin-empty an-empty">Not enough visits yet.</p>';
+  var AN_FAILED = "This could not be loaded just now.";
+
+  function anNum(n) {
+    return Number(n || 0).toLocaleString("en-GB");
+  }
+  // "2026-09-30" as "30 September", or "30 Sep" when short. Read from the text, so no time zone moves it.
+  function anDay(day, short) {
+    var p = String(day || "").split("-");
+    if (p.length !== 3) return String(day || "");
+    var month = AN_MONTHS[Number(p[1]) - 1] || "";
+    return Number(p[2]) + " " + (short ? month.slice(0, 3) : month);
+  }
+  function anDuration(seconds) {
+    if (seconds === null || seconds === undefined) return "Not yet";
+    var s = Math.round(seconds);
+    if (s < 60) return s + " sec";
+    var m = Math.floor(s / 60);
+    return m + " min" + (s % 60 ? " " + (s % 60) + " sec" : "");
+  }
+  function anPage(path) {
+    if (path === "/") return "Home page";
+    if (path === "other") return "Other pages";
+    return path;
+  }
+  function anSpan() {
+    return "the " + ((anReport && anReport.days) || anDays) + " days before";
+  }
+
+  function anWire() {
+    if (anWired) return;
+    anWired = true;
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-andays]"), function (b) {
+      b.addEventListener("click", function () {
+        anSetDays(Number(b.getAttribute("data-andays")));
+      });
+    });
+    el("anSwitchBtn").addEventListener("click", anFlipSwitch);
+    el("view-analytics").addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.closest("[data-anrefresh]")) {
+        anLoadReport();
+        return;
+      }
+      var more = t.closest("[data-anmore]");
+      if (!more) return;
+      var id = more.getAttribute("data-anmore");
+      anExpanded[id] = !anExpanded[id];
+      anRenderPanels();
+      var again = el(id).querySelector("[data-anmore]");
+      if (again && again.focus) again.focus();
+    });
+  }
+
+  function loadAnalytics() {
+    anWire();
+    anLoadSettings();
+    anLoadReport();
+  }
+
+  // ---- the switch ----
+  function anLoadSettings() {
+    authFetch("/api/admin/analytics/settings")
+      .then(okJson)
+      .then(function (s) {
+        anSettings = s;
+        anRenderSwitch();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        anSettings = null;
+        el("anSwitch").classList.remove("is-on");
+        el("anSwitchState").textContent = "Could not check whether visits are being counted.";
+        el("anSwitchWho").textContent = "";
+        el("anSwitchBtn").hidden = true;
+        el("anSwitchNote").hidden = true;
+      });
+  }
+
+  function anRenderSwitch() {
+    var on = !!(anSettings && anSettings.collecting);
+    el("anSwitch").classList.toggle("is-on", on);
+    el("anSwitchState").innerHTML = on
+      ? "<b>On.</b> Counting visits" + (anSettings.updatedAt ? " since " + H.escapeHtml(H.fmtDate(anSettings.updatedAt)) : "") + "."
+      : "<b>Off.</b> Nothing is being counted. Switching on starts counting each page view: which page, how the visitor " +
+        "arrived (a newsletter, a search, another website), their town or city, whether they used a phone, tablet or " +
+        "computer, how long they spent and how far down they read, and clicks on the buttons and links that matter. " +
+        "There are no cookies, and nothing kept says who anyone is. " +
+        '<a href="/privacy#counting-visits">What the privacy notice tells visitors</a>.';
+    var by = anSettings && anSettings.updatedBy && anSettings.updatedBy.indexOf("admin:") === 0 ? anSettings.updatedBy.slice(6) : "";
+    el("anSwitchWho").textContent = by
+      ? (on ? "Switched on by " : "Switched off by ") + by + (on ? "" : " on " + H.fmtDate(anSettings.updatedAt)) + "."
+      : "";
+    var mayFlip = canEdit("analytics");
+    var btn = el("anSwitchBtn");
+    btn.hidden = !mayFlip;
+    el("anSwitchNote").hidden = mayFlip;
+    btn.textContent = on ? "Stop counting visits" : "Start counting visits";
+    btn.className = on ? "btn btn-ghost" : "btn btn-primary";
+  }
+
+  function anFlipSwitch() {
+    var on = !!(anSettings && anSettings.collecting);
+    var question = on
+      ? "Stop counting visits? Nothing more will be counted until someone starts it again. The numbers so far are kept."
+      : "Start counting visits? From now on the website counts page views as described here, with no cookies.";
+    if (!window.confirm(question)) return;
+    var btn = el("anSwitchBtn");
+    var status = el("anSwitchStatus");
+    btn.disabled = true;
+    status.className = "ty-status";
+    status.textContent = on ? "Stopping…" : "Starting…";
+    authFetch("/api/admin/analytics/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ collecting: !on }),
+    })
+      .then(okJsonOrSaid)
+      .then(function (s) {
+        btn.disabled = false;
+        anSettings = s;
+        anRenderSwitch();
+        status.className = "ty-status is-ok";
+        status.textContent = s.collecting ? "Counting visits is now on." : "Counting visits is now off.";
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (err && err.message === "unauthorized") return;
+        status.className = "ty-status is-error";
+        status.textContent = (err && err.said) || "That did not work. Please try again.";
+      });
+  }
+
+  // ---- the numbers ----
+  function anSetDays(days) {
+    if (days === anDays && anReport) return;
+    anDays = days;
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-andays]"), function (b) {
+      var active = Number(b.getAttribute("data-andays")) === days;
+      b.classList.toggle("is-active", active);
+      b.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    anLoadReport();
+  }
+
+  function anLoadReport() {
+    var seq = ++anSeq;
+    el("view-analytics").setAttribute("aria-busy", "true");
+    authFetch("/api/admin/analytics?days=" + anDays)
+      .then(okJson)
+      .then(function (d) {
+        if (seq !== anSeq) return;
+        anReport = d;
+        anFailed = false;
+        anRenderAll();
+      })
+      .catch(function (err) {
+        if (seq !== anSeq || (err && err.message === "unauthorized")) return;
+        anReport = null;
+        anFailed = true;
+        anRenderAll();
+      });
+  }
+
+  function anRenderAll() {
+    el("view-analytics").removeAttribute("aria-busy");
+    anRenderFigures();
+    anRenderLine();
+    anRenderPanels();
+  }
+
+  // "Up 12% on the 30 days before". A share is compared in points, not as a percentage of itself.
+  function anChange(cur, prev, points) {
+    var span = anSpan();
+    if (points) {
+      var d = cur - prev;
+      if (d === 0) return "Same as " + span;
+      return (d > 0 ? "Up " : "Down ") + Math.abs(d) + (Math.abs(d) === 1 ? " point" : " points") + " on " + span;
+    }
+    if (!prev) return cur ? "None in " + span : "Same as " + span;
+    var pct = Math.round(((cur - prev) / prev) * 100);
+    if (pct === 0) return "About the same as " + span;
+    return (pct > 0 ? "Up " : "Down ") + Math.abs(pct) + "% on " + span;
+  }
+
+  function anRenderFigures() {
+    var box = el("anFigures");
+    if (anFailed) {
+      box.innerHTML = unavailableHtml("The numbers could not be loaded just now. Try again in a moment, or choose the days again.");
+      return;
+    }
+    var c = anReport.current.headline;
+    var p = anReport.previous.headline;
+    var cards = [
+      ["Visitors", anNum(c.visitors), anChange(c.visitors, p.visitors)],
+      ["Visits", anNum(c.visits), anChange(c.visits, p.visits)],
+      ["Page views", anNum(c.views), anChange(c.views, p.views)],
+      ["Visits that saw one page", c.bounceShare + "%", anChange(c.bounceShare, p.bounceShare, true)],
+    ];
+    box.innerHTML = cards
+      .map(function (k) {
+        return '<div class="admin-stat an-stat"><div class="n">' + H.escapeHtml(k[1]) + '</div><div class="l">' +
+          H.escapeHtml(k[0]) + '</div><p class="an-change">' + H.escapeHtml(k[2]) + "</p></div>";
+      })
+      .join("");
+  }
+
+  // The line: inline SVG stretched to its box, so its lines keep their width (non-scaling-stroke) and
+  // every word is HTML around it. The period before is a dashed grey line under it. Screen readers
+  // get a sentence instead of the drawing; a pointer gets the day under it.
+  function anRenderLine() {
+    var box = el("anLine");
+    if (anFailed) {
+      box.innerHTML = unavailableHtml(AN_FAILED);
+      return;
+    }
+    var cur = anReport.current.daily || [];
+    var prev = anReport.previous.daily || [];
+    var total = 0;
+    var prevTotal = 0;
+    var hi = null;
+    var lo = null;
+    cur.forEach(function (d) {
+      total += d.visitors;
+      if (!hi || d.visitors > hi.visitors) hi = d;
+      if (!lo || d.visitors < lo.visitors) lo = d;
+    });
+    prev.forEach(function (d) {
+      prevTotal += d.visitors;
+    });
+    if (!cur.length || total === 0) {
+      box.innerHTML = AN_EMPTY;
+      return;
+    }
+    var max = 1;
+    cur.concat(prev).forEach(function (d) {
+      if (d.visitors > max) max = d.visitors;
+    });
+    var W = 600;
+    var HT = 160;
+    var n = cur.length;
+    function x(i) {
+      return n === 1 ? W / 2 : (i * W) / (n - 1);
+    }
+    function y(v) {
+      return HT - (v / max) * (HT - 4) - 2;
+    }
+    function points(list) {
+      return list
+        .slice(0, n)
+        .map(function (d, i) {
+          return x(i).toFixed(1) + "," + y(d.visitors).toFixed(1);
+        })
+        .join(" ");
+    }
+    var curPts = points(cur);
+    var area = "M0," + HT + " L" + curPts.split(" ").join(" L") + " L" + x(n - 1).toFixed(1) + "," + HT + " Z";
+    var span = anSpan();
+    var summary =
+      "Visitors each day from " + anDay(cur[0].day) + " to " + anDay(cur[n - 1].day) + ": " + anNum(total) + " in all, highest " +
+      anNum(hi.visitors) + " on " + anDay(hi.day) + ", lowest " + anNum(lo.visitors) + " on " + anDay(lo.day) + ". " +
+      "In " + span + ", " + anNum(prevTotal) + " in all.";
+    box.innerHTML =
+      '<p class="sr-only" id="anLineSummary">' + H.escapeHtml(summary) + "</p>" +
+      '<ul class="an-legend" aria-hidden="true"><li><span class="an-key"></span>' + H.escapeHtml("Last " + n + " days") +
+      '</li><li><span class="an-key is-prev"></span>' + H.escapeHtml(span.charAt(0).toUpperCase() + span.slice(1)) + "</li></ul>" +
+      '<div class="an-chart" aria-hidden="true">' +
+      '<div class="an-y"><span>' + anNum(max) + "</span><span>" + anNum(Math.round(max / 2)) + "</span><span>0</span></div>" +
+      '<div class="an-plot">' +
+      '<svg class="an-svg" viewBox="0 0 ' + W + " " + HT + '" preserveAspectRatio="none" focusable="false">' +
+      '<line class="an-gridline" x1="0" x2="' + W + '" y1="' + y(max) + '" y2="' + y(max) + '"/>' +
+      '<line class="an-gridline" x1="0" x2="' + W + '" y1="' + y(max / 2) + '" y2="' + y(max / 2) + '"/>' +
+      '<line class="an-gridline is-base" x1="0" x2="' + W + '" y1="' + HT + '" y2="' + HT + '"/>' +
+      (prev.length ? '<polyline class="an-line is-prev" points="' + points(prev) + '"/>' : "") +
+      '<path class="an-area" d="' + area + '"/>' +
+      '<polyline class="an-line" points="' + curPts + '"/>' +
+      "</svg>" +
+      '<span class="an-dot" hidden></span><div class="an-tip" hidden></div>' +
+      "</div>" +
+      '<div class="an-x"><span>' + H.escapeHtml(anDay(cur[0].day, true)) + "</span><span>" + H.escapeHtml(anDay(cur[n - 1].day, true)) + "</span></div>" +
+      "</div>";
+    var plot = box.querySelector(".an-plot");
+    var dot = plot.querySelector(".an-dot");
+    var tip = plot.querySelector(".an-tip");
+    function show(e) {
+      var rect = plot.getBoundingClientRect();
+      if (!rect.width) return;
+      var i = Math.max(0, Math.min(n - 1, Math.round(((e.clientX - rect.left) / rect.width) * (n - 1))));
+      var d = cur[i];
+      var before = prev[i];
+      var left = (x(i) / W) * 100;
+      dot.style.left = left + "%";
+      dot.style.top = (y(d.visitors) / HT) * 100 + "%";
+      tip.innerHTML =
+        "<b>" + H.escapeHtml(anDay(d.day, true)) + "</b> " + anNum(d.visitors) + (d.visitors === 1 ? " visitor" : " visitors") +
+        (before ? '<br><span class="an-tip-prev">Period before, ' + H.escapeHtml(anDay(before.day, true)) + ": " + anNum(before.visitors) + "</span>" : "");
+      dot.hidden = false;
+      tip.hidden = false;
+      // Kept inside the chart, so near either end it never reaches past the card on a phone.
+      var half = tip.offsetWidth / 2;
+      var centre = (left / 100) * rect.width;
+      tip.style.left = Math.max(half, Math.min(rect.width - half, centre)) + "px";
+    }
+    plot.addEventListener("pointermove", show);
+    plot.addEventListener("pointerdown", show);
+    plot.addEventListener("pointerleave", function () {
+      dot.hidden = true;
+      tip.hidden = true;
+    });
+  }
+
+  // A ranked list with bars. Each row: `label` (already HTML), its number, and a bar against the
+  // biggest. The top ten, and "Show all" when there are more.
+  function anBars(id, rows, label, value, opts) {
+    var box = el(id);
+    if (!box) return;
+    if (anFailed) {
+      box.innerHTML = unavailableHtml(AN_FAILED);
+      return;
+    }
+    if (!rows || !rows.length) {
+      box.innerHTML = AN_EMPTY;
+      return;
+    }
+    opts = opts || {};
+    var total = 0;
+    var max = 0;
+    rows.forEach(function (r) {
+      var v = value(r);
+      total += v;
+      if (v > max) max = v;
+    });
+    var shown = anExpanded[id] ? rows : rows.slice(0, AN_TOP);
+    box.innerHTML =
+      '<ol class="an-bars">' +
+      shown
+        .map(function (r) {
+          var v = value(r);
+          var share = total ? Math.round((v / total) * 100) : 0;
+          return (
+            '<li class="an-row"><span class="an-row-label">' + label(r) + '</span><span class="an-row-n">' + anNum(v) +
+            (opts.share ? ' <span class="an-row-share">' + share + "%</span>" : "") +
+            '</span><span class="an-track" aria-hidden="true"><span class="an-fill" style="width:' +
+            (max ? Math.max(1, Math.round((v / max) * 100)) : 0) + '%"></span></span></li>'
+          );
+        })
+        .join("") +
+      "</ol>" +
+      anMore(id, rows.length);
+  }
+
+  function anMore(id, count) {
+    if (count <= AN_TOP) return "";
+    var all = !!anExpanded[id];
+    return (
+      '<button class="an-more" type="button" data-anmore="' + id + '" aria-expanded="' + (all ? "true" : "false") + '">' +
+      (all ? "Show the top 10" : "Show all " + count) + "</button>"
+    );
+  }
+
+  function anPages(rows) {
+    var box = el("anPages");
+    if (anFailed) {
+      box.innerHTML = unavailableHtml(AN_FAILED);
+      return;
+    }
+    if (!rows || !rows.length) {
+      box.innerHTML = AN_EMPTY;
+      return;
+    }
+    var shown = anExpanded.anPages ? rows : rows.slice(0, AN_TOP);
+    var head = ["Page", "Views", "Visitors", "Average time", "Average scroll", "Visits that began here"];
+    box.innerHTML =
+      '<table class="admin-table an-pages"><thead><tr>' +
+      head
+        .map(function (h, i) {
+          return '<th scope="col"' + (i ? ' class="admin-num"' : "") + ">" + h + "</th>";
+        })
+        .join("") +
+      "</tr></thead><tbody>" +
+      shown
+        .map(function (r) {
+          var cells = [
+            anPage(r.path),
+            anNum(r.views),
+            anNum(r.visitors),
+            anDuration(r.avgActiveSeconds),
+            r.avgScroll === null || r.avgScroll === undefined ? "Not yet" : r.avgScroll + "%",
+            r.entryShare + "%",
+          ];
+          return (
+            "<tr>" +
+            cells
+              .map(function (c, i) {
+                return "<td" + (i ? ' class="admin-num"' : ' class="an-page"') + ' data-label="' + head[i] + '">' + H.escapeHtml(c) + "</td>";
+              })
+              .join("") +
+            "</tr>"
+          );
+        })
+        .join("") +
+      "</tbody></table>" +
+      anMore("anPages", rows.length);
+  }
+
+  function anRenderPanels() {
+    var c = anReport ? anReport.current : {};
+    var esc = H.escapeHtml;
+    function visits(r) { return r.visits; }
+    function visitors(r) { return r.visitors; }
+    function clicks(r) { return r.clicks; }
+    anBars("anChannels", c.channels, function (r) { return esc(AN_CHANNELS[r.channel] || r.channel); }, visits, { share: true });
+    anBars("anWebsites", c.otherWebsites, function (r) { return esc(r.source); }, visits);
+    anBars("anNewsletters", c.newsletters, function (r) { return esc(r.label); }, visits);
+    anBars("anCities", c.cities, function (r) {
+      return esc(r.city) + (r.region ? '<span class="an-row-sub">' + esc(r.region) + "</span>" : "");
+    }, visitors);
+    anBars("anCountries", c.countries, function (r) { return esc(r.name); }, visitors, { share: true });
+    anPages(c.pages);
+    anBars("anClickKinds", c.clickKinds, function (r) { return esc(AN_KINDS[r.kind] || r.kind); }, clicks);
+    anBars("anClicks", c.clicks, function (r) {
+      return esc(r.label || AN_KINDS[r.kind] || r.kind) + '<span class="an-row-sub">' + esc(AN_KIND_ONE[r.kind] || r.kind) + "</span>";
+    }, clicks);
+    anBars("anDevices", c.devices, function (r) { return esc(AN_DEVICES[r.device] || r.device); }, visitors, { share: true });
+    anBars("anBrowsers", c.browsers, function (r) { return esc(r.browser); }, visitors, { share: true });
+    var now = el("anNow");
+    if (anFailed) {
+      now.innerHTML = unavailableHtml(AN_FAILED);
+      return;
+    }
+    var k = Number(anReport.rightNow || 0);
+    now.innerHTML =
+      '<p class="an-now"><span class="an-now-n">' + anNum(k) + "</span> " +
+      (k === 1 ? "person" : "people") + " on the website in the last 5 minutes.</p>" +
+      '<button class="an-more" type="button" data-anrefresh>Check again</button>';
   }
 })();

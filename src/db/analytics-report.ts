@@ -74,11 +74,11 @@ async function readRightNow(): Promise<number> {
 /** Every panel for the last `days` UK days and the same number of days before. */
 export async function readAnalyticsReport(days: PeriodDays, now: Date = new Date()): Promise<AnalyticsReport> {
   const { current, previous } = periodsFor(ukDay(now), days);
-  const [views, clicks, rightNow] = await Promise.all([
-    readViews(previous.from, current.to),
-    readClicks(previous.from, current.to),
-    readRightNow(),
-  ]);
+  // One after another, not side by side: the pool's few connections are shared with donations, and
+  // analytics is never allowed to take more than its share (src/routes/pulse.ts).
+  const views = await readViews(previous.from, current.to);
+  const clicks = await readClicks(previous.from, current.to);
+  const rightNow = await readRightNow();
   const cur = buildPanels(views, clicks, current);
   const before = buildPanels(views, clicks, previous);
   const subjects = await readNewsletterSubjects(newsletterIds([...cur.newsletters, ...before.newsletters]));

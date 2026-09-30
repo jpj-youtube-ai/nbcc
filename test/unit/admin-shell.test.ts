@@ -90,6 +90,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "outreach",
       "audit",
       "email-audit",
+      // TASK-482: site analytics, in the Admin group.
+      "analytics",
       "site",
       "team",
     ]);

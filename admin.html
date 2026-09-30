@@ -112,6 +112,7 @@
               <li><button class="admin-nav-link" type="button" data-view="audit">Audit</button></li>
               <li><button class="admin-nav-link" type="button" data-view="email-audit">Email audit</button></li>
               <li class="admin-nav-group" id="teamNavGroup" aria-hidden="true">Admin</li>
+              <li><button class="admin-nav-link" type="button" data-view="analytics">Analytics</button></li>
               <li><button class="admin-nav-link" type="button" data-view="site">Site pages</button></li>
               <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
             </ul>
@@ -1860,6 +1861,101 @@
                  view/edit matrix (Admin Phase 2, Task 6 - see view-team-permissions below). Gated to
                  team:edit: app.js gates every write control behind canEdit("team"); the server enforces
                  it too via authorizeSection. -->
+            <!-- Analytics (TASK-482): how many people visit the website, where they come from and
+                 what they look at, for the last 7, 30 or 90 days next to the period before. Needs
+                 analytics:view; the collecting switch needs analytics:edit. app.js fills every panel
+                 from one GET /api/admin/analytics. Nothing here scrolls inside a box: a long list
+                 shows its top 10 and "Show all" grows the page. -->
+            <section class="admin-view" id="view-analytics" aria-labelledby="analytics-heading" hidden>
+              <h2 id="analytics-heading">Analytics</h2>
+              <p class="admin-view-intro">How many people visit the website, where they come from and what they look at. There are no cookies, and nothing here says who anyone is.</p>
+
+              <div class="an-switch" id="anSwitch">
+                <div class="an-switch-text">
+                  <h3 class="admin-subhead">Are visits being counted?</h3>
+                  <p class="an-switch-state" id="anSwitchState" aria-live="polite">Checking&hellip;</p>
+                  <p class="an-switch-who" id="anSwitchWho"></p>
+                </div>
+                <button class="btn" type="button" id="anSwitchBtn" hidden>Loading&hellip;</button>
+                <p class="an-switch-note" id="anSwitchNote" hidden>Only someone who can edit Analytics can start or stop counting.</p>
+              </div>
+              <p class="ty-status" id="anSwitchStatus" role="status" aria-live="polite"></p>
+
+              <div class="an-bar">
+                <span class="an-bar-label" id="anDaysLabel">Show the last</span>
+                <div class="admin-segmented" role="group" aria-labelledby="anDaysLabel">
+                  <button class="admin-seg" type="button" data-andays="7" aria-pressed="false">7 days</button>
+                  <button class="admin-seg is-active" type="button" data-andays="30" aria-pressed="true">30 days</button>
+                  <button class="admin-seg" type="button" data-andays="90" aria-pressed="false">90 days</button>
+                </div>
+              </div>
+
+              <div class="admin-stats an-figures" id="anFigures" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+
+              <section class="an-card" aria-labelledby="anLineHead">
+                <h3 class="an-card-head" id="anLineHead">Visitors each day</h3>
+                <div id="anLine"><p class="admin-loading">Loading&hellip;</p></div>
+              </section>
+
+              <div class="an-grid">
+                <section class="an-card an-wide" aria-labelledby="anFromHead">
+                  <h3 class="an-card-head" id="anFromHead">Where they came from</h3>
+                  <p class="an-card-note">Each visit counts once, under the way it arrived.</p>
+                  <div id="anChannels"></div>
+                  <div class="an-pair">
+                    <div>
+                      <h4 class="an-list-head">Other websites</h4>
+                      <div id="anWebsites"></div>
+                    </div>
+                    <div>
+                      <h4 class="an-list-head">Newsletter issues</h4>
+                      <div id="anNewsletters"></div>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="an-card an-wide" aria-labelledby="anWhereHead">
+                  <h3 class="an-card-head" id="anWhereHead">Where they are</h3>
+                  <div class="an-pair">
+                    <div>
+                      <h4 class="an-list-head">Towns and cities</h4>
+                      <div id="anCities"></div>
+                    </div>
+                    <div>
+                      <h4 class="an-list-head">Countries</h4>
+                      <div id="anCountries"></div>
+                    </div>
+                  </div>
+                  <p class="an-credit"><a href="https://db-ip.com" target="_blank" rel="noopener">IP geolocation by DB-IP</a>, used under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.</p>
+                </section>
+
+                <section class="an-card an-wide" aria-labelledby="anPagesHead">
+                  <h3 class="an-card-head" id="anPagesHead">What they looked at</h3>
+                  <p class="an-card-note">Time is only while the page was on screen. Scroll is how far down people read, on average.</p>
+                  <div id="anPages"></div>
+                </section>
+
+                <section class="an-card" aria-labelledby="anClicksHead">
+                  <h3 class="an-card-head" id="anClicksHead">What they clicked</h3>
+                  <div id="anClickKinds"></div>
+                  <h4 class="an-list-head">Each button and link</h4>
+                  <div id="anClicks"></div>
+                </section>
+
+                <section class="an-card" aria-labelledby="anUsedHead">
+                  <h3 class="an-card-head" id="anUsedHead">What they used</h3>
+                  <div id="anDevices"></div>
+                  <h4 class="an-list-head">Browsers</h4>
+                  <div id="anBrowsers"></div>
+                </section>
+
+                <section class="an-card an-now-card" aria-labelledby="anNowHead">
+                  <h3 class="an-card-head" id="anNowHead">Right now</h3>
+                  <div id="anNow" aria-live="polite"></div>
+                </section>
+              </div>
+            </section>
+
             <!-- Site pages (site-pages feature): spare addresses (aliases -> 301 to the real
                  page) and per-page "show to search engines" choices (drives /sitemap.xml).
                  Reads need site:view; writes site:edit (admins by default) - app.js hides the

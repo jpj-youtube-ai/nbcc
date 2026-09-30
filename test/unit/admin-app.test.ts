@@ -1184,6 +1184,53 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(pill(document.querySelector("#donationsTable tbody tr"))).toBeNull();
     });
 
+    // The Overview shares the Donations table. Refreshing on Donations reopens it before the Overview
+    // loads, and the Overview's rows must never be marked, then or later.
+    it("never marks the Overview's recent donations, even after a refresh on Donations", async () => {
+      loginToken = tokenFor("admin");
+      whatsNew = [{ area: "donations", new: true, since: "2026-01-01T00:00:00.000Z" }];
+      window.sessionStorage.setItem("nbccAdminView", "donations");
+      // jsdom lays nothing out, so every link has no offsetParent and nothing would be restored.
+      const desc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetParent");
+      Object.defineProperty(HTMLElement.prototype, "offsetParent", {
+        configurable: true,
+        get() { return (this as HTMLElement).parentElement; },
+      });
+      try {
+        await signIn();
+        await settle();
+        expect(el("view-donations").hidden).toBe(false);
+        link("overview").click();
+        await settle();
+        expect(document.querySelector("#overviewRecent table")).not.toBeNull();
+        expect(pill(el("overviewRecent"))).toBeNull();
+      } finally {
+        if (desc) Object.defineProperty(HTMLElement.prototype, "offsetParent", desc);
+      }
+    });
+
+    // Manage access names each section after its menu link, and must not read the pill as part of it.
+    it("keeps the pill out of the section names on Manage access", async () => {
+      loginToken = tokenFor("admin");
+      teamMembers = [
+        {
+          id: 7, email: "ed@nbcc", full_name: "Ed Itor", role: "editor", status: "active",
+          invited_at: "2026-08-01T00:00:00Z", last_login_at: null, permissions: {},
+        },
+      ];
+      whatsNew = [{ area: "contact", new: true, since: "2026-10-01T00:00:00.000Z" }];
+      await signIn();
+      await settle();
+      link("team").click();
+      await settle();
+      (document.querySelector('[data-team-perms="7"]') as HTMLElement).click();
+      const labels = Array.from(document.querySelectorAll(".admin-perm-label")).map((l) => l.textContent);
+      expect(labels).toContain("Contact form");
+      expect(labels.filter((l) => /\bNew\b/.test(l || ""))).toEqual([]); // "Newsletter" is fine
+      const group = document.querySelector('[data-perm-section="contact"]');
+      expect(group?.getAttribute("aria-label")).toBe("Contact form access");
+    });
+
     it("shows no pills, and nothing else breaks, when the list cannot be fetched", async () => {
       whatsNewFailure = true;
       await signIn();

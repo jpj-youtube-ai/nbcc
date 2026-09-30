@@ -675,7 +675,10 @@
       '<div class="n">' + n + '</div><div class="l">' + H.escapeHtml(label) + "</div></div>"
     );
   }
-  function donationsTable(rows) {
+  // opts.newPills: only the Donations screen marks new rows (TASK-478). The Overview and Search draw
+  // this same table, and can load while Donations is the open section, straight after a refresh.
+  function donationsTable(rows, opts) {
+    opts = opts || {};
     if (!rows.length) return '<p class="admin-empty">No donations yet.</p>';
     var body = rows
       .map(function (d) {
@@ -688,7 +691,7 @@
           (d.gift_aid ? '<span class="admin-pill">Gift Aid</span>' : "") + "</td><td>" +
           H.escapeHtml(d.claim_status) + '</td><td><span class="admin-pill admin-pill--' + pay.state +
           '">' + H.escapeHtml(pay.label) + "</span></td><td>" + H.fmtDate(d.created_at) +
-          rowNewPill("donations", d.payment_status === "paid" ? d.created_at : null) +
+          (opts.newPills ? rowNewPill("donations", d.payment_status === "paid" ? d.created_at : null) : "") +
           '</td><td><button class="admin-link" type="button" data-donor="' + d.donor_id + '">View</button></td></tr>'
         );
       })
@@ -824,7 +827,7 @@
     )
       .then(okJson)
       .then(function (d) {
-        wrap.innerHTML = donationsTable(d.results || []);
+        wrap.innerHTML = donationsTable(d.results || [], { newPills: true });
         var total = d.total || 0;
         el("donationsPager").hidden = total <= 25;
         el("donationsInfo").textContent = total
@@ -2879,7 +2882,12 @@
     // Reuse the nav link's own text (e.g. "GASDS", "Partners" for ticker, "Thank you" for
     // thank-you) rather than duplicating labels that could drift out of sync with the nav.
     var btn = doc.querySelector('.admin-nav-link[data-view="' + section + '"]');
-    return btn ? btn.textContent : cap(section);
+    if (!btn) return cap(section);
+    // Without its New pill (TASK-478), which is not part of the section's name.
+    var copy = btn.cloneNode(true);
+    var pillIn = copy.querySelector(".admin-new-pill");
+    if (pillIn) pillIn.remove();
+    return copy.textContent.trim();
   }
   // A copy of perms naming every section, "none" wherever perms is silent. The permissions PATCH takes
   // only a complete matrix, and the editor role's defaults, like a map saved before a section existed,

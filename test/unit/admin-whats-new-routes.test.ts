@@ -114,6 +114,26 @@ describe("GET /api/admin/whats-new", () => {
   });
 });
 
+// The menu asks on every change of section, so a database that is down must get an answer, not an
+// unhandled rejection.
+describe("when the main database fails", () => {
+  it("answers the list with a 500", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    getSeenMock.mockRejectedValue(new Error("connection refused"));
+    const res = await call(getWhatsNew, req(tokenFor("admin")));
+    expect(res.statusCode).toBe(500);
+    spy.mockRestore();
+  });
+
+  it("answers a visit with a 500", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    markSeenMock.mockRejectedValue(new Error("connection refused"));
+    const res = await call(postWhatsNewSeen, req(tokenFor("admin"), { area: "contact" }));
+    expect(res.statusCode).toBe(500);
+    spy.mockRestore();
+  });
+});
+
 describe("POST /api/admin/whats-new/seen", () => {
   it("records the visit and says when", async () => {
     markSeenMock.mockResolvedValue(new Date("2026-10-06T08:00:00Z"));

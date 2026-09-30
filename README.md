@@ -5690,6 +5690,10 @@ your previous visit carry the same pill for as long as you stay.
   not light up years of old records.
 - **If a check fails,** that section just shows no pill and the error is logged. The others still
   answer, and a pill only ever appears when something is known to be new.
+- **A bank transfer (BACS) gift counts from when it was made, not when it was paid.** It is made
+  as pending and turns paid days later, and the donations table does not record when it was paid.
+  So if you open Donations in between, that gift will not light the pill. Card gifts are paid when
+  they are made.
 - **"Since" means at or after, to the millisecond.** Postgres keeps microseconds, but times reach
   the app cut to milliseconds. The database has already found an arrival strictly later, so
   something that came within the same millisecond as your last visit still counts. The first CI
@@ -5700,7 +5704,7 @@ your previous visit carry the same pill for as long as you stay.
 there.** Everyone whose account is older than it sees a pill on that section until they open it.
 
 **Where it lives:**
-- **Table:** `admin_seen (user_id, area, seen_at)` (migration `1791000000000_admin-seen.js`). A
+- **Table:** `admin_seen (user_id, area, seen_at)` (migration `1790900000001_admin-seen.js`). A
   person's rows go when their account does.
 - **Routes:** `GET /api/admin/whats-new` returns `{ areas: [{ area, new, since }] }`.
   `POST /api/admin/whats-new/seen { area }` answers 400 for an unknown section and 403 for one you

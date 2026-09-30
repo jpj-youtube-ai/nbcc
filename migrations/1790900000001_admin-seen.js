@@ -6,6 +6,9 @@
 //
 // Additive only (golden rule 2): a new table and nothing else. Removing a staff account removes
 // its rows with it.
+//
+// Numbered one above 1790900000000, the highest before it, rather than further ahead: a number in
+// the future makes the next migration created today sort before it, which fails on production.
 
 exports.up = (pgm) => {
   pgm.createTable(

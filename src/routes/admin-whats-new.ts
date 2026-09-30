@@ -14,29 +14,40 @@ import { getAccountCreatedAt, getSeen, latestArrival, markSeen } from "../db/wha
 
 const UNAUTHORISED = { error: "Invalid or expired admin session" };
 
+// The menu asks on every change of section, so a database that is down answers a 500 rather than
+// leaving the request hanging on an unhandled rejection.
+function failed(res: Response, what: string, err: unknown): Response {
+  console.error(`whats-new: ${what} failed:`, err instanceof Error ? err.message : err);
+  return res.status(500).json({ error: "Admin is temporarily unavailable" });
+}
+
 export async function getWhatsNew(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeAny(req, res);
   if (!claims) return;
-  const perms = await loadEffectivePermissions(claims.sub);
-  const createdAt = perms ? await getAccountCreatedAt(claims.sub) : null;
-  if (!perms || !createdAt) return res.status(401).json(UNAUTHORISED);
+  try {
+    const perms = await loadEffectivePermissions(claims.sub);
+    const createdAt = perms ? await getAccountCreatedAt(claims.sub) : null;
+    if (!perms || !createdAt) return res.status(401).json(UNAUTHORISED);
 
-  const seen = await getSeen(claims.sub);
-  const areas = await Promise.all(
-    reachableAreas(perms).map(async ({ area }) => {
-      const seenAt = seen.get(area) ?? null;
-      const since = arrivalsSince(seenAt, createdAt);
-      let latest: Date | null = null;
-      try {
-        latest = await latestArrival(area, since);
-      } catch (err) {
-        // One database being down must not take every pill with it: this section just shows none.
-        console.error(`whats-new: ${area} could not be checked:`, err instanceof Error ? err.message : err);
-      }
-      return { area, new: isNew({ area, seenAt, accountCreatedAt: createdAt, latestArrival: latest }), since: since.toISOString() };
-    }),
-  );
-  return res.status(200).json({ areas });
+    const seen = await getSeen(claims.sub);
+    const areas = await Promise.all(
+      reachableAreas(perms).map(async ({ area }) => {
+        const seenAt = seen.get(area) ?? null;
+        const since = arrivalsSince(seenAt, createdAt);
+        let latest: Date | null = null;
+        try {
+          latest = await latestArrival(area, since);
+        } catch (err) {
+          // One database being down must not take every pill with it: this section just shows none.
+          console.error(`whats-new: ${area} could not be checked:`, err instanceof Error ? err.message : err);
+        }
+        return { area, new: isNew({ area, seenAt, accountCreatedAt: createdAt, latestArrival: latest }), since: since.toISOString() };
+      }),
+    );
+    return res.status(200).json({ areas });
+  } catch (err) {
+    return failed(res, "the list", err);
+  }
 }
 
 const seenBody = z.object({ area: z.string() });
@@ -49,13 +60,17 @@ export async function postWhatsNewSeen(req: Request, res: Response): Promise<Res
     return res.status(400).json({ error: "That is not a section of the admin." });
   }
   const area = body.data.area;
-  const perms = await loadEffectivePermissions(claims.sub);
-  if (!perms) return res.status(401).json(UNAUTHORISED);
-  if (!reachableAreas(perms).some((a) => a.area === area)) {
-    return res.status(403).json({ error: "You do not have access to that section." });
+  try {
+    const perms = await loadEffectivePermissions(claims.sub);
+    if (!perms) return res.status(401).json(UNAUTHORISED);
+    if (!reachableAreas(perms).some((a) => a.area === area)) {
+      return res.status(403).json({ error: "You do not have access to that section." });
+    }
+    const seenAt = await markSeen(claims.sub, area);
+    return res.status(200).json({ area, seenAt: seenAt.toISOString() });
+  } catch (err) {
+    return failed(res, "recording a visit", err);
   }
-  const seenAt = await markSeen(claims.sub, area);
-  return res.status(200).json({ area, seenAt: seenAt.toISOString() });
 }
 
 export const adminWhatsNewRouter = Router();

@@ -22,7 +22,7 @@ Spec: `docs/superpowers/specs/2026-09-30-admin-new-pills-design.md`.
 
 | File | Change |
 |---|---|
-| `migrations/1791000000000_admin-seen.js` | new: the `admin_seen` table |
+| `migrations/1790900000001_admin-seen.js` | new: the `admin_seen` table |
 | `src/admin/whats-new.ts` | new: pure rules |
 | `src/db/whats-new.ts` | new: SQL |
 | `src/routes/admin-whats-new.ts` | new: routes |
@@ -49,7 +49,7 @@ Spec: `docs/superpowers/specs/2026-09-30-admin-new-pills-design.md`.
 - [ ] **Code:** implement `src/admin/whats-new.ts`.
 
 ### Task 2: Migration and SQL
-- [ ] **Migration** `1791000000000_admin-seen.js`: `admin_seen(user_id int NOT NULL REFERENCES users ON
+- [ ] **Migration** `1790900000001_admin-seen.js`: `admin_seen(user_id int NOT NULL REFERENCES users ON
   DELETE CASCADE, area text NOT NULL, seen_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY(user_id,
   area))`. Check it sorts last.
 - [ ] **`src/db/whats-new.ts`:**

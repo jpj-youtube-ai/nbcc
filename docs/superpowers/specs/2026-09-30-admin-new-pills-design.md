@@ -37,6 +37,13 @@ The access rules are the same gates the menu already uses (`data-view-gate` and 
 - **Events** is an eighth area, with no arrivals. It carries only the new-feature pill.
 - **Row pills follow the menu's rule.** Donations shows them on paid gifts only, the Ball on
   paid bookings only, and the Newsletter on website sign-ups only.
+- **Accepted: a BACS gift counts from when it was made.** Donations has no column for when a gift
+  was paid, and a bank transfer turns paid days after it was made. If you open Donations in
+  between, it does not light the pill.
+- **Only the Donations screen marks donation rows.** The Overview and Search draw the same table,
+  and can load while Donations is the open section, straight after a refresh (found in review).
+- **"Since" is at or after, to the millisecond.** Times reach the app cut to milliseconds, and the
+  database has already found each arrival strictly later (found by the first CI run).
 
 ## New parts of the admin
 
@@ -53,7 +60,7 @@ The access rules are the same gates the menu already uses (`data-view-gate` and 
 
 - **The table.** A new table `admin_seen` holds `(user_id, area, seen_at)`, with the primary key
   `(user_id, area)` and `ON DELETE CASCADE` from `users`. The migration is additive,
-  `1791000000000_admin-seen.js`.
+  `1790900000001_admin-seen.js`.
 - **Recording a visit.** Opening a tracked section calls `POST /api/admin/whats-new/seen { area }`,
   which records `seen_at = now()`.
 - **When a person has never opened a section**, what counts as their last visit depends on the kind

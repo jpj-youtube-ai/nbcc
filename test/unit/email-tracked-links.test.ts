@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  STAFF_ONLY_KINDS,
   emailLinkTags,
+  linkTagsForKind,
   newsletterLinkTags,
   ownSiteHosts,
   tagUrl,
@@ -301,5 +303,50 @@ describe("tagging links in an email's plain text", () => {
   it("changes nothing more when run a second time", () => {
     const once = tagLinksInText("Go to https://nbcc.scot/ball#tables now", NEWS, HOSTS);
     expect(tagLinksInText(once, NEWS, HOSTS)).toBe(once);
+  });
+});
+
+describe("staff only emails are never tagged", () => {
+  it("lists every kind that only ever goes to staff", () => {
+    expect([...STAFF_ONLY_KINDS].sort()).toEqual(
+      ["adminInvite", "adminReset", "backupAlert", "ballReport", "lapsedAdmin", "loginCode"].sort(),
+    );
+  });
+
+  it("gives staff only kinds no words, so staff clicks never count as Email visits", () => {
+    for (const kind of STAFF_ONLY_KINDS) expect(linkTagsForKind(kind)).toBeNull();
+  });
+
+  it("gives every other kind its own words", () => {
+    for (const kind of ["donation", "receipt", "ballConfirmation", "ballReminder", "portal", "outreach"]) {
+      expect(linkTagsForKind(kind)).toEqual(emailLinkTags(kind));
+    }
+  });
+});
+
+describe("html with untidy or unusual href values", () => {
+  const Q = NEWS_QS.replace(/&/g, "&amp;");
+
+  it("writes out the trimmed address when it tags one with spaces around it", () => {
+    expect(tagLinksInHtml('<a href=" https://nbcc.scot/ball ">x</a>', NEWS, HOSTS)).toBe(
+      `<a href="https://nbcc.scot/ball?${Q}">x</a>`,
+    );
+  });
+
+  it("trims a newline inside the attribute too", () => {
+    expect(tagLinksInHtml('<a href="\n  https://nbcc.scot/ball#tables\n">x</a>', NEWS, HOSTS)).toBe(
+      `<a href="https://nbcc.scot/ball?${Q}#tables">x</a>`,
+    );
+  });
+
+  it("leaves a link it does not tag exactly as it was, spaces and all", () => {
+    const html = '<a href=" https://example.org/ ">x</a>';
+    expect(tagLinksInHtml(html, NEWS, HOSTS)).toBe(html);
+  });
+
+  it("does not throw on a character reference beyond the last code point", () => {
+    const html = '<a href="https://nbcc.scot/ball?x=&#1114112;">x</a> <a href="https://nbcc.scot/events">y</a>';
+    expect(() => tagLinksInHtml(html, NEWS, HOSTS)).not.toThrow();
+    expect(tagLinksInHtml(html, NEWS, HOSTS)).toContain(`https://nbcc.scot/events?${Q}`);
   });
 });

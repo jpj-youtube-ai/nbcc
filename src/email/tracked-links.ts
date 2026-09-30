@@ -30,6 +30,23 @@ export function emailLinkTags(kind: string): LinkTags {
   return { source: "email", medium: "email", campaign: kind };
 }
 
+// Kinds that only ever go to staff (email log kinds, src/clients/email.ts). Their links stay
+// untagged, so a trustee opening the ticket report never counts as an Email visit. A new staff only
+// kind belongs here.
+export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
+  "adminInvite",
+  "adminReset",
+  "loginCode",
+  "lapsedAdmin",
+  "ballReport",
+  "backupAlert",
+]);
+
+// The words for an email of this kind, or null for a staff only kind.
+export function linkTagsForKind(kind: string): LinkTags | null {
+  return STAFF_ONLY_KINDS.has(kind) ? null : emailLinkTags(kind);
+}
+
 const ALWAYS_OURS = ["nbcc.scot", "www.nbcc.scot"];
 
 // The newsletter's sending subdomain and anything under it (click.news.nbcc.scot is SES's click
@@ -163,10 +180,17 @@ export function tagUrl(address: string, tags: LinkTags, hosts: ReadonlySet<strin
   return `${head}${sep}${queryWords(tags)}${tail}`;
 }
 
+// A numeric reference beyond the last code point (&#1114112;) is left as written rather than
+// thrown on; the address then fails to parse or keeps its odd character, which only means it is
+// not tagged.
+function fromCodePoint(whole: string, code: number): string {
+  return Number.isInteger(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole;
+}
+
 function decodeAttribute(value: string): string {
   return value
-    .replace(/&#x([0-9a-f]+);/gi, (_m, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_m, dec: string) => String.fromCodePoint(Number(dec)))
+    .replace(/&#x([0-9a-f]+);/gi, (whole, hex: string) => fromCodePoint(whole, parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (whole, dec: string) => fromCodePoint(whole, Number(dec)))
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
@@ -183,15 +207,16 @@ function fragmentStart(value: string): number {
 }
 
 // Rewrites href attribute values only. The attribute's existing text is kept byte for byte (no
-// decode and re-encode round trip, so an existing &amp; is never doubled); the words are inserted
-// before the fragment with & written as &amp;.
+// decode and re-encode round trip, so an existing &amp; is never doubled), apart from spaces and
+// line breaks around a link that is tagged: those are dropped, since "https://nbcc.scot/ball ?utm..."
+// would be a different, missing page. The words go before the fragment with & written as &amp;.
 export function tagLinksInHtml(html: string, tags: LinkTags, hosts: ReadonlySet<string>): string {
   return html.replace(
     /(\shref\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi,
     (whole, lead: string, dq: string | undefined, sq: string | undefined) => {
-      const raw = dq ?? sq ?? "";
+      const raw = (dq ?? sq ?? "").trim();
       const quote = dq !== undefined ? '"' : "'";
-      const sep = separatorFor(decodeAttribute(raw).trim(), hosts);
+      const sep = separatorFor(decodeAttribute(raw), hosts);
       if (sep === null) return whole;
       const hashAt = fragmentStart(raw);
       const head = hashAt === -1 ? raw : raw.slice(0, hashAt);

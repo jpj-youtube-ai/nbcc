@@ -2,7 +2,7 @@ import { config } from "../config";
 import { sendSesEmail, type SesMessage } from "./ses";
 import { buildKindEmail } from "../email/templates";
 import { recordEmailSend } from "../db/email-log";
-import { emailLinkTags, ownSiteHosts, tagLinksInHtml, tagLinksInText, type LinkTags } from "../email/tracked-links";
+import { linkTagsForKind, ownSiteHosts, tagLinksInHtml, tagLinksInText, type LinkTags } from "../email/tracked-links";
 
 // Transactional email client (TASK-070; Resend→SES migration). Sends every app email straight
 // to Amazon SES (src/clients/ses.ts) — the Cloudflare Worker relay and its Resend account are
@@ -77,14 +77,14 @@ async function logAttempt(
 //
 // TASK-480: links to our own site gain utm words here, in the html and the plain text alike, so the
 // site analytics can tell a visit from an email apart from Direct. Every kind names itself
-// (utm_source=email, utm_campaign=<kind>); the newsletter passes its own tags (its issue) or null
-// for a send that should stay untagged. Rules and exclusions (tokens, unsubscribe, other hosts):
+// (utm_source=email, utm_campaign=<kind>) except the staff only kinds, which stay untagged; the
+// newsletter passes its own tags (its issue) or null. Rules and exclusions (tokens, unsubscribe, other hosts):
 // src/email/tracked-links.ts.
 async function sendAndLog(
   kind: string,
   name: string | null,
   original: SesMessage,
-  links: LinkTags | null = emailLinkTags(kind),
+  links: LinkTags | null = linkTagsForKind(kind),
 ): Promise<void> {
   const msg = links ? withTrackedLinks(original, links) : original;
   // One audit row per person the message went to: almost always just `to`, but the Festive Ball
@@ -108,14 +108,20 @@ async function sendAndLog(
 }
 
 // Our own site: nbcc.scot, www.nbcc.scot and the configured public site addresses. Read at send time
-// so a config value is never needed at import.
+// so a config value is never needed at import. Fails open: if the rewrite throws for any reason the
+// email goes exactly as it was built, because tagging is never worth a receipt that does not arrive.
 function withTrackedLinks(msg: SesMessage, links: LinkTags): SesMessage {
-  const hosts = ownSiteHosts([config.PORTAL_BASE_URL, config.BALL_BASE_URL]);
-  return {
-    ...msg,
-    ...(msg.html ? { html: tagLinksInHtml(msg.html, links, hosts) } : {}),
-    ...(msg.text ? { text: tagLinksInText(msg.text, links, hosts) } : {}),
-  };
+  try {
+    const hosts = ownSiteHosts([config.PORTAL_BASE_URL, config.BALL_BASE_URL]);
+    return {
+      ...msg,
+      ...(msg.html ? { html: tagLinksInHtml(msg.html, links, hosts) } : {}),
+      ...(msg.text ? { text: tagLinksInText(msg.text, links, hosts) } : {}),
+    };
+  } catch (err) {
+    console.error("email link tagging failed, sending untagged:", err instanceof Error ? err.message : err);
+    return msg;
+  }
 }
 
 export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {
@@ -295,9 +301,9 @@ export interface NewsletterEmail {
   // Without them people reach for "report spam" instead of the in-body link — and a complaint
   // costs the sending domain far more than an unsubscribe does.
   unsubscribeUrl?: string;
-  // TASK-480: the utm words for links to our own site: newsletterLinkTags(id) for an issue,
-  // emailLinkTags("welcome") for the signup welcome. Left out (the admin test send), nothing is
-  // tagged, so staff opening a test do not count as newsletter readers.
+  // TASK-480: the utm words for links to our own site: newsletterLinkTags(id) for an issue and for
+  // its admin test send (so a test matches the real thing), emailLinkTags("welcome") for the signup
+  // welcome. Left out, nothing is tagged.
   links?: LinkTags;
   // No attachments field on purpose: uploaded files are HOSTED (public /newsletter/document/<uuid>
   // pages) and linked from the body, never attached — links keep deliverability clean

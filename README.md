@@ -6049,14 +6049,18 @@ So the site analytics can tell a visit from a newsletter or an email apart from 
 address, links to **our own site** in emails gain three words just before the email leaves:
 
 - in a newsletter: `utm_source=newsletter&utm_medium=email&utm_campaign=<the newsletter's id>`;
-- in any other email (receipts, Ball confirmations, reminders, the Ball ticket report and so on):
+- in any other email (receipts, Ball confirmations, reminders and so on):
   `utm_source=email&utm_medium=email&utm_campaign=<the email's kind>`, the same kind the email log
   shows, for example `ballConfirmation`. The footer signup welcome names itself `welcome`.
+- emails that only ever go to staff (the Ball ticket report, admin invitations, password resets,
+  sign in codes, the lapsed subscription notice and backup alerts) are not tagged, so staff clicks
+  never count as Email visits. The list is `STAFF_ONLY_KINDS` in `src/email/tracked-links.ts`.
 
 It happens in one place, `sendAndLog` in `src/clients/email.ts`, to the html and the plain text
 alike, using the rules in `src/email/tracked-links.ts`. The stored newsletter draft and the admin
-preview never carry the words, and the admin **test send** is left untagged on purpose, so staff
-checking a test do not count as newsletter readers.
+preview never carry the words. The admin **test send** is tagged exactly like the real send (by the
+newsletter's id, or `draft` before it is first saved), because a test must match the real thing. If
+the rewrite ever fails, the email goes out exactly as it was built and the failure is logged.
 
 Left exactly as they are:
 
@@ -6071,8 +6075,8 @@ Left exactly as they are:
   like a long random string (a UUID, for example the hosted newsletter documents);
 - mail, phone and `#` links.
 
-Existing query strings and `#` fragments are kept, `&` is written as `&amp;` inside html, and running
-it twice changes nothing more. Adding query words to links to our own site is the only change: no
+Existing query strings and `#` fragments are kept, spaces or line breaks around a tagged link are
+dropped, `&` is written as `&amp;` inside html, and running it twice changes nothing more. Adding query words to links to our own site is the only change: no
 sender, host, Reply-To or tracking setting moves, so the deliverability rules are untouched. Tests:
 `test/unit/email-tracked-links.test.ts` (the rules) and `test/unit/email-link-tracking-send.test.ts`
 (the wiring).

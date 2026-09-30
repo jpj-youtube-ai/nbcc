@@ -519,6 +519,24 @@ describe("newsletter block builder (jsdom, TASK-168 Task 25)", () => {
     expect(testSendRequests[0].body.subject).toBe("Test subject");
     expect((testSendRequests[0].body.bodyJson as { blocks: unknown[] }).blocks.length).toBe(1);
     expect(el("newsletterMsg").textContent).toContain("Test sent to s@nbcc");
+    // Unsaved, so there is no id to send: the server tags its links as a draft.
+    expect(testSendRequests[0].body.newsletterId).toBeUndefined();
+  });
+
+  it("Send test to me names a saved newsletter by its id, so its links match the real send (TASK-480)", async () => {
+    loginToken = tokenFor("editor");
+    await openNewsletterTab();
+    (el("newsletterNew") as HTMLElement).click();
+    (el("newsletterSubject") as HTMLInputElement).value = "Test subject";
+    clickPalette("Text");
+    (el("newsletterId") as HTMLInputElement).value = "41";
+
+    (el("newsletterTest") as HTMLElement).click();
+    await flush();
+    await flush();
+
+    expect(testSendRequests.length).toBe(1);
+    expect(testSendRequests[0].body.newsletterId).toBe(41);
   });
 });
 

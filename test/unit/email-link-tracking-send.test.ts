@@ -6,10 +6,23 @@ import { resolve } from "node:path";
 // src/clients/email.ts), to both its html and its plain text. Newsletters name their issue; every
 // other email names its kind. Every address here is invented.
 
-const { sendSes, record } = vi.hoisted(() => ({
+const { sendSes, record, boom } = vi.hoisted(() => ({
   sendSes: vi.fn<(msg: unknown) => Promise<string>>(async () => "ses-message-1"),
   record: vi.fn<(row: unknown) => Promise<undefined>>(async () => undefined),
+  boom: { on: false },
 }));
+
+// Lets one test make the rewrite itself fail, to prove the send goes ahead with the original.
+vi.mock("../../src/email/tracked-links", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/email/tracked-links")>();
+  return {
+    ...actual,
+    tagLinksInHtml: (...args: Parameters<typeof actual.tagLinksInHtml>) => {
+      if (boom.on) throw new RangeError("Invalid code point");
+      return actual.tagLinksInHtml(...args);
+    },
+  };
+});
 
 vi.mock("../../src/config", () => ({
   config: {
@@ -25,7 +38,7 @@ vi.mock("../../src/config", () => ({
 vi.mock("../../src/clients/ses", () => ({ sendSesEmail: sendSes }));
 vi.mock("../../src/db/email-log", () => ({ recordEmailSend: record }));
 
-import { sendBallConfirmation, sendNewsletter, sendDonationConfirmation } from "../../src/clients/email";
+import { sendBallConfirmation, sendBallReport, sendNewsletter, sendDonationConfirmation } from "../../src/clients/email";
 import { newsletterLinkTags } from "../../src/email/tracked-links";
 
 type Sent = { html?: string; text?: string; headers?: Record<string, string> };
@@ -34,6 +47,45 @@ const lastSent = () => sendSes.mock.calls[sendSes.mock.calls.length - 1][0] as S
 beforeEach(() => {
   sendSes.mockClear();
   record.mockClear();
+  boom.on = false;
+});
+
+describe("staff only emails", () => {
+  it("sends the Ball ticket report with its links untouched", async () => {
+    const html = '<a href="https://nbcc.scot/ball">The Ball</a>';
+    const text = "The Ball: https://nbcc.scot/ball";
+    await sendBallReport({
+      to: ["team@example.com"],
+      from: "events@nbcc.scot",
+      replyTo: "events@nbcc.scot",
+      subject: "Ticket report",
+      html,
+      text,
+    });
+    expect(lastSent().html).toBe(html);
+    expect(lastSent().text).toBe(text);
+  });
+});
+
+describe("if the rewrite fails", () => {
+  it("sends the original html and text unchanged and logs it", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    boom.on = true;
+    const html = '<a href="https://nbcc.scot/ball">The Ball</a>';
+    const text = "The Ball: https://nbcc.scot/ball";
+    await sendBallConfirmation({
+      email: "buyer@example.com",
+      from: "events@nbcc.scot",
+      replyTo: "events@nbcc.scot",
+      subject: "Your Festive Ball tickets",
+      html,
+      text,
+    });
+    expect(lastSent().html).toBe(html);
+    expect(lastSent().text).toBe(text);
+    expect(errors).toHaveBeenCalledTimes(1);
+    errors.mockRestore();
+  });
 });
 
 describe("other emails name their kind", () => {
@@ -93,7 +145,7 @@ describe("newsletters name their issue", () => {
     expect(sent.headers?.["List-Unsubscribe"]).toBe("<https://site.example.test/unsubscribe/abc>");
   });
 
-  it("leaves a newsletter with no tags given (the admin test send) exactly as it is", async () => {
+  it("leaves a newsletter with no tags given exactly as it is", async () => {
     await sendNewsletter(base);
     const sent = lastSent();
     expect(sent.html).toBe(base.html);
@@ -106,6 +158,12 @@ describe("the senders pass the right tags", () => {
 
   it("the newsletter send job names the newsletter by its id", () => {
     expect(read("src/newsletter/send-worker.ts")).toContain("links: newsletterLinkTags(job.newsletterId)");
+  });
+
+  it("the admin test send tags exactly like the real send, by the newsletter's id", () => {
+    const admin = read("src/routes/admin.ts");
+    const testSend = admin.slice(admin.indexOf("export async function postAdminNewsletterTestSend"));
+    expect(testSend.slice(0, testSend.indexOf("\nexport "))).toContain("links: newsletterLinkTags(");
   });
 
   it("the footer signup welcome names itself as the welcome email", () => {

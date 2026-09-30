@@ -3,12 +3,13 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { Pool } = require("pg");
 
-// Steps for the TASK-463 scenarios in admin-permissions.feature: access saved before four sections
-// existed (ball, email-audit, site, outreach) is brought up to date by the backfill migration. CI's
-// database is empty when migrations run, so the migration never meets an old matrix there. These
-// steps run its own SQL against the real database inside a transaction that is always rolled back:
-// proof on Postgres, with nothing left behind for any other scenario. Users are seeded with emails
-// ending admin.bdd@example.com, which the shared @admin Before hook (admin-auth.steps.js) clears.
+// Steps for the TASK-463 scenarios in admin-permissions.feature: access saved before three sections
+// existed (ball, site, outreach) is brought up to date by the backfill migration, which leaves the
+// email audit alone and records each key it adds in audit_log. CI's database is empty when migrations
+// run, so the migration never meets an old matrix there. These steps run its own SQL against the real
+// database inside a transaction that is always rolled back: proof on Postgres, with nothing left
+// behind for any other scenario. Users are seeded with emails ending admin.bdd@example.com, which the
+// shared @admin Before hook (admin-auth.steps.js) clears.
 
 const BACKFILL = path.resolve(__dirname, "../../migrations/1790788129056_permissions-backfill-missed-sections.js");
 
@@ -35,6 +36,12 @@ function oldMatrix() {
   return matrix;
 }
 
+function savedAccess(world, email) {
+  const permissions = world.backfilled && world.backfilled[email];
+  assert.ok(permissions, `no saved access found for ${email}`);
+  return permissions;
+}
+
 Given(
   "a user {string} with role {string} whose saved access predates the four late sections",
   async function (email, role) {
@@ -58,20 +65,45 @@ When("the TASK-463 permissions backfill runs", async function () {
   try {
     await client.query("BEGIN");
     for (const text of statements) await client.query(text);
-    const { rows } = await client.query(
+    const users = await client.query(
       "SELECT email, permissions FROM users WHERE email LIKE '%admin.bdd@example.com'",
     );
-    this.backfilled = Object.fromEntries(rows.map((row) => [row.email, row.permissions]));
+    this.backfilled = Object.fromEntries(users.rows.map((row) => [row.email, row.permissions]));
+    const logged = await client.query(
+      `SELECT u.email, a.actor, a.data FROM audit_log a JOIN users u ON u.id = a.entity_id
+        WHERE a.action = 'admin_user.permissions_backfilled' AND u.email LIKE '%admin.bdd@example.com'`,
+    );
+    this.backfillLog = logged.rows;
   } finally {
-    await client.query("ROLLBACK");
-    client.release();
+    try {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
   }
 });
 
 Then("the backfilled access of {string} gives {string} as {string}", function (email, section, level) {
-  const permissions = this.backfilled && this.backfilled[email];
-  assert.ok(permissions, `no saved access found for ${email}`);
-  assert.equal(permissions[section], level, `${email}: ${section}`);
+  assert.equal(savedAccess(this, email)[section], level, `${email}: ${section}`);
+});
+
+Then("the backfilled access of {string} does not mention {string}", function (email, section) {
+  assert.ok(!(section in savedAccess(this, email)), `${email} should have no ${section} key`);
+});
+
+Then("the backfilled access of {string} is still empty", function (email) {
+  assert.deepEqual(savedAccess(this, email), {});
+});
+
+Then("the backfill logged {string} as {string} for {string}", function (section, level, email) {
+  const rows = this.backfillLog.filter((row) => row.email === email && row.data.section === section);
+  assert.equal(rows.length, 1, `one audit row for ${email}: ${section}`);
+  assert.equal(rows[0].actor, "migration:TASK-463");
+  assert.equal(rows[0].data.level, level);
+});
+
+Then("the backfill logged nothing for {string}", function (email) {
+  assert.deepEqual(this.backfillLog.filter((row) => row.email === email), []);
 });
 
 AfterAll(async function () {

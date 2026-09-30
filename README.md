@@ -5820,6 +5820,27 @@ These are the three gaps TASK-465's review found.
 name field after "Add an event", focus on "Add an event" after deleting, and the dated names.
 Design: `docs/superpowers/specs/2026-09-30-events-screen-focus-design.md`.
 
+## A newsletter test that failed on a busy machine (TASK-470)
+
+The newsletter preview waits until you pause typing for 300ms before redrawing, and
+`test/unit/newsletter-builder-ui.test.ts` checks that: no redraw at 200ms, exactly one by 350ms. It
+failed now and then, but only when the machine was busy, and it passed on a re-run, which made it
+easy to wave through.
+
+The fault was in the tests, not the newsletter.
+
+- **What leaked.** Each test boots its own copy of the admin, and an old copy keeps any timer it had
+  started. "Send test to me" adds a block, which starts a 300ms preview timer, and then finishes
+  within milliseconds. When that timer fired in the next test, the old copy sent its preview through
+  the new test's stub, so the debounce test counted a request it never made.
+- **How it was proved.** Each preview request's origin was recorded while the file ran eight copies
+  at a time. It failed 3 times in 24 runs, and each time the stray request came from a real timer
+  started by an earlier test's copy.
+- **The fix.** The file now ends every timer a test started when that test ends. It then passed 48
+  runs out of 48 under the same load.
+
+No code the admin runs changed.
+
 ## Saving an editor's access took Contact businesses away (TASK-459)
 
 Editors have been able to use **Contact businesses** since it shipped: TASK-354 put `outreach` in the

@@ -188,6 +188,22 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const el = (id: string) => document.getElementById(id) as HTMLElement;
 
+// TASK-470: timers a test starts end with it. Every test boots its own copy of app.js, and a copy
+// keeps any timer it has started, such as the 300ms preview debounce. One left pending by a test
+// ("Send test to me" adds a block and finishes within milliseconds) fired during the next, sending
+// its preview through the next test's fetch stub, so the debounce test sometimes counted a request
+// it never made: 3 runs in 24 when the file was run eight at a time. Real timers only: a test that
+// uses fake ones clears them itself (vi.useRealTimers), and those never reach this spy.
+let timers: ReturnType<typeof vi.spyOn> | null = null;
+beforeEach(() => {
+  timers = vi.spyOn(globalThis, "setTimeout");
+});
+afterEach(() => {
+  for (const r of timers?.mock.results ?? []) if (r.type === "return") clearTimeout(r.value as ReturnType<typeof setTimeout>);
+  timers?.mockRestore();
+  timers = null;
+});
+
 async function signIn() {
   (el("adminEmail") as HTMLInputElement).value = "s@nbcc";
   (el("adminPassword") as HTMLInputElement).value = "pw";

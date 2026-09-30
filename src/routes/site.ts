@@ -143,6 +143,29 @@ async function ballIsPublished(cookieHeader: string | undefined): Promise<boolea
   }
 }
 
+// TASK-453: is the Events page switched on? Read fresh on every request, like the ball's gate, so
+// an admin's switch takes effect on the very next page view. Any failure reads as OFF: a broken
+// read must never put a menu link to a missing page on every page of the site.
+async function eventsPageIsOn(): Promise<boolean> {
+  try {
+    const { getEventsSettings } = await import("../db/events");
+    return (await getEventsSettings()).pageOn;
+  } catch {
+    return false;
+  }
+}
+
+// The menu items a page gets on top of what is in its file: the Festive Ball's while the ball is
+// published (or being previewed), and Events while that page is switched on. Each is idempotent,
+// so a page that already carries one is left as it is.
+async function decorateNav(html: string, cookieHeader: string | undefined): Promise<string> {
+  const [ball, events] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn()]);
+  let out = html;
+  if (ball) out = (await import("../ball/nav-link")).addBallNavLink(out);
+  if (events) out = (await import("../events/nav-link")).addEventsNavLink(out);
+  return out;
+}
+
 export function createSiteRouter(siteRoot: string): Router {
   const router = Router();
   const redirectsFile = join(siteRoot, "_redirects");
@@ -181,6 +204,13 @@ export function createSiteRouter(siteRoot: string): Router {
       // hidden in it.
       const preview = gateOpen ? false : await holdsPreviewCookie(req.headers.cookie);
       if (!gateOpen && !preview) {
+        // TASK-453: the one change this branch can need is the Events menu item. Switched off,
+        // the file still goes out byte for byte.
+        if (await eventsPageIsOn()) {
+          const { addEventsNavLink } = await import("../events/nav-link");
+          res.type("html").send(addEventsNavLink(readFileSync(homeFile, "utf8")));
+          return;
+        }
         res.sendFile(homeFile);
         return;
       }
@@ -193,7 +223,10 @@ export function createSiteRouter(siteRoot: string): Router {
         res.setHeader("Vary", "Cookie");
       }
       const template = readFileSync(homeFile, "utf8");
-      res.type("html").send(renderHomePromo(template, { gateOpen: true }));
+      // renderHomePromo adds the Festive Ball item itself; the Events item is ours to add.
+      let html = renderHomePromo(template, { gateOpen: true });
+      if (await eventsPageIsOn()) html = (await import("../events/nav-link")).addEventsNavLink(html);
+      res.type("html").send(html);
     } catch (err) {
       console.error("home ball promo failed:", err instanceof Error ? err.message : err);
       res.sendFile(homeFile);
@@ -211,16 +244,12 @@ export function createSiteRouter(siteRoot: string): Router {
       const { listPublicSupporters } = await import("../db/donations");
       const tiers = await listPublicSupporters();
       const template = readFileSync(supportersFile, "utf8");
-      let html = renderSupportersPage(template, tiers);
+      const html = renderSupportersPage(template, tiers);
       // Rendered by hand rather than served from disk, so it does not pass through the
-      // `_redirects` loop below and needs the nav item adding here too (TASK-326). This is
-      // also the page where getting the anchor wrong shows: its own nav item carries
+      // `_redirects` loop below and needs the nav items adding here too (TASK-326, TASK-453).
+      // This is also the page where getting the anchor wrong shows: its own nav item carries
       // class="active", so matching the link rather than the list finds the FOOTER first.
-      if (await ballIsPublished(req.headers.cookie)) {
-        const { addBallNavLink } = await import("../ball/nav-link");
-        html = addBallNavLink(html);
-      }
-      res.type("html").send(html);
+      res.type("html").send(await decorateNav(html, req.headers.cookie));
     } catch (err) {
       if (existsSync(supportersFile)) {
         res.sendFile(supportersFile);
@@ -243,6 +272,31 @@ export function createSiteRouter(siteRoot: string): Router {
     res.redirect(302, `/api/gift-aid/${encodeURIComponent(req.params.token)}`);
   });
 
+  // TASK-453: /events, built from the events table. Served only while an admin has the page
+  // switched on; switched off it falls through to the catch-all below exactly as if the route
+  // were not here - a real 404, or a spare address if one was set up for /events before this
+  // page existed. A failed read does the same rather than showing a broken page.
+  const eventsFile = join(siteRoot, "events.html");
+  router.get("/events", async (req, res, next) => {
+    try {
+      if (!(await eventsPageIsOn())) return next();
+      const [{ listPageEvents }, { londonToday }, { renderEventsPage }] = await Promise.all([
+        import("../db/events"),
+        import("../events/model"),
+        import("../events/render"),
+      ]);
+      const events = await listPageEvents(londonToday(new Date()));
+      const html = renderEventsPage(readFileSync(eventsFile, "utf8"), events);
+      // Revalidate on every view (the reason is in src/routes/ball.ts, TASK-341): a card staff
+      // just published must not be hidden behind a browser's heuristic cache.
+      res.setHeader("Cache-Control", "public, max-age=0");
+      res.type("html").send(await decorateNav(html, req.headers.cookie));
+    } catch (err) {
+      console.error("events page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
+
   // Apply each rule: 301 -> permanent redirect to the clean URL; 200 -> serve
   // the target file in place (the address bar keeps the clean URL).
   for (const rule of rules) {
@@ -252,17 +306,24 @@ export function createSiteRouter(siteRoot: string): Router {
         return;
       }
       const file = join(siteRoot, rule.to.replace(/^\//, ""));
-      // While the ball is unpublished this is byte-for-byte the old behaviour: the file is
-      // sent as-is and nothing on any page mentions it.
-      if (!file.endsWith(".html") || !(await ballIsPublished(req.headers.cookie))) {
+      if (!file.endsWith(".html")) {
+        res.sendFile(file);
+        return;
+      }
+      // While the ball is unpublished and the Events page is switched off this is byte-for-byte
+      // the old behaviour: the file is sent as-is and no page mentions either.
+      const [ball, events] = await Promise.all([ballIsPublished(req.headers.cookie), eventsPageIsOn()]);
+      if (!ball && !events) {
         res.sendFile(file);
         return;
       }
       try {
-        const { addBallNavLink } = await import("../ball/nav-link");
-        res.type("html").send(addBallNavLink(readFileSync(file, "utf8")));
+        let html = readFileSync(file, "utf8");
+        if (ball) html = (await import("../ball/nav-link")).addBallNavLink(html);
+        if (events) html = (await import("../events/nav-link")).addEventsNavLink(html);
+        res.type("html").send(html);
       } catch (err) {
-        console.error("ball nav link failed:", err instanceof Error ? err.message : err);
+        console.error("nav link failed:", err instanceof Error ? err.message : err);
         res.sendFile(file);
       }
     });
@@ -282,11 +343,11 @@ export function createSiteRouter(siteRoot: string): Router {
     res.setHeader("X-Robots-Tag", "noindex, nofollow");
     try {
       const { SITE_PAGES, renderSitemapTree } = await import("../site/pages");
-      const ballOpen = await ballIsPublished(req.headers.cookie);
+      const [ballOpen, eventsOn] = await Promise.all([ballIsPublished(req.headers.cookie), eventsPageIsOn()]);
       const template = readFileSync(sitemapFile, "utf8");
       const html = template.replace(
         /<div class="sitemap-tree">[\s\S]*?<\/div>/,
-        `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen)}</div>`,
+        `<div class="sitemap-tree">${renderSitemapTree(SITE_PAGES, ballOpen, eventsOn)}</div>`,
       );
       res.type("html").send(html);
     } catch (err) {
@@ -301,11 +362,14 @@ export function createSiteRouter(siteRoot: string): Router {
     try {
       const { SITE_PAGES, renderSitemapXml } = await import("../site/pages");
       const { getSeoOverrides } = await import("../db/site-pages");
-      const [overrides, ballOpen] = await Promise.all([
+      const [overrides, ballOpen, eventsOn] = await Promise.all([
         getSeoOverrides(),
         ballIsPublished(undefined), // never let a preview cookie leak the ball to a crawler
+        eventsPageIsOn(),
       ]);
-      res.type("application/xml").send(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", overrides, ballOpen));
+      res
+        .type("application/xml")
+        .send(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", overrides, ballOpen, eventsOn));
     } catch (err) {
       console.error("sitemap.xml failed:", err instanceof Error ? err.message : err);
       res.status(500).type("text/plain").send("sitemap unavailable");

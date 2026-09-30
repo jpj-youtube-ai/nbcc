@@ -10,6 +10,8 @@ import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
+import { addEventsNavLink } from "../events/nav-link";
+import { eventsPageIsOn } from "../db/events";
 import { buildBallCalendar } from "../ball/calendar";
 import { buildGuestSummaryEmail } from "../ball/run-up-email";
 import { parseMenu } from "../ball/menu";
@@ -211,7 +213,7 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   arrivalTime: string | null;
   includedNote: string | null;
   lineUpNote: string | null;
-}): void {
+}, eventsOn = false): void {
   const file = join(SITE_ROOT, "ball.html");
   if (!existsSync(file)) {
     res.status(404).send("Not found");
@@ -242,7 +244,10 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   // No publication check here, unlike site.ts: reaching this line already means the gate is
   // open OR the request carried a valid preview cookie, so the ball is reachable for THIS
   // request by definition. Re-testing it could only ever disagree with the page being sent.
-  res.type("html").send(addBallNavLink(renderBallPage(template, { settings, gateOpen })));
+  // TASK-453: and the Events item while that page is switched on, like every other page. The two
+  // insertions are independent (one goes after About, the other at the end), so order is free.
+  const page = renderBallPage(template, { settings, gateOpen });
+  res.type("html").send(addBallNavLink(eventsOn ? addEventsNavLink(page) : page));
 }
 
 // TASK-337: the add-to-calendar file.
@@ -294,7 +299,7 @@ ballRouter.get("/ball", async (req, res, next) => {
         return;
       }
     }
-    servePage(res, gateOpen, settings);
+    servePage(res, gateOpen, settings, await eventsPageIsOn());
   } catch (err) {
     next(err);
   }

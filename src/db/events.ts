@@ -122,6 +122,15 @@ export async function getEventsSettings(): Promise<EventsSettings> {
   return { pageOn: row.page_on, updatedAt: new Date(row.updated_at).toISOString(), updatedBy: row.updated_by };
 }
 
+/** Is the page switched on? Any failure reads as OFF: never a menu link to a page that is not there. */
+export async function eventsPageIsOn(): Promise<boolean> {
+  try {
+    return (await getEventsSettings()).pageOn;
+  } catch {
+    return false;
+  }
+}
+
 /** Turn the whole page on or off. Recorded with who did it, including a switch to the same state. */
 export async function setEventsPageOn(pageOn: boolean, actor: string): Promise<EventsSettings> {
   return inTransaction(async (client) => {

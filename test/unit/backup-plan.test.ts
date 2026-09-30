@@ -43,8 +43,9 @@ describe("the backup plan covers every database that exists", () => {
 
 describe("knowing how many tables to expect", () => {
   // A dump that yielded three tables when 44 exist must abort before it overwrites a good backup.
-  it("counts 44 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(44);
+  // 47 since TASK-453 added events, event_images and events_settings.
+  it("counts 47 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(47);
   });
 
   it("finds the two tables that live outside the main database", () => {
@@ -59,7 +60,11 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("declarations");
     expect(main).toContain("email_suppressions");
     expect(main).toContain("erasure_log");
-    expect(main.length).toBe(42);
+    // TASK-453: the events the public page is built from, their pictures, and the page switch.
+    expect(main).toContain("events");
+    expect(main).toContain("event_images");
+    expect(main).toContain("events_settings");
+    expect(main.length).toBe(45);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

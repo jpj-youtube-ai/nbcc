@@ -7,6 +7,7 @@ import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
+import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { sesWebhookRouter } from "./routes/ses-webhook";
@@ -77,6 +78,8 @@ export function createApp() {
   app.use(adminEventsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
+  // Admin > Analytics (TASK-482): the numbers and the collecting switch.
+  app.use(adminAnalyticsRouter);
   // Stories from the old website's My Story form, from its CSV export (TASK-461).
   app.use(adminStoriesImportRouter);
   app.use(healthRouter);

@@ -22,6 +22,7 @@ import { insertStory } from "../db/stories";
 import { contactEnquirySchema } from "../contact/schema";
 import { insertEnquiry } from "../db/contact";
 import { createRateLimiter } from "../portal/request-limiter";
+import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnstile";
 
 // Marketing-site API endpoints, both implemented.
 // - POST /api/checkout-session (REQ-029): turns the REQ-028 front-end payload into
@@ -503,6 +504,19 @@ export async function postContact(req: Request, res: Response): Promise<Response
     return res.status(429).json({ error: "Too many messages. Please try again shortly." });
   }
 
+  // TASK-NNN: Cloudflare Turnstile, when it is on. Before validation, so a bot without a valid pass
+  // learns nothing about what the form expects. A refused pass stores nothing; a check that cannot
+  // answer keeps the message and logs why, so a genuine enquiry is never lost to the checker.
+  if (captchaEnabled()) {
+    const verdict = await verifyCaptcha(req.body?.captchaToken, req.ip);
+    if (verdict.outcome === "refused") {
+      return res.status(400).json({ error: "captcha" });
+    }
+    if (verdict.outcome === "unavailable") {
+      console.error("contact captcha unavailable, message kept:", verdict.reason);
+    }
+  }
+
   const parsed = contactEnquirySchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -525,6 +539,14 @@ apiRouter.post(
   express.urlencoded({ extended: false, limit: "16kb" }),
   postContact,
 );
+
+// TASK-NNN: the contact page asks for the Turnstile site key and shows the box only if it gets one
+// (assets/js/contact-captcha.js). Public: the site key is in every visitor's browser anyway.
+export function getContactCaptcha(_req: Request, res: Response): Response {
+  return res.status(200).json({ siteKey: captchaSiteKey() });
+}
+
+apiRouter.get("/api/contact/captcha", getContactCaptcha);
 
 // Token-scoped Gift Aid declaration completion (REQ-048/TASK-076). The in-person
 // confirmation email/QR (TASK-075) links a walk-in donor here with their donation's unique

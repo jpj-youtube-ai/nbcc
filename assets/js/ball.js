@@ -50,6 +50,15 @@
     return checked ? checked.value : "card";
   }
 
+  // TASK-486: an invoice is only ever asked for with bank transfer.
+  function needsInvoice() {
+    return payMethod() === "transfer" && !!(form.elements.needsInvoice && form.elements.needsInvoice.checked);
+  }
+  function invoiceValue(name) {
+    var field = form.elements[name];
+    return field ? (field.value || "").trim() : "";
+  }
+
   function money(pence) {
     // Whole pounds lose the ".00" — "£1,000" reads better than "£1,000.00" on a
     // headline total, and the pennies only ever appear on the fee line.
@@ -146,6 +155,19 @@
       if (submit && !submit.disabled) {
         submit.textContent = transfer ? "Book and get bank details" : "Continue to payment";
       }
+
+      // TASK-486: "My company needs an invoice", only with bank transfer. While it is ticked the
+      // company's details are asked for and Gift Aid goes, unticked: a company cannot declare it.
+      var invoiceBox = document.getElementById("ballInvoice");
+      var invoiceFields = document.getElementById("ballInvoiceFields");
+      if (invoiceBox) invoiceBox.hidden = !transfer;
+      var invoicing = needsInvoice();
+      if (invoiceFields) invoiceFields.hidden = !invoicing;
+      if (form.elements.giftAid) {
+        var giftAidLabel = form.elements.giftAid.closest("label");
+        if (giftAidLabel) giftAidLabel.hidden = invoicing;
+        if (invoicing) form.elements.giftAid.checked = false;
+      }
     }
 
     if (feeOut) feeOut.textContent = money(fee);
@@ -205,6 +227,13 @@
     Array.prototype.forEach.call(done.querySelectorAll("[data-transfer]"), function (node) {
       node.textContent = values[node.getAttribute("data-transfer")] || "";
     });
+    // TASK-486: the printable invoice, when one was asked for.
+    var invoiceLine = done.querySelector("[data-invoice-line]");
+    var invoiceLink = done.querySelector("[data-transfer-invoice]");
+    if (invoiceLine && invoiceLink) {
+      if (data.invoiceUrl) invoiceLink.setAttribute("href", data.invoiceUrl);
+      invoiceLine.hidden = !data.invoiceUrl;
+    }
     form.hidden = true;
     done.hidden = false;
     var heading = document.getElementById("ballTransferDoneHeading");
@@ -240,6 +269,9 @@
         if (typeof data.cardFeeFixedPence === "number") cardFeeFixedPence = data.cardFeeFixedPence;
         // TASK-484: offer bank transfer only when the server says it is switched on.
         if (payMethodBox) payMethodBox.hidden = !(data.salesOpen && data.transferOpen);
+        // TASK-486: point a company wanting an invoice at the form, once it can take one.
+        var invoiceSelf = document.getElementById("ballInvoiceSelf");
+        if (invoiceSelf) invoiceSelf.hidden = !(data.salesOpen && data.transferOpen);
         recalculate();
         if (!data.salesOpen) {
           availability.textContent = data.soldOut
@@ -375,6 +407,13 @@
     if (!form.elements.termsAccepted || !form.elements.termsAccepted.checked) {
       return showError("Please tick to confirm you agree to the ticket terms.");
     }
+    var invoicing = needsInvoice();
+    if (invoicing && !invoiceValue("invoiceCompany")) {
+      return showError("Please give your company's name, for the invoice.");
+    }
+    if (invoicing && !invoiceValue("invoiceAddress")) {
+      return showError("Please give your company's address, for the invoice.");
+    }
     var donation = donationPence();
     if (form.elements.giftAid && form.elements.giftAid.checked && donation <= 0) {
       return showError("Gift Aid applies to a donation, so please enter a donation amount, or untick Gift Aid.");
@@ -408,6 +447,16 @@
       submit.textContent = "Booking…";
       delete body.uiMode;
       delete body.coverFee;
+      if (invoicing) {
+        body.giftAid = false;
+        body.invoice = {
+          company: invoiceValue("invoiceCompany"),
+          address: invoiceValue("invoiceAddress"),
+          po: invoiceValue("invoicePo"),
+          accountsEmail: invoiceValue("invoiceAccountsEmail"),
+          phone: invoiceValue("invoicePhone"),
+        };
+      }
       fetch("/api/ball/bank-transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

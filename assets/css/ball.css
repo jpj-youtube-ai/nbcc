@@ -523,6 +523,31 @@
   color: var(--maroon);
 }
 
+/* TASK-486: "My company needs an invoice", under the payment choice. The company's details open in
+   the same tinted panel as the donation amount, so the two read as the same kind of follow-up. */
+.ball-invoice-ask {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ball-invoice-ask[hidden],
+.ball-invoice-fields[hidden] { display: none; }
+.ball-invoice-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--tint);
+  border-radius: var(--radius);
+}
+.ball-invoice-fields textarea { resize: vertical; }
+/* In a column, .ball-field's 220px flex-basis would become a height. */
+.ball-invoice-fields > .ball-field { flex: none; }
+.ball-field > span small {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
 /* What someone paying by transfer needs, once booked: label above value, the value large enough
    to read off the screen into a banking app. The reference and amount are the two that matter. */
 .ball-transfer-done h3 {
@@ -601,7 +626,8 @@
   line-height: 1.5;
 }
 .ball-field input,
-.ball-field select {
+.ball-field select,
+.ball-field textarea {
   font: inherit;
   padding: 11px 13px;
   border: 1px solid var(--line);
@@ -611,7 +637,8 @@
   min-width: 0;
 }
 .ball-field input:focus-visible,
-.ball-field select:focus-visible {
+.ball-field select:focus-visible,
+.ball-field textarea:focus-visible {
   outline: 3px solid var(--crimson);
   outline-offset: 1px;
   border-color: var(--maroon);

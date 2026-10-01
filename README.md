@@ -5699,6 +5699,8 @@ the IP itself is then forgotten (see the analytics design,
   - `loadGeoDbIfPresent(path)` answers `null`, with one warning in the log, when the file is
     missing or unreadable, so the app still starts and simply records no places;
   - `connectGeoDb()` is the start-up wiring: the lookup for `/app/geo/dbip-city-lite.mmdb`, or `null`.
+    `src/analytics/start.ts` (`startPlaceLookups`, called from `src/index.ts` once the server is
+    listening) hands it to the counting's `setPlaceResolver`, so visits record a town (TASK-482).
 - **Fetching it.** The file is not in the repo. The Docker build downloads it in a `geo` stage of
   its own, with `scripts/fetch-geo-db.mjs` (Node's own fetch and gzip, so no curl): this month's
   `https://download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`, else last month's (DB-IP

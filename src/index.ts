@@ -1,6 +1,7 @@
 import { createApp } from "./app";
 import { config } from "./config";
 import { startSendWorker } from "./newsletter/send-worker";
+import { startPlaceLookups } from "./analytics/start";
 
 const app = createApp();
 
@@ -11,4 +12,6 @@ app.listen(config.PORT, () => {
   // with FOR UPDATE SKIP LOCKED, so running on several ECS tasks at once is safe — each row goes to
   // exactly one of them.
   startSendWorker();
+  // Site analytics: look visitors' towns up in the DB-IP file, when the image has it.
+  startPlaceLookups();
 });

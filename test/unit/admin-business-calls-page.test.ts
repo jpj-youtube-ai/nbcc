@@ -328,6 +328,56 @@ describe("the Call panel", () => {
     );
   });
 
+  // Review of #614: a save redraws the panel, and used to throw away what was typed in the other box.
+  it("keeps an unsaved note when a phone number is saved", async () => {
+    rows = [row(1)];
+    await openSupporters();
+    await openRow(1);
+    (document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value =
+      "Half written <note>";
+    (document.querySelector('[data-call-panel="1"] input[name="phone"]') as HTMLInputElement).value = "0131 496 0000";
+    (document.querySelector('[data-call-panel="1"] form[data-phone-form]') as HTMLFormElement).dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
+    await settle();
+    expect(document.querySelector('[data-call-panel="1"] a[href^="tel:"]')).not.toBeNull();
+    expect((document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value).toBe(
+      "Half written <note>",
+    );
+  });
+
+  it("keeps an unsaved phone number when a call is marked, and empties the note it saved", async () => {
+    rows = [row(1, { callDue: true, phone: "0131 496 0001" })];
+    await openSupporters();
+    await openRow(1);
+    (document.querySelector('[data-call-panel="1"] input[name="phone"]') as HTMLInputElement).value = "0131 496 0002";
+    (document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value = "Rang them";
+    (document.querySelector('[data-call-panel="1"] form[data-call-form]') as HTMLFormElement).dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
+    await settle();
+    expect(pillFor(1)).toBeNull();
+    expect((document.querySelector('[data-call-panel="1"] input[name="phone"]') as HTMLInputElement).value).toBe(
+      "0131 496 0002",
+    );
+    expect((document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("forgets unsaved text once the business is closed", async () => {
+    rows = [row(1), row(2)];
+    await openSupporters();
+    await openRow(1);
+    (document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value = "Draft";
+    (document.querySelector('[data-call-panel="1"] input[name="phone"]') as HTMLInputElement).value = "0131 496 0000";
+    (document.querySelector('[data-call-panel="1"] form[data-phone-form]') as HTMLFormElement).dispatchEvent(
+      new Event("submit", { cancelable: true, bubbles: true }),
+    );
+    await settle();
+    await openRow(2);
+    await openRow(1);
+    expect((document.querySelector('[data-call-panel="1"] textarea[name="note"]') as HTMLTextAreaElement).value).toBe("");
+  });
+
   it("limits the note to 500 characters", async () => {
     rows = [row(1)];
     await openSupporters();

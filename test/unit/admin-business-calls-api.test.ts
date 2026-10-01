@@ -148,6 +148,19 @@ describe("the list says who is due a call", () => {
     expect(sql).toMatch(/supporting_since/);
   });
 
+  // Review of #614: a dunning row exists only after a failed payment or a cancellation, so a healthy
+  // new subscription has none. Falling back to the donor's OTHER rows read an old cancellation as the
+  // current state, and a business that cancelled and later gave again was never due.
+  it("reads payment health only from the subscription of their latest paid gift", async () => {
+    await run(getAdminFulfilments, {});
+    const sql = String(queryMock.mock.calls.find((c) => /from business_supporter_fulfilment/i.test(String(c[0])))?.[0]);
+    const dunning = sql.slice(sql.search(/FROM subscription_dunning/i));
+    expect(dunning).toMatch(
+      /gift\.latest_subscription_id IS NULL\s+OR\s+s\.stripe_subscription_id = gift\.latest_subscription_id/i,
+    );
+    expect(dunning).not.toMatch(/DESC NULLS LAST/i);
+  });
+
   it("marks a business giving since March and never called as due", async () => {
     const res = await run(getAdminFulfilments, {});
     const r = (res.body as { results: Record<string, unknown>[] }).results[0];

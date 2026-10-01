@@ -1428,6 +1428,21 @@
   // to thank them and ask if there is anything we can do. The server decides who is due (callDue in
   // src/business/call-due.ts); this panel shows their number and the last call, and records the next.
   var callNotice = {}; // id -> { call?: message, phone?: message }, shown once after a save
+  // id -> { note?, phone? }: what was typed but not saved in the OTHER box when one of them saved.
+  // A save redraws the list, and without this it threw that text away (review of #614).
+  var callDrafts = {};
+
+  // Before a save redraws the panel, keep whatever is typed in the box that is not being saved.
+  function keepUnsaved(id, saving) {
+    var panel = document.querySelector('[data-call-panel="' + id + '"]');
+    if (!panel) return;
+    var draft = {};
+    var note = panel.querySelector('textarea[name="note"]');
+    var phone = panel.querySelector('input[name="phone"]');
+    if (saving !== "note" && note && note.value) draft.note = note.value;
+    if (saving !== "phone" && phone) draft.phone = phone.value;
+    callDrafts[id] = draft;
+  }
 
   // A number a phone can dial: digits and a leading +. "+44 (0)131" dials as +44131, so the (0) goes.
   function telHref(phone) {
@@ -1452,6 +1467,8 @@
 
   function fulfilmentCall(r) {
     var notice = callNotice[r.id] || {};
+    var draft = callDrafts[r.id] || {};
+    var phoneValue = draft.phone !== undefined ? draft.phone : r.phone || "";
     var phone = r.phone
       ? '<a class="fx-tel" href="' + H.escapeHtml(telHref(r.phone)) + '">' + H.escapeHtml(r.phone) + "</a>"
       : '<span class="fx-none">No phone number yet</span>';
@@ -1470,7 +1487,8 @@
         '<div class="fx-call-forms">' +
           '<form class="fx-call-form" data-call-form="' + r.id + '" novalidate>' +
             '<label class="fx-call-label" for="fxNote' + r.id + '">Note about the call (optional)</label>' +
-            '<textarea class="fx-call-input" id="fxNote' + r.id + '" name="note" rows="3" maxlength="500"></textarea>' +
+            '<textarea class="fx-call-input" id="fxNote' + r.id + '" name="note" rows="3" maxlength="500">' +
+              H.escapeHtml(draft.note || "") + "</textarea>" +
             '<p class="fx-help">Up to 500 characters. Marking the call clears the reminder for 3 months.</p>' +
             '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="submit">Mark as called</button></div>' +
             '<p class="fx-call-status" data-call-status role="status" aria-live="polite">' +
@@ -1481,7 +1499,7 @@
               (r.phone ? "Change their number" : "Add their number") + "</label>" +
             '<div class="fx-call-row">' +
               '<input class="fx-call-input" id="fxPhone' + r.id + '" name="phone" type="tel" maxlength="40" ' +
-                'autocomplete="off" value="' + H.escapeHtml(r.phone || "") + '">' +
+                'autocomplete="off" value="' + H.escapeHtml(phoneValue) + '">' +
               '<button class="admin-btn admin-btn--small" type="submit">Save number</button>' +
             "</div>" +
             '<p class="fx-call-status" data-phone-status role="status" aria-live="polite">' +
@@ -1550,6 +1568,7 @@
       .then(function (out) {
         if (!out) throw new Error("not recorded");
         callNotice[id] = { call: "Call recorded against your name." };
+        keepUnsaved(id, "note");
         loadFulfilments();
       })
       .catch(function () {
@@ -1573,6 +1592,7 @@
       .then(okJsonOrSaid)
       .then(function (out) {
         callNotice[id] = { phone: out && out.phone ? "Phone number saved." : "Phone number removed." };
+        keepUnsaved(id, "phone");
         loadFulfilments();
       })
       .catch(function (err) {
@@ -1633,6 +1653,7 @@
     var n = Number(id);
     fulfilOpenId = fulfilOpenId === n ? null : n;
     callNotice = {};
+    callDrafts = {};
     fulfilmentStatus("");
     loadFulfilments();
   }
@@ -1648,6 +1669,7 @@
         fulfilmentCallCount(d.results || []);
         // A save's message has now been shown once, in the panel it belongs to.
         callNotice = {};
+        callDrafts = {};
         // The open row renders a placeholder for its history; fill it in.
         if (fulfilOpenId != null) loadFulfilmentHistory(fulfilOpenId);
       })

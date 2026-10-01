@@ -4690,7 +4690,9 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   - **still supporting** means at least one paid monthly gift, and the `subscription_dunning` row
     for the subscription of their latest one neither cancelled (`cancelled_at`) nor `lapsed`. That is
     how Monthly givers reads an individual. `past_due` (Stripe still retrying) and no dunning row (no
-    trouble yet) both count as supporting. Not supporting means no pill, whatever the dates;
+    trouble yet) both count as supporting. An old subscription's cancellation never counts against a
+    newer one, so a business that cancelled and later gave again is supporting. Not supporting
+    means no pill, whatever the dates;
   - **after a call**, the next is due 3 calendar months after the last one;
   - **before the first call**, 3 calendar months after their first paid monthly gift, but never
     before **1 September 2026**, so everyone giving since June 2026 or earlier was due at once;

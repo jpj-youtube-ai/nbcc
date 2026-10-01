@@ -1,4 +1,4 @@
-const { Given, When, Then, Before, AfterAll } = require("@cucumber/cucumber");
+const { Given, When, Then, Before, After, AfterAll } = require("@cucumber/cucumber");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { randomBytes } = require("node:crypto");
@@ -7,16 +7,24 @@ const { Pool } = require("pg");
 // Steps for business-calls.feature (TASK-491): the reminder to phone each business that gives
 // monthly. Businesses are seeded straight into Postgres (a company donor, a paid monthly gift dated
 // when they started, and their fulfilment record), then the real admin routes are driven over HTTP.
-// Every business uses an email ending calls.bdd@example.com, which the Before hook below clears; the
-// admin user ends admin.bdd@example.com, which the shared @admin Before (admin-auth.steps.js) clears.
-// "an admin user ... with password ..." and "the admin response status should be ..." are shared.
+// The admin user ends admin.bdd@example.com, which the shared @admin Before (admin-auth.steps.js)
+// clears. "an admin user ... with password ..." and "the admin response status should be ..." are
+// shared.
+//
+// Kept apart from every other feature's cleanup (review of #614). The stripe-webhook Before deletes
+// any donor whose email ends bdd@example.com, or whose donation's subscription matches sub_bdd_%, and
+// it knows nothing of fulfilment records, so a row of ours left behind made it fail on the foreign
+// key. So: our businesses use their own domain (@calls.bdd.example.com, which no other pattern
+// matches) and their own subscription prefix (sub_callsbdd_), and everything we create is removed
+// both before AND after each of our scenarios, leaving nothing for anybody else to trip over.
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 const BACKFILL = path.resolve(__dirname, "../../migrations/1791100000000_business-supporter-calls.js");
-const MARKER = "%calls.bdd@example.com";
+const MARKER = "%@calls.bdd.example.com";
+const SUBSCRIPTION_PREFIX = "sub_callsbdd_";
 
-Before({ tags: "@business-calls" }, async function () {
+async function removeOurRows() {
   const { rows } = await pool.query("SELECT id FROM donors WHERE email LIKE $1", [MARKER]);
   const ids = rows.map((r) => r.id);
   if (!ids.length) return;
@@ -26,7 +34,10 @@ Before({ tags: "@business-calls" }, async function () {
   await pool.query("DELETE FROM subscription_dunning WHERE donor_id = ANY($1)", [ids]);
   await pool.query("DELETE FROM donations WHERE donor_id = ANY($1)", [ids]);
   await pool.query("DELETE FROM donors WHERE id = ANY($1)", [ids]);
-});
+}
+
+Before({ tags: "@business-calls" }, removeOurRows);
+After({ tags: "@business-calls" }, removeOurRows);
 
 async function login(email, password) {
   const res = await fetch(`${BASE_URL}/api/admin/login`, {
@@ -95,7 +106,7 @@ Given(
       [businessName, email],
     );
     const donorId = donor.rows[0].id;
-    const subscription = `sub_bdd_calls_${donorId}`;
+    const subscription = `${SUBSCRIPTION_PREFIX}${donorId}`;
     await pool.query(
       `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status, payment_status,
                               stripe_subscription_id, created_at)
@@ -130,6 +141,21 @@ Given("the business with email {string} cancelled its monthly gift", async funct
   // Stripe keeps a cancelled subscription 'active' until its period ends; cancelled_at is the truth.
   await setDunning(email, "active", true);
 });
+
+// A fresh subscription after a cancellation, paid without trouble, so (like a real one) it has no
+// subscription_dunning row of its own.
+Given(
+  "the business with email {string} started giving monthly again on a new subscription on {string}",
+  async function (email, since) {
+    await pool.query(
+      `INSERT INTO donations (donor_id, mode, amount_pence, gift_aid, claim_status, payment_status,
+                              stripe_subscription_id, created_at)
+       SELECT dn.id, 'monthly', 5000, false, 'not_eligible', 'paid', $2::text || dn.id::text || '_again', $3::timestamptz
+         FROM donors dn WHERE dn.email = $1`,
+      [email, SUBSCRIPTION_PREFIX, `${since}T10:00:00Z`],
+    );
+  },
+);
 
 Given("the business with email {string} already has the phone {string}", async function (email, phone) {
   await pool.query("UPDATE business_supporter_fulfilment SET phone = $2 WHERE id = $1", [

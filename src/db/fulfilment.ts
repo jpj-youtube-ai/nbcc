@@ -452,14 +452,18 @@ export async function listBusinessFulfilments(): Promise<BusinessFulfilmentListR
                 FROM donations d
                WHERE d.donor_id = f.donor_id AND d.mode = 'monthly' AND d.payment_status = 'paid'
             ) gift ON true
-       -- A business that cancelled and later gave again has two payment records; the one for the
-       -- subscription of their latest paid gift is the one that says where they stand now.
+       -- Payment health for the subscription of their latest paid gift ONLY. A dunning row exists
+       -- only after a failed payment or a cancellation, so a healthy new subscription has none; a
+       -- business that cancelled and later gave again must not be judged by the old one's row.
+       -- Only a gift with no subscription id at all (an older or hand-imported one) falls back to
+       -- the donor's most recent row.
        LEFT JOIN LATERAL (
               SELECT s.status, s.cancelled_at
                 FROM subscription_dunning s
                WHERE s.donor_id = f.donor_id
-               ORDER BY (s.stripe_subscription_id = gift.latest_subscription_id) DESC NULLS LAST,
-                        s.updated_at DESC
+                 AND (gift.latest_subscription_id IS NULL
+                      OR s.stripe_subscription_id = gift.latest_subscription_id)
+               ORDER BY s.updated_at DESC
                LIMIT 1
             ) sd ON true
       ORDER BY f.id DESC

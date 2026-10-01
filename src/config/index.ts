@@ -1,4 +1,4 @@
-import { configSchema, productionConfigProblems } from "./schema";
+import { configSchema } from "./schema";
 
 const parsed = configSchema.safeParse(process.env);
 
@@ -10,13 +10,6 @@ if (!parsed.success) {
     "Invalid environment configuration:",
     parsed.error.flatten().fieldErrors,
   );
-  process.exit(1);
-}
-
-// The same fail-fast for rules that only apply in production (see productionConfigProblems).
-const productionProblems = productionConfigProblems(parsed.data);
-if (productionProblems.length > 0) {
-  console.error("Invalid environment configuration:", productionProblems);
   process.exit(1);
 }
 

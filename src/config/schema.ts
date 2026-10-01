@@ -45,8 +45,8 @@ export const configSchema = z.object({
   // the box with it, so it is a plain task-def env value like STRIPE_PUBLISHABLE_KEY. The SECRET is
   // an SSM SecureString. The check is on only when BOTH are set: a secret without a site key would
   // refuse every message, because the page could not show the box. Empty outside production, so
-  // local dev and CI boot with the check off; productionConfigProblems refuses a production without
-  // them.
+  // local dev and CI boot with the check off; productionConfigProblems stops a production web server
+  // starting without them.
   TURNSTILE_SITE_KEY: z.string().default(""),
   TURNSTILE_SECRET_KEY: z.string().default(""),
 
@@ -240,8 +240,9 @@ export const configSchema = z.object({
 
 export type Config = z.infer<typeof configSchema>;
 
-// Rules that only hold in production, applied by src/config/index.ts after parsing. Kept out of
-// configSchema itself so the schema stays a plain z.object that tests can parse and extend.
+// Rules that only the production web server needs, applied where it starts (src/index.ts), so the
+// scheduled jobs that load the same config never depend on them. Kept out of configSchema itself so
+// the schema stays a plain z.object that tests can parse and extend.
 export function productionConfigProblems(c: Config): string[] {
   if (c.NODE_ENV !== "production") return [];
   const problems: string[] = [];

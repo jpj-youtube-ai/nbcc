@@ -45,15 +45,43 @@ describe("asking Cloudflare about a pass", () => {
     },
   );
 
-  it.each(["missing-input-secret", "invalid-input-secret", "bad-request", "internal-error"])(
-    "calls the check unavailable, rather than blaming the visitor, for %s",
-    async (code) => {
-      expect(await verifyCaptcha("tok", undefined, reply({ success: false, "error-codes": [code] }))).toEqual({
-        outcome: "unavailable",
-        reason: code,
-      });
-    },
-  );
+  // Cloudflare sends these with HTTP 400 (checked against the live siteverify: a REPLACE_ME secret gets
+  // a 400 naming invalid-input-secret), so the reason must be read from the body whatever the status.
+  it.each([
+    ["missing-input-secret", 400],
+    ["invalid-input-secret", 400],
+    ["bad-request", 400],
+    ["internal-error", 500],
+    ["internal-error", 200],
+  ])("calls the check unavailable, naming the reason, rather than blaming the visitor, for %s (HTTP %i)", async (code, status) => {
+    const fetchImpl = reply({ success: false, "error-codes": [code] }, { ok: status < 300, status });
+    expect(await verifyCaptcha("tok", undefined, fetchImpl)).toEqual({ outcome: "unavailable", reason: code });
+  });
+
+  it("still refuses the visitor's pass when Cloudflare names it with an error status", async () => {
+    const fetchImpl = reply({ success: false, "error-codes": ["invalid-input-response"] }, { ok: false, status: 400 });
+    expect(await verifyCaptcha("tok", undefined, fetchImpl)).toEqual({ outcome: "refused", reason: "invalid-input-response" });
+  });
+
+  it("keeps the message when the visitor's reason comes with one of ours", async () => {
+    const fetchImpl = reply({ success: false, "error-codes": ["invalid-input-response", "internal-error"] });
+    expect(await verifyCaptcha("tok", undefined, fetchImpl)).toEqual({
+      outcome: "unavailable",
+      reason: "invalid-input-response, internal-error",
+    });
+  });
+
+  it("never passes a success that comes with an error status", async () => {
+    expect(await verifyCaptcha("tok", undefined, reply({ success: true }, { ok: false, status: 500 }))).toEqual({
+      outcome: "unavailable",
+      reason: "Cloudflare replied 500",
+    });
+  });
+
+  it("names the status when an error reply cannot be read", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => { throw new SyntaxError("html"); } });
+    expect(await verifyCaptcha("tok", undefined, fetchImpl)).toEqual({ outcome: "unavailable", reason: "Cloudflare replied 502" });
+  });
 
   it("refuses a failure that gives no reason", async () => {
     expect(await verifyCaptcha("tok", undefined, reply({ success: false }))).toEqual({
@@ -68,6 +96,18 @@ describe("asking Cloudflare about a pass", () => {
     expect(await verifyCaptcha("   ", undefined, fetchImpl)).toEqual({ outcome: "refused", reason: "missing-input-response" });
     expect(await verifyCaptcha(42, undefined, fetchImpl)).toEqual({ outcome: "refused", reason: "missing-input-response" });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it.each([[""], [["tok"]], [{ token: "tok" }], [null]])("refuses %j as a pass without asking Cloudflare", async (token) => {
+    const fetchImpl = reply({ success: true });
+    expect(await verifyCaptcha(token, undefined, fetchImpl)).toEqual({ outcome: "refused", reason: "missing-input-response" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("gives up on Cloudflare after five seconds", async () => {
+    const fetchImpl = reply({ success: true });
+    await verifyCaptcha("tok", undefined, fetchImpl);
+    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
 
   it("refuses a pass longer than Cloudflare ever issues, without asking", async () => {
@@ -87,6 +127,8 @@ describe("asking Cloudflare about a pass", () => {
   it("is unavailable when Cloudflare does not answer in time", async () => {
     const fetchImpl = vi.fn().mockRejectedValue(new DOMException("timed out", "TimeoutError"));
     expect(await verifyCaptcha("tok", undefined, fetchImpl)).toEqual({ outcome: "unavailable", reason: "timeout" });
+    const aborted = vi.fn().mockRejectedValue(new DOMException("aborted", "AbortError"));
+    expect(await verifyCaptcha("tok", undefined, aborted)).toEqual({ outcome: "unavailable", reason: "timeout" });
   });
 
   it("is unavailable when Cloudflare replies with an error status", async () => {

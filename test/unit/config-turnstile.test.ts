@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { configSchema, productionConfigProblems } from "../../src/config/schema";
 
 // TASK-490: the contact form's Cloudflare Turnstile keys. Off (empty) by default so local dev and
@@ -53,5 +53,29 @@ describe("Turnstile keys in config", () => {
       TURNSTILE_SECRET_KEY: "REPLACE_ME",
     });
     expect(productionConfigProblems(c)).toEqual([]);
+  });
+});
+
+describe("the shared config in production", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  // The 2am backup and the 8am reminders load this same config. They never serve the contact form,
+  // so only the web server (src/index.ts) insists on the spam check's keys.
+  it("loads without the Turnstile keys, so the scheduled jobs never depend on them", async () => {
+    for (const [key, value] of Object.entries(base)) vi.stubEnv(key, value);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("TURNSTILE_SITE_KEY", "");
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "");
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as never);
+    vi.resetModules();
+    const { config } = await import("../../src/config");
+    expect(config.NODE_ENV).toBe("production");
+    expect(exit).not.toHaveBeenCalled();
   });
 });

@@ -56,19 +56,21 @@ export async function verifyCaptcha(
     const name = typeof err === "object" && err !== null && "name" in err ? String(err.name) : "";
     return { outcome: "unavailable", reason: name === "TimeoutError" || name === "AbortError" ? "timeout" : "network error" };
   }
-  if (!res.ok) return { outcome: "unavailable", reason: `Cloudflare replied ${res.status}` };
-
-  let body: unknown;
+  // Cloudflare names its reason in the body whatever the HTTP status: a rejected secret is a 400 with
+  // invalid-input-secret. So the codes decide, and the status speaks only when there are none.
+  let body: unknown = null;
   try {
     body = await res.json();
   } catch {
-    return { outcome: "unavailable", reason: "unreadable reply" };
+    // Read as no answer below.
   }
-  if (!body || typeof body !== "object") return { outcome: "unavailable", reason: "unreadable reply" };
-  const result = body as { success?: unknown; "error-codes"?: unknown };
-  if (result.success === true) return { outcome: "passed" };
+  const result = body && typeof body === "object" ? (body as { success?: unknown; "error-codes"?: unknown }) : null;
+  if (res.ok && result?.success === true) return { outcome: "passed" };
 
-  const codes = Array.isArray(result["error-codes"]) ? result["error-codes"].map(String) : [];
+  const codes = result && Array.isArray(result["error-codes"]) ? result["error-codes"].map(String) : [];
   if (codes.some((code) => NOT_THE_VISITORS.has(code))) return { outcome: "unavailable", reason: codes.join(", ") };
-  return { outcome: "refused", reason: codes.join(", ") || "no reason given" };
+  if (codes.length > 0) return { outcome: "refused", reason: codes.join(", ") };
+  if (!res.ok) return { outcome: "unavailable", reason: `Cloudflare replied ${res.status}` };
+  if (!result) return { outcome: "unavailable", reason: "unreadable reply" };
+  return { outcome: "refused", reason: "no reason given" };
 }

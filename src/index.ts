@@ -1,7 +1,17 @@
 import { createApp } from "./app";
 import { config } from "./config";
+import { productionConfigProblems } from "./config/schema";
 import { startSendWorker } from "./newsletter/send-worker";
 import { startPlaceLookups } from "./analytics/start";
+
+// TASK-490: the same fail-fast as src/config, for what only the web server needs in production (the
+// contact form's spam check keys). Checked here, not in src/config, so the scheduled jobs that share
+// the config (the backup, the reminders) never refuse to start over a setting they do not use.
+const productionProblems = productionConfigProblems(config);
+if (productionProblems.length > 0) {
+  console.error("Invalid environment configuration:", productionProblems);
+  process.exit(1);
+}
 
 const app = createApp();
 

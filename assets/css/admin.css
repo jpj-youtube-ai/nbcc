@@ -1756,6 +1756,35 @@ tr.nl-click:hover { background: var(--tint); }
 .monthly-table th:nth-child(7),.monthly-table td:nth-child(7){width:15%}  /* State */
 .monthly-table th:nth-child(8),.monthly-table td:nth-child(8){width:7%}   /* View */
 
+/* TASK-484: bookings awaiting a bank transfer. The actions get the room they need so "Mark as paid"
+   sits on one line; the two exceptions under it are quiet links. */
+.ball-transfers-table th:nth-child(1),.ball-transfers-table td:nth-child(1){width:15%}  /* Reference */
+.ball-transfers-table th:nth-child(2),.ball-transfers-table td:nth-child(2){width:31%}  /* Who */
+.ball-transfers-table th:nth-child(3),.ball-transfers-table td:nth-child(3){width:15%}  /* Amount */
+.ball-transfers-table th:nth-child(4),.ball-transfers-table td:nth-child(4){width:13%}  /* Pay by */
+.ball-transfers-table th:nth-child(5),.ball-transfers-table td:nth-child(5){width:26%}  /* Actions */
+.ball-transfer-actions{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.ball-mark-paid{white-space:nowrap}
+
+/* Narrow, each booking is a labelled card, as the donations table is (TASK-483): at 375px the five
+   columns were 44-106px and the box scrolled 106px sideways to reach Mark as paid. Measured on the
+   list itself, since the side menu takes its share above 860px. */
+#ballTransfers{container:btlist / inline-size}
+@container btlist (max-width:599px){
+  .ball-transfers-table,.ball-transfers-table tbody{display:block}
+  .ball-transfers-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .ball-transfers-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .ball-transfers-table tr:last-child{border-bottom:0}
+  /* Same specificity as the desktop column widths above, declared later, so it wins. */
+  .ball-transfers-table td:nth-child(n){width:auto}
+  .ball-transfers-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .ball-transfers-table td::before{content:attr(data-label);flex:0 0 5.5rem;font-size:.78rem;color:var(--slate-soft)}
+  .ball-transfers-table td:last-child{padding-top:8px}
+  .ball-transfers-table td:last-child::before{content:none}
+  .ball-transfer-actions{flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px 18px}
+  .ball-transfer-actions .admin-link{min-height:44px}
+}
+
 
 @media (max-width:1000px){
   .monthly-table,.monthly-table tbody,.monthly-table tr,.monthly-table td{display:block;width:auto}

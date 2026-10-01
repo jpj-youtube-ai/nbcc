@@ -1359,7 +1359,12 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `DELETE /api/admin/thank-you/sent/:id` | **implemented** | REQ-069 · TASK-168 (Editor+; remove a sent-letter row, audited as `thank_you.deleted`) |
 | `GET /api/supporters/ticker` | **implemented** | REQ-003 · TASK-178 (public; active supporter names for the site ticker) |
 | `GET /api/ball/availability` | **implemented** | TASK-313 (public; Festive Ball seats/tables remaining + whether sales are open. Counts only — never buyer details) |
-| `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking) |
+| `POST /api/ball/checkout-session` | **implemented** | TASK-313 (public; validates the order, holds the seats under a lock, mints a Stripe Checkout session, records a pending booking). TASK-484: takes an optional `replaces`, the inline checkout a fallback to Stripe's own page replaces |
+| `POST /api/ball/bank-transfer` | **implemented** | TASK-484 (public; books to pay by bank transfer and answers with the bank details; refused until an admin switches it on) |
+| `GET`/`PUT /api/admin/ball/transfer-settings` | **implemented** | TASK-484 (the bank details and the switch; changing them is admin only) |
+| `GET /api/admin/ball/transfers` | **implemented** | TASK-484 (bookings awaiting a bank transfer) |
+| `POST /api/admin/ball/bookings/:reference/mark-paid` | **implemented** | TASK-484 (admin only; `{ confirmTotalPence }`) |
+| `POST /api/admin/ball/bookings/:reference/pay-by` | **implemented** | TASK-484 (Festive Ball edit; `{ payBy }`) |
 | `POST /api/admin/outreach/check` | **implemented** | TASK-354 (Viewer+; what the matcher says about a business, BEFORE anything is committed) |
 | `POST /api/admin/outreach` | **implemented** | TASK-354 (Editor+; add a business as a draft. 409 on a business that declined, unless `acknowledgedMatches`) |
 | `GET /api/admin/outreach` | **implemented** | TASK-354 (Viewer+; every business on the list, newest first) |
@@ -2241,7 +2246,9 @@ database recording another, invisibly. `ball-checkout.test.ts` pins the two toge
 two people going for the last table are serialised and the loser is refused. The reservation
 only covers the gap until a `pending` booking exists; from then on the booking holds the seats,
 and Stripe's 30-minute session expiry (`checkout.session.expired` → `cancelled`) returns them if
-the buyer walks away. No sweeper to fail unattended.
+the buyer walks away. No sweeper to fail unattended. Since TASK-484 a pending card booking stops
+counting after an hour even if that event never arrives, and a bank transfer booking counts until it
+is paid or cancelled (see [Paying by bank transfer](#paying-by-bank-transfer-task-484)).
 
 **One webhook, two products.** Stripe delivers every event to a single endpoint, shared with
 donations. `checkout.session.completed` is routed on `metadata.product === "ball"` *before* the
@@ -2685,7 +2692,8 @@ the point of writing it down. Both actions are audited (`ball.hold_created`,
 same bar as changing capacity, because near a sell-out this decides who gets the last table.
 
 The seats come back on their own: availability counts only `pending` and `paid`
-(`SOLD_SQL`), so the status change *is* the mechanism. There is no separate "give the seats
+(`SOLD_SQL`; since TASK-484 a pending card checkout counts for an hour at most), so the status
+change *is* the mechanism. There is no separate "give the seats
 back" step to forget.
 
 **It does not refund.** Money moves in Stripe, by a person, deliberately — a button in our
@@ -2700,6 +2708,80 @@ row itself is kept, marked `cancelled`, so nothing is erased.
 
 This is also how you clear test bookings before launch: cancel them and the count returns to
 the full room.
+
+### Paying by bank transfer (TASK-484)
+
+A buyer can book Festive Ball seats or tables to pay by bank transfer instead of by card. This is
+stage 1 of five in `docs/superpowers/specs/2026-10-01-ball-bank-transfer-design.md`. **It ships
+switched off.** The ticket page offers it only when an admin has entered the bank details and
+ticked "Offer bank transfer on the ticket page".
+
+**For the buyer**
+- **The choice:** "How would you like to pay?" (Card, or Bank transfer) appears above the button.
+  Choosing bank transfer drops the card-fee offer and changes the button to "Book and get bank
+  details". Everything else on the form, including the terms, is the same as paying by card.
+- **After booking,** the page and an email (`src/ball/transfer-email.ts`) give:
+  - the account name, sort code and account number;
+  - the exact amount;
+  - the booking reference to use as the payment reference;
+  - the date their seats are held until, 7 days on (`TRANSFER_DAYS`).
+
+  The bank details are never in the open availability feed, which only says `transferOpen`.
+- **Once an admin marks it paid,** they get the ordinary "You're coming to the ball!" email with
+  the line "Your bank transfer has arrived. Thank you." and the link to add their guests. The guest
+  link only ever works on a paid booking.
+- **Booking again:** a buyer can make more than one transfer booking before paying, at the
+  client's request.
+
+**For the team (Admin → Festive Ball)**
+- **The bank details** go under Set up → Bank transfer. They live on `ball_settings`, never in the
+  code, because the repository is public. Only an admin can change them, and the switch cannot be
+  turned on while a detail is missing.
+- **Awaiting transfer,** under Where things stand, lists each booking with its amount and pay-by
+  date. It can be searched by reference, name or amount, for a payment whose reference was typed
+  wrong.
+- **Mark as paid** is for **admins only** (the admin role, read fresh on each request:
+  `authorizeSectionAsAdmin`). It asks "Has £1,020.00 arrived for BALL-XXXXXX (name)?" and sends the
+  amount it showed. The server refuses if that is not the booking's total.
+- **Give more time and Cancel** need Festive Ball edit. Cancelling an unpaid transfer booking
+  emails the buyer that it was cancelled.
+- **Late money:** a transfer cancelled while still unpaid can be marked paid when its money arrives
+  after all, but only while its seats are free. Otherwise the admin is told to refund the transfer
+  by hand. One that had been paid and was then cancelled (and refunded) cannot be brought back:
+  `ball_bookings.cancelled_from` records what each booking was when it was cancelled. Cancelling a
+  paid transfer says to refund it from the bank, not through Stripe.
+- **The audit log** records each step (`ball.transfer_settings_changed` without the numbers,
+  `ball.transfer_marked_paid`, `ball.transfer_reinstated`, `ball.transfer_pay_by_changed`), and
+  `ball_bookings.marked_paid_by` says who.
+
+**Seats and money**
+- **Seats:** a transfer booking holds its seats until it is paid or cancelled.
+- **Money:** it counts towards takings, Gift Aid figures and the ticket report only once it is
+  paid, like a card booking.
+- **Abuse:** at most 5 transfer bookings an hour from one connection, because a booking holds seats
+  for a week and a script could otherwise hold the room. Same-host requests (CI, local development)
+  are exempt, as for the admin login. There is deliberately no limit per email address.
+
+**Fixed alongside**
+- **Card checkouts hold seats for an hour at most.** If Stripe's "checkout expired" message were
+  ever lost, a pending card booking used to hold its seats for good. Its status is left alone, so
+  a late "completed" still finds it pending and marks it paid.
+- **A payment confirmed after its seats were released is flagged.** If Stripe's "completed" is
+  delayed past that hour (an outage, say), the seats may have gone to someone else. The payment is
+  real, so it is still recorded. It also writes a `ball.paid_after_seats_released` audit row saying
+  whether the room is now over capacity (`overbooked` in `src/ball/capacity.ts`), and logs an error
+  when it is, so staff can sort it out with the buyer.
+- **The fallback no longer leaves a second booking.** When the inline card payment could not be
+  shown, the fallback to Stripe's own page created a second pending booking, and both held seats.
+  The page now names the checkout it replaces. The server checks the client secret belongs to that
+  session, expires it at Stripe first, which Stripe refuses for one that was paid, and only then
+  cancels it.
+- **Click handlers attach once.** The Festive Ball screen's tables used to gain another click
+  handler on every reload, so one press of Cancel asked once per reload.
+
+**Still to come** (stages 2 to 5): the reminder 2 days before, the Overdue flag and a "last day for
+transfers"; invoices for companies; the events@ email, the New pill and the ticket report line;
+and staff adding a booking by hand.
 
 ### Changing the preview password
 

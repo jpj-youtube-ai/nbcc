@@ -359,3 +359,35 @@ describe("the donations table becomes labelled cards wherever it is narrow", () 
     expect(view).toContain("min-width:44px");
   });
 });
+
+// TASK-484: the Festive Ball's bookings awaiting a bank transfer. At 375px its five columns were
+// 44-106px and the box scrolled 106px sideways to reach "Mark as paid". Narrow, each booking is a
+// labelled card, measured on the list itself like the Donations table.
+describe("the bookings awaiting a transfer become labelled cards wherever they are narrow", () => {
+  const NARROW = "@container btlist (max-width:599px)";
+
+  it("measures the list itself", () => {
+    expect(rule("#ballTransfers")).toContain("container:btlist / inline-size");
+    expect(RULES.some((r) => r.media === NARROW)).toBe(true);
+  });
+
+  it("stops laying the bookings out as a table, each a column of labelled lines", () => {
+    expect(rule(".ball-transfers-table", NARROW)).toContain("display:block");
+    expect(rule(".ball-transfers-table tr", NARROW)).toContain("flex-direction:column");
+    expect(rule(".ball-transfers-table td", NARROW)).toContain("display:flex");
+    expect(rule(".ball-transfers-table td::before", NARROW)).toContain("content:attr(data-label)");
+  });
+
+  // The column widths that suit a desktop outrank a plain width:auto; the trap .ty-sent-table names.
+  it("lets every cell take the card's width, whatever the desktop columns say", () => {
+    expect(rule(".ball-transfers-table td:nth-child(n)", NARROW)).toContain("width:auto");
+  });
+
+  it("keeps the headings for screen readers", () => {
+    expect(rule(".ball-transfers-table thead", NARROW)).toContain("clip:rect(0 0 0 0)");
+  });
+
+  it("gives Give more time and Cancel a target a thumb can hit", () => {
+    expect(rule(".ball-transfer-actions .admin-link", NARROW)).toContain("min-height:44px");
+  });
+});

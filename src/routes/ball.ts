@@ -2,12 +2,16 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import express, { Router } from "express";
+import { z } from "zod";
 import { config } from "../config";
 import { stripe, stripeConfigured } from "../clients/stripe";
 import { canFulfil, seatsFor } from "../ball/capacity";
 import { makeReference, purchaseSchema } from "../ball/booking";
 import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
+import { publicTransferOpen } from "../ball/transfer";
+import { retireReplacedCheckout } from "../ball/replace-checkout";
+import { cancelReplacedCheckout, getTransferSettings, pendingCardSession } from "../db/ball-transfer";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
 import { addEventsNavLink } from "../events/nav-link";
@@ -58,6 +62,8 @@ ballRouter.get("/api/ball/availability", async (_req, res) => {
       tablesRemaining: a.tablesRemaining,
       soldOut: a.soldOut,
       salesOpen: a.salesOpen,
+      // TASK-484: whether to show "Pay by bank transfer". Yes or no only; never the bank details.
+      transferOpen: publicTransferOpen(a.salesOpen, await getTransferSettings()),
       // So the "cover the card fee" checkbox quotes the live rate rather than a number
       // baked into the script at build time (TASK-317). Not sensitive: the page already
       // shows the resulting amount in pounds.
@@ -75,6 +81,12 @@ ballRouter.get("/api/ball/availability", async (_req, res) => {
 // session expiry releases them if the buyer walks away.
 const RESERVATION_HOLD_MS = 2 * 60 * 1000;
 
+// TASK-484: the inline checkout a fallback to Stripe's own page replaces.
+const replacesSchema = z.object({
+  reference: z.string().regex(/^BALL-[A-Z2-9]{6}$/),
+  clientSecret: z.string().min(1).max(500),
+});
+
 ballRouter.post("/api/ball/checkout-session", async (req, res) => {
   const parsed = purchaseSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -84,6 +96,22 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
 
   let token: string | null = null;
   try {
+    // TASK-484: the page's fallback to Stripe's own page, after an inline checkout was created but
+    // could not be shown, names that checkout; it is retired so it stops holding seats beside the new
+    // one (the rules are in src/ball/replace-checkout.ts). Done before capacity is checked, so the
+    // seats it held are free again.
+    const replaces = replacesSchema.safeParse(req.body?.replaces);
+    if (replaces.success) {
+      const outcome = await retireReplacedCheckout(replaces.data, {
+        pendingCardSession,
+        expire: (sid) => stripe.checkout.sessions.expire(sid),
+        cancel: cancelReplacedCheckout,
+      });
+      if (outcome !== "retired" && outcome !== "not_found") {
+        console.error(`ball checkout: the replaced checkout ${replaces.data.reference} was not retired: ${outcome}`);
+      }
+    }
+
     // 1. Are sales open at all? Checked before anything is held, so a closed ball never
     //    creates a reservation it would have to clean up.
     const avail = await getAvailability();

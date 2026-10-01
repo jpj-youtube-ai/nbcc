@@ -56,6 +56,17 @@ export function availability(state: CapacityState): Availability {
   return { totalSeats, seatsRemaining, tablesRemaining, soldOut: seatsRemaining === 0 };
 }
 
+/**
+ * TASK-484: more committed than the room holds. Never true by our own hand, because every booking
+ * is checked under a lock first. It can become true when a card payment's confirmation arrives after
+ * its pending booking stopped holding seats (an hour on), because a payment already taken is
+ * recorded regardless. Whole tables plus the tables that pooled seats break must fit.
+ */
+export function overbooked(state: CapacityState): boolean {
+  const s = capacityStateSchema.parse(state);
+  return s.tablesSold + Math.ceil(pooledSeats(s) / s.seatsPerTable) > s.totalTables;
+}
+
 export const orderSchema = z.object({
   kind: z.enum(["seat", "table"]),
   quantity: z.number().int(),

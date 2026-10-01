@@ -37,23 +37,31 @@ function stubStripe(): Stripe {
   return {
     checkout: {
       sessions: {
-        create: async (params: Stripe.Checkout.SessionCreateParams) => ({
-          id: `cs_preview_${(n += 1)}`,
-          // An obviously-fake but well-formed Checkout URL; no network call. The offline
-          // preview URL reflects the session's key attributes — its mode and whether Gift
-          // Aid was opted in (the verbatim wording is bound in metadata, TASK-053) — so the
-          // gift-aided checkout flow is observable end to end without a live account.
-          url: `https://checkout.stripe.com/c/pay/preview_${params.mode ?? "session"}${
-            params.metadata?.giftAid === "true" ? "_giftaid" : ""
-          }`,
-          // Embedded Checkout (TASK-215): the stub also hands back a deterministic client_secret so
-          // the inline (ui_mode: embedded_page) flow is observable end to end without a live account.
-          // Real Stripe populates exactly ONE of url / client_secret per ui_mode; the checkout-session
-          // endpoint reads only the field for the requested mode, so returning both here is harmless.
-          client_secret: `cs_preview_secret_${params.mode ?? "session"}${
-            params.metadata?.giftAid === "true" ? "_giftaid" : ""
-          }`,
-        }),
+        create: async (params: Stripe.Checkout.SessionCreateParams) => {
+          const id = `cs_preview_${(n += 1)}`;
+          return {
+            id,
+            // An obviously-fake but well-formed Checkout URL; no network call. The offline
+            // preview URL reflects the session's key attributes — its mode and whether Gift
+            // Aid was opted in (the verbatim wording is bound in metadata, TASK-053) — so the
+            // gift-aided checkout flow is observable end to end without a live account.
+            url: `https://checkout.stripe.com/c/pay/preview_${params.mode ?? "session"}${
+              params.metadata?.giftAid === "true" ? "_giftaid" : ""
+            }`,
+            // Embedded Checkout (TASK-215): the stub also hands back a deterministic client_secret so
+            // the inline (ui_mode: embedded_page) flow is observable end to end without a live account.
+            // Real Stripe populates exactly ONE of url / client_secret per ui_mode; the checkout-session
+            // endpoint reads only the field for the requested mode, so returning both here is harmless.
+            // TASK-484: it starts with the session id, as Stripe's do, because the Ball's card fallback
+            // proves a session is the buyer's own by exactly that.
+            client_secret: `${id}_secret_preview_${params.mode ?? "session"}${
+              params.metadata?.giftAid === "true" ? "_giftaid" : ""
+            }`,
+          };
+        },
+        // TASK-484: the Ball's card fallback expires the checkout it replaces. Real Stripe refuses a
+        // session that has completed; the stub has none that do.
+        expire: async (id: string) => ({ id, status: "expired" }),
       },
     },
     // Subscription tier changes (REQ-055) exercised end to end without a Stripe

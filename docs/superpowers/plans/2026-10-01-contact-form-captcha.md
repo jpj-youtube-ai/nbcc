@@ -4,7 +4,7 @@
 
 **Goal:** Stop bot spam reaching Admin → Contact form by checking a Cloudflare Turnstile pass on `POST /api/contact`, as specified in `docs/superpowers/specs/2026-09-30-contact-form-captcha-design.md`.
 
-**Architecture:** A small client (`src/clients/turnstile.ts`) asks Cloudflare's siteverify about a pass and answers `passed`, `refused` or `unavailable`. `postContact` calls it between the rate limit and validation when both keys are configured. A refused pass stores nothing; an unavailable check keeps the message and logs why. The contact page alone loads `assets/js/contact-captcha.js`, which asks `GET /api/contact/captcha` for the site key, then loads Cloudflare's script and draws the box. The pass travels in a hidden `captchaToken` field that `main.js` already sends. It is a separate file because `main.js` and `styles.css` count towards `donate.html`'s page-weight budget, which has **553 bytes** left as CI measures it.
+**Architecture:** A small client (`src/clients/turnstile.ts`) asks Cloudflare's siteverify about a pass and answers `passed`, `refused` or `unavailable`. `postContact` calls it between the rate limit and validation when both keys are configured. A refused pass stores nothing; an unavailable check keeps the message and logs why. The contact page alone loads `assets/js/contact-captcha.js`, which asks `GET /api/contact/captcha` for the site key, then loads Cloudflare's script and draws the box. The pass travels in a hidden `captchaToken` field that `main.js` already sends. It is a separate file because `main.js` and `styles.css` count towards `donate.html`'s page-weight budget, which has about **530 bytes** left as CI measures it (TASK-479 raised it to 262KB and added pulse.js).
 
 **Tech Stack:** Express + TypeScript, zod config, Vitest (node and jsdom), classic browser JS with a CommonJS test guard, Terraform (SSM + ECS task definition), headless Chrome over the DevTools protocol for the browser check.
 
@@ -703,8 +703,10 @@ describe("the contact form's spam check (TASK-NNN)", () => {
   });
 
   it("loads its script deferred after main.js, and nothing from Cloudflare up front", () => {
+    // Other scripts may sit beside these (TASK-479's pulse.js does), so check order, not the list.
     const srcs = [...doc.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"));
-    expect(srcs).toEqual(["assets/js/main.js", "assets/js/contact-captcha.js"]);
+    expect(srcs.filter((s) => s === "assets/js/contact-captcha.js")).toHaveLength(1);
+    expect(srcs.indexOf("assets/js/contact-captcha.js")).toBeGreaterThan(srcs.indexOf("assets/js/main.js"));
     expect(doc.querySelector('script[src="assets/js/contact-captcha.js"]')?.hasAttribute("defer")).toBe(true);
     expect(html).not.toContain("challenges.cloudflare.com");
   });
@@ -718,7 +720,7 @@ Expected: FAIL in the four new tests (no `#contactCaptcha`, no `#captchaToken`, 
 
 - [ ] **Step 3: Add the markup**
 
-In `contact.html`, directly after the line `<script defer src="assets/js/main.js"></script>`, add (with the same indentation):
+In `contact.html`, directly after the line `<script defer src="/assets/js/pulse.js"></script>` (TASK-479's analytics, which follows `main.js`), add (with the same indentation):
 
 ```html
     <script defer src="assets/js/contact-captcha.js"></script>
@@ -1328,7 +1330,7 @@ the site key from `GET /api/contact/captcha`. `assets/js/contact-captcha.js`, lo
 `contact.html` only, then draws the box (Flexible when the form is 300px wide or more, Compact
 below that, so a 320px phone never scrolls sideways), holds Send with a message until there is a
 pass, and resets the box after each send. It is a separate file because `main.js` counts towards
-`donate.html`'s page-weight budget, which had 553 bytes left; `main.js` only sends the hidden
+`donate.html`'s page-weight budget, which had about 530 bytes left; `main.js` only sends the hidden
 `captchaToken` field. The secret is an SSM SecureString created holding `REPLACE_ME`: until the real
 value is pasted in, every check reports our secret as invalid and messages are kept, with a warning
 in the logs. Spec: `docs/superpowers/specs/2026-09-30-contact-form-captcha-design.md`.
@@ -1375,11 +1377,17 @@ for (const page of ["donate.html", "contact.html", "index.html", "about.html"]) 
   const imgs = tags(html, "img").filter((t) => attr(t, "loading") !== "lazy").map((t) => attr(t, "src")).filter(Boolean);
   const res = [...css, ...scripts, ...imgs, ...fonts];
   const bytes = size(page) + res.filter((r) => !ext(r)).reduce((s, r) => s + size(rel(r)), 0);
-  console.log(`${page.padEnd(13)} ${bytes} of 266240 bytes, headroom ${266240 - bytes}; requests ${1 + res.length}/15 (${res.join(", ")})`);
+  console.log(`${page.padEnd(13)} ${bytes} of ${LIMIT} bytes, headroom ${LIMIT - bytes}; requests ${1 + res.length}/15 (${res.join(", ")})`);
 }
 ```
 
-Expected: `donate.html` headroom still positive (it was 553 bytes before this change; Task 5 adds about 70), and `contact.html` within budget at 6 of 15 requests, `contact-captcha.js` among them.
+and, near the top of that script after the `size` helper, read the budget from the test itself so a raise there is picked up:
+
+```js
+const LIMIT = 1024 * Number(show("test/unit/perf-budget.test.ts").match(/maxTransferKB:\s*(\d+)/)[1]);
+```
+
+Expected: `donate.html` headroom still positive (530 bytes against TASK-479's 262KB before this change; Task 5 adds about 70), and `contact.html` within budget at 7 of 15 requests (`pulse.js` and `contact-captcha.js` among them).
 
 - [ ] **Step 3: A real browser, with Cloudflare's official test keys**
 

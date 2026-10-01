@@ -1412,6 +1412,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/admin/business-supporters/backfill-invites` | **implemented** | TASK-214 (Editor+ / `donations:edit`; one-time, idempotent catch-up that emails the thank-you invite to un-invited business supporters — `invited_at IS NULL` + `captured_at IS NULL` + has email; stamps `invited_at` on each success so a repeat run sends 0; best-effort sends; `fulfilment.backfill_invites` audit; returns `{ pending, sent, failed }`) |
 | `POST /api/admin/business-supporters/:id/send-invite` | **implemented** | TASK-431 (`business-supporters:edit`; sends the catch-up invite to **one** supporter — the same `runBusinessInviteBackfill` given a list of one, so same builder/send/stamp/idempotency; the read applies the bulk gate plus `f.id = $1`; already-invited returns `alreadyInvited: true` rather than an error; `fulfilment.send_invite` audit against that supporter) |
 | `GET /api/admin/fulfilments/:id/history` | **implemented** | TASK-436 (`business-supporters:edit`; the audit rows for one supporter, newest first, for the detail panel's History section — reads `listAuditLog({entity, entityId})`, so the audit log stays the single record and nothing is denormalised onto the row) |
+| `POST /api/admin/fulfilments/:id/calls` | **implemented** | TASK-491 (`business-supporters:edit`; strict body `{ note? }`, up to 500 characters, blank counts as none; records a thank you call at the server's time with the caller as `called_by`, audited `fulfilment.called` in one transaction; unknown id → 404). The list route now also returns `phone`, the last call, `supporting`, `supporting_since`, `callDue` and `callDueOn` per row |
+| `PUT /api/admin/fulfilments/:id/phone` | **implemented** | TASK-491 (`business-supporters:edit`; strict body `{ phone }`; digits, spaces, `+ ( ) -`, up to 40 characters and at least 7 digits, or empty to remove; audited `fulfilment.phone` with the number it replaced; bad number → 400, unknown id → 404) |
 
 They live in `src/routes/api.ts` (the donor-portal routes in `src/routes/portal.ts`, the admin
 routes in `src/routes/admin.ts`).
@@ -4667,6 +4669,48 @@ table touched, so a code-level rollback stays safe — golden rule 2):
   circle and "Goes out automatically on the next weekday morning" while it is still pending — a tick
   would claim it was done, which is the mistake that section exists to fix.
 
+  **TASK-491** adds a reminder to **phone** each business that gives monthly, every three months
+  while they are still giving, to thank them and ask if there is anything we can do
+  (`docs/superpowers/specs/2026-10-02-business-call-reminders-design.md`). What staff see:
+
+  - a **Time to call** pill under the business's name when a call is due (the admin's own pill in
+    the needs attention colours, not the green New pill), and a line above the list: *3 businesses
+    are due a call*, *1 business is due a call* or *No calls due*. The line is hidden while the list
+    is loading or could not load, so it never claims nobody is due when it does not know;
+  - a **Thank you call** panel at the top of a business's details: their number as a tap to call
+    `tel:` link (or *No phone number yet*), when they were last called, by whom and the note, a box
+    to add or change the number, and **Mark as called** with an optional note of up to 500
+    characters. The note box grows with what is typed; nothing scrolls inside a box;
+  - each call (`fulfilment.called`, with its note) and each change of number (`fulfilment.phone`,
+    with the number it replaced) in the business's **History**, written in the same transaction.
+
+  **Who is due** is the pure `callDue` in `src/business/call-due.ts`, worked out per row by
+  `GET /api/admin/fulfilments` (as `callDue` and `callDueOn`) against today in the UK:
+
+  - **still supporting** means at least one paid monthly gift, and the `subscription_dunning` row
+    for the subscription of their latest one neither cancelled (`cancelled_at`) nor `lapsed`. That is
+    how Monthly givers reads an individual. `past_due` (Stripe still retrying) and no dunning row (no
+    trouble yet) both count as supporting. An old subscription's cancellation never counts against a
+    newer one, so a business that cancelled and later gave again is supporting. Not supporting
+    means no pill, whatever the dates;
+  - **after a call**, the next is due 3 calendar months after the last one;
+  - **before the first call**, 3 calendar months after their first paid monthly gift, but never
+    before **1 September 2026**, so everyone giving since June 2026 or earlier was due at once;
+  - **3 calendar months** keeps the day of the month where it can and otherwise takes the month's
+    last day: 31 May gives 31 August, 30 November gives 28 or 29 February. Dates are UK days, so a
+    call at 00:30 on 1 July counts as 1 July. Due *on* the due date, not the day after.
+
+  Data (migration `1791100000000`, additive): `business_supporter_fulfilment.phone` (nullable) and
+  a new `business_supporter_calls` table (`fulfilment_id` cascading, `called_at`, `called_by`,
+  `note` up to 500). The migration also copied each business's number from **Contact businesses**
+  (`business_outreach.contact_phone`, linked by `business_outreach.donor_id`) into an **empty**
+  phone only, and only where it passes the same check the admin applies, logging each copy so
+  History says where the number came from. A number is digits, spaces, `+`, `(`, `)` and `-`, up to
+  40 characters with at least 7 digits (`normalisePhone`); an empty box removes it. Guarded by
+  `test/unit/business-call-due.test.ts`, `business-calls-migration.test.ts`,
+  `admin-business-calls-api.test.ts`, `admin-business-calls-page.test.ts`, and
+  `features/business-calls.feature` against Postgres.
+
   **TASK-211** delivers the two platinum recognition artifacts — the **supporter badge** and the
   per-business **certificate** (backend + assets only, no new dependency, no server-side PDF library).
   The **badge is the same for every supporter**, so it ships as one committed static asset,
@@ -7030,13 +7074,13 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 51 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 52 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
-report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, and site analytics
-four in TASK-479),
+report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
+four in TASK-479, and the business supporter call log in TASK-491),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 51 of **54** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 52 of **55** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

@@ -388,6 +388,16 @@ export interface BusinessFulfilmentListRow {
   social_done: boolean;
   added_to_supporters: boolean;
   created_at: Date;
+  // TASK-491: the call reminders. The number to ring them on (null until somebody adds it).
+  phone: string | null;
+  /** Their most recent call, who made it and what was noted; all null until somebody calls them. */
+  last_called_at: Date | null;
+  last_called_by: string | null;
+  last_call_note: string | null;
+  /** Their monthly gift is neither cancelled nor lapsed (read the way Monthly givers reads it). */
+  supporting: boolean;
+  /** Their first paid monthly gift, or null if they have never paid one. */
+  supporting_since: Date | null;
 }
 
 // List every business-supporter fulfilment record joined to its donor, most recent first, for the
@@ -413,10 +423,49 @@ export async function listBusinessFulfilments(): Promise<BusinessFulfilmentListR
             -- Whether this supporter has been thanked, and by whom (TASK-411). One letter per
             -- donor, so the LEFT JOIN yields at most one row; sent_by is 'automatic' when the
             -- daily pass sent it and an admin's address when somebody sent it by hand.
-            t.sent_at AS thank_you_sent_at, t.sent_by AS thank_you_sent_by
+            t.sent_at AS thank_you_sent_at, t.sent_by AS thank_you_sent_by,
+            -- TASK-491: the call reminders. Their number, and their most recent call.
+            f.phone,
+            lc.called_at AS last_called_at, lc.called_by AS last_called_by, lc.note AS last_call_note,
+            -- Still supporting, read the way Monthly givers reads an individual
+            -- (src/db/monthly-supporters.ts): at least one paid monthly gift, and the payment record
+            -- for their latest one neither cancelled nor lapsed. past_due still counts (Stripe is
+            -- still retrying the card), and so does no payment record at all (no trouble yet).
+            (gift.first_paid_at IS NOT NULL
+              AND sd.cancelled_at IS NULL
+              AND COALESCE(sd.status, 'active') <> 'lapsed') AS supporting,
+            gift.first_paid_at AS supporting_since
        FROM business_supporter_fulfilment f
        JOIN donors dn ON dn.id = f.donor_id
        LEFT JOIN thank_you_sent t ON t.donor_id = f.donor_id
+       LEFT JOIN LATERAL (
+              SELECT c.called_at, c.called_by, c.note
+                FROM business_supporter_calls c
+               WHERE c.fulfilment_id = f.id
+               ORDER BY c.called_at DESC, c.id DESC
+               LIMIT 1
+            ) lc ON true
+       LEFT JOIN LATERAL (
+              SELECT min(d.created_at) AS first_paid_at,
+                     (array_agg(d.stripe_subscription_id ORDER BY d.created_at DESC, d.id DESC))[1]
+                       AS latest_subscription_id
+                FROM donations d
+               WHERE d.donor_id = f.donor_id AND d.mode = 'monthly' AND d.payment_status = 'paid'
+            ) gift ON true
+       -- Payment health for the subscription of their latest paid gift ONLY. A dunning row exists
+       -- only after a failed payment or a cancellation, so a healthy new subscription has none; a
+       -- business that cancelled and later gave again must not be judged by the old one's row.
+       -- Only a gift with no subscription id at all (an older or hand-imported one) falls back to
+       -- the donor's most recent row.
+       LEFT JOIN LATERAL (
+              SELECT s.status, s.cancelled_at
+                FROM subscription_dunning s
+               WHERE s.donor_id = f.donor_id
+                 AND (gift.latest_subscription_id IS NULL
+                      OR s.stripe_subscription_id = gift.latest_subscription_id)
+               ORDER BY s.updated_at DESC
+               LIMIT 1
+            ) sd ON true
       ORDER BY f.id DESC
       LIMIT ${BUSINESS_FULFILMENT_LIST_LIMIT}`,
   );

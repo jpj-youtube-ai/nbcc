@@ -160,6 +160,8 @@
 .admin-pill.is-replied{background:var(--holly-soft);color:var(--holly-dark)}
 .admin-pill.is-public{background:var(--holly-soft);color:var(--holly-dark)}
 .admin-pill.is-internal{background:color-mix(in srgb,var(--slate-soft) 16%,var(--cream));color:var(--slate-soft)}
+/* TASK-491: a business due a thank you call. The needs attention colours, as on a New enquiry. */
+.admin-pill.is-call-due{background:color-mix(in srgb,var(--crimson) 16%,var(--cream));color:var(--crimson)}
 /* TASK-478: something this person has not seen yet: on a menu section, the phone's Menu button, and the
    rows that arrived since their last visit. Holly, so it never reads as the crimson of the open section
    or of an unanswered enquiry. */
@@ -1674,6 +1676,36 @@ tr.nl-click:hover { background: var(--tint); }
 .fx-history-list li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px}
 .fx-hist-what{font-size:.86rem;font-weight:600;color:var(--slate);overflow-wrap:anywhere}
 .fx-hist-who{font-size:.78rem;color:var(--slate-soft)}
+/* TASK-491: the note from a call, on its own line under who made it. */
+.fx-hist-note{flex-basis:100%;font-size:.82rem;color:var(--slate);white-space:pre-line;overflow-wrap:anywhere}
+
+/* ---- thank you calls (TASK-491) ----
+   The line above the list: maroon while somebody is due, quiet when nobody is. */
+.fx-call-count{margin:0 0 12px;font-size:.92rem;font-weight:600;color:var(--slate-soft)}
+.fx-call-count.is-due{color:var(--maroon)}
+/* The pill sits on its own line under the business name, like the New pill does. */
+.fx-call-pill{margin-top:5px}
+.fx-tel{color:var(--maroon);font-weight:600;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}
+.fx-tel:hover{color:var(--crimson)}
+/* The two forms side by side on a wide screen, one above the other on a narrow one (below). */
+.fx-call-forms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 28px;
+  margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+/* The site wide form rule draws every form as a card; these sit inside a panel that already is one. */
+.fx-call-form{display:flex;flex-direction:column;gap:7px;min-width:0;margin:0;
+  background:none;border:0;border-radius:0;padding:0;box-shadow:none}
+.fx-call-label{font-size:.85rem;font-weight:600;color:var(--slate)}
+.fx-call-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.fx-call-row .fx-call-input{flex:1 1 12rem}
+.fx-call-input{width:100%;min-width:0;box-sizing:border-box;font-family:var(--font-body);font-size:1rem;
+  color:var(--slate);background:var(--cream);border:1.6px solid var(--line);border-radius:12px;padding:10px 12px}
+.fx-call-input:focus{border-color:var(--holly);outline:none}
+/* The note grows with what is typed (no scrollbar inside it); app.js does the same where the
+   browser cannot. */
+textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-sizing:content}
+.fx-call-status{margin:0;font-size:.82rem;font-weight:600;color:var(--holly-dark);min-height:0}
+.fx-call-status:empty{display:none}
+.fx-call-status.is-error{color:var(--crimson)}
+.fx-call-form .admin-btn:disabled{opacity:.6;cursor:default}
 
 /* Small, but still a 44px target: these are the buttons that write to the record. */
 .admin-btn--small{flex:none;font-size:.82rem;padding:8px 14px;min-height:44px}
@@ -1682,6 +1714,7 @@ tr.nl-click:hover { background: var(--tint); }
   .fx-detail{grid-template-columns:minmax(0,1fr)}
   .fx-row{grid-template-columns:minmax(0,1fr);gap:1px}
   .fx-task{flex-direction:column;align-items:flex-start;gap:8px}
+  .fx-call-forms{grid-template-columns:minmax(0,1fr)}
 }
 
 /* What the system already did. Stated, never actionable: a button here would invite somebody to

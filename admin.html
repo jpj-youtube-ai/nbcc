@@ -276,6 +276,9 @@
                 <button class="admin-btn" type="button" id="backfillInvitesBtn">Send catch up invites</button>
                 <span class="admin-action-status" id="backfillInvitesStatus" role="status" aria-live="polite"></span>
               </div>
+              <!-- TASK-491: how many businesses are due a thank you call. Hidden while the list is
+                   loading or could not load, so it never says "No calls due" when it does not know. -->
+              <p class="fx-call-count" id="fulfilmentCallCount" role="status" aria-live="polite" hidden></p>
               <div class="admin-table-wrap" id="fulfilmentsTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <p class="admin-action-status" id="fulfilmentActionStatus" role="status" aria-live="polite"></p>
             </section>

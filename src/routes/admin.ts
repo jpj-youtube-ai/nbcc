@@ -33,6 +33,9 @@ import {
   getUninvitedBusinessSupporter,
   markFulfilmentInvited,
 } from "../db/fulfilment";
+import { recordBusinessCall, setBusinessPhone, BusinessCallError } from "../db/business-calls";
+import { callDue, normalisePhone } from "../business/call-due";
+import { londonToday } from "../events/model";
 import { runBusinessInviteBackfill } from "../business/backfill";
 import { listStories, getStory, updateStory, deleteStory } from "../db/stories";
 import { MAX_ADMIN_NOTES_LENGTH } from "../stories/schema";
@@ -3464,7 +3467,22 @@ function fulfilmentId(req: Request, res: Response): number | null {
 export async function getAdminFulfilments(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "business-supporters", "edit"))) return;
   try {
-    return res.status(200).json({ results: await listBusinessFulfilments() });
+    // TASK-491: whether each business is due a thank you call today (UK), and from when. Worked out
+    // here from the row's dates by the pure callDue, so the rule lives in one tested place.
+    const now = new Date();
+    const today = londonToday(now);
+    const ukDay = (d: Date | string | null | undefined) => (d ? londonToday(new Date(d)) : null);
+    const results = (await listBusinessFulfilments()).map((r) => {
+      const lastCalledOn = ukDay(r.last_called_at);
+      const due = callDue({
+        today,
+        supportingSince: ukDay(r.supporting_since),
+        lastCalledAt: lastCalledOn,
+        supporting: r.supporting === true,
+      });
+      return { ...r, lastCalledOn, callDue: due.due, callDueOn: due.dueOn };
+    });
+    return res.status(200).json({ results });
   } catch (err) {
     console.error("admin fulfilments list failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Admin is temporarily unavailable" });
@@ -3525,6 +3543,66 @@ adminRouter.get("/api/admin/monthly-supporters", getAdminMonthlySupporters);
 
 adminRouter.get("/api/admin/fulfilments", getAdminFulfilments);
 adminRouter.post("/api/admin/fulfilments/:id/mark", postAdminMarkFulfilment);
+
+// --- Business supporter call reminders (TASK-491) ------------------------------------------------
+// Jaimie phones each business that gives monthly every three months, to thank them and ask if there
+// is anything we can do. These two writes back the Call panel in a supporter's details; the list
+// above says who is due. Same gate as the rest of the section, strict bodies, and each write is one
+// transaction with its History (audit_log) row.
+
+// An optional note of up to 500 characters; blank counts as none. Nothing else may be sent: the time
+// of the call is the server's, so it cannot be backdated from the page.
+const fulfilmentCallSchema = z.object({ note: z.string().max(500).optional() }).strict();
+
+// POST /api/admin/fulfilments/:id/calls: record that somebody called this business today.
+export async function postAdminFulfilmentCall(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "business-supporters", "edit");
+  if (!claims) return;
+  const id = fulfilmentId(req, res);
+  if (id == null) return;
+  const parsed = fulfilmentCallSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: "A note can be up to 500 characters", details: parsed.error.flatten() });
+  }
+  const note = parsed.data.note?.trim() || null;
+  try {
+    const call = await recordBusinessCall(id, note, claims.email, actorOf(claims));
+    return res.status(200).json({ call });
+  } catch (err) {
+    if (err instanceof BusinessCallError) return res.status(404).json({ error: "Business supporter not found" });
+    console.error("admin fulfilment call failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+// The phone box. Checked by normalisePhone below; an empty box takes the number away.
+const fulfilmentPhoneSchema = z.object({ phone: z.string().max(200) }).strict();
+
+// PUT /api/admin/fulfilments/:id/phone: set or clear the number to call this business on.
+export async function putAdminFulfilmentPhone(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "business-supporters", "edit");
+  if (!claims) return;
+  const id = fulfilmentId(req, res);
+  if (id == null) return;
+  const parsed = fulfilmentPhoneSchema.safeParse(req.body ?? {});
+  const phone = parsed.success ? normalisePhone(parsed.data.phone) : null;
+  if (!phone || !phone.ok) {
+    return res.status(400).json({
+      error: "That phone number does not look right. Use digits, spaces, + ( ) and -, up to 40 characters.",
+    });
+  }
+  try {
+    const saved = await setBusinessPhone(id, phone.phone, actorOf(claims));
+    return res.status(200).json({ id: saved.id, phone: saved.phone });
+  } catch (err) {
+    if (err instanceof BusinessCallError) return res.status(404).json({ error: "Business supporter not found" });
+    console.error("admin fulfilment phone failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Admin update is temporarily unavailable" });
+  }
+}
+
+adminRouter.post("/api/admin/fulfilments/:id/calls", postAdminFulfilmentCall);
+adminRouter.put("/api/admin/fulfilments/:id/phone", putAdminFulfilmentPhone);
 
 // GET /api/admin/fulfilments/:id/history (TASK-436) — who did what to this supporter's record, and
 // when. Every fulfilment write already appends an audit row (markFulfilmentFlag, the invite send,

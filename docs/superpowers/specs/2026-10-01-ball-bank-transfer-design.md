@@ -38,6 +38,7 @@ People who simply prefer to pay by transfer cannot.
 | Phone and email bookings | Staff can add a bank transfer booking in the admin, with the same fields and the same emails. Staff tick that the buyer agreed to the terms. |
 | Money arriving after a cancellation | "Mark as paid" still works on a cancelled transfer booking if its seats are still free. Otherwise it says so, and staff refund by hand. |
 | A switch | Bank transfer appears on the page only when an admin has entered the bank details and switched it on. |
+| Safeguards (asked while planning) | One unpaid transfer booking per email address at a time. At most 5 transfer bookings an hour from one connection. A transfer booking holds seats for a week, so without these anyone could quietly hold the whole room. |
 
 ## What a buyer sees
 

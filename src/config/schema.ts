@@ -40,6 +40,16 @@ export const configSchema = z.object({
   // so the code ships safely BEFORE the gated infra apply that provisions the real key, rather than
   // crash-looping boot. Once the key lands, inline checkout engages automatically.
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
+
+  // Cloudflare Turnstile on the contact form (TASK-490). The SITE key is public: the browser draws
+  // the box with it, so it is a plain task-def env value like STRIPE_PUBLISHABLE_KEY. The SECRET is
+  // an SSM SecureString. The check is on only when BOTH are set: a secret without a site key would
+  // refuse every message, because the page could not show the box. Empty outside production, so
+  // local dev and CI boot with the check off; productionConfigProblems stops a production web server
+  // starting without them.
+  TURNSTILE_SITE_KEY: z.string().default(""),
+  TURNSTILE_SECRET_KEY: z.string().default(""),
+
   STRIPE_SUCCESS_URL: z.string().url(),
   STRIPE_CANCEL_URL: z.string().url(),
   STRIPE_PRICE_BRONZE: z.string().min(1),
@@ -229,3 +239,15 @@ export const configSchema = z.object({
 });
 
 export type Config = z.infer<typeof configSchema>;
+
+// Rules that only the production web server needs, applied where it starts (src/index.ts), so the
+// scheduled jobs that load the same config never depend on them. Kept out of configSchema itself so
+// the schema stays a plain z.object that tests can parse and extend.
+export function productionConfigProblems(c: Config): string[] {
+  if (c.NODE_ENV !== "production") return [];
+  const problems: string[] = [];
+  // TASK-490: without both keys the contact form's spam check would silently be off.
+  if (!c.TURNSTILE_SITE_KEY) problems.push("TURNSTILE_SITE_KEY is required in production");
+  if (!c.TURNSTILE_SECRET_KEY) problems.push("TURNSTILE_SECRET_KEY is required in production");
+  return problems;
+}

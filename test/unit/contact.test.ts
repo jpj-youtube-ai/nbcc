@@ -228,6 +228,18 @@ describe("contact form behaviour (jsdom)", () => {
     expect((document.getElementById("message") as HTMLTextAreaElement).value).toBe("");
   });
 
+  it("sends the spam check's pass from its hidden field with the message (TASK-490)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    (window as unknown as { fetch: unknown }).fetch = fetchMock;
+    set("firstName", "Ada");
+    set("email", "ada@example.com");
+    set("message", "Hello NBCC, I would love to help.");
+    set("captchaToken", "tok-1");
+    submit();
+    await flushPromises();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).captchaToken).toBe("tok-1");
+  });
+
   it("a failed submit (res.ok false) shows an error, keeps the typed message, and re-enables the button", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false });
     (window as unknown as { fetch: unknown }).fetch = fetchMock;
@@ -277,5 +289,40 @@ describe("contact form behaviour (jsdom)", () => {
       expect(invalid(id)).toBe("true");
       expect(norm(document.getElementById(`${id}-error`)?.textContent).length).toBeGreaterThan(0);
     }
+  });
+});
+
+// TASK-490: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only when the server
+// says the check is on. Nothing is loaded from Cloudflare by the page itself.
+describe("the contact form's spam check (TASK-490)", () => {
+  const form = doc.getElementById("contactForm");
+
+  it("has a place for the box above Send, hidden until it is drawn", () => {
+    const box = doc.getElementById("contactCaptcha");
+    const send = form?.querySelector('button[type="submit"]');
+    expect(box?.closest("form")).toBe(form);
+    expect(box?.hasAttribute("hidden")).toBe(true);
+    expect(box && send ? box.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING : 0).toBeTruthy();
+  });
+
+  it("carries the pass in a hidden field that main.js sends", () => {
+    const field = form?.querySelector("#captchaToken");
+    expect(field?.getAttribute("type")).toBe("hidden");
+    expect(field?.getAttribute("name")).toBe("captchaToken");
+  });
+
+  it("tells a visitor without JavaScript to email instead", () => {
+    const note = form?.querySelector("noscript");
+    expect(norm(note?.textContent)).toContain("needs JavaScript");
+    expect(note?.innerHTML).toContain('href="mailto:info@nbcc.scot"');
+  });
+
+  it("loads its script deferred after main.js, and nothing from Cloudflare up front", () => {
+    // Other scripts may sit beside these (TASK-479's pulse.js does), so check order, not the list.
+    const srcs = [...doc.querySelectorAll("script[src]")].map((s) => s.getAttribute("src"));
+    expect(srcs.filter((s) => s === "assets/js/contact-captcha.js")).toHaveLength(1);
+    expect(srcs.indexOf("assets/js/contact-captcha.js")).toBeGreaterThan(srcs.indexOf("assets/js/main.js"));
+    expect(doc.querySelector('script[src="assets/js/contact-captcha.js"]')?.hasAttribute("defer")).toBe(true);
+    expect(html).not.toContain("challenges.cloudflare.com");
   });
 });

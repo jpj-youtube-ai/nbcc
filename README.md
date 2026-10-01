@@ -1320,7 +1320,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | Method + path | Status | Requirement |
 |---|---|---|
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
-| `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec) |
+| `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec; checks a Cloudflare Turnstile pass first whenever the spam check is on, TASK-490) |
+| `GET /api/contact/captcha` | **implemented** | TASK-490 (the contact form's spam check: `{ siteKey }`, the public Turnstile site key, or `null` while the check is off; see **A spam check on the contact form (TASK-490)**) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
@@ -4159,6 +4160,32 @@ silent mailto fallback), and the submit button is disabled only while the reques
 Verified by `test/unit/contact.test.ts` (jsdom, mocked `fetch`) and `test/unit/contact-endpoint.test.ts`
 (mocked `insertEnquiry`).
 
+**A spam check on the contact form (TASK-490).** Bot spam was reaching Admin → Contact form past the
+honeypot and the rate limit, so `POST /api/contact` now checks a Cloudflare Turnstile pass between
+the rate limit and validation whenever the check is on: both `TURNSTILE_SITE_KEY` and
+`TURNSTILE_SECRET_KEY` set. The production web server refuses to start without them
+(`productionConfigProblems` in `src/config/schema.ts`, applied in `src/index.ts`, so the scheduled
+jobs that load the same config never depend on them); local development and CI run with the check
+off. `src/clients/turnstile.ts` asks Cloudflare's siteverify (5 second timeout) and answers
+`passed`, `refused` (the visitor's pass is missing, invalid, expired or reused: **400**
+`{ error: "captcha" }`, nothing stored) or `unavailable` (network, timeout, Cloudflare's own error,
+or our secret rejected: the message is **kept** and a warning logged, so a genuine enquiry is never
+lost to the checker). Cloudflare's error codes decide whatever the HTTP status, because it sends a
+rejected secret as a 400 naming `invalid-input-secret`. The page learns the site key from
+`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` only, fetches
+Cloudflare's script once the visitor starts on the form (a tap or a key in a field) or presses
+Send, so someone who only reads the page never contacts Cloudflare. It draws the box (Flexible when
+the form is 300px wide or more, Compact below that, and again at the size that fits if the form gets
+narrower, so a 320px phone never scrolls sideways), holds Send with a message until there is a pass
+(using `main.js`'s own form check, so the two agree), and resets the box after each send. It is a
+separate file because `main.js` counts towards
+`donate.html`'s page-weight budget, which had about 530 bytes left; `main.js` only sends the hidden
+`captchaToken` field. The secret is an SSM SecureString created holding `REPLACE_ME`: until the real
+value is pasted in, every check reports our secret as invalid and messages are kept, with a warning
+in the logs. The app sends no Content-Security-Policy, so nothing blocks Cloudflare; if one is ever
+added, allow `https://challenges.cloudflare.com` in `script-src` and `frame-src`. Spec:
+`docs/superpowers/specs/2026-09-30-contact-form-captcha-design.md`.
+
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
 six-year window has **closed**, it erases the captured personal data. It reuses the pure
@@ -5572,6 +5599,16 @@ aws ssm put-parameter --name /charity-site/production/STRIPE_PRICE_BRONZE \
 # endpoint; starts as REPLACE_ME.
 aws ssm put-parameter --name /charity-site/production/STRIPE_WEBHOOK_SECRET \
   --type SecureString --value 'whsec_...' --overwrite
+
+# Contact form spam check (TASK-490): the Cloudflare Turnstile secret key (SecureString), from the
+# Turnstile widget's settings in the Cloudflare dashboard. Starts as REPLACE_ME; until it is set,
+# every message is kept with a warning in the logs. `read -s` keeps the key off the screen and out
+# of the shell history. Then restart the service, because ECS reads secrets only when a task starts.
+read -rsp 'Turnstile secret key: ' TS; echo
+aws ssm put-parameter --name /charity-site/production/TURNSTILE_SECRET_KEY \
+  --type SecureString --value "$TS" --overwrite; unset TS
+aws ecs update-service --cluster charity-site-production --service charity-site-production \
+  --force-new-deployment
 
 # Email needs no put-parameter (Resend→SES migration): the app sends straight to
 # Amazon SES with the ECS task role, and the one email secret (SES_WEBHOOK_TOKEN)
@@ -7167,6 +7204,20 @@ defaulted, injected via `valueFrom` with its ARN in `exec_secrets`. It is the
 `whsec_…` signing secret the webhook endpoint (`POST /api/stripe/webhook`) uses to
 verify inbound events; its `.env.example`/CI placeholder is any non-empty
 `whsec_…` string, which keeps signature checks working offline.
+
+The **contact form spam check** (TASK-490) has two keys. `TURNSTILE_SITE_KEY` is Cloudflare
+Turnstile's **public** site key, which reaches every visitor's browser, so it is handled like
+`STRIPE_PUBLISHABLE_KEY`: a plain task-def `environment` value backed by the `turnstile_site_key`
+module variable and set in `infra/envs/production/main.tf`. `TURNSTILE_SECRET_KEY` is a secret: an
+SSM `SecureString` created holding `REPLACE_ME` (with `ignore_changes` on its value), injected via
+`valueFrom`, its ARN in `exec_secrets`. The real value is set with the `put-parameter` command under
+**One-time AWS bootstrap**, followed by a service restart. Both default to empty, and the check runs
+only when both are set, so local development and CI run without it. Unlike the publishable key,
+the production web server **refuses to start** without them (`productionConfigProblems` in
+`src/config/schema.ts`, applied in `src/index.ts`), so the check cannot be lost by accident. The
+scheduled jobs (the backup, the reminders) load the same config but not this rule, so they never
+depend on the keys. The flip side: the infra apply that adds them must land before the deploy that
+needs them, or the new web server tasks will not start and ECS keeps the old ones running.
 
 `CONTACT_FORWARD_URL` (TASK-039, REQ-030) was the form-service endpoint `/api/contact` used to
 forward enquiries to. It was retired from the live path by the 2026-07-10 contact-inbox spec —

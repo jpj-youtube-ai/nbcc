@@ -35,6 +35,7 @@
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="assets/js/main.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
+    <script defer src="assets/js/contact-captcha.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -121,6 +122,12 @@
                   <textarea id="message" name="message" rows="5" required aria-required="true" aria-describedby="message-error"></textarea>
                   <span class="err" id="message-error" hidden>Please write a short message.</span>
                 </div>
+                <!-- TASK-490: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only
+                     when the server says the check is on. The hidden field carries its pass, and
+                     main.js sends it with the message. -->
+                <div class="field" id="contactCaptcha" hidden></div>
+                <input type="hidden" id="captchaToken" name="captchaToken" value="" />
+                <noscript><p class="form-privacy">This form needs JavaScript to check you're not a robot. You can email us at <a href="mailto:info@nbcc.scot">info@nbcc.scot</a> instead.</p></noscript>
                 <button class="btn btn-holly" type="submit">Send message</button>
                 <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>
                 <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>

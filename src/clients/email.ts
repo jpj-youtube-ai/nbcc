@@ -2,6 +2,7 @@ import { config } from "../config";
 import { sendSesEmail, type SesMessage } from "./ses";
 import { buildKindEmail } from "../email/templates";
 import { recordEmailSend } from "../db/email-log";
+import { linkTagsForKind, ownSiteHosts, tagLinksInHtml, tagLinksInText, type LinkTags } from "../email/tracked-links";
 
 // Transactional email client (TASK-070; Resend→SES migration). Sends every app email straight
 // to Amazon SES (src/clients/ses.ts) — the Cloudflare Worker relay and its Resend account are
@@ -73,7 +74,19 @@ async function logAttempt(
 // Every send funnels through here: stub short-circuit, the SES call, and the audit row. The
 // original error is ALWAYS rethrown untouched — callers (the newsletter queue's failure
 // classifier above all) depend on the real message.
-async function sendAndLog(kind: string, name: string | null, msg: SesMessage): Promise<void> {
+//
+// TASK-480: links to our own site gain utm words here, in the html and the plain text alike, so the
+// site analytics can tell a visit from an email apart from Direct. Every kind names itself
+// (utm_source=email, utm_campaign=<kind>) except the staff only kinds, which stay untagged; the
+// newsletter passes its own tags (its issue) or null. Rules and exclusions (tokens, unsubscribe, other hosts):
+// src/email/tracked-links.ts.
+async function sendAndLog(
+  kind: string,
+  name: string | null,
+  original: SesMessage,
+  links: LinkTags | null = linkTagsForKind(kind),
+): Promise<void> {
+  const msg = links ? withTrackedLinks(original, links) : original;
   // One audit row per person the message went to: almost always just `to`, but the Festive Ball
   // ticket report (TASK-464) is one message to a small group, and the log lists each of them.
   const everyone = [msg.to, ...(msg.alsoTo ?? [])];
@@ -92,6 +105,23 @@ async function sendAndLog(kind: string, name: string | null, msg: SesMessage): P
     throw err;
   }
   await logEach(null, messageId);
+}
+
+// Our own site: nbcc.scot, www.nbcc.scot and the configured public site addresses. Read at send time
+// so a config value is never needed at import. Fails open: if the rewrite throws for any reason the
+// email goes exactly as it was built, because tagging is never worth a receipt that does not arrive.
+function withTrackedLinks(msg: SesMessage, links: LinkTags): SesMessage {
+  try {
+    const hosts = ownSiteHosts([config.PORTAL_BASE_URL, config.BALL_BASE_URL]);
+    return {
+      ...msg,
+      ...(msg.html ? { html: tagLinksInHtml(msg.html, links, hosts) } : {}),
+      ...(msg.text ? { text: tagLinksInText(msg.text, links, hosts) } : {}),
+    };
+  } catch (err) {
+    console.error("email link tagging failed, sending untagged:", err instanceof Error ? err.message : err);
+    return msg;
+  }
 }
 
 export async function sendDonationConfirmation(message: DonationConfirmation): Promise<void> {
@@ -271,6 +301,10 @@ export interface NewsletterEmail {
   // Without them people reach for "report spam" instead of the in-body link — and a complaint
   // costs the sending domain far more than an unsubscribe does.
   unsubscribeUrl?: string;
+  // TASK-480: the utm words for links to our own site: newsletterLinkTags(id) for an issue and for
+  // its admin test send (so a test matches the real thing), emailLinkTags("welcome") for the signup
+  // welcome. Left out, nothing is tagged.
+  links?: LinkTags;
   // No attachments field on purpose: uploaded files are HOSTED (public /newsletter/document/<uuid>
   // pages) and linked from the body, never attached — links keep deliverability clean
   // (hosted-documents design, 2026-07-22).
@@ -281,23 +315,28 @@ export async function sendNewsletter(message: NewsletterEmail): Promise<void> {
   // + detail (the SES client throws exactly that, and sendAndLog rethrows it untouched), so the
   // queue can tell "come back later" (429) from "give up on this address" — see
   // src/newsletter/send-failure.ts.
-  await sendAndLog("newsletter", null, {
-    to: message.email,
-    from: message.from,
-    replyTo: message.replyTo,
-    subject: message.subject,
-    html: message.html,
-    text: message.text,
-    configurationSet: config.SES_NEWSLETTER_CONFIGURATION_SET || undefined,
-    ...(message.unsubscribeUrl
-      ? {
-          headers: {
-            "List-Unsubscribe": `<${message.unsubscribeUrl}>`,
-            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-          },
-        }
-      : {}),
-  });
+  await sendAndLog(
+    "newsletter",
+    null,
+    {
+        to: message.email,
+        from: message.from,
+        replyTo: message.replyTo,
+        subject: message.subject,
+        html: message.html,
+        text: message.text,
+        configurationSet: config.SES_NEWSLETTER_CONFIGURATION_SET || undefined,
+        ...(message.unsubscribeUrl
+          ? {
+              headers: {
+                "List-Unsubscribe": `<${message.unsubscribeUrl}>`,
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+              },
+            }
+          : {}),
+    },
+    message.links ?? null,
+  );
 }
 
 // The admin thank-you letter send (TASK-163/REQ-069; from-address + text part TASK-165; CC TASK-168).

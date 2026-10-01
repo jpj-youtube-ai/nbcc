@@ -107,3 +107,23 @@ Feature: Admin per-section permission matrix (admin-management Phase 2)
     When the TASK-463 permissions backfill runs
     Then the backfilled access of "root.admin.bdd@example.com" is still empty
     And the backfill logged nothing for "root.admin.bdd@example.com"
+
+  # TASK-479: site analytics is admins only by role, as Jaimie asked. Access saved before it existed
+  # gets it at the role's own level, with an audit row each, and anybody else is given it from Team.
+  Scenario Outline: access saved before site analytics existed gets it at the <role> role's own level
+    Given a user "<email>" with role "<role>" whose saved access predates the four late sections
+    When the TASK-479 analytics permissions backfill runs
+    Then the backfilled access of "<email>" gives "analytics" as "<analytics>"
+    And the backfilled access of "<email>" gives "stories" as "view"
+    And the analytics backfill logged "<analytics>" for "<email>"
+
+    Examples:
+      | role   | email                            | analytics |
+      | admin  | old.admin.admin.bdd@example.com  | edit      |
+      | editor | old.editor.admin.bdd@example.com | none      |
+      | viewer | old.viewer.admin.bdd@example.com | none      |
+
+  Scenario: the analytics backfill leaves people with no saved access on their role's defaults
+    When the TASK-479 analytics permissions backfill runs
+    Then the backfilled access of "root.admin.bdd@example.com" is still empty
+    And the backfill logged nothing for "root.admin.bdd@example.com"

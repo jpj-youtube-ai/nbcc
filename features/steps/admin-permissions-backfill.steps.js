@@ -12,6 +12,8 @@ const { Pool } = require("pg");
 // shared @admin Before hook (admin-auth.steps.js) clears.
 
 const BACKFILL = path.resolve(__dirname, "../../migrations/1790788129056_permissions-backfill-missed-sections.js");
+// TASK-479: the site analytics section arrived with its own backfill, run the same way.
+const ANALYTICS_BACKFILL = path.resolve(__dirname, "../../migrations/1791000000001_permissions-analytics.js");
 
 // The sections that existed when saved matrices arrived (TASK-186). A matrix saved before the four
 // late sections names these and none of them.
@@ -59,8 +61,18 @@ Given(
 );
 
 When("the TASK-463 permissions backfill runs", async function () {
+  await runBackfill(this, BACKFILL);
+});
+
+When("the TASK-479 analytics permissions backfill runs", async function () {
+  await runBackfill(this, ANALYTICS_BACKFILL);
+});
+
+// Run a backfill migration's own SQL inside a transaction that is always rolled back, keeping what
+// it did to the BDD users (and what it logged) on the world for the Then steps.
+async function runBackfill(world, file) {
   const statements = [];
-  require(BACKFILL).up({ sql: (text) => statements.push(text) });
+  require(file).up({ sql: (text) => statements.push(text) });
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -68,12 +80,12 @@ When("the TASK-463 permissions backfill runs", async function () {
     const users = await client.query(
       "SELECT email, permissions FROM users WHERE email LIKE '%admin.bdd@example.com'",
     );
-    this.backfilled = Object.fromEntries(users.rows.map((row) => [row.email, row.permissions]));
+    world.backfilled = Object.fromEntries(users.rows.map((row) => [row.email, row.permissions]));
     const logged = await client.query(
       `SELECT u.email, a.actor, a.data FROM audit_log a JOIN users u ON u.id = a.entity_id
         WHERE a.action = 'admin_user.permissions_backfilled' AND u.email LIKE '%admin.bdd@example.com'`,
     );
-    this.backfillLog = logged.rows;
+    world.backfillLog = logged.rows;
   } finally {
     try {
       await client.query("ROLLBACK");
@@ -81,7 +93,7 @@ When("the TASK-463 permissions backfill runs", async function () {
       client.release();
     }
   }
-});
+}
 
 Then("the backfilled access of {string} gives {string} as {string}", function (email, section, level) {
   assert.equal(savedAccess(this, email)[section], level, `${email}: ${section}`);
@@ -99,6 +111,13 @@ Then("the backfill logged {string} as {string} for {string}", function (section,
   const rows = this.backfillLog.filter((row) => row.email === email && row.data.section === section);
   assert.equal(rows.length, 1, `one audit row for ${email}: ${section}`);
   assert.equal(rows[0].actor, "migration:TASK-463");
+  assert.equal(rows[0].data.level, level);
+});
+
+Then("the analytics backfill logged {string} for {string}", function (level, email) {
+  const rows = this.backfillLog.filter((row) => row.email === email && row.data.section === "analytics");
+  assert.equal(rows.length, 1, `one audit row for ${email}: analytics`);
+  assert.equal(rows[0].actor, "migration:TASK-479");
   assert.equal(rows[0].data.level, level);
 });
 

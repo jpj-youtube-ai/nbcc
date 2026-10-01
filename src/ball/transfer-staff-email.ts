@@ -78,7 +78,8 @@ export function buildTransferStaffEmail(
   ].join("\n");
 
   return {
-    subject: `New bank transfer booking: ${booking.reference}, ${amount}, ${booking.buyerName}`,
+    // One line, whatever was typed into the name box.
+    subject: `New bank transfer booking: ${booking.reference}, ${amount}, ${booking.buyerName.replace(/\s+/g, " ").trim()}`,
     html: ballEmailShell(body),
     text,
   };

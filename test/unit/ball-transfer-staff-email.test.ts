@@ -50,6 +50,12 @@ describe("the events@ email for a new bank transfer booking", () => {
     expect(invoiced.text).toContain("https://nbcc.scot/ball/invoice/42.abc");
   });
 
+  // A subject is one line, whatever was typed into the name box.
+  it("keeps the subject to one line", () => {
+    const mail2 = buildTransferStaffEmail({ ...booking, buyerName: "Ada\r\nBcc: x@example.com" }, base);
+    expect(mail2.subject).toBe("New bank transfer booking: BALL-7KQ2MZ, £1,020.00, Ada Bcc: x@example.com");
+  });
+
   it("escapes what the buyer typed", () => {
     const mail2 = buildTransferStaffEmail(
       { ...booking, buyerName: "<b>x</b>" },

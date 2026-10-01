@@ -50,14 +50,16 @@ const LATEST: Record<Exclude<Area, "events" | "analytics">, { db: "main" | "cont
           ) firsts WHERE first_paid_at > $1`,
   },
   fulfilments: { db: "main", sql: "SELECT max(created_at) AS at FROM business_supporter_fulfilment WHERE created_at > $1" },
-  // A paid booking, when it was paid; and (TASK-487) a bank transfer booking, when it was made, so
-  // the team knows to look out for the money. Matches the row pills on Festive Ball.
+  // A paid booking, when it was paid; and (TASK-487) a bank transfer booking still waiting for its
+  // money, when it was made, so the team knows to look out for it. Matches the row pills on Festive
+  // Ball: one cancelled since has no row to carry a pill, so it does not light the section either.
   ball: {
     db: "main",
     sql: `SELECT max(at) AS at FROM (
             SELECT paid_at AS at FROM ball_bookings WHERE status = 'paid' AND paid_at > $1
             UNION ALL
-            SELECT created_at FROM ball_bookings WHERE payment_method = 'transfer' AND created_at > $1
+            SELECT created_at FROM ball_bookings
+             WHERE payment_method = 'transfer' AND status = 'pending' AND created_at > $1
           ) arrivals`,
   },
   // Public sign-ups only: somebody staff added or imported is not news to staff.

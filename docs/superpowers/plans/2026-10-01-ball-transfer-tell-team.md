@@ -4,7 +4,7 @@
 
 **Goal:** When someone books the Festive Ball to pay by bank transfer, the team hears about it three ways: an email to events@nbcc.scot, the New pill on Festive Ball (and on the booking's row), and a line in the twice-weekly ticket report.
 
-**Architecture:** A pure staff-email builder beside the buyer emails, sent best effort after the booking commits, as the buyer's bank-details email already is. The pill's "latest arrival" query for `ball` also counts transfer bookings by when they were made. The ticket report gains three counted figures from the same bookings query it already runs, through a pure counter beside `countSales`.
+**Architecture:** A pure staff-email builder beside the buyer emails, sent best effort after the booking commits, as the buyer's bank-details email already is. The pill's "latest arrival" query for `ball` also counts transfer bookings by when they were made. The ticket report gains two counted figures (bookings and seats waiting for a transfer; no money, by the report's own rule) from the same bookings query it already runs, through a pure counter beside `countSales`.
 
 **Tech Stack:** Express + TypeScript, Postgres (node-pg-migrate, none needed here), Vitest (unit and jsdom), Cucumber BDD (CI only).
 
@@ -21,8 +21,8 @@ Spec: `docs/superpowers/specs/2026-10-01-ball-bank-transfer-design.md` ("Being t
 - Modify `src/routes/ball-transfer.ts`: call it after a booking.
 - Modify `src/db/whats-new.ts`: the `ball` arrival also counts transfer bookings by `created_at`.
 - Modify `assets/js/admin/app.js`: a row pill on Awaiting transfer, by `createdAt`.
-- Modify `src/ball/sales-report.ts`: `countAwaitingTransfers`, three `SalesInputs` fields, one line under "Sold".
-- Modify `src/db/ball-report.ts`: select `payment_method, total_pence`, fill the new fields.
+- Modify `src/ball/sales-report.ts`: `countAwaitingTransfers`, two `SalesInputs` fields, one line under "Sold".
+- Modify `src/db/ball-report.ts`: select `payment_method`, fill the new fields.
 - Tests: `test/unit/ball-transfer-staff-email.test.ts` (new), `ball-transfer-routes.test.ts`, `tracked-links` test, `ball-sales-report.test.ts`, `admin-app.test.ts`; BDD in `features/ball-bank-transfer.feature`.
 - README: "Telling the team (TASK-487, stage 4)".
 

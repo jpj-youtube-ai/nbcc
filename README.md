@@ -2840,9 +2840,11 @@ ticked "Offer bank transfer on the ticket page".
   amount to look out for, the pay-by date, the buyer, the company and its invoice when there is one,
   and a link to the admin. Reply-To is the buyer. Its log kind, `ballTransferStaff`, is staff only,
   so its links are never counted as Email visits.
-- **The New pill:** a new transfer booking lights Festive Ball for everyone who can see it, from
-  when it was made (as well as a paid booking, from when it was paid; `src/db/whats-new.ts`). Its
-  row in Awaiting transfer carries the pill too.
+- **The New pill:** a new transfer booking still waiting for its money lights Festive Ball for
+  everyone who can see it, from when it was made (as well as a paid booking, from when it was paid;
+  `src/db/whats-new.ts`). Its row in Awaiting transfer carries the pill too.
+- **Email audit** names both bank transfer kinds; `test/unit/admin-email-kinds.test.ts` fails if a
+  kind the server sends has no name there.
 - **The ticket report** says, under Sold, "12 more seats are booked and waiting for a bank transfer
   (2 bookings)" when there are any (`countAwaitingTransfers`). Seats and bookings only: the report
   carries no money. They are counted as sold once marked paid.

@@ -2374,6 +2374,9 @@
     ["businessInvite", "Business invite"], ["businessCapture", "Business confirmation"],
     ["businessReminder", "Business reminder"], ["ballConfirmation", "Ball confirmation"],
     ["ballReminder", "Ball reminder"], ["ballRunUp", "Ball run-up"], ["ballReport", "Ball ticket report"],
+    // TASK-487: every kind the server sends has a name here (test/unit/admin-email-kinds.test.ts).
+    ["ballTransfer", "Ball bank transfer"], ["ballTransferStaff", "Ball bank transfer (to events@)"],
+    ["outreach", "Business outreach"], ["backupAlert", "Backup alert"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];

@@ -1666,6 +1666,8 @@
       .then(okJson)
       .then(function (d) {
         wrap.innerHTML = fulfilmentsTable(d.results || []);
+        // A note put back after a save is sized to its words, so it never scrolls inside its box.
+        nlFitBoxes(Array.prototype.slice.call(wrap.querySelectorAll("textarea.fx-call-input")));
         fulfilmentCallCount(d.results || []);
         // A save's message has now been shown once, in the panel it belongs to.
         callNotice = {};

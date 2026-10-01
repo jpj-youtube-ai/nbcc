@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import express, { Router } from "express";
+import { z } from "zod";
 import { config } from "../config";
 import { stripe, stripeConfigured } from "../clients/stripe";
 import { canFulfil, seatsFor } from "../ball/capacity";
@@ -9,7 +10,7 @@ import { makeReference, purchaseSchema } from "../ball/booking";
 import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
 import { publicTransferOpen } from "../ball/transfer";
-import { getTransferSettings } from "../db/ball-transfer";
+import { cancelReplacedCheckout, getTransferSettings, pendingCardSession } from "../db/ball-transfer";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
 import { addEventsNavLink } from "../events/nav-link";
@@ -79,6 +80,12 @@ ballRouter.get("/api/ball/availability", async (_req, res) => {
 // session expiry releases them if the buyer walks away.
 const RESERVATION_HOLD_MS = 2 * 60 * 1000;
 
+// TASK-484: the inline checkout a fallback to Stripe's own page replaces.
+const replacesSchema = z.object({
+  reference: z.string().regex(/^BALL-[A-Z2-9]{6}$/),
+  clientSecret: z.string().min(1).max(500),
+});
+
 ballRouter.post("/api/ball/checkout-session", async (req, res) => {
   const parsed = purchaseSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -88,6 +95,25 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
 
   let token: string | null = null;
   try {
+    // TASK-484: the page's fallback to Stripe's own page, after an inline checkout was created but
+    // could not be shown. Without this, that first checkout stayed pending and held its seats for
+    // half an hour beside the new one. The page proves the checkout is its own with the client
+    // secret it was given, which begins with the session id. The session is expired at Stripe FIRST:
+    // Stripe refuses to expire one that has been paid, so a checkout somebody did pay can never be
+    // cancelled under them. Done before capacity is checked, so the seats it held are free again.
+    const replaces = replacesSchema.safeParse(req.body?.replaces);
+    if (replaces.success) {
+      const sid = await pendingCardSession(replaces.data.reference);
+      if (sid && replaces.data.clientSecret.startsWith(`${sid}_secret_`)) {
+        try {
+          await stripe.checkout.sessions.expire(sid);
+          await cancelReplacedCheckout(sid);
+        } catch (err) {
+          console.error("ball checkout: could not retire the replaced session:", err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
     // 1. Are sales open at all? Checked before anything is held, so a closed ball never
     //    creates a reservation it would have to clean up.
     const avail = await getAvailability();

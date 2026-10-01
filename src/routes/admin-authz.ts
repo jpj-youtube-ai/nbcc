@@ -82,6 +82,26 @@ export async function authorizeSection(
   return result.claims;
 }
 
+// TASK-484: edit access to a section AND the admin role, both read from the database on this request.
+// For the few actions the client reserved to admins whatever the access matrix says: marking a bank
+// transfer's money as arrived, and setting the bank details. The token's role claim is not trusted
+// for this; it can be a day old.
+export async function authorizeSectionAsAdmin(
+  req: Request,
+  res: Response,
+  section: Section,
+): Promise<AdminSessionClaims | null> {
+  const result = await authorizeSession(req, res);
+  if (!result) return null;
+
+  if (result.row.role !== "admin" || !can(effectivePermissions(result.row), section, "edit")) {
+    res.status(403).json({ error: "Only an admin can do that" });
+    return null;
+  }
+
+  return result.claims;
+}
+
 // TASK-464: authorizeSection for a card on one section's page that shows another section's data
 // (the Festive Ball's ticket report, on the Events page). The user needs every section named, at its
 // level; the same 401s, and one 403 if any is short.

@@ -1500,6 +1500,25 @@
               <p class="admin-note" id="ballFeeExample"></p>
               <p class="ty-status" id="ballFeeStatus" role="status" aria-live="polite"></p>
 
+              <!-- TASK-484: the account bank transfer buyers pay into, and the switch that puts the
+                   choice on the ticket page. Admins only, enforced by the server. -->
+              <h3 class="admin-subhead">Bank transfer</h3>
+              <p class="admin-note">The account buyers pay into when they choose bank transfer. They see these only after booking, never on the open page. Only an admin can change them.</p>
+              <form id="ballTransferForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">Account name
+                  <input id="ballTransferAccountName" type="text" maxlength="70" style="width:260px" />
+                </label>
+                <label class="ty-inline">Sort code
+                  <input id="ballTransferSortCode" type="text" inputmode="numeric" maxlength="8" placeholder="12-34-56" style="width:110px" />
+                </label>
+                <label class="ty-inline">Account number
+                  <input id="ballTransferAccountNumber" type="text" inputmode="numeric" maxlength="8" style="width:120px" />
+                </label>
+                <label class="ty-inline"><input id="ballTransferOn" type="checkbox" /> Offer bank transfer on the ticket page</label>
+                <button class="btn btn-primary" type="submit" id="ballTransferSave">Save</button>
+              </form>
+              <p class="ty-status" id="ballTransferStatus" role="status" aria-live="polite"></p>
+
               <h3 class="admin-subhead">Details the venue confirms later</h3>
               <p class="admin-note">Leave these empty and the page says &ldquo;to be confirmed&rdquo; rather than guessing. Fill one in and it appears on the ticket page and in every booking email from then on.</p>
               <form id="ballDetailsForm" class="ty-controls admin-stack" autocomplete="off">
@@ -1543,6 +1562,14 @@
 
               <h3 class="admin-band" id="ball-state">Where things stand</h3>
               <p class="admin-note admin-band-note">Who has booked, who still owes you an answer, and the lists the venue needs. Read these before you send anything.</p>
+              <!-- TASK-484: bookings made to pay by bank transfer, holding their seats until the money
+                   arrives. Marking one paid is for admins; more time and cancelling for Festive Ball edit. -->
+              <h3 class="admin-subhead">Awaiting transfer</h3>
+              <p class="admin-note">Booked to pay by bank transfer and holding their seats. When the money is in the bank, <b>Mark as paid</b> sends them their confirmation and the link to tell us who&rsquo;s coming. Only an admin can mark one paid.</p>
+              <label class="ty-inline">Find a payment by reference, name or amount
+                <input id="ballTransferSearch" type="search" autocomplete="off" style="width:220px" />
+              </label>
+              <div id="ballTransfers" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <h3 class="admin-subhead">Bookings</h3>
               <p class="admin-note">Three lists. The <b>door list</b> is alphabetical by surname for the welcome desk. The <b>catering list</b> is the one you send the venue: it has food and access notes only, no emails, no references, no money. The <b>bookings list</b> is for your own records.</p>
               <p class="ty-controls" id="ballExports">

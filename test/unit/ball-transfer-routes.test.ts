@@ -1,0 +1,126 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// TASK-484: POST /api/ball/bank-transfer, the public route for booking to pay by bank transfer. The
+// database and the email are mocked; features/ball-bank-transfer.feature runs it against Postgres.
+
+const { getAvailabilityMock, getCapacityStateMock, getTransferSettingsMock, createTransferBookingMock, sendTransferDetailsMock } =
+  vi.hoisted(() => ({
+    getAvailabilityMock: vi.fn(),
+    getCapacityStateMock: vi.fn(),
+    getTransferSettingsMock: vi.fn(),
+    createTransferBookingMock: vi.fn(),
+    sendTransferDetailsMock: vi.fn(),
+  }));
+vi.mock("../../src/db/ball", () => ({ getAvailability: getAvailabilityMock, getCapacityState: getCapacityStateMock }));
+vi.mock("../../src/db/ball-transfer", () => ({
+  getTransferSettings: getTransferSettingsMock,
+  createTransferBooking: createTransferBookingMock,
+}));
+vi.mock("../../src/ball/transfer-send", () => ({ sendTransferDetails: sendTransferDetailsMock }));
+vi.mock("../../src/config", () => ({
+  config: { NODE_ENV: "development", BALL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" },
+}));
+
+import { postBankTransfer } from "../../src/routes/ball-transfer";
+
+// Invented, like every fixture in this public repo.
+const BANK = { on: true, accountName: "Night Before Christmas Campaign", sortCode: "12-34-56", accountNumber: "12345678" };
+const order = {
+  kind: "table",
+  quantity: 1,
+  buyerFirstName: "Ada",
+  buyerSurname: "Test",
+  buyerEmail: "ada@example.com",
+  donationPence: 2000,
+  coverFee: true, // a transfer has no card fee, whatever is sent
+  giftAid: true,
+  newsletterOptIn: false,
+  termsAccepted: true,
+};
+
+type MockRes = { statusCode: number; body: unknown; status: (c: number) => MockRes; json: (b: unknown) => MockRes };
+function mockRes(): MockRes {
+  const res = { statusCode: 200, body: undefined as unknown } as MockRes;
+  res.status = (c) => { res.statusCode = c; return res; };
+  res.json = (b) => { res.body = b; return res; };
+  return res;
+}
+// The limiter remembers connections for an hour, so each test books from an address of its own.
+let testIp = "";
+let ipSeq = 0;
+const post = async (body: unknown, ip = testIp) => {
+  const res = mockRes();
+  await postBankTransfer({ body, ip, headers: {} } as never, res as never);
+  return res;
+};
+const body = (res: MockRes) => res.body as Record<string, unknown>;
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  testIp = `203.0.113.${(ipSeq += 1)}`;
+  getTransferSettingsMock.mockResolvedValue(BANK);
+  getAvailabilityMock.mockResolvedValue({ salesOpen: true, soldOut: false, cardFee: { percentBp: 120, fixedPence: 20 } });
+  getCapacityStateMock.mockResolvedValue({ seatsPerTable: 10 });
+  createTransferBookingMock.mockResolvedValue({ id: 1 });
+});
+
+describe("POST /api/ball/bank-transfer", () => {
+  it("books the seats and answers with everything needed to pay", async () => {
+    const res = await post(order);
+    expect(res.statusCode).toBe(201);
+    const b = body(res);
+    expect(b.reference).toMatch(/^BALL-[A-Z2-9]{6}$/);
+    expect(b).toMatchObject({
+      totalPence: 102_000, // £1,000 table + £20 donation, and no card fee
+      accountName: BANK.accountName,
+      sortCode: "12-34-56",
+      accountNumber: "12345678",
+    });
+    expect(b.payBy).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(createTransferBookingMock).toHaveBeenCalledTimes(1);
+    const [write] = createTransferBookingMock.mock.calls[0];
+    expect(write).toMatchObject({ kind: "table", seats: 10, feeCoverPence: 0, totalPence: 102_000, giftAid: true });
+    expect(sendTransferDetailsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not offered until an admin has switched it on with every detail", async () => {
+    getTransferSettingsMock.mockResolvedValue({ ...BANK, on: false });
+    expect((await post(order)).statusCode).toBe(409);
+    getTransferSettingsMock.mockResolvedValue({ ...BANK, accountNumber: null });
+    const res = await post(order);
+    expect(res.statusCode).toBe(409);
+    expect(body(res).error).toBe("Bank transfer isn't available");
+    expect(createTransferBookingMock).not.toHaveBeenCalled();
+  });
+
+  it("is refused when ticket sales are closed", async () => {
+    getAvailabilityMock.mockResolvedValue({ salesOpen: false, soldOut: true, cardFee: { percentBp: 120, fixedPence: 20 } });
+    expect((await post(order)).statusCode).toBe(409);
+    expect(createTransferBookingMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses a booking without the terms agreed", async () => {
+    expect((await post({ ...order, termsAccepted: false })).statusCode).toBe(400);
+  });
+
+  it("says so when the seats went while they were deciding", async () => {
+    createTransferBookingMock.mockResolvedValue(null);
+    const res = await post(order);
+    expect(res.statusCode).toBe(409);
+    expect(body(res).error).toBe("There are not enough whole tables left for that booking");
+    expect(sendTransferDetailsMock).not.toHaveBeenCalled();
+  });
+
+  // The client wants a buyer who decides they want more to be able to book more.
+  it("lets the same buyer book again before paying", async () => {
+    expect((await post(order)).statusCode).toBe(201);
+    expect((await post({ ...order, kind: "seat", quantity: 2 })).statusCode).toBe(201);
+  });
+
+  // A transfer booking holds seats for a week, so a bot must not be able to hold the room.
+  it("allows five from one connection in an hour, and refuses the sixth", async () => {
+    for (let i = 0; i < 5; i++) expect((await post(order)).statusCode).toBe(201);
+    expect((await post(order)).statusCode).toBe(429);
+    expect((await post(order, "198.51.100.9")).statusCode).toBe(201);
+  });
+});

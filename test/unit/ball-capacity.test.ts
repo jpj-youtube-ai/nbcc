@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   availability,
   canFulfil,
+  overbooked,
   seatsFor,
   SEATS_PER_TABLE,
   type CapacityState,
@@ -15,6 +16,24 @@ const base: CapacityState = {
   looseSeatsSold: 0,
   reservedSeats: 0,
 };
+
+// TASK-484: a card payment whose confirmation arrives after its seats stopped being held is still
+// recorded (the money is taken), so the room CAN end up holding more than it has. This says when.
+describe("overbooked", () => {
+  it("is not, while everything fits", () => {
+    expect(overbooked({ ...base, totalTables: 2, tablesSold: 2 })).toBe(false);
+    expect(overbooked({ ...base, totalTables: 2, tablesSold: 1, looseSeatsSold: 10 })).toBe(false);
+  });
+
+  it("is, when more whole tables are taken than exist", () => {
+    expect(overbooked({ ...base, totalTables: 2, tablesSold: 3 })).toBe(true);
+  });
+
+  // Loose seats share tables, so a table and eleven loose seats need three tables of ten.
+  it("is, when loose seats spill past the tables left", () => {
+    expect(overbooked({ ...base, totalTables: 2, tablesSold: 1, looseSeatsSold: 11 })).toBe(true);
+  });
+});
 
 describe("availability", () => {
   it("an untouched ball offers every seat and every table", () => {

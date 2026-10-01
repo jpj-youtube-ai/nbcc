@@ -2834,8 +2834,20 @@ ticked "Offer bank transfer on the ticket page".
   for them (`invoiceCc`), unless it is the buyer's own.
 - **Admin:** the Awaiting transfer list shows the company and an **Invoice** link under the buyer.
 
-**Still to come** (stages 4 and 5): the events@ email, the New pill and the ticket report line; and
-staff adding a booking by hand.
+**Telling the team (TASK-487, stage 4)**
+- **An email to events@nbcc.scot** for each new booking (`src/ball/transfer-staff-email.ts`, sent by
+  `sendTransferStaffNotice` after the booking is made, best effort). It gives the reference, the
+  amount to look out for, the pay-by date, the buyer, the company and its invoice when there is one,
+  and a link to the admin. Reply-To is the buyer. Its log kind, `ballTransferStaff`, is staff only,
+  so its links are never counted as Email visits.
+- **The New pill:** a new transfer booking lights Festive Ball for everyone who can see it, from
+  when it was made (as well as a paid booking, from when it was paid; `src/db/whats-new.ts`). Its
+  row in Awaiting transfer carries the pill too.
+- **The ticket report** says, under Sold, "12 more seats are booked and waiting for a bank transfer
+  (2 bookings)" when there are any (`countAwaitingTransfers`). Seats and bookings only: the report
+  carries no money. They are counted as sold once marked paid.
+
+**Still to come** (stage 5): staff adding a booking by hand.
 
 ### Changing the preview password
 
@@ -2927,7 +2939,8 @@ the sponsor and our own staff) get one email with its ticket numbers: seats sold
 full, whole tables and single seats, what sold since the last update and in the last 7 days against
 the 7 before, what is still available and kept back for guests, the people still waiting (anyone
 already offered a place is not counted) and the seats they want, and the days to go. Counts only:
-no names, no booking details, no money. Sold means paid. It opens with when the next
+no names, no booking details, no money. Sold means paid; seats booked to pay by bank transfer and
+still waiting for the money get a line of their own (TASK-487). It opens with when the next
 update comes and how to reach us (01292 811 015, events@nbcc.scot), comes From and Reply-To
 `BALL_FROM_EMAIL` in the Ball's own frame (`ballEmailShell`), and goes as ONE email with everyone
 on the To line so they can reply to all: they all work together (Jaimie's call; if the list ever

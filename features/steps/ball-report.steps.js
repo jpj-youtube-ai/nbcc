@@ -176,9 +176,11 @@ Given("these Festive Ball bookings exist:", async function (table) {
     n += 1;
     const ago = row["paid days ago"];
     await pool.query(
+      // TASK-487: an optional "payment" column, card unless it says transfer.
       `INSERT INTO ball_bookings
-         (reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence, total_pence, status, paid_at)
-       VALUES ($1, $2, $3, $4, 'Report Buyer', $5, 0, 0, $6, $7)`,
+         (reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence, total_pence, status, paid_at,
+          payment_method)
+       VALUES ($1, $2, $3, $4, 'Report Buyer', $5, 0, 0, $6, $7, $8)`,
       [
         `BALL-RPT${String(n).padStart(3, "0")}`,
         row.kind,
@@ -187,6 +189,7 @@ Given("these Festive Ball bookings exist:", async function (table) {
         `buyer${n}.report.bdd@example.com`,
         row.status,
         ago ? new Date(Date.now() - Number(ago) * DAY_MS) : null,
+        row.payment === "transfer" ? "transfer" : "card",
       ],
     );
   }

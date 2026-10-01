@@ -47,9 +47,9 @@ Spec: `docs/superpowers/specs/2026-10-01-ball-bank-transfer-design.md` ("Being t
 
 ## Task 3: the ticket report
 
-- [ ] Test (`ball-sales-report.test.ts`): `countAwaitingTransfers` counts pending transfer bookings only (not paid, cancelled, or pending card); the report says "2 bookings for 12 seats (£1,200) are waiting for a bank transfer" under Sold, says nothing when there are none, and uses the singular for one.
+- [ ] Test (`ball-sales-report.test.ts`): `countAwaitingTransfers` counts pending transfer bookings only (not paid, cancelled, or pending card); the report says "12 more seats are booked and waiting for a bank transfer (2 bookings)" under Sold, says nothing when there are none, and uses the singular for one. **No money:** the report deliberately carries none (Jaimie's rule, TASK-464), so the "total" is in seats.
 - [ ] Run: fails.
-- [ ] Add `paymentMethod` and `totalPence` to `BookingRow` (optional, so older stored figures still parse), `countAwaitingTransfers`, the three `SalesInputs` fields, the line, and the query change in `readSalesInputs`.
+- [ ] Add `paymentMethod` to `BookingRow` (optional), `countAwaitingTransfers`, two `SalesInputs` fields, the line, and the query change in `readSalesInputs`.
 - [ ] Run: passes. Commit `[TASK-487] The ticket report counts bookings waiting for a bank transfer`.
 
 ## Task 4: BDD, README, review, ship

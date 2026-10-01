@@ -240,6 +240,27 @@
               </label>
             </div>
 
+            <!-- TASK-484: shown by ball.js only when /api/ball/availability says transferOpen, which
+                 needs an admin to have entered the bank details and switched it on. Without
+                 JavaScript, or switched off, the form takes cards only, exactly as before. -->
+            <fieldset class="ball-choice ball-pay" id="ballPayMethod" hidden>
+              <legend>How would you like to pay?</legend>
+              <label class="ball-option">
+                <input type="radio" name="payMethod" value="card" checked />
+                <span class="ball-option-body">
+                  <b>Card</b>
+                  <span class="ball-note">Pay now, securely through Stripe.</span>
+                </span>
+              </label>
+              <label class="ball-option">
+                <input type="radio" name="payMethod" value="transfer" />
+                <span class="ball-option-body">
+                  <b>Bank transfer</b>
+                  <span class="ball-note">We'll hold your seats for 7 days and give you our bank details and a reference.</span>
+                </span>
+              </label>
+            </fieldset>
+
             <div class="ball-extras">
               <label class="ball-check">
                 <input type="checkbox" name="coverFee" />
@@ -328,6 +349,22 @@
               <a href="/ball/terms">ticket terms</a>.
             </p>
           </form>
+
+          <!-- TASK-484: what someone paying by bank transfer sees once they have booked. Filled in by
+               ball.js from the booking's answer; the same details are emailed to them. -->
+          <section class="ball-form ball-transfer-done" id="ballTransferDone" aria-labelledby="ballTransferDoneHeading" hidden>
+            <h3 id="ballTransferDoneHeading" tabindex="-1">Your seats are held</h3>
+            <p>Please pay by bank transfer by <b data-transfer="payBy"></b>.</p>
+            <dl class="ball-transfer-details">
+              <div><dt>Amount to pay</dt><dd data-transfer="amount"></dd></div>
+              <div><dt>Account name</dt><dd data-transfer="accountName"></dd></div>
+              <div><dt>Sort code</dt><dd data-transfer="sortCode"></dd></div>
+              <div><dt>Account number</dt><dd data-transfer="accountNumber"></dd></div>
+              <div><dt>Payment reference</dt><dd data-transfer="reference"></dd></div>
+            </dl>
+            <p>We've emailed these to you as well. Please use the reference exactly as it is written, so we can match your payment to your booking.</p>
+            <p>As soon as your payment arrives we'll email to confirm your booking, with a link to tell us who's coming.</p>
+          </section>
 
           <!-- The two things this form CANNOT do, said plainly and in their own card. Both used
                to be one clause at the tail of the smallprint, which is where reading stops — and

@@ -32,6 +32,8 @@ export interface BallEventDetails {
   guestLink?: string | null;
   /** Absolute link to the .ics file (TASK-337). Passed in, because this module stays pure. */
   calendarUrl?: string | null;
+  /** TASK-484: paid by bank transfer and just marked paid, so the email thanks them for it. */
+  transferArrived?: boolean;
 }
 
 export interface BallConfirmationEmail {
@@ -40,7 +42,8 @@ export interface BallConfirmationEmail {
   text: string;
 }
 
-function money(pence: number): string {
+// Exported for the bank transfer emails (TASK-484), so the two say amounts and orders the same way.
+export function money(pence: number): string {
   return "£" + (pence / 100).toLocaleString("en-GB", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
@@ -48,7 +51,7 @@ function money(pence: number): string {
 }
 
 // "2 tickets" / "a table of 10" — what the buyer would say themselves.
-function describe(booking: Pick<BallBookingWrite, "kind" | "quantity" | "seats">): string {
+export function describe(booking: Pick<BallBookingWrite, "kind" | "quantity" | "seats">): string {
   if (booking.kind === "table") {
     return booking.quantity === 1
       ? "a table of 10"
@@ -56,6 +59,8 @@ function describe(booking: Pick<BallBookingWrite, "kind" | "quantity" | "seats">
   }
   return booking.quantity === 1 ? "1 ticket" : `${booking.quantity} tickets`;
 }
+
+const TRANSFER_ARRIVED = "Your bank transfer has arrived. Thank you.";
 
 const P = `style="color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6;margin:0 0 12px"`;
 const H2 = `style="color:${MAROON};font-family:${HEAD};font-size:18px;font-weight:700;margin:26px 0 10px"`;
@@ -110,6 +115,7 @@ export function buildBallConfirmationEmail(
   <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">You're coming to the ball!</h1>
 
   <p ${P}>Thank you, ${name}. Your booking is confirmed, and we're delighted you're joining us on Saturday 7th November.</p>
+  ${details.transferArrived ? `<p ${P}><b>${TRANSFER_ARRIVED}</b></p>` : ""}
 
   ${factsCard(
     `<tr><td style="padding:14px 18px 4px;color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;">Booking reference</td></tr>
@@ -153,7 +159,7 @@ because you receive a meal and entertainment in return.\n`
   const text = `YOU'RE COMING TO THE BALL
 
 Thank you, ${booking.buyerName}. Your booking is confirmed, and we're delighted
-you're joining us on Saturday 7th November.
+you're joining us on Saturday 7th November.${details.transferArrived ? `\n\n${TRANSFER_ARRIVED}` : ""}
 
 Booking reference: ${booking.reference}
 You have booked ${what}.

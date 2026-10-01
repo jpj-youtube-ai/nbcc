@@ -70,8 +70,10 @@ describe("nothing was lost in the reorder", () => {
   });
 
   // A moved block that lost its <form> would still have every id and would still not save.
-  it("keeps all eight forms", () => {
-    expect((view.match(/<form/g) || []).length).toBe(8);
+  // Nine since TASK-484 added the bank transfer details.
+  it("keeps all nine forms", () => {
+    expect((view.match(/<form/g) || []).length).toBe(9);
+    expect(view).toContain('<form id="ballTransferForm"');
   });
 });
 

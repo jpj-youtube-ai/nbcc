@@ -33,6 +33,17 @@ const tableBooking = {
 
 const noArrival = { arrivalTime: null, includedNote: null };
 
+// TASK-484: a bank transfer buyer gets the same confirmation once an admin marks the money arrived,
+// with one line thanking them for the transfer. Nobody else sees that line.
+describe("the confirmation for a bank transfer", () => {
+  it("thanks a bank transfer buyer for the transfer, and only them", () => {
+    const withLine = buildBallConfirmationEmail(tableBooking, { ...noArrival, transferArrived: true });
+    expect(withLine.text).toContain("Your bank transfer has arrived. Thank you.");
+    expect(withLine.html).toContain("Your bank transfer has arrived. Thank you.");
+    expect(buildBallConfirmationEmail(tableBooking, noArrival).text).not.toContain("bank transfer");
+  });
+});
+
 describe("buildBallConfirmationEmail", () => {
   it("puts the booking reference in the subject so it is findable later", () => {
     const mail = buildBallConfirmationEmail(seatBooking, noArrival);

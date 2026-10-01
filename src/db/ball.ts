@@ -3,12 +3,14 @@ import { pool } from "./pool";
 import {
   availability,
   canFulfil,
+  overbooked,
   seatsFor,
   type CapacityState,
   type Availability,
   type Order,
 } from "../ball/capacity";
 import type { BallBookingWrite } from "../ball/booking";
+import type { TransferEmailBooking } from "../ball/transfer-email";
 import type { BallSettingsUpdate } from "../ball/settings";
 import { retentionDate, type GuestInput } from "../ball/guests";
 import type { GuestPageBooking, GuestRow } from "../ball/guest-page";
@@ -87,10 +89,20 @@ const SETTINGS_SQL = `SELECT total_tables, seats_per_table, held_seats, gate_ope
 // Sold seats, split by how they were bought. 'pending' counts as well as 'paid': a booking
 // awaiting Stripe confirmation is still holding those seats, and releasing them early would
 // let the room oversell in the seconds between payment and webhook.
+//
+// TASK-484: a pending booking counts only while it can still become paid.
+//   * A bank transfer holds its seats until an admin marks it paid or staff cancel it.
+//   * A card checkout holds them for an hour. Stripe expires the session at 30 minutes, and its
+//     expired event cancels the booking; if that event were ever lost, the seats would otherwise
+//     stay held for good. The status is left alone, so a late "completed" still finds the booking
+//     pending and marks it paid.
 const SOLD_SQL = `SELECT
     COALESCE(SUM(quantity) FILTER (WHERE kind = 'table'), 0) AS tables_sold,
     COALESCE(SUM(quantity) FILTER (WHERE kind = 'seat'),  0) AS loose_seats_sold
-  FROM ball_bookings WHERE status IN ('pending', 'paid')`;
+  FROM ball_bookings
+  WHERE status = 'paid'
+     OR (status = 'pending'
+         AND (payment_method = 'transfer' OR created_at > now() - interval '1 hour'))`;
 
 // Only live holds count. Expired rows are ignored by the WHERE clause rather than deleted,
 // so a plain read never has to take a write lock.
@@ -128,9 +140,9 @@ function toSettings(r: SettingsRow): BallSettings {
 
 // A querier is either the pool or a client already inside a transaction, so the same three
 // reads back both the plain availability read and the locked reservation claim below.
-type Querier = Pick<PoolClient, "query">;
+export type Querier = Pick<PoolClient, "query">;
 
-async function readCapacityState(db: Querier): Promise<CapacityState> {
+export async function readCapacityState(db: Querier): Promise<CapacityState> {
   const s = await db.query<SettingsRow>(SETTINGS_SQL);
   const sold = await db.query<{ tables_sold: string; loose_seats_sold: string }>(SOLD_SQL);
   const held = await db.query<{ reserved_seats: string }>(RESERVED_SQL);
@@ -238,7 +250,7 @@ export async function releaseReservation(token: string): Promise<void> {
 //
 // A booking is written as 'pending' the moment the Stripe session is created, and it is the
 // pending row — not the short reservation — that holds the seats from then on. That ordering
-// matters: the 15-minute reservation only has to cover the gap between "choose" and "session
+// matters: the 2-minute reservation only has to cover the gap between "choose" and "session
 // created", after which the booking itself is the record of intent. Stripe's own 30-minute
 // session expiry then closes the loop, via checkout.session.expired -> cancelled, so an
 // abandoned checkout gives its seats back without a sweeper.
@@ -278,15 +290,33 @@ export async function markBookingPaid(
   client: Querier,
   booking: BallBookingWrite,
 ): Promise<string> {
-  const res = await client.query(
+  const res = await client.query<{ id: number; reference: string; late: boolean }>(
     `UPDATE ball_bookings
         SET status = 'paid',
             paid_at = now(),
             buyer_email = COALESCE(NULLIF($2, ''), buyer_email)
-      WHERE stripe_session_id = $1 AND status = 'pending'`,
+      WHERE stripe_session_id = $1 AND status = 'pending'
+      RETURNING id, reference, created_at <= now() - interval '1 hour' AS late`,
     [booking.stripeSessionId, booking.buyerEmail],
   );
-  if (res.rowCount && res.rowCount > 0) return "ball.paid";
+  if (res.rowCount && res.rowCount > 0) {
+    // TASK-484: a pending card booking stops holding its seats after an hour (SOLD_SQL), in case
+    // Stripe's expired event is lost. If the "completed" event was delayed past that instead, the
+    // payment is real and is recorded, but its seats may since have gone to someone else. Say so
+    // where staff will find it, rather than letting the room be oversold in silence.
+    const row = res.rows[0];
+    if (row?.late) {
+      const isOver = overbooked(await readCapacityState(client));
+      await client.query(
+        `INSERT INTO audit_log (actor, action, entity, entity_id, data) VALUES ($1, $2, $3, $4, $5)`,
+        ["system:stripe", "ball.paid_after_seats_released", "ball_booking", row.id, { reference: row.reference, overbooked: isOver }],
+      );
+      if (isOver) {
+        console.error(`ball: ${row.reference} was paid after its seats were released, and the room is now overbooked`);
+      }
+    }
+    return "ball.paid";
+  }
 
   // No pending row: either Stripe redelivered after we already recorded it (harmless), or the
   // session was created outside this app. Insert defensively so a real payment is never lost.
@@ -371,7 +401,14 @@ const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
 // Only a live booking can be cancelled. Re-cancelling something already cancelled or refunded
 // returns null rather than pretending it did something, so the caller can say so plainly.
 export type CancelOutcome =
-  | { ok: true; seats: number; wasStatus: "pending" | "paid" }
+  | {
+      ok: true;
+      seats: number;
+      wasStatus: "pending" | "paid";
+      // TASK-484: so the route can email a bank transfer buyer whose unpaid booking was cancelled.
+      paymentMethod: string;
+      booking: TransferEmailBooking & { buyerEmail: string };
+    }
   | { ok: false; reason: "not_found" | "already_closed"; status?: string };
 
 export async function cancelBooking(
@@ -384,8 +421,23 @@ export async function cancelBooking(
     await client.query("BEGIN");
     // Locked for the length of the transaction so two staff pressing cancel at once cannot
     // both count it as a fresh cancellation in the audit log.
-    const found = await client.query<{ id: number; status: string; seats: number }>(
-      `SELECT id, status, seats FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
+    const found = await client.query<{
+      id: number;
+      status: string;
+      seats: number;
+      kind: "seat" | "table";
+      quantity: number;
+      buyer_name: string;
+      buyer_email: string;
+      tickets_pence: number;
+      donation_pence: number;
+      total_pence: number;
+      gift_aid: boolean;
+      payment_method: string;
+    }>(
+      `SELECT id, status, seats, kind, quantity, buyer_name, buyer_email, tickets_pence,
+              donation_pence, total_pence, gift_aid, payment_method
+         FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
       [reference],
     );
     const row = found.rows[0];
@@ -399,7 +451,7 @@ export async function cancelBooking(
     }
 
     await client.query(
-      `UPDATE ball_bookings SET status = 'cancelled' WHERE id = $1`,
+      `UPDATE ball_bookings SET status = 'cancelled', cancelled_from = status WHERE id = $1`,
       [row.id],
     );
     await insertAudit(client, {
@@ -415,7 +467,24 @@ export async function cancelBooking(
       },
     });
     await client.query("COMMIT");
-    return { ok: true, seats: row.seats, wasStatus: row.status };
+    return {
+      ok: true,
+      seats: row.seats,
+      wasStatus: row.status,
+      paymentMethod: row.payment_method,
+      booking: {
+        reference,
+        kind: row.kind,
+        quantity: row.quantity,
+        seats: row.seats,
+        buyerName: row.buyer_name,
+        buyerEmail: row.buyer_email,
+        ticketsPence: row.tickets_pence,
+        donationPence: row.donation_pence,
+        totalPence: row.total_pence,
+        giftAid: row.gift_aid,
+      },
+    };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -611,6 +680,10 @@ export interface BallBookingRow {
   status: string;
   createdAt: string;
   paidAt: string | null;
+  /** TASK-484: "card" (Stripe) or "transfer" (bank transfer, marked paid by an admin). */
+  paymentMethod: string;
+  /** TASK-484: the status it had when staff cancelled it; only a transfer cancelled unpaid comes back. */
+  cancelledFrom: string | null;
 }
 
 // TASK-337: how many checkouts were started and never finished.
@@ -627,9 +700,9 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at
+            created_at, paid_at, payment_method, cancelled_from
        FROM ball_bookings
-      WHERE status = 'pending'
+      WHERE status = 'pending' AND payment_method = 'card'
       ORDER BY created_at DESC
       LIMIT $1`,
     [Math.min(Math.max(limit, 1), 200)],
@@ -649,12 +722,14 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
     status: r.status,
     createdAt: r.created_at,
     paidAt: r.paid_at,
+    paymentMethod: r.payment_method,
+    cancelledFrom: r.cancelled_from,
   }));
 }
 
 export async function countAbandonedBookings(): Promise<number> {
   const res = await pool.query<{ n: string }>(
-    `SELECT COUNT(*)::text AS n FROM ball_bookings WHERE status = 'pending'`,
+    `SELECT COUNT(*)::text AS n FROM ball_bookings WHERE status = 'pending' AND payment_method = 'card'`,
   );
   return Number(res.rows[0]?.n ?? 0);
 }
@@ -665,7 +740,7 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at
+            created_at, paid_at, payment_method, cancelled_from
        FROM ball_bookings
       WHERE status <> 'pending'
       ORDER BY created_at DESC
@@ -687,6 +762,8 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
     status: r.status,
     createdAt: r.created_at,
     paidAt: r.paid_at,
+    paymentMethod: r.payment_method,
+    cancelledFrom: r.cancelled_from,
   }));
 }
 

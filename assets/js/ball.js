@@ -41,6 +41,15 @@
     return checked ? checked.value : "seat";
   }
 
+  // TASK-484: "card" or "transfer". Card whenever the choice is not on the page, which is whenever
+  // an admin has not switched bank transfer on.
+  var payMethodBox = document.getElementById("ballPayMethod");
+  function payMethod() {
+    if (!payMethodBox || payMethodBox.hidden) return "card";
+    var checked = form.querySelector('input[name="payMethod"]:checked');
+    return checked ? checked.value : "card";
+  }
+
   function money(pence) {
     // Whole pounds lose the ".00" — "£1,000" reads better than "£1,000.00" on a
     // headline total, and the pennies only ever appear on the fee line.
@@ -124,6 +133,21 @@
     // the file, the throw showed up as no snow rather than as an obvious error.
     var coverFee = form && form.elements.coverFee && form.elements.coverFee.checked;
 
+    // TASK-484: a bank transfer has no card fee. Its offer goes, unticked, so it cannot creep into
+    // the total, and the button says what happens next.
+    if (form && form.elements.coverFee) {
+      var transfer = payMethod() === "transfer";
+      var feeLabel = form.elements.coverFee.closest("label");
+      if (feeLabel) feeLabel.hidden = transfer;
+      if (transfer) {
+        form.elements.coverFee.checked = false;
+        coverFee = false;
+      }
+      if (submit && !submit.disabled) {
+        submit.textContent = transfer ? "Book and get bank details" : "Continue to payment";
+      }
+    }
+
     if (feeOut) feeOut.textContent = money(fee);
     // The 20p is per ORDER, so the fee per ticket falls as the order grows. Worth saying:
     // it turns a number that looks like a surcharge into one that visibly gets better.
@@ -151,6 +175,44 @@
     if (donationFields) donationFields.hidden = !(addDonation && addDonation.checked);
   }
 
+  // TASK-484: "2026-10-08" as "Thursday 8 October". Noon UTC, so no time zone can move it a day.
+  function longDate(iso) {
+    try {
+      return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        timeZone: "UTC",
+      });
+    } catch (e) {
+      return iso;
+    }
+  }
+
+  // TASK-484: the booking is made; swap the form for what they need to pay.
+  function showTransferDone(data) {
+    var done = document.getElementById("ballTransferDone");
+    if (!done) return;
+    var values = {
+      payBy: longDate(data.payBy),
+      // The exact figure, pence and all, as the email gives it: it is what they type into their bank.
+      amount: "£" + (data.totalPence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      accountName: data.accountName,
+      sortCode: data.sortCode,
+      accountNumber: data.accountNumber,
+      reference: data.reference,
+    };
+    Array.prototype.forEach.call(done.querySelectorAll("[data-transfer]"), function (node) {
+      node.textContent = values[node.getAttribute("data-transfer")] || "";
+    });
+    form.hidden = true;
+    done.hidden = false;
+    var heading = document.getElementById("ballTransferDoneHeading");
+    if (heading && heading.focus) {
+      try { heading.focus(); } catch (e) { /* focus unavailable */ }
+    }
+  }
+
   function showError(message) {
     if (!errorBox) return;
     errorBox.textContent = message;
@@ -176,6 +238,8 @@
         // Adopt the live card rate before anything is priced on screen (TASK-317).
         if (typeof data.cardFeePercentBp === "number") cardFeeBp = data.cardFeePercentBp;
         if (typeof data.cardFeeFixedPence === "number") cardFeeFixedPence = data.cardFeeFixedPence;
+        // TASK-484: offer bank transfer only when the server says it is switched on.
+        if (payMethodBox) payMethodBox.hidden = !(data.salesOpen && data.transferOpen);
         recalculate();
         if (!data.salesOpen) {
           availability.textContent = data.soldOut
@@ -332,12 +396,53 @@
 
     submit.disabled = true;
     var original = submit.innerHTML;
-    submit.textContent = "Taking you to payment…";
 
     function restore() {
       submit.disabled = false;
       submit.innerHTML = original;
     }
+
+    // TASK-484: booked to pay by bank transfer. No card, no Stripe: the seats are held and the
+    // answer carries the account, the amount, the reference and the date, shown here and emailed.
+    if (payMethod() === "transfer") {
+      submit.textContent = "Booking…";
+      delete body.uiMode;
+      delete body.coverFee;
+      fetch("/api/ball/bank-transfer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+        .then(function (res) {
+          return res.json().then(function (data) {
+            return { status: res.status, data: data };
+          });
+        })
+        // Two-argument then: the "check your connection" message is for a request that never got an
+        // answer, and must not replace the server's own reason if showing that reason goes wrong.
+        .then(
+          function (result) {
+            if (result.status === 201) {
+              showTransferDone(result.data);
+              return;
+            }
+            restore();
+            showError(
+              result.data && result.data.error
+                ? result.data.error
+                : "Something went wrong making your booking. Please try again, or email events@nbcc.scot.",
+            );
+            loadAvailability();
+          },
+          function () {
+            restore();
+            showError("We couldn't make your booking. Check your connection and try again, or email events@nbcc.scot.");
+          },
+        );
+      return;
+    }
+
+    submit.textContent = "Taking you to payment…";
 
     function post(mode) {
       body.uiMode = mode;
@@ -367,7 +472,11 @@
     // The hosted Stripe page, in its own tab-less redirect. This is the fallback, not the
     // plan: it is what happens if Stripe.js is blocked, the mount is missing, or the embed
     // throws — so a buyer is never left holding a dead button.
-    function hostedRedirect() {
+    //
+    // TASK-484: when an inline checkout was already created and could not be shown, say which
+    // one this replaces. The server retires it, so it stops holding seats beside the new one.
+    function hostedRedirect(replaces) {
+      if (replaces) body.replaces = replaces;
       post("hosted")
         .then(function (result) {
           if (result.status === 201 && result.data.url) {
@@ -399,15 +508,25 @@
           return;
         }
         var data = result.data;
+        // From here a checkout exists, so every fallback names it (TASK-484).
+        var created = data.reference && data.clientSecret
+          ? { reference: data.reference, clientSecret: data.clientSecret }
+          : null;
+        // The server could not embed and sent Stripe's own page instead: that checkout is the one to
+        // use. Asking for another would leave two holding seats (TASK-484 review).
+        if (!data.clientSecret && data.url) {
+          window.location.assign(data.url);
+          return;
+        }
         if (!data.clientSecret || !data.publishableKey) {
-          hostedRedirect();
+          hostedRedirect(created);
           return;
         }
         var stripe;
         try {
           stripe = window.Stripe(data.publishableKey);
         } catch (e) {
-          hostedRedirect();
+          hostedRedirect(created);
           return;
         }
         stripe
@@ -420,10 +539,10 @@
           })
           .catch(function () {
             closeCheckout();
-            hostedRedirect();
+            hostedRedirect(created);
           });
       })
-      .catch(hostedRedirect);
+      .catch(function () { hostedRedirect(); });
   });
 
   /* ---- snow ----------------------------------------------------------------

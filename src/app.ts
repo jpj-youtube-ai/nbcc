@@ -22,6 +22,8 @@ import { IMAGE_JSON_BODY_LIMIT } from "./newsletter/image-validation";
 import { newsletterDocumentsRouter } from "./routes/newsletter-documents";
 import { tickerRouter } from "./routes/ticker";
 import { ballRouter } from "./routes/ball";
+import { ballTransferRouter } from "./routes/ball-transfer";
+import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -66,6 +68,8 @@ export function createApp() {
   app.use(tickerRouter);
   // Public Festive Ball availability feed (TASK-313): GET /api/ball/availability.
   app.use(ballRouter);
+  // Booking the Festive Ball to pay by bank transfer (TASK-484). Refused until an admin switches it on.
+  app.use(ballTransferRouter);
   app.use(portalRouter);
   app.use(adminRouter);
   // Admin user management + forgot/set-password (admin-management Phase 1, Task 5).
@@ -74,6 +78,8 @@ export function createApp() {
   app.use(adminEventsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
+  // The admin side of paying for the Ball by bank transfer (TASK-484).
+  app.use(adminBallTransferRouter);
   // Stories from the old website's My Story form, from its CSV export (TASK-461).
   app.use(adminStoriesImportRouter);
   // The New pills in the admin, per person (TASK-478).

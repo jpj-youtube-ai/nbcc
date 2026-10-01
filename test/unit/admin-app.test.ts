@@ -115,6 +115,11 @@ let deleteFailure = false; // TASK-468: a delete answers 500
 // (nothing unless a test says so), and whether that request fails.
 let whatsNew: Array<{ area: string; new: boolean; since: string }> = [];
 let whatsNewFailure = false;
+// TASK-484: the Festive Ball's bank transfer settings, the bookings awaiting a transfer, and the
+// bookings table (all empty unless a test says otherwise). Invented details.
+let transferSettings = { on: false, accountName: null as string | null, sortCode: null as string | null, accountNumber: null as string | null, ready: false };
+let awaitingTransfers: unknown[] = [];
+let ballBookings: unknown[] = [];
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
@@ -136,6 +141,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     return j({ email: claims?.email || "", permissions: effectivePermissions({ role, permissions: storedPermissions }) });
   }
   if (url.includes("/api/admin/donors/")) return j(snapshot);
+  if (url.includes("/api/admin/search/donations")) return j({ results: [donation] }); // TASK-483
   if (url.includes("/api/admin/donations")) return j({ results: [donation], total: 1 });
   if (/\/api\/admin\/stories\/\d+/.test(url) && init?.method === "PATCH") {
     const patch = JSON.parse(init.body || "{}");
@@ -192,6 +198,15 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     if (eventsFailure) return j({ error: "Admin is temporarily unavailable" }, 500);
     return j({ pageOn: false, updatedAt: null, updatedBy: null, today: "2026-09-30", events });
   }
+  // TASK-484: bank transfer on the Festive Ball screen.
+  if (url.includes("/api/admin/ball/transfer-settings")) {
+    if (init?.method === "PUT") return j({ ...transferSettings, ...JSON.parse(init.body || "{}") });
+    return j(transferSettings);
+  }
+  if (url.includes("/api/admin/ball/transfers")) return j({ results: awaitingTransfers });
+  if (/\/api\/admin\/ball\/bookings\/[^/]+\/mark-paid$/.test(url)) return j({ reference: "BALL-7KQ2MZ", reinstated: false });
+  if (/\/api\/admin\/ball\/bookings\/[^/]+\/pay-by$/.test(url)) return j({ reference: "BALL-7KQ2MZ", payBy: "2026-10-20" });
+  if (/\/api\/admin\/ball\/bookings$/.test(url)) return j({ results: ballBookings, abandoned: 0, abandonedRows: [] });
   // TASK-478: the seen POST is checked first, since it shares the list's prefix.
   if (url.includes("/api/admin/whats-new/seen") && init?.method === "POST") {
     const area = (JSON.parse(init.body || "{}") as { area?: string }).area;
@@ -228,6 +243,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     deleteFailure = false;
     whatsNew = [];
     whatsNewFailure = false;
+    transferSettings = { on: false, accountName: null, sortCode: null, accountNumber: null, ready: false };
+    awaitingTransfers = [];
+    ballBookings = [];
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -1107,6 +1125,41 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     });
   });
 
+  // TASK-483: on a phone the donations table becomes cards, each line labelled by its cell's
+  // data-label (admin.css). All three lists that draw it must carry the labels and the wrapper the
+  // stylesheet measures.
+  describe("the donations table on a phone (TASK-483)", () => {
+    const LABELS = ["ID", "Donor", "Donation", "Amount", "Gift Aid", "Claim", "Payment", "Date", ""];
+    const labelsIn = (host: string) =>
+      Array.from(document.querySelectorAll(host + " .dn-list .dn-table tbody tr:first-child td")).map((td) =>
+        td.getAttribute("data-label"),
+      );
+
+    it("labels every cell on the Donations screen", async () => {
+      await signIn();
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await flush();
+      await flush();
+      expect(labelsIn("#donationsTable")).toEqual(LABELS);
+    });
+
+    it("labels every cell in the Overview's recent donations", async () => {
+      await signIn();
+      await flush();
+      expect(labelsIn("#overviewRecent")).toEqual(LABELS);
+    });
+
+    it("labels every cell in donation search results", async () => {
+      await signIn();
+      (document.querySelector('.admin-seg[data-kind="donations"]') as HTMLElement).click();
+      (el("searchQuery") as HTMLInputElement).value = "Ada";
+      el("searchForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await flush();
+      await flush();
+      expect(labelsIn("#searchResults")).toEqual(LABELS);
+    });
+  });
+
   // TASK-478: a New pill on each section holding something this person has not seen. Opening the
   // section clears it for them; the server keeps everyone else's.
   describe("New pills (TASK-478)", () => {
@@ -1241,6 +1294,222 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await settle();
       expect(document.querySelector("#donationsTable table")).not.toBeNull();
       expect(seenPosts()).toEqual([]);
+    });
+  });
+
+  // TASK-484: paying for the Festive Ball by bank transfer, on the admin screen. The client reserved
+  // setting the bank details and confirming money to ADMINS; giving more time and cancelling need
+  // Festive Ball edit. The server enforces all of it; these check what each person is offered.
+  describe("bank transfer on the Festive Ball screen (TASK-484)", () => {
+    const awaiting = {
+      reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test",
+      buyerEmail: "ada@example.com", totalPence: 102_000, payBy: "2026-10-08", createdAt: "2026-10-01T09:00:00Z",
+    };
+    const fetchCalls = () =>
+      (globalThis.fetch as unknown as { mock: { calls: Array<[unknown, { method?: string; body?: string }?]> } }).mock.calls;
+    const posted = (pattern: RegExp) =>
+      fetchCalls().filter(([url, init]) => pattern.test(String(url)) && (init?.method === "POST" || init?.method === "PUT"));
+    const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
+    const openBall = async () => {
+      await signIn();
+      (document.querySelector('.admin-nav-link[data-view="ball"]') as HTMLElement).click();
+      await settle();
+    };
+    const asEditorWithBallEdit = () => {
+      loginToken = tokenFor("editor");
+      storedPermissions = { ...roleToPermissions("editor"), ball: "edit" };
+    };
+    const buttonsIn = (host: string) =>
+      Array.from(document.querySelectorAll(host + " button")).map((b) => (b.textContent || "").trim());
+
+    it("shows the bank details, which only an admin can change", async () => {
+      loginToken = tokenFor("admin");
+      transferSettings = { on: true, accountName: "Night Before Christmas Campaign", sortCode: "12-34-56", accountNumber: "12345678", ready: true };
+      await openBall();
+      expect((el("ballTransferAccountName") as HTMLInputElement).value).toBe("Night Before Christmas Campaign");
+      expect((el("ballTransferSortCode") as HTMLInputElement).value).toBe("12-34-56");
+      expect((el("ballTransferAccountNumber") as HTMLInputElement).value).toBe("12345678");
+      expect((el("ballTransferOn") as HTMLInputElement).checked).toBe(true);
+      expect((el("ballTransferSave") as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it("lets an editor with Festive Ball edit see the bank details but not change them", async () => {
+      asEditorWithBallEdit();
+      await openBall();
+      expect((el("ballTransferSave") as HTMLButtonElement).disabled).toBe(true);
+      expect((el("ballTransferOn") as HTMLInputElement).disabled).toBe(true);
+    });
+
+    it("saves the bank details and the switch", async () => {
+      loginToken = tokenFor("admin");
+      await openBall();
+      (el("ballTransferAccountName") as HTMLInputElement).value = "Night Before Christmas Campaign";
+      (el("ballTransferSortCode") as HTMLInputElement).value = "123456";
+      (el("ballTransferAccountNumber") as HTMLInputElement).value = "12345678";
+      (el("ballTransferOn") as HTMLInputElement).checked = true;
+      el("ballTransferForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      const [, init] = posted(/\/api\/admin\/ball\/transfer-settings$/)[0];
+      expect(JSON.parse(init?.body || "{}")).toEqual({
+        accountName: "Night Before Christmas Campaign", sortCode: "123456", accountNumber: "12345678", on: true,
+      });
+    });
+
+    it("lists the bookings awaiting a transfer", async () => {
+      loginToken = tokenFor("admin");
+      awaitingTransfers = [awaiting];
+      await openBall();
+      const list = el("ballTransfers").textContent || "";
+      for (const part of ["BALL-7KQ2MZ", "Ada Test", "ada@example.com", "£1,020.00", "Thu 8 Oct"]) expect(list, part).toContain(part);
+    });
+
+    it("offers an admin Mark as paid, Give more time and Cancel", async () => {
+      loginToken = tokenFor("admin");
+      awaitingTransfers = [awaiting];
+      await openBall();
+      expect(buttonsIn("#ballTransfers")).toEqual(["Mark as paid", "Give more time", "Cancel"]);
+    });
+
+    it("offers an editor with Festive Ball edit only Give more time and Cancel", async () => {
+      asEditorWithBallEdit();
+      awaitingTransfers = [awaiting];
+      await openBall();
+      expect(buttonsIn("#ballTransfers")).toEqual(["Give more time", "Cancel"]);
+    });
+
+    it("asks before marking paid, naming the amount, and sends that amount", async () => {
+      loginToken = tokenFor("admin");
+      awaitingTransfers = [awaiting];
+      await openBall();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      (document.querySelector("#ballTransfers [data-mark-paid]") as HTMLElement).click();
+      await settle();
+      expect(confirm.mock.calls[0][0]).toContain("Has £1,020.00 arrived for BALL-7KQ2MZ (Ada Test)?");
+      expect(posted(/mark-paid$/)).toHaveLength(0);
+
+      confirm.mockReturnValue(true);
+      (document.querySelector("#ballTransfers [data-mark-paid]") as HTMLElement).click();
+      await settle();
+      const [, init] = posted(/\/bookings\/BALL-7KQ2MZ\/mark-paid$/)[0];
+      expect(JSON.parse(init?.body || "{}")).toEqual({ confirmTotalPence: 102_000 });
+      confirm.mockRestore();
+    });
+
+    it("gives more time to the date staff type", async () => {
+      loginToken = tokenFor("admin");
+      awaitingTransfers = [awaiting];
+      await openBall();
+      const prompt = vi.spyOn(window, "prompt").mockReturnValue("2026-10-20");
+      (document.querySelector("#ballTransfers [data-pay-by]") as HTMLElement).click();
+      await settle();
+      expect(prompt.mock.calls[0][1]).toBe("2026-10-15"); // a week on from the date it has now
+      const [, init] = posted(/\/bookings\/BALL-7KQ2MZ\/pay-by$/)[0];
+      expect(JSON.parse(init?.body || "{}")).toEqual({ payBy: "2026-10-20" });
+      prompt.mockRestore();
+    });
+
+    it("finds a payment by reference, name or amount", async () => {
+      loginToken = tokenFor("admin");
+      awaitingTransfers = [
+        awaiting,
+        { ...awaiting, reference: "BALL-2PQRST", buyerName: "Bo Example", buyerEmail: "bo@example.com", totalPence: 30_000 },
+        // £720: its amount starts with the digits in "BALL-7KQ2MZ", which is a reference, not an amount.
+        { ...awaiting, reference: "BALL-9WXYZA", buyerName: "Cy Example", buyerEmail: "cy@example.com", totalPence: 72_000 },
+      ];
+      await openBall();
+      const search = el("ballTransferSearch") as HTMLInputElement;
+      const visible = () =>
+        Array.from(document.querySelectorAll("#ballTransfers tbody tr")).filter((r) => !(r as HTMLElement).hidden).length;
+      for (const [query, expected] of [
+        ["1,020", 1], ["£300", 1], ["720.00", 1], ["bo exa", 1], ["2pqr", 1], ["BALL-7KQ2MZ", 1], ["", 3], ["nobody", 0],
+      ] as const) {
+        search.value = query;
+        search.dispatchEvent(new Event("input", { bubbles: true }));
+        expect(visible(), query).toBe(expected);
+      }
+    });
+
+    // Money arriving for a booking already cancelled: it comes back if its seats are still free.
+    it("offers an admin Mark as paid on a cancelled transfer booking, and nobody else", async () => {
+      ballBookings = [{
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "cancelled",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: null, paymentMethod: "transfer", cancelledFrom: "pending",
+      }];
+      loginToken = tokenFor("admin");
+      await openBall();
+      expect(document.querySelector("#ballBookings [data-mark-paid]")).not.toBeNull();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      (document.querySelector("#ballBookings [data-mark-paid]") as HTMLElement).click();
+      expect(confirm.mock.calls[0][0]).toContain("This booking was cancelled.");
+      confirm.mockRestore();
+    });
+
+    it("does not offer an editor Mark as paid on a cancelled transfer booking", async () => {
+      ballBookings = [{
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "cancelled",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: null, paymentMethod: "transfer", cancelledFrom: "pending",
+      }];
+      asEditorWithBallEdit();
+      await openBall();
+      expect(document.querySelector("#ballBookings [data-mark-paid]")).toBeNull();
+    });
+
+    // Paid, then cancelled and refunded by hand: there is nothing to bring back.
+    it("does not offer Mark as paid on a transfer that had been paid before it was cancelled", async () => {
+      ballBookings = [{
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "cancelled",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: "2026-10-02T09:00:00Z", paymentMethod: "transfer", cancelledFrom: "paid",
+      }];
+      loginToken = tokenFor("admin");
+      await openBall();
+      expect(document.querySelector("#ballBookings [data-mark-paid]")).toBeNull();
+    });
+
+    // Their money came by bank transfer, so the refund goes back the same way, not through Stripe.
+    it("tells staff cancelling a paid transfer to refund it from the bank", async () => {
+      ballBookings = [{
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "paid",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: "2026-10-02T09:00:00Z", paymentMethod: "transfer", cancelledFrom: null,
+      }];
+      loginToken = tokenFor("admin");
+      await openBall();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      (document.querySelector("#ballBookings [data-cancel-booking]") as HTMLElement).click();
+      expect(confirm.mock.calls[0][0]).toContain("refund them from the bank");
+      expect(confirm.mock.calls[0][0]).not.toContain("Stripe");
+      confirm.mockRestore();
+    });
+
+    // Each load used to add another click handler to the bookings table, so after the screen had
+    // been opened a few times one click on Cancel asked as many times.
+    it("asks once per click, however many times the screen has been opened", async () => {
+      loginToken = tokenFor("admin");
+      ballBookings = [{
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        totalPence: 100_000, donationPence: 0, giftAid: false, newsletterOptIn: false, status: "paid",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: "2026-10-01T09:00:00Z", paymentMethod: "card",
+      }];
+      await openBall();
+      (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+      await settle();
+      (document.querySelector('.admin-nav-link[data-view="ball"]') as HTMLElement).click();
+      await settle();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      (document.querySelector("#ballBookings [data-cancel-booking]") as HTMLElement).click();
+      expect(confirm).toHaveBeenCalledTimes(1);
+      confirm.mockRestore();
+    });
+
+    // A card checkout someone never finished holds its seats for up to an hour now (TASK-484), so
+    // "no seats are held" was wrong as well as stale.
+    it("says what an abandoned checkout really does to the seats", () => {
+      const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8");
+      expect(app).not.toContain("no seats are held");
+      expect(app).toContain("Their seats are kept for up to an hour in case they are still paying, then go back on sale.");
     });
   });
 });

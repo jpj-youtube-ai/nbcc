@@ -7,6 +7,7 @@ import { renderBallThankYou } from "../../src/ball/thank-you-page";
 import { buildBallConfirmationEmail } from "../../src/ball/confirmation-email";
 import { buildBallReminderEmail } from "../../src/ball/reminder-email";
 import { renderGuestPage, renderGuestNotFound } from "../../src/ball/guest-page";
+import { buildTransferDetailsEmail, buildTransferCancelledEmail } from "../../src/ball/transfer-email";
 
 // TASK-325: two house rules the rest of the site already followed and the ball surfaces did
 // not. Both are asserted on what a reader actually SEES — the rendered output, and the HTML
@@ -54,6 +55,19 @@ const SURFACES: Array<[string, string]> = [
   ["reminder subject", buildBallReminderEmail(booking, [], details).subject],
   ["guest page", renderGuestPage({ token: "tok", booking, guests: [], saved: false, error: null })],
   ["guest not found", renderGuestNotFound()],
+  // TASK-484: the bank transfer emails.
+  ...(() => {
+    const bank = { accountName: "Night Before Christmas Campaign", sortCode: "12-34-56", accountNumber: "12345678" };
+    const details = buildTransferDetailsEmail(booking, bank, "2026-10-08");
+    const cancelled = buildTransferCancelledEmail(booking);
+    return [
+      ["bank details email (html)", details.html],
+      ["bank details email (text)", details.text],
+      ["bank details subject", details.subject],
+      ["transfer cancelled email (html)", cancelled.html],
+      ["transfer cancelled email (text)", cancelled.text],
+    ] as Array<[string, string]>;
+  })(),
 ];
 
 describe("no long dashes anywhere a reader can see them", () => {

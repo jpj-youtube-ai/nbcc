@@ -275,3 +275,119 @@ describe("the Events list becomes compact rows wherever its table does not fit",
     expect(rule("#view-events .ev-admin-table .ev-admin-edit", NARROW)).toContain("min-height:44px");
   });
 });
+
+// TASK-483: the donations table, wherever it is drawn (the Donations screen, the Overview's recent
+// donations and search results), becomes a list of labelled cards when it is narrow. At 375px its
+// nine columns were about 38px each and every word wrapped one letter per line. Like the Events list
+// it measures itself, because those three lists sit in different places.
+describe("the donations table becomes labelled cards wherever it is narrow", () => {
+  const NARROW = "@container dnlist (max-width:759px)";
+
+  it("measures the list itself, not the screen", () => {
+    expect(rule(".dn-list")).toContain("container:dnlist / inline-size");
+    expect(RULES.some((r) => r.media === NARROW)).toBe(true);
+  });
+
+  it("stops laying the donations out as a table", () => {
+    expect(rule(".dn-table", NARROW)).toContain("display:block");
+    expect(rule(".dn-table tbody", NARROW)).toContain("display:block");
+    expect(rule(".dn-table tr", NARROW)).toContain("display:flex");
+    expect(rule(".dn-table tr", NARROW)).toContain("flex-direction:column");
+  });
+
+  // The house stacks' label and value, side by side, the label from the cell's own data-label.
+  // A row, not the house stacks' grid: in a grid every piece of a cell is a grid item, so the
+  // Payment and Gift Aid pills stretched to the column's width and a date's New pill dropped to a
+  // line of its own under the labels (seen at 375px). The label keeps a fixed width so the values
+  // still line up.
+  it("labels every fact with its column's name, its value beside it", () => {
+    expect(rule(".dn-table td", NARROW)).toContain("display:flex");
+    const label = rule(".dn-table td::before", NARROW);
+    expect(label).toContain("content:attr(data-label)");
+    // 6rem, not the house stacks' 7.5rem: the longest label, "Donation", needs about 55px, and at 320px a
+    // date with its New pill needs the rest (at 7.5rem the date broke as "30/09/202" and "6").
+    expect(label).toContain("flex:0 0 6rem");
+  });
+
+  // The donor heads the card, as the client chose, without a "Donor" label beside it.
+  it("puts the donor at the top, as the card's heading", () => {
+    const donor = rule(".dn-table td:nth-child(2)", NARROW);
+    expect(donor).toContain("order:-1");
+    expect(donor).toContain("font-weight:600");
+    expect(rule(".dn-table td:nth-child(2)::before", NARROW)).toContain("content:none");
+  });
+
+  // No Gift Aid is an empty cell on the desktop table too; a card line saying nothing is noise.
+  it("leaves out a line with nothing on it", () => {
+    expect(rule(".dn-table td:empty", NARROW)).toContain("display:none");
+  });
+
+  it("keeps the headings for screen readers rather than removing them", () => {
+    const head = rule(".dn-table thead", NARROW);
+    expect(head).toContain("clip:rect(0 0 0 0)");
+    expect(head).not.toContain("display:none");
+  });
+
+  // Only the cards may say how the rows and cells lay out: a later rule putting a row back to
+  // table-row, or giving a cell a width, would undo them while every rule above still exists. That
+  // includes a rule reaching the cells through one of the three lists' ids (which would outrank
+  // .dn-table td) or a child combinator, and min/max widths and flex sizes as well as widths. The
+  // labels' own fixed width (td::before) is the cards' and is left alone.
+  it("lets no other rule, at any width, change how the rows and cells lay out", () => {
+    const reaches = /\.dn-table[ >]+(tbody|tr|td)|#(donationsTable|overviewRecent|searchResults)\b/;
+    const layout = RULES.filter((r) => r.selectors.some((s) => reaches.test(s) && !s.includes("::before")));
+    const offenders = [
+      ...layout.filter((r) => r.media !== NARROW && /(^|;)display:/.test(r.body)),
+      ...layout.filter((r) => /(^|;)((min-|max-)?width:(?!auto)|flex(-basis)?:)/.test(r.body)),
+    ].map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
+    expect(offenders).toEqual([]);
+  });
+
+  // The donor is moved to the top by its position, so a new or moved column moves it too.
+  it("depends on the columns app.js draws, in the order it draws them", () => {
+    // Line endings evened out: the expected text spans a line, and a Windows checkout ends it in \r\n.
+    const app = readFileSync(resolve(ROOT, "assets/js/admin/app.js"), "utf8").replace(/\r\n/g, "\n");
+    expect(app).toContain(
+      "<th>ID</th><th>Donor</th><th>Donation</th>' +\n      \"<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Payment</th><th>Date</th><th></th>",
+    );
+  });
+
+  // Both ways: .admin-link has no padding, so on its own the button is only as wide as "View".
+  it("gives each donation's View button a target a thumb can hit", () => {
+    const view = rule(".dn-table [data-donor]", NARROW);
+    expect(view).toContain("min-height:44px");
+    expect(view).toContain("min-width:44px");
+  });
+});
+
+// TASK-484: the Festive Ball's bookings awaiting a bank transfer. At 375px its five columns were
+// 44-106px and the box scrolled 106px sideways to reach "Mark as paid". Narrow, each booking is a
+// labelled card, measured on the list itself like the Donations table.
+describe("the bookings awaiting a transfer become labelled cards wherever they are narrow", () => {
+  const NARROW = "@container btlist (max-width:599px)";
+
+  it("measures the list itself", () => {
+    expect(rule("#ballTransfers")).toContain("container:btlist / inline-size");
+    expect(RULES.some((r) => r.media === NARROW)).toBe(true);
+  });
+
+  it("stops laying the bookings out as a table, each a column of labelled lines", () => {
+    expect(rule(".ball-transfers-table", NARROW)).toContain("display:block");
+    expect(rule(".ball-transfers-table tr", NARROW)).toContain("flex-direction:column");
+    expect(rule(".ball-transfers-table td", NARROW)).toContain("display:flex");
+    expect(rule(".ball-transfers-table td::before", NARROW)).toContain("content:attr(data-label)");
+  });
+
+  // The column widths that suit a desktop outrank a plain width:auto; the trap .ty-sent-table names.
+  it("lets every cell take the card's width, whatever the desktop columns say", () => {
+    expect(rule(".ball-transfers-table td:nth-child(n)", NARROW)).toContain("width:auto");
+  });
+
+  it("keeps the headings for screen readers", () => {
+    expect(rule(".ball-transfers-table thead", NARROW)).toContain("clip:rect(0 0 0 0)");
+  });
+
+  it("gives Give more time and Cancel a target a thumb can hit", () => {
+    expect(rule(".ball-transfer-actions .admin-link", NARROW)).toContain("min-height:44px");
+  });
+});

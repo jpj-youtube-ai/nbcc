@@ -436,6 +436,12 @@ export async function sendBallRunUp(message: BallConfirmationMessage): Promise<v
   await sendVerbatim("ballRunUp", null, message);
 }
 
+// TASK-484: the bank transfer emails (how to pay, and cancelled). Their own name in logs, like the
+// reminder and run-up, so they can be told apart from the confirmation in a bounce report.
+export async function sendBallTransfer(message: BallConfirmationMessage): Promise<void> {
+  await sendVerbatim("ballTransfer", null, message);
+}
+
 // TASK-464: the Festive Ball ticket report, twice a week to the people running the Ball with us.
 // ONE message with everyone on the To line, because they all work together and a reply should reach
 // all of them (Jaimie's call; if the list ever reaches beyond that group, send them separately).

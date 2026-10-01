@@ -482,6 +482,12 @@ export async function sendBallTransfer(message: BallConfirmationMessage): Promis
   await sendVerbatim("ballTransfer", null, message);
 }
 
+// TASK-487: the email to events@ for each new bank transfer booking. Staff only, so its links are
+// never tagged (src/email/tracked-links.ts), and its own kind in the log.
+export async function sendBallTransferStaff(message: BallConfirmationMessage): Promise<void> {
+  await sendVerbatim("ballTransferStaff", null, message);
+}
+
 // TASK-464: the Festive Ball ticket report, twice a week to the people running the Ball with us.
 // ONE message with everyone on the To line, because they all work together and a reply should reach
 // all of them (Jaimie's call; if the list ever reaches beyond that group, send them separately).

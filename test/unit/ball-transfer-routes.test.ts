@@ -3,14 +3,21 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // TASK-484: POST /api/ball/bank-transfer, the public route for booking to pay by bank transfer. The
 // database and the email are mocked; features/ball-bank-transfer.feature runs it against Postgres.
 
-const { getAvailabilityMock, getCapacityStateMock, getTransferSettingsMock, createTransferBookingMock, sendTransferDetailsMock } =
-  vi.hoisted(() => ({
-    getAvailabilityMock: vi.fn(),
-    getCapacityStateMock: vi.fn(),
-    getTransferSettingsMock: vi.fn(),
-    createTransferBookingMock: vi.fn(),
-    sendTransferDetailsMock: vi.fn(),
-  }));
+const {
+  getAvailabilityMock,
+  getCapacityStateMock,
+  getTransferSettingsMock,
+  createTransferBookingMock,
+  sendTransferDetailsMock,
+  sendTransferStaffNoticeMock,
+} = vi.hoisted(() => ({
+  getAvailabilityMock: vi.fn(),
+  getCapacityStateMock: vi.fn(),
+  getTransferSettingsMock: vi.fn(),
+  createTransferBookingMock: vi.fn(),
+  sendTransferDetailsMock: vi.fn(),
+  sendTransferStaffNoticeMock: vi.fn(),
+}));
 vi.mock("../../src/db/ball", () => ({ getAvailability: getAvailabilityMock, getCapacityState: getCapacityStateMock }));
 vi.mock("../../src/db/ball-transfer", () => ({
   getTransferSettings: getTransferSettingsMock,
@@ -18,6 +25,7 @@ vi.mock("../../src/db/ball-transfer", () => ({
 }));
 vi.mock("../../src/ball/transfer-send", () => ({
   sendTransferDetails: sendTransferDetailsMock,
+  sendTransferStaffNotice: sendTransferStaffNoticeMock,
   invoiceUrl: (id: number) => `https://nbcc.scot/ball/invoice/${id}.sig`,
 }));
 vi.mock("../../src/config", () => ({
@@ -114,6 +122,18 @@ describe("POST /api/ball/bank-transfer", () => {
     expect(res.statusCode).toBe(409);
     expect(body(res).error).toBe("There are not enough whole tables left for that booking");
     expect(sendTransferDetailsMock).not.toHaveBeenCalled();
+  });
+
+  // TASK-487: the team hears of each booking at events@.
+  it("tells the team about the booking, and not about a refused one", async () => {
+    const res = await post(order);
+    expect(sendTransferStaffNoticeMock).toHaveBeenCalledTimes(1);
+    const [write, payBy] = sendTransferStaffNoticeMock.mock.calls[0];
+    expect(write).toMatchObject({ reference: body(res).reference, buyerEmail: "ada@example.com", invoice: null });
+    expect(payBy).toBe(body(res).payBy);
+    createTransferBookingMock.mockResolvedValue(null);
+    await post(order);
+    expect(sendTransferStaffNoticeMock).toHaveBeenCalledTimes(1);
   });
 
   // The client wants a buyer who decides they want more to be able to book more.

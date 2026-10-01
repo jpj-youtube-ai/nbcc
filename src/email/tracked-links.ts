@@ -39,6 +39,7 @@ export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
   "loginCode",
   "lapsedAdmin",
   "ballReport",
+  "ballTransferStaff",
   "backupAlert",
 ]);
 

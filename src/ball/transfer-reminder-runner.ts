@@ -1,4 +1,9 @@
-import { getTransferSettings, listTransfersForReminder, markTransferReminderSent } from "../db/ball-transfer";
+import {
+  claimTransferReminder,
+  getTransferSettings,
+  listTransfersForReminder,
+  releaseTransferReminder,
+} from "../db/ball-transfer";
 import { londonDate } from "./sales-report";
 import { runTransferReminderPass, type ReminderPassResult } from "./transfer-reminders";
 import { sendTransferReminder } from "./transfer-send";
@@ -17,7 +22,8 @@ export async function runTransferReminders(now = new Date()): Promise<ReminderPa
   return runTransferReminderPass({
     list: listTransfersForReminder,
     send: (b) => sendTransferReminder(b, bank, b.payBy),
-    markSent: markTransferReminderSent,
+    claim: claimTransferReminder,
+    release: releaseTransferReminder,
     today: londonDate(now),
   });
 }

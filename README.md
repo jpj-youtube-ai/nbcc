@@ -2790,7 +2790,10 @@ ticked "Offer bank transfer on the ticket page".
   - It is sent by the daily 8am job (`src/scripts/send-reminders.ts`, via
     `src/ball/transfer-reminder-runner.ts`), once (`ball_bookings.transfer_reminder_sent_at`).
   - It is never sent on the day the booking was made, nor once the date has passed (`reminderDue`).
-  - A failed send is left unmarked, so the next morning's run tries again.
+  - Each booking is claimed before it is sent (`claimTransferReminder` marks it only if nothing has
+    yet), so two runs at once cannot both email the same person. A failed send gives its claim back,
+    so the next morning's run tries again. One failure never stops the rest.
+  - Giving more time clears the reminder, so the new date gets its own reminder two days before it.
   - It still goes when bank transfer has been switched off, because those buyers still owe the
     money. It needs the bank details to be set.
 - **Overdue.** Once a booking's pay-by date has passed, the Awaiting transfer list shows it as

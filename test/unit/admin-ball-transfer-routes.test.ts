@@ -74,7 +74,7 @@ describe("the bank details and the switch", () => {
   it("can be read by anyone who can see the Festive Ball", async () => {
     const res = await call(getAdminTransferSettings, tokenFor("viewer"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ ...BANK, ready: false });
+    expect(res.body).toEqual({ ...BANK, ready: false, offered: false });
   });
 
   it("can be changed by an admin only, not by an editor with Festive Ball edit", async () => {
@@ -116,6 +116,16 @@ describe("the last day for transfers", () => {
     expect(m.saveTransferSettings).toHaveBeenLastCalledWith({ lastDay: "2026-10-31" }, "admin:staff@example.com");
     await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: null });
     expect(m.saveTransferSettings).toHaveBeenLastCalledWith({ lastDay: null }, "admin:staff@example.com");
+  });
+
+  // Switched on is not the same as offered: after the last day the page offers card only.
+  it("says whether the ticket page actually offers it", async () => {
+    m.saveTransferSettings.mockResolvedValue({ ...BANK, on: true, lastDay: "2020-01-01" });
+    const past = await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: "2020-01-01" });
+    expect((past.body as { offered: boolean }).offered).toBe(false);
+    m.saveTransferSettings.mockResolvedValue({ ...BANK, on: true, lastDay: null });
+    const open = await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: null });
+    expect((open.body as { offered: boolean }).offered).toBe(true);
   });
 
   it("must be a real date", async () => {

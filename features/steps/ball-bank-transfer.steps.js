@@ -270,6 +270,20 @@ Then(
 
 // --- TASK-485: deadlines --------------------------------------------------------------------------
 
+Then("the transfer booking answer is {int} saying {string}", function (status, words) {
+  assert.equal(this.transferStatus, status, JSON.stringify(this.transferBody));
+  assert.ok(String(this.transferBody.error || "").includes(words), JSON.stringify(this.transferBody));
+});
+
+When("its reminder has gone", async function () {
+  await pool.query("UPDATE ball_bookings SET transfer_reminder_sent_at = now() WHERE reference = $1", [this.transferRef]);
+});
+
+Then("it will be reminded again before the new date", async function () {
+  const row = await pool.query("SELECT transfer_reminder_sent_at FROM ball_bookings WHERE reference = $1", [this.transferRef]);
+  assert.equal(row.rows[0].transfer_reminder_sent_at, null);
+});
+
 const LONDON_TODAY = "(now() AT TIME ZONE 'Europe/London')::date";
 
 Given("the last day for transfers was yesterday", async function () {

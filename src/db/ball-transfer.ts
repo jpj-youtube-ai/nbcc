@@ -208,8 +208,20 @@ export async function listTransfersForReminder(): Promise<ReminderCandidate[]> {
   }));
 }
 
-export async function markTransferReminderSent(id: number): Promise<void> {
-  await pool.query(`UPDATE ball_bookings SET transfer_reminder_sent_at = now() WHERE id = $1`, [id]);
+/** Mark it reminded only if nothing has yet: true when this caller won it, so only one run sends. */
+export async function claimTransferReminder(id: number): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE ball_bookings SET transfer_reminder_sent_at = now()
+      WHERE id = $1 AND transfer_reminder_sent_at IS NULL AND status = 'pending'
+      RETURNING id`,
+    [id],
+  );
+  return (res.rowCount ?? 0) > 0;
+}
+
+/** Give a claim back after its send failed, so the next run tries again. */
+export async function releaseTransferReminder(id: number): Promise<void> {
+  await pool.query(`UPDATE ball_bookings SET transfer_reminder_sent_at = NULL WHERE id = $1`, [id]);
 }
 
 // --- marking paid --------------------------------------------------------------------------------
@@ -332,7 +344,11 @@ export async function extendPayBy(
     const row = found.rows[0];
     if (!row) return "not_found";
     if (row.payment_method !== "transfer" || row.status !== "pending") return "not_open";
-    await client.query(`UPDATE ball_bookings SET pay_by = $2 WHERE id = $1`, [row.id, payBy]);
+    // TASK-485: a new date gets its own reminder two days before it, so the old one is forgotten.
+    await client.query(`UPDATE ball_bookings SET pay_by = $2, transfer_reminder_sent_at = NULL WHERE id = $1`, [
+      row.id,
+      payBy,
+    ]);
     await insertAudit(client, {
       actor,
       action: "ball.transfer_pay_by_changed",

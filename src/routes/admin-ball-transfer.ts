@@ -3,7 +3,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import type { AdminSessionClaims } from "../admin/session";
-import { bankDetailsSchema, isOverdue, transferReady } from "../ball/transfer";
+import { bankDetailsSchema, isOverdue, transferReady, transferWindowOpen, type TransferSettings } from "../ball/transfer";
 import { makeGuestToken } from "../ball/guests";
 import { londonDate } from "../ball/sales-report";
 import { sendTransferArrived } from "../ball/transfer-send";
@@ -36,11 +36,19 @@ function failed(res: Response, what: string, err: unknown): Response {
   return res.status(500).json({ error: "Admin is temporarily unavailable" });
 }
 
+// The settings as the admin screen shows them. `ready`: switched on with every detail. `offered`: the
+// ticket page actually offers it now, which it does not after the last day for transfers (TASK-485),
+// so the screen never says "the ticket page offers bank transfer" when it does not.
+function settingsAnswer(s: TransferSettings) {
+  const ready = transferReady(s);
+  return { ...s, ready, offered: ready && transferWindowOpen(new Date(), s.lastDay ?? null) };
+}
+
 export async function getAdminTransferSettings(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "ball", "view"))) return;
   try {
     const s = await getTransferSettings();
-    return res.status(200).json({ ...s, ready: transferReady(s) });
+    return res.status(200).json(settingsAnswer(s));
   } catch (err) {
     return failed(res, "reading the settings", err);
   }
@@ -96,7 +104,7 @@ export async function putAdminTransferSettings(req: Request, res: Response): Pro
     if (details) update.details = details;
     if (lastDay !== undefined) update.lastDay = lastDay;
     const saved = await saveTransferSettings(update, actorOf(claims));
-    return res.status(200).json({ ...saved, ready: transferReady(saved) });
+    return res.status(200).json(settingsAnswer(saved));
   } catch (err) {
     return failed(res, "saving the settings", err);
   }

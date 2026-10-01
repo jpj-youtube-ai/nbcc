@@ -9122,9 +9122,14 @@
       })
         .then(okJsonOrSaid)
         .then(function (s) {
+          // TASK-485: switched on is not the same as offered: after the last day, card only.
           ballStatus(
             "ballTransferStatus",
-            s.on ? "Saved. The ticket page offers bank transfer." : "Saved. The ticket page does not offer bank transfer.",
+            !s.on
+              ? "Saved. The ticket page does not offer bank transfer."
+              : s.offered
+                ? "Saved. The ticket page offers bank transfer."
+                : "Saved. The last day for transfers has passed, so the ticket page offers card only.",
           );
           loadBallTransferSettings();
         })

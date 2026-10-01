@@ -1370,6 +1370,21 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(JSON.parse(init?.body || "{}").lastDay).toBeNull();
     });
 
+    // TASK-485: switched on is not the same as offered once the last day has passed.
+    it("says so when saving after the last day for transfers has passed", async () => {
+      loginToken = tokenFor("admin");
+      transferSettings = {
+        on: true, accountName: "NBCC", sortCode: "12-34-56", accountNumber: "12345678", ready: true,
+        lastDay: "2020-01-01", offered: false,
+      } as typeof transferSettings;
+      await openBall();
+      el("ballTransferForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(el("ballTransferStatus").textContent).toBe(
+        "Saved. The last day for transfers has passed, so the ticket page offers card only.",
+      );
+    });
+
     // TASK-485: past its date, flagged; and whether the reminder has gone.
     it("flags an overdue booking, and says when the reminder has gone", async () => {
       loginToken = tokenFor("admin");

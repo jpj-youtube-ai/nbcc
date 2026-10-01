@@ -1554,8 +1554,16 @@ Dispatch the `config-drift-reviewer` agent on the branch (the two keys through s
 Use `/ship`, which takes the latest number in GitHub +1. Also check local branches, because other sessions hold numbers locally:
 `{ gh run list --limit 200 --json headBranch,displayTitle --jq '.[].headBranch, .[].displayTitle'; gh pr list --state all --limit 200 --json title --jq '.[].title'; git branch -a --format='%(refname:short)'; } | grep -oiE 'task[-_ ]?[0-9]+' | grep -oE '[0-9]+' | sort -n | tail -1`
 
-Then replace the stand-in everywhere it appears, rename the branch, and commit:
-`git grep -l "TASK-NNN" | xargs sed -i 's/TASK-NNN/TASK-<number>/g' && git branch -m contact-form-captcha task-<number>-contact-form-captcha && git commit -am "[TASK-<number>] Number the captcha change"`
+Then replace the stand-in in **this branch's files only**, rename the branch, and commit. `TASK-NNN`
+is also a generic placeholder elsewhere in the repo (`CLAUDE.md`, including its machine-managed
+block, `.claude/skills/ship/SKILL.md`, older plans and a test), and the guard hook does not see a
+Bash `sed`, so a repo-wide replace would quietly rewrite them. This plan is left out too, because
+its own steps use the placeholder:
+`git grep -l "TASK-NNN" -- $(git diff --name-only origin/main...HEAD | grep -v '^docs/superpowers/plans/') | xargs sed -i 's/TASK-NNN/TASK-<number>/g' && git diff --stat && git branch -m contact-form-captcha task-<number>-contact-form-captcha && git commit -am "[TASK-<number>] Number the captcha change"`
+
+Done for TASK-490: 29 lines in 19 files; none of them held `TASK-NNN` on `main`. On Windows, `sed -i`
+rewrites CRLF files as LF. Git stores LF either way, but `test/unit/footer.test.ts` (byte-identical
+footers) then fails locally until those files are checked out again.
 
 - [ ] **Step 2: Open the PR straight away**
 

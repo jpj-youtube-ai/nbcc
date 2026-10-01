@@ -4163,16 +4163,22 @@ Verified by `test/unit/contact.test.ts` (jsdom, mocked `fetch`) and `test/unit/c
 **A spam check on the contact form (TASK-490).** Bot spam was reaching Admin → Contact form past the
 honeypot and the rate limit, so `POST /api/contact` now checks a Cloudflare Turnstile pass between
 the rate limit and validation whenever the check is on: both `TURNSTILE_SITE_KEY` and
-`TURNSTILE_SECRET_KEY` set. Production refuses to start without them (`productionConfigProblems` in
-`src/config/schema.ts`); local development and CI run with the check off. `src/clients/turnstile.ts`
-asks Cloudflare's siteverify (5 second timeout) and answers `passed`, `refused` (the visitor's pass
-is missing, invalid, expired or reused: **400** `{ error: "captcha" }`, nothing stored) or
-`unavailable` (network, timeout, Cloudflare's own error, or our secret rejected: the message is
-**kept** and an error logged, so a genuine enquiry is never lost to the checker). The page learns
-the site key from `GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by
-`contact.html` only, then draws the box (Flexible when the form is 300px wide or more, Compact
-below that, so a 320px phone never scrolls sideways), holds Send with a message until there is a
-pass, and resets the box after each send. It is a separate file because `main.js` counts towards
+`TURNSTILE_SECRET_KEY` set. The production web server refuses to start without them
+(`productionConfigProblems` in `src/config/schema.ts`, applied in `src/index.ts`, so the scheduled
+jobs that load the same config never depend on them); local development and CI run with the check
+off. `src/clients/turnstile.ts` asks Cloudflare's siteverify (5 second timeout) and answers
+`passed`, `refused` (the visitor's pass is missing, invalid, expired or reused: **400**
+`{ error: "captcha" }`, nothing stored) or `unavailable` (network, timeout, Cloudflare's own error,
+or our secret rejected: the message is **kept** and a warning logged, so a genuine enquiry is never
+lost to the checker). Cloudflare's error codes decide whatever the HTTP status, because it sends a
+rejected secret as a 400 naming `invalid-input-secret`. The page learns the site key from
+`GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by `contact.html` only, fetches
+Cloudflare's script once the visitor starts on the form (a tap or a key in a field) or presses
+Send, so someone who only reads the page never contacts Cloudflare. It draws the box (Flexible when
+the form is 300px wide or more, Compact below that, and again at the size that fits if the form gets
+narrower, so a 320px phone never scrolls sideways), holds Send with a message until there is a pass
+(using `main.js`'s own form check, so the two agree), and resets the box after each send. It is a
+separate file because `main.js` counts towards
 `donate.html`'s page-weight budget, which had about 530 bytes left; `main.js` only sends the hidden
 `captchaToken` field. The secret is an SSM SecureString created holding `REPLACE_ME`: until the real
 value is pasted in, every check reports our secret as invalid and messages are kept, with a warning
@@ -7207,10 +7213,11 @@ SSM `SecureString` created holding `REPLACE_ME` (with `ignore_changes` on its va
 `valueFrom`, its ARN in `exec_secrets`. The real value is set with the `put-parameter` command under
 **One-time AWS bootstrap**, followed by a service restart. Both default to empty, and the check runs
 only when both are set, so local development and CI run without it. Unlike the publishable key,
-production **refuses to start** without them (`productionConfigProblems` in `src/config/schema.ts`),
-so the check cannot be lost by accident. The flip side: the infra apply that adds them must land
-before the deploy that needs them, or the new tasks will not start and ECS rolls back to the old
-ones.
+the production web server **refuses to start** without them (`productionConfigProblems` in
+`src/config/schema.ts`, applied in `src/index.ts`), so the check cannot be lost by accident. The
+scheduled jobs (the backup, the reminders) load the same config but not this rule, so they never
+depend on the keys. The flip side: the infra apply that adds them must land before the deploy that
+needs them, or the new web server tasks will not start and ECS keeps the old ones running.
 
 `CONTACT_FORWARD_URL` (TASK-039, REQ-030) was the form-service endpoint `/api/contact` used to
 forward enquiries to. It was retired from the live path by the 2026-07-10 contact-inbox spec —

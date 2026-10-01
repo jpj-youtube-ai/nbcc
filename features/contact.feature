@@ -18,3 +18,10 @@ Feature: Contact endpoint (REQ-030, 2026-07-10 contact-inbox)
       { "firstName": "", "lastName": "", "email": "not-an-email", "message": "" }
       """
     Then the response status should be 400
+
+  # TASK-490: the contact page asks whether the spam check is on. CI runs with both Turnstile keys
+  # unset, so it is off there and the page is told there is no site key (and draws no box).
+  Scenario: the page is told the spam check is off when no keys are set
+    When I GET "/api/contact/captcha"
+    Then the response status should be 200
+    And the response body should contain '{"siteKey":null}'

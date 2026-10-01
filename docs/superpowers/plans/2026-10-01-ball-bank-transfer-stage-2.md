@@ -21,8 +21,8 @@ Nothing is cancelled automatically (the client's choice): staff decide.
 
 ## Tasks (test first throughout)
 
-1. **Migration** `1790900000003_ball-transfer-deadlines.js`. It sorts below the parked analytics
-   migrations (`1791000000000/1`), like stage 1's. Add:
+1. **Migration** `1791000000002_ball-transfer-deadlines.js` (renumbered above the analytics migrations, which merged first; originally planned below the parked analytics
+   migrations (`1791000000000/1`), like stage 1's). Add:
    - `ball_bookings.transfer_reminder_sent_at timestamptz` (nullable);
    - `ball_settings.transfer_last_day date` (nullable).
 2. **Rules** (`test/unit/ball-transfer.test.ts`):

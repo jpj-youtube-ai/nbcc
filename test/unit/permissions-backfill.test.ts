@@ -98,8 +98,13 @@ describe("the TASK-479 analytics backfill", () => {
     expect(source()).toContain("'admin_user.permissions_backfilled'");
   });
 
-  it("sorts after every other migration, so production runs it", () => {
+  // What matters is that nothing production had already run sorts after it; later work (TASK-485's
+  // 1791000000002) rightly comes after. So: the backfill follows its own table migration, and both
+  // follow 1790900000002, the highest migration on main when TASK-479 merged.
+  it("sorts after every migration production had run before it, so production runs it", () => {
     const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".js")).sort();
-    expect(files.slice(-2)).toEqual(["1791000000000_site-analytics.js", ANALYTICS_BACKFILL]);
+    const tables = files.indexOf("1791000000000_site-analytics.js");
+    expect(files[tables + 1]).toBe(ANALYTICS_BACKFILL);
+    expect(files.indexOf("1790900000002_ball-bank-transfer.js")).toBe(tables - 1);
   });
 });

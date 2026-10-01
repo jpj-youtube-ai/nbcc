@@ -10,8 +10,9 @@
 //                                            deadline shortens to fit it, and after it the page
 //                                            offers card only. Null means no last day.
 //
-// Numbered after stage 1 (1790900000002) and below the analytics migrations in the open PR #602
-// (1791000000000/1), for the same reason as stage 1: this merges first, so they will sort after it.
+// Numbered 1791000000002: after the site analytics migrations (1791000000000/1), which reached main
+// while this was in review. A migration must never sort before one production has already run, and
+// those run on production first.
 
 exports.up = (pgm) => {
   pgm.addColumns("ball_bookings", {

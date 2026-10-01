@@ -2715,10 +2715,11 @@ the full room.
 
 ### Paying by bank transfer (TASK-484)
 
-A buyer can book Festive Ball seats or tables to pay by bank transfer instead of by card. This is
-stage 1 of five in `docs/superpowers/specs/2026-10-01-ball-bank-transfer-design.md`. **It ships
-switched off.** The ticket page offers it only when an admin has entered the bank details and
-ticked "Offer bank transfer on the ticket page".
+A buyer can book Festive Ball seats or tables to pay by bank transfer instead of by card. It was
+built in five stages (TASK-484 to TASK-488) from
+`docs/superpowers/specs/2026-10-01-ball-bank-transfer-design.md`. **It ships switched off.** The
+ticket page offers it only when an admin has entered the bank details and ticked "Offer bank
+transfer on the ticket page". Staff can add a booking by hand once the bank details are in.
 
 **For the buyer**
 - **The choice:** "How would you like to pay?" (Card, or Bank transfer) appears above the button.
@@ -2849,7 +2850,23 @@ ticked "Offer bank transfer on the ticket page".
   (2 bookings)" when there are any (`countAwaitingTransfers`). Seats and bookings only: the report
   carries no money. They are counted as sold once marked paid.
 
-**Still to come** (stage 5): staff adding a booking by hand.
+**Staff add a booking (TASK-488, stage 5)**
+- **Add a bank transfer booking,** under Awaiting transfer, is for phone and email orders. It is
+  offered to anyone with Festive Ball edit, and the server requires the same
+  (`POST /api/admin/ball/transfer-bookings`).
+- **What it asks for:** the order, the buyer's name and email, any donation, and an optional
+  invoice. A required tick confirms that the buyer agreed to the ticket terms.
+- **The same booking as the ticket page:** one function makes both (`placeTransferBooking` in
+  `src/ball/place-transfer-booking.ts`). It has the same prices, pay-by date and invoice, and sends
+  the same emails: the bank details to the buyer, and the events@ email, which says who added it.
+- **What differs from the ticket page:**
+  - **It works before the ticket page offers bank transfer,** once the bank details are entered. So
+    staff can take an order, or make a test booking, while the switch is off.
+  - **It ignores "Close sales now",** as holds do. It still needs room, and it stops at the last day
+    for transfers.
+  - **No Gift Aid and no newsletter sign-up.** A declaration made over the phone needs its own
+    written record, and a sign-up records consent the buyer gave themselves. Both are stored as no.
+- **The audit log** records `ball.transfer_booking_added` with who added it.
 
 ### Changing the preview password
 

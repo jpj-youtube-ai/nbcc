@@ -10,6 +10,8 @@ import {
   transferPayBy,
   isOverdue,
   reminderDue,
+  invoiceSchema,
+  TRANSFER_DAYS_INVOICE,
 } from "../../src/ball/transfer";
 
 // TASK-484: the rules for paying for the Festive Ball by bank transfer. Every figure here is invented.
@@ -59,6 +61,40 @@ describe("what the public availability feed says about bank transfer", () => {
   it("closes after the last day for transfers, and is open on the day itself", () => {
     expect(publicTransferOpen(true, { ...ready, lastDay: "2026-10-01" }, now)).toBe(true);
     expect(publicTransferOpen(true, { ...ready, lastDay: "2026-09-30" }, now)).toBe(false);
+  });
+});
+
+// TASK-486: what "My company needs an invoice" asks for.
+describe("the invoice details", () => {
+  const full = {
+    company: "Ayrshire Example Ltd", address: "1 Example Street\nKilmarnock\nKA1 1AA",
+    po: "PO-123", accountsEmail: "accounts@example.com", phone: "01563 000000",
+  };
+
+  it("needs the company's name and address, and nothing else", () => {
+    expect(invoiceSchema.safeParse({ company: "Ayrshire Example Ltd", address: "1 Example Street" }).success).toBe(true);
+    expect(invoiceSchema.safeParse({ ...full, company: " " }).success).toBe(false);
+    expect(invoiceSchema.safeParse({ ...full, address: "" }).success).toBe(false);
+  });
+
+  it("takes a purchase order number, accounts email and phone when given", () => {
+    expect(invoiceSchema.parse(full)).toEqual(full);
+  });
+
+  it("treats an empty optional box as not given", () => {
+    const parsed = invoiceSchema.parse({ ...full, po: " ", accountsEmail: "", phone: "" });
+    expect(parsed.po).toBeUndefined();
+    expect(parsed.accountsEmail).toBeUndefined();
+    expect(parsed.phone).toBeUndefined();
+  });
+
+  it("refuses an accounts email that is not one", () => {
+    expect(invoiceSchema.safeParse({ ...full, accountsEmail: "accounts at example" }).success).toBe(false);
+  });
+
+  it("gives a company invoice fourteen days", () => {
+    expect(TRANSFER_DAYS_INVOICE).toBe(14);
+    expect(transferPayBy(new Date("2026-10-01T10:00:00Z"), null, TRANSFER_DAYS_INVOICE)).toBe("2026-10-15");
   });
 });
 

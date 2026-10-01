@@ -7,6 +7,23 @@ import { londonDate } from "./sales-report";
 /** Days a buyer has to pay. Stage 3 gives an invoice 14; stage 2 caps both at a last day. */
 export const TRANSFER_DAYS = 7;
 
+/** TASK-486: a company paying an invoice gets 14, because accounts teams pay in runs. */
+export const TRANSFER_DAYS_INVOICE = 14;
+
+// An optional box left empty, or only spaces, is "not given".
+const optional = (schema: z.ZodString) =>
+  z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), schema.optional());
+
+/** TASK-486: what "My company needs an invoice" asks for. Name and address are needed for it to be an invoice. */
+export const invoiceSchema = z.object({
+  company: z.string().trim().min(1, "Give the company's name").max(120),
+  address: z.string().trim().min(1, "Give the company's address").max(400),
+  po: optional(z.string().trim().max(60)),
+  accountsEmail: optional(z.string().trim().toLowerCase().email("That isn't an email address").max(254)),
+  phone: optional(z.string().trim().max(40)),
+});
+export type InvoiceDetails = z.infer<typeof invoiceSchema>;
+
 const digits = (s: string): string => s.replace(/[\s-]/g, "");
 
 /** "123456" or "12-34-56" as it is written on a cheque book: "12-34-56". */

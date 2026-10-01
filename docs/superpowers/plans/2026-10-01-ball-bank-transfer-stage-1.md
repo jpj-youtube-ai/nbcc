@@ -445,8 +445,8 @@ export async function saveTransferSettings(
     - Inside the lock: `const state = await readCapacityState(client); if (!canFulfil(state, {kind, quantity})) → ROLLBACK, return null`.
     - Then `INSERT INTO ball_bookings (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname, buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence, gift_aid, newsletter_opt_in, status, terms_accepted_at, payment_method, pay_by) VALUES (…, 'pending', now(), 'transfer', $payBy) RETURNING id`.
     - `fee_cover_pence` is always 0.
-  - **`hasUnpaidTransfer(email)`** returns `Promise<boolean>`:
-    `SELECT 1 FROM ball_bookings WHERE payment_method = 'transfer' AND status = 'pending' AND buyer_email = $1 LIMIT 1`.
+  - **No per-email check.** The client decided a buyer who wants more must be able to book more,
+    so there is deliberately no "one unpaid booking per email address".
   - **`listAwaitingTransfers()`**: pending transfers ordered by `pay_by, created_at`. Returns
     reference, kind, quantity, seats, buyerName, buyerEmail, totalPence, payBy (as `YYYY-MM-DD`, from
     `to_char(pay_by, 'YYYY-MM-DD')`) and createdAt.
@@ -548,8 +548,8 @@ export async function authorizeSectionAsAdmin(
     Nothing is written.
   - **409 when sales are closed**, using `getAvailability().salesOpen` false.
   - **400** on a body that fails `purchaseSchema`.
-  - **409, "You already have a booking waiting for a bank transfer"**, when `hasUnpaidTransfer` is
-    true. The message must not include any reference.
+  - **A second transfer booking from the same email address is accepted (201).** There is
+    deliberately no per-email limit.
   - **409, "There are not enough seats left for that booking"**, when `createTransferBooking`
     returns null.
   - **201 on success**, with body `{ reference, totalPence, payBy, accountName, sortCode, accountNumber }`.
@@ -787,11 +787,12 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     Then the admin answer is 200
     And the booking is paid with a guest link, marked paid by "ann.transfer.admin.bdd@example.com"
 
-  Scenario: One unpaid transfer booking per email address
+  Scenario: A buyer who wants more can book again before paying
     Given bank transfer is switched on with bank details
     When a buyer books 1 table to pay by bank transfer
     And the same buyer books 1 seat to pay by bank transfer
-    Then the transfer booking answer is 409
+    Then the transfer booking answer is 201 with the bank details and a pay-by date 7 days away
+    And the ball availability should show 9 tables remaining
 
   Scenario: A cancelled transfer booking comes back when its money arrives, if its seats are free
     Given bank transfer is switched on with bank details
@@ -850,7 +851,7 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
   - where the bank details live, and that only admins can set them;
   - what a buyer sees;
   - the 7 days;
-  - one unpaid booking per email, and 5 an hour per address, and why;
+  - 5 an hour per connection and why, and that there is deliberately no per-email limit;
   - the Awaiting transfer list;
   - Mark as paid being admin-only with the amount check;
   - more time and cancel, and the emails;

@@ -8,6 +8,7 @@ import {
   buildTransferDetailsEmail,
   buildTransferCancelledEmail,
   buildTransferReminderEmail,
+  buildInvoicePaidEmail,
   type TransferEmailBooking,
 } from "./transfer-email";
 import type { BallBookingWrite } from "./booking";
@@ -19,8 +20,9 @@ import { signInvoiceToken } from "./invoice-token";
 // not the email goes, and a failed send is logged, never turned into an error for the buyer or the
 // admin who pressed the button.
 //
-// TASK-486: a booking with an invoice links it from every one of these, and copies the company's
-// accounts team when the buyer gave an address for them.
+// TASK-486: a booking with an invoice links it from every one of these. The bank details, reminder
+// and cancelled emails copy the company's accounts team when the buyer gave an address for them;
+// once paid, the accounts team gets an email of its own instead (TASK-489).
 
 const base = () => config.BALL_BASE_URL.replace(/\/+$/, "");
 
@@ -123,9 +125,18 @@ export async function sendTransferArrived(
   guestToken: string,
   invoice: InvoiceContact | null = null,
 ): Promise<void> {
+  // TASK-489: Jaimie's choice. The confirmation carries the private link to add the guests, so it
+  // goes to the buyer alone; the accounts team gets an email of its own, sent apart so that one
+  // failing never stops the other.
+  let url: string | null = null;
+  let accountsEmail: string | undefined;
+  try {
+    ({ invoiceUrl: url, cc: accountsEmail } = invoiceParts(invoice, booking.buyerEmail));
+  } catch (err) {
+    logFailure("invoice link", err);
+  }
   try {
     const settings = await getSettings();
-    const { invoiceUrl: url, cc } = invoiceParts(invoice, booking.buyerEmail);
     const mail = buildBallConfirmationEmail(booking, {
       arrivalTime: settings.arrivalTime,
       includedNote: settings.includedNote,
@@ -136,12 +147,22 @@ export async function sendTransferArrived(
     });
     await sendBallConfirmation({
       email: booking.buyerEmail,
-      cc,
       from: config.BALL_FROM_EMAIL,
       replyTo: config.BALL_FROM_EMAIL,
       ...mail,
     });
   } catch (err) {
     logFailure("transfer arrived", err);
+  }
+  if (!url || !accountsEmail) return;
+  try {
+    await sendBallTransfer({
+      email: accountsEmail,
+      from: config.BALL_FROM_EMAIL,
+      replyTo: config.BALL_FROM_EMAIL,
+      ...buildInvoicePaidEmail(booking, { invoiceUrl: url }),
+    });
+  } catch (err) {
+    logFailure("invoice paid", err);
   }
 }

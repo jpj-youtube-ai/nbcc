@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { buildTransferDetailsEmail, buildTransferCancelledEmail, buildTransferReminderEmail } from "../../src/ball/transfer-email";
+import {
+  buildTransferDetailsEmail,
+  buildTransferCancelledEmail,
+  buildTransferReminderEmail,
+  buildInvoicePaidEmail,
+} from "../../src/ball/transfer-email";
 
 // TASK-484: the emails a bank transfer buyer receives before their money arrives. Every name, number
 // and amount here is invented: this repository is public.
@@ -101,6 +106,32 @@ describe("the emails for a booking with an invoice", () => {
     const mail = buildTransferCancelledEmail(booking, { invoiceUrl: url });
     expect(mail.html).toContain(`href="${url}"`);
     expect(mail.text).toContain(url);
+  });
+});
+
+// TASK-489: once paid, the accounts team gets an email of its own rather than a copy of the buyer's
+// confirmation, which carries the private link to add the guests.
+describe("the accounts team's payment received email", () => {
+  const url = "https://nbcc.scot/ball/invoice/42.abc";
+  const mail = buildInvoicePaidEmail(booking, { invoiceUrl: url });
+
+  it("names the invoice in the subject", () => {
+    expect(mail.subject).toBe("Payment received: Festive Ball invoice BALL-7KQ2MZ");
+  });
+
+  it("says how much arrived, for which invoice, and links it, now marked paid", () => {
+    for (const part of ["£1,020.00", "BALL-7KQ2MZ", url]) {
+      expect(mail.text, part).toContain(part);
+    }
+    expect(mail.html).toContain(`href="${url}"`);
+    expect(mail.text).toMatch(/marked paid/);
+  });
+
+  it("carries no guest link and no bank details", () => {
+    for (const body of [mail.text, mail.html]) {
+      expect(body).not.toMatch(/\/ball\/guests\//);
+      expect(body).not.toMatch(/sort code/i);
+    }
   });
 });
 

@@ -548,11 +548,14 @@
   font-size: 0.84rem;
   color: var(--slate-soft);
 }
+/* The body face, not the display serif: its numbers rise and fall (old-style figures), which is
+   lovely in a heading and a liability when someone is copying a sort code into a banking app. */
 .ball-transfer-details dd {
   margin: 2px 0 0;
-  font-family: "Playfair Display", Georgia, serif;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
   font-weight: 700;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0.02em;
   color: var(--maroon);
   overflow-wrap: anywhere;
 }

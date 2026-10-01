@@ -2,7 +2,7 @@ import { pool } from "./pool";
 import { insertAudit, recordAudit } from "./donations";
 import { getCapacityState } from "./ball";
 import { availability } from "../ball/capacity";
-import { countSales, recipientsSchema, type Recipient, type SalesInputs } from "../ball/sales-report";
+import { countAwaitingTransfers, countSales, recipientsSchema, type Recipient, type SalesInputs } from "../ball/sales-report";
 
 // TASK-464: the Festive Ball ticket report's settings, its numbers, and the record of what went out.
 // The decisions (is it due, what does it say) are in the pure src/ball/sales-report.ts; this file
@@ -142,7 +142,8 @@ export async function readSalesInputs(now: Date, since: Date | null): Promise<Sa
     quantity: number;
     seats: number;
     paid_at: Date | null;
-  }>("SELECT kind, status, quantity, seats, paid_at FROM ball_bookings");
+    payment_method: string;
+  }>("SELECT kind, status, quantity, seats, paid_at, payment_method FROM ball_bookings");
   // Still waiting: anyone already offered a released place is being looked after.
   const waiting = await pool.query<{ people: string; seats: string }>(
     `SELECT count(*) AS people, COALESCE(sum(seats_wanted), 0) AS seats
@@ -150,16 +151,15 @@ export async function readSalesInputs(now: Date, since: Date | null): Promise<Sa
   );
   const state = await getCapacityState();
   const left = availability(state);
-  const sold = countSales(
-    bookings.rows.map((b) => ({
-      kind: b.kind,
-      status: b.status,
-      quantity: Number(b.quantity),
-      seats: Number(b.seats),
-      paidAt: b.paid_at,
-    })),
-    { now, since },
-  );
+  const rows = bookings.rows.map((b) => ({
+    kind: b.kind,
+    status: b.status,
+    quantity: Number(b.quantity),
+    seats: Number(b.seats),
+    paidAt: b.paid_at,
+    paymentMethod: b.payment_method,
+  }));
+  const sold = countSales(rows, { now, since });
   return {
     totalSeats: left.totalSeats,
     ...sold,
@@ -168,6 +168,7 @@ export async function readSalesInputs(now: Date, since: Date | null): Promise<Sa
     heldSeats: state.heldSeats,
     waitingList: Number(waiting.rows[0]?.people ?? 0),
     waitingSeats: Number(waiting.rows[0]?.seats ?? 0),
+    ...countAwaitingTransfers(rows),
   };
 }
 

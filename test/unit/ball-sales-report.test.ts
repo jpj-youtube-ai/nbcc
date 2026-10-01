@@ -9,6 +9,7 @@ import {
   recipientsSchema,
   renderReport,
   countSales,
+  countAwaitingTransfers,
   MAX_RECIPIENTS,
   type BookingRow,
   type SalesInputs,
@@ -33,6 +34,8 @@ const INPUTS: SalesInputs = {
   soldPrevious7Days: 22,
   waitingList: 0,
   waitingSeats: 0,
+  awaitingTransfers: 0,
+  awaitingTransferSeats: 0,
 };
 const TUESDAY = { today: "2026-10-06", eventDate: EVENT, test: false };
 
@@ -145,6 +148,30 @@ describe("the recipients", () => {
 
 // The numbers themselves: what counts as sold, and which sales fall in which window. Pure, so the
 // rules the sponsor reads are tested here rather than only in SQL.
+// TASK-487: bookings made to pay by bank transfer and still waiting for the money.
+describe("the bookings waiting for a bank transfer", () => {
+  const row = (over: Partial<BookingRow>): BookingRow => ({
+    kind: "table", status: "pending", quantity: 1, seats: 10, paidAt: null, paymentMethod: "transfer", ...over,
+  });
+
+  it("counts pending transfers only: not paid, cancelled, or a card checkout under way", () => {
+    expect(
+      countAwaitingTransfers([
+        row({}),
+        row({ kind: "seat", quantity: 2, seats: 2 }),
+        row({ status: "paid", paidAt: new Date() }),
+        row({ status: "cancelled" }),
+        row({ paymentMethod: "card" }),
+        row({ paymentMethod: undefined }),
+      ]),
+    ).toEqual({ awaitingTransfers: 2, awaitingTransferSeats: 12 });
+  });
+
+  it("is nothing when there are none", () => {
+    expect(countAwaitingTransfers([])).toEqual({ awaitingTransfers: 0, awaitingTransferSeats: 0 });
+  });
+});
+
 describe("the numbers, counted from the bookings", () => {
   const NOW = new Date("2026-10-06T07:00:00Z"); // 8am in the UK, Tuesday 6 October
   const ago = (days: number) => new Date(NOW.getTime() - days * 86_400_000);
@@ -278,6 +305,16 @@ describe("the email", () => {
     const soldOut = renderReport({ ...INPUTS, seatsRemaining: 0, tablesRemaining: 0 }, TUESDAY).text;
     expect(soldOut).toContain("Sold out");
     expect(soldOut).not.toMatch(/\b0 seats/);
+  });
+
+  // TASK-487: booked to pay by bank transfer, not yet paid. Seats and bookings only: no money.
+  it("says how many seats are booked and waiting for a bank transfer", () => {
+    const { html, text } = renderReport({ ...INPUTS, awaitingTransfers: 2, awaitingTransferSeats: 12 }, TUESDAY);
+    for (const body of [html, text]) expect(body).toContain("12 more seats are booked and waiting for a bank transfer (2 bookings)");
+    expect(renderReport({ ...INPUTS, awaitingTransfers: 1, awaitingTransferSeats: 1 }, TUESDAY).text).toContain(
+      "1 more seat is booked and waiting for a bank transfer (1 booking)",
+    );
+    expect(renderReport(INPUTS, TUESDAY).text).not.toMatch(/bank transfer/);
   });
 
   it("gives the waiting list as people and the seats they want", () => {

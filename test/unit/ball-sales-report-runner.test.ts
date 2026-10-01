@@ -53,6 +53,8 @@ const INPUTS: SalesInputs = {
   soldPrevious7Days: 22,
   waitingList: 0,
   waitingSeats: 0,
+  awaitingTransfers: 0,
+  awaitingTransferSeats: 0,
 };
 
 beforeEach(() => {

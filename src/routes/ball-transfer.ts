@@ -12,7 +12,7 @@ import {
   TRANSFER_DAYS_INVOICE,
   type InvoiceDetails,
 } from "../ball/transfer";
-import { invoiceUrl, sendTransferDetails } from "../ball/transfer-send";
+import { invoiceUrl, sendTransferDetails, sendTransferStaffNotice } from "../ball/transfer-send";
 import { getAvailability, getCapacityState } from "../db/ball";
 import { createTransferBooking, getBookingForInvoice, getTransferSettings } from "../db/ball-transfer";
 import { verifyInvoiceToken } from "../ball/invoice-token";
@@ -121,6 +121,11 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
     };
     const contact = invoice ? { bookingId: booked.id, accountsEmail: invoice.accountsEmail ?? null } : null;
     void sendTransferDetails({ ...write, invoice: contact }, details, payBy);
+    // TASK-487: and the team, at events@.
+    void sendTransferStaffNotice(
+      { ...write, invoice: invoice ? { bookingId: booked.id, company: invoice.company } : null },
+      payBy,
+    );
     return res.status(201).json({
       reference,
       totalPence: totals.totalPence,

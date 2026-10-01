@@ -1,5 +1,6 @@
 import { config } from "../config";
-import { sendBallConfirmation, sendBallTransfer } from "../clients/email";
+import { sendBallConfirmation, sendBallTransfer, sendBallTransferStaff } from "../clients/email";
+import { buildTransferStaffEmail } from "./transfer-staff-email";
 import { getSettings } from "../db/ball";
 import type { InvoiceContact } from "../db/ball-transfer";
 import { buildBallConfirmationEmail } from "./confirmation-email";
@@ -53,6 +54,31 @@ export async function sendTransferDetails(booking: Recipient, bank: BankDetails,
     });
   } catch (err) {
     logFailure("transfer details", err);
+  }
+}
+
+/**
+ * TASK-487: tell the team at events@ about a new booking, so they know a payment is on its way.
+ * Reply-To is the buyer, so answering it reaches them.
+ */
+export async function sendTransferStaffNotice(
+  booking: TransferEmailBooking & { buyerEmail: string; invoice: { bookingId: number; company: string } | null },
+  payBy: string,
+): Promise<void> {
+  try {
+    const mail = buildTransferStaffEmail(booking, {
+      payBy,
+      adminUrl: `${base()}/admin`,
+      invoice: booking.invoice ? { company: booking.invoice.company, url: invoiceUrl(booking.invoice.bookingId) } : null,
+    });
+    await sendBallTransferStaff({
+      email: config.BALL_FROM_EMAIL,
+      from: config.BALL_FROM_EMAIL,
+      replyTo: booking.buyerEmail,
+      ...mail,
+    });
+  } catch (err) {
+    logFailure("transfer staff notice", err);
   }
 }
 

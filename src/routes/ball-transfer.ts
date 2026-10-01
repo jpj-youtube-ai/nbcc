@@ -14,7 +14,10 @@ import {
 } from "../ball/transfer";
 import { invoiceUrl, sendTransferDetails } from "../ball/transfer-send";
 import { getAvailability, getCapacityState } from "../db/ball";
-import { createTransferBooking, getTransferSettings } from "../db/ball-transfer";
+import { createTransferBooking, getBookingForInvoice, getTransferSettings } from "../db/ball-transfer";
+import { verifyInvoiceToken } from "../ball/invoice-token";
+import { renderInvoicePage } from "../ball/invoice-page";
+import { config } from "../config";
 import { createRateLimiter } from "../portal/request-limiter";
 
 // TASK-484: POST /api/ball/bank-transfer. Book Festive Ball seats or tables to pay by bank transfer.
@@ -129,5 +132,61 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
   }
 }
 
+// TASK-486: GET /ball/invoice/:token, the printable invoice for a booking made with "My company needs
+// an invoice". The link is signed (src/ball/invoice-token.ts), so a booking number alone opens nothing,
+// and a bad link is simply not found. It carries a company's address and the booking's money, so it
+// is never cached by anything shared and is kept out of search engines. It shows the booking as it
+// stands now: Paid once paid; Cancelled, with no bank details, once cancelled.
+export async function getInvoicePage(req: Request, res: Response): Promise<void> {
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  let id: number;
+  try {
+    id = verifyInvoiceToken(String(req.params.token ?? ""), config.ADMIN_SESSION_SECRET);
+  } catch {
+    res.status(404).type("text").send("Not found");
+    return;
+  }
+  try {
+    const booking = await getBookingForInvoice(id);
+    if (!booking) {
+      res.status(404).type("text").send("Not found");
+      return;
+    }
+    const status = booking.status === "paid" || booking.status === "cancelled" ? booking.status : "pending";
+    // Still owed: the account to pay into. Whether or not transfers are still offered to new buyers,
+    // someone who has already booked needs it, so only the details themselves are checked.
+    const s = status === "pending" ? await getTransferSettings() : null;
+    const bank =
+      s?.accountName && s.sortCode && s.accountNumber
+        ? { accountName: s.accountName, sortCode: s.sortCode, accountNumber: s.accountNumber }
+        : null;
+    res.status(200).type("html").send(
+      renderInvoicePage({
+        reference: booking.reference,
+        issuedOn: booking.issuedOn,
+        payBy: booking.payBy ?? booking.issuedOn,
+        status,
+        paidOn: booking.paidOn,
+        company: booking.company,
+        address: booking.address,
+        po: booking.po,
+        buyerName: booking.buyerName,
+        kind: booking.kind,
+        quantity: booking.quantity,
+        seats: booking.seats,
+        ticketsPence: booking.ticketsPence,
+        donationPence: booking.donationPence,
+        totalPence: booking.totalPence,
+        bank,
+      }),
+    );
+  } catch (err) {
+    console.error("ball invoice page failed:", err instanceof Error ? err.message : err);
+    res.status(500).type("text").send("The invoice is temporarily unavailable. Please try again, or email events@nbcc.scot.");
+  }
+}
+
 export const ballTransferRouter = Router();
 ballTransferRouter.post("/api/ball/bank-transfer", postBankTransfer);
+ballTransferRouter.get("/ball/invoice/:token", getInvoicePage);

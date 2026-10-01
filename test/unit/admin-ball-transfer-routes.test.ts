@@ -109,12 +109,42 @@ describe("the bank details and the switch", () => {
   });
 });
 
+// TASK-485: the last day for transfers to arrive.
+describe("the last day for transfers", () => {
+  it("is saved by an admin, and can be cleared", async () => {
+    await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: "2026-10-31" });
+    expect(m.saveTransferSettings).toHaveBeenLastCalledWith({ lastDay: "2026-10-31" }, "admin:staff@example.com");
+    await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: null });
+    expect(m.saveTransferSettings).toHaveBeenLastCalledWith({ lastDay: null }, "admin:staff@example.com");
+  });
+
+  it("must be a real date", async () => {
+    expect((await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: "2026-02-30" })).statusCode).toBe(400);
+    expect(m.saveTransferSettings).not.toHaveBeenCalled();
+  });
+
+  it("is an admin's to set", async () => {
+    expect((await call(putAdminTransferSettings, editorWithBallEdit(), { lastDay: "2026-10-31" })).statusCode).toBe(403);
+  });
+});
+
 describe("the bookings awaiting a transfer", () => {
   it("are listed for anyone who can see the Festive Ball", async () => {
-    m.listAwaitingTransfers.mockResolvedValue([{ reference: "BALL-7KQ2MZ" }]);
+    m.listAwaitingTransfers.mockResolvedValue([{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01" }]);
     const res = await call(getAdminTransfers, tokenFor("viewer"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ" }] });
+    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01", overdue: false }] });
+  });
+
+  // TASK-485: past its date, flagged for staff, who decide what happens.
+  it("say which are overdue", async () => {
+    m.listAwaitingTransfers.mockResolvedValue([
+      { reference: "BALL-OLDONE", payBy: "2020-01-01" },
+      { reference: "BALL-NEWONE", payBy: "2099-01-01" },
+    ]);
+    const res = await call(getAdminTransfers, tokenFor("viewer"));
+    const results = (res.body as { results: Array<{ reference: string; overdue: boolean }> }).results;
+    expect(results.map((r) => r.overdue)).toEqual([true, false]);
   });
 });
 

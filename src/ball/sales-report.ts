@@ -160,6 +160,10 @@ export interface SalesInputs {
   waitingList: number;
   /** The seats those people want between them. */
   waitingSeats: number;
+  /** TASK-487: bookings made to pay by bank transfer, still waiting for the money. Not sold yet. */
+  awaitingTransfers: number;
+  /** The seats those bookings hold. */
+  awaitingTransferSeats: number;
 }
 
 /** One booking, as the numbers need it. */
@@ -169,9 +173,22 @@ export interface BookingRow {
   quantity: number;
   seats: number;
   paidAt: Date | null;
+  /** TASK-487: "card" or "transfer". */
+  paymentMethod?: string;
 }
 
 const DAY_MS = 86_400_000;
+
+/**
+ * TASK-487: bookings made to pay by bank transfer that are still waiting for the money. They hold
+ * their seats, but are not sold until an admin marks them paid, so they are counted apart.
+ */
+export function countAwaitingTransfers(
+  bookings: readonly BookingRow[],
+): Pick<SalesInputs, "awaitingTransfers" | "awaitingTransferSeats"> {
+  const waiting = bookings.filter((b) => b.paymentMethod === "transfer" && b.status === "pending");
+  return { awaitingTransfers: waiting.length, awaitingTransferSeats: waiting.reduce((n, b) => n + b.seats, 0) };
+}
 
 /**
  * What has sold, counted from the bookings. Sold means paid: a booking waiting for its card
@@ -234,7 +251,14 @@ function reportLines(i: SalesInputs, ctx: ReportContext) {
       : "There are no more updates planned.";
   return {
     opening: `Here's how Festive Ball ticket sales stand this morning. ${whatNext} Any questions in the meantime, call us on ${BALL_PHONE} or email ${BALL_EMAIL}.`,
-    sold: [`${i.seatsSold} of ${i.totalSeats} seats (${percent}%)`, how].filter(Boolean),
+    sold: [
+      `${i.seatsSold} of ${i.totalSeats} seats (${percent}%)`,
+      how,
+      // TASK-487: booked, and counted as sold once the money arrives.
+      i.awaitingTransfers > 0
+        ? `${counted(i.awaitingTransferSeats, "more seat is", "more seats are")} booked and waiting for a bank transfer (${counted(i.awaitingTransfers, "booking", "bookings")})`
+        : "",
+    ].filter(Boolean),
     lately: [
       i.soldSinceLast === null
         ? "This is the first update"

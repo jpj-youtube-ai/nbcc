@@ -39,6 +39,9 @@ export const SECTIONS = [
   // on donations:edit, which meant anyone who could correct a donation could also work through
   // somebody's perks. Admins hold it by role and grant it per person from the Team matrix.
   "business-supporters",
+  // TASK-479: site analytics (Admin > Analytics). Admins only by role, as Jaimie asked; anyone else
+  // is given it per person from the Team matrix. Editors and viewers get NONE, like "email-audit".
+  "analytics",
   "team",
 ] as const;
 
@@ -90,13 +93,13 @@ export function roleToPermissions(role: string): PermissionMap {
     return perms;
   }
 
-  // viewer (and any unrecognised role) — view everywhere except team, the email audit and
+  // viewer (and any unrecognised role) — view everywhere except team, the email audit, analytics and
   // business supporters (donor-identifying data is admin-granted per person, never arrives with
   // a role).
   const perms: PermissionMap = {};
   for (const section of SECTIONS) {
     perms[section] =
-      section === "team" || section === "email-audit" || section === "business-supporters"
+      section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics"
         ? "none"
         : "view";
   }

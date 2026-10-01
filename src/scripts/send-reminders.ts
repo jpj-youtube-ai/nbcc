@@ -132,6 +132,16 @@ if (require.main === module) {
       } catch (err) {
         console.error("email log prune failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-479: site analytics retention. Page views and clicks are kept 13 months, and every
+      // daily salt older than today is deleted, so yesterday's visitor ids can never be made again.
+      // Its own try/catch, like every pass above.
+      try {
+        const { pruneAnalytics } = await import("../db/analytics");
+        const pruned = await pruneAnalytics(new Date());
+        console.error(`analytics retention: views=${pruned.views} clicks=${pruned.clicks} salts=${pruned.salts}`);
+      } catch (err) {
+        console.error("analytics prune failed:", err instanceof Error ? err.message : err);
+      }
       await pool.end();
     })
     .catch(async (err: unknown) => {

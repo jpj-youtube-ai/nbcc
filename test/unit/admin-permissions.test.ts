@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 19 matrix sections", () => {
+  it("lists exactly the 20 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -42,9 +42,10 @@ describe("SECTIONS", () => {
       "site",
       "outreach",
       "business-supporters",
+      "analytics",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(19);
+    expect(SECTIONS).toHaveLength(20);
   });
 });
 
@@ -105,6 +106,22 @@ describe("email-audit defaults", () => {
   it("can still be granted per person via a stored override", () => {
     const stored: PermissionMap = { "email-audit": "view" };
     expect(can(effectivePermissions({ role: "viewer", permissions: stored }), "email-audit", "view")).toBe(true);
+  });
+});
+
+// TASK-479: site analytics. Admins hold it by role and can give it to anyone from Team > Manage
+// access; nobody else gets it with their role, as Jaimie asked.
+describe("analytics defaults", () => {
+  it("admins edit; editors and viewers get none", () => {
+    expect(roleToPermissions("admin").analytics).toBe("edit");
+    expect(roleToPermissions("editor").analytics ?? "none").toBe("none");
+    expect(roleToPermissions("viewer").analytics).toBe("none");
+    expect(can(roleToPermissions("editor"), "analytics", "view")).toBe(false);
+    expect(can(roleToPermissions("viewer"), "analytics", "view")).toBe(false);
+  });
+
+  it("can still be given to anyone through a saved matrix", () => {
+    expect(can(effectivePermissions({ role: "viewer", permissions: { analytics: "view" } }), "analytics", "view")).toBe(true);
   });
 });
 
@@ -173,10 +190,10 @@ describe("roleToPermissions", () => {
     expect(can(perms, "team", "view")).toBe(false);
   });
 
-  it("viewer gets view on all sections except team, email-audit and business-supporters", () => {
+  it("viewer gets view on all sections except team, email-audit, business-supporters and analytics", () => {
     const perms = roleToPermissions("viewer");
     for (const section of SECTIONS) {
-      if (section === "team" || section === "email-audit" || section === "business-supporters") continue;
+      if (section === "team" || section === "email-audit" || section === "business-supporters" || section === "analytics") continue;
       expect(perms[section]).toBe("view");
     }
   });

@@ -11,6 +11,7 @@ import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PAT
 import { adminWhatsNewRouter } from "./routes/admin-whats-new";
 import { stripeWebhookRouter } from "./routes/stripe-webhook";
 import { sesWebhookRouter } from "./routes/ses-webhook";
+import { pulseRouter } from "./routes/pulse";
 import { preferencesRouter } from "./routes/preferences";
 import { subscribeRouter } from "./routes/subscribe";
 import { unsubscribeRouter } from "./routes/unsubscribe";
@@ -42,6 +43,9 @@ export function createApp() {
   // from the raw bytes (SNS posts JSON as text/plain), so it is mounted before express.json for
   // the same reason as Stripe's.
   app.use(sesWebhookRouter);
+  // Site analytics (TASK-479): POST /api/pulse reads its own small text body (2 KB at most) and
+  // always answers 204, so it goes before express.json, which would answer some bodies with an error.
+  app.use(pulseRouter);
   app.use(preferencesRouter);
   // Reject an oversized JSON submission to the public, unauthenticated /api/my-story
   // endpoint by its Content-Length BEFORE the global express.json() parses it, so the

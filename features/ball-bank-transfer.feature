@@ -127,3 +127,29 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     When I start an inline ball checkout for 1 seat
     And the buyer falls back to Stripe's own page for the same order
     Then exactly one pending card booking should hold seats
+
+  # TASK-486: invoices.
+  Scenario: A company that needs an invoice gets 14 days and a private invoice page
+    Given bank transfer is switched on with bank details
+    When a company books 1 table to pay by bank transfer with an invoice
+    Then the transfer booking answer is 201 with the bank details and a pay-by date 14 days away
+    And the booking keeps the company's invoice details, without Gift Aid
+    When I open the invoice link
+    Then the invoice page shows the company, the reference and the bank details
+    And the invoice page is private and kept out of search engines
+    When "ann.transfer.admin.bdd@example.com" lists the bookings awaiting a transfer
+    Then the booking is listed with its company and a link to its invoice
+    When "ann.transfer.admin.bdd@example.com" marks it paid confirming the right amount
+    And I open the invoice link
+    Then the invoice page says it is paid
+
+  Scenario: An invoice needs the company's name and address
+    Given bank transfer is switched on with bank details
+    When a company books 1 table to pay by bank transfer with an invoice but no address
+    Then the transfer booking answer is 400
+
+  Scenario: An altered invoice link opens nothing
+    Given bank transfer is switched on with bank details
+    When a company books 1 table to pay by bank transfer with an invoice
+    And I open the invoice link with its signature altered
+    Then the invoice page is not found

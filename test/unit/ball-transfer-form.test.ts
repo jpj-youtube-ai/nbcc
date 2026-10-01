@@ -158,6 +158,113 @@ describe("paying by bank transfer, on the form (TASK-484)", () => {
   });
 });
 
+// TASK-486: "My company needs an invoice", offered with bank transfer.
+describe("asking for an invoice, on the form (TASK-486)", () => {
+  const box = () => el("ballInvoice");
+  const fields = () => el("ballInvoiceFields");
+  const input = (name: string) => form().elements.namedItem(name) as HTMLInputElement;
+  const giftAidLabel = () => input("giftAid").closest("label") as HTMLElement;
+  const tickInvoice = () => {
+    input("needsInvoice").checked = true;
+    input("needsInvoice").dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const fillInvoice = () => {
+    input("invoiceCompany").value = "Example Widgets Ltd";
+    (form().elements.namedItem("invoiceAddress") as HTMLTextAreaElement).value = "1 Test Street\nTestville";
+    input("invoiceAccountsEmail").value = "accounts@example.com";
+  };
+
+  it("is offered only with bank transfer", async () => {
+    await reload({ transferOpen: true });
+    expect(box().hidden).toBe(true);
+    chooseTransfer();
+    expect(box().hidden).toBe(false);
+    expect(fields().hidden).toBe(true);
+  });
+
+  it("asks for the company's details, and takes Gift Aid away, once ticked", async () => {
+    await reload({ transferOpen: true });
+    chooseTransfer();
+    input("giftAid").checked = true;
+    tickInvoice();
+    expect(fields().hidden).toBe(false);
+    expect(giftAidLabel().hidden).toBe(true);
+    expect(input("giftAid").checked).toBe(false);
+    expect((el("ballGiftAidNote") as HTMLElement).hidden).toBe(true);
+  });
+
+  it("brings Gift Aid back when unticked", async () => {
+    await reload({ transferOpen: true });
+    chooseTransfer();
+    tickInvoice();
+    input("needsInvoice").checked = false;
+    input("needsInvoice").dispatchEvent(new Event("change", { bubbles: true }));
+    expect(fields().hidden).toBe(true);
+    expect(giftAidLabel().hidden).toBe(false);
+  });
+
+  it("needs the company's name and address", async () => {
+    await reload({ transferOpen: true });
+    chooseTransfer();
+    tickInvoice();
+    fillIn();
+    submit();
+    await flush();
+    expect(el("ballError").textContent).toMatch(/company's name/);
+    input("invoiceCompany").value = "Example Widgets Ltd";
+    submit();
+    await flush();
+    expect(el("ballError").textContent).toMatch(/company's address/);
+    expect(calls.some((c) => c.url.includes("/api/ball/bank-transfer"))).toBe(false);
+  });
+
+  it("sends the invoice details, and links the invoice once booked", async () => {
+    await reload({ transferOpen: true });
+    transferAnswer = {
+      status: 201,
+      body: {
+        reference: "BALL-7KQ2MZ", totalPence: 100000, payBy: "2026-10-15",
+        accountName: "Night Before Christmas Campaign", sortCode: "12-34-56", accountNumber: "12345678",
+        invoiceUrl: "https://nbcc.scot/ball/invoice/42.abc",
+      },
+    };
+    chooseTransfer();
+    tickInvoice();
+    fillIn();
+    fillInvoice();
+    submit();
+    await flush();
+    const post = calls.find((c) => c.url.includes("/api/ball/bank-transfer"));
+    expect(post?.body?.invoice).toEqual({
+      company: "Example Widgets Ltd",
+      address: "1 Test Street\nTestville",
+      po: "",
+      accountsEmail: "accounts@example.com",
+      phone: "",
+    });
+    expect(post?.body?.giftAid).toBe(false);
+    const link = el("ballTransferDone").querySelector('a[data-transfer-invoice]') as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("https://nbcc.scot/ball/invoice/42.abc");
+    expect((link.closest("[data-invoice-line]") as HTMLElement).hidden).toBe(false);
+  });
+
+  it("sends no invoice when the box is not ticked, and shows no invoice link", async () => {
+    await reload({ transferOpen: true });
+    transferAnswer = {
+      status: 201,
+      body: { reference: "BALL-7KQ2MZ", totalPence: 10000, payBy: "2026-10-08", accountName: "N", sortCode: "12-34-56", accountNumber: "12345678" },
+    };
+    chooseTransfer();
+    fillIn();
+    input("invoiceCompany").value = "Left over from earlier";
+    submit();
+    await flush();
+    const post = calls.find((c) => c.url.includes("/api/ball/bank-transfer"));
+    expect(post?.body?.invoice).toBeUndefined();
+    expect((el("ballTransferDone").querySelector("[data-invoice-line]") as HTMLElement).hidden).toBe(true);
+  });
+});
+
 describe("the card fallback (TASK-484)", () => {
   // The inline payment was created, then could not be shown. The fallback to Stripe's own page used
   // to make a second booking while the first went on holding seats for half an hour.

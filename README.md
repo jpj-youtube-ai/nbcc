@@ -2804,8 +2804,38 @@ ticked "Offer bank transfer on the ticket page".
   **Overdue**. It also shows **Reminder sent** where the reminder has gone. Nothing is cancelled
   automatically, at the client's choice: staff mark it paid, give more time, or cancel.
 
-**Still to come** (stages 3 to 5): invoices for companies; the events@ email, the New pill and the
-ticket report line; and staff adding a booking by hand.
+**Invoices (TASK-486, stage 3)**
+- **On the form.** Once bank transfer is chosen, the buyer can tick "My company needs an invoice".
+  - It asks for the company's name and address (both required). The purchase order number, the
+    accounts team's email and a phone number are optional.
+  - While it is ticked, Gift Aid is taken away and sent as false, because a company cannot make a
+    Gift Aid declaration. The server forces this too.
+  - The "Booking bigger, or paying by invoice?" card points companies at it once transfer is on.
+- **14 days to pay** (`TRANSFER_DAYS_INVOICE`), still capped by the last day for transfers.
+- **The invoice** is a private printable page at `/ball/invoice/<token>`
+  (`src/ball/invoice-page.ts`, served by `getInvoicePage` in `src/routes/ball-transfer.ts`).
+  - Its number is the booking reference.
+  - It shows the charity's name, number and address, the company and its PO, the order and the
+    total, the bank details and the pay-by date. It says "Not registered for VAT, so no VAT is
+    charged." It has a "Print or save as PDF" button.
+  - It always shows the booking as it stands: **Paid** once marked paid, and **Cancelled**, with no
+    bank details, once cancelled.
+  - The link is signed (`src/ball/invoice-token.ts`, with `ADMIN_SESSION_SECRET`), so a booking
+    number alone opens nothing. A bad link is "Not found". The page is `private, no-store` and
+    `noindex`. Changing `ADMIN_SESSION_SECRET` breaks every invoice link already emailed, as it
+    does the thank-you letter links. The Awaiting transfer list always shows a working link, for staff
+    to send on.
+  - Anything neither unpaid nor paid (cancelled, or refunded) shows as cancelled.
+- **Its details** are stored on the booking (`ball_bookings.invoice_company`, `invoice_address`,
+  `invoice_po`, `invoice_accounts_email`, `invoice_phone`). They are all nullable; a booking without
+  an invoice has none.
+- **The emails** link the invoice: the bank details, the reminder, the cancellation and the
+  confirmation once paid. Every one of them **copies the accounts team** when an email was given
+  for them (`invoiceCc`), unless it is the buyer's own.
+- **Admin:** the Awaiting transfer list shows the company and an **Invoice** link under the buyer.
+
+**Still to come** (stages 4 and 5): the events@ email, the New pill and the ticket report line; and
+staff adding a booking by hand.
 
 ### Changing the preview password
 

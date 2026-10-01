@@ -60,10 +60,18 @@ beforeEach(() => vi.clearAllMocks());
 
 describe("cancelling a booking", () => {
   it("emails the buyer when it was an unpaid bank transfer", async () => {
-    cancelBookingMock.mockResolvedValue({ ok: true, seats: 10, wasStatus: "pending", paymentMethod: "transfer", booking });
+    cancelBookingMock.mockResolvedValue({ ok: true, seats: 10, wasStatus: "pending", paymentMethod: "transfer", booking, invoice: null });
     const res = await cancel();
     expect(res.statusCode).toBe(200);
-    expect(sendTransferCancelledMock).toHaveBeenCalledWith(booking);
+    expect(sendTransferCancelledMock).toHaveBeenCalledWith({ ...booking, invoice: null });
+  });
+
+  // TASK-486: the cancelled email links the invoice, which now shows it cancelled.
+  it("passes an invoiced booking's invoice on to the cancelled email", async () => {
+    const invoice = { bookingId: 42, accountsEmail: "accounts@example.com" };
+    cancelBookingMock.mockResolvedValue({ ok: true, seats: 10, wasStatus: "pending", paymentMethod: "transfer", booking, invoice });
+    await cancel();
+    expect(sendTransferCancelledMock).toHaveBeenCalledWith({ ...booking, invoice });
   });
 
   it("sends nothing for a card booking", async () => {

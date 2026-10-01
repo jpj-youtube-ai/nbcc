@@ -22,7 +22,10 @@ vi.mock("../../src/db/ball-transfer", () => ({
   markTransferPaid: m.markTransferPaid,
   extendPayBy: m.extendPayBy,
 }));
-vi.mock("../../src/ball/transfer-send", () => ({ sendTransferArrived: m.sendTransferArrived }));
+vi.mock("../../src/ball/transfer-send", () => ({
+  sendTransferArrived: m.sendTransferArrived,
+  invoiceUrl: (id: number) => `https://nbcc.scot/ball/invoice/${id}.sig`,
+}));
 vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret", BALL_BASE_URL: "https://nbcc.scot" },
 }));
@@ -143,7 +146,20 @@ describe("the bookings awaiting a transfer", () => {
     m.listAwaitingTransfers.mockResolvedValue([{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01" }]);
     const res = await call(getAdminTransfers, tokenFor("viewer"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01", overdue: false }] });
+    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01", overdue: false, invoiceUrl: null }] });
+  });
+
+  // TASK-486: staff can open the invoice a company was given.
+  it("link the invoice of a booking that has one", async () => {
+    m.listAwaitingTransfers.mockResolvedValue([
+      { reference: "BALL-7KQ2MZ", payBy: "2099-01-01", company: "Example Widgets Ltd", invoiceId: 42 },
+    ]);
+    const res = await call(getAdminTransfers, tokenFor("viewer"));
+    expect(res.body).toEqual({
+      results: [
+        { reference: "BALL-7KQ2MZ", payBy: "2099-01-01", company: "Example Widgets Ltd", overdue: false, invoiceUrl: "https://nbcc.scot/ball/invoice/42.sig" },
+      ],
+    });
   });
 
   // TASK-485: past its date, flagged for staff, who decide what happens.
@@ -172,12 +188,20 @@ describe("marking a transfer paid", () => {
   });
 
   it("marks it paid and sends the confirmation with its guest link", async () => {
-    m.markTransferPaid.mockResolvedValue({ ok: true, reinstated: false, booking, guestToken: "tok123" });
+    m.markTransferPaid.mockResolvedValue({ ok: true, reinstated: false, booking, guestToken: "tok123", invoice: null });
     const res = await call(postAdminMarkTransferPaid, tokenFor("admin"), { confirmTotalPence: 102_000 }, params);
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ reference: "BALL-7KQ2MZ", reinstated: false });
     expect(m.markTransferPaid).toHaveBeenCalledWith("BALL-7KQ2MZ", 102_000, "admin:staff@example.com", expect.any(String));
-    expect(m.sendTransferArrived).toHaveBeenCalledWith(booking, "tok123");
+    expect(m.sendTransferArrived).toHaveBeenCalledWith(booking, "tok123", null);
+  });
+
+  // TASK-486: the confirmation links the invoice, now marked paid, and copies the accounts team.
+  it("passes an invoiced booking's invoice on to the confirmation", async () => {
+    const invoice = { bookingId: 42, accountsEmail: "accounts@example.com" };
+    m.markTransferPaid.mockResolvedValue({ ok: true, reinstated: false, booking, guestToken: "tok123", invoice });
+    await call(postAdminMarkTransferPaid, tokenFor("admin"), { confirmTotalPence: 102_000 }, params);
+    expect(m.sendTransferArrived).toHaveBeenCalledWith(booking, "tok123", invoice);
   });
 
   it.each([

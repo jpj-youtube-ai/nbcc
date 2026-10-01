@@ -450,6 +450,7 @@ export async function sendBusinessSupporterReminder(message: BusinessSupporterRe
 // newsletter's send-only sender and must not carry transactional receipts. Sent verbatim.
 export interface BallConfirmationMessage {
   email: string; // the buyer
+  cc?: string; // TASK-486: a company's accounts team, on an invoiced bank transfer booking
   from: string; // config.BALL_FROM_EMAIL
   replyTo: string; // same as from — a reply must reach a real inbox
   subject: string;

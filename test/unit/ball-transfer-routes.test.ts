@@ -16,13 +16,17 @@ vi.mock("../../src/db/ball-transfer", () => ({
   getTransferSettings: getTransferSettingsMock,
   createTransferBooking: createTransferBookingMock,
 }));
-vi.mock("../../src/ball/transfer-send", () => ({ sendTransferDetails: sendTransferDetailsMock }));
+vi.mock("../../src/ball/transfer-send", () => ({
+  sendTransferDetails: sendTransferDetailsMock,
+  invoiceUrl: (id: number) => `https://nbcc.scot/ball/invoice/${id}.sig`,
+}));
 vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "development", BALL_BASE_URL: "https://nbcc.scot", BALL_FROM_EMAIL: "events@nbcc.scot" },
 }));
 
 import { postBankTransfer } from "../../src/routes/ball-transfer";
 import { londonDate } from "../../src/ball/sales-report";
+import { transferPayBy, TRANSFER_DAYS_INVOICE } from "../../src/ball/transfer";
 
 // Invented, like every fixture in this public repo.
 const BANK = { on: true, accountName: "Night Before Christmas Campaign", sortCode: "12-34-56", accountNumber: "12345678" };
@@ -141,5 +145,61 @@ describe("POST /api/ball/bank-transfer", () => {
     for (let i = 0; i < 5; i++) expect((await post(order)).statusCode).toBe(201);
     expect((await post(order)).statusCode).toBe(429);
     expect((await post(order, "198.51.100.9")).statusCode).toBe(201);
+  });
+
+  // TASK-486: a company paying an invoice gets 14 days, a private link to the invoice, and no Gift
+  // Aid (a company cannot make a Gift Aid declaration).
+  describe("with an invoice", () => {
+    const invoice = {
+      company: "Example Widgets Ltd",
+      address: "1 Test Street\nTestville\nTE1 1ST",
+      po: "PO-0001",
+      accountsEmail: "accounts@example.com",
+      phone: "",
+    };
+
+    it("books it with 14 days to pay, no Gift Aid, and answers with the invoice link", async () => {
+      const res = await post({ ...order, invoice });
+      expect(res.statusCode).toBe(201);
+      const [write, payBy, details] = createTransferBookingMock.mock.calls[0];
+      expect(write.giftAid).toBe(false);
+      expect(payBy).toBe(transferPayBy(new Date(), null, TRANSFER_DAYS_INVOICE));
+      expect(details).toEqual({
+        company: "Example Widgets Ltd",
+        address: "1 Test Street\nTestville\nTE1 1ST",
+        po: "PO-0001",
+        accountsEmail: "accounts@example.com",
+        phone: undefined,
+      });
+      expect(body(res).invoiceUrl).toBe("https://nbcc.scot/ball/invoice/1.sig");
+      expect(sendTransferDetailsMock.mock.calls[0][0].invoice).toEqual({ bookingId: 1, accountsEmail: "accounts@example.com" });
+    });
+
+    it("still stops at the last day for transfers", async () => {
+      const tomorrow = londonDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+      getTransferSettingsMock.mockResolvedValue({ ...BANK, lastDay: tomorrow });
+      expect(body(await post({ ...order, invoice })).payBy).toBe(tomorrow);
+    });
+
+    // Gift Aid is dropped for an invoice, so a request ticking it without a donation is not refused for it.
+    it("drops Gift Aid before checking it needs a donation", async () => {
+      const res = await post({ ...order, donationPence: 0, giftAid: true, invoice });
+      expect(res.statusCode).toBe(201);
+      expect(createTransferBookingMock.mock.calls[0][0].giftAid).toBe(false);
+    });
+
+    it("refuses an invoice without the company name or address", async () => {
+      expect((await post({ ...order, invoice: { ...invoice, company: "" } })).statusCode).toBe(400);
+      expect((await post({ ...order, invoice: { ...invoice, address: " " } })).statusCode).toBe(400);
+      expect(createTransferBookingMock).not.toHaveBeenCalled();
+    });
+
+    it("has no invoice, and keeps the Gift Aid, when none was asked for", async () => {
+      const res = await post(order);
+      expect(createTransferBookingMock.mock.calls[0][0].giftAid).toBe(true);
+      expect(createTransferBookingMock.mock.calls[0][2]).toBeNull();
+      expect(body(res).invoiceUrl).toBeUndefined();
+      expect(sendTransferDetailsMock.mock.calls[0][0].invoice).toBeNull();
+    });
   });
 });

@@ -256,10 +256,45 @@
                 <input type="radio" name="payMethod" value="transfer" />
                 <span class="ball-option-body">
                   <b>Bank transfer</b>
-                  <span class="ball-note">We'll hold your seats for 7 days and give you our bank details and a reference.</span>
+                  <span class="ball-note">We'll hold your seats for 7 days, or 14 with an invoice, and give you our bank details and a reference.</span>
                 </span>
               </label>
             </fieldset>
+
+            <!-- TASK-486: shown by ball.js only when bank transfer is chosen. A company gets a
+                 printable invoice and 14 days to pay. Gift Aid is taken away while it is ticked: a
+                 company cannot make a Gift Aid declaration. -->
+            <div class="ball-invoice-ask" id="ballInvoice" hidden>
+              <label class="ball-check">
+                <input type="checkbox" name="needsInvoice" />
+                <span><b>My company needs an invoice.</b> You'll get a printable invoice, and 14 days to pay.</span>
+              </label>
+              <div class="ball-invoice-fields" id="ballInvoiceFields" hidden>
+                <label class="ball-field">
+                  <span>Company name</span>
+                  <input type="text" name="invoiceCompany" autocomplete="organization" maxlength="120" />
+                </label>
+                <label class="ball-field">
+                  <span>Company address</span>
+                  <textarea name="invoiceAddress" rows="3" autocomplete="street-address" maxlength="400"></textarea>
+                </label>
+                <div class="ball-row ball-row-fields">
+                  <label class="ball-field">
+                    <span>Purchase order number <small>(optional)</small></span>
+                    <input type="text" name="invoicePo" maxlength="60" />
+                  </label>
+                  <label class="ball-field">
+                    <span>Phone number <small>(optional)</small></span>
+                    <input type="tel" name="invoicePhone" autocomplete="tel" maxlength="40" />
+                  </label>
+                </div>
+                <label class="ball-field">
+                  <span>Accounts team email <small>(optional)</small></span>
+                  <input type="email" name="invoiceAccountsEmail" maxlength="254" />
+                  <small>We'll copy them on every email about this booking.</small>
+                </label>
+              </div>
+            </div>
 
             <div class="ball-extras">
               <label class="ball-check">
@@ -288,7 +323,7 @@
                       my donations in that tax year it is my responsibility to pay any difference.
                     </span>
                   </label>
-                  <p class="ball-note">
+                  <p class="ball-note" id="ballGiftAidNote">
                     Gift Aid can't be claimed on ticket sales, because you receive a meal and
                     entertainment in return. It can be claimed on a donation.
                   </p>
@@ -363,6 +398,7 @@
               <div><dt>Payment reference</dt><dd data-transfer="reference"></dd></div>
             </dl>
             <p>We've emailed these to you as well. Please use the reference exactly as it is written, so we can match your payment to your booking.</p>
+            <p data-invoice-line hidden>Your invoice has the same details, for your accounts team: <a data-transfer-invoice href="#" target="_blank" rel="noopener">view or print your invoice</a>.</p>
             <p>As soon as your payment arrives we'll email to confirm your booking, with a link to tell us who's coming.</p>
           </section>
 
@@ -378,6 +414,11 @@
               paid by card. For a larger booking, or if your company needs an <b>invoice</b>
               instead of paying by card, talk to us directly. We'll raise the invoice and
               hold your tables while it is settled.
+            </p>
+            <!-- TASK-486: shown by ball.js once bank transfer is switched on. -->
+            <p id="ballInvoiceSelf" hidden>
+              Up to four tables with an invoice? Choose <b>Bank transfer</b> on the form and tick
+              <b>My company needs an invoice</b>.
             </p>
             <p class="ball-invoice-contact">
               <a href="mailto:events@nbcc.scot">events@nbcc.scot</a>

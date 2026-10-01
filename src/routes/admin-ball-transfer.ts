@@ -152,7 +152,7 @@ export async function postAdminMarkTransferPaid(req: Request, res: Response): Pr
       return res.status(status).json({ error });
     }
     // After the commit, best effort: the booking is paid whether or not the email goes.
-    void sendTransferArrived(outcome.booking, outcome.guestToken);
+    void sendTransferArrived(outcome.booking, outcome.guestToken, outcome.invoice);
     return res.status(200).json({ reference, reinstated: outcome.reinstated });
   } catch (err) {
     return failed(res, "marking paid", err);

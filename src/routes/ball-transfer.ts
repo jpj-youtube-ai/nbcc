@@ -3,8 +3,16 @@ import { Router, type Request, type Response } from "express";
 import { makeReference, purchaseSchema } from "../ball/booking";
 import { seatsFor } from "../ball/capacity";
 import { orderTotalPence } from "../ball/pricing";
-import { transferPayBy, transferReady, transferWindowOpen } from "../ball/transfer";
-import { sendTransferDetails } from "../ball/transfer-send";
+import {
+  invoiceSchema,
+  transferPayBy,
+  transferReady,
+  transferWindowOpen,
+  TRANSFER_DAYS,
+  TRANSFER_DAYS_INVOICE,
+  type InvoiceDetails,
+} from "../ball/transfer";
+import { invoiceUrl, sendTransferDetails } from "../ball/transfer-send";
 import { getAvailability, getCapacityState } from "../db/ball";
 import { createTransferBooking, getTransferSettings } from "../db/ball-transfer";
 import { createRateLimiter } from "../portal/request-limiter";
@@ -39,8 +47,18 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid booking request", details: parsed.error.issues });
   }
+  // TASK-486: "My company needs an invoice". The company and its address are required; a company
+  // cannot make a Gift Aid declaration, so an invoiced booking never carries one.
+  let invoice: InvoiceDetails | null = null;
+  if (req.body?.invoice != null) {
+    const inv = invoiceSchema.safeParse(req.body.invoice);
+    if (!inv.success) {
+      return res.status(400).json({ error: "Invalid invoice details", details: inv.error.issues });
+    }
+    invoice = inv.data;
+  }
   // A transfer has no card fee, whatever the form sent.
-  const purchase = { ...parsed.data, coverFee: false };
+  const purchase = { ...parsed.data, coverFee: false, giftAid: invoice ? false : parsed.data.giftAid };
 
   try {
     const bank = await getTransferSettings();
@@ -61,8 +79,8 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
     const { seatsPerTable } = await getCapacityState();
     const totals = orderTotalPence({ order, donationPence: purchase.donationPence, coverFee: false, cardFee: avail.cardFee });
     const reference = makeReference(randomBytes(8));
-    // Seven days on, or the last day for transfers if that comes first.
-    const payBy = transferPayBy(now, lastDay);
+    // Seven days on (fourteen with an invoice), or the last day for transfers if that comes first.
+    const payBy = transferPayBy(now, lastDay, invoice ? TRANSFER_DAYS_INVOICE : TRANSFER_DAYS);
     const write = {
       reference,
       kind: purchase.kind,
@@ -81,7 +99,7 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
     };
 
     // Capacity is re-checked under the settings lock inside; null means the seats went meanwhile.
-    const booked = await createTransferBooking(write, payBy);
+    const booked = await createTransferBooking(write, payBy, invoice);
     if (!booked) {
       return res.status(409).json({
         error:
@@ -96,8 +114,15 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
       sortCode: bank.sortCode as string,
       accountNumber: bank.accountNumber as string,
     };
-    void sendTransferDetails(write, details, payBy);
-    return res.status(201).json({ reference, totalPence: totals.totalPence, payBy, ...details });
+    const contact = invoice ? { bookingId: booked.id, accountsEmail: invoice.accountsEmail ?? null } : null;
+    void sendTransferDetails({ ...write, invoice: contact }, details, payBy);
+    return res.status(201).json({
+      reference,
+      totalPence: totals.totalPence,
+      payBy,
+      ...details,
+      ...(contact ? { invoiceUrl: invoiceUrl(contact.bookingId) } : {}),
+    });
   } catch (err) {
     console.error("ball bank transfer booking failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "Could not make that booking. Please try again, or email events@nbcc.scot." });

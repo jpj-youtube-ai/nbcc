@@ -12,7 +12,22 @@ import {
   reminderDue,
   invoiceSchema,
   TRANSFER_DAYS_INVOICE,
+  invoiceCc,
 } from "../../src/ball/transfer";
+
+// TASK-486: the accounts team gets a copy of every email about an invoiced booking, unless that is
+// the buyer anyway.
+describe("who is copied on an invoiced booking's emails", () => {
+  it("copies the accounts team", () => {
+    expect(invoiceCc("accounts@example.com", "ada@example.com")).toBe("accounts@example.com");
+  });
+
+  it("copies nobody when there is no accounts email, or it is the buyer's own", () => {
+    expect(invoiceCc(null, "ada@example.com")).toBeUndefined();
+    expect(invoiceCc(undefined, "ada@example.com")).toBeUndefined();
+    expect(invoiceCc(" ADA@example.com ", "ada@example.com")).toBeUndefined();
+  });
+});
 
 // TASK-484: the rules for paying for the Festive Ball by bank transfer. Every figure here is invented.
 

@@ -109,3 +109,10 @@ export function payByDate(now: Date, days = TRANSFER_DAYS): string {
   const [y, m, d] = londonDate(now).split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
+
+/** TASK-486: the accounts team is copied on an invoiced booking's emails, unless it is the buyer anyway. */
+export function invoiceCc(accountsEmail: string | null | undefined, buyerEmail: string): string | undefined {
+  const cc = accountsEmail?.trim();
+  if (!cc || cc.toLowerCase() === buyerEmail.trim().toLowerCase()) return undefined;
+  return cc;
+}

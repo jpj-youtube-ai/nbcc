@@ -42,6 +42,16 @@ describe("the confirmation for a bank transfer", () => {
     expect(withLine.html).toContain("Your bank transfer has arrived. Thank you.");
     expect(buildBallConfirmationEmail(tableBooking, noArrival).text).not.toContain("bank transfer");
   });
+
+  // TASK-486: a company paying an invoice is pointed at it, now marked Paid, for its records.
+  it("links the invoice, now marked paid, when there is one", () => {
+    const url = "https://nbcc.scot/ball/invoice/42.abc";
+    const mail = buildBallConfirmationEmail(tableBooking, { ...noArrival, transferArrived: true, invoiceUrl: url });
+    expect(mail.html).toContain(`href="${url}"`);
+    expect(mail.text).toContain(url);
+    expect(mail.text).toMatch(/invoice/i);
+    expect(buildBallConfirmationEmail(tableBooking, noArrival).text).not.toMatch(/invoice/i);
+  });
 });
 
 describe("buildBallConfirmationEmail", () => {

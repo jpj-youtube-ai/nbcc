@@ -3742,7 +3742,7 @@ export async function postAdminBallCancelBooking(
     // believing their seats are held. After the commit, best effort. A transfer that had been paid
     // is a refund conversation, so it gets nothing automatic.
     if (outcome.paymentMethod === "transfer" && outcome.wasStatus === "pending") {
-      void sendTransferCancelled(outcome.booking);
+      void sendTransferCancelled({ ...outcome.booking, invoice: outcome.invoice });
     }
     return res.status(200).json({ cancelled: reference, seatsReturned: outcome.seats });
   } catch (err) {

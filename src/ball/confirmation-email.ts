@@ -34,6 +34,8 @@ export interface BallEventDetails {
   calendarUrl?: string | null;
   /** TASK-484: paid by bank transfer and just marked paid, so the email thanks them for it. */
   transferArrived?: boolean;
+  /** TASK-486: the booking's private invoice page, now marked paid, when it has one. */
+  invoiceUrl?: string | null;
 }
 
 export interface BallConfirmationEmail {
@@ -116,6 +118,9 @@ export function buildBallConfirmationEmail(
 
   <p ${P}>Thank you, ${name}. Your booking is confirmed, and we're delighted you're joining us on Saturday 7th November.</p>
   ${details.transferArrived ? `<p ${P}><b>${TRANSFER_ARRIVED}</b></p>` : ""}
+  ${details.invoiceUrl
+    ? `<p ${P}>Your invoice is now marked paid, for your records. <a href="${escapeHtml(details.invoiceUrl)}" ${LINK}>View or print your invoice</a></p>`
+    : ""}
 
   ${factsCard(
     `<tr><td style="padding:14px 18px 4px;color:${SLATE_SOFT};font-family:${BODY_FONT};font-size:13px;">Booking reference</td></tr>
@@ -159,7 +164,9 @@ because you receive a meal and entertainment in return.\n`
   const text = `YOU'RE COMING TO THE BALL
 
 Thank you, ${booking.buyerName}. Your booking is confirmed, and we're delighted
-you're joining us on Saturday 7th November.${details.transferArrived ? `\n\n${TRANSFER_ARRIVED}` : ""}
+you're joining us on Saturday 7th November.${details.transferArrived ? `\n\n${TRANSFER_ARRIVED}` : ""}${
+    details.invoiceUrl ? `\n\nYour invoice is now marked paid, for your records. View or print it:\n${details.invoiceUrl}` : ""
+  }
 
 Booking reference: ${booking.reference}
 You have booked ${what}.

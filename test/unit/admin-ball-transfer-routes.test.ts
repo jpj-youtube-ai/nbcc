@@ -172,12 +172,20 @@ describe("marking a transfer paid", () => {
   });
 
   it("marks it paid and sends the confirmation with its guest link", async () => {
-    m.markTransferPaid.mockResolvedValue({ ok: true, reinstated: false, booking, guestToken: "tok123" });
+    m.markTransferPaid.mockResolvedValue({ ok: true, reinstated: false, booking, guestToken: "tok123", invoice: null });
     const res = await call(postAdminMarkTransferPaid, tokenFor("admin"), { confirmTotalPence: 102_000 }, params);
     expect(res.statusCode).toBe(200);
     expect(res.body).toEqual({ reference: "BALL-7KQ2MZ", reinstated: false });
     expect(m.markTransferPaid).toHaveBeenCalledWith("BALL-7KQ2MZ", 102_000, "admin:staff@example.com", expect.any(String));
-    expect(m.sendTransferArrived).toHaveBeenCalledWith(booking, "tok123");
+    expect(m.sendTransferArrived).toHaveBeenCalledWith(booking, "tok123", null);
+  });
+
+  // TASK-486: the confirmation links the invoice, now marked paid, and copies the accounts team.
+  it("passes an invoiced booking's invoice on to the confirmation", async () => {
+    const invoice = { bookingId: 42, accountsEmail: "accounts@example.com" };
+    m.markTransferPaid.mockResolvedValue({ ok: true, reinstated: false, booking, guestToken: "tok123", invoice });
+    await call(postAdminMarkTransferPaid, tokenFor("admin"), { confirmTotalPence: 102_000 }, params);
+    expect(m.sendTransferArrived).toHaveBeenCalledWith(booking, "tok123", invoice);
   });
 
   it.each([

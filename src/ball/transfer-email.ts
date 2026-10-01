@@ -45,12 +45,28 @@ function factRow(label: string, value: string, big = false): string {
   );
 }
 
+/** TASK-486: where the booking's invoice is, when it has one. */
+export interface InvoiceLink {
+  invoiceUrl?: string | null;
+}
+
+const LINK = `style="color:${CRIMSON};font-weight:700"`;
+
+function invoiceHtml(url: string | null | undefined, words: string): string {
+  return url ? `<p ${P}>${words} <a href="${escapeHtml(url)}" ${LINK}>View or print your invoice</a></p>` : "";
+}
+
+function invoiceText(url: string | null | undefined, words: string): string {
+  return url ? `\n${words} View or print your invoice:\n${url}\n` : "";
+}
+
 export function buildTransferDetailsEmail(
   booking: TransferEmailBooking,
   bank: BankDetails,
   payBy: string,
+  opts: InvoiceLink = {},
 ): TransferEmail {
-  return buildPayEmail(booking, bank, payBy, "details");
+  return buildPayEmail(booking, bank, payBy, "details", opts.invoiceUrl);
 }
 
 /**
@@ -61,8 +77,9 @@ export function buildTransferReminderEmail(
   booking: TransferEmailBooking,
   bank: BankDetails,
   payBy: string,
+  opts: InvoiceLink = {},
 ): TransferEmail {
-  return buildPayEmail(booking, bank, payBy, "reminder");
+  return buildPayEmail(booking, bank, payBy, "reminder", opts.invoiceUrl);
 }
 
 function buildPayEmail(
@@ -70,6 +87,7 @@ function buildPayEmail(
   bank: BankDetails,
   payBy: string,
   variant: "details" | "reminder",
+  invoiceUrl?: string | null,
 ): TransferEmail {
   const name = escapeHtml(booking.buyerName);
   const what = describe(booking);
@@ -118,6 +136,7 @@ function buildPayEmail(
   )}
 
   <p ${P}>Please use the reference exactly as it is written, so we can match your payment to your booking.</p>
+  ${invoiceHtml(invoiceUrl, "Your invoice has the same details, for your accounts team.")}
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 4px;">${rowsHtml}</table>
 
@@ -158,7 +177,7 @@ Payment reference: ${booking.reference}
 
 Please use the reference exactly as it is written, so we can match your
 payment to your booking.
-
+${invoiceText(invoiceUrl, "Your invoice has the same details, for your accounts team.")}
 ${moneyText}
 ${giftAidText}
 WHAT HAPPENS NEXT
@@ -179,13 +198,14 @@ ${BALL_TEXT_FOOTER}`;
 // Their money may already be on its way when the reminder goes.
 const ALREADY_PAID = "If you've already paid, thank you, there's nothing more to do. It can take a day or two to reach us.";
 
-export function buildTransferCancelledEmail(booking: TransferEmailBooking): TransferEmail {
+export function buildTransferCancelledEmail(booking: TransferEmailBooking, opts: InvoiceLink = {}): TransferEmail {
   const name = escapeHtml(booking.buyerName);
   const ref = escapeHtml(booking.reference);
 
   const body = `<h1 style="color:${CRIMSON};font-family:${HEAD};font-size:24px;font-weight:800;margin:0 0 14px">Your booking has been cancelled</h1>
   <p ${P}>Hello ${name}. We hadn't received payment for booking <b>${ref}</b>, so we've cancelled it and released the seats.</p>
   <p ${P}>If you have already paid, or would still like to come, reply to this email and we'll sort it out.</p>
+  ${invoiceHtml(opts.invoiceUrl, "Your invoice now shows it as cancelled.")}
   ${contactPanel()}`;
 
   const text = `YOUR BOOKING HAS BEEN CANCELLED
@@ -195,7 +215,7 @@ so we've cancelled it and released the seats.
 
 If you have already paid, or would still like to come, reply to this email and
 we'll sort it out.
-
+${invoiceText(opts.invoiceUrl, "Your invoice now shows it as cancelled.")}
 ${BALL_TEXT_FOOTER}`;
 
   return {

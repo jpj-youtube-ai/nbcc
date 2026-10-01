@@ -78,6 +78,32 @@ describe("the reminder", () => {
   });
 });
 
+// TASK-486: a booking with an invoice links it from every email about it.
+describe("the emails for a booking with an invoice", () => {
+  const url = "https://nbcc.scot/ball/invoice/42.abc";
+
+  it("link the invoice from the bank details email and the reminder", () => {
+    for (const mail of [
+      buildTransferDetailsEmail(booking, bank, "2026-10-08", { invoiceUrl: url }),
+      buildTransferReminderEmail(booking, bank, "2026-10-08", { invoiceUrl: url }),
+    ]) {
+      expect(mail.html).toContain(`href="${url}"`);
+      expect(mail.text).toContain(url);
+      expect(mail.text).toMatch(/invoice/i);
+    }
+  });
+
+  it("say nothing about an invoice when there is none", () => {
+    expect(buildTransferDetailsEmail(booking, bank, "2026-10-08").text).not.toMatch(/invoice/i);
+  });
+
+  it("link it from the cancelled email, which it now shows as cancelled", () => {
+    const mail = buildTransferCancelledEmail(booking, { invoiceUrl: url });
+    expect(mail.html).toContain(`href="${url}"`);
+    expect(mail.text).toContain(url);
+  });
+});
+
 describe("the cancelled email", () => {
   const mail = buildTransferCancelledEmail(booking);
 

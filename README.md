@@ -4155,6 +4155,24 @@ silent mailto fallback), and the submit button is disabled only while the reques
 Verified by `test/unit/contact.test.ts` (jsdom, mocked `fetch`) and `test/unit/contact-endpoint.test.ts`
 (mocked `insertEnquiry`).
 
+**A spam check on the contact form (TASK-NNN).** Bot spam was reaching Admin → Contact form past the
+honeypot and the rate limit, so `POST /api/contact` now checks a Cloudflare Turnstile pass between
+the rate limit and validation whenever the check is on: both `TURNSTILE_SITE_KEY` and
+`TURNSTILE_SECRET_KEY` set. Production refuses to start without them (`productionConfigProblems` in
+`src/config/schema.ts`); local development and CI run with the check off. `src/clients/turnstile.ts`
+asks Cloudflare's siteverify (5 second timeout) and answers `passed`, `refused` (the visitor's pass
+is missing, invalid, expired or reused: **400** `{ error: "captcha" }`, nothing stored) or
+`unavailable` (network, timeout, Cloudflare's own error, or our secret rejected: the message is
+**kept** and an error logged, so a genuine enquiry is never lost to the checker). The page learns
+the site key from `GET /api/contact/captcha`. `assets/js/contact-captcha.js`, loaded by
+`contact.html` only, then draws the box (Flexible when the form is 300px wide or more, Compact
+below that, so a 320px phone never scrolls sideways), holds Send with a message until there is a
+pass, and resets the box after each send. It is a separate file because `main.js` counts towards
+`donate.html`'s page-weight budget, which had about 530 bytes left; `main.js` only sends the hidden
+`captchaToken` field. The secret is an SSM SecureString created holding `REPLACE_ME`: until the real
+value is pasted in, every check reports our secret as invalid and messages are kept, with a warning
+in the logs. Spec: `docs/superpowers/specs/2026-09-30-contact-form-captcha-design.md`.
+
 **Retention-expiry anonymisation (REQ-064 · TASK-112).** `anonymizeDonorPersonalData(declarationId)`
 (`src/db/admin.ts`) is the audited write behind the retention-expiry queue: once a declaration's HMRC
 six-year window has **closed**, it erases the captured personal data. It reuses the pure

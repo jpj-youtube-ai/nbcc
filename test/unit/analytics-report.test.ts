@@ -68,9 +68,19 @@ describe("pagesFrom", () => {
       { path: "/donate", views: 2, visitors: 2, avgActiveSeconds: null, avgScroll: null, entries: 1 },
     ];
     expect(pagesFrom(rows, 3)).toEqual([
-      { path: "/", views: 3, visitors: 2, avgActiveSeconds: 20, avgScroll: 30, entryShare: 67 },
-      { path: "/donate", views: 2, visitors: 2, avgActiveSeconds: null, avgScroll: null, entryShare: 33 },
+      { path: "/", title: "Home page", views: 3, visitors: 2, avgActiveSeconds: 20, avgScroll: 30, entryShare: 67 },
+      { path: "/donate", title: "Donate", views: 2, visitors: 2, avgActiveSeconds: null, avgScroll: null, entryShare: 33 },
     ]);
+  });
+
+  it("names every page the way the site map does", () => {
+    const named = (path: string) => pagesFrom([{ path, views: 1, visitors: 1, avgActiveSeconds: null, avgScroll: null, entries: 0 }], 1)[0].title;
+    expect(named("/ball")).toBe("Festive Ball");
+    expect(named("/ball/terms")).toBe("Ticket terms");
+    expect(named("/donate/thank-you")).toBe("Thank you");
+    expect(named("/gift-aid/declare")).toBe("Gift Aid declaration");
+    expect(named("other")).toBe("Other pages");
+    expect(named("/somewhere-new")).toBe("/somewhere-new");
   });
 });
 

@@ -11,6 +11,7 @@
 //   bounce    a visit with one view. The headline gives their share of all visits.
 //   averages  of active seconds and scroll ignore views with no leave event yet (null).
 import type { Channel } from "./channel";
+import { pageTitle } from "./paths";
 import type { Device } from "./user-agent";
 import { ukDay } from "./visitor";
 
@@ -25,6 +26,8 @@ export type Daily = { day: string; visitors: number }[];
 export type NewsletterRow = { campaign: string | null; label: string; visits: number };
 export type PageRow = {
   path: string;
+  /** The page's name, as the site map calls it. */
+  title: string;
   views: number;
   visitors: number;
   avgActiveSeconds: number | null;
@@ -124,8 +127,16 @@ export function headlineFrom(row: { visitors: number; visits: number; views: num
 }
 
 /** Each page's entries as a share of all the period's visits. */
-export function pagesFrom(rows: (Omit<PageRow, "entryShare"> & { entries: number })[], visits: number): PageRow[] {
-  return rows.map(({ entries, ...rest }) => ({ ...rest, entryShare: percent(entries, visits) }));
+export function pagesFrom(
+  rows: (Omit<PageRow, "entryShare" | "title"> & { entries: number })[],
+  visits: number,
+): PageRow[] {
+  return rows.map(({ entries, path, ...rest }) => ({
+    path,
+    title: pageTitle(path),
+    ...rest,
+    entryShare: percent(entries, visits),
+  }));
 }
 
 let regionNames: Intl.DisplayNames | null = null;

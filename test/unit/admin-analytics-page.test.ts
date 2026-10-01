@@ -198,7 +198,7 @@ describe("the collecting switch", () => {
   it("on: says since when", async () => {
     await openAnalytics();
     expect(el("anSwitch").classList.contains("is-on")).toBe(true);
-    expect(text("anSwitchState")).toContain("since 28/09/2026");
+    expect(text("anSwitchState")).toMatch(/since 28 September 2026 at \d\d:\d\d/);
     expect(el("anSwitchBtn").textContent).toBe("Stop counting visits");
   });
 
@@ -314,6 +314,31 @@ describe("the numbers", () => {
     served["GET /api/admin/analytics"] = { status: 200, body: { ...REPORT, current: { ...REPORT.current, cities: many } } };
     await openAnalytics();
     expect((el("anCities").querySelector("[data-anmore]") as HTMLElement).textContent).toBe("Show the top 100");
+  });
+
+  it("names pages, says when counting began in words, and never shows a real share as 0%", async () => {
+    served["GET /api/admin/analytics/settings"] = {
+      status: 200,
+      body: { collecting: true, updatedAt: "2026-10-01T07:30:00.000Z", updatedBy: "admin:staff@example.com" },
+    };
+    const report = {
+      ...REPORT,
+      current: {
+        ...REPORT.current,
+        pages: [{ path: "/ball", title: "Festive Ball", views: 9, visitors: 8, avgActiveSeconds: 30, avgScroll: 50, entryShare: 20 }],
+        countries: [
+          { country: "GB", name: "United Kingdom", visitors: 1000 },
+          { country: "ES", name: "Spain", visitors: 4 },
+        ],
+      },
+    };
+    served["GET /api/admin/analytics"] = { status: 200, body: report };
+    await openAnalytics();
+    expect(text("anPages")).toContain("Festive Ball");
+    expect(text("anPages")).not.toContain("/ball");
+    expect(text("anSwitch")).toContain("since 1 October 2026 at 08:30");
+    expect(text("anCountries")).toContain("under 1%");
+    expect(text("anCountries")).not.toMatch(/(^|[^0-9])0%/);
   });
 
   it("says Not enough visits yet in every panel with nothing to show", async () => {

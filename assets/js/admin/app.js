@@ -10308,10 +10308,19 @@
     var m = Math.floor(s / 60);
     return m + " min" + (s % 60 ? " " + (s % 60) + " sec" : "");
   }
-  function anPage(path) {
+  function anPage(path, title) {
+    if (title) return title;
     if (path === "/") return "Home page";
     if (path === "other") return "Other pages";
     return path;
+  }
+  // "1 October 2026 at 08:30", UK time.
+  function anWhen(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return "";
+    var day = d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
+    var time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+    return day + " at " + time;
   }
   function anSpan() {
     return "the " + ((anReport && anReport.days) || anDays) + " days before";
@@ -10372,7 +10381,7 @@
     var on = !!(anSettings && anSettings.collecting);
     el("anSwitch").classList.toggle("is-on", on);
     el("anSwitchState").innerHTML = on
-      ? "<b>On.</b> Counting visits" + (anSettings.updatedAt ? " since " + H.escapeHtml(H.fmtDate(anSettings.updatedAt)) : "") + "."
+      ? "<b>On.</b> Counting visits" + (anSettings.updatedAt ? " since " + H.escapeHtml(anWhen(anSettings.updatedAt)) : "") + "."
       : "<b>Off.</b> Nothing is being counted. Switching on starts counting each page view: which page, how the visitor " +
         "arrived (a newsletter, a search, another website), their town or city, whether they used a phone, tablet or " +
         "computer, how long they spent and how far down they read, and clicks on the buttons and links that matter. " +
@@ -10642,7 +10651,7 @@
           var share = total ? Math.round((v / total) * 100) : 0;
           return (
             '<li class="an-row"><span class="an-row-label">' + label(r) + '</span><span class="an-row-n">' + anNum(v) +
-            (opts.share ? ' <span class="an-row-share">' + share + "%</span>" : "") +
+            (opts.share ? ' <span class="an-row-share">' + (share === 0 && v > 0 ? "under 1%" : share + "%") + "</span>" : "") +
             '</span><span class="an-track" aria-hidden="true"><span class="an-fill" style="width:' +
             (max ? Math.max(1, Math.round((v / max) * 100)) : 0) + '%"></span></span></li>'
           );
@@ -10684,7 +10693,7 @@
       shown
         .map(function (r) {
           var cells = [
-            anPage(r.path),
+            anPage(r.path, r.title),
             anNum(r.views),
             anNum(r.visitors),
             anDuration(r.avgActiveSeconds),

@@ -228,6 +228,18 @@ describe("contact form behaviour (jsdom)", () => {
     expect((document.getElementById("message") as HTMLTextAreaElement).value).toBe("");
   });
 
+  it("sends the spam check's pass from its hidden field with the message (TASK-NNN)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    (window as unknown as { fetch: unknown }).fetch = fetchMock;
+    set("firstName", "Ada");
+    set("email", "ada@example.com");
+    set("message", "Hello NBCC, I would love to help.");
+    set("captchaToken", "tok-1");
+    submit();
+    await flushPromises();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).captchaToken).toBe("tok-1");
+  });
+
   it("a failed submit (res.ok false) shows an error, keeps the typed message, and re-enables the button", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false });
     (window as unknown as { fetch: unknown }).fetch = fetchMock;

@@ -15,6 +15,8 @@ export interface TransferStaffEmailOptions {
   adminUrl: string;
   /** The company and its invoice, when the buyer asked for one. */
   invoice: { company: string; url: string } | null;
+  /** TASK-488: the member of staff who added it for a phone or email order; absent from the website. */
+  addedBy?: string | null;
 }
 
 const P = `style="color:${SLATE};font-family:${BODY_FONT};font-size:14px;line-height:1.6;margin:0 0 12px"`;
@@ -26,6 +28,8 @@ function factRow(label: string, value: string): string {
     `<tr><td style="padding:0 18px 10px;font-family:${HEAD};font-size:16px;font-weight:700;color:${MAROON};">${value}</td></tr>`
   );
 }
+
+const addedByLine = (who: string) => `Added by ${who} in the admin, for a phone or email order.`;
 
 export function buildTransferStaffEmail(
   booking: TransferEmailBooking & { buyerEmail: string },
@@ -52,6 +56,7 @@ export function buildTransferStaffEmail(
   const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">For the team</p>
   <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:24px;font-weight:800;margin:0 0 14px">New bank transfer booking</h1>
   <p ${P}>${name} has booked <b>${what}</b> to pay by bank transfer. Their seats are held until the money arrives or the booking is cancelled.</p>
+  ${o.addedBy ? `<p ${P}>${escapeHtml(addedByLine(o.addedBy))}</p>` : ""}
   ${factsCard(rows)}
   <p ${P}>When the money arrives, an admin marks it paid under Festive Ball, Awaiting transfer. That sends ${name} their confirmation and the link to add their guests.</p>
   <p ${P}><a href="${adminUrl}" ${LINK}>Open the admin</a></p>
@@ -62,6 +67,7 @@ export function buildTransferStaffEmail(
     "",
     `${booking.buyerName} has booked ${what} to pay by bank transfer. Their seats are held until`,
     "the money arrives or the booking is cancelled.",
+    ...(o.addedBy ? ["", addedByLine(o.addedBy)] : []),
     "",
     `Payment reference: ${booking.reference}`,
     `Amount to arrive: ${amount}`,

@@ -450,6 +450,55 @@ Then("the invoice page is not found", function () {
   assert.equal(this.invoiceStatus, 404);
 });
 
+// --- TASK-488: staff add a booking ----------------------------------------------------------------
+
+Given("the bank details are entered but bank transfer is switched off", async function () {
+  await pool.query(
+    `UPDATE ball_settings SET transfer_on = false, transfer_account_name = $1,
+            transfer_sort_code = $2, transfer_account_number = $3 WHERE id = 1`,
+    [BANK.accountName, BANK.sortCode, BANK.accountNumber],
+  );
+});
+
+When("{string} adds a bank transfer booking for {int} {word}", async function (email, quantity, what) {
+  await asStaff(this, email, "POST", "/api/admin/ball/transfer-bookings", {
+    kind: what.startsWith("table") ? "table" : "seat",
+    quantity,
+    buyerFirstName: "Ada",
+    buyerSurname: "Phoned",
+    buyerEmail: BUYER,
+    donationPence: 1000,
+    // Sent ticked: a staff booking must still carry no Gift Aid and no newsletter sign-up.
+    giftAid: true,
+    newsletterOptIn: true,
+    termsAccepted: true,
+  });
+  if (this.adminStatus === 201) this.transferRef = this.adminBody.reference;
+});
+
+Then(
+  "the added booking holds its seats with no Gift Aid, recorded as added by {string}",
+  async function (email) {
+    const row = await pool.query(
+      `SELECT id, status, payment_method, gift_aid, newsletter_opt_in, terms_accepted_at
+         FROM ball_bookings WHERE reference = $1`,
+      [this.transferRef],
+    );
+    const b = row.rows[0];
+    assert.ok(b, `no booking ${this.transferRef}`);
+    assert.equal(b.status, "pending");
+    assert.equal(b.payment_method, "transfer");
+    assert.equal(b.gift_aid, false);
+    assert.equal(b.newsletter_opt_in, false);
+    assert.ok(b.terms_accepted_at, "the terms are recorded as agreed");
+    const audit = await pool.query(
+      `SELECT actor FROM audit_log WHERE action = 'ball.transfer_booking_added' AND entity_id = $1`,
+      [b.id],
+    );
+    assert.deepEqual(audit.rows.map((r) => r.actor), [`admin:${email}`]);
+  },
+);
+
 // --- TASK-487: telling the team -------------------------------------------------------------------
 
 Given("{string} has just opened Festive Ball", async function (email) {

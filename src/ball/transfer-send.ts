@@ -64,10 +64,12 @@ export async function sendTransferDetails(booking: Recipient, bank: BankDetails,
 export async function sendTransferStaffNotice(
   booking: TransferEmailBooking & { buyerEmail: string; invoice: { bookingId: number; company: string } | null },
   payBy: string,
+  addedBy: string | null = null,
 ): Promise<void> {
   try {
     const mail = buildTransferStaffEmail(booking, {
       payBy,
+      addedBy,
       adminUrl: `${base()}/admin`,
       invoice: booking.invoice ? { company: booking.invoice.company, url: invoiceUrl(booking.invoice.bookingId) } : null,
     });

@@ -7,6 +7,7 @@ import { bankDetailsSchema, isOverdue, transferReady, transferWindowOpen, type T
 import { makeGuestToken } from "../ball/guests";
 import { londonDate } from "../ball/sales-report";
 import { invoiceUrl, sendTransferArrived } from "../ball/transfer-send";
+import { placeTransferBooking } from "../ball/place-transfer-booking";
 import {
   extendPayBy,
   getTransferSettings,
@@ -22,6 +23,7 @@ import {
 //   GET  /api/admin/ball/transfers                         bookings awaiting a transfer        ball: view
 //   POST /api/admin/ball/bookings/:reference/mark-paid     the money has arrived               ADMIN only
 //   POST /api/admin/ball/bookings/:reference/pay-by        give more time                      ball: edit
+//   POST /api/admin/ball/transfer-bookings                 add one, for a phone order (488)    ball: edit
 //
 // "ADMIN only" means the admin role, read fresh, as well as Festive Ball edit: the client reserved
 // the bank details and confirming money to admins whatever the access matrix says. Cancelling stays
@@ -185,7 +187,29 @@ export async function postAdminTransferPayBy(req: Request, res: Response): Promi
   }
 }
 
+// TASK-488: staff add a booking for a phone or email order. The same fields, prices, dates and emails
+// as the ticket page (src/ball/place-transfer-booking.ts), but it works before the ticket page offers
+// bank transfer, needs Festive Ball edit, and carries no Gift Aid or newsletter sign-up.
+export async function postAdminAddTransferBooking(req: Request, res: Response): Promise<Response | void> {
+  const claims = await authorizeSection(req, res, "ball", "edit");
+  if (!claims) return;
+  try {
+    const placed = await placeTransferBooking(req.body, { now: new Date(), addedBy: claims.email });
+    if (!placed.ok) return res.status(placed.status).json(placed.body);
+    return res.status(201).json({
+      reference: placed.reference,
+      totalPence: placed.totalPence,
+      payBy: placed.payBy,
+      ...placed.bank,
+      ...(placed.invoiceUrl ? { invoiceUrl: placed.invoiceUrl } : {}),
+    });
+  } catch (err) {
+    return failed(res, "adding a booking", err);
+  }
+}
+
 export const adminBallTransferRouter = Router();
+adminBallTransferRouter.post("/api/admin/ball/transfer-bookings", postAdminAddTransferBooking);
 adminBallTransferRouter.get("/api/admin/ball/transfer-settings", getAdminTransferSettings);
 adminBallTransferRouter.put("/api/admin/ball/transfer-settings", putAdminTransferSettings);
 adminBallTransferRouter.get("/api/admin/ball/transfers", getAdminTransfers);

@@ -1571,6 +1571,45 @@
                    arrives. Marking one paid is for admins; more time and cancelling for Festive Ball edit. -->
               <h3 class="admin-subhead">Awaiting transfer</h3>
               <p class="admin-note">Booked to pay by bank transfer and holding their seats. When the money is in the bank, <b>Mark as paid</b> sends them their confirmation and the link to tell us who&rsquo;s coming. Only an admin can mark one paid.</p>
+              <!-- TASK-488: staff add a booking by hand for a phone or email order. Festive Ball edit;
+                   shown by app.js. The same booking and emails as the ticket page's. -->
+              <p class="ty-controls">
+                <button type="button" class="btn btn-ghost" id="ballAddTransferOpen" aria-expanded="false" aria-controls="ballAddTransferForm" hidden>Add a bank transfer booking</button>
+              </p>
+              <form id="ballAddTransferForm" class="ball-add-transfer" autocomplete="off" hidden>
+                <p class="admin-note">For a phone or email order. The buyer gets the bank details and their reference by email, exactly as if they had booked on the ticket page, and events@ hears about it. This works before the ticket page offers bank transfer, once the bank details are in. There is no Gift Aid or newsletter sign-up here: those need the buyer&rsquo;s own declaration.</p>
+                <p class="ty-controls">
+                  <label class="ty-inline">How many
+                    <input id="ballAddQuantity" type="number" min="1" max="9" step="1" value="1" style="width:70px" />
+                  </label>
+                  <label class="ty-inline">of
+                    <select id="ballAddKind">
+                      <option value="table">tables of 10 (up to 4)</option>
+                      <option value="seat">tickets (up to 9)</option>
+                    </select>
+                  </label>
+                  <label class="ty-inline">Donation &pound;
+                    <input id="ballAddDonation" type="number" min="0" step="0.01" inputmode="decimal" style="width:90px" />
+                  </label>
+                </p>
+                <div class="ty-field"><label for="ballAddFirstName">First name</label><input id="ballAddFirstName" type="text" maxlength="60" /></div>
+                <div class="ty-field"><label for="ballAddSurname">Surname</label><input id="ballAddSurname" type="text" maxlength="60" /></div>
+                <div class="ty-field"><label for="ballAddEmail">Email</label><input id="ballAddEmail" type="email" maxlength="254" /></div>
+                <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddInvoice" type="checkbox" /> <span>Their company needs an invoice (14 days to pay)</span></label></p>
+                <div id="ballAddInvoiceFields" hidden>
+                  <div class="ty-field"><label for="ballAddCompany">Company name</label><input id="ballAddCompany" type="text" maxlength="120" /></div>
+                  <div class="ty-field"><label for="ballAddAddress">Company address</label><textarea id="ballAddAddress" rows="3" maxlength="400"></textarea></div>
+                  <div class="ty-field"><label for="ballAddPo">Purchase order number (optional)</label><input id="ballAddPo" type="text" maxlength="60" /></div>
+                  <div class="ty-field"><label for="ballAddAccountsEmail">Accounts team email (optional, copied on every email)</label><input id="ballAddAccountsEmail" type="email" maxlength="254" /></div>
+                  <div class="ty-field"><label for="ballAddPhone">Phone number (optional)</label><input id="ballAddPhone" type="tel" maxlength="40" /></div>
+                </div>
+                <p class="ty-controls"><label class="ty-inline ball-add-check"><input id="ballAddTerms" type="checkbox" /> <span><b>Required:</b> the buyer has agreed to the <a href="/ball/terms" target="_blank" rel="noopener">ticket terms</a>, including that tickets are non-refundable and it is an over 18s event.</span></label></p>
+                <p class="ty-controls">
+                  <button class="btn btn-primary" type="submit" id="ballAddSave">Add the booking</button>
+                  <button class="btn btn-ghost" type="button" id="ballAddCancel">Cancel</button>
+                </p>
+              </form>
+              <p class="ty-status" id="ballAddStatus" role="status" aria-live="polite"></p>
               <label class="ty-inline">Find a payment by reference, name or amount
                 <input id="ballTransferSearch" type="search" autocomplete="off" style="width:220px" />
               </label>

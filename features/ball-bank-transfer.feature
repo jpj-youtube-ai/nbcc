@@ -161,3 +161,19 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     Then Festive Ball is not new to "ann.transfer.admin.bdd@example.com"
     When a buyer books 1 table to pay by bank transfer
     Then Festive Ball is new to "ann.transfer.admin.bdd@example.com"
+
+  # TASK-488: staff add a booking for a phone or email order.
+  Scenario: Staff add a booking for a phone order before the ticket page offers bank transfer
+    Given the bank details are entered but bank transfer is switched off
+    When "ed.transfer.admin.bdd@example.com" adds a bank transfer booking for 1 table
+    Then the admin answer is 201
+    And the added booking holds its seats with no Gift Aid, recorded as added by "ed.transfer.admin.bdd@example.com"
+    When I request the ball availability
+    Then the ball availability should show 9 tables remaining
+    And the ball availability should not offer bank transfer
+
+  Scenario: Adding a booking by hand needs Festive Ball edit
+    Given an admin user "vic.transfer.admin.bdd@example.com" with role "viewer" and password "transfer-pw-123"
+    And the bank details are entered but bank transfer is switched off
+    When "vic.transfer.admin.bdd@example.com" adds a bank transfer booking for 1 table
+    Then the admin answer is 403

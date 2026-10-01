@@ -8690,7 +8690,110 @@
     });
   }
 
+  // TASK-488: staff add a bank transfer booking by hand, for a phone or email order. The server
+  // (POST /api/admin/ball/transfer-bookings, Festive Ball edit) makes the same booking and sends the
+  // same emails as the ticket page; this form only gathers what the buyer said.
+  function longDay(iso) {
+    return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", {
+      weekday: "long", day: "numeric", month: "long", timeZone: "UTC",
+    });
+  }
+  function showAddTransfer(open) {
+    el("ballAddTransferForm").hidden = !open;
+    el("ballAddTransferOpen").setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) el("ballAddFirstName").focus();
+  }
+  function wireAddTransferBooking() {
+    var form = el("ballAddTransferForm");
+    var value = function (id) { return (el(id).value || "").trim(); };
+    el("ballAddTransferOpen").addEventListener("click", function () {
+      showAddTransfer(form.hidden);
+    });
+    el("ballAddCancel").addEventListener("click", function () {
+      showAddTransfer(false);
+    });
+    el("ballAddInvoice").addEventListener("change", function () {
+      el("ballAddInvoiceFields").hidden = !el("ballAddInvoice").checked;
+    });
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!value("ballAddFirstName") || !value("ballAddSurname")) {
+        ballStatus("ballAddStatus", "Give the buyer's first name and surname.");
+        return;
+      }
+      if (value("ballAddEmail").indexOf("@") === -1) {
+        ballStatus("ballAddStatus", "Give the buyer's email address: the bank details go there.");
+        return;
+      }
+      // One booking takes up to 4 tables or 9 tickets, as on the ticket page.
+      var kind = el("ballAddKind").value;
+      var quantity = Math.floor(Number(el("ballAddQuantity").value)) || 1;
+      if (quantity > (kind === "table" ? 4 : 9)) {
+        ballStatus("ballAddStatus", kind === "table"
+          ? "One booking takes up to 4 tables. Add another booking for the rest."
+          : "One booking takes up to 9 tickets. Add another booking for the rest, or book a table.");
+        return;
+      }
+      var invoicing = el("ballAddInvoice").checked;
+      if (invoicing && (!value("ballAddCompany") || !value("ballAddAddress"))) {
+        ballStatus("ballAddStatus", "Give the company's name and address, for the invoice.");
+        return;
+      }
+      if (!el("ballAddTerms").checked) {
+        ballStatus("ballAddStatus", "Tick to confirm the buyer has agreed to the ticket terms.");
+        return;
+      }
+      var body = {
+        kind: kind,
+        quantity: quantity,
+        buyerFirstName: value("ballAddFirstName"),
+        buyerSurname: value("ballAddSurname"),
+        buyerEmail: value("ballAddEmail"),
+        donationPence: Math.max(0, Math.round((Number(value("ballAddDonation")) || 0) * 100)),
+        termsAccepted: true,
+      };
+      if (invoicing) {
+        body.invoice = {
+          company: value("ballAddCompany"),
+          address: value("ballAddAddress"),
+          po: value("ballAddPo"),
+          accountsEmail: value("ballAddAccountsEmail"),
+          phone: value("ballAddPhone"),
+        };
+      }
+      el("ballAddSave").disabled = true;
+      ballStatus("ballAddStatus", "Adding…");
+      authFetch("/api/admin/ball/transfer-bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+        .then(okJsonOrSaid)
+        .then(function (d) {
+          el("ballAddSave").disabled = false;
+          ballStatus(
+            "ballAddStatus",
+            // The email goes after the booking is saved, so this says it is on its way, not that it arrived.
+            "Added " + d.reference + ": " + exactMoney(d.totalPence) + " to pay by " + longDay(d.payBy) +
+              ". The bank details are on their way to " + body.buyerFirstName + " by email.",
+          );
+          form.reset();
+          el("ballAddInvoiceFields").hidden = true;
+          showAddTransfer(false);
+          loadBallTransfers();
+        })
+        .catch(function (err) {
+          el("ballAddSave").disabled = false;
+          if (err && err.message === "unauthorized") return;
+          ballStatus("ballAddStatus", (err && err.said) || "Could not add that booking. Nothing has been changed.");
+        });
+    });
+  }
+
   function loadBallTransfers() {
+    // TASK-488: adding a booking by hand is for Festive Ball edit, as the server requires.
+    el("ballAddTransferOpen").hidden = !canEdit("ball");
+    if (!canEdit("ball")) el("ballAddTransferForm").hidden = true;
     authFetch("/api/admin/ball/transfers")
       .then(okJson)
       .then(function (d) {
@@ -9118,6 +9221,7 @@
     // used to be added inside each load, so every reload stacked another copy and a single click on
     // Cancel asked as many times as the screen had been loaded (found in TASK-484, where marking a
     // transfer paid reloads the screen).
+    wireAddTransferBooking();
     el("ballHolds").addEventListener("click", onReleaseHoldClick);
     el("ballBookings").addEventListener("click", function (e) {
       if (onMarkPaidClick(e)) return;

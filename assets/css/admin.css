@@ -1765,6 +1765,12 @@ tr.nl-click:hover { background: var(--tint); }
 .ball-transfers-table th:nth-child(5),.ball-transfers-table td:nth-child(5){width:26%}  /* Actions */
 .ball-transfer-actions{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
 .ball-mark-paid{white-space:nowrap}
+/* TASK-488: adding a booking by hand. The form is a full-width card like its neighbours; its fields
+   and words are capped to a readable width inside it. Each tick box stays beside its words at any
+   width: the narrow-screen .ty-inline rule would otherwise wrap the box above them. */
+.ball-add-transfer .ty-field,.ball-add-transfer .admin-note,.ball-add-transfer .ball-add-check{max-width:600px}
+.ball-add-transfer .ball-add-check{flex-wrap:nowrap;align-items:flex-start}
+.ball-add-transfer .ball-add-check input{flex:none;margin-top:3px}
 
 /* Narrow, each booking is a labelled card, as the donations table is (TASK-483): at 375px the five
    columns were 44-106px and the box scrolled 106px sideways to reach Mark as paid. Measured on the

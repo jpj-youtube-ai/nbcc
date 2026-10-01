@@ -8643,6 +8643,9 @@
         '</td><td data-label="Who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
         '</small></td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
         '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
+        // TASK-485: past its date, for staff to decide on; and whether the reminder has gone.
+        (t.overdue ? ' <span class="admin-pill is-new">Overdue</span>' : "") +
+        (t.reminded ? "<br /><small>Reminder sent</small>" : "") +
         '</td><td data-label=""><span class="ball-transfer-actions">' + actions + "</span></td></tr>";
     }).join("");
     return '<div class="admin-table-wrap"><table class="admin-table ball-transfers-table"><thead><tr><th>Reference</th><th>Who</th><th>Amount</th>' +
@@ -8686,8 +8689,9 @@
         el("ballTransferSortCode").value = s.sortCode || "";
         el("ballTransferAccountNumber").value = s.accountNumber || "";
         el("ballTransferOn").checked = !!s.on;
+        el("ballTransferLastDay").value = s.lastDay || "";
         var admin = isAdmin();
-        ["ballTransferAccountName", "ballTransferSortCode", "ballTransferAccountNumber", "ballTransferOn", "ballTransferSave"]
+        ["ballTransferAccountName", "ballTransferSortCode", "ballTransferAccountNumber", "ballTransferLastDay", "ballTransferOn", "ballTransferSave"]
           .forEach(function (id) { el(id).disabled = !admin; });
       })
       .catch(function () {
@@ -9112,6 +9116,8 @@
           sortCode: el("ballTransferSortCode").value.trim(),
           accountNumber: el("ballTransferAccountNumber").value.trim(),
           on: el("ballTransferOn").checked,
+          // TASK-485: an empty box means no last day.
+          lastDay: el("ballTransferLastDay").value || null,
         }),
       })
         .then(okJsonOrSaid)

@@ -1347,12 +1347,42 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       (el("ballTransferSortCode") as HTMLInputElement).value = "123456";
       (el("ballTransferAccountNumber") as HTMLInputElement).value = "12345678";
       (el("ballTransferOn") as HTMLInputElement).checked = true;
+      (el("ballTransferLastDay") as HTMLInputElement).value = "2026-10-31";
       el("ballTransferForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
       await settle();
       const [, init] = posted(/\/api\/admin\/ball\/transfer-settings$/)[0];
       expect(JSON.parse(init?.body || "{}")).toEqual({
         accountName: "Night Before Christmas Campaign", sortCode: "123456", accountNumber: "12345678", on: true,
+        lastDay: "2026-10-31",
       });
+    });
+
+    // TASK-485: an empty box means no last day, so it is sent as null, which clears it.
+    it("clears the last day for transfers when the box is emptied", async () => {
+      loginToken = tokenFor("admin");
+      transferSettings = { on: false, accountName: "NBCC", sortCode: "12-34-56", accountNumber: "12345678", ready: false, lastDay: "2026-10-31" } as typeof transferSettings;
+      await openBall();
+      expect((el("ballTransferLastDay") as HTMLInputElement).value).toBe("2026-10-31");
+      (el("ballTransferLastDay") as HTMLInputElement).value = "";
+      el("ballTransferForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      const [, init] = posted(/\/api\/admin\/ball\/transfer-settings$/)[0];
+      expect(JSON.parse(init?.body || "{}").lastDay).toBeNull();
+    });
+
+    // TASK-485: past its date, flagged; and whether the reminder has gone.
+    it("flags an overdue booking, and says when the reminder has gone", async () => {
+      loginToken = tokenFor("admin");
+      awaitingTransfers = [
+        { ...awaiting, overdue: true, reminded: true },
+        { ...awaiting, reference: "BALL-2PQRST", overdue: false, reminded: false },
+      ];
+      await openBall();
+      const rows = Array.from(document.querySelectorAll("#ballTransfers tbody tr"));
+      expect(rows[0].textContent).toContain("Overdue");
+      expect(rows[0].textContent).toContain("Reminder sent");
+      expect(rows[1].textContent).not.toContain("Overdue");
+      expect(rows[1].textContent).not.toContain("Reminder sent");
     });
 
     it("lists the bookings awaiting a transfer", async () => {

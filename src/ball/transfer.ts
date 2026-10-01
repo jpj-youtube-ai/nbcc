@@ -33,6 +33,8 @@ export interface TransferSettings {
   accountName: string | null;
   sortCode: string | null;
   accountNumber: string | null;
+  /** TASK-485: the last day transfers may arrive (UK date, YYYY-MM-DD), or null for none. */
+  lastDay?: string | null;
 }
 
 /** Switched on and every detail there. Otherwise a buyer would be given a booking they cannot pay. */
@@ -44,8 +46,45 @@ export function transferReady(s: TransferSettings): boolean {
  * Whether the public Ball page should offer bank transfer. A yes or no only: the bank details are
  * given to a buyer after they book, never in the open availability feed.
  */
-export function publicTransferOpen(salesOpen: boolean, s: TransferSettings): boolean {
-  return salesOpen && transferReady(s);
+export function publicTransferOpen(salesOpen: boolean, s: TransferSettings, now: Date): boolean {
+  return salesOpen && transferReady(s) && transferWindowOpen(now, s.lastDay ?? null);
+}
+
+// --- TASK-485: deadlines -----------------------------------------------------------------------
+
+/** Open while there is no last day, or until the end of it (UK date). */
+export function transferWindowOpen(now: Date, lastDay: string | null): boolean {
+  return lastDay === null || londonDate(now) <= lastDay;
+}
+
+/** Seven days on, or the last day for transfers if that comes first. YYYY-MM-DD compares as text. */
+export function transferPayBy(now: Date, lastDay: string | null, days = TRANSFER_DAYS): string {
+  const usual = payByDate(now, days);
+  return lastDay !== null && lastDay < usual ? lastDay : usual;
+}
+
+/** Past its pay-by date: flagged for staff from the next day. Staff decide what happens; nothing is automatic. */
+export function isOverdue(payBy: string, today: string): boolean {
+  return today > payBy;
+}
+
+/** Days before the pay-by date that the reminder goes. */
+export const REMINDER_DAYS_BEFORE = 2;
+
+/**
+ * Due the "please pay by" reminder: not yet sent; within the two days before the date, inclusive;
+ * not past it (an overdue booking is for staff); and not on the day it was booked, which with a
+ * short deadline would land hours after the first email.
+ */
+export function reminderDue(
+  b: { payBy: string; createdDay: string; remindedAt: string | null },
+  today: string,
+): boolean {
+  if (b.remindedAt) return false;
+  if (today > b.payBy || today <= b.createdDay) return false;
+  const [y, m, d] = b.payBy.split("-").map(Number);
+  const from = new Date(Date.UTC(y, m - 1, d - REMINDER_DAYS_BEFORE)).toISOString().slice(0, 10);
+  return today >= from;
 }
 
 /** The UK date `days` days after `now`, as YYYY-MM-DD. */

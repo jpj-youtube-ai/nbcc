@@ -7,7 +7,7 @@ import { renderBallThankYou } from "../../src/ball/thank-you-page";
 import { buildBallConfirmationEmail } from "../../src/ball/confirmation-email";
 import { buildBallReminderEmail } from "../../src/ball/reminder-email";
 import { renderGuestPage, renderGuestNotFound } from "../../src/ball/guest-page";
-import { buildTransferDetailsEmail, buildTransferCancelledEmail } from "../../src/ball/transfer-email";
+import { buildTransferDetailsEmail, buildTransferCancelledEmail, buildTransferReminderEmail } from "../../src/ball/transfer-email";
 
 // TASK-325: two house rules the rest of the site already followed and the ball surfaces did
 // not. Both are asserted on what a reader actually SEES — the rendered output, and the HTML
@@ -60,7 +60,11 @@ const SURFACES: Array<[string, string]> = [
     const bank = { accountName: "Night Before Christmas Campaign", sortCode: "12-34-56", accountNumber: "12345678" };
     const details = buildTransferDetailsEmail(booking, bank, "2026-10-08");
     const cancelled = buildTransferCancelledEmail(booking);
+    const reminder = buildTransferReminderEmail(booking, bank, "2026-10-08");
     return [
+      ["transfer reminder email (html)", reminder.html],
+      ["transfer reminder email (text)", reminder.text],
+      ["transfer reminder subject", reminder.subject],
       ["bank details email (html)", details.html],
       ["bank details email (text)", details.text],
       ["bank details subject", details.subject],

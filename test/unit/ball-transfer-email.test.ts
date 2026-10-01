@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTransferDetailsEmail, buildTransferCancelledEmail } from "../../src/ball/transfer-email";
+import { buildTransferDetailsEmail, buildTransferCancelledEmail, buildTransferReminderEmail } from "../../src/ball/transfer-email";
 
 // TASK-484: the emails a bank transfer buyer receives before their money arrives. Every name, number
 // and amount here is invented: this repository is public.
@@ -50,6 +50,31 @@ describe("the bank details email", () => {
 
   it("escapes what the buyer typed", () => {
     expect(buildTransferDetailsEmail({ ...booking, buyerName: "<b>x</b>" }, bank, "2026-10-08").html).not.toContain("<b>x</b>");
+  });
+});
+
+// TASK-485: two days before the date, if it is still unpaid.
+describe("the reminder", () => {
+  const mail = buildTransferReminderEmail(booking, bank, "2026-10-08");
+
+  it("names the booking and the date in the subject", () => {
+    expect(mail.subject).toBe("Reminder: please pay for your Festive Ball booking BALL-7KQ2MZ by Thursday 8 October");
+  });
+
+  it("gives everything needed to pay again, so nobody has to find the first email", () => {
+    for (const part of ["£1,020.00", "12-34-56", "12345678", "Night Before Christmas Campaign", "BALL-7KQ2MZ"]) {
+      expect(mail.text, part).toContain(part);
+      expect(mail.html, part).toContain(part);
+    }
+  });
+
+  // Their money may be on its way while this is being sent.
+  it("tells someone who has already paid that there is nothing to do", () => {
+    expect(mail.text).toMatch(/already paid, thank you/);
+  });
+
+  it("escapes what the buyer typed", () => {
+    expect(buildTransferReminderEmail({ ...booking, buyerName: "<b>x</b>" }, bank, "2026-10-08").html).not.toContain("<b>x</b>");
   });
 });
 

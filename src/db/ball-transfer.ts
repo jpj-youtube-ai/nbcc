@@ -32,7 +32,8 @@ const lockSettings = (client: PoolClient) => client.query("SELECT id FROM ball_s
 
 export async function getTransferSettings(): Promise<TransferSettings> {
   const res = await pool.query(
-    `SELECT transfer_on, transfer_account_name, transfer_sort_code, transfer_account_number
+    `SELECT transfer_on, transfer_account_name, transfer_sort_code, transfer_account_number,
+            to_char(transfer_last_day, 'YYYY-MM-DD') AS transfer_last_day
        FROM ball_settings WHERE id = 1`,
   );
   const r = res.rows[0];
@@ -41,11 +42,12 @@ export async function getTransferSettings(): Promise<TransferSettings> {
     accountName: r.transfer_account_name,
     sortCode: r.transfer_sort_code,
     accountNumber: r.transfer_account_number,
+    lastDay: r.transfer_last_day,
   };
 }
 
 export async function saveTransferSettings(
-  update: { on?: boolean; details?: BankDetails },
+  update: { on?: boolean; details?: BankDetails; lastDay?: string | null },
   actor: string,
 ): Promise<TransferSettings> {
   await inTransaction(async (client) => {
@@ -60,13 +62,21 @@ export async function saveTransferSettings(
     if (update.on !== undefined) {
       await client.query(`UPDATE ball_settings SET transfer_on = $1 WHERE id = 1`, [update.on]);
     }
+    // TASK-485: null clears it.
+    if (update.lastDay !== undefined) {
+      await client.query(`UPDATE ball_settings SET transfer_last_day = $1 WHERE id = 1`, [update.lastDay]);
+    }
     // What changed, never the numbers themselves: more people can read the audit log than the settings.
     await insertAudit(client, {
       actor,
       action: "ball.transfer_settings_changed",
       entity: "ball_settings",
       entityId: 1,
-      data: { switchedOn: update.on ?? null, bankDetailsChanged: Boolean(update.details) },
+      data: {
+        switchedOn: update.on ?? null,
+        bankDetailsChanged: Boolean(update.details),
+        lastDay: update.lastDay === undefined ? "unchanged" : update.lastDay,
+      },
     });
   });
   return getTransferSettings();
@@ -123,13 +133,16 @@ export interface AwaitingTransfer {
   totalPence: number;
   payBy: string;
   createdAt: string;
+  /** TASK-485: the "please pay by" reminder has gone. */
+  reminded: boolean;
 }
 
-/** Every transfer still waiting for its money, the one due soonest first. */
+/** Every transfer still waiting for its money, the one due soonest first (so overdue ones lead). */
 export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
   const res = await pool.query(
     `SELECT reference, kind, quantity, seats, buyer_name, buyer_email, total_pence,
-            to_char(pay_by, 'YYYY-MM-DD') AS pay_by, created_at
+            to_char(pay_by, 'YYYY-MM-DD') AS pay_by, created_at,
+            transfer_reminder_sent_at IS NOT NULL AS reminded
        FROM ball_bookings
       WHERE payment_method = 'transfer' AND status = 'pending'
       ORDER BY pay_by ASC, created_at ASC`,
@@ -144,7 +157,59 @@ export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
     totalPence: r.total_pence,
     payBy: r.pay_by,
     createdAt: r.created_at,
+    reminded: r.reminded,
   }));
+}
+
+// --- TASK-485: the reminder -----------------------------------------------------------------------
+
+export interface ReminderCandidate {
+  id: number;
+  reference: string;
+  kind: "seat" | "table";
+  quantity: number;
+  seats: number;
+  buyerName: string;
+  buyerEmail: string;
+  ticketsPence: number;
+  donationPence: number;
+  totalPence: number;
+  giftAid: boolean;
+  payBy: string;
+  /** The UK date it was booked. */
+  createdDay: string;
+  remindedAt: string | null;
+}
+
+/** Unpaid transfers not yet reminded. Whether each is due today is the pure reminderDue's call. */
+export async function listTransfersForReminder(): Promise<ReminderCandidate[]> {
+  const res = await pool.query(
+    `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence,
+            donation_pence, total_pence, gift_aid, to_char(pay_by, 'YYYY-MM-DD') AS pay_by,
+            to_char(created_at AT TIME ZONE 'Europe/London', 'YYYY-MM-DD') AS created_day
+       FROM ball_bookings
+      WHERE payment_method = 'transfer' AND status = 'pending' AND transfer_reminder_sent_at IS NULL`,
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    reference: r.reference,
+    kind: r.kind,
+    quantity: r.quantity,
+    seats: r.seats,
+    buyerName: r.buyer_name,
+    buyerEmail: r.buyer_email,
+    ticketsPence: r.tickets_pence,
+    donationPence: r.donation_pence,
+    totalPence: r.total_pence,
+    giftAid: r.gift_aid,
+    payBy: r.pay_by,
+    createdDay: r.created_day,
+    remindedAt: null,
+  }));
+}
+
+export async function markTransferReminderSent(id: number): Promise<void> {
+  await pool.query(`UPDATE ball_bookings SET transfer_reminder_sent_at = now() WHERE id = $1`, [id]);
 }
 
 // --- marking paid --------------------------------------------------------------------------------

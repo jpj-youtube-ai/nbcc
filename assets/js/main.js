@@ -674,7 +674,7 @@
         lastName: value("lastName"),
         email: value("email"),
         message: value("message"),
-        captchaToken: value("captchaToken"), // TASK-NNN: set by contact-captcha.js
+        captchaToken: value("captchaToken"), // TASK-490: set by contact-captcha.js
       };
 
       if (typeof win.fetch !== "function") return; // no-JS/preview: native POST handles it

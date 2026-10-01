@@ -1,4 +1,4 @@
-// Contact form spam check (TASK-NNN): Cloudflare Turnstile, on the contact page only.
+// Contact form spam check (TASK-490): Cloudflare Turnstile, on the contact page only.
 //
 // Asks the server whether the check is on (GET /api/contact/captcha). Only when it gets a site key
 // does it load Cloudflare's script and draw the box, so no other page, and no page in development

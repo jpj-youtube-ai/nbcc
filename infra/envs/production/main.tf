@@ -68,7 +68,7 @@ module "app" {
   # real Stripe LIVE publishable key for production; a placeholder just falls back to hosted checkout.
   stripe_publishable_key = "pk_live_51TY8v74nlOtH58iwQR2oZ607WpQKSo5oAGG0JbK9wVIG05iRMYbFIa1Wf8GXDGWngxpGy2JyarU6ropAMSzB43Kg00WD09oA5u"
 
-  # Cloudflare Turnstile SITE key for the contact form (TASK-NNN). PUBLIC, from the widget
+  # Cloudflare Turnstile SITE key for the contact form (TASK-490). PUBLIC, from the widget
   # "nbcc.scot contact form" in the charity's Cloudflare account (hostname nbcc.scot, which covers
   # www). Verified 2026-10-01: Cloudflare draws the box for nbcc.scot and refuses localhost.
   turnstile_site_key = "0x4AAAAAAFLWXsnTJas6eb4L"

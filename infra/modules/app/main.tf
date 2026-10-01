@@ -141,7 +141,7 @@ resource "aws_ssm_parameter" "stripe_webhook_secret" {
   lifecycle { ignore_changes = [value] }
 }
 
-# Cloudflare Turnstile SECRET key (TASK-NNN): checks the contact form's passes with Cloudflare. A
+# Cloudflare Turnstile SECRET key (TASK-490): checks the contact form's passes with Cloudflare. A
 # SecureString like the Stripe secret, created holding REPLACE_ME. The real value is pasted in out of
 # band (aws ssm put-parameter --overwrite) and the apply never overwrites it. Until it is, every
 # check reports our secret as invalid, and the contact form keeps messages and logs a warning.

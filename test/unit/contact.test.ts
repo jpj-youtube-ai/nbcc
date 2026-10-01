@@ -228,7 +228,7 @@ describe("contact form behaviour (jsdom)", () => {
     expect((document.getElementById("message") as HTMLTextAreaElement).value).toBe("");
   });
 
-  it("sends the spam check's pass from its hidden field with the message (TASK-NNN)", async () => {
+  it("sends the spam check's pass from its hidden field with the message (TASK-490)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true });
     (window as unknown as { fetch: unknown }).fetch = fetchMock;
     set("firstName", "Ada");
@@ -292,9 +292,9 @@ describe("contact form behaviour (jsdom)", () => {
   });
 });
 
-// TASK-NNN: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only when the server
+// TASK-490: Cloudflare Turnstile's box, drawn by assets/js/contact-captcha.js only when the server
 // says the check is on. Nothing is loaded from Cloudflare by the page itself.
-describe("the contact form's spam check (TASK-NNN)", () => {
+describe("the contact form's spam check (TASK-490)", () => {
   const form = doc.getElementById("contactForm");
 
   it("has a place for the box above Send, hidden until it is drawn", () => {

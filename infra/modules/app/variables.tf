@@ -87,7 +87,7 @@ variable "stripe_publishable_key" {
   default = "pk_test_replace_me"
 }
 
-# Cloudflare Turnstile SITE key for the contact form's spam check (TASK-NNN). PUBLIC: every visitor's
+# Cloudflare Turnstile SITE key for the contact form's spam check (TASK-490). PUBLIC: every visitor's
 # browser draws the box with it, so it is a plain env value like stripe_publishable_key. Empty by
 # default; production sets it, and the app refuses to start production without it.
 variable "turnstile_site_key" {

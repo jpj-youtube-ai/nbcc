@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// TASK-NNN: the privacy notice names the contact form's spam check, what Cloudflare receives, the
+// TASK-490: the privacy notice names the contact form's spam check, what Cloudflare receives, the
 // lawful basis, and Cloudflare's own Turnstile privacy addendum.
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");

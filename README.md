@@ -1320,8 +1320,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | Method + path | Status | Requirement |
 |---|---|---|
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
-| `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec; checks a Cloudflare Turnstile pass first whenever the spam check is on, TASK-NNN) |
-| `GET /api/contact/captcha` | **implemented** | TASK-NNN (the contact form's spam check: `{ siteKey }`, the public Turnstile site key, or `null` while the check is off; see **A spam check on the contact form (TASK-NNN)**) |
+| `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec; checks a Cloudflare Turnstile pass first whenever the spam check is on, TASK-490) |
+| `GET /api/contact/captcha` | **implemented** | TASK-490 (the contact form's spam check: `{ siteKey }`, the public Turnstile site key, or `null` while the check is off; see **A spam check on the contact form (TASK-490)**) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
@@ -4160,7 +4160,7 @@ silent mailto fallback), and the submit button is disabled only while the reques
 Verified by `test/unit/contact.test.ts` (jsdom, mocked `fetch`) and `test/unit/contact-endpoint.test.ts`
 (mocked `insertEnquiry`).
 
-**A spam check on the contact form (TASK-NNN).** Bot spam was reaching Admin → Contact form past the
+**A spam check on the contact form (TASK-490).** Bot spam was reaching Admin → Contact form past the
 honeypot and the rate limit, so `POST /api/contact` now checks a Cloudflare Turnstile pass between
 the rate limit and validation whenever the check is on: both `TURNSTILE_SITE_KEY` and
 `TURNSTILE_SECRET_KEY` set. Production refuses to start without them (`productionConfigProblems` in
@@ -5594,7 +5594,7 @@ aws ssm put-parameter --name /charity-site/production/STRIPE_PRICE_BRONZE \
 aws ssm put-parameter --name /charity-site/production/STRIPE_WEBHOOK_SECRET \
   --type SecureString --value 'whsec_...' --overwrite
 
-# Contact form spam check (TASK-NNN): the Cloudflare Turnstile secret key (SecureString), from the
+# Contact form spam check (TASK-490): the Cloudflare Turnstile secret key (SecureString), from the
 # Turnstile widget's settings in the Cloudflare dashboard. Starts as REPLACE_ME; until it is set,
 # every message is kept with a warning in the logs. `read -s` keeps the key off the screen and out
 # of the shell history. Then restart the service, because ECS reads secrets only when a task starts.
@@ -7199,7 +7199,7 @@ defaulted, injected via `valueFrom` with its ARN in `exec_secrets`. It is the
 verify inbound events; its `.env.example`/CI placeholder is any non-empty
 `whsec_…` string, which keeps signature checks working offline.
 
-The **contact form spam check** (TASK-NNN) has two keys. `TURNSTILE_SITE_KEY` is Cloudflare
+The **contact form spam check** (TASK-490) has two keys. `TURNSTILE_SITE_KEY` is Cloudflare
 Turnstile's **public** site key, which reaches every visitor's browser, so it is handled like
 `STRIPE_PUBLISHABLE_KEY`: a plain task-def `environment` value backed by the `turnstile_site_key`
 module variable and set in `infra/envs/production/main.tf`. `TURNSTILE_SECRET_KEY` is a secret: an

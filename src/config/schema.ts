@@ -41,7 +41,7 @@ export const configSchema = z.object({
   // crash-looping boot. Once the key lands, inline checkout engages automatically.
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
 
-  // Cloudflare Turnstile on the contact form (TASK-NNN). The SITE key is public: the browser draws
+  // Cloudflare Turnstile on the contact form (TASK-490). The SITE key is public: the browser draws
   // the box with it, so it is a plain task-def env value like STRIPE_PUBLISHABLE_KEY. The SECRET is
   // an SSM SecureString. The check is on only when BOTH are set: a secret without a site key would
   // refuse every message, because the page could not show the box. Empty outside production, so
@@ -245,7 +245,7 @@ export type Config = z.infer<typeof configSchema>;
 export function productionConfigProblems(c: Config): string[] {
   if (c.NODE_ENV !== "production") return [];
   const problems: string[] = [];
-  // TASK-NNN: without both keys the contact form's spam check would silently be off.
+  // TASK-490: without both keys the contact form's spam check would silently be off.
   if (!c.TURNSTILE_SITE_KEY) problems.push("TURNSTILE_SITE_KEY is required in production");
   if (!c.TURNSTILE_SECRET_KEY) problems.push("TURNSTILE_SECRET_KEY is required in production");
   return problems;

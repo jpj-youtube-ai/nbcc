@@ -38,7 +38,7 @@ data "aws_iam_policy_document" "exec_secrets" {
       # all injected via valueFrom, so the exec role must be able to read them.
       aws_ssm_parameter.stripe_secret_key.arn,
       aws_ssm_parameter.stripe_webhook_secret.arn,
-      # Cloudflare Turnstile secret (TASK-NNN), injected via valueFrom like the Stripe secret.
+      # Cloudflare Turnstile secret (TASK-490), injected via valueFrom like the Stripe secret.
       aws_ssm_parameter.turnstile_secret_key.arn,
       # SES delivery-webhook token (Resend→SES migration): the shared secret in the SNS
       # subscription path, injected via valueFrom, so the exec role must be able to read it.
@@ -165,7 +165,7 @@ resource "aws_ecs_task_definition" "app" {
       # Stripe PUBLISHABLE key (TASK-215) for Embedded Checkout — PUBLIC (ships to the browser), so a
       # plain env value like the redirect URLs, NOT an SSM secret and NOT in the exec_secrets policy.
       { name = "STRIPE_PUBLISHABLE_KEY", value = var.stripe_publishable_key },
-      # Cloudflare Turnstile SITE key (TASK-NNN): public, so a plain env value like the publishable key.
+      # Cloudflare Turnstile SITE key (TASK-490): public, so a plain env value like the publishable key.
       { name = "TURNSTILE_SITE_KEY", value = var.turnstile_site_key },
       # Optional Stripe donation product id for one-off gifts — non-secret, empty by default.
       { name = "STRIPE_DONATION_PRODUCT", value = var.stripe_donation_product },
@@ -205,7 +205,7 @@ resource "aws_ecs_task_definition" "app" {
       # the exec_secrets policy below or the task fails to start.
       { name = "STRIPE_SECRET_KEY", valueFrom = aws_ssm_parameter.stripe_secret_key.arn },
       { name = "STRIPE_WEBHOOK_SECRET", valueFrom = aws_ssm_parameter.stripe_webhook_secret.arn },
-      # Cloudflare Turnstile SECRET key (TASK-NNN). Its ARN is also in exec_secrets above.
+      # Cloudflare Turnstile SECRET key (TASK-490). Its ARN is also in exec_secrets above.
       { name = "TURNSTILE_SECRET_KEY", valueFrom = aws_ssm_parameter.turnstile_secret_key.arn },
       # SES delivery-webhook token (Resend→SES migration): a SecureString, injected like a
       # secret — its ARN must also appear in exec_secrets above.

@@ -14,7 +14,7 @@ const JS_PATH = "assets/js/main.js";
 // TASK-479: the visit counter, the one other script every public page carries. Small, deferred and
 // separate from main.js so it can be left off the pages that are not public.
 const PULSE_PATH = "/assets/js/pulse.js";
-// TASK-NNN: the contact form's spam check, the one script a single page carries. Its own file, on
+// TASK-490: the contact form's spam check, the one script a single page carries. Its own file, on
 // contact.html only, because main.js counts towards donate.html's page-weight budget, which has
 // almost no room left, and this code is of no use on any other page.
 const CAPTCHA_PATH = "assets/js/contact-captcha.js";

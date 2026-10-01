@@ -504,7 +504,7 @@ export async function postContact(req: Request, res: Response): Promise<Response
     return res.status(429).json({ error: "Too many messages. Please try again shortly." });
   }
 
-  // TASK-NNN: Cloudflare Turnstile, when it is on. Before validation, so a bot without a valid pass
+  // TASK-490: Cloudflare Turnstile, when it is on. Before validation, so a bot without a valid pass
   // learns nothing about what the form expects. A refused pass stores nothing; a check that cannot
   // answer keeps the message and logs why, so a genuine enquiry is never lost to the checker.
   if (captchaEnabled()) {
@@ -540,7 +540,7 @@ apiRouter.post(
   postContact,
 );
 
-// TASK-NNN: the contact page asks for the Turnstile site key and shows the box only if it gets one
+// TASK-490: the contact page asks for the Turnstile site key and shows the box only if it gets one
 // (assets/js/contact-captcha.js). Public: the site key is in every visitor's browser anyway.
 export function getContactCaptcha(_req: Request, res: Response): Response {
   return res.status(200).json({ siteKey: captchaSiteKey() });

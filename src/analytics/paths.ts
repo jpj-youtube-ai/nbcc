@@ -1,7 +1,7 @@
 // TASK-479: which page a view was of. Only the site's own pages are kept, by their canonical clean
 // address from the site map (src/site/pages.ts); anything else is "other". The query string and
 // anything after it are thrown away first, so a token in an address can never reach a table.
-import { ALL_PAGES } from "../site/pages";
+import { ALL_PAGES, PRIVATE_PAGES } from "../site/pages";
 
 // Public pages that carry pulse.js but are deliberately not on the site map.
 const UNLISTED_PUBLIC = ["/sitemap", "/business/thank-you", "/gift-aid/declare"];
@@ -21,4 +21,12 @@ export function canonicalPath(raw: string): string {
     if (path.startsWith(prefix)) return canonical;
   }
   return "other";
+}
+
+/** A page's name for the Analytics page, as the site map calls it: "/ball" is "Festive Ball". */
+export function pageTitle(path: string): string {
+  if (path === "/") return "Home page";
+  if (path === "other") return "Other pages";
+  const page = ALL_PAGES.find((p) => p.path === path) ?? PRIVATE_PAGES.find((p) => p.path === path);
+  return page ? page.title : path;
 }

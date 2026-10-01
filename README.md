@@ -1387,6 +1387,9 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `PATCH /api/admin/events/settings` | **implemented** | TASK-453 (events: edit **and** the admin role; `{pageOn}` switches the whole page. Audited as `events.page_switched`) |
 | `POST /api/admin/events/preview` | **implemented** | TASK-453 (events: view; the card and the whole page as HTML documents, from the same renderer as `/events`) |
 | `POST /api/admin/event-images` | **implemented** | TASK-453 (events: edit; base64 upload, raster only, 2 MB, returns `/media/events/<uuid>`) |
+| `GET /api/admin/analytics?days=7\|30\|90` | **implemented** | TASK-482 (analytics: view; every panel of Admin > Analytics for the period and the one before, in one payload) |
+| `GET/PUT /api/admin/analytics/settings` | **implemented** | TASK-482 (analytics: view / edit; `{collecting}` switches counting on or off. Audited as `analytics.collecting_switched`) |
+| `GET /api/admin/analytics/now` | **implemented** | TASK-482 (analytics: view; `{collecting, people}`, the light read behind "Check again") |
 | `GET/POST /api/admin/ticker`, `PATCH/DELETE /api/admin/ticker/:id` | **implemented** | REQ-003 · TASK-178 (Viewer reads; Editor+ add/edit/hide/delete; audited) |
 | `GET /api/admin/contact` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; list enquiries, optional `?status=new\|replied`) |
 | `GET /api/admin/contact/:id` | **implemented** | 2026-07-10 contact-inbox spec (Viewer+; one enquiry in full) |
@@ -5778,6 +5781,8 @@ the IP itself is then forgotten (see the analytics design,
   - `loadGeoDbIfPresent(path)` answers `null`, with one warning in the log, when the file is
     missing or unreadable, so the app still starts and simply records no places;
   - `connectGeoDb()` is the start-up wiring: the lookup for `/app/geo/dbip-city-lite.mmdb`, or `null`.
+    `src/analytics/start.ts` (`startPlaceLookups`, called from `src/index.ts` once the server is
+    listening) hands it to the counting's `setPlaceResolver`, so visits record a town (TASK-482).
 - **Fetching it.** The file is not in the repo. The Docker build downloads it in a `geo` stage of
   its own, with `scripts/fetch-geo-db.mjs` (Node's own fetch and gzip, so no curl): this month's
   `https://download.db-ip.com/free/dbip-city-lite-YYYY-MM.mmdb.gz`, else last month's (DB-IP
@@ -5823,6 +5828,7 @@ your previous visit carry the same pill for as long as you stay.
 | Festive Ball | a booking was paid | by reference |
 | Newsletter | somebody signed up on the website (not imports or staff additions) | on "Added", for website sign-ups |
 | Events | only when there is a new feature (below) | none |
+| Analytics (TASK-482) | only when there is a new feature (below): page views are not news | none |
 
 **The rules** are in `src/admin/whats-new.ts`, tested in `test/unit/whats-new.test.ts`:
 - **You only see pills on sections you can open.** Each section uses the same permission as its
@@ -6755,9 +6761,9 @@ email link words (TASK-480), the town and city database (TASK-481) and Admin > A
 follow.
 
 **It ships switched off.** Nothing is kept until an admin turns collecting on
-(`analytics_settings.collecting`, default `false`). Until TASK-482 adds the switch to the admin,
-it can only be changed in the database. `src/db/analytics.ts` has `getAnalyticsSettings` and
-`setCollecting(on, actor)` (which writes an `analytics.collecting_switched` audit row) ready for it.
+(`analytics_settings.collecting`, default `false`), from the switch at the top of Admin > Analytics
+(TASK-482, below). `setCollecting(on, actor)` in `src/db/analytics.ts` writes an
+`analytics.collecting_switched` audit row for every change.
 
 **The script.** `assets/js/pulse.js` (under 2 KB, no libraries) is loaded with `defer` on every
 public page (index, about, donate, events, ball, ball terms, Gift Aid, contact, My Story,
@@ -6820,6 +6826,70 @@ visitor id across days, user agent and bot reading, the payload, the limiter, th
 the place seam, the handler, the SQL, the route's 204s, pulse.js itself in jsdom, the pages that
 carry it, the retention wiring and the privacy section). BDD: `features/analytics-pulse.feature`
 against Postgres, and the backfill scenarios in `features/admin-permissions.feature`.
+
+## Admin > Analytics (TASK-482)
+
+Part 4 of site analytics: the page that shows the numbers TASK-479 counts. Admin > Analytics, in the
+Admin group of the menu, shown only to people with the `analytics` permission (admins by role; the
+group's label now shows for anyone with Team or Analytics). It carries a New pill (TASK-478) for
+everyone who can open it until they first do: `analytics` is an area in `src/admin/whats-new.ts`
+with a launch entry in `FEATURES` and no arrivals of its own.
+
+**The switch** sits at the top, as a card like the Events page's. Off, it says what switching on
+starts counting and links the privacy notice's "Counting visits" section; on, it says since when and
+who switched it. Only `analytics: edit` can flip it (after a confirmation); anyone with view sees it
+read only. The change is saved through `setCollecting` (audited) and then
+`pulseSwitch.forget()`, so `POST /api/pulse` on the same task takes it up at once rather than within
+its 30 second memory.
+
+**The numbers**, for the last 7, 30 or 90 UK days (the chips), each beside the same number of days
+before. Today is only part of a day, so like is compared with like: the period runs to now, and the
+days before are counted up to the same UK clock time on their last day (`periodsFor`), as the small
+print under the chips says. Without that, steady traffic read as a fall every morning. Choosing
+another period dims the page and says it is loading until the new numbers arrive; a slower answer
+for a period chosen earlier is ignored.
+
+| Panel | What it shows |
+|---|---|
+| Figures | visitors, visits, page views, and the share of visits that saw one page, each with its change on the period before (a share changes in points) |
+| Visitors each day | an inline SVG line (no library) with the period before dashed under it, the day under the pointer on hover, and a sentence for screen readers instead of the drawing |
+| Where they came from | visits by channel (Newsletter, Email, Search, Social, Other websites, Direct) as bars with their share; the top other websites by name; the visits each newsletter issue brought, named by the newsletter's subject where the campaign is a newsletter id (TASK-480 tags links with it), else the campaign as it came |
+| Where they are | visitors by town or city and by country (named from the ISO code with `Intl.DisplayNames`), with the credit "IP geolocation by DB-IP" linked to db-ip.com, as its CC BY 4.0 licence requires |
+| What they looked at | each page: views, visitors, average time on screen and average scroll (both ignore views not yet left), and the share of visits that began there. A table on a desktop, one block per page on a phone |
+| What they clicked | clicks by kind (Donate and ticket buttons, phone and email links, downloads, links to other websites) and by each button or link |
+| What they used | visitors by phone, tablet or computer, and by browser |
+| Right now | people with a page view in the last 5 minutes (today's and yesterday's rows only, so the day index does the work), with "Check again", which asks `/api/admin/analytics/now` alone. While counting is off it says so rather than "0 people" |
+
+**The definitions:** a visitor is a distinct (day, visitor id) pair, so the same person on two days
+is two; a visit is one visitor's views on one day, split wherever the gap between two views is more
+than 30 minutes, and its first view is its entry page and decides its channel; a one page visit is a
+bounce; averages ignore missing values.
+
+**Counted in Postgres, not in Node.** The service is one small task that also takes donations and
+Stripe webhooks, so `src/db/analytics-report.ts` does every count in SQL and only small aggregate
+rows come back: GROUP BYs, and the visit split as a window function (`lag(at)` over each day and
+visitor, a new visit where the gap is over 30 minutes, `lead` to find visits of one view). The period
+before needs only its figures and line, so only those are read for it. Queries run one after another,
+so analytics never holds more than one of the pool's connections. The longest lists (towns, other
+websites, clicked labels) stop at 100. What is left (percentages, days with no visitors, country
+names, newsletter labels, the periods) is pure, in `src/analytics/report.ts`.
+
+Nothing scrolls inside a box: a list longer than ten shows its top ten and "Show all" grows the
+page. A panel with nothing in it says "Not enough visits yet"; if the numbers cannot be loaded,
+every panel says so rather than showing zeros (TASK-476).
+
+**Tests.** Unit: `test/unit/analytics-report.test.ts` (the periods at 9am, across the change from
+summer time and just after midnight; the empty days; the bounce share; entry shares; country names;
+newsletter labels), `test/unit/admin-analytics-routes.test.ts` (401, 403 for editors and viewers,
+view against edit, the audit actor, `forget`, the right now endpoint, bad days and bodies, failures),
+`test/unit/admin-analytics-page.test.ts` (the page in the admin's jsdom harness: the nav item and its
+New pill, the switch off, on, read only, flipped, cancelled and failed, the chips, the loading state
+and a stale answer ignored, the small print, the figures, the line's summary and whole number axis,
+every panel filled, empty and failed, stored text shown as text and never as markup, the DB-IP
+credit, Show all, Check again on its own, and counting off), and `test/unit/whats-new*.test.ts` (the
+analytics area). BDD: `features/analytics-admin.feature` against Postgres (the permission, the
+audited switch, and the figures from seeded page views, including a gap of over 30 minutes that
+splits a visit and one of exactly 30 that does not).
 
 ## Backups (TASK-423)
 

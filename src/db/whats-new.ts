@@ -32,7 +32,7 @@ export async function getAccountCreatedAt(userId: number): Promise<Date | null> 
 
 // One "the latest thing to arrive after $1" query per section, each on the database that holds it.
 // These are the same times the row pills in the admin compare against.
-const LATEST: Record<Exclude<Area, "events">, { db: "main" | "contact" | "stories"; sql: string }> = {
+const LATEST: Record<Exclude<Area, "events" | "analytics">, { db: "main" | "contact" | "stories"; sql: string }> = {
   contact: { db: "contact", sql: "SELECT max(created_at) AS at FROM contact_enquiries WHERE created_at > $1" },
   stories: { db: "stories", sql: "SELECT max(created_at) AS at FROM stories WHERE created_at > $1" },
   donations: {
@@ -61,7 +61,8 @@ const LATEST: Record<Exclude<Area, "events">, { db: "main" | "contact" | "storie
 
 /** The latest arrival in a section after `since`, or null when nothing has arrived since. */
 export async function latestArrival(area: Area, since: Date): Promise<Date | null> {
-  if (area === "events") return null; // the Events page has new features, not arrivals
+  // The Events page and Admin > Analytics have new features, not arrivals.
+  if (area === "events" || area === "analytics") return null;
   const q = LATEST[area];
   const db = q.db === "contact" ? contactPool : q.db === "stories" ? storiesPool : pool;
   const res = await db.query<{ at: Date | null }>(q.sql, [since]);

@@ -99,21 +99,27 @@ Given("{string} has read the analytics for {int} days", async function (email, d
 });
 
 // Visitor A: two views ten minutes apart, then one more 48 minutes later (a second visit).
-// Visitor B: one view. Both arrived from an invented website, from an invented town.
-When("two invented visitors' page views from today are stored", async function () {
+// Visitor B: one view. Visitor C: two views exactly 30 minutes apart (still one visit). All arrived
+// from an invented website, from an invented town.
+When("three invented visitors' page views from today are stored", async function () {
   const rows = [
     ["bdd1a1", "bdd1visitora", "/", 60],
     ["bdd1a2", "bdd1visitora", "/donate", 50],
     ["bdd1a3", "bdd1visitora", "/events", 2],
     ["bdd1b1", "bdd1visitorb", "/", 20],
+    ["bdd1c1", "bdd1visitorc", "/", 45],
+    ["bdd1c2", "bdd1visitorc", "/about-us", 15],
   ];
+  // One moment for every row: now() moves on between statements, which would make the exact 30
+  // minute gap a few milliseconds longer and split it.
+  const base = (await pool.query("SELECT now() AS t")).rows[0].t;
   for (const [viewId, visitor, path, minutesAgo] of rows) {
     await pool.query(
       `INSERT INTO analytics_views
          (view_id, at, day, path, visitor, channel, source, campaign, country, region, city, device, browser, os)
-       VALUES ($1, now() - make_interval(mins => $2), (now() AT TIME ZONE 'Europe/London')::date, $3, $4,
+       VALUES ($1, $5::timestamptz - make_interval(mins => $2), ($5::timestamptz AT TIME ZONE 'Europe/London')::date, $3, $4,
                'other_websites', 'bdd-site.example', NULL, 'GB', 'Scotland', 'Bddtown', 'phone', 'Safari', 'iOS')`,
-      [viewId, minutesAgo, path, visitor],
+      [viewId, minutesAgo, path, visitor, base],
     );
   }
 });
@@ -141,6 +147,12 @@ Then("{string} had {int} visitors", function (city, visitors) {
   assert.equal(row.visitors, visitors);
 });
 
+When("{string} checks who is on the website right now", async function (email) {
+  await call(this, await login(email), "GET", "/api/admin/analytics/now");
+});
+
+// From the whole report ({ rightNow: { collecting, people } }) or from Check again ({ collecting, people }).
 Then("someone is on the website right now", function () {
-  assert.ok(this.analyticsBody.rightNow >= 1, `right now was ${this.analyticsBody.rightNow}`);
+  const now = this.analyticsBody.rightNow ?? this.analyticsBody;
+  assert.ok(now.people >= 1, `right now was ${JSON.stringify(now)}`);
 });

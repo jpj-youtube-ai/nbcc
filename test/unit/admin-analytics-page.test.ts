@@ -20,7 +20,8 @@ const token = signAdminSession({ sub: 3, email: "admin@nbcc", role: "admin", now
 
 type Call = { method: string; path: string; body?: string };
 let perms: PermissionMap = {};
-let served: Record<string, { status: number; body: unknown }> = {};
+type Served = { status: number; body: unknown; wait?: Promise<unknown> };
+let served: Record<string, Served> = {};
 let calls: Call[] = [];
 
 function respond(url: string, init?: { method?: string; body?: string }) {
@@ -37,7 +38,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
   if (path === "/api/admin/login") return j({ token, user: { email: "admin@nbcc", role: "admin" } });
   if (path === "/api/admin/me") return j({ email: "admin@nbcc", permissions: perms });
   const hit = served[method + " " + url] || served[method + " " + path];
-  if (hit) return j(hit.body, hit.status);
+  if (hit) return hit.wait ? hit.wait.then(() => j(hit.body, hit.status)) : j(hit.body, hit.status);
   return j({ results: [] });
 }
 
@@ -110,14 +111,33 @@ function empty() {
     browsers: [],
   };
 }
+function comparison(scale: number) {
+  const p = panels(scale);
+  return { headline: p.headline, daily: p.daily };
+}
 const REPORT = {
   days: 30,
-  current: { from: "2026-09-24", to: "2026-09-30", ...panels(2) },
-  previous: { from: "2026-09-17", to: "2026-09-23", ...panels(1) },
-  rightNow: 3,
-  generatedAt: "2026-09-30T12:00:00.000Z",
+  current: { from: "2026-09-24", to: "2026-09-30", until: "2026-09-30T08:00:00.000Z", ...panels(2) },
+  previous: { from: "2026-09-17", to: "2026-09-23", until: "2026-09-23T08:00:00.000Z", ...comparison(1) },
+  rightNow: { collecting: true, people: 3 },
+  generatedAt: "2026-09-30T08:00:00.000Z",
 };
-const EMPTY = { days: 30, current: { from: "a", to: "b", ...empty() }, previous: { from: "a", to: "b", ...empty() }, rightNow: 0 };
+const EMPTY = {
+  days: 30,
+  current: { from: "a", to: "b", until: "2026-09-30T08:00:00.000Z", ...empty() },
+  previous: { from: "a", to: "b", until: "2026-09-23T08:00:00.000Z", headline: empty().headline, daily: empty().daily },
+  rightNow: { collecting: true, people: 0 },
+};
+// The same report with set visitors each day, to read the line's axis.
+function withDaily(visitors: number[]) {
+  const daily = visitors.map((v, i) => ({ day: `2026-09-${String(24 + i).padStart(2, "0")}`, visitors: v }));
+  return { ...REPORT, current: { ...REPORT.current, daily }, previous: { ...REPORT.previous, daily: daily.map((d) => ({ ...d, visitors: 0 })) } };
+}
+function deferred() {
+  let release!: () => void;
+  const wait = new Promise<void>((r) => (release = r));
+  return { wait, release };
+}
 const OFF = { collecting: false, updatedAt: null, updatedBy: null };
 const ON = { collecting: true, updatedAt: "2026-09-28T09:00:00.000Z", updatedBy: "admin:admin@nbcc" };
 
@@ -299,5 +319,103 @@ describe("the numbers", () => {
     await openAnalytics();
     for (const id of [...PANELS, "anLine", "anFigures", "anNow"]) expect(text(id)).toContain("could not be loaded");
     expect(text("anFigures")).not.toContain("0");
+  });
+});
+
+describe("review of #605", () => {
+  it("says which times it compares: today so far against the same time of day before", async () => {
+    await openAnalytics();
+    const note = text("anPeriodNote");
+    expect(note).toContain("24 September to now");
+    expect(note).toContain("17 September to 23 September");
+    expect(note).toContain("up to 09:00");
+  });
+
+  it("labels the line only with whole numbers that sit on its gridlines", async () => {
+    served["GET /api/admin/analytics"] = { status: 200, body: withDaily([1, 3, 2]) };
+    await openAnalytics();
+    expect(Array.from(el("anLine").querySelectorAll(".an-y span")).map((s) => s.textContent)).toEqual(["4", "2", "0"]);
+  });
+
+  it("gives a line of ones a whole middle too", async () => {
+    served["GET /api/admin/analytics"] = { status: 200, body: withDaily([1, 0, 1]) };
+    await openAnalytics();
+    expect(Array.from(el("anLine").querySelectorAll(".an-y span")).map((s) => s.textContent)).toEqual(["2", "1", "0"]);
+  });
+
+  it("shows it is loading a new period, and a slower earlier answer cannot replace the newer one", async () => {
+    const slow = deferred();
+    served["GET /api/admin/analytics?days=30"] = { status: 200, body: REPORT, wait: slow.wait };
+    const week = { ...REPORT, days: 7, current: { ...REPORT.current, headline: { visitors: 7777, visits: 1, views: 1, bounceShare: 0 } } };
+    const pending = deferred();
+    served["GET /api/admin/analytics?days=7"] = { status: 200, body: week, wait: pending.wait };
+    await openAnalytics();
+    (document.querySelector('[data-andays="7"]') as HTMLElement).click();
+    await settle();
+    expect(el("view-analytics").getAttribute("aria-busy")).toBe("true");
+    expect(el("view-analytics").classList.contains("is-loading")).toBe(true);
+    expect(text("anLoading")).toBe("Loading the last 7 days…");
+    pending.release();
+    await settle();
+    expect(text("anFigures")).toContain("7,777");
+    expect(el("view-analytics").classList.contains("is-loading")).toBe(false);
+    slow.release();
+    await settle();
+    expect(text("anFigures")).toContain("7,777");
+  });
+
+  it("checks right now on its own, without reloading every panel", async () => {
+    served["GET /api/admin/analytics/now"] = { status: 200, body: { collecting: true, people: 9 } };
+    await openAnalytics();
+    const before = calls.filter((c) => c.path.startsWith("/api/admin/analytics?")).length;
+    (el("anNow").querySelector("[data-anrefresh]") as HTMLElement).click();
+    await settle();
+    expect(calls.filter((c) => c.path.startsWith("/api/admin/analytics?")).length).toBe(before);
+    expect(calls.some((c) => c.path === "/api/admin/analytics/now")).toBe(true);
+    expect(text("anNow")).toContain("9 people on the website");
+  });
+
+  it("says counting is off rather than that nobody is on the website", async () => {
+    served["GET /api/admin/analytics"] = { status: 200, body: { ...REPORT, rightNow: { collecting: false, people: 0 } } };
+    await openAnalytics();
+    expect(text("anNow")).toContain("Counting is off");
+    expect(text("anNow")).not.toContain("0 people");
+  });
+
+  it("shows stored text as text, never as markup", async () => {
+    const evil = '<img src=x onerror="window.__pwned=1">';
+    const hostile = {
+      ...REPORT,
+      current: {
+        ...REPORT.current,
+        otherWebsites: [{ source: evil, visits: 2 }],
+        newsletters: [{ campaign: "41", label: evil, visits: 2 }],
+        cities: [{ city: evil, region: evil, country: "GB", visitors: 2 }],
+        countries: [{ country: "ZZ", name: evil, visitors: 2 }],
+        pages: [{ path: evil, views: 1, visitors: 1, avgActiveSeconds: 1, avgScroll: 1, entryShare: 1 }],
+        clickKinds: [{ kind: evil, clicks: 1 }],
+        clicks: [{ kind: evil, label: evil, clicks: 1 }],
+        browsers: [{ browser: evil, visitors: 1 }],
+      },
+    };
+    served["GET /api/admin/analytics"] = { status: 200, body: hostile };
+    await openAnalytics();
+    expect(el("view-analytics").querySelectorAll("img")).toHaveLength(0);
+    for (const id of ["anWebsites", "anNewsletters", "anCities", "anCountries", "anPages", "anClickKinds", "anClicks", "anBrowsers"]) {
+      expect(text(id)).toContain("<img src=x");
+    }
+    expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
+  });
+
+  it("carries a New pill until it is opened (TASK-478)", async () => {
+    served["GET /api/admin/whats-new"] = { status: 200, body: { areas: [{ area: "analytics", new: true, since: "2026-09-30T00:00:00.000Z" }] } };
+    served["POST /api/admin/whats-new/seen"] = { status: 200, body: { area: "analytics", seenAt: "2026-10-01T09:00:00.000Z" } };
+    await signIn();
+    expect(navLink().querySelector(".admin-new-pill")).not.toBeNull();
+    navLink().click();
+    await settle();
+    expect(navLink().querySelector(".admin-new-pill")).toBeNull();
+    const seen = calls.find((c) => c.method === "POST" && c.path === "/api/admin/whats-new/seen");
+    expect(JSON.parse(seen?.body || "{}")).toEqual({ area: "analytics" });
   });
 });

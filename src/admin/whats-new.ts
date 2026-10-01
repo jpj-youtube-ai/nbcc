@@ -4,11 +4,20 @@
 
 import { can, type PermissionMap, type Section } from "./permissions";
 
-export type Area = "contact" | "stories" | "donations" | "monthly" | "fulfilments" | "ball" | "newsletter" | "events";
+export type Area =
+  | "contact"
+  | "stories"
+  | "donations"
+  | "monthly"
+  | "fulfilments"
+  | "ball"
+  | "newsletter"
+  | "events"
+  | "analytics";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
-// never sits on a section the person cannot open. Every one except events also has arrivals, the
-// query for which is in src/db/whats-new.ts.
+// never sits on a section the person cannot open. Every one except events and analytics also has
+// arrivals, the query for which is in src/db/whats-new.ts.
 export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" | "edit" }> = [
   { area: "contact", section: "contact", level: "view" },
   { area: "stories", section: "stories", level: "view" },
@@ -18,6 +27,8 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "ball", section: "ball", level: "view" },
   { area: "newsletter", section: "newsletter", level: "view" },
   { area: "events", section: "events", level: "view" },
+  // TASK-482: Admin > Analytics. New as a screen only: page views are not news to tell staff about.
+  { area: "analytics", section: "analytics", level: "view" },
 ];
 
 export function isArea(value: unknown): value is Area {
@@ -30,6 +41,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "events", added: new Date("2026-09-30T12:00:00Z"), what: "The Events page and its ticket report (TASK-453, TASK-464)" },
   { area: "monthly", added: new Date("2026-09-30T12:00:00Z"), what: "Monthly givers (TASK-447)" },
   { area: "stories", added: new Date("2026-09-30T12:00:00Z"), what: "Stories brought in from the old website (TASK-461)" },
+  { area: "analytics", added: new Date("2026-10-01T12:00:00Z"), what: "Admin > Analytics: where visitors come from and what they look at (TASK-482)" },
 ];
 
 // When the pills went live. Someone who has never opened a section is counted as having seen it

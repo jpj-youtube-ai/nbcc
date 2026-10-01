@@ -10328,7 +10328,7 @@
       var t = e.target;
       if (!t || !t.closest) return;
       if (t.closest("[data-anrefresh]")) {
-        anLoadReport();
+        anLoadNow();
         return;
       }
       var more = t.closest("[data-anmore]");
@@ -10411,6 +10411,7 @@
         anRenderSwitch();
         status.className = "ty-status is-ok";
         status.textContent = s.collecting ? "Counting visits is now on." : "Counting visits is now off.";
+        anLoadNow();
       })
       .catch(function (err) {
         btn.disabled = false;
@@ -10432,9 +10433,14 @@
     anLoadReport();
   }
 
+  // A new period dims what is showing and says so until its numbers arrive. Only the latest request
+  // may draw: a slower answer for a period chosen earlier is dropped when it turns up.
   function anLoadReport() {
     var seq = ++anSeq;
-    el("view-analytics").setAttribute("aria-busy", "true");
+    var view = el("view-analytics");
+    view.setAttribute("aria-busy", "true");
+    view.classList.add("is-loading");
+    el("anLoading").textContent = "Loading the last " + anDays + " days\u2026";
     authFetch("/api/admin/analytics?days=" + anDays)
       .then(okJson)
       .then(function (d) {
@@ -10452,7 +10458,11 @@
   }
 
   function anRenderAll() {
-    el("view-analytics").removeAttribute("aria-busy");
+    var view = el("view-analytics");
+    view.removeAttribute("aria-busy");
+    view.classList.remove("is-loading");
+    el("anLoading").textContent = "";
+    anRenderPeriodNote();
     anRenderFigures();
     anRenderLine();
     anRenderPanels();
@@ -10521,10 +10531,12 @@
       box.innerHTML = AN_EMPTY;
       return;
     }
+    // The top of the axis is even, so the gridline halfway up is a whole number of visitors too.
     var max = 1;
     cur.concat(prev).forEach(function (d) {
       if (d.visitors > max) max = d.visitors;
     });
+    if (max % 2) max += 1;
     var W = 600;
     var HT = 160;
     var n = cur.length;
@@ -10554,7 +10566,7 @@
       '<ul class="an-legend" aria-hidden="true"><li><span class="an-key"></span>' + H.escapeHtml("Last " + n + " days") +
       '</li><li><span class="an-key is-prev"></span>' + H.escapeHtml(span.charAt(0).toUpperCase() + span.slice(1)) + "</li></ul>" +
       '<div class="an-chart" aria-hidden="true">' +
-      '<div class="an-y"><span>' + anNum(max) + "</span><span>" + anNum(Math.round(max / 2)) + "</span><span>0</span></div>" +
+      '<div class="an-y"><span>' + anNum(max) + "</span><span>" + anNum(max / 2) + "</span><span>0</span></div>" +
       '<div class="an-plot">' +
       '<svg class="an-svg" viewBox="0 0 ' + W + " " + HT + '" preserveAspectRatio="none" focusable="false">' +
       '<line class="an-gridline" x1="0" x2="' + W + '" y1="' + y(max) + '" y2="' + y(max) + '"/>' +
@@ -10712,15 +10724,61 @@
     }, clicks);
     anBars("anDevices", c.devices, function (r) { return esc(AN_DEVICES[r.device] || r.device); }, visitors, { share: true });
     anBars("anBrowsers", c.browsers, function (r) { return esc(r.browser); }, visitors, { share: true });
-    var now = el("anNow");
-    if (anFailed) {
-      now.innerHTML = unavailableHtml(AN_FAILED);
+    anRenderNow(anFailed ? null : anReport.rightNow);
+  }
+
+  // Right now: people with a page view in the last 5 minutes. While counting is off nobody is
+  // counted, so it says that rather than "0 people", which would read as an empty website.
+  function anRenderNow(now) {
+    var box = el("anNow");
+    if (!now) {
+      box.innerHTML = unavailableHtml(AN_FAILED);
       return;
     }
-    var k = Number(anReport.rightNow || 0);
-    now.innerHTML =
-      '<p class="an-now"><span class="an-now-n">' + anNum(k) + "</span> " +
-      (k === 1 ? "person" : "people") + " on the website in the last 5 minutes.</p>" +
+    var k = Number(now.people || 0);
+    box.innerHTML =
+      (now.collecting
+        ? '<p class="an-now"><span class="an-now-n">' + anNum(k) + "</span> " +
+          (k === 1 ? "person" : "people") + " on the website in the last 5 minutes.</p>"
+        : '<p class="an-now">Counting is off, so nobody is being counted right now.</p>') +
       '<button class="an-more" type="button" data-anrefresh>Check again</button>';
+  }
+
+  function anLoadNow() {
+    authFetch("/api/admin/analytics/now")
+      .then(okJson)
+      .then(function (now) {
+        anRenderNow(now);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        anRenderNow(null);
+      });
+  }
+
+  // The small print under the chips: which days are counted and to when. Today is only part of a
+  // day, so the days before are counted up to the same time of day (src/analytics/report.ts).
+  var AN_CLOCK = (function () {
+    try {
+      return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    } catch {
+      return null;
+    }
+  })();
+  function anRenderPeriodNote() {
+    var note = el("anPeriodNote");
+    if (anFailed || !anReport || !anReport.current || !anReport.previous) {
+      note.textContent = "";
+      return;
+    }
+    var c = anReport.current;
+    var p = anReport.previous;
+    var time = AN_CLOCK && c.until ? AN_CLOCK.format(new Date(c.until)) : "";
+    note.textContent =
+      anDay(c.from) + " to now, beside " + anDay(p.from) + " to " + anDay(p.to) + "." +
+      (time
+        ? " Today is counted up to " + time + ", so " + anDay(p.to) + " is counted up to " + time +
+          " too, and a morning is never set against a whole day."
+        : "");
   }
 })();

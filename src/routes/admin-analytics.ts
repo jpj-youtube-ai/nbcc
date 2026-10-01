@@ -4,7 +4,7 @@ import { authorizeSection } from "./admin-authz";
 import { actorOf } from "./admin";
 import { pulseSwitch } from "./pulse";
 import { getAnalyticsSettings, setCollecting } from "../db/analytics";
-import { readAnalyticsReport } from "../db/analytics-report";
+import { readAnalyticsReport, readRightNow } from "../db/analytics-report";
 import { PERIOD_DAYS, type PeriodDays } from "../analytics/report";
 
 // TASK-482: Admin > Analytics.
@@ -12,6 +12,7 @@ import { PERIOD_DAYS, type PeriodDays } from "../analytics/report";
 //   GET /api/admin/analytics?days=7|30|90   every panel for the period and the one before   analytics: view
 //   GET /api/admin/analytics/settings        the collecting switch                            analytics: view
 //   PUT /api/admin/analytics/settings        { collecting }                                   analytics: edit
+//   GET /api/admin/analytics/now             people on the site now, for "Check again"        analytics: view
 //
 // Changing the switch writes an audit_log row (setCollecting) and then makes POST /api/pulse forget
 // the value it remembered, so counting starts or stops on this task at once rather than within 30
@@ -37,6 +38,16 @@ export async function getAnalytics(req: Request, res: Response): Promise<void> {
   } catch (err) {
     console.error("analytics report failed:", err instanceof Error ? err.message : err);
     res.status(500).json({ error: "The numbers could not be loaded. Please try again." });
+  }
+}
+
+export async function getAnalyticsNow(req: Request, res: Response): Promise<void> {
+  if (!(await authorizeSection(req, res, "analytics", "view"))) return;
+  try {
+    res.json(await readRightNow());
+  } catch (err) {
+    console.error("analytics right now failed:", err instanceof Error ? err.message : err);
+    res.status(500).json({ error: "Right now could not be checked. Please try again." });
   }
 }
 
@@ -71,5 +82,6 @@ export async function putAnalyticsSettings(req: Request, res: Response): Promise
 }
 
 adminAnalyticsRouter.get("/api/admin/analytics", getAnalytics);
+adminAnalyticsRouter.get("/api/admin/analytics/now", getAnalyticsNow);
 adminAnalyticsRouter.get("/api/admin/analytics/settings", getAnalyticsSettingsRoute);
 adminAnalyticsRouter.put("/api/admin/analytics/settings", putAnalyticsSettings);

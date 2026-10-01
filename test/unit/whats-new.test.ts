@@ -10,7 +10,7 @@ const at = (iso: string) => new Date(iso);
 describe("the sections that can carry a New pill", () => {
   it("covers every kind of arrival the client asked for, and the Events page", () => {
     expect(AREAS.map((a) => a.area)).toEqual([
-      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events",
+      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics",
     ]);
   });
 
@@ -20,7 +20,7 @@ describe("the sections that can carry a New pill", () => {
     expect(gate).toEqual({
       contact: "contact:view", stories: "stories:view", donations: "donations:view",
       monthly: "donations:view", fulfilments: "business-supporters:edit", ball: "ball:view",
-      newsletter: "newsletter:view", events: "events:view",
+      newsletter: "newsletter:view", events: "events:view", analytics: "analytics:view",
     });
     for (const a of AREAS) expect(SECTIONS).toContain(a.section);
   });
@@ -29,8 +29,14 @@ describe("the sections that can carry a New pill", () => {
     const viewer = reachableAreas(roleToPermissions("viewer")).map((a) => a.area);
     expect(viewer).toContain("donations");
     expect(viewer).not.toContain("fulfilments"); // business-supporters needs edit
+    expect(viewer).not.toContain("analytics"); // admins only by role (TASK-479)
     expect(reachableAreas(roleToPermissions("admin")).map((a) => a.area)).toEqual(AREAS.map((a) => a.area));
     expect(reachableAreas({})).toEqual([]);
+  });
+
+  // TASK-482: Admin > Analytics is a new screen, so everyone who can open it sees it as New once.
+  it("announces Admin > Analytics", () => {
+    expect(FEATURES.some((f) => f.area === "analytics")).toBe(true);
   });
 
   it("lists new parts of the admin only against sections that exist", () => {

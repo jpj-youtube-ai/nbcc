@@ -5,20 +5,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 //   GET /api/admin/analytics?days=7|30|90   analytics: view
 //   GET /api/admin/analytics/settings        analytics: view
 //   PUT /api/admin/analytics/settings        analytics: edit, { collecting }
+//   GET /api/admin/analytics/now             analytics: view, just "right now" (the Check again button)
 //
 // The analytics section is admins only by role (TASK-479), so a plain editor or viewer is refused,
 // and someone given view on Team > Manage access can look but not flip the switch. Changing the
 // switch goes through setCollecting (which writes the audit row) and then makes POST /api/pulse
 // forget the switch it remembered, so the change takes effect at once.
 
-const { readReportMock, getSettingsMock, setCollectingMock, forgetMock, getUserAuthRowMock } = vi.hoisted(() => ({
+const { readReportMock, readNowMock, getSettingsMock, setCollectingMock, forgetMock, getUserAuthRowMock } = vi.hoisted(() => ({
   readReportMock: vi.fn(),
+  readNowMock: vi.fn(),
   getSettingsMock: vi.fn(),
   setCollectingMock: vi.fn(),
   forgetMock: vi.fn(),
   getUserAuthRowMock: vi.fn(),
 }));
-vi.mock("../../src/db/analytics-report", () => ({ readAnalyticsReport: readReportMock }));
+vi.mock("../../src/db/analytics-report", () => ({ readAnalyticsReport: readReportMock, readRightNow: readNowMock }));
 vi.mock("../../src/db/analytics", () => ({ getAnalyticsSettings: getSettingsMock, setCollecting: setCollectingMock }));
 vi.mock("../../src/routes/pulse", () => ({ pulseSwitch: { forget: forgetMock } }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: getUserAuthRowMock }));
@@ -33,7 +35,7 @@ vi.mock("../../src/config", () => ({
 }));
 vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() } }));
 
-import { getAnalytics, getAnalyticsSettingsRoute, putAnalyticsSettings } from "../../src/routes/admin-analytics";
+import { getAnalytics, getAnalyticsNow, getAnalyticsSettingsRoute, putAnalyticsSettings } from "../../src/routes/admin-analytics";
 import { signAdminSession } from "../../src/admin/session";
 
 const SECRET = "test-admin-secret";
@@ -74,7 +76,8 @@ async function run(handler: Handler, o: Opts) {
 const SETTINGS = { collecting: true, updatedAt: "2026-09-30T20:00:00.000Z", updatedBy: "admin:" + EMAIL };
 
 beforeEach(() => {
-  readReportMock.mockReset().mockResolvedValue({ days: 30, current: {}, previous: {}, rightNow: 0 });
+  readReportMock.mockReset().mockResolvedValue({ days: 30, current: {}, previous: {}, rightNow: { collecting: true, people: 0 } });
+  readNowMock.mockReset().mockResolvedValue({ collecting: true, people: 4 });
   getSettingsMock.mockReset().mockResolvedValue({ collecting: false, updatedAt: null, updatedBy: null });
   setCollectingMock.mockReset().mockResolvedValue(SETTINGS);
   forgetMock.mockReset();
@@ -123,6 +126,26 @@ describe("who may read the numbers", () => {
     const res = await run(getAnalytics, { token: tokenFor("admin") });
     expect(res.statusCode).toBe(500);
     expect(JSON.stringify(res.body)).not.toContain("10.0.0.1");
+  });
+});
+
+describe("right now on its own (Check again)", () => {
+  it("needs analytics view, like the rest", async () => {
+    expect((await run(getAnalyticsNow, { token: null })).statusCode).toBe(401);
+    expect((await run(getAnalyticsNow, { token: tokenFor("editor") })).statusCode).toBe(403);
+    expect(readNowMock).not.toHaveBeenCalled();
+  });
+
+  it("answers with just the people on the site and whether counting is on, without the whole report", async () => {
+    const res = await run(getAnalyticsNow, { token: tokenFor("viewer", { analytics: "view" }) });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ collecting: true, people: 4 });
+    expect(readReportMock).not.toHaveBeenCalled();
+  });
+
+  it("says it could not load when the database fails", async () => {
+    readNowMock.mockRejectedValue(new Error("boom"));
+    expect((await run(getAnalyticsNow, { token: tokenFor("admin") })).statusCode).toBe(500);
   });
 });
 

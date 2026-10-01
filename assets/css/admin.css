@@ -2253,6 +2253,14 @@ tr.nl-click:hover { background: var(--tint); }
 #view-analytics .admin-seg:hover:not(.is-active) { color: var(--maroon); }
 #view-analytics .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
 
+/* A new period: what is showing dims until its own numbers arrive (aria-busy says so to a reader). */
+#view-analytics .an-loading { font-size: 0.85rem; color: var(--slate-soft); }
+#view-analytics .an-loading:empty { display: none; }
+#view-analytics.is-loading .an-figures,
+#view-analytics.is-loading .an-card { opacity: 0.45; transition: opacity .2s; }
+#view-analytics .an-period-note { margin: -6px 0 16px; max-width: 72ch; font-size: 0.82rem; color: var(--slate-soft); text-wrap: pretty; }
+#view-analytics .an-period-note:empty { display: none; }
+
 /* ---- the figures: two across on a phone, four on a desktop ---- */
 #view-analytics .an-figures { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 #view-analytics .an-stat .n { font-variant-numeric: tabular-nums; }

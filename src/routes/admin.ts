@@ -214,6 +214,7 @@ import { newsletterLinkTags } from "../email/tracked-links";
 import { createRateLimiter } from "../portal/request-limiter";
 import { clampPage } from "../db/admin";
 import { config } from "../config";
+import { sendTransferCancelled } from "../ball/transfer-send";
 
 // The role-based admin login endpoint (REQ-062 · TASK-105). POST /api/admin/login verifies a staff
 // user's email + password (scrypt) and, on success, returns a signed session token — the bearer-token
@@ -3736,6 +3737,12 @@ export async function postAdminBallCancelBooking(
         : res.status(409).json({
             error: `That booking is already ${outcome.status}, so there are no seats to give back.`,
           });
+    }
+    // TASK-484: an unpaid bank transfer booking cancelled by staff is told, so nobody goes on
+    // believing their seats are held. After the commit, best effort. A transfer that had been paid
+    // is a refund conversation, so it gets nothing automatic.
+    if (outcome.paymentMethod === "transfer" && outcome.wasStatus === "pending") {
+      void sendTransferCancelled(outcome.booking);
     }
     return res.status(200).json({ cancelled: reference, seatsReturned: outcome.seats });
   } catch (err) {

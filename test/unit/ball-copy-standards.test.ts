@@ -7,7 +7,12 @@ import { renderBallThankYou } from "../../src/ball/thank-you-page";
 import { buildBallConfirmationEmail } from "../../src/ball/confirmation-email";
 import { buildBallReminderEmail } from "../../src/ball/reminder-email";
 import { renderGuestPage, renderGuestNotFound } from "../../src/ball/guest-page";
-import { buildTransferDetailsEmail, buildTransferCancelledEmail, buildTransferReminderEmail } from "../../src/ball/transfer-email";
+import {
+  buildTransferDetailsEmail,
+  buildTransferCancelledEmail,
+  buildTransferReminderEmail,
+  buildInvoicePaidEmail,
+} from "../../src/ball/transfer-email";
 
 // TASK-325: two house rules the rest of the site already followed and the ball surfaces did
 // not. Both are asserted on what a reader actually SEES — the rendered output, and the HTML
@@ -61,7 +66,12 @@ const SURFACES: Array<[string, string]> = [
     const details = buildTransferDetailsEmail(booking, bank, "2026-10-08");
     const cancelled = buildTransferCancelledEmail(booking);
     const reminder = buildTransferReminderEmail(booking, bank, "2026-10-08");
+    // TASK-489: the accounts team's own email once paid.
+    const invoicePaid = buildInvoicePaidEmail(booking, { invoiceUrl: "https://nbcc.scot/ball/invoice/42.abc" });
     return [
+      ["invoice paid email (html)", invoicePaid.html],
+      ["invoice paid email (text)", invoicePaid.text],
+      ["invoice paid subject", invoicePaid.subject],
       ["transfer reminder email (html)", reminder.html],
       ["transfer reminder email (text)", reminder.text],
       ["transfer reminder subject", reminder.subject],

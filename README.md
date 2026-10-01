@@ -2832,8 +2832,12 @@ transfer on the ticket page". Staff can add a booking by hand once the bank deta
   `invoice_po`, `invoice_accounts_email`, `invoice_phone`). They are all nullable; a booking without
   an invoice has none.
 - **The emails** link the invoice: the bank details, the reminder, the cancellation and the
-  confirmation once paid. Every one of them **copies the accounts team** when an email was given
-  for them (`invoiceCc`), unless it is the buyer's own.
+  confirmation once paid. The bank details, reminder and cancellation **copy the accounts team**
+  when an email was given for them (`invoiceCc`), unless it is the buyer's own.
+- **Once paid, two separate emails** (TASK-489, Jaimie's choice). The buyer's confirmation carries
+  the private link to add the guests, so it goes to the buyer alone. The accounts team gets its own
+  "Payment received: Festive Ball invoice …" email (`buildInvoicePaidEmail`) with the amount and the
+  invoice, now marked paid. Each is sent on its own, so one failing never stops the other.
 - **Admin:** the Awaiting transfer list shows the company and an **Invoice** link under the buyer.
 
 **Telling the team (TASK-487, stage 4)**

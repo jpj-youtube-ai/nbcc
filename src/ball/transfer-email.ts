@@ -198,6 +198,34 @@ ${BALL_TEXT_FOOTER}`;
 // Their money may already be on its way when the reminder goes.
 const ALREADY_PAID = "If you've already paid, thank you, there's nothing more to do. It can take a day or two to reach us.";
 
+/**
+ * TASK-489: to a company's accounts team when the money arrives. Their own email, not a copy of the
+ * buyer's confirmation, which carries the private link to add the guests.
+ */
+export function buildInvoicePaidEmail(booking: TransferEmailBooking, opts: { invoiceUrl: string }): TransferEmail {
+  const ref = escapeHtml(booking.reference);
+  const amount = money(booking.totalPence);
+
+  const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">The Festive Ball</p>
+  <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:24px;font-weight:800;margin:0 0 14px">Payment received. Thank you.</h1>
+  <p ${P}>We've received <b>${amount}</b> for invoice <b>${ref}</b>, for ${escapeHtml(describe(booking))} at the Festive Ball.</p>
+  ${invoiceHtml(opts.invoiceUrl, "The invoice is now marked paid, for your records.")}
+  ${contactPanel()}`;
+
+  const text = `PAYMENT RECEIVED. THANK YOU.
+
+We've received ${amount} for invoice ${booking.reference}, for ${describe(booking)}
+at the Festive Ball.
+${invoiceText(opts.invoiceUrl, "The invoice is now marked paid, for your records.")}
+${BALL_TEXT_FOOTER}`;
+
+  return {
+    subject: `Payment received: Festive Ball invoice ${booking.reference}`,
+    html: ballEmailShell(body),
+    text,
+  };
+}
+
 export function buildTransferCancelledEmail(booking: TransferEmailBooking, opts: InvoiceLink = {}): TransferEmail {
   const name = escapeHtml(booking.buyerName);
   const ref = escapeHtml(booking.reference);

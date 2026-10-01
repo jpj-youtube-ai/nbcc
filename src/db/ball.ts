@@ -87,10 +87,20 @@ const SETTINGS_SQL = `SELECT total_tables, seats_per_table, held_seats, gate_ope
 // Sold seats, split by how they were bought. 'pending' counts as well as 'paid': a booking
 // awaiting Stripe confirmation is still holding those seats, and releasing them early would
 // let the room oversell in the seconds between payment and webhook.
+//
+// TASK-484: a pending booking counts only while it can still become paid.
+//   * A bank transfer holds its seats until an admin marks it paid or staff cancel it.
+//   * A card checkout holds them for an hour. Stripe expires the session at 30 minutes, and its
+//     expired event cancels the booking; if that event were ever lost, the seats would otherwise
+//     stay held for good. The status is left alone, so a late "completed" still finds the booking
+//     pending and marks it paid.
 const SOLD_SQL = `SELECT
     COALESCE(SUM(quantity) FILTER (WHERE kind = 'table'), 0) AS tables_sold,
     COALESCE(SUM(quantity) FILTER (WHERE kind = 'seat'),  0) AS loose_seats_sold
-  FROM ball_bookings WHERE status IN ('pending', 'paid')`;
+  FROM ball_bookings
+  WHERE status = 'paid'
+     OR (status = 'pending'
+         AND (payment_method = 'transfer' OR created_at > now() - interval '1 hour'))`;
 
 // Only live holds count. Expired rows are ignored by the WHERE clause rather than deleted,
 // so a plain read never has to take a write lock.
@@ -128,9 +138,9 @@ function toSettings(r: SettingsRow): BallSettings {
 
 // A querier is either the pool or a client already inside a transaction, so the same three
 // reads back both the plain availability read and the locked reservation claim below.
-type Querier = Pick<PoolClient, "query">;
+export type Querier = Pick<PoolClient, "query">;
 
-async function readCapacityState(db: Querier): Promise<CapacityState> {
+export async function readCapacityState(db: Querier): Promise<CapacityState> {
   const s = await db.query<SettingsRow>(SETTINGS_SQL);
   const sold = await db.query<{ tables_sold: string; loose_seats_sold: string }>(SOLD_SQL);
   const held = await db.query<{ reserved_seats: string }>(RESERVED_SQL);
@@ -238,7 +248,7 @@ export async function releaseReservation(token: string): Promise<void> {
 //
 // A booking is written as 'pending' the moment the Stripe session is created, and it is the
 // pending row — not the short reservation — that holds the seats from then on. That ordering
-// matters: the 15-minute reservation only has to cover the gap between "choose" and "session
+// matters: the 2-minute reservation only has to cover the gap between "choose" and "session
 // created", after which the booking itself is the record of intent. Stripe's own 30-minute
 // session expiry then closes the loop, via checkout.session.expired -> cancelled, so an
 // abandoned checkout gives its seats back without a sweeper.
@@ -611,6 +621,8 @@ export interface BallBookingRow {
   status: string;
   createdAt: string;
   paidAt: string | null;
+  /** TASK-484: "card" (Stripe) or "transfer" (bank transfer, marked paid by an admin). */
+  paymentMethod: string;
 }
 
 // TASK-337: how many checkouts were started and never finished.
@@ -627,9 +639,9 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at
+            created_at, paid_at, payment_method
        FROM ball_bookings
-      WHERE status = 'pending'
+      WHERE status = 'pending' AND payment_method = 'card'
       ORDER BY created_at DESC
       LIMIT $1`,
     [Math.min(Math.max(limit, 1), 200)],
@@ -649,12 +661,13 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
     status: r.status,
     createdAt: r.created_at,
     paidAt: r.paid_at,
+    paymentMethod: r.payment_method,
   }));
 }
 
 export async function countAbandonedBookings(): Promise<number> {
   const res = await pool.query<{ n: string }>(
-    `SELECT COUNT(*)::text AS n FROM ball_bookings WHERE status = 'pending'`,
+    `SELECT COUNT(*)::text AS n FROM ball_bookings WHERE status = 'pending' AND payment_method = 'card'`,
   );
   return Number(res.rows[0]?.n ?? 0);
 }
@@ -665,7 +678,7 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at
+            created_at, paid_at, payment_method
        FROM ball_bookings
       WHERE status <> 'pending'
       ORDER BY created_at DESC
@@ -687,6 +700,7 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
     status: r.status,
     createdAt: r.created_at,
     paidAt: r.paid_at,
+    paymentMethod: r.payment_method,
   }));
 }
 

@@ -167,6 +167,8 @@
         var giftAidLabel = form.elements.giftAid.closest("label");
         if (giftAidLabel) giftAidLabel.hidden = invoicing;
         if (invoicing) form.elements.giftAid.checked = false;
+        var giftAidNote = document.getElementById("ballGiftAidNote");
+        if (giftAidNote) giftAidNote.hidden = invoicing;
       }
     }
 

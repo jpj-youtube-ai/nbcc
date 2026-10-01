@@ -2822,7 +2822,10 @@ ticked "Offer bank transfer on the ticket page".
     bank details, once cancelled.
   - The link is signed (`src/ball/invoice-token.ts`, with `ADMIN_SESSION_SECRET`), so a booking
     number alone opens nothing. A bad link is "Not found". The page is `private, no-store` and
-    `noindex`.
+    `noindex`. Changing `ADMIN_SESSION_SECRET` breaks every invoice link already emailed, as it
+    does the thank-you letter links. The Awaiting transfer list always shows a working link, for staff
+    to send on.
+  - Anything neither unpaid nor paid (cancelled, or refunded) shows as cancelled.
 - **Its details** are stored on the booking (`ball_bookings.invoice_company`, `invoice_address`,
   `invoice_po`, `invoice_accounts_email`, `invoice_phone`). They are all nullable; a booking without
   an invoice has none.

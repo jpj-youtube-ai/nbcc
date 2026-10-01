@@ -181,6 +181,13 @@ describe("POST /api/ball/bank-transfer", () => {
       expect(body(await post({ ...order, invoice })).payBy).toBe(tomorrow);
     });
 
+    // Gift Aid is dropped for an invoice, so a request ticking it without a donation is not refused for it.
+    it("drops Gift Aid before checking it needs a donation", async () => {
+      const res = await post({ ...order, donationPence: 0, giftAid: true, invoice });
+      expect(res.statusCode).toBe(201);
+      expect(createTransferBookingMock.mock.calls[0][0].giftAid).toBe(false);
+    });
+
     it("refuses an invoice without the company name or address", async () => {
       expect((await post({ ...order, invoice: { ...invoice, company: "" } })).statusCode).toBe(400);
       expect((await post({ ...order, invoice: { ...invoice, address: " " } })).statusCode).toBe(400);

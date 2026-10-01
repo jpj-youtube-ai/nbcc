@@ -103,6 +103,14 @@ describe("GET /ball/invoice/:token", () => {
     expect(res.body).not.toContain("12345678");
   });
 
+  // Anything that is neither owed nor paid (a refund, say) must not ask for money either.
+  it("treats any other status as cancelled, with no bank details", async () => {
+    getBookingForInvoiceMock.mockResolvedValue({ ...booking, status: "refunded" });
+    const res = await get(goodToken);
+    expect(res.body).not.toContain("12345678");
+    expect(res.body).toContain("cancelled");
+  });
+
   it("says it is paid once it is", async () => {
     getBookingForInvoiceMock.mockResolvedValue({ ...booking, status: "paid", paidOn: "2026-10-05" });
     expect((await get(goodToken)).body).toMatch(/Paid/);

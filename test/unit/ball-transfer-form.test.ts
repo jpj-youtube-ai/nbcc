@@ -190,6 +190,7 @@ describe("asking for an invoice, on the form (TASK-486)", () => {
     expect(fields().hidden).toBe(false);
     expect(giftAidLabel().hidden).toBe(true);
     expect(input("giftAid").checked).toBe(false);
+    expect((el("ballGiftAidNote") as HTMLElement).hidden).toBe(true);
   });
 
   it("brings Gift Aid back when unticked", async () => {

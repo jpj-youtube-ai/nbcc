@@ -46,22 +46,24 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
   if (!isLoopback(req) && !limiter.allow(req.ip ?? "unknown", Date.now())) {
     return res.status(429).json({ error: "Too many bookings from here. Please try again later, or email events@nbcc.scot." });
   }
-  const parsed = purchaseSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid booking request", details: parsed.error.issues });
-  }
   // TASK-486: "My company needs an invoice". The company and its address are required; a company
-  // cannot make a Gift Aid declaration, so an invoiced booking never carries one.
+  // cannot make a Gift Aid declaration, so an invoiced booking never carries one. Dropped before the
+  // booking is checked, so Gift Aid ticked without a donation is not a reason to refuse it.
   let invoice: InvoiceDetails | null = null;
-  if (req.body?.invoice != null) {
-    const inv = invoiceSchema.safeParse(req.body.invoice);
+  const rawInvoice: unknown = req.body?.invoice;
+  if (rawInvoice && typeof rawInvoice === "object") {
+    const inv = invoiceSchema.safeParse(rawInvoice);
     if (!inv.success) {
       return res.status(400).json({ error: "Invalid invoice details", details: inv.error.issues });
     }
     invoice = inv.data;
   }
+  const parsed = purchaseSchema.safeParse(invoice ? { ...req.body, giftAid: false } : req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid booking request", details: parsed.error.issues });
+  }
   // A transfer has no card fee, whatever the form sent.
-  const purchase = { ...parsed.data, coverFee: false, giftAid: invoice ? false : parsed.data.giftAid };
+  const purchase = { ...parsed.data, coverFee: false };
 
   try {
     const bank = await getTransferSettings();
@@ -153,7 +155,9 @@ export async function getInvoicePage(req: Request, res: Response): Promise<void>
       res.status(404).type("text").send("Not found");
       return;
     }
-    const status = booking.status === "paid" || booking.status === "cancelled" ? booking.status : "pending";
+    // Only a pending booking asks for money. Anything neither pending nor paid (cancelled, or a
+    // refund) reads as cancelled, with no bank details.
+    const status = booking.status === "paid" || booking.status === "pending" ? booking.status : "cancelled";
     // Still owed: the account to pay into. Whether or not transfers are still offered to new buyers,
     // someone who has already booked needs it, so only the details themselves are checked.
     const s = status === "pending" ? await getTransferSettings() : null;

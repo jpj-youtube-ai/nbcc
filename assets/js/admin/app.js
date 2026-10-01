@@ -1146,6 +1146,8 @@
     if (r.business_name && r.donor_name && r.donor_name !== r.business_name) {
       out += '<span class="admin-fulfil-sub">' + H.escapeHtml(r.donor_name) + "</span>";
     }
+    // TASK-491: due a thank you call. The server works this out (callDue), so the page only says it.
+    if (r.callDue) out += '<span class="admin-pill is-call-due fx-call-pill">Time to call</span>';
     return out + rowNewPill("fulfilments", r.created_at);
   }
 
@@ -1373,19 +1375,31 @@
       "fulfilment.badge_sent": "Badge sent",
       "fulfilment.social_done": "Social post done",
       "fulfilment.added_to_supporters": "Added to the supporters list",
-      "fulfilment.preferences": "They filled in the form"
+      "fulfilment.preferences": "They filled in the form",
+      "fulfilment.called": "Called them"
     };
     return (
       '<ul class="fx-history-list">' +
       rows.map(function (a) {
         var what = LABELS[a.action] || a.action;
+        var data = a.data || {};
+        // TASK-491: a phone change says what it changed to, and where a copied number came from.
+        if (a.action === "fulfilment.phone") {
+          what = data.source === "outreach"
+            ? "Phone number copied from Contact businesses"
+            : data.phone ? "Phone number set to " + data.phone : "Phone number removed";
+        }
         // Actors are stored as "admin:someone@example.com"; the system jobs as "script:<name>".
         var who = String(a.actor || "");
         who = who.indexOf("admin:") === 0 ? who.slice(6)
             : who.indexOf("script:") === 0 ? "an automatic job"
             : who || "unknown";
+        var note = a.action === "fulfilment.called" && data.note
+          ? '<span class="fx-hist-note">' + H.escapeHtml(data.note) + "</span>"
+          : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
-          '<span class="fx-hist-who">' + H.fmtDate(a.created_at) + " · " + H.escapeHtml(who) + "</span></li>";
+          '<span class="fx-hist-who">' + H.fmtDate(a.created_at) + " · " + H.escapeHtml(who) + "</span>" +
+          note + "</li>";
       }).join("") +
       "</ul>"
     );
@@ -1409,9 +1423,174 @@
       });
   }
 
+  // ---- thank you calls (TASK-491) ----
+  // Jaimie phones each business that gives monthly every three months while they are still giving,
+  // to thank them and ask if there is anything we can do. The server decides who is due (callDue in
+  // src/business/call-due.ts); this panel shows their number and the last call, and records the next.
+  var callNotice = {}; // id -> { call?: message, phone?: message }, shown once after a save
+
+  // A number a phone can dial: digits and a leading +. "+44 (0)131" dials as +44131, so the (0) goes.
+  function telHref(phone) {
+    var s = String(phone || "").trim();
+    if (s.charAt(0) === "+") s = s.replace(/\(0\)/g, "");
+    return "tel:" + s.replace(/[^0-9+]/g, "");
+  }
+
+  function fulfilmentCallState(r) {
+    if (!r.supporting) {
+      return '<span class="fx-state fx-state--waiting">No calls needed</span> ' +
+        (r.supporting_since
+          ? "Their monthly gift has stopped, so there is no reminder to call."
+          : "They have no paid monthly gift yet.");
+    }
+    if (r.callDue) {
+      return '<span class="fx-state fx-state--todo">Time to call</span> ' +
+        (r.callDueOn ? "Due since " + H.fmtDate(r.callDueOn) + "." : "");
+    }
+    return '<span class="fx-state fx-state--done">Next call due ' + H.fmtDate(r.callDueOn) + "</span>";
+  }
+
+  function fulfilmentCall(r) {
+    var notice = callNotice[r.id] || {};
+    var phone = r.phone
+      ? '<a class="fx-tel" href="' + H.escapeHtml(telHref(r.phone)) + '">' + H.escapeHtml(r.phone) + "</a>"
+      : '<span class="fx-none">No phone number yet</span>';
+    var last = r.last_called_at
+      ? H.fmtDate(r.lastCalledOn || r.last_called_at) + (r.last_called_by ? " by " + H.escapeHtml(r.last_called_by) : "")
+      : '<span class="fx-none">Not called yet</span>';
+    var rows =
+      fulfilRow("Phone", phone) +
+      fulfilRow("Last called", last) +
+      (r.last_called_at && r.last_call_note
+        ? fulfilRow("Note from that call", '<span class="fx-address">' + H.escapeHtml(r.last_call_note) + "</span>")
+        : "");
+    var forms = "";
+    if (canEdit("business-supporters")) {
+      forms =
+        '<div class="fx-call-forms">' +
+          '<form class="fx-call-form" data-call-form="' + r.id + '" novalidate>' +
+            '<label class="fx-call-label" for="fxNote' + r.id + '">Note about the call (optional)</label>' +
+            '<textarea class="fx-call-input" id="fxNote' + r.id + '" name="note" rows="3" maxlength="500"></textarea>' +
+            '<p class="fx-help">Up to 500 characters. Marking the call clears the reminder for 3 months.</p>' +
+            '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="submit">Mark as called</button></div>' +
+            '<p class="fx-call-status" data-call-status role="status" aria-live="polite">' +
+              H.escapeHtml(notice.call || "") + "</p>" +
+          "</form>" +
+          '<form class="fx-call-form" data-phone-form="' + r.id + '" novalidate>' +
+            '<label class="fx-call-label" for="fxPhone' + r.id + '">' +
+              (r.phone ? "Change their number" : "Add their number") + "</label>" +
+            '<div class="fx-call-row">' +
+              '<input class="fx-call-input" id="fxPhone' + r.id + '" name="phone" type="tel" maxlength="40" ' +
+                'autocomplete="off" value="' + H.escapeHtml(r.phone || "") + '">' +
+              '<button class="admin-btn admin-btn--small" type="submit">Save number</button>' +
+            "</div>" +
+            '<p class="fx-call-status" data-phone-status role="status" aria-live="polite">' +
+              H.escapeHtml(notice.phone || "") + "</p>" +
+          "</form>" +
+        "</div>";
+    }
+    return (
+      '<p class="fx-letter">' + fulfilmentCallState(r) + "</p>" +
+      '<dl class="fx-dl">' + rows + "</dl>" +
+      forms
+    );
+  }
+
+  // The line above the list. null hides it: while the list has never loaded, or failed, it does not
+  // know, and "No calls due" would be a guess dressed as a fact.
+  function fulfilmentCallCount(rows) {
+    var line = el("fulfilmentCallCount");
+    if (!line) return;
+    if (!rows) {
+      line.hidden = true;
+      line.textContent = "";
+      return;
+    }
+    var n = rows.filter(function (r) { return r.callDue; }).length;
+    line.textContent = n === 0 ? "No calls due"
+      : n === 1 ? "1 business is due a call"
+      : n + " businesses are due a call";
+    line.classList.toggle("is-due", n > 0);
+    line.hidden = false;
+  }
+
+  function callFormStatus(form, attr, msg, isError) {
+    var s = form.querySelector("[" + attr + "]");
+    if (!s) return;
+    s.textContent = msg || "";
+    s.classList.toggle("is-error", !!isError);
+  }
+
+  function markCalled(form) {
+    var id = form.getAttribute("data-call-form");
+    var box = form.querySelector('textarea[name="note"]');
+    var note = box ? String(box.value || "").trim() : "";
+    if (note.length > 500) {
+      callFormStatus(form, "data-call-status", "A note can be up to 500 characters.", true);
+      return;
+    }
+    var biz = document.querySelector(".fx-summary.is-open .admin-fulfil-biz");
+    if (
+      !window.confirm(
+        "Record a call to " + (biz ? biz.textContent : "this business") + " today?\n\n" +
+          "This is recorded against your name and clears the reminder for 3 months."
+      )
+    ) {
+      return;
+    }
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+    callFormStatus(form, "data-call-status", "Saving…", false);
+    authFetch("/api/admin/fulfilments/" + encodeURIComponent(id) + "/calls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(note ? { note: note } : {}),
+    })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (out) {
+        if (!out) throw new Error("not recorded");
+        callNotice[id] = { call: "Call recorded against your name." };
+        loadFulfilments();
+      })
+      .catch(function () {
+        if (btn) btn.disabled = false;
+        callFormStatus(form, "data-call-status", "Could not record the call. Please try again.", true);
+      });
+  }
+
+  function savePhone(form) {
+    var id = form.getAttribute("data-phone-form");
+    var input = form.querySelector('input[name="phone"]');
+    var phone = input ? String(input.value || "") : "";
+    var btn = form.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
+    callFormStatus(form, "data-phone-status", "Saving…", false);
+    authFetch("/api/admin/fulfilments/" + encodeURIComponent(id) + "/phone", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: phone }),
+    })
+      .then(okJsonOrSaid)
+      .then(function (out) {
+        callNotice[id] = { phone: out && out.phone ? "Phone number saved." : "Phone number removed." };
+        loadFulfilments();
+      })
+      .catch(function (err) {
+        if (btn) btn.disabled = false;
+        callFormStatus(
+          form,
+          "data-phone-status",
+          (err && err.said) || "Could not save the number. Please try again.",
+          true
+        );
+      });
+  }
+
   function fulfilmentDetail(r) {
     return (
       '<div class="fx-detail">' +
+        '<section class="fx-panel fx-panel--wide fx-call" data-call-panel="' + r.id + '">' +
+          "<h4>Thank you call</h4>" + fulfilmentCall(r) + "</section>" +
         '<section class="fx-panel"><h4>Their invite</h4>' + fulfilmentInvite(r) + "</section>" +
         '<section class="fx-panel"><h4>Thank-you letter</h4>' + fulfilmentLetter(r) + "</section>" +
         '<section class="fx-panel"><h4>What they asked for</h4>' + fulfilmentSubmission(r) + "</section>" +
@@ -1453,6 +1632,7 @@
   function toggleFulfilment(id) {
     var n = Number(id);
     fulfilOpenId = fulfilOpenId === n ? null : n;
+    callNotice = {};
     fulfilmentStatus("");
     loadFulfilments();
   }
@@ -1465,10 +1645,14 @@
       .then(okJson)
       .then(function (d) {
         wrap.innerHTML = fulfilmentsTable(d.results || []);
+        fulfilmentCallCount(d.results || []);
+        // A save's message has now been shown once, in the panel it belongs to.
+        callNotice = {};
         // The open row renders a placeholder for its history; fill it in.
         if (fulfilOpenId != null) loadFulfilmentHistory(fulfilOpenId);
       })
       .catch(function () {
+        fulfilmentCallCount(null);
         wrap.innerHTML = '<p class="admin-empty">Business supporters are unavailable.</p>';
       });
   }
@@ -6891,6 +7075,26 @@
       // first stops a button press also collapsing the row out from under itself.
       var toggle = t.closest("[data-fulfil-toggle]");
       if (toggle) return toggleFulfilment(toggle.getAttribute("data-fulfil-toggle"));
+    });
+
+    // TASK-491: the two forms in a business's Call panel. Delegated, because the panel is redrawn
+    // with the list after every save.
+    content.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form || !form.hasAttribute) return;
+      if (form.hasAttribute("data-call-form")) {
+        e.preventDefault();
+        markCalled(form);
+      } else if (form.hasAttribute("data-phone-form")) {
+        e.preventDefault();
+        savePhone(form);
+      }
+    });
+    // The note box grows with what is typed rather than scrolling inside itself (field-sizing does
+    // this in the browsers that have it; this covers the rest).
+    content.addEventListener("input", function (e) {
+      var t = e.target;
+      if (t && t.matches && t.matches("textarea.fx-call-input")) nlFitBox(t);
     });
 
     // The supporter rows are role="button" tabindex="0", so they have to answer Enter and Space

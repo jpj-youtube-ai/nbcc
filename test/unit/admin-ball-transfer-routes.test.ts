@@ -154,6 +154,18 @@ describe("marking a transfer paid", () => {
     expect(m.sendTransferArrived).not.toHaveBeenCalled();
   });
 
+  // Paid, then cancelled and refunded by hand: bringing it back would send a confirmation for money
+  // the charity has returned.
+  it("refuses a booking that had been paid before it was cancelled", async () => {
+    m.markTransferPaid.mockResolvedValue({ ok: false, reason: "was_paid" });
+    const res = await call(postAdminMarkTransferPaid, tokenFor("admin"), { confirmTotalPence: 102_000 }, params);
+    expect(res.statusCode).toBe(409);
+    expect((res.body as { error: string }).error).toBe(
+      "That booking had been paid before it was cancelled, so it can't be brought back. Make a new booking instead.",
+    );
+    expect(m.sendTransferArrived).not.toHaveBeenCalled();
+  });
+
   it("says plainly when the seats have gone since it was cancelled", async () => {
     m.markTransferPaid.mockResolvedValue({ ok: false, reason: "seats_gone" });
     const res = await call(postAdminMarkTransferPaid, tokenFor("admin"), { confirmTotalPence: 102_000 }, params);

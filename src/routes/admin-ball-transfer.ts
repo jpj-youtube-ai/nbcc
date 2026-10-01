@@ -104,6 +104,7 @@ const MARK_PAID_REFUSALS = {
   not_found: [404, "There is no booking with that reference."],
   not_transfer: [409, "That booking was paid by card, so Stripe confirms it, not us."],
   already_paid: [409, "That booking is already marked paid."],
+  was_paid: [409, "That booking had been paid before it was cancelled, so it can't be brought back. Make a new booking instead."],
   amount_mismatch: [409, "That isn't the amount for this booking. Reload the list and check it."],
   seats_gone: [409, "Its seats have been sold since it was cancelled. Refund the transfer by hand."],
 } as const;

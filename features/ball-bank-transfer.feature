@@ -56,6 +56,14 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     Then the admin answer is 200
     And the booking is paid with a guest link, marked paid by "ann.transfer.admin.bdd@example.com"
 
+  Scenario: A transfer paid and then cancelled cannot be brought back
+    Given bank transfer is switched on with bank details
+    When a buyer books 1 table to pay by bank transfer
+    And "ann.transfer.admin.bdd@example.com" marks it paid confirming the right amount
+    And "ed.transfer.admin.bdd@example.com" cancels it
+    And "ann.transfer.admin.bdd@example.com" marks it paid confirming the right amount
+    Then the admin answer is 409
+
   Scenario: A cancelled transfer booking cannot come back once its seats are sold
     Given the ball is reset to 1 tables of 10 with 0 held back
     And bank transfer is switched on with bank details

@@ -38,7 +38,7 @@
 
 | File | Change |
 |---|---|
-| `migrations/1791000000010_ball-bank-transfer.js` | **new.** `ball_bookings.payment_method`, `pay_by`, `marked_paid_by`; `ball_settings.transfer_on`, `transfer_account_name`, `transfer_sort_code`, `transfer_account_number`. |
+| `migrations/1790900000002_ball-bank-transfer.js` | **new.** `ball_bookings.payment_method`, `pay_by`, `marked_paid_by`; `ball_settings.transfer_on`, `transfer_account_name`, `transfer_sort_code`, `transfer_account_number`. |
 | `src/ball/transfer.ts` | **new.** Pure: the bank details schema, sort code formatting, `transferReady`, `payByDate`, `TRANSFER_DAYS`. |
 | `src/db/ball-transfer.ts` | **new.** Settings read and write; `createTransferBooking` (under the settings lock); `listAwaitingTransfers`; `markTransferPaid` (paid or reinstated, minting the guest token); `extendPayBy`; `abandonReplacedCheckout`. |
 | `src/db/ball.ts` | Capacity: a pending CARD booking holds seats for one hour at most. The abandoned list and count are card only. `listBookings` and `cancelBooking` return `paymentMethod` (cancel also returns the buyer's name and email). |
@@ -66,7 +66,7 @@ copy below follows them (no em dashes, plain words), but those tests are the aut
 
 ### Task 1: The migration
 
-**Files:** create `migrations/1791000000010_ball-bank-transfer.js`.
+**Files:** create `migrations/1790900000002_ball-bank-transfer.js`.
 
 - [ ] **Choose the number.** Run `ls migrations | tail -3` and `gh pr diff 602 --name-only | grep migrations`.
   - The parked analytics PRs use `1791000000000` and `1791000000001`, so number this above both,

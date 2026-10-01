@@ -151,7 +151,7 @@ export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
 
 export type MarkPaidOutcome =
   | { ok: true; reinstated: boolean; booking: BallBookingWrite; guestToken: string }
-  | { ok: false; reason: "not_found" | "not_transfer" | "already_paid" | "amount_mismatch" | "seats_gone" };
+  | { ok: false; reason: "not_found" | "not_transfer" | "already_paid" | "was_paid" | "amount_mismatch" | "seats_gone" };
 
 interface BookingDbRow {
   id: number;
@@ -172,6 +172,7 @@ interface BookingDbRow {
   status: string;
   payment_method: string;
   guest_token: string | null;
+  cancelled_from: string | null;
 }
 
 function toWrite(r: BookingDbRow): BallBookingWrite {
@@ -212,7 +213,7 @@ export async function markTransferPaid(
     const found = await client.query<BookingDbRow>(
       `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
               buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence, gift_aid,
-              newsletter_opt_in, status, payment_method, guest_token
+              newsletter_opt_in, status, payment_method, guest_token, cancelled_from
          FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
       [reference],
     );
@@ -221,6 +222,9 @@ export async function markTransferPaid(
     if (row.payment_method !== "transfer") return { ok: false, reason: "not_transfer" };
     if (row.status === "paid") return { ok: false, reason: "already_paid" };
     if (row.status !== "pending" && row.status !== "cancelled") return { ok: false, reason: "not_found" };
+    // Paid, then cancelled and refunded by hand: bringing it back would confirm money the charity
+    // has returned. Only a transfer cancelled while still unpaid can come back (TASK-484 review).
+    if (row.status === "cancelled" && row.cancelled_from !== "pending") return { ok: false, reason: "was_paid" };
     if (row.total_pence !== confirmTotalPence) return { ok: false, reason: "amount_mismatch" };
 
     const reinstated = row.status === "cancelled";

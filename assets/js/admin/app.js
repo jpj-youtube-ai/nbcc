@@ -8586,14 +8586,15 @@
   function cancelCell(b) {
     // TASK-484: a cancelled bank transfer booking whose money arrives after all comes back, if its
     // seats are still free. Confirming money is for admins.
-    if (b.status === "cancelled" && b.paymentMethod === "transfer" && isAdmin()) {
+    // Only one cancelled while still unpaid: one paid and then cancelled has been refunded by hand.
+    if (b.status === "cancelled" && b.paymentMethod === "transfer" && b.cancelledFrom === "pending" && isAdmin()) {
       return markPaidButton(b, true);
     }
     if (b.status !== "pending" && b.status !== "paid") return "—";
     if (!canEdit("ball")) return "";
+    var transferMark = b.paymentMethod !== "transfer" ? "" : b.status === "pending" ? ' data-transfer="1"' : ' data-paid-transfer="1"';
     return '<button type="button" class="btn btn-small btn-danger" data-cancel-booking="' +
-      H.escapeHtml(b.reference) + '"' + (b.paymentMethod === "transfer" && b.status === "pending" ? ' data-transfer="1"' : "") +
-      ">Cancel</button>";
+      H.escapeHtml(b.reference) + '"' + transferMark + ">Cancel</button>";
   }
 
   // ---- TASK-484: paying for the Ball by bank transfer -------------------------------------------
@@ -9053,9 +9054,13 @@
       btn.getAttribute("data-transfer")
         ? "Cancel booking " + reference + "?"
           + "\n\nIt hasn't been paid. The seats go straight back on sale, and they're emailed that it's cancelled."
-        : "Cancel booking " + reference + "?"
-          + "\n\nThe seats go straight back on sale."
-          + "\n\nThis does NOT refund any money. If they paid, refund them in Stripe separately."
+        : btn.getAttribute("data-paid-transfer")
+          ? "Cancel booking " + reference + "?"
+            + "\n\nThe seats go straight back on sale."
+            + "\n\nThis does NOT refund any money. They paid by bank transfer, so refund them from the bank."
+          : "Cancel booking " + reference + "?"
+            + "\n\nThe seats go straight back on sale."
+            + "\n\nThis does NOT refund any money. If they paid, refund them in Stripe separately."
     );
     if (!ok) return;
     var note = window.prompt("Why? (optional, kept in the audit log)", "") || "";

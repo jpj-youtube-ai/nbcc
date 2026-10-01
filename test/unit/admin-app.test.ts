@@ -1427,7 +1427,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       ballBookings = [{
         id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
         totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "cancelled",
-        createdAt: "2026-10-01T09:00:00Z", paidAt: null, paymentMethod: "transfer",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: null, paymentMethod: "transfer", cancelledFrom: "pending",
       }];
       loginToken = tokenFor("admin");
       await openBall();
@@ -1442,11 +1442,39 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       ballBookings = [{
         id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
         totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "cancelled",
-        createdAt: "2026-10-01T09:00:00Z", paidAt: null, paymentMethod: "transfer",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: null, paymentMethod: "transfer", cancelledFrom: "pending",
       }];
       asEditorWithBallEdit();
       await openBall();
       expect(document.querySelector("#ballBookings [data-mark-paid]")).toBeNull();
+    });
+
+    // Paid, then cancelled and refunded by hand: there is nothing to bring back.
+    it("does not offer Mark as paid on a transfer that had been paid before it was cancelled", async () => {
+      ballBookings = [{
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "cancelled",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: "2026-10-02T09:00:00Z", paymentMethod: "transfer", cancelledFrom: "paid",
+      }];
+      loginToken = tokenFor("admin");
+      await openBall();
+      expect(document.querySelector("#ballBookings [data-mark-paid]")).toBeNull();
+    });
+
+    // Their money came by bank transfer, so the refund goes back the same way, not through Stripe.
+    it("tells staff cancelling a paid transfer to refund it from the bank", async () => {
+      ballBookings = [{
+        id: 1, reference: "BALL-7KQ2MZ", kind: "table", quantity: 1, seats: 10, buyerName: "Ada Test", buyerEmail: "ada@example.com",
+        totalPence: 102_000, donationPence: 2000, giftAid: true, newsletterOptIn: false, status: "paid",
+        createdAt: "2026-10-01T09:00:00Z", paidAt: "2026-10-02T09:00:00Z", paymentMethod: "transfer", cancelledFrom: null,
+      }];
+      loginToken = tokenFor("admin");
+      await openBall();
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      (document.querySelector("#ballBookings [data-cancel-booking]") as HTMLElement).click();
+      expect(confirm.mock.calls[0][0]).toContain("refund them from the bank");
+      expect(confirm.mock.calls[0][0]).not.toContain("Stripe");
+      confirm.mockRestore();
     });
 
     // Each load used to add another click handler to the bookings table, so after the screen had

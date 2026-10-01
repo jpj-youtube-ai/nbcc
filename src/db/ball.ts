@@ -432,7 +432,7 @@ export async function cancelBooking(
     }
 
     await client.query(
-      `UPDATE ball_bookings SET status = 'cancelled' WHERE id = $1`,
+      `UPDATE ball_bookings SET status = 'cancelled', cancelled_from = status WHERE id = $1`,
       [row.id],
     );
     await insertAudit(client, {
@@ -663,6 +663,8 @@ export interface BallBookingRow {
   paidAt: string | null;
   /** TASK-484: "card" (Stripe) or "transfer" (bank transfer, marked paid by an admin). */
   paymentMethod: string;
+  /** TASK-484: the status it had when staff cancelled it; only a transfer cancelled unpaid comes back. */
+  cancelledFrom: string | null;
 }
 
 // TASK-337: how many checkouts were started and never finished.
@@ -679,7 +681,7 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at, payment_method
+            created_at, paid_at, payment_method, cancelled_from
        FROM ball_bookings
       WHERE status = 'pending' AND payment_method = 'card'
       ORDER BY created_at DESC
@@ -702,6 +704,7 @@ export async function listAbandonedBookings(limit = 100): Promise<BallBookingRow
     createdAt: r.created_at,
     paidAt: r.paid_at,
     paymentMethod: r.payment_method,
+    cancelledFrom: r.cancelled_from,
   }));
 }
 
@@ -718,7 +721,7 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email,
             total_pence, donation_pence, gift_aid, newsletter_opt_in, status,
-            created_at, paid_at, payment_method
+            created_at, paid_at, payment_method, cancelled_from
        FROM ball_bookings
       WHERE status <> 'pending'
       ORDER BY created_at DESC
@@ -741,6 +744,7 @@ export async function listBookings(limit = 200, offset = 0): Promise<BallBooking
     createdAt: r.created_at,
     paidAt: r.paid_at,
     paymentMethod: r.payment_method,
+    cancelledFrom: r.cancelled_from,
   }));
 }
 

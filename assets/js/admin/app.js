@@ -10252,6 +10252,8 @@
   // ten and a "Show all" button that grows the page. A panel with nothing in it says "Not enough
   // visits yet", and one whose numbers failed to load says so rather than showing zeros (TASK-476).
   var AN_TOP = 10;
+  // The server sends at most this many of a long list (LIST_LIMIT in src/db/analytics-report.ts).
+  var AN_LIST_CAP = 100;
   var anDays = 30;
   var anSettings = null;
   var anReport = null;
@@ -10655,7 +10657,7 @@
     var all = !!anExpanded[id];
     return (
       '<button class="an-more" type="button" data-anmore="' + id + '" aria-expanded="' + (all ? "true" : "false") + '">' +
-      (all ? "Show the top 10" : "Show all " + count) + "</button>"
+      (all ? "Show the top 10" : count >= AN_LIST_CAP ? "Show the top " + count : "Show all " + count) + "</button>"
     );
   }
 

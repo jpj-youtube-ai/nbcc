@@ -308,6 +308,14 @@ describe("the numbers", () => {
     expect((el("anCities").querySelector("[data-anmore]") as HTMLElement).textContent).toBe("Show the top 10");
   });
 
+  // The server sends at most 100 of a long list, so the button never says "all" of a list it cut.
+  it("says top 100, not all, when the list reached the server's limit", async () => {
+    const many = Array.from({ length: 100 }, (_, i) => ({ city: "Town " + i, region: "Scotland", country: "GB", visitors: 200 - i }));
+    served["GET /api/admin/analytics"] = { status: 200, body: { ...REPORT, current: { ...REPORT.current, cities: many } } };
+    await openAnalytics();
+    expect((el("anCities").querySelector("[data-anmore]") as HTMLElement).textContent).toBe("Show the top 100");
+  });
+
   it("says Not enough visits yet in every panel with nothing to show", async () => {
     served["GET /api/admin/analytics"] = { status: 200, body: EMPTY };
     await openAnalytics();

@@ -3,6 +3,7 @@ import { pool } from "./pool";
 import {
   availability,
   canFulfil,
+  overbooked,
   seatsFor,
   type CapacityState,
   type Availability,
@@ -289,15 +290,33 @@ export async function markBookingPaid(
   client: Querier,
   booking: BallBookingWrite,
 ): Promise<string> {
-  const res = await client.query(
+  const res = await client.query<{ id: number; reference: string; late: boolean }>(
     `UPDATE ball_bookings
         SET status = 'paid',
             paid_at = now(),
             buyer_email = COALESCE(NULLIF($2, ''), buyer_email)
-      WHERE stripe_session_id = $1 AND status = 'pending'`,
+      WHERE stripe_session_id = $1 AND status = 'pending'
+      RETURNING id, reference, created_at <= now() - interval '1 hour' AS late`,
     [booking.stripeSessionId, booking.buyerEmail],
   );
-  if (res.rowCount && res.rowCount > 0) return "ball.paid";
+  if (res.rowCount && res.rowCount > 0) {
+    // TASK-484: a pending card booking stops holding its seats after an hour (SOLD_SQL), in case
+    // Stripe's expired event is lost. If the "completed" event was delayed past that instead, the
+    // payment is real and is recorded, but its seats may since have gone to someone else. Say so
+    // where staff will find it, rather than letting the room be oversold in silence.
+    const row = res.rows[0];
+    if (row?.late) {
+      const isOver = overbooked(await readCapacityState(client));
+      await client.query(
+        `INSERT INTO audit_log (actor, action, entity, entity_id, data) VALUES ($1, $2, $3, $4, $5)`,
+        ["system:stripe", "ball.paid_after_seats_released", "ball_booking", row.id, { reference: row.reference, overbooked: isOver }],
+      );
+      if (isOver) {
+        console.error(`ball: ${row.reference} was paid after its seats were released, and the room is now overbooked`);
+      }
+    }
+    return "ball.paid";
+  }
 
   // No pending row: either Stripe redelivered after we already recorded it (harmless), or the
   // session was created outside this app. Insert defensively so a real payment is never lost.

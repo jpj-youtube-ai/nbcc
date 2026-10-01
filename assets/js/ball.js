@@ -195,7 +195,8 @@
     if (!done) return;
     var values = {
       payBy: longDate(data.payBy),
-      amount: money(data.totalPence),
+      // The exact figure, pence and all, as the email gives it: it is what they type into their bank.
+      amount: "£" + (data.totalPence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       accountName: data.accountName,
       sortCode: data.sortCode,
       accountNumber: data.accountNumber,
@@ -511,6 +512,12 @@
         var created = data.reference && data.clientSecret
           ? { reference: data.reference, clientSecret: data.clientSecret }
           : null;
+        // The server could not embed and sent Stripe's own page instead: that checkout is the one to
+        // use. Asking for another would leave two holding seats (TASK-484 review).
+        if (!data.clientSecret && data.url) {
+          window.location.assign(data.url);
+          return;
+        }
         if (!data.clientSecret || !data.publishableKey) {
           hostedRedirect(created);
           return;

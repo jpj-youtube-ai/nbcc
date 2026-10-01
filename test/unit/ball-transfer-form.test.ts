@@ -138,7 +138,7 @@ describe("paying by bank transfer, on the form (TASK-484)", () => {
     const done = el("ballTransferDone");
     expect(done.hidden).toBe(false);
     expect(form().hidden).toBe(true);
-    for (const part of ["BALL-7KQ2MZ", "£100", "Night Before Christmas Campaign", "12-34-56", "12345678", "Thursday 8 October"]) {
+    for (const part of ["BALL-7KQ2MZ", "£100.00", "Night Before Christmas Campaign", "12-34-56", "12345678", "Thursday 8 October"]) {
       expect(done.textContent, part).toContain(part);
     }
     expect(document.activeElement).toBe(el("ballTransferDoneHeading"));
@@ -176,6 +176,17 @@ describe("the card fallback (TASK-484)", () => {
     expect(posts.length).toBe(2);
     expect(posts[0].body?.replaces).toBeUndefined();
     expect(posts[1].body?.replaces).toEqual({ reference: "BALL-AAAAAA", clientSecret: "cs_x_secret_y" });
+  });
+
+  // The server answers an inline request with Stripe's own page when it cannot embed: follow it,
+  // rather than asking for a second checkout beside the first.
+  it("follows the link it was given instead of making a second checkout", async () => {
+    (window as unknown as { Stripe: unknown }).Stripe = () => ({ initEmbeddedCheckout: () => new Promise(() => {}) });
+    checkoutAnswers = [{ status: 201, body: { reference: "BALL-DDDDDD", totalPence: 10000, url: "https://checkout.stripe.com/c/pay/x" } }];
+    fillIn();
+    submit();
+    await flush();
+    expect(calls.filter((c) => c.url.includes("/api/ball/checkout-session")).length).toBe(1);
   });
 
   it("replaces nothing when there was no inline checkout to replace", async () => {

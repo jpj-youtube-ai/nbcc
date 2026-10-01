@@ -1410,12 +1410,19 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
     it("finds a payment by reference, name or amount", async () => {
       loginToken = tokenFor("admin");
-      awaitingTransfers = [awaiting, { ...awaiting, reference: "BALL-2PQRST", buyerName: "Bo Example", buyerEmail: "bo@example.com", totalPence: 30_000 }];
+      awaitingTransfers = [
+        awaiting,
+        { ...awaiting, reference: "BALL-2PQRST", buyerName: "Bo Example", buyerEmail: "bo@example.com", totalPence: 30_000 },
+        // £720: its amount starts with the digits in "BALL-7KQ2MZ", which is a reference, not an amount.
+        { ...awaiting, reference: "BALL-9WXYZA", buyerName: "Cy Example", buyerEmail: "cy@example.com", totalPence: 72_000 },
+      ];
       await openBall();
       const search = el("ballTransferSearch") as HTMLInputElement;
       const visible = () =>
         Array.from(document.querySelectorAll("#ballTransfers tbody tr")).filter((r) => !(r as HTMLElement).hidden).length;
-      for (const [query, expected] of [["1,020", 1], ["£300", 1], ["bo exa", 1], ["2pqr", 1], ["", 2], ["nobody", 0]] as const) {
+      for (const [query, expected] of [
+        ["1,020", 1], ["£300", 1], ["720.00", 1], ["bo exa", 1], ["2pqr", 1], ["BALL-7KQ2MZ", 1], ["", 3], ["nobody", 0],
+      ] as const) {
         search.value = query;
         search.dispatchEvent(new Event("input", { bubbles: true }));
         expect(visible(), query).toBe(expected);

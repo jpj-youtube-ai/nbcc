@@ -2745,9 +2745,11 @@ ticked "Offer bank transfer on the ticket page".
   amount it showed. The server refuses if that is not the booking's total.
 - **Give more time and Cancel** need Festive Ball edit. Cancelling an unpaid transfer booking
   emails the buyer that it was cancelled.
-- **Late money:** a cancelled transfer booking whose money arrives after all can still be marked
-  paid, but only while its seats are free. Otherwise the admin is told to refund the transfer by
-  hand.
+- **Late money:** a transfer cancelled while still unpaid can be marked paid when its money arrives
+  after all, but only while its seats are free. Otherwise the admin is told to refund the transfer
+  by hand. One that had been paid and was then cancelled (and refunded) cannot be brought back:
+  `ball_bookings.cancelled_from` records what each booking was when it was cancelled. Cancelling a
+  paid transfer says to refund it from the bank, not through Stripe.
 - **The audit log** records each step (`ball.transfer_settings_changed` without the numbers,
   `ball.transfer_marked_paid`, `ball.transfer_reinstated`, `ball.transfer_pay_by_changed`), and
   `ball_bookings.marked_paid_by` says who.
@@ -2764,6 +2766,11 @@ ticked "Offer bank transfer on the ticket page".
 - **Card checkouts hold seats for an hour at most.** If Stripe's "checkout expired" message were
   ever lost, a pending card booking used to hold its seats for good. Its status is left alone, so
   a late "completed" still finds it pending and marks it paid.
+- **A payment confirmed after its seats were released is flagged.** If Stripe's "completed" is
+  delayed past that hour (an outage, say), the seats may have gone to someone else. The payment is
+  real, so it is still recorded. It also writes a `ball.paid_after_seats_released` audit row saying
+  whether the room is now over capacity (`overbooked` in `src/ball/capacity.ts`), and logs an error
+  when it is, so staff can sort it out with the buyer.
 - **The fallback no longer leaves a second booking.** When the inline card payment could not be
   shown, the fallback to Stripe's own page created a second pending booking, and both held seats.
   The page now names the checkout it replaces. The server checks the client secret belongs to that

@@ -8653,7 +8653,9 @@
   function filterBallTransfers() {
     var input = el("ballTransferSearch");
     var q = ((input && input.value) || "").trim().toLowerCase();
-    var digits = q.replace(/[^0-9]/g, "");
+    // Only something that looks like money is matched as an amount: the digits in a reference such
+    // as BALL-7KQ2MZ would otherwise find every total starting with 72.
+    var digits = /^[£\d.,\s]+$/.test(q) ? q.replace(/[^0-9]/g, "") : "";
     Array.prototype.forEach.call(document.querySelectorAll("#ballTransfers tbody tr"), function (tr) {
       var t = ballTransferRows.filter(function (r) { return r.reference === tr.getAttribute("data-ref"); })[0];
       if (!t || !q) { tr.hidden = false; return; }

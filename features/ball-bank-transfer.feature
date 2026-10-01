@@ -85,6 +85,16 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     When I request the ball availability
     Then the ball availability should show 10 tables remaining
 
+  # Its seats were released after an hour; the payment is real, so it is recorded, and flagged.
+  Scenario: A card payment confirmed after its seats were released is recorded and flagged
+    Given the ball is reset to 1 tables of 10 with 0 held back
+    And a card checkout for 1 table was started 2 hours ago and never finished
+    And bank transfer is switched on with bank details
+    When a buyer books 1 table to pay by bank transfer
+    Then the transfer booking answer is 201 with the bank details and a pay-by date 7 days away
+    When Stripe confirms the old card checkout was paid
+    Then the old card checkout is paid and flagged as paid after its seats were released, overbooking the room
+
   Scenario: A bank transfer booking keeps its seats however old it is
     Given a bank transfer booking for 1 table was made 3 days ago
     When I request the ball availability

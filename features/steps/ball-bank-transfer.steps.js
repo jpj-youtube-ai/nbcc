@@ -220,6 +220,54 @@ Given("a bank transfer booking for {int} table was made {int} days ago", async f
   await insertBooking({ reference: "BALL-OLDTRF", method: "transfer", status: "pending", agoInterval: `${days} days` });
 });
 
+// A signed checkout.session.completed for the two-hour-old card checkout above, as Stripe would send
+// it after a long delay. Signed the way features/steps/ball.steps.js signs, offline.
+When("Stripe confirms the old card checkout was paid", async function () {
+  const Stripe = require("stripe");
+  const signer = new Stripe("sk_test_bdd");
+  const payload = JSON.stringify({
+    id: `evt_ball_late_${Date.now()}`,
+    object: "event",
+    type: "checkout.session.completed",
+    data: {
+      object: {
+        id: "cs_old_BALL-OLDCRD",
+        object: "checkout.session",
+        customer_details: { email: BUYER },
+        metadata: {
+          product: "ball", reference: "BALL-OLDCRD", kind: "table", quantity: "1", seats: "10",
+          buyerName: "Old Transfer", ticketsPence: "100000", donationPence: "0", feeCoverPence: "0",
+          totalPence: "100000", giftAid: "false", newsletterOptIn: "false",
+        },
+      },
+    },
+  });
+  const signature = signer.webhooks.generateTestHeaderString({
+    payload,
+    secret: process.env.STRIPE_WEBHOOK_SECRET || "whsec_dummy",
+  });
+  const res = await fetch(`${BASE_URL}/api/stripe/webhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Stripe-Signature": signature },
+    body: payload,
+  });
+  assert.equal(res.status, 200);
+});
+
+Then(
+  "the old card checkout is paid and flagged as paid after its seats were released, overbooking the room",
+  async function () {
+    const booking = await pool.query("SELECT id, status FROM ball_bookings WHERE reference = 'BALL-OLDCRD'");
+    assert.equal(booking.rows[0].status, "paid");
+    const audit = await pool.query(
+      `SELECT data FROM audit_log WHERE action = 'ball.paid_after_seats_released' AND entity_id = $1`,
+      [booking.rows[0].id],
+    );
+    assert.equal(audit.rowCount, 1);
+    assert.equal(audit.rows[0].data.overbooked, true);
+  },
+);
+
 When("the buyer falls back to Stripe's own page for the same order", async function () {
   const first = this.ballCheckout;
   assert.ok(first && first.reference && first.clientSecret, "an inline checkout was started first");

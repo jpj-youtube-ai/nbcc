@@ -192,6 +192,9 @@ describe("giving more time", () => {
   it("refuses a date in the past, or one that is not a date", async () => {
     expect((await call(postAdminTransferPayBy, editorWithBallEdit(), { payBy: "2020-01-01" }, params)).statusCode).toBe(400);
     expect((await call(postAdminTransferPayBy, editorWithBallEdit(), { payBy: "next week" }, params)).statusCode).toBe(400);
+    // Shaped like a date but not one: the database would refuse it, and staff would see a 500.
+    expect((await call(postAdminTransferPayBy, editorWithBallEdit(), { payBy: "2099-02-30" }, params)).statusCode).toBe(400);
+    expect((await call(postAdminTransferPayBy, editorWithBallEdit(), { payBy: "2099-13-01" }, params)).statusCode).toBe(400);
     expect(m.extendPayBy).not.toHaveBeenCalled();
   });
 

@@ -135,7 +135,17 @@ export async function postAdminMarkTransferPaid(req: Request, res: Response): Pr
   }
 }
 
-const payByBody = z.object({ payBy: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
+// A real calendar date: "2026-02-30" has the right shape, but Postgres would refuse it and staff would
+// see a 500, so it must survive a round trip through Date unchanged.
+const payByBody = z.object({
+  payBy: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((d) => {
+      const t = new Date(`${d}T12:00:00Z`);
+      return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+    }),
+});
 
 export async function postAdminTransferPayBy(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "ball", "edit");

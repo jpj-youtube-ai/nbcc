@@ -10,6 +10,7 @@ import { makeReference, purchaseSchema } from "../ball/booking";
 import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
 import { publicTransferOpen } from "../ball/transfer";
+import { retireReplacedCheckout } from "../ball/replace-checkout";
 import { cancelReplacedCheckout, getTransferSettings, pendingCardSession } from "../db/ball-transfer";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
@@ -96,21 +97,18 @@ ballRouter.post("/api/ball/checkout-session", async (req, res) => {
   let token: string | null = null;
   try {
     // TASK-484: the page's fallback to Stripe's own page, after an inline checkout was created but
-    // could not be shown. Without this, that first checkout stayed pending and held its seats for
-    // half an hour beside the new one. The page proves the checkout is its own with the client
-    // secret it was given, which begins with the session id. The session is expired at Stripe FIRST:
-    // Stripe refuses to expire one that has been paid, so a checkout somebody did pay can never be
-    // cancelled under them. Done before capacity is checked, so the seats it held are free again.
+    // could not be shown, names that checkout; it is retired so it stops holding seats beside the new
+    // one (the rules are in src/ball/replace-checkout.ts). Done before capacity is checked, so the
+    // seats it held are free again.
     const replaces = replacesSchema.safeParse(req.body?.replaces);
     if (replaces.success) {
-      const sid = await pendingCardSession(replaces.data.reference);
-      if (sid && replaces.data.clientSecret.startsWith(`${sid}_secret_`)) {
-        try {
-          await stripe.checkout.sessions.expire(sid);
-          await cancelReplacedCheckout(sid);
-        } catch (err) {
-          console.error("ball checkout: could not retire the replaced session:", err instanceof Error ? err.message : err);
-        }
+      const outcome = await retireReplacedCheckout(replaces.data, {
+        pendingCardSession,
+        expire: (sid) => stripe.checkout.sessions.expire(sid),
+        cancel: cancelReplacedCheckout,
+      });
+      if (outcome !== "retired" && outcome !== "not_found") {
+        console.error(`ball checkout: the replaced checkout ${replaces.data.reference} was not retired: ${outcome}`);
       }
     }
 

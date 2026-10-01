@@ -8617,7 +8617,7 @@
     return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
   }
   function markPaidButton(b, cancelled) {
-    return '<button type="button" class="btn btn-small btn-primary" data-mark-paid="' + H.escapeHtml(b.reference) +
+    return '<button type="button" class="btn btn-primary ball-mark-paid" data-mark-paid="' + H.escapeHtml(b.reference) +
       '" data-amount="' + b.totalPence + '" data-name="' + H.escapeHtml(b.buyerName) + '"' +
       (cancelled ? ' data-cancelled="1"' : "") + ">Mark as paid</button>";
   }
@@ -8631,10 +8631,11 @@
         ? t.quantity + (t.quantity === 1 ? " table" : " tables")
         : t.quantity + (t.quantity === 1 ? " ticket" : " tickets");
       var actions = (isAdmin() ? markPaidButton(t, false) : "") +
+        // One button, then two quieter links: marking money arrived is the job; the others are exceptions.
         (canEdit("ball")
-          ? '<button type="button" class="btn btn-small" data-pay-by="' + H.escapeHtml(t.reference) +
+          ? '<button type="button" class="admin-link" data-pay-by="' + H.escapeHtml(t.reference) +
             '" data-current="' + H.escapeHtml(t.payBy) + '">Give more time</button>' +
-            '<button type="button" class="btn btn-small btn-danger" data-cancel-booking="' + H.escapeHtml(t.reference) +
+            '<button type="button" class="admin-link" data-cancel-booking="' + H.escapeHtml(t.reference) +
             '" data-transfer="1">Cancel</button>'
           : "");
       return '<tr data-ref="' + H.escapeHtml(t.reference) + '"><td data-label="Reference">' + H.escapeHtml(t.reference) +
@@ -8643,7 +8644,7 @@
         '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
         '</td><td data-label=""><span class="ball-transfer-actions">' + actions + "</span></td></tr>";
     }).join("");
-    return '<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Reference</th><th>Who</th><th>Amount</th>' +
+    return '<div class="admin-table-wrap"><table class="admin-table ball-transfers-table"><thead><tr><th>Reference</th><th>Who</th><th>Amount</th>' +
       "<th>Pay by</th><th></th></tr></thead><tbody>" + body + "</tbody></table></div>";
   }
 

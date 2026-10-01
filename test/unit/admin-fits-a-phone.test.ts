@@ -329,12 +329,16 @@ describe("the donations table becomes labelled cards wherever it is narrow", () 
   });
 
   // Only the cards may say how the rows and cells lay out: a later rule putting a row back to
-  // table-row, or giving a cell a width, would undo them while every rule above still exists.
+  // table-row, or giving a cell a width, would undo them while every rule above still exists. That
+  // includes a rule reaching the cells through one of the three lists' ids (which would outrank
+  // .dn-table td) or a child combinator, and min/max widths and flex sizes as well as widths. The
+  // labels' own fixed width (td::before) is the cards' and is left alone.
   it("lets no other rule, at any width, change how the rows and cells lay out", () => {
-    const layout = RULES.filter((r) => r.selectors.some((s) => /\.dn-table (tbody|tr|td)/.test(s)));
+    const reaches = /\.dn-table[ >]+(tbody|tr|td)|#(donationsTable|overviewRecent|searchResults)\b/;
+    const layout = RULES.filter((r) => r.selectors.some((s) => reaches.test(s) && !s.includes("::before")));
     const offenders = [
       ...layout.filter((r) => r.media !== NARROW && /(^|;)display:/.test(r.body)),
-      ...layout.filter((r) => /(^|;)width:(?!auto)/.test(r.body)),
+      ...layout.filter((r) => /(^|;)((min-|max-)?width:(?!auto)|flex(-basis)?:)/.test(r.body)),
     ].map((r) => `${r.media ?? ""} ${r.selectors.join(",")}{${r.body}}`);
     expect(offenders).toEqual([]);
   });
@@ -348,7 +352,10 @@ describe("the donations table becomes labelled cards wherever it is narrow", () 
     );
   });
 
+  // Both ways: .admin-link has no padding, so on its own the button is only as wide as "View".
   it("gives each donation's View button a target a thumb can hit", () => {
-    expect(rule(".dn-table [data-donor]", NARROW)).toContain("min-height:44px");
+    const view = rule(".dn-table [data-donor]", NARROW);
+    expect(view).toContain("min-height:44px");
+    expect(view).toContain("min-width:44px");
   });
 });

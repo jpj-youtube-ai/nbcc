@@ -1792,7 +1792,7 @@ tr.nl-click:hover { background: var(--tint); }
   .dn-table td:empty{display:none}
   .dn-table td:nth-child(2){order:-1;display:block;font-weight:600;font-size:1rem;padding-bottom:6px}
   .dn-table td:nth-child(2)::before{content:none}
-  .dn-table [data-donor]{min-height:44px}
+  .dn-table [data-donor]{min-height:44px;min-width:44px}
 }
 
 /* =================================================================

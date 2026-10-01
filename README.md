@@ -5830,11 +5830,12 @@ narrower than 760px (about 84px a column), each donation is now a card:
 - **the donor's name** is the card's heading;
 - **every other fact** is on its own labelled line: ID, Donation, Amount, Gift Aid, Claim, Payment
   and Date (with any New pill);
-- **the View button** comes last, 44px tall;
+- **the View button** comes last, at least 44px each way;
 - **a gift with no Gift Aid** has no Gift Aid line, matching its empty cell on the desktop table.
 
 This was the client's choice, "A: labelled cards", like Monthly givers. Wide, the table is
-unchanged.
+unchanged. Because the change measures the list, not the screen, a screen up to about 1030px wide
+with the side menu showing also gets cards. That covers a landscape iPad or a narrow laptop window.
 
 **One table, three places.** `donationsTable` in `assets/js/admin/app.js` draws the Donations
 screen, the Overview's recent donations and donation search results, so all three change together.

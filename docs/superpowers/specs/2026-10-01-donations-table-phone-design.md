@@ -24,13 +24,13 @@ Where the list is narrow, each donation becomes a card:
 
 This is the house pattern from Monthly givers and the thank-you letter history.
 
-Wide, the table is exactly as it is today.
+Wide, the table is exactly as it is today. Because it measures the list, a screen up to about 1030px with the side menu showing (a landscape iPad, a narrow laptop window) also gets cards.
 
 ## When it switches
 
 - **On the list's own width, not the screen's:** a container query, as the Events list does
   (TASK-460).
-- **Why:** the three lists sit in different places, and the side menu takes its share up to 860px.
+- **Why:** the three lists sit in different places, and the side menu takes a 210px column above 860px (below that it is a Menu button).
   A screen width standing in for the list's would be right for one of them at most.
 - **How:** `donationsTable` wraps its table in `<div class="dn-list">`, which is the container
   (`dnlist`). The table stacks when that is narrower than 760px, about 84px for each of the nine
@@ -40,7 +40,7 @@ Wide, the table is exactly as it is today.
 
 - **CSS:** `assets/css/admin.css` gets `.dn-list` and `.dn-table` rules inside
   `@container dnlist (max-width:759px)`:
-  - the table, its body, rows and cells become blocks;
+  - the table and its body become blocks, each row a column of its cells (flex);
   - the headings are hidden the accessible way, so screen readers still read them;
   - each cell becomes a label and its value side by side (see "Changed while building"), with the label from `data-label`;
   - the donor cell moves to the top with `order:-1` and loses its label.

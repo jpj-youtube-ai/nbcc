@@ -206,12 +206,14 @@ export interface AwaitingTransfer {
   reminded: boolean;
   /** TASK-486: the company it is invoiced to, or null without an invoice. */
   company: string | null;
+  /** TASK-486: the booking's id when it has an invoice, for the link to it; null without one. */
+  invoiceId: number | null;
 }
 
 /** Every transfer still waiting for its money, the one due soonest first (so overdue ones lead). */
 export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
   const res = await pool.query(
-    `SELECT reference, kind, quantity, seats, buyer_name, buyer_email, total_pence,
+    `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email, total_pence,
             to_char(pay_by, 'YYYY-MM-DD') AS pay_by, created_at,
             transfer_reminder_sent_at IS NOT NULL AS reminded, invoice_company
        FROM ball_bookings
@@ -230,6 +232,7 @@ export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
     createdAt: r.created_at,
     reminded: r.reminded,
     company: r.invoice_company,
+    invoiceId: r.invoice_company ? r.id : null,
   }));
 }
 

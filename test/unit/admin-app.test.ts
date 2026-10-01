@@ -1400,6 +1400,24 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(rows[1].textContent).not.toContain("Reminder sent");
     });
 
+    // TASK-486: the company it is invoiced to, and its invoice, which opens in a new tab.
+    it("names the company and links the invoice of an invoiced booking", async () => {
+      loginToken = tokenFor("admin");
+      awaitingTransfers = [
+        { ...awaiting, company: "Example Widgets Ltd", invoiceUrl: "https://nbcc.scot/ball/invoice/42.abc" },
+        { ...awaiting, reference: "BALL-2PQRST", company: null, invoiceUrl: null },
+      ];
+      await openBall();
+      const rows = Array.from(document.querySelectorAll("#ballTransfers tbody tr"));
+      expect(rows[0].textContent).toContain("Example Widgets Ltd");
+      const link = rows[0].querySelector("a") as HTMLAnchorElement;
+      expect(link.textContent).toBe("Invoice");
+      expect(link.getAttribute("href")).toBe("https://nbcc.scot/ball/invoice/42.abc");
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(rows[1].querySelector("a")).toBeNull();
+      expect(rows[1].textContent).not.toContain("Invoice");
+    });
+
     it("lists the bookings awaiting a transfer", async () => {
       loginToken = tokenFor("admin");
       awaitingTransfers = [awaiting];

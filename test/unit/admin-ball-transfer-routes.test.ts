@@ -22,7 +22,10 @@ vi.mock("../../src/db/ball-transfer", () => ({
   markTransferPaid: m.markTransferPaid,
   extendPayBy: m.extendPayBy,
 }));
-vi.mock("../../src/ball/transfer-send", () => ({ sendTransferArrived: m.sendTransferArrived }));
+vi.mock("../../src/ball/transfer-send", () => ({
+  sendTransferArrived: m.sendTransferArrived,
+  invoiceUrl: (id: number) => `https://nbcc.scot/ball/invoice/${id}.sig`,
+}));
 vi.mock("../../src/config", () => ({
   config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret", BALL_BASE_URL: "https://nbcc.scot" },
 }));
@@ -143,7 +146,20 @@ describe("the bookings awaiting a transfer", () => {
     m.listAwaitingTransfers.mockResolvedValue([{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01" }]);
     const res = await call(getAdminTransfers, tokenFor("viewer"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01", overdue: false }] });
+    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01", overdue: false, invoiceUrl: null }] });
+  });
+
+  // TASK-486: staff can open the invoice a company was given.
+  it("link the invoice of a booking that has one", async () => {
+    m.listAwaitingTransfers.mockResolvedValue([
+      { reference: "BALL-7KQ2MZ", payBy: "2099-01-01", company: "Example Widgets Ltd", invoiceId: 42 },
+    ]);
+    const res = await call(getAdminTransfers, tokenFor("viewer"));
+    expect(res.body).toEqual({
+      results: [
+        { reference: "BALL-7KQ2MZ", payBy: "2099-01-01", company: "Example Widgets Ltd", overdue: false, invoiceUrl: "https://nbcc.scot/ball/invoice/42.sig" },
+      ],
+    });
   });
 
   // TASK-485: past its date, flagged for staff, who decide what happens.

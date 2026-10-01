@@ -8649,7 +8649,16 @@
           : "");
       return '<tr data-ref="' + H.escapeHtml(t.reference) + '"><td data-label="Reference">' + H.escapeHtml(t.reference) +
         '</td><td data-label="Who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
-        '</small></td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
+        "</small>" +
+        // TASK-486: the company it is invoiced to, and the invoice they were given.
+        (t.company
+          ? "<br /><small>" + H.escapeHtml(t.company) +
+            (t.invoiceUrl
+              ? ' &middot; <a href="' + H.escapeHtml(t.invoiceUrl) + '" target="_blank" rel="noopener">Invoice</a>'
+              : "") +
+            "</small>"
+          : "") +
+        '</td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
         '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
         // TASK-485: past its date, for staff to decide on; and whether the reminder has gone.
         (t.overdue ? ' <span class="admin-pill is-new">Overdue</span>' : "") +

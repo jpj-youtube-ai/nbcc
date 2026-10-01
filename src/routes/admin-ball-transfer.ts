@@ -6,7 +6,7 @@ import type { AdminSessionClaims } from "../admin/session";
 import { bankDetailsSchema, isOverdue, transferReady, transferWindowOpen, type TransferSettings } from "../ball/transfer";
 import { makeGuestToken } from "../ball/guests";
 import { londonDate } from "../ball/sales-report";
-import { sendTransferArrived } from "../ball/transfer-send";
+import { invoiceUrl, sendTransferArrived } from "../ball/transfer-send";
 import {
   extendPayBy,
   getTransferSettings,
@@ -115,7 +115,12 @@ export async function getAdminTransfers(req: Request, res: Response): Promise<Re
   try {
     // TASK-485: past its date, flagged for staff. Nothing happens to it automatically.
     const today = londonDate(new Date());
-    const results = (await listAwaitingTransfers()).map((t) => ({ ...t, overdue: isOverdue(t.payBy, today) }));
+    // TASK-486: and the private link to the invoice, for a booking that has one.
+    const results = (await listAwaitingTransfers()).map(({ invoiceId, ...t }) => ({
+      ...t,
+      overdue: isOverdue(t.payBy, today),
+      invoiceUrl: invoiceId ? invoiceUrl(invoiceId) : null,
+    }));
     return res.status(200).json({ results });
   } catch (err) {
     return failed(res, "listing transfers", err);

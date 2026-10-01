@@ -136,6 +136,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     return j({ email: claims?.email || "", permissions: effectivePermissions({ role, permissions: storedPermissions }) });
   }
   if (url.includes("/api/admin/donors/")) return j(snapshot);
+  if (url.includes("/api/admin/search/donations")) return j({ results: [donation] }); // TASK-483
   if (url.includes("/api/admin/donations")) return j({ results: [donation], total: 1 });
   if (/\/api\/admin\/stories\/\d+/.test(url) && init?.method === "PATCH") {
     const patch = JSON.parse(init.body || "{}");
@@ -1104,6 +1105,41 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       const link = await arriveFromMenu();
       expect(el("evEditorTitle").textContent).toBe("Editing: Carols at the Cross");
       expect(document.activeElement).toBe(link);
+    });
+  });
+
+  // TASK-483: on a phone the donations table becomes cards, each line labelled by its cell's
+  // data-label (admin.css). All three lists that draw it must carry the labels and the wrapper the
+  // stylesheet measures.
+  describe("the donations table on a phone (TASK-483)", () => {
+    const LABELS = ["ID", "Donor", "Donation", "Amount", "Gift Aid", "Claim", "Payment", "Date", ""];
+    const labelsIn = (host: string) =>
+      Array.from(document.querySelectorAll(host + " .dn-list .dn-table tbody tr:first-child td")).map((td) =>
+        td.getAttribute("data-label"),
+      );
+
+    it("labels every cell on the Donations screen", async () => {
+      await signIn();
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await flush();
+      await flush();
+      expect(labelsIn("#donationsTable")).toEqual(LABELS);
+    });
+
+    it("labels every cell in the Overview's recent donations", async () => {
+      await signIn();
+      await flush();
+      expect(labelsIn("#overviewRecent")).toEqual(LABELS);
+    });
+
+    it("labels every cell in donation search results", async () => {
+      await signIn();
+      (document.querySelector('.admin-seg[data-kind="donations"]') as HTMLElement).click();
+      (el("searchQuery") as HTMLInputElement).value = "Ada";
+      el("searchForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await flush();
+      await flush();
+      expect(labelsIn("#searchResults")).toEqual(LABELS);
     });
   });
 

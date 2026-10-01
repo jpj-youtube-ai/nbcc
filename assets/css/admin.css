@@ -1772,6 +1772,29 @@ tr.nl-click:hover { background: var(--tint); }
   .monthly-table td:empty{display:none}
 }
 
+/* TASK-483: the donations table (the Donations screen, the Overview's recent donations and search
+   results) becomes labelled cards where it is narrow. At 375px its nine columns were about 38px each
+   and every word wrapped one letter per line. It measures its own width, like the Events list,
+   because those three lists sit in different places; below 760px, about 84px a column, dates and
+   amounts start to break. The house stack (.monthly-table) with two changes. The donor heads the
+   card, so the row is a column of cells and the donor's moves to the top. And each line is a row
+   with a fixed-width label rather than a grid: in a grid every piece of a cell is a grid item, so
+   the pills stretched to the column's width and a date's New pill dropped below the labels. */
+.dn-list{container:dnlist / inline-size}
+@container dnlist (max-width:759px){
+  .dn-table,.dn-table tbody{display:block}
+  .dn-table thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .dn-table tr{display:flex;flex-direction:column;border-bottom:1px solid var(--line);padding:10px 0}
+  .dn-table tr:last-child{border-bottom:0}
+  .dn-table td{border-bottom:0;padding:3px 14px;display:flex;gap:10px;align-items:baseline;text-align:left}
+  .dn-table td::before{content:attr(data-label);flex:0 0 6rem;font-size:.78rem;color:var(--slate-soft)}
+  .dn-table .admin-new-pill{margin-left:0}
+  .dn-table td:empty{display:none}
+  .dn-table td:nth-child(2){order:-1;display:block;font-weight:600;font-size:1rem;padding-bottom:6px}
+  .dn-table td:nth-child(2)::before{content:none}
+  .dn-table [data-donor]{min-height:44px;min-width:44px}
+}
+
 /* =================================================================
    EVENTS (TASK-453) - the Events page's section. Everything here is
    scoped to #view-events so nothing else in the admin can change.

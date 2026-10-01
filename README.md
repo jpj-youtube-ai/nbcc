@@ -5822,6 +5822,45 @@ Every row of the table above was replayed in headless Chrome with smooth scrolli
 admin is unchanged. `test/unit/admin-fits-a-phone.test.ts` pins the rules and `admin-app.test.ts`
 drives the menu's behaviour through the real `app.js`.
 
+## The donations table on a phone (TASK-483)
+
+At 375px the donations table squeezed its nine columns to about 38px each, so every word wrapped
+one letter per line. Nothing scrolled sideways, but nothing could be read either. Where the list is
+narrower than 760px (about 84px a column), each donation is now a card:
+- **the donor's name** is the card's heading;
+- **every other fact** is on its own labelled line: ID, Donation, Amount, Gift Aid, Claim, Payment
+  and Date (with any New pill);
+- **the View button** comes last, at least 44px each way;
+- **a gift with no Gift Aid** has no Gift Aid line, matching its empty cell on the desktop table.
+
+This was the client's choice, "A: labelled cards", like Monthly givers. Wide, the table is
+unchanged. Because the change measures the list, not the screen, a screen up to about 1030px wide
+with the side menu showing also gets cards. That covers a landscape iPad or a narrow laptop window.
+
+**One table, three places.** `donationsTable` in `assets/js/admin/app.js` draws the Donations
+screen, the Overview's recent donations and donation search results, so all three change together.
+
+**How it works:**
+- **It measures the list itself,** like the Events list: `donationsTable` wraps its table in
+  `.dn-list`, a container (`dnlist`). Those three lists sit in different places, so the screen's
+  width would be right for one at most.
+- **Every cell carries a `data-label`.** The cards show it with `::before`, and the headings are
+  hidden in a way screen readers still read.
+- **Two differences from the house stack** (`.monthly-table`):
+  - The donor is moved to the top with `order:-1`, so the cards depend on the column order.
+    `admin-fits-a-phone.test.ts` checks the headings app.js draws.
+  - Each line is a row with a fixed-width label, not a grid. In a grid every piece of a cell is
+    its own grid item, so the Payment and Gift Aid pills stretched across the column, and a
+    date's New pill fell onto a line of its own.
+- **The label is 6rem wide,** not 7.5rem: at 320px that leaves room for a date and its New pill on
+  one line.
+
+**Checked:**
+- **Browser:** 320, 375, 768 (list 720px, so cards) and 1280px (the table, unchanged). `scrollWidth`
+  equalled the viewport at every phone and tablet width, and no box scrolled.
+- **Tests:** `admin-fits-a-phone.test.ts` pins the CSS. `admin-app.test.ts` checks every cell's label
+  on all three lists.
+
 ## The Events switch fits the smallest phones (TASK-455)
 
 The one screen TASK-454 left too wide. The switch at the top of **Events** (**Put the page on the

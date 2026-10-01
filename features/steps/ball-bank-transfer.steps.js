@@ -449,3 +449,26 @@ Then("the invoice page says it is paid", function () {
 Then("the invoice page is not found", function () {
   assert.equal(this.invoiceStatus, 404);
 });
+
+// --- TASK-487: telling the team -------------------------------------------------------------------
+
+Given("{string} has just opened Festive Ball", async function (email) {
+  await asStaff(this, email, "POST", "/api/admin/whats-new/seen", { area: "ball" });
+  assert.equal(this.adminStatus, 200, JSON.stringify(this.adminBody));
+});
+
+async function ballIsNewTo(world, email) {
+  await asStaff(world, email, "GET", "/api/admin/whats-new");
+  assert.equal(world.adminStatus, 200, JSON.stringify(world.adminBody));
+  const ball = (world.adminBody.areas || []).find((a) => a.area === "ball");
+  assert.ok(ball, JSON.stringify(world.adminBody));
+  return ball.new;
+}
+
+Then("Festive Ball is not new to {string}", async function (email) {
+  assert.equal(await ballIsNewTo(this, email), false);
+});
+
+Then("Festive Ball is new to {string}", async function (email) {
+  assert.equal(await ballIsNewTo(this, email), true);
+});

@@ -1400,6 +1400,20 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(rows[1].textContent).not.toContain("Reminder sent");
     });
 
+    // TASK-487: a transfer booking made since this person last opened Festive Ball carries the New pill.
+    it("marks a transfer booking made since the last visit as New, and leaves older ones alone", async () => {
+      loginToken = tokenFor("admin");
+      whatsNew = [{ area: "ball", new: true, since: "2026-10-01T08:00:00.000Z" }];
+      awaitingTransfers = [
+        { ...awaiting, createdAt: "2026-10-01T09:00:00.000Z" },
+        { ...awaiting, reference: "BALL-2PQRST", createdAt: "2026-09-30T09:00:00.000Z" },
+      ];
+      await openBall();
+      const rows = Array.from(document.querySelectorAll("#ballTransfers tbody tr"));
+      expect(rows[0].querySelector(".admin-new-pill")).not.toBeNull();
+      expect(rows[1].querySelector(".admin-new-pill")).toBeNull();
+    });
+
     // TASK-486: the company it is invoiced to, and its invoice, which opens in a new tab.
     it("names the company and links the invoice of an invoiced booking", async () => {
       loginToken = tokenFor("admin");

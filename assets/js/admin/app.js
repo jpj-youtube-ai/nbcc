@@ -8648,6 +8648,8 @@
             '" data-transfer="1">Cancel</button>'
           : "");
       return '<tr data-ref="' + H.escapeHtml(t.reference) + '"><td data-label="Reference">' + H.escapeHtml(t.reference) +
+        // TASK-487: made since this person last opened Festive Ball.
+        rowNewPill("ball", t.createdAt) +
         '</td><td data-label="Who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
         "</small>" +
         // TASK-486: the company it is invoiced to, and the invoice they were given.

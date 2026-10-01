@@ -153,3 +153,11 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     When a company books 1 table to pay by bank transfer with an invoice
     And I open the invoice link with its signature altered
     Then the invoice page is not found
+
+  # TASK-487: telling the team.
+  Scenario: A new bank transfer booking puts the New pill on Festive Ball
+    Given bank transfer is switched on with bank details
+    And "ann.transfer.admin.bdd@example.com" has just opened Festive Ball
+    Then Festive Ball is not new to "ann.transfer.admin.bdd@example.com"
+    When a buyer books 1 table to pay by bank transfer
+    Then Festive Ball is new to "ann.transfer.admin.bdd@example.com"

@@ -120,6 +120,8 @@ let whatsNewFailure = false;
 let transferSettings = { on: false, accountName: null as string | null, sortCode: null as string | null, accountNumber: null as string | null, ready: false };
 let awaitingTransfers: unknown[] = [];
 let ballBookings: unknown[] = [];
+// TASK-488: what adding a booking by hand answers.
+let addTransferAnswer: { status: number; body: unknown } = { status: 201, body: {} };
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
@@ -203,6 +205,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     if (init?.method === "PUT") return j({ ...transferSettings, ...JSON.parse(init.body || "{}") });
     return j(transferSettings);
   }
+  if (url.includes("/api/admin/ball/transfer-bookings")) return j(addTransferAnswer.body, addTransferAnswer.status);
   if (url.includes("/api/admin/ball/transfers")) return j({ results: awaitingTransfers });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/mark-paid$/.test(url)) return j({ reference: "BALL-7KQ2MZ", reinstated: false });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/pay-by$/.test(url)) return j({ reference: "BALL-7KQ2MZ", payBy: "2026-10-20" });
@@ -246,6 +249,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     transferSettings = { on: false, accountName: null, sortCode: null, accountNumber: null, ready: false };
     awaitingTransfers = [];
     ballBookings = [];
+    addTransferAnswer = { status: 201, body: {} };
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -1398,6 +1402,117 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(rows[0].textContent).toContain("Reminder sent");
       expect(rows[1].textContent).not.toContain("Overdue");
       expect(rows[1].textContent).not.toContain("Reminder sent");
+    });
+
+    // TASK-488: staff add a booking by hand for a phone or email order. Festive Ball edit only.
+    describe("adding a booking by hand (TASK-488)", () => {
+      const field = (id: string) => el(id) as HTMLInputElement;
+      const openAdd = async () => {
+        await openBall();
+        el("ballAddTransferOpen").click();
+      };
+      const fillAdd = () => {
+        (el("ballAddKind") as HTMLSelectElement).value = "table";
+        field("ballAddQuantity").value = "1";
+        field("ballAddFirstName").value = "Ada";
+        field("ballAddSurname").value = "Test";
+        field("ballAddEmail").value = "ada@example.com";
+        field("ballAddDonation").value = "20";
+        field("ballAddTerms").checked = true;
+      };
+      const submitAdd = async () => {
+        el("ballAddTransferForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+        await settle();
+      };
+      const transferListLoads = () => fetchCalls().filter(([url]) => String(url).includes("/api/admin/ball/transfers")).length;
+
+      it("is offered to someone with Festive Ball edit, closed until asked for", async () => {
+        asEditorWithBallEdit();
+        await openBall();
+        expect(el("ballAddTransferOpen").hidden).toBe(false);
+        expect(el("ballAddTransferForm").hidden).toBe(true);
+        el("ballAddTransferOpen").click();
+        expect(el("ballAddTransferForm").hidden).toBe(false);
+        expect(el("ballAddTransferOpen").getAttribute("aria-expanded")).toBe("true");
+      });
+
+      it("is not offered to someone who can only view the Festive Ball", async () => {
+        loginToken = tokenFor("viewer");
+        await openBall();
+        expect(el("ballAddTransferOpen").hidden).toBe(true);
+      });
+
+      it("asks for the company's details only when an invoice is needed", async () => {
+        loginToken = tokenFor("admin");
+        await openAdd();
+        expect(el("ballAddInvoiceFields").hidden).toBe(true);
+        field("ballAddInvoice").checked = true;
+        field("ballAddInvoice").dispatchEvent(new Event("change", { bubbles: true }));
+        expect(el("ballAddInvoiceFields").hidden).toBe(false);
+      });
+
+      it("needs the buyer's agreement to the terms before it sends anything", async () => {
+        loginToken = tokenFor("admin");
+        await openAdd();
+        fillAdd();
+        field("ballAddTerms").checked = false;
+        await submitAdd();
+        expect(posted(/\/api\/admin\/ball\/transfer-bookings$/)).toHaveLength(0);
+        expect(el("ballAddStatus").textContent).toMatch(/agreed to the ticket terms/);
+      });
+
+      it("adds it, says what the buyer must pay and by when, and refreshes the list", async () => {
+        loginToken = tokenFor("admin");
+        addTransferAnswer = {
+          status: 201,
+          body: { reference: "BALL-7KQ2MZ", totalPence: 102_000, payBy: "2026-10-08", accountName: "N", sortCode: "12-34-56", accountNumber: "12345678" },
+        };
+        await openAdd();
+        const before = transferListLoads();
+        fillAdd();
+        await submitAdd();
+        const [, init] = posted(/\/api\/admin\/ball\/transfer-bookings$/)[0];
+        expect(JSON.parse(init?.body || "{}")).toEqual({
+          kind: "table",
+          quantity: 1,
+          buyerFirstName: "Ada",
+          buyerSurname: "Test",
+          buyerEmail: "ada@example.com",
+          donationPence: 2000,
+          termsAccepted: true,
+        });
+        const said = el("ballAddStatus").textContent || "";
+        for (const part of ["BALL-7KQ2MZ", "£1,020.00", "Thursday 8 October"]) expect(said, part).toContain(part);
+        expect(transferListLoads()).toBeGreaterThan(before);
+        expect(el("ballAddTransferForm").hidden).toBe(true);
+        expect(field("ballAddFirstName").value).toBe("");
+      });
+
+      it("sends the invoice details when ticked", async () => {
+        loginToken = tokenFor("admin");
+        addTransferAnswer = { status: 201, body: { reference: "BALL-7KQ2MZ", totalPence: 100_000, payBy: "2026-10-15" } };
+        await openAdd();
+        fillAdd();
+        field("ballAddInvoice").checked = true;
+        field("ballAddCompany").value = "Example Widgets Ltd";
+        (el("ballAddAddress") as HTMLTextAreaElement).value = "1 Test Street";
+        await submitAdd();
+        const [, init] = posted(/\/api\/admin\/ball\/transfer-bookings$/)[0];
+        expect(JSON.parse(init?.body || "{}").invoice).toEqual({
+          company: "Example Widgets Ltd", address: "1 Test Street", po: "", accountsEmail: "", phone: "",
+        });
+      });
+
+      it("says what went wrong and keeps what was typed", async () => {
+        loginToken = tokenFor("admin");
+        addTransferAnswer = { status: 409, body: { error: "There are not enough whole tables left for that booking" } };
+        await openAdd();
+        fillAdd();
+        await submitAdd();
+        expect(el("ballAddStatus").textContent).toBe("There are not enough whole tables left for that booking");
+        expect(field("ballAddFirstName").value).toBe("Ada");
+        expect(el("ballAddTransferForm").hidden).toBe(false);
+      });
     });
 
     // TASK-487: a transfer booking made since this person last opened Festive Ball carries the New pill.

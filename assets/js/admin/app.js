@@ -8584,10 +8584,167 @@
   // Only a live booking has seats to give back; anything already cancelled or refunded says so
   // instead of offering a button that would 409.
   function cancelCell(b) {
+    // TASK-484: a cancelled bank transfer booking whose money arrives after all comes back, if its
+    // seats are still free. Confirming money is for admins.
+    if (b.status === "cancelled" && b.paymentMethod === "transfer" && isAdmin()) {
+      return markPaidButton(b, true);
+    }
     if (b.status !== "pending" && b.status !== "paid") return "—";
     if (!canEdit("ball")) return "";
     return '<button type="button" class="btn btn-small btn-danger" data-cancel-booking="' +
-      H.escapeHtml(b.reference) + '">Cancel</button>';
+      H.escapeHtml(b.reference) + '"' + (b.paymentMethod === "transfer" && b.status === "pending" ? ' data-transfer="1"' : "") +
+      ">Cancel</button>";
+  }
+
+  // ---- TASK-484: paying for the Ball by bank transfer -------------------------------------------
+  //
+  // The bank details and the switch (admins only), the bookings awaiting a transfer, and the three
+  // things staff do with one: mark it paid (admins only, confirming the exact amount), give more
+  // time, or cancel. The server enforces who may do what; this only decides what each person is offered.
+
+  // "£1,020.00": the exact figure, because it is what staff check against the bank statement.
+  function exactMoney(pence) {
+    return "£" + (pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  // "2026-10-08" as "Thu 8 Oct". Noon UTC, so no time zone can move it a day.
+  function shortDay(iso) {
+    return new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", {
+      weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
+    });
+  }
+  function addDays(iso, n) {
+    var p = iso.split("-").map(Number);
+    return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+  }
+  function markPaidButton(b, cancelled) {
+    return '<button type="button" class="btn btn-small btn-primary" data-mark-paid="' + H.escapeHtml(b.reference) +
+      '" data-amount="' + b.totalPence + '" data-name="' + H.escapeHtml(b.buyerName) + '"' +
+      (cancelled ? ' data-cancelled="1"' : "") + ">Mark as paid</button>";
+  }
+
+  var ballTransferRows = [];
+
+  function ballTransfersTable(rows) {
+    if (!rows.length) return '<p class="admin-empty">No bookings are waiting for a bank transfer.</p>';
+    var body = rows.map(function (t) {
+      var what = t.kind === "table"
+        ? t.quantity + (t.quantity === 1 ? " table" : " tables")
+        : t.quantity + (t.quantity === 1 ? " ticket" : " tickets");
+      var actions = (isAdmin() ? markPaidButton(t, false) : "") +
+        (canEdit("ball")
+          ? '<button type="button" class="btn btn-small" data-pay-by="' + H.escapeHtml(t.reference) +
+            '" data-current="' + H.escapeHtml(t.payBy) + '">Give more time</button>' +
+            '<button type="button" class="btn btn-small btn-danger" data-cancel-booking="' + H.escapeHtml(t.reference) +
+            '" data-transfer="1">Cancel</button>'
+          : "");
+      return '<tr data-ref="' + H.escapeHtml(t.reference) + '"><td data-label="Reference">' + H.escapeHtml(t.reference) +
+        '</td><td data-label="Who">' + H.escapeHtml(t.buyerName) + "<br /><small>" + H.escapeHtml(t.buyerEmail) +
+        '</small></td><td data-label="Amount">' + exactMoney(t.totalPence) + "<br /><small>" + what +
+        '</small></td><td data-label="Pay by">' + H.escapeHtml(shortDay(t.payBy)) +
+        '</td><td data-label=""><span class="ball-transfer-actions">' + actions + "</span></td></tr>";
+    }).join("");
+    return '<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>Reference</th><th>Who</th><th>Amount</th>' +
+      "<th>Pay by</th><th></th></tr></thead><tbody>" + body + "</tbody></table></div>";
+  }
+
+  // By reference, name or email, or by amount however it is typed: "1020", "1,020" or "£1,020.00".
+  function filterBallTransfers() {
+    var input = el("ballTransferSearch");
+    var q = ((input && input.value) || "").trim().toLowerCase();
+    var digits = q.replace(/[^0-9]/g, "");
+    Array.prototype.forEach.call(document.querySelectorAll("#ballTransfers tbody tr"), function (tr) {
+      var t = ballTransferRows.filter(function (r) { return r.reference === tr.getAttribute("data-ref"); })[0];
+      if (!t || !q) { tr.hidden = false; return; }
+      var text = (t.reference + " " + t.buyerName + " " + t.buyerEmail).toLowerCase();
+      var byAmount = digits.length > 0 && String(t.totalPence).indexOf(digits) === 0;
+      tr.hidden = !(text.indexOf(q) !== -1 || byAmount);
+    });
+  }
+
+  function loadBallTransfers() {
+    authFetch("/api/admin/ball/transfers")
+      .then(okJson)
+      .then(function (d) {
+        ballTransferRows = d.results || [];
+        el("ballTransfers").innerHTML = ballTransfersTable(ballTransferRows);
+        filterBallTransfers();
+      })
+      .catch(function () {
+        el("ballTransfers").innerHTML = '<p class="admin-empty">Could not load the bookings awaiting a transfer.</p>';
+      });
+  }
+
+  function loadBallTransferSettings() {
+    authFetch("/api/admin/ball/transfer-settings")
+      .then(okJson)
+      .then(function (s) {
+        el("ballTransferAccountName").value = s.accountName || "";
+        el("ballTransferSortCode").value = s.sortCode || "";
+        el("ballTransferAccountNumber").value = s.accountNumber || "";
+        el("ballTransferOn").checked = !!s.on;
+        var admin = isAdmin();
+        ["ballTransferAccountName", "ballTransferSortCode", "ballTransferAccountNumber", "ballTransferOn", "ballTransferSave"]
+          .forEach(function (id) { el(id).disabled = !admin; });
+      })
+      .catch(function () {
+        ballStatus("ballTransferStatus", "Could not load the bank details.");
+      });
+  }
+
+  function onMarkPaidClick(e) {
+    var btn = e.target && e.target.closest && e.target.closest("[data-mark-paid]");
+    if (!btn) return false;
+    var reference = btn.getAttribute("data-mark-paid");
+    var amount = Number(btn.getAttribute("data-amount"));
+    var ask = "Has " + exactMoney(amount) + " arrived for " + reference + " (" + btn.getAttribute("data-name") + ")?" +
+      "\n\nThey're emailed their confirmation and the link to tell us who's coming.";
+    if (btn.getAttribute("data-cancelled")) {
+      ask = "This booking was cancelled. If its seats are still free it comes back as paid, and they're emailed their confirmation.\n\n" + ask;
+    }
+    if (!window.confirm(ask)) return true;
+    btn.disabled = true;
+    authFetch("/api/admin/ball/bookings/" + encodeURIComponent(reference) + "/mark-paid", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirmTotalPence: amount }),
+    })
+      .then(okJsonOrSaid)
+      .then(function () { loadBall(); })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (err && err.message === "unauthorized") return;
+        window.alert((err && err.said) || "Could not mark " + reference + " paid. Nothing has been changed.");
+        loadBall();
+      });
+    return true;
+  }
+
+  function onPayByClick(e) {
+    var btn = e.target && e.target.closest && e.target.closest("[data-pay-by]");
+    if (!btn) return false;
+    var reference = btn.getAttribute("data-pay-by");
+    var next = window.prompt("New pay-by date for " + reference + " (YYYY-MM-DD)", addDays(btn.getAttribute("data-current"), 7));
+    if (!next) return true;
+    btn.disabled = true;
+    authFetch("/api/admin/ball/bookings/" + encodeURIComponent(reference) + "/pay-by", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ payBy: next.trim() }),
+    })
+      .then(okJsonOrSaid)
+      .then(function () { loadBallTransfers(); })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (err && err.message === "unauthorized") return;
+        window.alert((err && err.said) || "Could not change the date. Nothing has been changed.");
+      });
+    return true;
+  }
+
+  function onTransfersClick(e) {
+    if (onMarkPaidClick(e)) return;
+    if (onPayByClick(e)) return;
+    onCancelBookingClick(e);
   }
 
   // TASK-324: seats held back for a named party, with a deadline. Replaces trusting a bare
@@ -8617,7 +8774,6 @@
       .then(okJson)
       .then(function (d) {
         el("ballHolds").innerHTML = ballHoldsTable(d.results || []);
-        el("ballHolds").addEventListener("click", onReleaseHoldClick);
       })
       .catch(function () {
         el("ballHolds").innerHTML = '<p class="admin-empty">Could not load holds.</p>';
@@ -8831,6 +8987,8 @@
     ballWire();
     el("ballBookings").innerHTML = '<p class="admin-loading">Loading…</p>';
     loadBallHolds();
+    loadBallTransfers();
+    loadBallTransferSettings();
     authFetch("/api/admin/ball")
       .then(okJson)
       .then(ballRender)
@@ -8855,13 +9013,11 @@
             ? '<details class="admin-fold"><summary>' + d.abandoned +
               (d.abandoned === 1 ? " checkout was" : " checkouts were") +
               " started and never paid for" +
-              "</summary><p class=\"admin-note\">No money was taken and no seats are held. " +
+              "</summary><p class=\"admin-note\">No money was taken. Their seats are kept for up to an hour in case they are still paying, then go back on sale. " +
               "A very recent one may still be mid-payment.</p>" +
               ballBookingsTable(d.abandonedRows || []) +
               "</details>"
             : "");
-        // Delegated, because the table is re-rendered on every load.
-        el("ballBookings").addEventListener("click", onCancelBookingClick);
       })
       .catch(function () {
         el("ballBookings").innerHTML = '<p class="admin-empty">Could not load bookings.</p>';
@@ -8891,10 +9047,14 @@
     var btn = e.target && e.target.closest && e.target.closest("[data-cancel-booking]");
     if (!btn) return;
     var reference = btn.getAttribute("data-cancel-booking");
+    // TASK-484: an unpaid bank transfer booking has no money to refund, and they are told.
     var ok = window.confirm(
-      "Cancel booking " + reference + "?"
-        + "\n\nThe seats go straight back on sale."
-        + "\n\nThis does NOT refund any money. If they paid, refund them in Stripe separately."
+      btn.getAttribute("data-transfer")
+        ? "Cancel booking " + reference + "?"
+          + "\n\nIt hasn't been paid. The seats go straight back on sale, and they're emailed that it's cancelled."
+        : "Cancel booking " + reference + "?"
+          + "\n\nThe seats go straight back on sale."
+          + "\n\nThis does NOT refund any money. If they paid, refund them in Stripe separately."
     );
     if (!ok) return;
     var note = window.prompt("Why? (optional, kept in the audit log)", "") || "";
@@ -8919,6 +9079,46 @@
   function ballWire() {
     if (ballWired) return;
     ballWired = true;
+
+    // Delegated, because the tables are re-rendered on every load, and attached HERE, once. They
+    // used to be added inside each load, so every reload stacked another copy and a single click on
+    // Cancel asked as many times as the screen had been loaded (found in TASK-484, where marking a
+    // transfer paid reloads the screen).
+    el("ballHolds").addEventListener("click", onReleaseHoldClick);
+    el("ballBookings").addEventListener("click", function (e) {
+      if (onMarkPaidClick(e)) return;
+      onCancelBookingClick(e);
+    });
+    // TASK-484: bank transfer.
+    el("ballTransfers").addEventListener("click", onTransfersClick);
+    el("ballTransferSearch").addEventListener("input", filterBallTransfers);
+    el("ballTransferForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (!isAdmin()) return;
+      ballStatus("ballTransferStatus", "Saving…");
+      authFetch("/api/admin/ball/transfer-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountName: el("ballTransferAccountName").value.trim(),
+          sortCode: el("ballTransferSortCode").value.trim(),
+          accountNumber: el("ballTransferAccountNumber").value.trim(),
+          on: el("ballTransferOn").checked,
+        }),
+      })
+        .then(okJsonOrSaid)
+        .then(function (s) {
+          ballStatus(
+            "ballTransferStatus",
+            s.on ? "Saved. The ticket page offers bank transfer." : "Saved. The ticket page does not offer bank transfer.",
+          );
+          loadBallTransferSettings();
+        })
+        .catch(function (err) {
+          if (err && err.message === "unauthorized") return;
+          ballStatus("ballTransferStatus", (err && err.said) || "Could not save. Nothing has been changed.");
+        });
+    });
 
     el("ballGateForm").addEventListener("submit", function (e) {
       e.preventDefault();

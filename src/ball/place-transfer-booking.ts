@@ -24,7 +24,7 @@ import { createTransferBooking, getTransferSettings } from "../db/ball-transfer"
 // The rules differ in only these ways. A buyer on the website can book only while an admin has
 // switched bank transfer on and ticket sales are open. Staff need only the bank details to be
 // entered: they can take an order before the ticket page offers it (and so make a test booking), and
-// past "Close sales now", as they can hold seats. Staff bookings carry no Gift Aid and no newsletter
+// past "Close sales now", as they can hold seats, but not past the date ticket sales close. Staff bookings carry no Gift Aid and no newsletter
 // sign-up: a declaration made over the phone needs its own written record, and a sign-up records
 // consent given by the buyer themselves. Both need room, and both stop at the last day for transfers.
 
@@ -76,6 +76,7 @@ export async function placeTransferBooking(
 
   const avail = await getAvailability();
   if (!staff && !avail.salesOpen) return refuse(409, { error: "Ticket sales are closed", soldOut: avail.soldOut });
+  if (staff && avail.closedByDate) return refuse(409, { error: "Ticket sales have closed for the Ball." });
 
   const order = { kind: purchase.kind, quantity: purchase.quantity };
   const { seatsPerTable } = await getCapacityState();

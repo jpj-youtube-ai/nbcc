@@ -184,7 +184,7 @@ export async function getCapacityState(): Promise<CapacityState> {
 }
 
 export async function getAvailability(): Promise<
-  Availability & { salesOpen: boolean; cardFee: CardFeeRate }
+  Availability & { salesOpen: boolean; closedByDate: boolean; cardFee: CardFeeRate }
 > {
   const res = await pool.query<SettingsRow>(SETTINGS_SQL);
   const settings = toSettings(res.rows[0]);
@@ -195,6 +195,9 @@ export async function getAvailability(): Promise<
   return {
     ...a,
     salesOpen: !settings.salesClosed && !closedByDate && !a.soldOut,
+    // TASK-488: on its own, for staff adding a booking by hand, who can book past "Close sales now"
+    // but not past the closing date.
+    closedByDate,
     // Carried here so the ONE read the checkout already does gives the route the rate too,
     // rather than a second round trip to price the same order.
     cardFee: {

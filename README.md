@@ -2863,7 +2863,7 @@ transfer on the ticket page". Staff can add a booking by hand once the bank deta
   - **It works before the ticket page offers bank transfer,** once the bank details are entered. So
     staff can take an order, or make a test booking, while the switch is off.
   - **It ignores "Close sales now",** as holds do. It still needs room, and it stops at the last day
-    for transfers.
+    for transfers and once ticket sales close by date (`closedByDate` from `getAvailability`).
   - **No Gift Aid and no newsletter sign-up.** A declaration made over the phone needs its own
     written record, and a sign-up records consent the buyer gave themselves. Both are stored as no.
 - **The audit log** records `ball.transfer_booking_added` with who added it.

@@ -1488,6 +1488,29 @@ describe("admin app integration (jsdom, TASK-118)", () => {
         expect(field("ballAddFirstName").value).toBe("");
       });
 
+      // A table order is at most 4 and a ticket order at most 9, as on the ticket page.
+      it("says the limit before sending more tables than one booking can take", async () => {
+        loginToken = tokenFor("admin");
+        await openAdd();
+        fillAdd();
+        field("ballAddQuantity").value = "5";
+        await submitAdd();
+        expect(posted(/\/api\/admin\/ball\/transfer-bookings$/)).toHaveLength(0);
+        expect(el("ballAddStatus").textContent).toMatch(/up to 4 tables/);
+      });
+
+      it("takes a donation in pounds and pence", async () => {
+        loginToken = tokenFor("admin");
+        addTransferAnswer = { status: 201, body: { reference: "BALL-7KQ2MZ", totalPence: 102_050, payBy: "2026-10-08" } };
+        await openAdd();
+        fillAdd();
+        field("ballAddDonation").value = "20.50";
+        await submitAdd();
+        const [, init] = posted(/\/api\/admin\/ball\/transfer-bookings$/)[0];
+        expect(JSON.parse(init?.body || "{}").donationPence).toBe(2050);
+        expect(field("ballAddDonation").getAttribute("step")).toBe("0.01");
+      });
+
       it("sends the invoice details when ticked", async () => {
         loginToken = tokenFor("admin");
         addTransferAnswer = { status: 201, body: { reference: "BALL-7KQ2MZ", totalPence: 100_000, payBy: "2026-10-15" } };

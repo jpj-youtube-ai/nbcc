@@ -8725,6 +8725,15 @@
         ballStatus("ballAddStatus", "Give the buyer's email address: the bank details go there.");
         return;
       }
+      // One booking takes up to 4 tables or 9 tickets, as on the ticket page.
+      var kind = el("ballAddKind").value;
+      var quantity = Math.floor(Number(el("ballAddQuantity").value)) || 1;
+      if (quantity > (kind === "table" ? 4 : 9)) {
+        ballStatus("ballAddStatus", kind === "table"
+          ? "One booking takes up to 4 tables. Add another booking for the rest."
+          : "One booking takes up to 9 tickets. Add another booking for the rest, or book a table.");
+        return;
+      }
       var invoicing = el("ballAddInvoice").checked;
       if (invoicing && (!value("ballAddCompany") || !value("ballAddAddress"))) {
         ballStatus("ballAddStatus", "Give the company's name and address, for the invoice.");
@@ -8735,8 +8744,8 @@
         return;
       }
       var body = {
-        kind: el("ballAddKind").value,
-        quantity: Number(el("ballAddQuantity").value) || 1,
+        kind: kind,
+        quantity: quantity,
         buyerFirstName: value("ballAddFirstName"),
         buyerSurname: value("ballAddSurname"),
         buyerEmail: value("ballAddEmail"),
@@ -8764,8 +8773,9 @@
           el("ballAddSave").disabled = false;
           ballStatus(
             "ballAddStatus",
-            "Added " + d.reference + ". " + body.buyerFirstName + " has been emailed the bank details: " +
-              exactMoney(d.totalPence) + " to pay by " + longDay(d.payBy) + ".",
+            // The email goes after the booking is saved, so this says it is on its way, not that it arrived.
+            "Added " + d.reference + ": " + exactMoney(d.totalPence) + " to pay by " + longDay(d.payBy) +
+              ". The bank details are on their way to " + body.buyerFirstName + " by email.",
           );
           form.reset();
           el("ballAddInvoiceFields").hidden = true;

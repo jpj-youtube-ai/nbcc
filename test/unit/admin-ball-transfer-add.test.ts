@@ -127,6 +127,15 @@ describe("POST /api/admin/ball/transfer-bookings", () => {
     expect(answer(res).error).toBe("The last day for transfers has passed.");
   });
 
+  // "Close sales now" is a pause staff can book past, as they can hold seats; the closing date is not.
+  it("stops once ticket sales have closed by date", async () => {
+    m.getAvailability.mockResolvedValue({ salesOpen: false, closedByDate: true, soldOut: false, cardFee: { percentBp: 120, fixedPence: 20 } });
+    const res = await add(tokenFor("admin"), order);
+    expect(res.statusCode).toBe(409);
+    expect(answer(res).error).toBe("Ticket sales have closed for the Ball.");
+    expect(m.createTransferBooking).not.toHaveBeenCalled();
+  });
+
   it("says so when there is no room", async () => {
     m.createTransferBooking.mockResolvedValue(null);
     const res = await add(tokenFor("admin"), order);

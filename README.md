@@ -6288,6 +6288,44 @@ it would only turn those links from a warning into "not found". It could be made
 Resend release the name (or moving it with CloudFront's alias-transfer, which needs a TXT record
 proving the domain is ours) and adding it to the same distribution.
 
+## Links in our emails say which email they came from (TASK-480)
+
+So the site analytics can tell a visit from a newsletter or an email apart from someone typing the
+address, links to **our own site** in emails gain three words just before the email leaves:
+
+- in a newsletter: `utm_source=newsletter&utm_medium=email&utm_campaign=<the newsletter's id>`;
+- in any other email (receipts, Ball confirmations, reminders and so on):
+  `utm_source=email&utm_medium=email&utm_campaign=<the email's kind>`, the same kind the email log
+  shows, for example `ballConfirmation`. The footer signup welcome names itself `welcome`.
+- emails that only ever go to staff (the Ball ticket report, admin invitations, password resets,
+  sign in codes, the lapsed subscription notice and backup alerts) are not tagged, so staff clicks
+  never count as Email visits. The list is `STAFF_ONLY_KINDS` in `src/email/tracked-links.ts`.
+
+It happens in one place, `sendAndLog` in `src/clients/email.ts`, to the html and the plain text
+alike, using the rules in `src/email/tracked-links.ts`. The stored newsletter draft and the admin
+preview never carry the words. The admin **test send** is tagged exactly like the real send (by the
+newsletter's id, or `draft` before it is first saved), because a test must match the real thing. If
+the rewrite ever fails, the email goes out exactly as it was built and the failure is logged.
+
+Left exactly as they are:
+
+- links to any other website, and to `news.nbcc.scot` or its click tracker `click.news.nbcc.scot`;
+  "our own site" means `nbcc.scot`, `www.nbcc.scot` and the configured site addresses
+  (`PORTAL_BASE_URL`, `BALL_BASE_URL`);
+- a link that already has any `utm_` word, which keeps its own;
+- unsubscribe and preferences links (and the List-Unsubscribe header), portal links, set password
+  and admin links, thank you letters, Ball guest details, business certificates and thank you
+  choices, Gift Aid declarations, short links under `/g/`, and hosted files and images;
+- any link with a query parameter such as `token`, `t`, `key` or `code`, or with any part that looks
+  like a long random string (a UUID, for example the hosted newsletter documents);
+- mail, phone and `#` links.
+
+Existing query strings and `#` fragments are kept, spaces or line breaks around a tagged link are
+dropped, `&` is written as `&amp;` inside html, and running it twice changes nothing more. Adding query words to links to our own site is the only change: no
+sender, host, Reply-To or tracking setting moves, so the deliverability rules are untouched. Tests:
+`test/unit/email-tracked-links.test.ts` (the rules) and `test/unit/email-link-tracking-send.test.ts`
+(the wiring).
+
 ## Enquiries waiting for a reply (TASK-425)
 
 A contact enquiry used to be invisible unless you deliberately opened **Content → Contact form**.

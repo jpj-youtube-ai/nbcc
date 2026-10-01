@@ -166,10 +166,10 @@
   font-size: 0.88rem;
   color: var(--on-night-soft);
 }
-@media (max-width: 620px) {
-  .ball-facts { grid-template-columns: 1fr; gap: 18px; text-align: center; }
-}
-
+@media (max-width: 620px) {
+  .ball-facts { grid-template-columns: 1fr; gap: 18px; text-align: center; }
+}
+
 /* TASK-335: the line-up, announced 31 August. Sits directly beneath the facts band and takes
    only a BOTTOM rule: the band above already closes with one, and a border on both would draw
    a double line a few pixels apart, which reads as a mistake rather than a frame. */

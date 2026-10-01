@@ -210,6 +210,7 @@ import { parseImportFile } from "../newsletter/import-parse";
 import { parseTargetListIds, foldOutcomes, type TargetOutcome } from "../newsletter/audience-targets";
 import { getNewsletterStats } from "../db/newsletter-events";
 import { sendNewsletter, sendThankYou, sendAdminLoginCode, sendBusinessSupporterInvite } from "../clients/email";
+import { newsletterLinkTags } from "../email/tracked-links";
 import { createRateLimiter } from "../portal/request-limiter";
 import { clampPage } from "../db/admin";
 import { config } from "../config";
@@ -1429,6 +1430,8 @@ const testSendSchema = z.object({
   subject: z.string().trim().min(1),
   bodyJson: newsletterDocSchema,
   to: z.array(z.string().trim().email()).min(1).max(5).optional(),
+  // TASK-480: the saved newsletter being tested, so its links carry the same words as the real send.
+  newsletterId: z.number().int().positive().optional(),
 });
 // POST /api/admin/newsletters/preflight — the pre-send checks (TASK-277, letter P). Takes the CURRENT
 // draft, exactly like the preview and the test send do, so it checks what is about to go out rather
@@ -1490,6 +1493,9 @@ export async function postAdminNewsletterTestSend(req: Request, res: Response): 
         // TASK-275: the test copy carries the text part too — a test that differs from the real send is
         // not a test of the real send.
         text: htmlToPlainText(html),
+        // TASK-480: tagged exactly like the real send, for the same reason. A draft not yet saved has
+        // no id, so its links name it "draft".
+        links: newsletterLinkTags(parsed.data.newsletterId ?? "draft"),
       });
     } catch (err) {
       console.error(`newsletter test-send to ${address} failed`, err);

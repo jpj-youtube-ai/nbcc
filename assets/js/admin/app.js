@@ -6284,7 +6284,12 @@
       authFetch("/api/admin/newsletters/test-send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: el("newsletterSubject").value || "Newsletter", bodyJson: nlDoc }),
+        // TASK-480: a saved newsletter's id, so the test's links carry the same words as the real send.
+        body: JSON.stringify({
+          subject: el("newsletterSubject").value || "Newsletter",
+          bodyJson: nlDoc,
+          newsletterId: Number(el("newsletterId").value) > 0 ? Number(el("newsletterId").value) : undefined,
+        }),
       })
         .then(function (res) { return res.json().then(function (b) { return { ok: res.ok, b: b }; }); })
         .then(function (r) {

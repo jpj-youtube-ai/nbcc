@@ -5,6 +5,7 @@ import { buildWelcomeEmail, shouldSendWelcome } from "../newsletter/welcome";
 import { newsletterSender } from "../newsletter/theme";
 import { signSubscriberUnsubscribeToken } from "../donors/unsubscribe-token";
 import { sendNewsletter } from "../clients/email";
+import { emailLinkTags } from "../email/tracked-links";
 import { recordAudit } from "../db/donations";
 import { config } from "../config";
 
@@ -115,6 +116,8 @@ async function sendWelcome(listId: number, email: string): Promise<void> {
     html: built.html,
     text: built.text,
     unsubscribeUrl: `${config.PORTAL_BASE_URL}/unsubscribe/${token}`,
+    // TASK-480: it rides the newsletter sender but is not an issue, so it names itself.
+    links: emailLinkTags("welcome"),
   });
   // Recorded like any other outbound message, so "what have we sent this person?" stays answerable.
   try {

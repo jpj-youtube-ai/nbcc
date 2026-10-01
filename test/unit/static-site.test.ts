@@ -14,6 +14,11 @@ const JS_PATH = "assets/js/main.js";
 // TASK-479: the visit counter, the one other script every public page carries. Small, deferred and
 // separate from main.js so it can be left off the pages that are not public.
 const PULSE_PATH = "/assets/js/pulse.js";
+// TASK-NNN: the contact form's spam check, the one script a single page carries. Its own file, on
+// contact.html only, because main.js counts towards donate.html's page-weight budget, which has
+// almost no room left, and this code is of no use on any other page.
+const CAPTCHA_PATH = "assets/js/contact-captcha.js";
+const CAPTCHA_PAGE = "contact.html";
 
 const PAGES = [
   { file: "index.html", label: "Home" },
@@ -41,9 +46,9 @@ function allJsSrcs(html: string): string[] {
   return [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi)].map((m) => m[1]);
 }
 
-// Every script but the visit counter, which is checked on its own.
+// Every script but the visit counter and the contact page's spam check, each checked on its own.
 function jsSrcs(html: string): string[] {
-  return allJsSrcs(html).filter((src) => src !== PULSE_PATH);
+  return allJsSrcs(html).filter((src) => src !== PULSE_PATH && src !== CAPTCHA_PATH);
 }
 
 describe("static site shared assets", () => {
@@ -88,6 +93,19 @@ for (const { file, label } of PAGES) {
       expect(html).toContain(`<script defer src="${PULSE_PATH}"></script>`);
       expect(allJsSrcs(html).filter((src) => src === PULSE_PATH)).toHaveLength(1);
     });
+
+    it(
+      file === CAPTCHA_PAGE ? "loads the spam check's own script once, deferred" : "does not load the contact page's spam check",
+      () => {
+        const count = allJsSrcs(html).filter((src) => src === CAPTCHA_PATH).length;
+        if (file === CAPTCHA_PAGE) {
+          expect(count).toBe(1);
+          expect(html).toContain(`<script defer src="${CAPTCHA_PATH}"></script>`);
+        } else {
+          expect(count).toBe(0);
+        }
+      },
+    );
 
     it("has no inline <style> or inline <script> blocks", () => {
       expect(html).not.toMatch(/<style[\s>]/i);

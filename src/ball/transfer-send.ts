@@ -8,6 +8,7 @@ import {
   buildTransferDetailsEmail,
   buildTransferCancelledEmail,
   buildTransferReminderEmail,
+  buildInvoicePaidEmail,
   type TransferEmailBooking,
 } from "./transfer-email";
 import type { BallBookingWrite } from "./booking";
@@ -123,9 +124,12 @@ export async function sendTransferArrived(
   guestToken: string,
   invoice: InvoiceContact | null = null,
 ): Promise<void> {
+  // TASK-489: Jaimie's choice. The confirmation carries the private link to add the guests, so it
+  // goes to the buyer alone; the accounts team gets an email of its own, sent apart so that one
+  // failing never stops the other.
+  const { invoiceUrl: url, cc: accountsEmail } = invoiceParts(invoice, booking.buyerEmail);
   try {
     const settings = await getSettings();
-    const { invoiceUrl: url, cc } = invoiceParts(invoice, booking.buyerEmail);
     const mail = buildBallConfirmationEmail(booking, {
       arrivalTime: settings.arrivalTime,
       includedNote: settings.includedNote,
@@ -136,12 +140,22 @@ export async function sendTransferArrived(
     });
     await sendBallConfirmation({
       email: booking.buyerEmail,
-      cc,
       from: config.BALL_FROM_EMAIL,
       replyTo: config.BALL_FROM_EMAIL,
       ...mail,
     });
   } catch (err) {
     logFailure("transfer arrived", err);
+  }
+  if (!url || !accountsEmail) return;
+  try {
+    await sendBallTransfer({
+      email: accountsEmail,
+      from: config.BALL_FROM_EMAIL,
+      replyTo: config.BALL_FROM_EMAIL,
+      ...buildInvoicePaidEmail(booking, { invoiceUrl: url }),
+    });
+  } catch (err) {
+    logFailure("invoice paid", err);
   }
 }

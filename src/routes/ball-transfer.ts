@@ -1,20 +1,6 @@
-import { randomBytes } from "node:crypto";
 import { Router, type Request, type Response } from "express";
-import { makeReference, purchaseSchema } from "../ball/booking";
-import { seatsFor } from "../ball/capacity";
-import { orderTotalPence } from "../ball/pricing";
-import {
-  invoiceSchema,
-  transferPayBy,
-  transferReady,
-  transferWindowOpen,
-  TRANSFER_DAYS,
-  TRANSFER_DAYS_INVOICE,
-  type InvoiceDetails,
-} from "../ball/transfer";
-import { invoiceUrl, sendTransferDetails, sendTransferStaffNotice } from "../ball/transfer-send";
-import { getAvailability, getCapacityState } from "../db/ball";
-import { createTransferBooking, getBookingForInvoice, getTransferSettings } from "../db/ball-transfer";
+import { placeTransferBooking } from "../ball/place-transfer-booking";
+import { getBookingForInvoice, getTransferSettings } from "../db/ball-transfer";
 import { verifyInvoiceToken } from "../ball/invoice-token";
 import { renderInvoicePage } from "../ball/invoice-page";
 import { config } from "../config";
@@ -46,92 +32,16 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
   if (!isLoopback(req) && !limiter.allow(req.ip ?? "unknown", Date.now())) {
     return res.status(429).json({ error: "Too many bookings from here. Please try again later, or email events@nbcc.scot." });
   }
-  // TASK-486: "My company needs an invoice". The company and its address are required; a company
-  // cannot make a Gift Aid declaration, so an invoiced booking never carries one. Dropped before the
-  // booking is checked, so Gift Aid ticked without a donation is not a reason to refuse it.
-  let invoice: InvoiceDetails | null = null;
-  const rawInvoice: unknown = req.body?.invoice;
-  if (rawInvoice && typeof rawInvoice === "object") {
-    const inv = invoiceSchema.safeParse(rawInvoice);
-    if (!inv.success) {
-      return res.status(400).json({ error: "Invalid invoice details", details: inv.error.issues });
-    }
-    invoice = inv.data;
-  }
-  const parsed = purchaseSchema.safeParse(invoice ? { ...req.body, giftAid: false } : req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid booking request", details: parsed.error.issues });
-  }
-  // A transfer has no card fee, whatever the form sent.
-  const purchase = { ...parsed.data, coverFee: false };
-
   try {
-    const bank = await getTransferSettings();
-    if (!transferReady(bank)) return res.status(409).json({ error: "Bank transfer isn't available" });
-    // TASK-485: after the last day for transfers to arrive, card only.
-    const now = new Date();
-    const lastDay = bank.lastDay ?? null;
-    if (!transferWindowOpen(now, lastDay)) {
-      return res.status(409).json({ error: "Bank transfer has closed. Please pay by card." });
-    }
-
-    const avail = await getAvailability();
-    if (!avail.salesOpen) {
-      return res.status(409).json({ error: "Ticket sales are closed", soldOut: avail.soldOut });
-    }
-
-    const order = { kind: purchase.kind, quantity: purchase.quantity };
-    const { seatsPerTable } = await getCapacityState();
-    const totals = orderTotalPence({ order, donationPence: purchase.donationPence, coverFee: false, cardFee: avail.cardFee });
-    const reference = makeReference(randomBytes(8));
-    // Seven days on (fourteen with an invoice), or the last day for transfers if that comes first.
-    const payBy = transferPayBy(now, lastDay, invoice ? TRANSFER_DAYS_INVOICE : TRANSFER_DAYS);
-    const write = {
-      reference,
-      kind: purchase.kind,
-      quantity: purchase.quantity,
-      seats: seatsFor(order, seatsPerTable),
-      buyerName: purchase.buyerName,
-      buyerFirstName: purchase.buyerFirstName,
-      buyerSurname: purchase.buyerSurname,
-      buyerEmail: purchase.buyerEmail,
-      ticketsPence: totals.ticketsPence,
-      donationPence: totals.donationPence,
-      feeCoverPence: 0,
-      totalPence: totals.totalPence,
-      giftAid: purchase.giftAid,
-      newsletterOptIn: purchase.newsletterOptIn,
-    };
-
-    // Capacity is re-checked under the settings lock inside; null means the seats went meanwhile.
-    const booked = await createTransferBooking(write, payBy, invoice);
-    if (!booked) {
-      return res.status(409).json({
-        error:
-          purchase.kind === "table"
-            ? "There are not enough whole tables left for that booking"
-            : "There are not enough seats left for that booking",
-      });
-    }
-
-    const details = {
-      accountName: bank.accountName as string,
-      sortCode: bank.sortCode as string,
-      accountNumber: bank.accountNumber as string,
-    };
-    const contact = invoice ? { bookingId: booked.id, accountsEmail: invoice.accountsEmail ?? null } : null;
-    void sendTransferDetails({ ...write, invoice: contact }, details, payBy);
-    // TASK-487: and the team, at events@.
-    void sendTransferStaffNotice(
-      { ...write, invoice: invoice ? { bookingId: booked.id, company: invoice.company } : null },
-      payBy,
-    );
+    // TASK-488: the booking itself is made where the staff route makes one too.
+    const placed = await placeTransferBooking(req.body, { now: new Date(), addedBy: null });
+    if (!placed.ok) return res.status(placed.status).json(placed.body);
     return res.status(201).json({
-      reference,
-      totalPence: totals.totalPence,
-      payBy,
-      ...details,
-      ...(contact ? { invoiceUrl: invoiceUrl(contact.bookingId) } : {}),
+      reference: placed.reference,
+      totalPence: placed.totalPence,
+      payBy: placed.payBy,
+      ...placed.bank,
+      ...(placed.invoiceUrl ? { invoiceUrl: placed.invoiceUrl } : {}),
     });
   } catch (err) {
     console.error("ball bank transfer booking failed:", err instanceof Error ? err.message : err);

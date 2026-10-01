@@ -50,6 +50,16 @@ describe("the events@ email for a new bank transfer booking", () => {
     expect(invoiced.text).toContain("https://nbcc.scot/ball/invoice/42.abc");
   });
 
+  // TASK-488: a booking staff added for a phone or email order says who added it; one made on the
+  // website says nothing of the kind.
+  it("says who added it, when staff did", () => {
+    const added = buildTransferStaffEmail(booking, { ...base, addedBy: "sam@example.com" });
+    for (const body of [added.text, added.html]) {
+      expect(body).toContain("Added by sam@example.com in the admin, for a phone or email order.");
+    }
+    expect(mail.text).not.toMatch(/Added by/);
+  });
+
   // A subject is one line, whatever was typed into the name box.
   it("keeps the subject to one line", () => {
     const mail2 = buildTransferStaffEmail({ ...booking, buyerName: "Ada\r\nBcc: x@example.com" }, base);

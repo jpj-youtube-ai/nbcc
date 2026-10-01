@@ -84,11 +84,16 @@ export async function saveTransferSettings(
 
 // --- booking -------------------------------------------------------------------------------------
 
-/** A new transfer booking, holding its seats from now. Null when there is no longer room for it. */
+/**
+ * A new transfer booking, holding its seats from now. Null when there is no longer room for it.
+ * `addedBy` (TASK-488) is the actor of a member of staff who added it for a phone or email order;
+ * that is audited. A booking made on the website passes null.
+ */
 export async function createTransferBooking(
   write: Omit<BallBookingWrite, "stripeSessionId">,
   payBy: string,
   invoice: InvoiceDetails | null = null,
+  addedBy: string | null = null,
 ): Promise<{ id: number } | null> {
   return inTransaction(async (client) => {
     await lockSettings(client);
@@ -125,6 +130,15 @@ export async function createTransferBooking(
         invoice?.phone ?? null,
       ],
     );
+    if (addedBy) {
+      await insertAudit(client, {
+        actor: addedBy,
+        action: "ball.transfer_booking_added",
+        entity: "ball_booking",
+        entityId: res.rows[0].id,
+        data: { reference: write.reference, totalPence: write.totalPence },
+      });
+    }
     return { id: res.rows[0].id };
   });
 }

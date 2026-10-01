@@ -677,6 +677,10 @@
   }
   // opts.newPills: only the Donations screen marks new rows (TASK-478). The Overview and Search draw
   // this same table, and can load while Donations is the open section, straight after a refresh.
+  //
+  // TASK-483: where the list is narrow it becomes labelled cards (admin.css, .dn-list), so every cell
+  // carries its column's name, and the wrapper is what the stylesheet measures. The cards move the
+  // donor to the top by position, so admin-fits-a-phone.test.ts checks these columns and their order.
   function donationsTable(rows, opts) {
     opts = opts || {};
     if (!rows.length) return '<p class="admin-empty">No donations yet.</p>';
@@ -686,20 +690,23 @@
         // TASK-241: one Payment pill combining payment_status + any refund (see helpers.paymentLabel).
         var pay = H.paymentLabel(d);
         return (
-          "<tr><td>" + d.id + "</td><td>" + H.escapeHtml(d.donor_name) + '</td><td data-label="Gift">' + gift +
-          '</td><td class="admin-num">' + H.formatPence(d.amount_pence) + "</td><td>" +
-          (d.gift_aid ? '<span class="admin-pill">Gift Aid</span>' : "") + "</td><td>" +
-          H.escapeHtml(d.claim_status) + '</td><td><span class="admin-pill admin-pill--' + pay.state +
-          '">' + H.escapeHtml(pay.label) + "</span></td><td>" + H.fmtDate(d.created_at) +
+          '<tr><td data-label="ID">' + d.id + '</td><td data-label="Donor">' + H.escapeHtml(d.donor_name) +
+          '</td><td data-label="Donation">' + gift +
+          '</td><td class="admin-num" data-label="Amount">' + H.formatPence(d.amount_pence) +
+          '</td><td data-label="Gift Aid">' +
+          (d.gift_aid ? '<span class="admin-pill">Gift Aid</span>' : "") + '</td><td data-label="Claim">' +
+          H.escapeHtml(d.claim_status) + '</td><td data-label="Payment"><span class="admin-pill admin-pill--' +
+          pay.state + '">' + H.escapeHtml(pay.label) + '</span></td><td data-label="Date">' + H.fmtDate(d.created_at) +
           (opts.newPills ? rowNewPill("donations", d.payment_status === "paid" ? d.created_at : null) : "") +
-          '</td><td><button class="admin-link" type="button" data-donor="' + d.donor_id + '">View</button></td></tr>'
+          '</td><td data-label=""><button class="admin-link" type="button" data-donor="' + d.donor_id +
+          '">View</button></td></tr>'
         );
       })
       .join("");
     return (
-      '<table class="admin-table"><thead><tr><th>ID</th><th>Donor</th><th>Donation</th>' +
+      '<div class="dn-list"><table class="admin-table dn-table"><thead><tr><th>ID</th><th>Donor</th><th>Donation</th>' +
       "<th>Amount</th><th>Gift Aid</th><th>Claim</th><th>Payment</th><th>Date</th><th></th></tr></thead><tbody>" +
-      body + "</tbody></table>"
+      body + "</tbody></table></div>"
     );
   }
   // TASK-476: a figure that could not be counted. It keeps its place and its label, so the other

@@ -42,11 +42,19 @@ Wide, the table is exactly as it is today.
   `@container dnlist (max-width:759px)`:
   - the table, its body, rows and cells become blocks;
   - the headings are hidden the accessible way, so screen readers still read them;
-  - each cell becomes a label/value grid, with the label from `data-label`;
+  - each cell becomes a label and its value side by side (see "Changed while building"), with the label from `data-label`;
   - the donor cell moves to the top with `order:-1` and loses its label.
 - **Labels:** every cell gets a `data-label` in `donationsTable`. The donor cell gets "Donor" for
   completeness, though it is not shown.
 - **Nothing else changes,** including the New pills: only the Donations screen marks rows.
+
+## Changed while building (seen in the browser at 375 and 320px)
+
+- **Each line is a row with a fixed-width label, not the house grid.** In a grid every piece of a
+  cell is a grid item, so the Payment and Gift Aid pills stretched to the column's width and a
+  date's New pill dropped to a line of its own under the labels.
+- **The label is 6rem, not 7.5rem.** At 320px a date and its New pill need the room; at 7.5rem the
+  date broke as "30/09/202" and "6".
 
 ## Testing
 

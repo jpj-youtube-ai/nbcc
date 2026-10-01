@@ -60,7 +60,7 @@ function daysFromToday(days) {
 async function reset() {
   await pool.query(
     `UPDATE ball_settings SET transfer_on = false, transfer_account_name = NULL,
-            transfer_sort_code = NULL, transfer_account_number = NULL WHERE id = 1`,
+            transfer_sort_code = NULL, transfer_account_number = NULL, transfer_last_day = NULL WHERE id = 1`,
   );
   await pool.query("DELETE FROM ball_bookings WHERE buyer_email LIKE '%transfer.bdd@example.com'");
 }
@@ -267,6 +267,57 @@ Then(
     assert.equal(audit.rows[0].data.overbooked, true);
   },
 );
+
+// --- TASK-485: deadlines --------------------------------------------------------------------------
+
+const LONDON_TODAY = "(now() AT TIME ZONE 'Europe/London')::date";
+
+Given("the last day for transfers was yesterday", async function () {
+  await pool.query(`UPDATE ball_settings SET transfer_last_day = ${LONDON_TODAY} - 1 WHERE id = 1`);
+});
+
+Given("the last day for transfers is {int} days from today", async function (days) {
+  const res = await pool.query(
+    `UPDATE ball_settings SET transfer_last_day = ${LONDON_TODAY} + $1::int WHERE id = 1
+     RETURNING to_char(transfer_last_day, 'YYYY-MM-DD') AS last_day`,
+    [days],
+  );
+  this.lastDay = res.rows[0].last_day;
+});
+
+Then("the booking must be paid by the last day for transfers", function () {
+  assert.equal(this.transferStatus, 201, JSON.stringify(this.transferBody));
+  assert.equal(this.transferBody.payBy, this.lastDay);
+});
+
+Given("a bank transfer booking for {int} table was due to be paid {int} days ago", async function (_n, days) {
+  await pool.query(
+    `INSERT INTO ball_bookings
+       (reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence, donation_pence,
+        fee_cover_pence, total_pence, gift_aid, newsletter_opt_in, status, created_at, payment_method, pay_by)
+     VALUES ('BALL-DUEAGO', 'table', 1, 10, 'Late Payer', $1, 100000, 0, 0, 100000, false, false, 'pending',
+             now() - interval '9 days', 'transfer', ${LONDON_TODAY} - $2::int)`,
+    [BUYER, days],
+  );
+});
+
+When("{string} lists the bookings awaiting a transfer", async function (email) {
+  await asStaff(this, email, "GET", "/api/admin/ball/transfers");
+});
+
+Then("that booking is listed as overdue", function () {
+  assert.equal(this.adminStatus, 200, JSON.stringify(this.adminBody));
+  const row = (this.adminBody.results || []).find((r) => r.reference === "BALL-DUEAGO");
+  assert.ok(row, JSON.stringify(this.adminBody));
+  assert.equal(row.overdue, true);
+});
+
+Then("it is still holding its seats", async function () {
+  const row = await pool.query("SELECT status FROM ball_bookings WHERE reference = 'BALL-DUEAGO'");
+  assert.equal(row.rows[0].status, "pending");
+  const res = await fetch(`${BASE_URL}/api/ball/availability`);
+  assert.equal((await res.json()).tablesRemaining, 9);
+});
 
 When("the buyer falls back to Stripe's own page for the same order", async function () {
   const first = this.ballCheckout;

@@ -80,6 +80,27 @@ Feature: Paying for the Festive Ball by bank transfer (TASK-484)
     Then the admin answer is 200
     And the booking's pay-by date is 14 days from today
 
+  # TASK-485: deadlines.
+  Scenario: After the last day for transfers, the page offers card only
+    Given bank transfer is switched on with bank details
+    And the last day for transfers was yesterday
+    When I request the ball availability
+    Then the ball availability should not offer bank transfer
+    When a buyer books 1 table to pay by bank transfer
+    Then the transfer booking answer is 409
+
+  Scenario: A booking made close to the last day must be paid by that day
+    Given bank transfer is switched on with bank details
+    And the last day for transfers is 3 days from today
+    When a buyer books 1 table to pay by bank transfer
+    Then the booking must be paid by the last day for transfers
+
+  Scenario: A transfer booking past its pay-by date is flagged for staff, not cancelled
+    Given a bank transfer booking for 1 table was due to be paid 2 days ago
+    When "ann.transfer.admin.bdd@example.com" lists the bookings awaiting a transfer
+    Then that booking is listed as overdue
+    And it is still holding its seats
+
   Scenario: A card checkout left pending for over an hour no longer holds seats
     Given a card checkout for 1 table was started 2 hours ago and never finished
     When I request the ball availability

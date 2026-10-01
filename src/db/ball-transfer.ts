@@ -4,7 +4,7 @@ import { insertAudit } from "./donations";
 import { readCapacityState } from "./ball";
 import { canFulfil } from "../ball/capacity";
 import type { BallBookingWrite } from "../ball/booking";
-import type { BankDetails, TransferSettings } from "../ball/transfer";
+import type { BankDetails, InvoiceDetails, TransferSettings } from "../ball/transfer";
 
 // TASK-484: the reads and writes behind paying for the Ball by bank transfer. The rules are in
 // src/ball/transfer.ts. Every write that takes seats queues behind the same ball_settings row lock as
@@ -88,6 +88,7 @@ export async function saveTransferSettings(
 export async function createTransferBooking(
   write: Omit<BallBookingWrite, "stripeSessionId">,
   payBy: string,
+  invoice: InvoiceDetails | null = null,
 ): Promise<{ id: number } | null> {
   return inTransaction(async (client) => {
     await lockSettings(client);
@@ -97,8 +98,10 @@ export async function createTransferBooking(
       `INSERT INTO ball_bookings
          (reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname, buyer_email,
           tickets_pence, donation_pence, fee_cover_pence, total_pence, gift_aid, newsletter_opt_in,
-          status, terms_accepted_at, payment_method, pay_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,'pending',now(),'transfer',$14)
+          status, terms_accepted_at, payment_method, pay_by,
+          invoice_company, invoice_address, invoice_po, invoice_accounts_email, invoice_phone)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,0,$11,$12,$13,'pending',now(),'transfer',$14,
+               $15,$16,$17,$18,$19)
        RETURNING id`,
       [
         write.reference,
@@ -115,10 +118,76 @@ export async function createTransferBooking(
         write.giftAid,
         write.newsletterOptIn,
         payBy,
+        invoice?.company ?? null,
+        invoice?.address ?? null,
+        invoice?.po ?? null,
+        invoice?.accountsEmail ?? null,
+        invoice?.phone ?? null,
       ],
     );
     return { id: res.rows[0].id };
   });
+}
+
+// --- TASK-486: the invoice ------------------------------------------------------------------------
+
+export interface InvoiceBooking {
+  id: number;
+  reference: string;
+  kind: "seat" | "table";
+  quantity: number;
+  seats: number;
+  buyerName: string;
+  ticketsPence: number;
+  donationPence: number;
+  totalPence: number;
+  status: string;
+  payBy: string | null;
+  issuedOn: string;
+  paidOn: string | null;
+  company: string;
+  address: string;
+  po: string | null;
+}
+
+/** A transfer booking with an invoice, for its printable page; null when it has none. */
+export async function getBookingForInvoice(id: number): Promise<InvoiceBooking | null> {
+  const res = await pool.query(
+    `SELECT id, reference, kind, quantity, seats, buyer_name, tickets_pence, donation_pence, total_pence,
+            status, to_char(pay_by, 'YYYY-MM-DD') AS pay_by,
+            to_char(created_at AT TIME ZONE 'Europe/London', 'YYYY-MM-DD') AS issued_on,
+            to_char(paid_at AT TIME ZONE 'Europe/London', 'YYYY-MM-DD') AS paid_on,
+            invoice_company, invoice_address, invoice_po
+       FROM ball_bookings
+      WHERE id = $1 AND payment_method = 'transfer' AND invoice_company IS NOT NULL`,
+    [id],
+  );
+  const r = res.rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    reference: r.reference,
+    kind: r.kind,
+    quantity: r.quantity,
+    seats: r.seats,
+    buyerName: r.buyer_name,
+    ticketsPence: r.tickets_pence,
+    donationPence: r.donation_pence,
+    totalPence: r.total_pence,
+    status: r.status,
+    payBy: r.pay_by,
+    issuedOn: r.issued_on,
+    paidOn: r.paid_on,
+    company: r.invoice_company,
+    address: r.invoice_address,
+    po: r.invoice_po,
+  };
+}
+
+/** Whether a booking has an invoice, and the accounts team to copy in. */
+export interface InvoiceContact {
+  bookingId: number;
+  accountsEmail: string | null;
 }
 
 // --- the admin's list ----------------------------------------------------------------------------
@@ -135,6 +204,8 @@ export interface AwaitingTransfer {
   createdAt: string;
   /** TASK-485: the "please pay by" reminder has gone. */
   reminded: boolean;
+  /** TASK-486: the company it is invoiced to, or null without an invoice. */
+  company: string | null;
 }
 
 /** Every transfer still waiting for its money, the one due soonest first (so overdue ones lead). */
@@ -142,7 +213,7 @@ export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
   const res = await pool.query(
     `SELECT reference, kind, quantity, seats, buyer_name, buyer_email, total_pence,
             to_char(pay_by, 'YYYY-MM-DD') AS pay_by, created_at,
-            transfer_reminder_sent_at IS NOT NULL AS reminded
+            transfer_reminder_sent_at IS NOT NULL AS reminded, invoice_company
        FROM ball_bookings
       WHERE payment_method = 'transfer' AND status = 'pending'
       ORDER BY pay_by ASC, created_at ASC`,
@@ -158,6 +229,7 @@ export async function listAwaitingTransfers(): Promise<AwaitingTransfer[]> {
     payBy: r.pay_by,
     createdAt: r.created_at,
     reminded: r.reminded,
+    company: r.invoice_company,
   }));
 }
 
@@ -179,6 +251,7 @@ export interface ReminderCandidate {
   /** The UK date it was booked. */
   createdDay: string;
   remindedAt: string | null;
+  invoice: InvoiceContact | null;
 }
 
 /** Unpaid transfers not yet reminded. Whether each is due today is the pure reminderDue's call. */
@@ -186,7 +259,8 @@ export async function listTransfersForReminder(): Promise<ReminderCandidate[]> {
   const res = await pool.query(
     `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_email, tickets_pence,
             donation_pence, total_pence, gift_aid, to_char(pay_by, 'YYYY-MM-DD') AS pay_by,
-            to_char(created_at AT TIME ZONE 'Europe/London', 'YYYY-MM-DD') AS created_day
+            to_char(created_at AT TIME ZONE 'Europe/London', 'YYYY-MM-DD') AS created_day,
+            invoice_company, invoice_accounts_email
        FROM ball_bookings
       WHERE payment_method = 'transfer' AND status = 'pending' AND transfer_reminder_sent_at IS NULL`,
   );
@@ -204,6 +278,7 @@ export async function listTransfersForReminder(): Promise<ReminderCandidate[]> {
     giftAid: r.gift_aid,
     payBy: r.pay_by,
     createdDay: r.created_day,
+    invoice: r.invoice_company ? { bookingId: r.id, accountsEmail: r.invoice_accounts_email } : null,
     remindedAt: null,
   }));
 }
@@ -227,7 +302,7 @@ export async function releaseTransferReminder(id: number): Promise<void> {
 // --- marking paid --------------------------------------------------------------------------------
 
 export type MarkPaidOutcome =
-  | { ok: true; reinstated: boolean; booking: BallBookingWrite; guestToken: string }
+  | { ok: true; reinstated: boolean; booking: BallBookingWrite; guestToken: string; invoice: InvoiceContact | null }
   | { ok: false; reason: "not_found" | "not_transfer" | "already_paid" | "was_paid" | "amount_mismatch" | "seats_gone" };
 
 interface BookingDbRow {
@@ -250,6 +325,8 @@ interface BookingDbRow {
   payment_method: string;
   guest_token: string | null;
   cancelled_from: string | null;
+  invoice_company: string | null;
+  invoice_accounts_email: string | null;
 }
 
 function toWrite(r: BookingDbRow): BallBookingWrite {
@@ -290,7 +367,8 @@ export async function markTransferPaid(
     const found = await client.query<BookingDbRow>(
       `SELECT id, reference, kind, quantity, seats, buyer_name, buyer_first_name, buyer_surname,
               buyer_email, tickets_pence, donation_pence, fee_cover_pence, total_pence, gift_aid,
-              newsletter_opt_in, status, payment_method, guest_token, cancelled_from
+              newsletter_opt_in, status, payment_method, guest_token, cancelled_from,
+              invoice_company, invoice_accounts_email
          FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
       [reference],
     );
@@ -324,7 +402,13 @@ export async function markTransferPaid(
       entityId: row.id,
       data: { reference, totalPence: row.total_pence },
     });
-    return { ok: true, reinstated, booking: toWrite(row), guestToken: updated.rows[0].guest_token };
+    return {
+      ok: true,
+      reinstated,
+      booking: toWrite(row),
+      guestToken: updated.rows[0].guest_token,
+      invoice: row.invoice_company ? { bookingId: row.id, accountsEmail: row.invoice_accounts_email } : null,
+    };
   });
 }
 

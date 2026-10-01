@@ -408,6 +408,8 @@ export type CancelOutcome =
       // TASK-484: so the route can email a bank transfer buyer whose unpaid booking was cancelled.
       paymentMethod: string;
       booking: TransferEmailBooking & { buyerEmail: string };
+      // TASK-486: its invoice, if it has one, so the email can link it and copy in the accounts team.
+      invoice: { bookingId: number; accountsEmail: string | null } | null;
     }
   | { ok: false; reason: "not_found" | "already_closed"; status?: string };
 
@@ -434,9 +436,11 @@ export async function cancelBooking(
       total_pence: number;
       gift_aid: boolean;
       payment_method: string;
+      invoice_company: string | null;
+      invoice_accounts_email: string | null;
     }>(
       `SELECT id, status, seats, kind, quantity, buyer_name, buyer_email, tickets_pence,
-              donation_pence, total_pence, gift_aid, payment_method
+              donation_pence, total_pence, gift_aid, payment_method, invoice_company, invoice_accounts_email
          FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
       [reference],
     );
@@ -472,6 +476,7 @@ export async function cancelBooking(
       seats: row.seats,
       wasStatus: row.status,
       paymentMethod: row.payment_method,
+      invoice: row.invoice_company ? { bookingId: row.id, accountsEmail: row.invoice_accounts_email } : null,
       booking: {
         reference,
         kind: row.kind,

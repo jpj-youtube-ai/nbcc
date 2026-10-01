@@ -31,3 +31,6 @@ crash.log
 
 # Subagent-driven-development scratch (ledger + task reports) — never part of the shipped site.
 .superpowers/
+
+# The DB-IP location database (TASK-481): fetched by the Docker build, never committed.
+/geo/

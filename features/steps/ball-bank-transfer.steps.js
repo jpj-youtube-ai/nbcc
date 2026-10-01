@@ -84,7 +84,7 @@ Given("bank transfer is switched on with bank details", async function () {
   );
 });
 
-async function book(world, quantity, what) {
+async function book(world, quantity, what, extra = {}) {
   const kind = what.startsWith("table") ? "table" : "seat";
   const res = await fetch(`${BASE_URL}/api/ball/bank-transfer`, {
     method: "POST",
@@ -96,6 +96,7 @@ async function book(world, quantity, what) {
       buyerSurname: "Transfer",
       buyerEmail: BUYER,
       termsAccepted: true,
+      ...extra,
     }),
   });
   world.transferStatus = res.status;
@@ -363,4 +364,88 @@ Then("exactly one pending card booking should hold seats", async function () {
   assert.equal(pending.length, 1, JSON.stringify(rows.rows));
   const replaced = rows.rows.find((r) => r.reference === this.replacedReference);
   assert.equal(replaced && replaced.status, "cancelled");
+});
+
+// --- TASK-486: invoices ---------------------------------------------------------------------------
+
+// Invented, like every fixture in this public repo.
+const INVOICE = {
+  company: "Example Widgets Ltd",
+  address: "1 Test Street\nTestville\nTE1 1ST",
+  po: "PO-0001",
+  accountsEmail: "accounts.transfer.bdd@example.com",
+  phone: "",
+};
+
+When("a company books {int} {word} to pay by bank transfer with an invoice", async function (quantity, what) {
+  // Gift Aid ticked on the way in: a company cannot declare it, so it must not survive.
+  await book(this, quantity, what, { donationPence: 1000, giftAid: true, invoice: INVOICE });
+});
+
+When("a company books {int} {word} to pay by bank transfer with an invoice but no address", async function (quantity, what) {
+  await book(this, quantity, what, { invoice: { ...INVOICE, address: "" } });
+});
+
+Then("the booking keeps the company's invoice details, without Gift Aid", async function () {
+  const row = await pool.query(
+    `SELECT gift_aid, invoice_company, invoice_address, invoice_po, invoice_accounts_email, invoice_phone
+       FROM ball_bookings WHERE reference = $1`,
+    [this.transferRef],
+  );
+  const b = row.rows[0];
+  assert.equal(b.gift_aid, false);
+  assert.equal(b.invoice_company, INVOICE.company);
+  assert.equal(b.invoice_address, INVOICE.address);
+  assert.equal(b.invoice_po, INVOICE.po);
+  assert.equal(b.invoice_accounts_email, INVOICE.accountsEmail);
+  assert.equal(b.invoice_phone, null);
+  assert.match(this.transferBody.invoiceUrl || "", /\/ball\/invoice\/\d+\.[A-Za-z0-9_-]+$/);
+});
+
+// The link is built on BALL_BASE_URL (the public site); open its path on the server under test.
+async function openInvoice(world, path) {
+  const res = await fetch(`${BASE_URL}${path}`);
+  world.invoiceStatus = res.status;
+  world.invoiceHeaders = res.headers;
+  world.invoiceHtml = await res.text();
+}
+const invoicePath = (world) => new URL(world.transferBody.invoiceUrl).pathname;
+
+When("I open the invoice link", async function () {
+  await openInvoice(this, invoicePath(this));
+});
+
+When("I open the invoice link with its signature altered", async function () {
+  const path = invoicePath(this);
+  const last = path.slice(-1);
+  await openInvoice(this, path.slice(0, -1) + (last === "A" ? "B" : "A"));
+});
+
+Then("the invoice page shows the company, the reference and the bank details", function () {
+  assert.equal(this.invoiceStatus, 200, this.invoiceHtml.slice(0, 300));
+  for (const part of [INVOICE.company, this.transferRef, BANK.accountNumber, "PO-0001"]) {
+    assert.ok(this.invoiceHtml.includes(part), `the invoice shows ${part}`);
+  }
+});
+
+Then("the invoice page is private and kept out of search engines", function () {
+  assert.equal(this.invoiceHeaders.get("cache-control"), "private, no-store");
+  assert.match(this.invoiceHeaders.get("x-robots-tag") || "", /noindex/);
+});
+
+Then("the booking is listed with its company and a link to its invoice", function () {
+  assert.equal(this.adminStatus, 200, JSON.stringify(this.adminBody));
+  const row = (this.adminBody.results || []).find((r) => r.reference === this.transferRef);
+  assert.ok(row, JSON.stringify(this.adminBody));
+  assert.equal(row.company, INVOICE.company);
+  assert.equal(row.invoiceUrl, this.transferBody.invoiceUrl);
+});
+
+Then("the invoice page says it is paid", function () {
+  assert.equal(this.invoiceStatus, 200);
+  assert.match(this.invoiceHtml, /class="stamp paid">Paid/);
+});
+
+Then("the invoice page is not found", function () {
+  assert.equal(this.invoiceStatus, 404);
 });

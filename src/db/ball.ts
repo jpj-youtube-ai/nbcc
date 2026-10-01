@@ -9,6 +9,7 @@ import {
   type Order,
 } from "../ball/capacity";
 import type { BallBookingWrite } from "../ball/booking";
+import type { TransferEmailBooking } from "../ball/transfer-email";
 import type { BallSettingsUpdate } from "../ball/settings";
 import { retentionDate, type GuestInput } from "../ball/guests";
 import type { GuestPageBooking, GuestRow } from "../ball/guest-page";
@@ -381,7 +382,14 @@ const SETTING_COLUMNS: Record<keyof BallSettingsWrite, string> = {
 // Only a live booking can be cancelled. Re-cancelling something already cancelled or refunded
 // returns null rather than pretending it did something, so the caller can say so plainly.
 export type CancelOutcome =
-  | { ok: true; seats: number; wasStatus: "pending" | "paid" }
+  | {
+      ok: true;
+      seats: number;
+      wasStatus: "pending" | "paid";
+      // TASK-484: so the route can email a bank transfer buyer whose unpaid booking was cancelled.
+      paymentMethod: string;
+      booking: TransferEmailBooking & { buyerEmail: string };
+    }
   | { ok: false; reason: "not_found" | "already_closed"; status?: string };
 
 export async function cancelBooking(
@@ -394,8 +402,23 @@ export async function cancelBooking(
     await client.query("BEGIN");
     // Locked for the length of the transaction so two staff pressing cancel at once cannot
     // both count it as a fresh cancellation in the audit log.
-    const found = await client.query<{ id: number; status: string; seats: number }>(
-      `SELECT id, status, seats FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
+    const found = await client.query<{
+      id: number;
+      status: string;
+      seats: number;
+      kind: "seat" | "table";
+      quantity: number;
+      buyer_name: string;
+      buyer_email: string;
+      tickets_pence: number;
+      donation_pence: number;
+      total_pence: number;
+      gift_aid: boolean;
+      payment_method: string;
+    }>(
+      `SELECT id, status, seats, kind, quantity, buyer_name, buyer_email, tickets_pence,
+              donation_pence, total_pence, gift_aid, payment_method
+         FROM ball_bookings WHERE reference = $1 FOR UPDATE`,
       [reference],
     );
     const row = found.rows[0];
@@ -425,7 +448,24 @@ export async function cancelBooking(
       },
     });
     await client.query("COMMIT");
-    return { ok: true, seats: row.seats, wasStatus: row.status };
+    return {
+      ok: true,
+      seats: row.seats,
+      wasStatus: row.status,
+      paymentMethod: row.payment_method,
+      booking: {
+        reference,
+        kind: row.kind,
+        quantity: row.quantity,
+        seats: row.seats,
+        buyerName: row.buyer_name,
+        buyerEmail: row.buyer_email,
+        ticketsPence: row.tickets_pence,
+        donationPence: row.donation_pence,
+        totalPence: row.total_pence,
+        giftAid: row.gift_aid,
+      },
+    };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

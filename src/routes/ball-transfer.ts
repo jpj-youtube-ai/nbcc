@@ -3,7 +3,7 @@ import { Router, type Request, type Response } from "express";
 import { makeReference, purchaseSchema } from "../ball/booking";
 import { seatsFor } from "../ball/capacity";
 import { orderTotalPence } from "../ball/pricing";
-import { payByDate, transferReady } from "../ball/transfer";
+import { transferPayBy, transferReady, transferWindowOpen } from "../ball/transfer";
 import { sendTransferDetails } from "../ball/transfer-send";
 import { getAvailability, getCapacityState } from "../db/ball";
 import { createTransferBooking, getTransferSettings } from "../db/ball-transfer";
@@ -45,6 +45,12 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
   try {
     const bank = await getTransferSettings();
     if (!transferReady(bank)) return res.status(409).json({ error: "Bank transfer isn't available" });
+    // TASK-485: after the last day for transfers to arrive, card only.
+    const now = new Date();
+    const lastDay = bank.lastDay ?? null;
+    if (!transferWindowOpen(now, lastDay)) {
+      return res.status(409).json({ error: "Bank transfer has closed. Please pay by card." });
+    }
 
     const avail = await getAvailability();
     if (!avail.salesOpen) {
@@ -55,7 +61,8 @@ export async function postBankTransfer(req: Request, res: Response): Promise<Res
     const { seatsPerTable } = await getCapacityState();
     const totals = orderTotalPence({ order, donationPence: purchase.donationPence, coverFee: false, cardFee: avail.cardFee });
     const reference = makeReference(randomBytes(8));
-    const payBy = payByDate(new Date());
+    // Seven days on, or the last day for transfers if that comes first.
+    const payBy = transferPayBy(now, lastDay);
     const write = {
       reference,
       kind: purchase.kind,

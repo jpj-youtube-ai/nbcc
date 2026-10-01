@@ -2,7 +2,12 @@ import { config } from "../config";
 import { sendBallConfirmation, sendBallTransfer } from "../clients/email";
 import { getSettings } from "../db/ball";
 import { buildBallConfirmationEmail } from "./confirmation-email";
-import { buildTransferDetailsEmail, buildTransferCancelledEmail, type TransferEmailBooking } from "./transfer-email";
+import {
+  buildTransferDetailsEmail,
+  buildTransferCancelledEmail,
+  buildTransferReminderEmail,
+  type TransferEmailBooking,
+} from "./transfer-email";
 import type { BallBookingWrite } from "./booking";
 import type { BankDetails } from "./transfer";
 
@@ -34,6 +39,24 @@ export async function sendTransferDetails(
   } catch (err) {
     logFailure("transfer details", err);
   }
+}
+
+/**
+ * TASK-485: the reminder two days before the date. Unlike the others this one THROWS on failure, so
+ * the daily pass leaves it unmarked and tomorrow's run tries again.
+ */
+export async function sendTransferReminder(
+  booking: TransferEmailBooking & { buyerEmail: string },
+  bank: BankDetails,
+  payBy: string,
+): Promise<void> {
+  const mail = buildTransferReminderEmail(booking, bank, payBy);
+  await sendBallTransfer({
+    email: booking.buyerEmail,
+    from: config.BALL_FROM_EMAIL,
+    replyTo: config.BALL_FROM_EMAIL,
+    ...mail,
+  });
 }
 
 /** Their unpaid booking was cancelled by staff. */

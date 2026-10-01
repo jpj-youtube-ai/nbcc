@@ -63,7 +63,7 @@ ballRouter.get("/api/ball/availability", async (_req, res) => {
       soldOut: a.soldOut,
       salesOpen: a.salesOpen,
       // TASK-484: whether to show "Pay by bank transfer". Yes or no only; never the bank details.
-      transferOpen: publicTransferOpen(a.salesOpen, await getTransferSettings()),
+      transferOpen: publicTransferOpen(a.salesOpen, await getTransferSettings(), new Date()),
       // So the "cover the card fee" checkbox quotes the live rate rather than a number
       // baked into the script at build time (TASK-317). Not sensitive: the page already
       // shows the resulting amount in pounds.

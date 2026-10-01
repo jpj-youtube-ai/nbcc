@@ -50,10 +50,32 @@ export function buildTransferDetailsEmail(
   bank: BankDetails,
   payBy: string,
 ): TransferEmail {
+  return buildPayEmail(booking, bank, payBy, "details");
+}
+
+/**
+ * TASK-485: two days before the date, if it is still unpaid. Everything needed to pay again, so
+ * nobody has to dig out the first email, and a word for someone whose money is already on its way.
+ */
+export function buildTransferReminderEmail(
+  booking: TransferEmailBooking,
+  bank: BankDetails,
+  payBy: string,
+): TransferEmail {
+  return buildPayEmail(booking, bank, payBy, "reminder");
+}
+
+function buildPayEmail(
+  booking: TransferEmailBooking,
+  bank: BankDetails,
+  payBy: string,
+  variant: "details" | "reminder",
+): TransferEmail {
   const name = escapeHtml(booking.buyerName);
   const what = describe(booking);
   const until = longDate(payBy);
   const amount = money(booking.totalPence);
+  const reminder = variant === "reminder";
 
   // The money as on the confirmation: only lines that exist, then the total.
   const rows: Array<[string, string]> = [["Tickets", money(booking.ticketsPence)]];
@@ -76,9 +98,16 @@ export function buildTransferDetailsEmail(
     : "";
 
   const body = `<p style="margin:0 0 6px;font-family:${BODY_FONT};font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:${SLATE_SOFT};font-weight:700">The Festive Ball</p>
-  <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">Thank you, ${name}. Your seats are held</h1>
+  <h1 style="color:${CRIMSON};font-family:${HEAD};font-size:26px;font-weight:800;margin:0 0 14px;letter-spacing:-.01em">${
+    reminder ? `A reminder, ${name}: please pay by ${until}` : `Thank you, ${name}. Your seats are held`
+  }</h1>
 
-  <p ${P}>You have booked <b>${what}</b>. Your seats are held for you until <b>${until}</b>. Please pay by bank transfer by then.</p>
+  <p ${P}>${
+    reminder
+      ? `Your seats for <b>${what}</b> are held for you until <b>${until}</b>, and we haven't received your payment yet. Here are the details again.`
+      : `You have booked <b>${what}</b>. Your seats are held for you until <b>${until}</b>. Please pay by bank transfer by then.`
+  }</p>
+  ${reminder ? `<p ${P}>${ALREADY_PAID}</p>` : ""}
 
   ${factsCard(
     factRow("Amount to pay", amount, true) +
@@ -106,11 +135,21 @@ for every pound, at no cost to you. Gift Aid can't be claimed on ticket sales,
 because you receive a meal and entertainment in return.\n`
     : "";
 
-  const text = `THANK YOU, ${booking.buyerName.toUpperCase()}. YOUR SEATS ARE HELD
+  const opening = reminder
+    ? `A REMINDER, ${booking.buyerName.toUpperCase()}: PLEASE PAY BY ${until.toUpperCase()}
+
+Your seats for ${what} are held for you until ${until}, and we haven't
+received your payment yet. Here are the details again.
+
+${ALREADY_PAID}
+`
+    : `THANK YOU, ${booking.buyerName.toUpperCase()}. YOUR SEATS ARE HELD
 
 You have booked ${what}. Your seats are held for you until ${until}.
 Please pay by bank transfer by then.
+`;
 
+  const text = `${opening}
 Amount to pay: ${amount}
 Account name: ${bank.accountName}
 Sort code: ${bank.sortCode}
@@ -129,11 +168,16 @@ link to tell us who's coming.
 ${BALL_TEXT_FOOTER}`;
 
   return {
-    subject: `How to pay for your Festive Ball booking ${booking.reference}`,
+    subject: reminder
+      ? `Reminder: please pay for your Festive Ball booking ${booking.reference} by ${until}`
+      : `How to pay for your Festive Ball booking ${booking.reference}`,
     html: ballEmailShell(body),
     text,
   };
 }
+
+// Their money may already be on its way when the reminder goes.
+const ALREADY_PAID = "If you've already paid, thank you, there's nothing more to do. It can take a day or two to reach us.";
 
 export function buildTransferCancelledEmail(booking: TransferEmailBooking): TransferEmail {
   const name = escapeHtml(booking.buyerName);

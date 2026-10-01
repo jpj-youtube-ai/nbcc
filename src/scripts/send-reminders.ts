@@ -68,6 +68,17 @@ if (require.main === module) {
       } catch (err) {
         console.error("ball ticket report failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-485: the Festive Ball bank transfer reminder, two days before a booking's pay-by date.
+      // Its own try/catch, like every pass here, so a failure cannot stop anything after it.
+      try {
+        const { runTransferReminders } = await import("../ball/transfer-reminder-runner");
+        const reminders = await runTransferReminders();
+        console.error(
+          `ball transfer reminders: considered=${reminders.considered} sent=${reminders.sent} failed=${reminders.failed}`,
+        );
+      } catch (err) {
+        console.error("ball transfer reminders failed:", err instanceof Error ? err.message : err);
+      }
       // TASK-407: the automatic thank-you letter. A business that has signed up and told us how
       // it would like to be thanked gets its letter without anybody having to remember, and one
       // that never answered gets the standard letter after a fortnight rather than nothing at

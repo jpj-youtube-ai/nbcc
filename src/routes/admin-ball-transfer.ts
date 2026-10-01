@@ -3,7 +3,7 @@ import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import type { AdminSessionClaims } from "../admin/session";
-import { bankDetailsSchema, transferReady } from "../ball/transfer";
+import { bankDetailsSchema, isOverdue, transferReady, transferWindowOpen, type TransferSettings } from "../ball/transfer";
 import { makeGuestToken } from "../ball/guests";
 import { londonDate } from "../ball/sales-report";
 import { sendTransferArrived } from "../ball/transfer-send";
@@ -36,15 +36,33 @@ function failed(res: Response, what: string, err: unknown): Response {
   return res.status(500).json({ error: "Admin is temporarily unavailable" });
 }
 
+// The settings as the admin screen shows them. `ready`: switched on with every detail. `offered`: the
+// ticket page actually offers it now, which it does not after the last day for transfers (TASK-485),
+// so the screen never says "the ticket page offers bank transfer" when it does not.
+function settingsAnswer(s: TransferSettings) {
+  const ready = transferReady(s);
+  return { ...s, ready, offered: ready && transferWindowOpen(new Date(), s.lastDay ?? null) };
+}
+
 export async function getAdminTransferSettings(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "ball", "view"))) return;
   try {
     const s = await getTransferSettings();
-    return res.status(200).json({ ...s, ready: transferReady(s) });
+    return res.status(200).json(settingsAnswer(s));
   } catch (err) {
     return failed(res, "reading the settings", err);
   }
 }
+
+// A real calendar date: "2026-02-30" has the right shape, but Postgres would refuse it and staff would
+// see a 500, so it must survive a round trip through Date unchanged.
+const realDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((d) => {
+    const t = new Date(`${d}T12:00:00Z`);
+    return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+  });
 
 const settingsBody = z
   .object({
@@ -52,6 +70,8 @@ const settingsBody = z
     accountName: z.string().optional(),
     sortCode: z.string().optional(),
     accountNumber: z.string().optional(),
+    // TASK-485: the last day transfers may arrive; null clears it.
+    lastDay: realDate.nullable().optional(),
   })
   .strict();
 
@@ -61,7 +81,7 @@ export async function putAdminTransferSettings(req: Request, res: Response): Pro
   const body = settingsBody.safeParse(req.body);
   if (!body.success) return res.status(400).json({ error: "Invalid settings" });
 
-  const { on, ...detailFields } = body.data;
+  const { on, lastDay, ...detailFields } = body.data;
   const givesDetails = Object.values(detailFields).some((v) => v !== undefined);
   let details: z.infer<typeof bankDetailsSchema> | undefined;
   if (givesDetails) {
@@ -79,11 +99,12 @@ export async function putAdminTransferSettings(req: Request, res: Response): Pro
     if (next.on && !transferReady(next)) {
       return res.status(400).json({ error: "Fill in all three bank details before switching it on" });
     }
-    const update: { on?: boolean; details?: typeof details } = {};
+    const update: { on?: boolean; details?: typeof details; lastDay?: string | null } = {};
     if (on !== undefined) update.on = on;
     if (details) update.details = details;
+    if (lastDay !== undefined) update.lastDay = lastDay;
     const saved = await saveTransferSettings(update, actorOf(claims));
-    return res.status(200).json({ ...saved, ready: transferReady(saved) });
+    return res.status(200).json(settingsAnswer(saved));
   } catch (err) {
     return failed(res, "saving the settings", err);
   }
@@ -92,7 +113,10 @@ export async function putAdminTransferSettings(req: Request, res: Response): Pro
 export async function getAdminTransfers(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "ball", "view"))) return;
   try {
-    return res.status(200).json({ results: await listAwaitingTransfers() });
+    // TASK-485: past its date, flagged for staff. Nothing happens to it automatically.
+    const today = londonDate(new Date());
+    const results = (await listAwaitingTransfers()).map((t) => ({ ...t, overdue: isOverdue(t.payBy, today) }));
+    return res.status(200).json({ results });
   } catch (err) {
     return failed(res, "listing transfers", err);
   }
@@ -135,17 +159,7 @@ export async function postAdminMarkTransferPaid(req: Request, res: Response): Pr
   }
 }
 
-// A real calendar date: "2026-02-30" has the right shape, but Postgres would refuse it and staff would
-// see a 500, so it must survive a round trip through Date unchanged.
-const payByBody = z.object({
-  payBy: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .refine((d) => {
-      const t = new Date(`${d}T12:00:00Z`);
-      return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
-    }),
-});
+const payByBody = z.object({ payBy: realDate });
 
 export async function postAdminTransferPayBy(req: Request, res: Response): Promise<Response | void> {
   const claims = await authorizeSection(req, res, "ball", "edit");

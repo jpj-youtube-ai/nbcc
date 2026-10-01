@@ -74,7 +74,7 @@ describe("the bank details and the switch", () => {
   it("can be read by anyone who can see the Festive Ball", async () => {
     const res = await call(getAdminTransferSettings, tokenFor("viewer"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ ...BANK, ready: false });
+    expect(res.body).toEqual({ ...BANK, ready: false, offered: false });
   });
 
   it("can be changed by an admin only, not by an editor with Festive Ball edit", async () => {
@@ -109,12 +109,52 @@ describe("the bank details and the switch", () => {
   });
 });
 
+// TASK-485: the last day for transfers to arrive.
+describe("the last day for transfers", () => {
+  it("is saved by an admin, and can be cleared", async () => {
+    await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: "2026-10-31" });
+    expect(m.saveTransferSettings).toHaveBeenLastCalledWith({ lastDay: "2026-10-31" }, "admin:staff@example.com");
+    await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: null });
+    expect(m.saveTransferSettings).toHaveBeenLastCalledWith({ lastDay: null }, "admin:staff@example.com");
+  });
+
+  // Switched on is not the same as offered: after the last day the page offers card only.
+  it("says whether the ticket page actually offers it", async () => {
+    m.saveTransferSettings.mockResolvedValue({ ...BANK, on: true, lastDay: "2020-01-01" });
+    const past = await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: "2020-01-01" });
+    expect((past.body as { offered: boolean }).offered).toBe(false);
+    m.saveTransferSettings.mockResolvedValue({ ...BANK, on: true, lastDay: null });
+    const open = await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: null });
+    expect((open.body as { offered: boolean }).offered).toBe(true);
+  });
+
+  it("must be a real date", async () => {
+    expect((await call(putAdminTransferSettings, tokenFor("admin"), { lastDay: "2026-02-30" })).statusCode).toBe(400);
+    expect(m.saveTransferSettings).not.toHaveBeenCalled();
+  });
+
+  it("is an admin's to set", async () => {
+    expect((await call(putAdminTransferSettings, editorWithBallEdit(), { lastDay: "2026-10-31" })).statusCode).toBe(403);
+  });
+});
+
 describe("the bookings awaiting a transfer", () => {
   it("are listed for anyone who can see the Festive Ball", async () => {
-    m.listAwaitingTransfers.mockResolvedValue([{ reference: "BALL-7KQ2MZ" }]);
+    m.listAwaitingTransfers.mockResolvedValue([{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01" }]);
     const res = await call(getAdminTransfers, tokenFor("viewer"));
     expect(res.statusCode).toBe(200);
-    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ" }] });
+    expect(res.body).toEqual({ results: [{ reference: "BALL-7KQ2MZ", payBy: "2099-01-01", overdue: false }] });
+  });
+
+  // TASK-485: past its date, flagged for staff, who decide what happens.
+  it("say which are overdue", async () => {
+    m.listAwaitingTransfers.mockResolvedValue([
+      { reference: "BALL-OLDONE", payBy: "2020-01-01" },
+      { reference: "BALL-NEWONE", payBy: "2099-01-01" },
+    ]);
+    const res = await call(getAdminTransfers, tokenFor("viewer"));
+    const results = (res.body as { results: Array<{ reference: string; overdue: boolean }> }).results;
+    expect(results.map((r) => r.overdue)).toEqual([true, false]);
   });
 });
 

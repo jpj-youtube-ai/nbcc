@@ -22,6 +22,7 @@ vi.mock("../../src/config", () => ({
 }));
 
 import { postBankTransfer } from "../../src/routes/ball-transfer";
+import { londonDate } from "../../src/ball/sales-report";
 
 // Invented, like every fixture in this public repo.
 const BANK = { on: true, accountName: "Night Before Christmas Campaign", sortCode: "12-34-56", accountNumber: "12345678" };
@@ -115,6 +116,24 @@ describe("POST /api/ball/bank-transfer", () => {
   it("lets the same buyer book again before paying", async () => {
     expect((await post(order)).statusCode).toBe(201);
     expect((await post({ ...order, kind: "seat", quantity: 2 })).statusCode).toBe(201);
+  });
+
+  // TASK-485: after the last day for transfers, card only.
+  it("is refused after the last day for transfers", async () => {
+    getTransferSettingsMock.mockResolvedValue({ ...BANK, lastDay: "2020-01-01" });
+    const res = await post(order);
+    expect(res.statusCode).toBe(409);
+    expect(body(res).error).toBe("Bank transfer has closed. Please pay by card.");
+    expect(createTransferBookingMock).not.toHaveBeenCalled();
+  });
+
+  it("shortens the pay-by date to the last day when that comes first", async () => {
+    const tomorrow = londonDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    getTransferSettingsMock.mockResolvedValue({ ...BANK, lastDay: tomorrow });
+    const res = await post(order);
+    expect(res.statusCode).toBe(201);
+    expect(body(res).payBy).toBe(tomorrow);
+    expect(createTransferBookingMock.mock.calls[0][1]).toBe(tomorrow);
   });
 
   // A transfer booking holds seats for a week, so a bot must not be able to hold the room.

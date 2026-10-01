@@ -1514,6 +1514,11 @@
                 <label class="ty-inline">Account number
                   <input id="ballTransferAccountNumber" type="text" inputmode="numeric" maxlength="8" style="width:120px" />
                 </label>
+                <!-- TASK-485: every booking's pay-by date shortens to fit this, and after it the
+                     ticket page offers card only. Empty means no last day. -->
+                <label class="ty-inline">Last day for transfers to arrive
+                  <input id="ballTransferLastDay" type="date" />
+                </label>
                 <label class="ty-inline"><input id="ballTransferOn" type="checkbox" /> Offer bank transfer on the ticket page</label>
                 <button class="btn btn-primary" type="submit" id="ballTransferSave">Save</button>
               </form>

@@ -8,6 +8,8 @@ import { canFulfil, seatsFor } from "../ball/capacity";
 import { makeReference, purchaseSchema } from "../ball/booking";
 import { buildBallSessionParams } from "../ball/checkout";
 import { orderTotalPence } from "../ball/pricing";
+import { publicTransferOpen } from "../ball/transfer";
+import { getTransferSettings } from "../db/ball-transfer";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
 import { addBallNavLink } from "../ball/nav-link";
 import { addEventsNavLink } from "../events/nav-link";
@@ -58,6 +60,8 @@ ballRouter.get("/api/ball/availability", async (_req, res) => {
       tablesRemaining: a.tablesRemaining,
       soldOut: a.soldOut,
       salesOpen: a.salesOpen,
+      // TASK-484: whether to show "Pay by bank transfer". Yes or no only; never the bank details.
+      transferOpen: publicTransferOpen(a.salesOpen, await getTransferSettings()),
       // So the "cover the card fee" checkbox quotes the live rate rather than a number
       // baked into the script at build time (TASK-317). Not sensitive: the page already
       // shows the resulting amount in pounds.

@@ -22,6 +22,7 @@ import { IMAGE_JSON_BODY_LIMIT } from "./newsletter/image-validation";
 import { newsletterDocumentsRouter } from "./routes/newsletter-documents";
 import { tickerRouter } from "./routes/ticker";
 import { ballRouter } from "./routes/ball";
+import { ballTransferRouter } from "./routes/ball-transfer";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -66,6 +67,8 @@ export function createApp() {
   app.use(tickerRouter);
   // Public Festive Ball availability feed (TASK-313): GET /api/ball/availability.
   app.use(ballRouter);
+  // Booking the Festive Ball to pay by bank transfer (TASK-484). Refused until an admin switches it on.
+  app.use(ballTransferRouter);
   app.use(portalRouter);
   app.use(adminRouter);
   // Admin user management + forgot/set-password (admin-management Phase 1, Task 5).

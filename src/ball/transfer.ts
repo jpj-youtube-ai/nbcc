@@ -40,6 +40,14 @@ export function transferReady(s: TransferSettings): boolean {
   return s.on && Boolean(s.accountName && s.sortCode && s.accountNumber);
 }
 
+/**
+ * Whether the public Ball page should offer bank transfer. A yes or no only: the bank details are
+ * given to a buyer after they book, never in the open availability feed.
+ */
+export function publicTransferOpen(salesOpen: boolean, s: TransferSettings): boolean {
+  return salesOpen && transferReady(s);
+}
+
 /** The UK date `days` days after `now`, as YYYY-MM-DD. */
 export function payByDate(now: Date, days = TRANSFER_DAYS): string {
   const [y, m, d] = londonDate(now).split("-").map(Number);

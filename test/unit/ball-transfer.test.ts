@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bankDetailsSchema, formatSortCode, transferReady, payByDate, TRANSFER_DAYS } from "../../src/ball/transfer";
+import { bankDetailsSchema, formatSortCode, transferReady, publicTransferOpen, payByDate, TRANSFER_DAYS } from "../../src/ball/transfer";
 
 // TASK-484: the rules for paying for the Festive Ball by bank transfer. Every figure here is invented.
 
@@ -31,6 +31,16 @@ describe("whether the page may offer a bank transfer", () => {
   it("does not when any detail is missing, or when it is switched off", () => {
     expect(transferReady({ on: true, ...details, accountNumber: null })).toBe(false);
     expect(transferReady({ on: false, ...details })).toBe(false);
+  });
+});
+
+describe("what the public availability feed says about bank transfer", () => {
+  const ready = { on: true, accountName: "NBCC", sortCode: "12-34-56", accountNumber: "12345678" };
+
+  it("is open only while tickets are on sale and it is ready", () => {
+    expect(publicTransferOpen(true, ready)).toBe(true);
+    expect(publicTransferOpen(false, ready)).toBe(false);
+    expect(publicTransferOpen(true, { ...ready, on: false })).toBe(false);
   });
 });
 

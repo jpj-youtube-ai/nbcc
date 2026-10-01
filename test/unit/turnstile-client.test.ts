@@ -105,9 +105,12 @@ describe("asking Cloudflare about a pass", () => {
   });
 
   it("gives up on Cloudflare after five seconds", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
     const fetchImpl = reply({ success: true });
     await verifyCaptcha("tok", undefined, fetchImpl);
-    expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+    expect(timeout).toHaveBeenCalledWith(5000);
+    expect(fetchImpl.mock.calls[0][1].signal).toBe(timeout.mock.results[0].value);
+    timeout.mockRestore();
   });
 
   it("refuses a pass longer than Cloudflare ever issues, without asking", async () => {

@@ -29,6 +29,7 @@ const WAITING = "One moment, we're still checking you're not a robot.";
 const STILL_WAITING = "Still checking you're not a robot. If this keeps happening, please email info@nbcc.scot.";
 const TICK = "Please tick the box above Send to show you're not a robot.";
 const BROKEN = "The spam check could not load. Please try again in a moment, or email info@nbcc.scot.";
+const READY = "Thank you for waiting. Please press Send again to send your message.";
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const el = (id: string) => document.getElementById(id) as HTMLElement & { value?: string };
 const turnstile = { render: vi.fn(() => "w1"), reset: vi.fn(), remove: vi.fn() };
@@ -221,15 +222,50 @@ describe("with the check on", () => {
     expect(el("captchaToken").value).toBe("");
   });
 
-  it("takes its own message back once the pass arrives", async () => {
+  it("asks the visitor to press Send again once the pass arrives after a held Send", async () => {
     await start(KEY);
     startOnTheForm();
     cloudflareArrives();
     fillValidForm();
     submit();
     renderOptions().callback("tok-1");
-    expect(el("formStatus").textContent).toBe("");
+    expect(el("formStatus").textContent).toBe(READY);
     expect(el("formStatus").className).toBe("form-status");
+    expect(submit()).toBe(true);
+  });
+
+  it("says nothing when the pass arrives before Send was pressed", async () => {
+    await start(KEY);
+    startOnTheForm();
+    cloudflareArrives();
+    renderOptions().callback("tok-1");
+    expect(el("formStatus").textContent).toBe("");
+  });
+
+  it.each(["expired-callback", "timeout-callback", "error-callback"])(
+    "takes back the press Send again prompt when the pass is lost (%s)",
+    async (name) => {
+      await start(KEY);
+      startOnTheForm();
+      cloudflareArrives();
+      fillValidForm();
+      submit();
+      renderOptions().callback("tok-1");
+      renderOptions()[name]();
+      expect(el("formStatus").textContent).toBe("");
+    },
+  );
+
+  it("shows waiting as a plain message and only a failure as an error", async () => {
+    await start(KEY);
+    startOnTheForm();
+    cloudflareArrives();
+    fillValidForm();
+    submit();
+    expect(el("formStatus").className).toBe("form-status");
+    renderOptions()["error-callback"]("110200");
+    submit();
+    expect(el("formStatus").className).toBe("form-status is-error");
   });
 
   it("leaves main.js's messages alone when a pass arrives", async () => {
@@ -268,7 +304,7 @@ describe("with the check on", () => {
     fillValidForm();
     submit();
     renderOptions().callback("tok-1");
-    expect(el("formStatus").textContent).toBe("");
+    expect(el("formStatus").textContent).toBe(READY);
     expect(submit()).toBe(true);
   });
 
@@ -299,6 +335,21 @@ describe("with the check on", () => {
     expect(turnstile.remove).toHaveBeenCalledWith("w1");
     expect(renderOptions(1).size).toBe("compact");
     expect(el("captchaToken").value).toBe("");
+  });
+
+  it("starts the redrawn box afresh, with nothing left over from the old one", async () => {
+    windowIs(700);
+    await start(KEY);
+    roomIs(560);
+    startOnTheForm();
+    cloudflareArrives();
+    renderOptions()["before-interactive-callback"]();
+    roomIs(270);
+    windowIs(360);
+    window.dispatchEvent(new Event("resize"));
+    fillValidForm();
+    submit();
+    expect(el("formStatus").textContent).toBe(WAITING);
   });
 
   it("leaves the box alone when only the height changes, or the size still fits", async () => {

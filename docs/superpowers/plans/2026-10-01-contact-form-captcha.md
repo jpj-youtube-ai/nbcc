@@ -1571,7 +1571,7 @@ The PR title is what makes the number visible to other sessions. Title: `[TASK-<
 
 - [ ] **Step 3: Green, then merge, then apply production infra**
 
-Wait for `pr.yml` green, squash-merge, then (the diff touches `infra/`) trigger and watch the production Infra apply (`/ship` step 9). Watch the production deploy. If the deploy started before the SSM parameter existed and failed, re-run it after the apply.
+Wait for `pr.yml` green, squash-merge, then (the diff touches `infra/`) trigger and watch the production Infra apply (`/ship` step 9). The merge's own deploy reads the task definition from Terraform's state, so if it ran first its new web server would start without the keys and refuse. Cancel it straight after the merge: find it by the merge SHA with `gh run list --workflow=deploy-prod.yml --commit <sha>`, never "latest on main". Re-run it with `gh run rerun <id>` once the apply is green, and watch it. Cancelling at any point is safe: ECS finishes or rolls back an update already sent, and the scheduled jobs no longer need the keys.
 
 - [ ] **Step 4: Jaimie pastes the secret**
 

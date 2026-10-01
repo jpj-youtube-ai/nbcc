@@ -20,6 +20,7 @@
   var STILL_WAITING = "Still checking you're not a robot. If this keeps happening, please email info@nbcc.scot.";
   var TICK = "Please tick the box above Send to show you're not a robot.";
   var BROKEN = "The spam check could not load. Please try again in a moment, or email info@nbcc.scot.";
+  var READY = "Thank you for waiting. Please press Send again to send your message.";
   // Flexible and Normal need 300px. A narrower form gets Compact, so nothing scrolls sideways.
   var FLEXIBLE_MIN = 300;
 
@@ -33,20 +34,33 @@
     var siteKey = null;
     var said = null;
 
-    function say(text) {
+    // Only a failure is styled as an error; waiting and the prompts are plain, like main.js's "Sending…".
+    function say(text, isError) {
       if (!status) return;
       status.textContent = text;
-      status.className = "form-status is-error";
+      status.className = isError ? "form-status is-error" : "form-status";
       said = text;
+    }
+
+    // Whether the status still shows this script's message (main.js may have written over it).
+    function showing(text) {
+      return Boolean(status) && said !== null && status.textContent === said && (text === undefined || said === text);
     }
 
     // Takes back only its own message, never main.js's "Sending…" or "Thank you".
     function unsay() {
-      if (status && said !== null && status.textContent === said) {
+      if (showing()) {
         status.textContent = "";
         status.className = "form-status";
       }
       said = null;
+    }
+
+    // A pass that has gone (expired, timed out, failed or redrawn): clear it, and take back any
+    // "press Send again" that relied on it.
+    function passLost() {
+      field.value = "";
+      if (showing(READY)) unsay();
     }
 
     // The same check main.js makes before it sends (it puts it on window), so the two never disagree
@@ -90,7 +104,7 @@
           e.stopImmediatePropagation();
           load(true);
           state.held += 1;
-          say(state.broken ? BROKEN : state.interactive ? TICK : state.held > 1 ? STILL_WAITING : WAITING);
+          say(state.broken ? BROKEN : state.interactive ? TICK : state.held > 1 ? STILL_WAITING : WAITING, state.broken);
           return;
         }
         state.held = 0;
@@ -130,16 +144,14 @@
           state.broken = false;
           state.interactive = false;
           state.held = 0;
-          unsay();
+          // A Send held while there was no pass sent nothing, so never leave a blank that reads as
+          // sent: ask for the press again.
+          if (showing()) say(READY, false);
         },
-        "expired-callback": function () {
-          field.value = "";
-        },
-        "timeout-callback": function () {
-          field.value = "";
-        },
+        "expired-callback": passLost,
+        "timeout-callback": passLost,
         "error-callback": function () {
-          field.value = "";
+          passLost();
           state.broken = true;
         },
         "before-interactive-callback": function () {
@@ -161,7 +173,9 @@
       if (state.widgetId === null || !win.turnstile || sizeThatFits() === state.size) return;
       win.turnstile.remove(state.widgetId);
       state.widgetId = null;
-      field.value = "";
+      state.interactive = false;
+      state.broken = false;
+      passLost();
       render();
     });
 

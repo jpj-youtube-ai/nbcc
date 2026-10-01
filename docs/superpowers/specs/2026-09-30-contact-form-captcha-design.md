@@ -38,7 +38,9 @@ account (the referral system uses it), so nobody signs up for anything.
   Nothing is sent and nothing is lost; the message stays in the form until there is a pass.
 - A pass that fails, expires or is refused: "Please try again." The box resets and the typed
   message stays, as the form already does for any error.
-- The box resets after every reply from the server, because each pass works once.
+- The box resets after every send, because each pass works once. When a held Send's pass arrives,
+  the message changes to "Thank you for waiting. Please press Send again to send your message.",
+  so a blank never reads as sent.
 - JavaScript off: a note under the form, "This form needs JavaScript to check you're not a robot.
   You can email us at info@nbcc.scot instead." (Today a no-JavaScript send gets a raw error page.)
 - The contact form only. The footer newsletter signup and My Story keep their own honeypots.

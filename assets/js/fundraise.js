@@ -293,6 +293,36 @@
         });
     }
 
+    // --- an invite from the team (TASK-503) ---------------------------------------------------------
+    // Opened from a staff invite's link (/fundraise?invite=...): ask the server for it, by POST so
+    // the token never sits in an address, and fill in the name and email, nothing else, leaving
+    // anything already typed. The sign up carries it back so the invite is marked used. A link that
+    // no longer works changes nothing.
+    var inviteToken = null;
+    var inviteMatch = /[?&]invite=([A-Za-z0-9_-]{43})(?:&|$)/.exec((win.location && win.location.search) || "");
+    if (inviteMatch && typeof win.fetch === "function") {
+      win
+        .fetch("/api/fundraise/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: inviteMatch[1] }),
+        })
+        .then(function (res) {
+          return res && res.ok ? res.json() : null;
+        })
+        .then(function (data) {
+          if (!data) return;
+          inviteToken = inviteMatch[1];
+          [["name", data.name], ["email", data.email]].forEach(function (pair) {
+            var box = el(pair[0]);
+            if (box && !String(box.value || "").trim() && typeof pair[1] === "string") box.value = pair[1];
+          });
+        })
+        .catch(function () {
+          /* Could not ask: the form works the same without it. */
+        });
+    }
+
     // --- checking and sending -------------------------------------------------------------------
     // The rule the browser cannot check on its own: an event's finish is after its start.
     function finishBeforeStart() {
@@ -386,6 +416,7 @@
       body.ticketUrl = booking === "away" ? val("ticketUrl") : "";
       body.company = val("company");
       body.captchaToken = tokenField ? tokenField.value : "";
+      if (inviteToken) body.invite = inviteToken;
       return body;
     }
 

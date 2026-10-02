@@ -1428,6 +1428,36 @@
               </div>
               <p class="ty-status" id="frSwitchStatus" role="status" aria-live="polite"></p>
 
+              <!-- TASK-503: the team's tools. Invite someone (editors and admins), and who gets the
+                   Monday summary (admins). Both grow the page; nothing scrolls inside them. -->
+              <section class="fr-card" id="frInvite" aria-labelledby="frInviteHead" hidden>
+                <h3 class="admin-subhead" id="frInviteHead">Invite someone</h3>
+                <p class="fr-card-intro">Spoken to someone who'd like to fundraise for us? Send them an invite from the events inbox. The button in it opens the Fundraise for us form with their name and email already filled in.</p>
+                <form class="fr-form fr-invite-form" id="frInviteForm" novalidate>
+                  <div class="fr-field"><label class="fx-call-label" for="frInviteName">Their name</label><input class="fx-call-input" id="frInviteName" name="name" type="text" maxlength="100" autocomplete="off" /></div>
+                  <div class="fr-field"><label class="fx-call-label" for="frInviteEmail">Their email</label><input class="fx-call-input" id="frInviteEmail" name="email" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
+                  <div class="fr-field fr-field--wide"><label class="fx-call-label" for="frInviteNote">A personal note (optional)</label><textarea class="fx-call-input fr-input" id="frInviteNote" name="note" rows="3" maxlength="600"></textarea><span class="fr-field-hint">Up to 600 characters. It shows in the email, under a friendly hello.</span></div>
+                  <div class="fr-field"><label class="fx-call-label" for="frInviteSigner">Signed by</label><select class="fx-call-input" id="frInviteSigner" name="signedBy"></select><span class="fr-field-hint">The email is signed with this first name, so they know who they spoke to.</span></div>
+                  <div class="fx-call-row fr-field--wide"><button class="admin-btn" type="submit" id="frInviteSend">Send the invite</button></div>
+                  <p class="ty-status fr-field--wide" id="frInviteStatus" role="status" aria-live="polite"></p>
+                </form>
+                <h4 class="fr-card-subhead">Invites not taken up yet</h4>
+                <ul class="fr-people" id="frInvites"><li class="fr-people-empty">Loading&hellip;</li></ul>
+              </section>
+
+              <section class="fr-card" id="frSummary" aria-labelledby="frSummaryHead" hidden>
+                <h3 class="admin-subhead" id="frSummaryHead">Weekly summary</h3>
+                <p class="fr-summary-state" id="frSummaryState" aria-live="polite">Checking&hellip;</p>
+                <p class="fr-card-intro">Every Monday at 8am, one email to each person on this list: last week's money, new sign ups, what is waiting on us and what is coming up.</p>
+                <ul class="fr-people" id="frSummaryList"></ul>
+                <div class="fr-summary-add">
+                  <div class="fr-field"><label class="fx-call-label" for="frSummaryEmail">Add an email address</label><input class="fx-call-input" id="frSummaryEmail" type="email" maxlength="254" autocomplete="off" spellcheck="false" /></div>
+                  <button class="admin-btn" type="button" id="frSummaryAdd">Add to the list</button>
+                  <button class="admin-btn fr-btn-quiet" type="button" id="frSummaryTest">Send a test now</button>
+                </div>
+                <p class="ty-status" id="frSummaryStatus" role="status" aria-live="polite"></p>
+              </section>
+
               <div class="fr-bar">
                 <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
                   <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
@@ -1435,6 +1465,7 @@
                   <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
                   <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
                   <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="calls" aria-pressed="false">Calls due (<span data-frcount="calls">0</span>)</button>
                 </div>
               </div>
               <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live

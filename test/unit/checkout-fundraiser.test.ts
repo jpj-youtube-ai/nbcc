@@ -100,3 +100,15 @@ describe("the donate page, without a fundraiser", () => {
     expect((await run({ ...gift, amount: 100 })).statusCode).toBe(200);
   });
 });
+
+// TASK-493: a supporter who ticks the newsletter box when giving on a fundraiser's page is handled
+// exactly like a donate page giver: the same emailConsent field, stamped the same way.
+describe("the newsletter tick box when giving on a fundraiser's page", () => {
+  it.each([true, false])("stamps emailConsent %s exactly as the donate page does", async (consent) => {
+    await run({ ...gift, emailConsent: consent });
+    const donatePage = lastParams().metadata.emailConsent;
+    await run({ ...gift, emailConsent: consent, fundraiserId: 7 });
+    expect(lastParams().metadata.emailConsent).toBe(donatePage);
+    expect(donatePage).toBe(String(consent));
+  });
+});

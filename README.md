@@ -7142,7 +7142,11 @@ Answers: `200 { "status": "received" }` (also for a filled honeypot, which store
 `400 { "error": "...", "fields": { "phone": "Please give us a phone number, so we can call you." } }`
 with a plain English message per field; `400 { "error": "captcha" }`; `404` while switched off;
 `429` after 5 sign ups from one address in 10 minutes. On success the organiser is emailed a thank
-you and `events@` a summary.
+you and `events@` a summary. A ticked `newsletterOk` subscribes the organiser **exactly as the footer
+form does**: both call `subscribeSelf` (`src/newsletter/self-signup.ts`, moved unchanged out of
+`src/routes/subscribe.ts`): the newsletter list, `consent_source` `footer`, deduped by address, an
+earlier opt out of their own revived, the welcome email with its one click unsubscribe, and
+suppressed addresses held back at send time like every newsletter. Unticked changes nothing.
 
 **`GET /api/fundraise/captcha`**: `{ "siteKey": "..." | null }`, the same key as the contact form.
 
@@ -7263,8 +7267,8 @@ kind on the Email audit:
 
 ### Not yet (stage 1)
 
-The newsletter tick box is **stored** (`fundraisers.newsletter_ok`) but does not yet add anyone to a
-list. Approval emails point to the page, which carries the QR code; the code is not attached to the
+A supporter's newsletter tick when giving is the donate page's `emailConsent`, landing on
+`donors.email_consent` exactly as a donate page gift does (tested). Approval emails point to the page, which carries the QR code; the code is not attached to the
 email. Monthly gifts on fundraiser pages, materials, automatic emails and the requests' tracking are
 later stages.
 
@@ -7272,7 +7276,7 @@ later stages.
 
 Unit: `fundraising-model`, `fundraising-manage-token`, `fundraising-emails`, `fundraisers-db`,
 `fundraise-routes`, `admin-fundraising-routes`, `checkout-fundraiser`, `stripe-webhook-fundraiser`,
-`fundraising-migration`, `whats-new-fundraising`, plus the permission, backfill, backup, email kind
+`fundraising-migration`, `whats-new-fundraising`, `newsletter-self-signup`, plus the permission, backfill, backup, email kind
 and tracked link tests. BDD: `features/fundraising.feature` (approval and the switch, a gift raising
 the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
 manage change waiting for staff, who may do what).

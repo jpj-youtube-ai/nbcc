@@ -22,6 +22,7 @@ const send = vi.hoisted(() => ({
   sendManageLinkEmail: vi.fn(),
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
 }));
+const newsletter = vi.hoisted(() => ({ subscribeSelf: vi.fn() }));
 const captcha = vi.hoisted(() => ({ enabled: false, verdict: { outcome: "passed" } as { outcome: string; reason?: string } }));
 
 vi.mock("../../src/db/fundraisers", async () => {
@@ -33,6 +34,7 @@ vi.mock("../../src/db/fundraisers", async () => {
   return { ...db, FundraiserError };
 });
 vi.mock("../../src/fundraising/send", () => send);
+vi.mock("../../src/newsletter/self-signup", () => newsletter);
 vi.mock("../../src/clients/turnstile", () => ({
   captchaEnabled: () => captcha.enabled,
   captchaSiteKey: () => (captcha.enabled ? "site-key-for-tests" : null),
@@ -131,6 +133,7 @@ beforeEach(() => {
   for (const fn of Object.values(db)) fn.mockReset();
   send.sendSignUpEmails.mockReset();
   send.sendManageLinkEmail.mockReset();
+  newsletter.subscribeSelf.mockReset().mockResolvedValue("added");
   captcha.enabled = false;
   captcha.verdict = { outcome: "passed" };
   db.fundraisingIsOn.mockResolvedValue(true);
@@ -318,5 +321,29 @@ describe("using a manage link", () => {
     const res = await run(postManage, { params: { token }, body: { title: "Something else" } });
     expect(res.statusCode).toBe(400);
     expect(db.requestEdit).not.toHaveBeenCalled();
+  });
+});
+
+// TASK-493: the newsletter tick box on the sign up subscribes the organiser exactly as the footer
+// form does (src/newsletter/self-signup.ts); an unticked box changes nothing.
+describe("the newsletter tick box on the sign up", () => {
+  it("subscribes the organiser when ticked", async () => {
+    db.createFundraiser.mockResolvedValue(record({ status: "new", newsletterOk: true }));
+    await run(postFundraise, { body: signUp({ newsletterOk: true }) });
+    expect(newsletter.subscribeSelf).toHaveBeenCalledWith({ name: "Sam Sample", email: "sam@example.com", phone: "07700 900456" });
+  });
+
+  it("does nothing when unticked", async () => {
+    db.createFundraiser.mockResolvedValue(record({ status: "new", newsletterOk: false }));
+    await run(postFundraise, { body: signUp({ newsletterOk: false }) });
+    expect(newsletter.subscribeSelf).not.toHaveBeenCalled();
+  });
+
+  it("still takes the sign up when subscribing fails", async () => {
+    db.createFundraiser.mockResolvedValue(record({ status: "new", newsletterOk: true }));
+    newsletter.subscribeSelf.mockRejectedValueOnce(new Error("database away"));
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect((await run(postFundraise, { body: signUp({ newsletterOk: true }) })).statusCode).toBe(200);
+    quiet.mockRestore();
   });
 });

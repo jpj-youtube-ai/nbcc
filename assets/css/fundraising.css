@@ -360,8 +360,8 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .page-prose .help-contents li { margin: 0; }
 .help-contents a { display: inline-block; padding: 8px 0; min-height: 44px; font-weight: 600; text-underline-offset: 3px; }
 /* The A to Z reads like a little dictionary: one column, a round letter badge in the margin of each
-   row, sitting level with the idea beside it. The badges take turns through NBCC's own festive
-   colours (crimson, holly, maroon, gold), so the list reads as a string of baubles. A second idea for
+   row, sitting level with the idea beside it. The badges alternate NBCC maroon and gold by letter
+   (A maroon, B gold, C maroon...; Jaimie's choice), so the list reads as a string of baubles. A second idea for
    the same letter leaves the margin empty. The letters are decoration: the idea names carry them. */
 .page-prose .help-az {
   list-style: none;
@@ -372,7 +372,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
   border-radius: var(--radius);
 }
 .page-prose .help-az li {
-  --badge: var(--crimson);
+  --badge: var(--maroon);
   display: grid;
   grid-template-columns: 2.75rem minmax(0, 1fr);
   column-gap: clamp(14px, 2.6vw, 22px);
@@ -383,9 +383,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
-.page-prose .help-az li:nth-child(4n + 2) { --badge: var(--holly); }
-.page-prose .help-az li:nth-child(4n + 3) { --badge: var(--maroon); }
-.page-prose .help-az li:nth-child(4n + 4) { --badge: var(--gold-ink); }
+.page-prose .help-az li.help-az__gold { --badge: var(--gold-ink); }
 .page-prose .help-az li:last-child { border-bottom: 0; }
 .page-prose .help-az li::before {
   content: attr(data-letter);

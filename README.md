@@ -6065,11 +6065,12 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
-## The admin Overview: Needs you (TASK-508)
+## The admin Overview: Needs you (TASK-508) and How we are doing (TASK-509)
 
 The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent
-first, each with a button to the screen that deals with it. The design, and the two stages still to
-come (the numbers, then Coming up), are in `docs/superpowers/specs/2026-10-03-admin-overview-design.md`.
+first, each with a button to the screen that deals with it. Under it, **How we are doing** gives the
+numbers, one line each. The design, and the stage still to come (Coming up), are in
+`docs/superpowers/specs/2026-10-03-admin-overview-design.md`.
 
 - **Three levels**, marked by a dot (and said in words to a screen reader), in this order:
   1. **Money or overdue** (crimson):
@@ -6095,9 +6096,9 @@ come (the numbers, then Coming up), are in `docs/superpowers/specs/2026-10-03-ad
 
   Anything at zero is left out. A quiet day says "Nothing needs you right now."
 - **One request**, `GET /api/admin/overview` (any session), answers
-  `{ updatedAt, needs: [{ key, level, text, view, button }], failed: [screen names] }`
+  `{ updatedAt, needs: [{ key, level, text, view, button }], numbers: [{ key, title, headline, detail, view, button }], failed: [screen names] }`
   (`src/routes/admin-overview.ts`). Each item has the same gate as its own screen. A section the
-  person cannot open is never asked for (`gatherNeeds`, `src/admin/overview-sources.ts`). Each count
+  person cannot open is never asked for (`gather`, `src/admin/overview-sources.ts`). Each count
   uses the same database function and rule as that screen, so the two cannot disagree.
 - **One that fails is named**: "Could not check: Festive Ball". The rest still show, and the list
   never says "Nothing needs you" when it could not tell.
@@ -6109,6 +6110,33 @@ come (the numbers, then Coming up), are in `docs/superpowers/specs/2026-10-03-ad
 - It is read afresh each time the Overview is opened, and says when ("Updated 9:41"). The five Gift
   Aid figures that used to stand here are lines in level 3. Recent donations, underneath, shows the
   latest 5.
+
+**How we are doing** (TASK-509), each line only for people who may see the screen behind it, worded
+by `numbersLines` in `src/admin/overview-numbers.ts`:
+
+- **Money in** (in whole pounds): this month so far against the same days last month, up to the same
+  UK time of day (`monthSoFar`; the whole of a shorter last month on the 31st). Split into donations
+  (Donations: view), the Festive Ball (Ball: view) and fundraising pages, online and cash paid in
+  (Fundraising: view). Each part is read on its own (`src/db/overview-numbers.ts`) and counted as
+  its screen counts it: paid gifts less refunds; paid Ball bookings by when they were paid; cash by
+  the day it was paid in. Someone who sees only some parts gets only those, and the button opens the
+  first of their screens. The parts are rounded and the headline is their sum, so they add up. If a
+  part they may see cannot be read, Money in is left out (a short total would read as all of it) and
+  "Could not check" names that part.
+- **Monthly givers** (Donations: view): how many give and what they give a month, as the Monthly
+  givers screen counts them, and who joined and stopped this month. One read serves this and the
+  Needs you line for failing gifts.
+- **Festive Ball** (Ball: view): seats sold of the room (the ticket report's own count), money taken
+  (the Festive Ball dashboard's), seats held for bank transfers, and days to go. Gone once the night
+  has passed.
+- **Website** (Analytics: view): visitors in the last 7 days against the 7 before, people on the site
+  now, and which channel brought the most visits (`readWebsiteGlance`: four of the Analytics
+  screen's own queries).
+  Left out while counting is switched off.
+
+The numbers share the Needs you pass (`gather`), so the 3 at a time limit covers both, and a number
+that cannot be read is named in the same "Could not check". The card is hidden for someone who may
+see none of them.
 
 ## QR codes for every page (TASK-492)
 

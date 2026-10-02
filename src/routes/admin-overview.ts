@@ -1,11 +1,18 @@
 import { Router, type Request, type Response } from "express";
 import { authorizeAny, loadEffectivePermissions } from "./admin-authz";
 import { needsLines, type NeedCounts } from "../admin/overview";
-import { gatherNeeds, type NeedSource } from "../admin/overview-sources";
+import { can } from "../admin/permissions";
+import { gather, type Source } from "../admin/overview-sources";
+import { giversFrom, monthSoFar, numbersLines, type NowAndBefore, type NumberCounts } from "../admin/overview-numbers";
 import { listAwaitingTransfers } from "../db/ball-transfer";
 import { isOverdue } from "../ball/transfer";
 import { londonDate } from "../ball/sales-report";
-import { getSettings, listGuestProgress } from "../db/ball";
+import { getDashboard, getSettings, listGuestProgress } from "../db/ball";
+import { readSalesInputs } from "../db/ball-report";
+import { BALL_EVENT_DATE } from "../ball/run-up-runner";
+import { daysToGo } from "../ball/sales-report";
+import { sumBallTaken, sumDonations, sumFundraisingCash } from "../db/overview-numbers";
+import { readWebsiteGlance } from "../db/analytics-report";
 import { summariseGuestProgress } from "../ball/guest-progress";
 import { listMonthlySupporters } from "../db/monthly-supporters";
 import {
@@ -41,12 +48,29 @@ import { DEFAULT_THANK_YOU_THRESHOLD_PENCE } from "../thank-you/model";
 // docs/superpowers/specs/2026-10-03-admin-overview-design.md.
 
 const DAY_MS = 86_400_000;
+
+// TASK-509: the numbers ride on the same pass as "Needs you", so the three at a time limit covers
+// both. Their keys sit beside the Needs you keys and never share a name with one.
+type NumberReads = {
+  moneyDonations?: NowAndBefore;
+  moneyBall?: NowAndBefore;
+  moneyFundraising?: NowAndBefore;
+  givers?: NumberCounts["monthly"];
+  ballSales?: NumberCounts["ball"];
+  website?: NumberCounts["website"];
+};
+type OverviewCounts = NeedCounts & NumberReads;
 const count = (n: number) => ({ count: n });
 
 // The Festive Ball's guest details only become a "needs you" in the three weeks before they close.
 const GUEST_DETAILS_WARNING_DAYS = 21;
 
-function sources(email: string, now: Date): NeedSource[] {
+function sources(email: string, now: Date): Source<OverviewCounts>[] {
+  // Monthly givers is read once for both its "Needs you" line and its number.
+  let givers: ReturnType<typeof listMonthlySupporters> | null = null;
+  const monthlyGivers = () => (givers ??= listMonthlySupporters());
+  const months = monthSoFar(now);
+
   // The fundraising sources share one read of the sign ups, calls and request rows.
   let fundraising: Promise<{
     fundraisers: Awaited<ReturnType<typeof listAllFundraisers>>;
@@ -54,9 +78,13 @@ function sources(email: string, now: Date): NeedSource[] {
     rows: RequestRow[];
   }> | null = null;
   const fundraisingData = () =>
-    (fundraising ??= Promise.all([listAllFundraisers(), listFundraiserCalls(), listRequestRows()]).then(
-      ([fundraisers, calls, rows]) => ({ fundraisers, calls, rows }),
-    ));
+    // One after another: a source takes one of the 3 slots, so it must hold one connection, not three.
+    (fundraising ??= (async () => {
+      const fundraisers = await listAllFundraisers();
+      const calls = await listFundraiserCalls();
+      const rows = await listRequestRows();
+      return { fundraisers, calls, rows };
+    })());
 
   return [
     {
@@ -85,7 +113,7 @@ function sources(email: string, now: Date): NeedSource[] {
       name: "Monthly givers",
       section: "donations",
       level: "view",
-      read: async () => ({ monthlyFailing: count((await listMonthlySupporters()).filter((m) => m.state === "past_due").length) }),
+      read: async () => ({ monthlyFailing: count((await monthlyGivers()).filter((m) => m.state === "past_due").length) }),
     },
     {
       name: "Claims",
@@ -169,6 +197,50 @@ function sources(email: string, now: Date): NeedSource[] {
         ),
       }),
     },
+
+    // --- the numbers (TASK-509): how we are doing, each behind its own screen's gate ---------------
+    { name: "Donations", section: "donations", level: "view", read: async () => ({ moneyDonations: await sumDonations(months, false) }) },
+    { name: "Festive Ball", section: "ball", level: "view", read: async () => ({ moneyBall: await sumBallTaken(months) }) },
+    {
+      name: "Fundraising",
+      section: "fundraising",
+      level: "view",
+      read: async () => {
+        // Gifts through the pages, and cash organisers paid in: the two halves of the meter.
+        const online = await sumDonations(months, true);
+        const cash = await sumFundraisingCash(months);
+        return { moneyFundraising: { now: online.now + cash.now, before: online.before + cash.before } };
+      },
+    },
+    { name: "Monthly givers", section: "donations", level: "view", read: async () => ({ givers: giversFrom(await monthlyGivers(), now) }) },
+    {
+      name: "Festive Ball",
+      section: "ball",
+      level: "view",
+      read: async () => {
+        // The ticket report's own count of seats, and the Festive Ball dashboard's money taken.
+        const sales = await readSalesInputs(now, null);
+        const taken = await getDashboard();
+        return {
+          ballSales: {
+            seatsSold: sales.seatsSold,
+            totalSeats: sales.totalSeats,
+            takenPence: taken.totalPence,
+            transferSeats: sales.awaitingTransferSeats,
+            daysToGo: daysToGo(londonDate(now), londonDate(BALL_EVENT_DATE)),
+          },
+        };
+      },
+    },
+    {
+      name: "Analytics",
+      section: "analytics",
+      level: "view",
+      read: async () => {
+        const website = await readWebsiteGlance(now);
+        return website ? { website } : {};
+      },
+    },
   ];
 }
 
@@ -179,8 +251,20 @@ export async function getAdminOverview(req: Request, res: Response): Promise<Res
     const perms = await loadEffectivePermissions(claims.sub);
     if (!perms) return res.status(401).json({ error: "Invalid or expired admin session" });
     const now = new Date();
-    const { counts, failed } = await gatherNeeds(perms, sources(claims.email, now));
-    return res.status(200).json({ updatedAt: now.toISOString(), needs: needsLines(counts), failed });
+    const { counts: c, failed } = await gather(perms, sources(claims.email, now));
+    // Money in only when every part this person may see was read: a total from the parts that
+    // answered would read as all the money in. "Could not check" names the part that failed.
+    const moneyWhole =
+      (!can(perms, "donations", "view") || c.moneyDonations) &&
+      (!can(perms, "ball", "view") || c.moneyBall) &&
+      (!can(perms, "fundraising", "view") || c.moneyFundraising);
+    const numbers = numbersLines({
+      money: moneyWhole ? { donations: c.moneyDonations, ball: c.moneyBall, fundraising: c.moneyFundraising } : undefined,
+      monthly: c.givers,
+      ball: c.ballSales,
+      website: c.website,
+    });
+    return res.status(200).json({ updatedAt: now.toISOString(), needs: needsLines(c), numbers, failed });
   } catch (err) {
     console.error("admin overview failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "The overview could not load. Try again." });

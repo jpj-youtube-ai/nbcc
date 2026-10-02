@@ -6,13 +6,16 @@ import type { NeedCounts } from "./overview";
 // open. The sources run at once and on their own: one that fails is named in `failed`, by its
 // screen's name, and the rest still count. The real sources are in src/routes/admin-overview.ts.
 
-export interface NeedSource {
+export interface Source<C extends object> {
   /** The screen's name, as the menu shows it: what "Could not check" says when it fails. */
   name: string;
   section: Section;
   level: "view" | "edit";
-  read: () => Promise<NeedCounts>;
+  read: () => Promise<C>;
 }
+
+/** A source for "Needs you". */
+export type NeedSource = Source<NeedCounts>;
 
 // The main database pool takes 5 connections at a time (src/db/pool.ts). One Overview asking all of
 // its sources at once would take every one, and a donor's checkout would wait behind it; three at a
@@ -36,13 +39,14 @@ async function settleInTurn<T>(jobs: ReadonlyArray<() => Promise<T>>, atOnce: nu
   return results;
 }
 
-export async function gatherNeeds(
+/** Asks every source a person may see, three at a time, and merges what they found. */
+export async function gather<C extends object>(
   perms: PermissionMap,
-  sources: readonly NeedSource[],
-): Promise<{ counts: NeedCounts; failed: string[] }> {
+  sources: readonly Source<C>[],
+): Promise<{ counts: C; failed: string[] }> {
   const allowed = sources.filter((s) => can(perms, s.section, s.level));
   const results = await settleInTurn(allowed.map((s) => () => s.read()), MAX_AT_ONCE);
-  const counts: NeedCounts = {};
+  const counts = {} as C;
   const failed: string[] = [];
   results.forEach((r, i) => {
     if (r.status === "fulfilled") {

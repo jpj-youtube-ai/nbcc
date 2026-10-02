@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { gatherNeeds, type NeedSource } from "../../src/admin/overview-sources";
+import { gather, type NeedSource } from "../../src/admin/overview-sources";
 import { roleToPermissions } from "../../src/admin/permissions";
 
 // TASK-508: gathering "Needs you". Each source runs only for people who may see its screen, each on
@@ -16,7 +16,7 @@ const source = (over: Partial<NeedSource>): NeedSource => ({
 describe("gathering what needs people", () => {
   it("asks only the sources a person may see, and counts what they find", async () => {
     const hidden = vi.fn(async () => ({ businessCalls: { count: 9 } }));
-    const got = await gatherNeeds(roleToPermissions("viewer"), [
+    const got = await gather(roleToPermissions("viewer"), [
       source({}),
       // Business supporters needs edit; a viewer has none.
       source({ name: "Business supporters", section: "business-supporters", level: "edit", read: hidden }),
@@ -28,7 +28,7 @@ describe("gathering what needs people", () => {
 
   it("names a source that fails, and still counts the rest", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const got = await gatherNeeds(roleToPermissions("admin"), [
+    const got = await gather(roleToPermissions("admin"), [
       source({}),
       source({ name: "Festive Ball", section: "ball", read: async () => { throw new Error("down"); } }),
     ]);
@@ -38,7 +38,7 @@ describe("gathering what needs people", () => {
 
   it("lets one source count several kinds, and names a screen once however many of its sources fail", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    const got = await gatherNeeds(roleToPermissions("admin"), [
+    const got = await gather(roleToPermissions("admin"), [
       source({ name: "Fundraising", section: "fundraising", read: async () => ({ fundraisingNew: { count: 1 }, fundraiserCalls: { count: 3 } }) }),
       source({ name: "Claims", section: "claims", read: async () => { throw new Error("a"); } }),
       source({ name: "Claims", section: "claims", read: async () => { throw new Error("b"); } }),
@@ -62,14 +62,14 @@ describe("gathering what needs people", () => {
           return {};
         },
       });
-    await gatherNeeds(roleToPermissions("admin"), Array.from({ length: 10 }, slow));
+    await gather(roleToPermissions("admin"), Array.from({ length: 10 }, slow));
     expect(most).toBe(3);
   });
 
   it("asks nothing for someone who can see nothing", async () => {
     const read = vi.fn(async () => ({}));
     const none = Object.fromEntries(Object.keys(roleToPermissions("admin")).map((k) => [k, "none"])) as ReturnType<typeof roleToPermissions>;
-    const got = await gatherNeeds(none, [source({ read }), source({ section: "ball", read })]);
+    const got = await gather(none, [source({ read }), source({ section: "ball", read })]);
     expect(read).not.toHaveBeenCalled();
     expect(got).toEqual({ counts: {}, failed: [] });
   });

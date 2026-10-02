@@ -1,4 +1,4 @@
-// TASK-507: "Needs you" on the admin Overview. The pure rules: every kind of waiting item, its words,
+// TASK-508: "Needs you" on the admin Overview. The pure rules: every kind of waiting item, its words,
 // how urgent it is, and the screen that deals with it. The counts come from
 // src/admin/overview-sources.ts; the route is src/routes/admin-overview.ts. Design:
 // docs/superpowers/specs/2026-10-03-admin-overview-design.md.

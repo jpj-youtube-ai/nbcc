@@ -5911,7 +5911,7 @@ a 401 still signs you out. A list that did come back empty still says so, becaus
 
 | Panel | On a failure it used to show | Now |
 |---|---|---|
-| Overview figures (each one on its own) | 0 | Could not load (the other figures still show). A figure from a section your access leaves out (a 403) is left out rather than reported every sign in. Since TASK-507 these are lines in Needs you, which names a part it could not check ("Could not check: Claims"). |
+| Overview figures (each one on its own) | 0 | Could not load (the other figures still show). A figure from a section your access leaves out (a 403) is left out rather than reported every sign in. Since TASK-508 these are lines in Needs you, which names a part it could not check ("Could not check: Claims"). |
 | Overview recent donations | nothing | Recent donations are unavailable. (On a 403: Recent donations are not part of your access.) |
 | Donations | No donations yet. | Donations are unavailable. |
 | GASDS deadline | No GASDS donations are approaching the claim deadline. | GASDS donations are unavailable. |
@@ -6055,7 +6055,7 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
-## The admin Overview: Needs you (TASK-507)
+## The admin Overview: Needs you (TASK-508)
 
 The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent
 first, each with a button to the screen that deals with it. The design, and the two stages still to

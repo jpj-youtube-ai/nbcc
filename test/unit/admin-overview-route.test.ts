@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// TASK-507: GET /api/admin/overview. Each source reads through the same database functions as its
+// TASK-508: GET /api/admin/overview. Each source reads through the same database functions as its
 // own screen; here those are mocked, and the rules that turn rows into counts are the real ones. The
 // viewer and admin are invented.
 

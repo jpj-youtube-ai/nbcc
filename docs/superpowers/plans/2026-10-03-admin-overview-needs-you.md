@@ -8,7 +8,7 @@
 
 **Tech Stack:** Express + TypeScript, Vitest (unit and jsdom), Cucumber BDD (CI only). No migration.
 
-Spec: `docs/superpowers/specs/2026-10-03-admin-overview-design.md`. Ships as TASK-507.
+Spec: `docs/superpowers/specs/2026-10-03-admin-overview-design.md`. Ships as TASK-508.
 
 ---
 

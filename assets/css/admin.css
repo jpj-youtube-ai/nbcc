@@ -2755,7 +2755,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-offlist-panel { background: color-mix(in srgb, var(--tan) 12%, var(--card)); }
 #view-fundraising .fr-call-form { margin-top: 12px; max-width: 560px; }
 
-/* TASK-507: the Overview. "Needs you" is a card like Analytics' cards: one line per waiting item,
+/* TASK-508: the Overview. "Needs you" is a card like Analytics' cards: one line per waiting item,
    a dot for how urgent it is (crimson: money or overdue; gold: waiting on a reply; grey: a slower
    deadline, said in words for a screen reader too), the sentence, and a button to the screen that
    deals with it. On a phone the button drops under the sentence rather than squeezing it. */

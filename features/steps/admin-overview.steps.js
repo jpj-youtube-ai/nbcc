@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { randomBytes } = require("node:crypto");
 const { Pool } = require("pg");
 
-// Steps for admin-overview.feature (TASK-507). Drives GET /api/admin/overview over HTTP against the
+// Steps for admin-overview.feature (TASK-508). Drives GET /api/admin/overview over HTTP against the
 // real database. The staff come from the shared @admin steps (addresses ending admin.bdd@example.com,
 // which the @admin hooks remove). The sign up is written straight into fundraisers, as the public form
 // leaves it, and removed again by its organiser's invented address.

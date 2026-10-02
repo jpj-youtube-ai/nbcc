@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { needsLines, NEEDS, type NeedCounts } from "../../src/admin/overview";
 
-// TASK-507: "Needs you" on the admin Overview. These are the pure rules: what each waiting item is
+// TASK-508: "Needs you" on the admin Overview. These are the pure rules: what each waiting item is
 // called, how urgent it is, the order, and which screen deals with it. Invented numbers only.
 
 describe("the words for each waiting item", () => {

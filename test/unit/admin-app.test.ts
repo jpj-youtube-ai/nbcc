@@ -125,7 +125,7 @@ let addTransferAnswer: { status: number; body: unknown } = { status: 201, body: 
 // TASK-492: the QR codes screen's list, and every code image asked for.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><path d="M0 0h1v1H0z"/></svg>';
 let qrPages: unknown[] = [];
-// TASK-507: what the Overview's "Needs you" answers, or that it fails.
+// TASK-508: what the Overview's "Needs you" answers, or that it fails.
 let overviewAnswer: { status: number; body: unknown } = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: [] } };
 let qrImageUrls: string[] = [];
 
@@ -1186,9 +1186,9 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
   // TASK-478: a New pill on each section holding something this person has not seen. Opening the
   // section clears it for them; the server keeps everyone else's.
-  // TASK-507: the Overview opens with "Needs you": what is waiting on someone, most urgent first,
+  // TASK-508: the Overview opens with "Needs you": what is waiting on someone, most urgent first,
   // each one click from the screen that deals with it. The server decides what each person may see.
-  describe("Needs you on the Overview (TASK-507)", () => {
+  describe("Needs you on the Overview (TASK-508)", () => {
     const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
     const NEEDS = [
       { key: "transfersOverdue", level: 1, text: "1 bank transfer is overdue", view: "ball", button: "Festive Ball" },

@@ -1,7 +1,7 @@
 import { can, type PermissionMap, type Section } from "./permissions";
 import type { NeedCounts } from "./overview";
 
-// TASK-507: gathering "Needs you". Each source counts one screen's waiting items and carries the
+// TASK-508: gathering "Needs you". Each source counts one screen's waiting items and carries the
 // gate that screen uses, so the Overview never shows (or even asks for) something a person cannot
 // open. The sources run at once and on their own: one that fails is named in `failed`, by its
 // screen's name, and the rest still count. The real sources are in src/routes/admin-overview.ts.

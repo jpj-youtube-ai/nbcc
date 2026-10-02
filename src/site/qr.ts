@@ -12,7 +12,8 @@ export const QR_BASE = "https://nbcc.scot";
 
 /** A page's short name: in its code's tag and its download's file name. "/" is "home". */
 export function qrSlug(path: string): string {
-  const slug = path.replace(/^\/+|\/+$/g, "").replace(/\//g, "-");
+  // Small letters, so a typed /Ball counts in Analytics as the Festive Ball page.
+  const slug = path.replace(/^\/+|\/+$/g, "").replace(/\//g, "-").toLowerCase();
   return slug || "home";
 }
 

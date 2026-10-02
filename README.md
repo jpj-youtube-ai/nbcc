@@ -6053,8 +6053,13 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
   scan in print. They are drawn by the server with the `qrcode` package (`drawQr` in
   `src/site/qr.ts`).
 - **Any other nbcc.scot address** (a spare address from Site pages, say) gets a code from the box
-  under the list. Only paths on nbcc.scot are allowed (`qrPath`): a code for somebody else's
-  website is refused.
+  under the list. A whole address pasted from the browser is taken too. Only paths on nbcc.scot are
+  allowed (`qrPath`): a code for somebody else's website is refused.
+- **Spare and old addresses keep the tags.** A spare address, and an old address in `_redirects`,
+  now send the visitor on with the query string they arrived with (`keepQuery`,
+  `src/site/redirect.ts`). So a QR code made for /give still counts its scans as QR code, and a
+  newsletter link to an old address still counts as the newsletter. The target is always one of
+  our own paths, so the query cannot change where anyone goes.
 - **Who:** anyone who can view Site pages (`GET /api/admin/qr-codes` and
   `GET /api/admin/qr-codes/image?path=/donate&format=svg|png`, `src/routes/admin-qr.ts`). Codes
   only point at public pages, so there is nothing private here. The menu item has a New pill the

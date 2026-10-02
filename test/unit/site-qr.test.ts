@@ -41,6 +41,11 @@ describe("the name a page's code is known by", () => {
     expect(qrSlug("/ball/terms")).toBe("ball-terms");
     expect(qrSlug("/about-us")).toBe("about-us");
   });
+
+  // So a typed /Ball is counted in Analytics as the Festive Ball page, not as an address of its own.
+  it("is in small letters, however the address was typed", () => {
+    expect(qrSlug("/Ball/Terms")).toBe("ball-terms");
+  });
 });
 
 // The tag is how Admin > Analytics tells a scan from a typed address.

@@ -1256,6 +1256,17 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(saved).toEqual([{ href: "blob:qr", download: "nbcc-qr-give.svg" }]);
     });
 
+    // Staff often paste the address from the browser, whole.
+    it("takes a pasted whole nbcc.scot address", async () => {
+      qrPages = PAGES;
+      await openQr();
+      (el("qrOtherPath") as HTMLInputElement).value = "https://www.nbcc.scot/give";
+      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(qrImageUrls.some((u) => u.includes("path=%2Fgive&"))).toBe(true);
+      expect((document.querySelector("#qrOther .qr-card") as HTMLElement).textContent).toContain("nbcc.scot/give");
+    });
+
     it("refuses an address that is not on nbcc.scot, before asking", async () => {
       qrPages = PAGES;
       await openQr();
@@ -1266,6 +1277,12 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(el("qrStatus").textContent).toBe("Give an address on nbcc.scot, starting with /");
       expect(qrImageUrls.length).toBe(before);
       expect(document.querySelector("#qrOther .qr-card")).toBeNull();
+      // An empty box is not the home page.
+      (el("qrOtherPath") as HTMLInputElement).value = "  ";
+      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(el("qrStatus").textContent).toBe("Give an address on nbcc.scot, starting with /");
+      expect(qrImageUrls.length).toBe(before);
     });
 
     it("says so when the list cannot load", async () => {

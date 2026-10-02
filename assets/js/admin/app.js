@@ -2849,7 +2849,7 @@
 
   // "/ball/terms" as "ball-terms", "/" as "home": the name of the file, as the server names it.
   function qrSlug(path) {
-    return path.replace(/^\/+|\/+$/g, "").replace(/\//g, "-") || "home";
+    return path.replace(/^\/+|\/+$/g, "").replace(/\//g, "-").toLowerCase() || "home";
   }
 
   function qrCard(page) {
@@ -2903,7 +2903,10 @@
     });
     el("qrOtherForm").addEventListener("submit", function (e) {
       e.preventDefault();
-      var path = (el("qrOtherPath").value || "").trim();
+      // A whole nbcc.scot address pasted from the browser becomes its path.
+      var typed = (el("qrOtherPath").value || "").trim();
+      var path = typed.replace(/^(https?:\/\/)?(www\.)?nbcc\.scot(?=\/|$)/i, "");
+      if (typed && !path) path = "/"; // "nbcc.scot" alone is the home page; an empty box stays empty
       el("qrOther").innerHTML = "";
       if (!QR_PATH.test(path) || path.length > 200) {
         el("qrStatus").textContent = QR_BAD_PATH;

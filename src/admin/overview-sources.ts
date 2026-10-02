@@ -1,0 +1,35 @@
+import { can, type PermissionMap, type Section } from "./permissions";
+import type { NeedCounts } from "./overview";
+
+// TASK-507: gathering "Needs you". Each source counts one screen's waiting items and carries the
+// gate that screen uses, so the Overview never shows (or even asks for) something a person cannot
+// open. The sources run at once and on their own: one that fails is named in `failed`, by its
+// screen's name, and the rest still count. The real sources are in src/routes/admin-overview.ts.
+
+export interface NeedSource {
+  /** The screen's name, as the menu shows it: what "Could not check" says when it fails. */
+  name: string;
+  section: Section;
+  level: "view" | "edit";
+  read: () => Promise<NeedCounts>;
+}
+
+export async function gatherNeeds(
+  perms: PermissionMap,
+  sources: readonly NeedSource[],
+): Promise<{ counts: NeedCounts; failed: string[] }> {
+  const allowed = sources.filter((s) => can(perms, s.section, s.level));
+  const results = await Promise.allSettled(allowed.map((s) => s.read()));
+  const counts: NeedCounts = {};
+  const failed: string[] = [];
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      Object.assign(counts, r.value);
+      return;
+    }
+    const name = allowed[i].name;
+    console.error(`admin overview: ${name} could not be checked:`, r.reason instanceof Error ? r.reason.message : r.reason);
+    if (!failed.includes(name)) failed.push(name);
+  });
+  return { counts, failed };
+}

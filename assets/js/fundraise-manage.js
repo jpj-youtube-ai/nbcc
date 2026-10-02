@@ -40,7 +40,12 @@
     { key: "dressCode", kind: "text", nullable: true },
     { key: "included", kind: "text", nullable: true },
     { key: "socialLink", kind: "text", nullable: true },
+    // TASK-511 review: a sign up made since the form's second round changes these instead.
+    { key: "instagram", kind: "text", nullable: true },
+    { key: "facebook", kind: "text", nullable: true },
   ];
+  // TASK-511 review: the link rules, as the server checks them (assets/js/social-handles.js).
+  var LINK_RULES = { instagram: "instagramLink", facebook: "facebookLink" };
 
   var GIFTS_FIRST = 10;
 
@@ -616,6 +621,14 @@
         show(form, x, shown[x.key]);
       });
 
+      // TASK-511 review: Instagram and Facebook each in a box of their own for a sign up made since
+      // the form's second round; the one link box for one from before. Only boxes shown are sent.
+      var two = f.linkBoxes === "two";
+      var linkOne = card.querySelector("[data-link-one]");
+      var linkTwo = card.querySelector("[data-link-two]");
+      if (linkOne) linkOne.hidden = two;
+      if (linkTwo) linkTwo.hidden = !two;
+
       // The ticket link only when tickets are sold on another website.
       var ticket = card.querySelector("[data-ticket-link]");
       function ticketShown() {
@@ -629,7 +642,15 @@
       form.addEventListener("submit", function (e) {
         e.preventDefault();
         say(status, "", null);
-        if (!validate(form, summary, null)) return;
+        var linkProblems = [];
+        var rules = win.NBCCSocialHandles;
+        Object.keys(LINK_RULES).forEach(function (key) {
+          var c = controls(form, key)[0];
+          if (!rules || !c || hiddenIn(form, c)) return;
+          var r = rules[LINK_RULES[key]](c.value);
+          if (r && r.ok === false) linkProblems.push({ control: c, message: r.message });
+        });
+        if (!validate(form, summary, linkProblems.length ? linkProblems : null)) return;
         var changes = {};
         FIELDS.forEach(function (x) {
           var cs = controls(form, x.key);

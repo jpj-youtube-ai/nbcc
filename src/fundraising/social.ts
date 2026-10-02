@@ -22,6 +22,27 @@ const FACEBOOK_NAME = /^[A-Za-z0-9.]{1,80}$/;
 // One part of a Facebook address: letters, numbers, full stops, underscores and hyphens.
 const FACEBOOK_PART = /^[A-Za-z0-9._-]{1,100}$/;
 const FACEBOOK_NOT_A_PAGE = new Set(["login", "login.php", "home.php", "sharer", "sharer.php", "dialog", "plugins", "help", "settings"]);
+// Review fix: a post, a photo or a video is found by its query (story.php?story_fbid=...&id=...,
+// watch?v=...), so the query is kept for these, less the tracking Facebook and others add to links.
+const FACEBOOK_BY_QUERY = new Set(["story.php", "permalink.php", "watch", "photo.php", "video.php"]);
+const TRACKING = /^(fbclid|mibextid|ref|refsrc|rdid|share_url|sfnsn|_rdr|_rdc|__tn__|__cft__.*|__xts__.*|utm_.*)$/i;
+const QUERY_KEY = /^[A-Za-z0-9_]{1,40}$/;
+const QUERY_VALUE = /^[A-Za-z0-9._~%-]{1,200}$/;
+
+/** The query of a post or video link, less tracking: "story_fbid=123&id=456", or null if unusable. */
+function keptQuery(query: string): string | null {
+  const kept: string[] = [];
+  for (const pair of query.replace(/^\?/, "").split("&")) {
+    if (!pair) continue;
+    const at = pair.indexOf("=");
+    const key = at === -1 ? pair : pair.slice(0, at);
+    const value = at === -1 ? "" : pair.slice(at + 1);
+    if (TRACKING.test(key)) continue;
+    if (!QUERY_KEY.test(key) || !QUERY_VALUE.test(value)) return null;
+    kept.push(key + "=" + value);
+  }
+  return kept.length ? kept.join("&") : null;
+}
 
 /**
  * A pasted address taken apart: the host, and the path's parts, with any https, query and fragment
@@ -83,6 +104,10 @@ export function facebookLink(raw: unknown): SocialResult {
     // A profile with no name of its own: the id is the only part of the query that matters.
     const id = /[?&]id=(\d{1,25})(?:&|$)/.exec(a.query);
     return id && a.parts.length === 1 ? { ok: true, link: `https://www.facebook.com/profile.php?id=${id[1]}` } : refuse;
+  }
+  if (a.parts.length === 1 && FACEBOOK_BY_QUERY.has(a.parts[0].toLowerCase())) {
+    const query = keptQuery(a.query);
+    return query ? { ok: true, link: `https://www.facebook.com/${a.parts[0]}?${query}` } : refuse;
   }
   return { ok: true, link: `https://www.facebook.com/${a.parts.join("/")}` };
 }

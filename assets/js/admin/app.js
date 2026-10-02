@@ -9023,6 +9023,8 @@
   var FR_EDITABLE = [
     ["description", "Description"], ["targetPence", "Target"], ["eventDate", "Date"], ["startTime", "Start time"],
     ["venue", "Venue"], ["town", "Town"], ["socialLink", "Facebook or Instagram link"],
+    // TASK-511 review: a sign up made since the form's second round changes these instead.
+    ["instagram", "Instagram"], ["facebook", "Facebook"],
     ["cardLine", "Line for the front of the card"], ["endTime", "Finish time"], ["timeTbc", "Time still to be confirmed"],
     ["venueAddress", "Full address"], ["venuePostcode", "Venue postcode"], ["access", "Access"], ["price", "Price"],
     ["booking", "How people get in"], ["ticketUrl", "Ticket link"], ["ageLimit", "Age limit"], ["dressCode", "Dress code"],
@@ -9919,9 +9921,9 @@
         head("The fundraiser") +
         box("title", "title", "Name for it", "text", 'maxlength="100" autocomplete="off"') +
         pick("kind", "Kind", FR_KINDS) +
-        (f.kind === "other" || f.kindOther
-          ? box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Something else. Up to 80 characters.")
-          : "") +
+        // TASK-511 review: always there, shown as soon as Something else is chosen (keepTyping).
+        box("kindOther", "kindOther", "What it is, in their words (optional)", "text", 'maxlength="80" autocomplete="off"', "For Something else. Up to 80 characters.")
+          .replace('<div class="fr-field">', '<div class="fr-field" data-frkindother' + (v.kind === "other" || v.kindOther ? "" : " hidden") + ">") +
         pick("path", "They are", [["raising", "Raising money"], ["event", "Holding an event"]]) +
         area("description", "description", "About it", 4, 1000) +
         box("eventDate", "eventDate", "Date (optional)", "date", "") +
@@ -9949,7 +9951,10 @@
         box("leafletCount", "wants.leafletCount", "Leaflets", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 1,000.") +
         box("bucketCount", "wants.bucketCount", "Collection buckets", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
         box("tinCount", "wants.tinCount", "Collection tins", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
-        box("qrCount", "wants.qrCount", "Printed QR codes", "text", 'inputmode="numeric" autocomplete="off"', "Cards or stickers with their page\u2019s QR code. 0 for none, up to 200.") +
+        // TASK-511 review: printed QR codes carry a page's QR code, and an event has none.
+        (f.path !== "event" || Number(v.qrCount) > 0
+          ? box("qrCount", "wants.qrCount", "Printed QR codes", "text", 'inputmode="numeric" autocomplete="off"', "Cards or stickers with their page\u2019s QR code. 0 for none, up to 200.")
+          : "") +
         (frHasOldRequests(f)
           ? box("leaflets", "wants.leaflets", "Leaflets or posters", "text", 'inputmode="numeric" autocomplete="off"', "Asked for before posters and leaflets were split. 0 for none, up to 1,000.") +
             box("buckets", "wants.buckets", "Buckets or tins to borrow", "text", 'inputmode="numeric" autocomplete="off"', "Asked for before buckets and tins were split. 0 for none, up to 20.")
@@ -10536,6 +10541,12 @@
       if (t.closest("#frEditForm") && t.name) {
         frEditDraft = frEditDraft || {};
         frEditDraft[t.name] = t.type === "checkbox" ? !!t.checked : String(t.value || "");
+        // TASK-511 review: what Something else is, as soon as it is chosen.
+        if (t.name === "kind") {
+          var other = t.closest("#frEditForm").querySelector("[data-frkindother]");
+          var said = other && other.querySelector("input");
+          if (other) other.hidden = t.value !== "other" && !(said && String(said.value || "").trim());
+        }
       }
       var cashForm = t.closest("#frCashForm");
       if (cashForm) {

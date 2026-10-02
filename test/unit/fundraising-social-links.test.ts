@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { createRequire } from "node:module";
+import { resolve } from "node:path";
 import { instagramLink, facebookLink } from "../../src/fundraising/social";
 
 // TASK-511: their Instagram and their Facebook, in boxes of their own. People type a handle (@name
@@ -64,6 +66,11 @@ describe("Facebook", () => {
     ["https://www.facebook.com/profile.php?id=100012345678901&ref=x", "https://www.facebook.com/profile.php?id=100012345678901"],
     ["https://www.facebook.com/share/1AbC2dEf3G/", "https://www.facebook.com/share/1AbC2dEf3G"],
     ["web.facebook.com/robin-bakes-123", "https://www.facebook.com/robin-bakes-123"],
+    // Review fix: a post or a video is only found by its query, so that is kept; tracking is not.
+    ["https://www.facebook.com/story.php?story_fbid=123&id=456&fbclid=abc", "https://www.facebook.com/story.php?story_fbid=123&id=456"],
+    ["https://m.facebook.com/permalink.php?story_fbid=pfbid0abc&id=456&utm_source=x", "https://www.facebook.com/permalink.php?story_fbid=pfbid0abc&id=456"],
+    ["facebook.com/watch?v=987654&mibextid=xyz", "https://www.facebook.com/watch?v=987654"],
+    ["facebook.com/watch/?v=987654", "https://www.facebook.com/watch?v=987654"],
   ])("tidies %j to the full link", (typed, link) => {
     expect(facebookLink(typed)).toEqual({ ok: true, link });
   });
@@ -81,11 +88,36 @@ describe("Facebook", () => {
     "https://www.facebook.com/profile.php", // no id
     "https://www.facebook.com/profile.php?id=abc",
     "https://www.facebook.com/robin<b>",
+    "https://www.facebook.com/story.php", // nothing to find the post by
+    "https://www.facebook.com/watch?v=<script>",
     "javascript:alert(1)",
     "x".repeat(301),
   ])("refuses %j with a plain message", (typed) => {
     const r = facebookLink(typed);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.message).toMatch(/Facebook/);
+  });
+});
+
+// Review fix: the form checks the boxes as it goes, with a copy of these rules for the browser
+// (assets/js/social-handles.js), so a problem shows before Send. It must answer exactly as the server.
+describe("the browser's copy of the rules", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const browser = createRequire(import.meta.url)(resolve(__dirname, "../../assets/js/social-handles.js"));
+  const typed = [
+    "", "   ", "@", "@robin.bakes", "robin.bakes", "Robin_Bakes", "instagram.com/robin.bakes", "www.instagram.com/robin.bakes/",
+    "http://instagram.com/robin.bakes", "https://www.instagram.com/robin.bakes?igsh=abc123", "https://instagram.com/robin.bakes/reels/",
+    "https://m.instagram.com/robin.bakes#top", "robin.me", "robin bakes", "robin..bakes", ".robin", "robin.", "a".repeat(31),
+    "https://www.facebook.com/robin.bakes", "https://evil.example/instagram.com/robin", "instagram.com.evil.example/robin",
+    "https://www.instagram.com/", "https://www.instagram.com/p/C0abc123/", "javascript:alert(1)", "<script>", "robinbakes",
+    "@Robin.Bakes", "facebook.com/robinbakes", "https://m.facebook.com/robinbakes?ref=share", "http://fb.com/robinbakes",
+    "https://www.facebook.com/groups/exampleton.bakers", "https://www.facebook.com/profile.php?id=100012345678901&ref=x",
+    "https://www.facebook.com/story.php?story_fbid=123&id=456&fbclid=abc", "facebook.com/watch/?v=987654",
+    "https://www.facebook.com/profile.php", "https://www.facebook.com/story.php", "https://www.facebook.com/watch?v=<script>",
+    "Robin Bakes", "https://facebook.com.evil.example/robin", "x".repeat(301),
+  ];
+  it.each(typed)("answers %j as the server does", (t) => {
+    expect(browser.instagramLink(t)).toEqual(instagramLink(t));
+    expect(browser.facebookLink(t)).toEqual(facebookLink(t));
   });
 });

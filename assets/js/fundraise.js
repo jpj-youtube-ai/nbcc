@@ -296,8 +296,13 @@
       step.classList.remove("is-waiting");
       step.classList.add("is-arriving");
     }
+    // Stepping ends once every question for their path is showing. Any still waiting belong to the
+    // other path (hidden): they are let go too, so a change of path shows them straight away.
     function finishStepping() {
       stepped = false;
+      steps.forEach(function (step) {
+        if (step.classList.contains("is-waiting")) show(step);
+      });
       if (showAllRow) showAllRow.hidden = true;
     }
     function reveal() {
@@ -313,7 +318,10 @@
         if (!answered(step)) open = false;
       });
       if (first && news) news.textContent = "Next question: " + titleOf(first);
-      if (!form.querySelector("[data-step].is-waiting")) finishStepping();
+      var left = steps.some(function (step) {
+        return !step.hidden && step.classList.contains("is-waiting");
+      });
+      if (!left) finishStepping();
     }
     // Every question at once: from the button, or when they press Send.
     function revealAll() {
@@ -356,6 +364,29 @@
       }
     }
 
+    // --- Review fix: Instagram and Facebook, checked as they leave the box -------------------------
+    // The same rules as the server (assets/js/social-handles.js): the help line under the box says
+    // what is wrong, and Send is held with the box flagged. The server still checks.
+    var SOCIAL = { instagram: "instagramLink", facebook: "facebookLink" };
+    var socialHelp = {};
+    function socialProblem(id) {
+      var rules = win.NBCCSocialHandles;
+      var box = el(id);
+      if (!rules || !box || !SOCIAL[id]) return null;
+      var r = rules[SOCIAL[id]](box.value);
+      return r && r.ok === false ? r.message : null;
+    }
+    function checkSocial(target) {
+      var id = target && target.id;
+      if (!SOCIAL[id]) return;
+      var help = el(id + "Help");
+      if (help && socialHelp[id] === undefined) socialHelp[id] = help.textContent;
+      var problem = socialProblem(id);
+      if (help) help.textContent = problem || socialHelp[id];
+      if (problem) target.setAttribute("aria-invalid", "true");
+      else target.removeAttribute("aria-invalid");
+    }
+
     function applyAll() {
       applyPath();
       applyKind();
@@ -363,14 +394,38 @@
       applyAddress();
       applyShoutOut();
     }
-    form.addEventListener("change", function () {
-      applyAll();
+    // Review fix: whatever goes wrong in tidying the form, the next question still comes.
+    function safely(work) {
+      try {
+        work();
+      } catch (err) {
+        if (win.console && win.console.error) win.console.error("fundraise form:", err);
+      }
+    }
+    // Review fix: while they type, the next question waits until they leave the box (change) or
+    // pause, rather than arriving on the first key.
+    var PAUSE_MS = 600;
+    var pause = null;
+    function revealSoon() {
+      if (pause) win.clearTimeout(pause);
+      pause = win.setTimeout(function () {
+        pause = null;
+        reveal();
+      }, PAUSE_MS);
+    }
+    form.addEventListener("change", function (e) {
+      safely(applyAll);
+      safely(function () {
+        checkSocial(e && e.target);
+      });
+      if (pause) win.clearTimeout(pause);
+      pause = null;
       reveal();
     });
     form.addEventListener("input", function () {
-      applyAddress();
-      applyCounts();
-      reveal();
+      safely(applyAddress);
+      safely(applyCounts);
+      revealSoon();
     });
     applyAll();
     reveal();
@@ -514,6 +569,10 @@
         var out = [];
         var end = finishBeforeStart();
         if (end) out.push({ control: end, message: "The finish time is before the start." });
+        Object.keys(SOCIAL).forEach(function (id) {
+          var problem = socialProblem(id);
+          if (problem) out.push({ control: el(id), message: problem });
+        });
         if (serverFields) {
           Object.keys(serverFields).forEach(function (key) {
             var control = el(controlFor(key));

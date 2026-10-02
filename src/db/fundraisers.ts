@@ -8,6 +8,7 @@ import {
   hasPage,
   meter,
   organiserNameFor,
+  socialLinkFor,
   wallEntries,
   wallStepVerdict,
   type AdminPatch,
@@ -323,7 +324,13 @@ export async function setFundraisingOn(pageOn: boolean, actor: string): Promise<
 // TASK-511: a short address nobody has, or has ever had: the initials of the title (ssd), then ssd2,
 // ssd3... (src/fundraising/slugs.ts). Every address a page used to have counts as taken, so an old
 // link can never lead to someone else's page. Staff may change it before approving.
+// TASK-511 review: who may take which address is decided one at a time across the whole site, with
+// a lock held to the end of the transaction. Without it a sign up could read the addresses in use a
+// moment before staff move a page off one (into the history), and then take that old address.
+const SLUG_LOCK = "SELECT pg_advisory_xact_lock(hashtext('fundraiser_slugs'))";
+
 async function freeSlug(client: PoolClient, title: string): Promise<string> {
+  await client.query(SLUG_LOCK);
   const base = initialsSlug(title);
   // The base is only letters and numbers, so it is safe in the pattern as it is.
   const taken = new Set(
@@ -551,10 +558,16 @@ export async function patchFundraiser(id: number, patch: AdminPatch, actor: stri
     const before = await lockFundraiser(client, id);
     checkTimes(before, patch);
     const newSlug = typeof patch.slug === "string" && patch.slug !== before.slug ? patch.slug : null;
-    if (newSlug) await claimOldSlug(client, id, newSlug);
+    if (newSlug) {
+      await client.query(SLUG_LOCK);
+      await claimOldSlug(client, id, newSlug);
+    }
     // TASK-511: the whole name follows a change to its first name or surname.
     const name = organiserNameFor(before, patch);
     const full: AdminPatch = name ? { ...patch, name } : { ...patch };
+    // TASK-511 review: the old single link follows Instagram and Facebook.
+    const link = socialLinkFor(before, full);
+    if (link !== undefined) full.socialLink = link;
     // TASK-511: what they would like is saved whole; printed QR codes not sent are kept as stored.
     if (full.wants && full.wants.qrCount === undefined) full.wants = { ...full.wants, qrCount: before.wants.qrCount ?? 0 };
     const changed = await applyPatch(client, id, full, actor);
@@ -746,7 +759,13 @@ export async function decideEdit(
     if (edit.status !== "waiting") throw new FundraiserError("not_waiting");
     let changed: string[] = [];
     if (approve) checkTimes(live, (edit.changes ?? {}) as Record<string, unknown>);
-    if (approve) changed = await applyPatch(client, fundraiserId, edit.changes as Partial<Record<PatchField, unknown>>, actor);
+    if (approve) {
+      const changes = { ...(edit.changes ?? {}) } as FundraiserEdit;
+      // TASK-511 review: the old single link follows an approved change to Instagram or Facebook.
+      const link = socialLinkFor(live, changes);
+      if (link !== undefined) changes.socialLink = link;
+      changed = await applyPatch(client, fundraiserId, changes as Partial<Record<PatchField, unknown>>, actor);
+    }
     await client.query(
       "UPDATE fundraiser_edits SET status = $1, decided_at = now(), decided_by = $2 WHERE id = $3",
       [approve ? "approved" : "rejected", actor, editId],

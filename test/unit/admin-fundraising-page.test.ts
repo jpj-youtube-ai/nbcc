@@ -949,6 +949,37 @@ describe("a sign up from the form's second round", () => {
     expect(text(detail())).toContain("Facebook or Instagram");
   });
 
+  // Review fixes.
+  it("shows the box for what it is as soon as Something else is chosen", async () => {
+    records = [roundTwo({ kind: "santa_dash", kindLabel: "A Santa dash", kindOther: null })];
+    await openFundraising();
+    await openRow(1);
+    const other = () => q('#frEditForm [name="kindOther"]')!.closest(".fr-field") as HTMLElement;
+    expect(other().hidden).toBe(true);
+    setValue('#frEditForm [name="kind"]', "other");
+    expect(other().hidden).toBe(false);
+    setValue('#frEditForm [name="kind"]', "birthday");
+    expect(other().hidden).toBe(true);
+  });
+
+  it("asks no printed QR codes of an event, which has no page", async () => {
+    records = [roundTwo({ path: "event", wants: { posterCount: 1, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false } })];
+    await openFundraising();
+    await openRow(1);
+    expect(q('#frEditForm [name="qrCount"]')).toBeNull();
+  });
+
+  it("names Instagram and Facebook in an organiser's waiting change", async () => {
+    records = [roundTwo({ status: "approved", pageUrl: "https://nbcc.scot/fundraise/test-dash-1" })];
+    waiting = { 1: { id: 9, changes: { instagram: "https://www.instagram.com/robyn", facebook: "https://www.facebook.com/robyn" }, status: "waiting", createdAt: "2026-10-01T10:00:00.000Z" } };
+    await openFundraising();
+    await openRow(1);
+    const change = text(q("#frChange"));
+    expect(change).toContain("Instagram");
+    expect(change).toContain("https://www.instagram.com/robyn");
+    expect(change).toContain("Facebook");
+  });
+
   it("says a changed web address keeps the old one working", async () => {
     records = [roundTwo()];
     await openFundraising();

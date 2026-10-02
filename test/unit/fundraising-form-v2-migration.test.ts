@@ -74,8 +74,18 @@ describe("the form round two migration", () => {
     const kinds = list ? list[1].split(",").map((s) => s.trim().replace(/'/g, "")) : [];
     expect(kinds.sort()).toEqual([...REQUEST_KINDS].sort());
     expect(kinds).toContain("qr_codes");
-    // The old check is found by what it says, whatever Postgres named it.
-    expect(sql).toMatch(/pg_get_constraintdef\(oid\) LIKE '%kind IN%'/);
+  });
+
+  // Review fix: Postgres keeps "kind IN (...)" as "(kind = ANY (ARRAY[...]))", so a search for
+  // "kind IN" found nothing, the old check stayed, and adding ours failed ("already exists") in CI.
+  // The column check from 080 is named fundraiser_requests_kind_check: dropped by that name, before
+  // ours is added; and any other check listing the kinds (found by a kind in it) is dropped too.
+  it("drops the old kind check by its name, before adding the widened one", () => {
+    const drop = sql.indexOf("ALTER TABLE fundraiser_requests DROP CONSTRAINT IF EXISTS fundraiser_requests_kind_check");
+    expect(drop).toBeGreaterThan(-1);
+    expect(drop).toBeLessThan(sql.indexOf("ADD CONSTRAINT fundraiser_requests_kind_check"));
+    expect(sql).not.toMatch(/LIKE '%kind IN%'/);
+    expect(sql).toMatch(/LIKE '%shout_out%'/);
   });
 
   it("drops and deletes nothing that is there now", () => {
@@ -88,6 +98,9 @@ describe("the form round two migration", () => {
     migration.down(down.pgm);
     const downSql = down.calls.filter((c) => c.op === "sql").map((c) => String(c.args[0])).join("\n");
     expect(downSql).toMatch(/NOT VALID/);
+    const drop = downSql.indexOf("DROP CONSTRAINT IF EXISTS fundraiser_requests_kind_check");
+    expect(drop).toBeGreaterThan(-1);
+    expect(drop).toBeLessThan(downSql.indexOf("ADD CONSTRAINT"));
     expect(downSql).not.toMatch(/'qr_codes'/);
   });
 });

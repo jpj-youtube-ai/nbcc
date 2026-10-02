@@ -16,6 +16,7 @@ const require = createRequire(import.meta.url);
 const shared = require(resolve(ROOT, "assets/js/main.js"));
 const { initFundraiseForm } = require(resolve(ROOT, "assets/js/fundraise.js"));
 const template = readFileSync(resolve(ROOT, "fundraise.html"), "utf8");
+const socialHandles = require(resolve(ROOT, "assets/js/social-handles.js"));
 const css = readFileSync(resolve(ROOT, "assets/css/fundraising.css"), "utf8");
 
 let calls: Array<{ url: string; init?: RequestInit }>;
@@ -42,6 +43,8 @@ function load() {
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).NBCCFormValidation = { validateForm: shared.validateForm, clearValidation: shared.clearValidation };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).NBCCSocialHandles = socialHandles;
   return initFundraiseForm(document, window);
 }
 
@@ -275,6 +278,100 @@ function fill(path: "raising" | "event") {
   type("postPostcode", "EX1 1EX");
   tick("attendNo");
 }
+
+// ---- review fixes ----
+
+const typeOnly = (id: string, value: string) => {
+  const el = $<HTMLInputElement>(`#${id}`);
+  el.value = value;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+};
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+describe("the next question, while they type", () => {
+  beforeEach(() => load());
+
+  it("waits for them to leave the box, or to pause, rather than coming on the first key", async () => {
+    tick("pathRaising");
+    tick("kind-run_walk");
+    typeOnly("title", "J");
+    typeOnly("description", "F");
+    expect(waiting($("#target"))).toBe(true);
+    await wait(800);
+    expect(waiting($("#target"))).toBe(false);
+  });
+
+  it("comes at once when they leave the box", () => {
+    tick("pathRaising");
+    tick("kind-run_walk");
+    typeOnly("title", "Jo's Swim");
+    typeOnly("description", "Forty lengths.");
+    $("#description").dispatchEvent(new Event("change", { bubbles: true }));
+    expect(waiting($("#target"))).toBe(false);
+  });
+});
+
+describe("when only the other path's question is left waiting", () => {
+  it("stops stepping, takes Show all away, and still shows it if they change path", () => {
+    load();
+    fill("raising");
+    expect($("[data-show-all-row]").hidden).toBe(true);
+    expect(document.querySelector("[data-step].is-waiting")).toBeNull();
+    tick("pathEvent");
+    const card = $("[data-event-questions]");
+    expect(card.hidden).toBe(false);
+    expect(card.classList.contains("is-waiting")).toBe(false);
+  });
+});
+
+describe("a fault in the form's own script", () => {
+  it("still brings the next question", () => {
+    load();
+    const real = document.getElementById.bind(document);
+    document.getElementById = ((id: string) => {
+      if (id === "kindOther") throw new Error("boom");
+      return real(id);
+    }) as typeof document.getElementById;
+    try {
+      const el = $<HTMLInputElement>("#pathRaising");
+      el.checked = true;
+      try {
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+      } catch {
+        /* the fault itself */
+      }
+      expect(waiting($("#kind-run_walk"))).toBe(false);
+    } finally {
+      document.getElementById = real;
+    }
+  });
+});
+
+describe("Instagram and Facebook, checked before sending", () => {
+  it("says what is wrong as soon as they leave the box", () => {
+    load();
+    type("facebook", "https://www.instagram.com/someone");
+    expect($("#facebookHelp").textContent).toMatch(/Facebook page name/);
+    expect($("#facebook").getAttribute("aria-invalid")).toBe("true");
+    type("facebook", "facebook.com/someone");
+    expect($("#facebookHelp").textContent).toBe("Your page name, or the link to your page, group or event.");
+    expect($("#facebook").hasAttribute("aria-invalid")).toBe(false);
+  });
+
+  it("sends nothing while one is wrong, and flags it", async () => {
+    load();
+    fill("raising");
+    type("instagram", "robin bakes");
+    await submit();
+    expect(calls.filter((c) => c.url === "/api/fundraise")).toHaveLength(0);
+    expect(document.getElementById("instagram-error")?.textContent).toMatch(/Instagram name/);
+  });
+
+  it("is loaded on the page before the form's own script", () => {
+    expect(template.indexOf("/assets/js/social-handles.js")).toBeGreaterThan(-1);
+    expect(template.indexOf("/assets/js/social-handles.js")).toBeLessThan(template.indexOf("/assets/js/fundraise.js"));
+  });
+});
 
 describe("sending", () => {
   it("sends the split name, Something else, both links, every yes or no, and QR codes", async () => {

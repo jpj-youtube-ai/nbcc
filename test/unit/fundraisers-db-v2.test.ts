@@ -10,7 +10,7 @@ vi.mock("../../src/db/pool", () => ({ pool: { query: vi.fn(), connect: vi.fn() }
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "test" } }));
 
 import { pool } from "../../src/db/pool";
-import { createFundraiser, patchAssignments, patchFundraiser, toRecord } from "../../src/db/fundraisers";
+import { createFundraiser, decideEdit, patchAssignments, patchFundraiser, toRecord } from "../../src/db/fundraisers";
 import { currentSlugFor } from "../../src/db/fundraiser-slugs";
 import { signUpSchema } from "../../src/fundraising/model";
 
@@ -185,5 +185,66 @@ describe("an old address", () => {
     expect(query.mock.calls.at(-1)?.[1]).toEqual(["sams-santa-dash"]);
     query.mockResolvedValueOnce({ rows: [] });
     expect(await currentSlugFor("nobody")).toBeNull();
+  });
+});
+
+// Review fix: the old single link always follows Instagram and Facebook, whether staff change them or
+// approve an organiser's change.
+describe("the old single link, after a change to either link", () => {
+  const roundTwo = () => fundraiserRow({ first_name: "Sam", last_name: "Sample", instagram: "https://www.instagram.com/sam", social_link: "https://www.instagram.com/sam" });
+
+  it("follows a staff change", async () => {
+    const calls = useClient((sql) => (sql.includes("FROM fundraisers f WHERE f.id = $1") ? { rows: [roundTwo()] } : undefined));
+    await patchFundraiser(9, { facebook: "https://www.facebook.com/samruns" }, "admin:kim@example.com");
+    const update = calls.find(([s]) => s.startsWith("UPDATE fundraisers"));
+    expect(update?.[0]).toContain("facebook = $1");
+    expect(update?.[0]).toContain("social_link = $2");
+    expect(update?.[1].slice(0, 2)).toEqual(["https://www.facebook.com/samruns", "https://www.facebook.com/samruns"]);
+  });
+
+  it("follows an organiser's change when staff approve it", async () => {
+    const calls = useClient((sql) => {
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [roundTwo()] };
+      if (sql.startsWith("SELECT changes, status FROM fundraiser_edits")) return { rows: [{ changes: { instagram: null }, status: "waiting" }] };
+      return undefined;
+    });
+    await decideEdit(9, 3, true, "admin:kim@example.com");
+    const update = calls.find(([s]) => s.startsWith("UPDATE fundraisers"));
+    expect(update?.[0]).toContain("instagram = $1");
+    expect(update?.[0]).toContain("social_link = $2");
+    expect(update?.[1].slice(0, 2)).toEqual([null, null]);
+  });
+});
+
+// Review fix: who may take which address is decided one at a time (a lock held to the end of the
+// transaction), so a sign up can never take an old address in the moment staff move a page off it.
+describe("addresses, one at a time", () => {
+  const LOCK = /pg_advisory_xact_lock/;
+
+  it("is how a new sign up picks its address", async () => {
+    const calls = useClient((sql) => {
+      if (sql.startsWith("SELECT slug FROM fundraisers")) return { rows: [] };
+      if (sql.includes("INSERT INTO fundraisers")) return { rows: [{ id: 30 }] };
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [fundraiserRow({ id: 30 })] };
+      return undefined;
+    });
+    await createFundraiser(newSignUp());
+    const lock = calls.findIndex(([s]) => LOCK.test(s));
+    expect(lock).toBeGreaterThan(-1);
+    expect(lock).toBeLessThan(calls.findIndex(([s]) => s.startsWith("SELECT slug FROM fundraisers")));
+  });
+
+  it("is how staff move a page to a new address", async () => {
+    const calls = useClient((sql) => (sql.includes("FROM fundraisers f WHERE f.id = $1") ? { rows: [fundraiserRow()] } : undefined));
+    await patchFundraiser(9, { slug: "sw" }, "admin:kim@example.com");
+    const lock = calls.findIndex(([s]) => LOCK.test(s));
+    expect(lock).toBeGreaterThan(-1);
+    expect(lock).toBeLessThan(calls.findIndex(([s]) => s.startsWith("SELECT fundraiser_id FROM fundraiser_slug_history")));
+  });
+
+  it("is not taken for a change that leaves the address alone", async () => {
+    const calls = useClient((sql) => (sql.includes("FROM fundraisers f WHERE f.id = $1") ? { rows: [fundraiserRow()] } : undefined));
+    await patchFundraiser(9, { title: "Sam's Long Walk" }, "admin:kim@example.com");
+    expect(calls.some(([s]) => LOCK.test(s))).toBe(false);
   });
 });

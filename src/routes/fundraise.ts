@@ -437,8 +437,17 @@ export async function postManageSignIn(req: Request, res: Response): Promise<Res
 
 function editableOf(f: FundraiserRecord) {
   const out: Record<string, unknown> = {};
-  for (const field of EDITABLE_FIELDS) out[field] = f[field];
+  for (const field of EDITABLE_FIELDS) out[field] = f[field] === undefined ? null : f[field];
   return out;
+}
+
+/**
+ * TASK-511 review: which link boxes their form shows. A sign up made since the form's second round
+ * (it has the name in two parts, or a link of its own) changes Instagram and Facebook, each in a box
+ * of its own; one from before keeps its one link box.
+ */
+function linkBoxesOf(f: FundraiserRecord): "one" | "two" {
+  return f.firstName || f.instagram || f.facebook ? "two" : "one";
 }
 
 // TASK-505: one of their own fundraisers' requests, as the organiser reads them. Best effort: a
@@ -479,6 +488,7 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           qrUrl: page ? `/fundraise/${f.slug}/qr.svg` : null,
           meter: f.meter,
           editable: editableOf(f),
+          linkBoxes: linkBoxesOf(f),
           waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
           // As the wall shows them: a name or Anonymous, the amount unless hidden, the message unless
           // staff hid it. Never a giver's email, full name or anything else about them.

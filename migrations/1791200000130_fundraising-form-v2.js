@@ -32,17 +32,21 @@ const OLD_KINDS = ["posters", "leaflets", "leaflets_or_posters", "buckets", "tin
 const NEW_KINDS = [...OLD_KINDS, "qr_codes"];
 const kindCheck = (kinds) => `kind IN (${kinds.map((k) => `'${k}'`).join(", ")})`;
 
-// The kind check was declared on the column in 1791200000080, so Postgres named it. Rather than
-// guess that name, every check on the table that lists the kinds is dropped, and the widened one is
-// added back under a name of our own (as 1791200000030 did for analytics).
+// The kind check was declared on the column in 1791200000080, so Postgres named it
+// fundraiser_requests_kind_check (table, column, "check"). It is dropped by that name, and then
+// (in case it was ever named otherwise) any other check that lists the kinds, found by one of them:
+// Postgres keeps "kind IN (...)" as "(kind = ANY (ARRAY['posters'::text, ...]))", so the words
+// "kind IN" are never there (review fix: looking for them found nothing, and adding ours failed).
+// The widened one is then added back under the same name.
 const dropKindChecks = `
+  ALTER TABLE fundraiser_requests DROP CONSTRAINT IF EXISTS fundraiser_requests_kind_check;
   DO $$
   DECLARE c text;
   BEGIN
     FOR c IN
       SELECT conname FROM pg_constraint
        WHERE conrelid = 'fundraiser_requests'::regclass AND contype = 'c'
-         AND pg_get_constraintdef(oid) LIKE '%kind IN%'
+         AND pg_get_constraintdef(oid) LIKE '%shout_out%'
     LOOP
       EXECUTE format('ALTER TABLE fundraiser_requests DROP CONSTRAINT %I', c);
     END LOOP;

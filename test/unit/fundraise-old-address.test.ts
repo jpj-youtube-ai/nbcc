@@ -95,6 +95,18 @@ describe("an address a page used to have", () => {
     expect(res.headers.get("location")).toBe("/fundraise/rsd");
   });
 
+  // Review fix: a 301 with no caching rule is kept by a browser for good. If staff change a link
+  // and later change it back, someone who scanned in between would go round in a circle. An hour,
+  // then the browser asks again.
+  it.each(["/fundraise/robins-santa-dash", "/fundraise/robins-santa-dash/qr.svg", "/fundraise/robins-santa-dash/qr.png"])(
+    "lets a browser keep the redirect from %s for an hour only",
+    async (path) => {
+      const res = await get(path);
+      expect(res.status).toBe(301);
+      expect(res.headers.get("cache-control")).toBe("public, max-age=3600");
+    },
+  );
+
   it("keeps the query string, so a poster's tag still counts", async () => {
     const res = await get("/fundraise/robins-santa-dash?utm_source=poster&utm_medium=qr");
     expect(res.status).toBe(301);

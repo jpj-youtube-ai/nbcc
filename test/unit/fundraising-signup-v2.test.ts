@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { signUpSchema, adminPatchSchema, organiserNameFor, MAX_QR_CODES, type FundraiserRecord } from "../../src/fundraising/model";
+import {
+  signUpSchema,
+  adminPatchSchema,
+  editSchema,
+  organiserNameFor,
+  socialLinkFor,
+  EDITABLE_FIELDS,
+  MAX_QR_CODES,
+  type FundraiserRecord,
+} from "../../src/fundraising/model";
 
 // TASK-511: the sign up form, round two. The name in two boxes, "Something else" said in their own
 // words, Instagram and Facebook in boxes of their own, printed QR codes, and every yes or no answered
@@ -204,5 +213,38 @@ describe("the whole name, kept for everything that reads it", () => {
   it("is left alone when neither part changes, and for a sign up from before, which has one name", () => {
     expect(organiserNameFor(before, { title: "x" })).toBeUndefined();
     expect(organiserNameFor({ firstName: null, lastName: null, name: "Old Name" }, { name: "New Name" })).toBeUndefined();
+  });
+});
+
+// Review fix: the organiser's private area changes Instagram and Facebook too (still approved by
+// staff), and the old single link always follows them, so nothing reading it is ever out of step.
+describe("an organiser's change to their links", () => {
+  it("takes Instagram and Facebook, tidied, as things they may change", () => {
+    expect(EDITABLE_FIELDS).toEqual(expect.arrayContaining(["instagram", "facebook", "socialLink"]));
+    const r = editSchema.safeParse({ instagram: "@robin.bakes", facebook: "" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data).toEqual({ instagram: "https://www.instagram.com/robin.bakes", facebook: null });
+    const bad = editSchema.safeParse({ facebook: "https://www.instagram.com/robin" });
+    expect(bad.success).toBe(false);
+  });
+});
+
+describe("the old single link, kept in step", () => {
+  const roundTwo = { instagram: "https://www.instagram.com/a", facebook: null, socialLink: "https://www.instagram.com/a", firstName: "Robin" };
+  const before = { instagram: null, facebook: null, socialLink: "https://www.facebook.com/old.page", firstName: null };
+
+  it("follows a change to either link: Facebook first, then Instagram", () => {
+    expect(socialLinkFor(roundTwo, { facebook: "https://www.facebook.com/b" })).toBe("https://www.facebook.com/b");
+    expect(socialLinkFor(roundTwo, { instagram: "https://www.instagram.com/c" })).toBe("https://www.instagram.com/c");
+    expect(socialLinkFor(roundTwo, { instagram: null })).toBeNull();
+  });
+
+  it("is left alone when neither link changes", () => {
+    expect(socialLinkFor(roundTwo, { title: "x" })).toBeUndefined();
+  });
+
+  it("keeps a sign up from before's one link until a new one is given", () => {
+    expect(socialLinkFor(before, { instagram: null })).toBe("https://www.facebook.com/old.page");
+    expect(socialLinkFor(before, { instagram: "https://www.instagram.com/n" })).toBe("https://www.instagram.com/n");
   });
 });

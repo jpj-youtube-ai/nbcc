@@ -100,6 +100,7 @@ async function load(search: string, reply: (url: string, method: string, body: u
     location: { search, pathname: "/fundraise/manage", assign: (url: string) => assigned.push(url) },
     history: { replaceState: (_s: unknown, _t: string, url: string) => replaced.push(url) },
     NBCCFormValidation: { validateForm: shared.validateForm, clearValidation: shared.clearValidation },
+    NBCCSocialHandles: require(resolve(ROOT, "assets/js/social-handles.js")),
     fetch: vi.fn((url: string, init?: RequestInit) => {
       const method = init?.method ?? "GET";
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
@@ -396,6 +397,46 @@ describe("changing the details", () => {
     await submit($("form[data-f-edit]", card(8)));
     const input = field(8, "endTime");
     expect(document.getElementById(`${input.id}-error`)?.textContent).toBe("The finish time is before the start.");
+  });
+
+  // TASK-511 review: a sign up made since the form's second round has Instagram and Facebook in boxes
+  // of their own, here too; one from before keeps its one link box.
+  const roundTwo = () =>
+    raising({ linkBoxes: "two", editable: { ...editableRaising, socialLink: "https://www.instagram.com/robin", instagram: "https://www.instagram.com/robin", facebook: null } });
+
+  it("asks a sign up from the second round for Instagram and Facebook, not the one link", async () => {
+    await load("", signedIn(roundTwo()));
+    expect($("[data-link-two]", card(7)).hidden).toBe(false);
+    expect($("[data-link-one]", card(7)).hidden).toBe(true);
+    expect(field(7, "instagram").value).toBe("https://www.instagram.com/robin");
+    expect(field(7, "facebook").value).toBe("");
+  });
+
+  it("keeps the one link box for a sign up from before", async () => {
+    await load("", signedIn(raising()));
+    expect($("[data-link-one]", card(7)).hidden).toBe(false);
+    expect($("[data-link-two]", card(7)).hidden).toBe(true);
+  });
+
+  it("sends a change to Facebook only, and never the one link box it does not show", async () => {
+    await load("", (url, method) => (method === "POST" ? { status: 202, body: { status: "waiting", edit: { id: 6 } } } : signedIn(roundTwo())(url, method)));
+    type(field(7, "facebook"), "facebook.com/robinruns");
+    await submit($("form[data-f-edit]", card(7)));
+    expect(posts()[0].body).toEqual({ facebook: "facebook.com/robinruns" });
+  });
+
+  it("flags a link that is not theirs before sending", async () => {
+    await load("", signedIn(roundTwo()));
+    type(field(7, "instagram"), "https://www.facebook.com/robin");
+    await submit($("form[data-f-edit]", card(7)));
+    expect(posts()).toHaveLength(0);
+    const input = field(7, "instagram");
+    expect(document.getElementById(`${input.id}-error`)?.textContent).toMatch(/Instagram name/);
+  });
+
+  it("loads the link rules before its own script", () => {
+    expect(template.indexOf("/assets/js/social-handles.js")).toBeGreaterThan(-1);
+    expect(template.indexOf("/assets/js/social-handles.js")).toBeLessThan(template.indexOf("/assets/js/fundraise-manage.js"));
   });
 
   it("shows a change still waiting, in the form", async () => {

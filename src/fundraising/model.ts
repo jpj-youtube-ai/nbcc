@@ -488,6 +488,9 @@ export const EDITABLE_FIELDS = [
   "venue",
   "town",
   "socialLink",
+  // TASK-511 review: a sign up made since asks for these instead of the one link; still approved by staff.
+  "instagram",
+  "facebook",
   ...EVENT_ONLY_FIELDS,
 ] as const;
 export type EditableField = (typeof EDITABLE_FIELDS)[number];
@@ -501,6 +504,8 @@ export const editSchema = z
     venue: optionalText(120).optional(),
     town: optionalText(80).optional(),
     socialLink: optionalWebLink.optional(),
+    instagram: socialBox(instagramLink).optional(),
+    facebook: socialBox(facebookLink).optional(),
     cardLine: cardLine.optional(),
     endTime: optionalTime.optional(),
     timeTbc: z.boolean().optional(),
@@ -626,6 +631,21 @@ export const adminPatchSchema = z
   .refine((b) => Object.keys(b).length > 0, { message: "There is nothing to change." });
 
 export type AdminPatch = z.infer<typeof adminPatchSchema>;
+
+type LinkParts = { instagram?: string | null; facebook?: string | null; socialLink: string | null; firstName?: string | null };
+
+/**
+ * TASK-511 review: the old single link (social_link) a change leaves, when it changes Instagram or
+ * Facebook: Facebook first, then Instagram. A sign up from before (no name parts, no links of its
+ * own) keeps its one link when both are left empty. Undefined when neither link changes.
+ */
+export function socialLinkFor(before: LinkParts, change: { instagram?: string | null; facebook?: string | null }): string | null | undefined {
+  if (change.instagram === undefined && change.facebook === undefined) return undefined;
+  const facebook = change.facebook !== undefined ? change.facebook : before.facebook ?? null;
+  const instagram = change.instagram !== undefined ? change.instagram : before.instagram ?? null;
+  const roundTwo = Boolean(before.firstName || before.instagram || before.facebook);
+  return facebook ?? instagram ?? (roundTwo ? null : before.socialLink);
+}
 
 type NameParts = { firstName?: string | null; lastName?: string | null; name: string };
 

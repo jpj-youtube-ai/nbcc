@@ -8184,8 +8184,11 @@ Jaimie's second round of changes to the sign up form at `/fundraise`, and shorte
 **One question after another.** `assets/js/fundraise.js` adds `fr-stepped` to the form and shows
 each question (each `[data-step]`) once the one before is answered: answered means every question
 in it that needs an answer, and is in play for their path, is valid (read from `validity`, so
-nothing is flagged red on the way). A step with nothing it needs comes along with the one before; a
-step once shown is never taken away. Each new one is said in a polite live region ("Next question:
+nothing is flagged red on the way), checked when they leave a box (`change`) or pause typing for
+0.6 seconds, never on the first key. A step with nothing it needs comes along with the one before; a
+step once shown is never taken away. Once every question for their path shows, stepping stops (and
+the other path's questions are let go, so a change of path shows them at once); a fault in the
+form's own tidying never stops the next question coming. Each new one is said in a polite live region ("Next question:
 What kind of event is it?"), focus stays where they are, and "Show all the questions at once" (or
 pressing Send) shows every one, Send then flagging whatever is missing. The rise and fade is off for
 anyone who asks for less motion. Without the script every question is in the page as it is.
@@ -8212,9 +8215,17 @@ server's messages follow the path too (`kindMissing`, `kindOtherMissing` in
   about it on NBCC's social media?" and "Would you like a shout out from us?". A handle (`@name` or
   `name`) or a link, with or without https, from the app or the website, is tidied to one full link
   (`src/fundraising/social.ts`): `https://www.instagram.com/<name>` (a profile, never a post), and
-  `https://www.facebook.com/<path>` (a page, group, event, share link, or `profile.php?id=`); any
-  other website is refused in plain words. Stored in `instagram` and `facebook`; `social_link` is
-  still filled (Facebook first) for anything that reads it, and an old sign up keeps its one link. A
+  `https://www.facebook.com/<path>` (a page, group, event, share link, or `profile.php?id=`; a post
+  or video link, `story.php`, `permalink.php`, `photo.php`, `video.php` or `watch`, keeps its
+  query less tracking such as `fbclid` and `utm_*`); any other website is refused in plain words.
+  The browser has a copy of these rules (`assets/js/social-handles.js`, held to the same answers by
+  `fundraising-social-links`), so the form says what is wrong as they leave the box and holds Send.
+  Stored in `instagram` and `facebook`; `social_link` is still filled (Facebook first) for
+  anything that reads it, and follows every later change to either link (`socialLinkFor`, on a
+  staff change and on approving an organiser's); an old sign up keeps its one link. The organiser's
+  private area changes Instagram and Facebook in boxes of their own for a sign up made since
+  (`linkBoxes: "two"` on `GET /api/fundraise/manage/me`; still approved by staff), and the one link
+  box for one from before (`"one"`). A
   shout out asked for without their OK to post is taken, and the form, the staff email and the
   admin all say we need their OK first.
 - **Yes or no** questions (posting about it, a shout out, someone coming along, and the website) are
@@ -8243,20 +8254,27 @@ Rules: `src/fundraising/slugs.ts`; the lookup of what is taken: `freeSlug` in
 `src/db/fundraisers.ts`.
 
 **Old page links keep working.** When staff change a page's link, the old one is kept in
-`fundraiser_slug_history`, and `/fundraise/<old>` (and `/fundraise/<old>/qr.svg`) answer with a
+`fundraiser_slug_history`, and `/fundraise/<old>` (and its `qr.svg` and `qr.png`) answer with a
 **301** to the page's link now, query string kept, while it has a page; otherwise the site's 404. So a
-QR code printed with the old link never breaks. No other page may ever take an old link: a new sign
-up counts every one as taken, and staff giving one to another page get a `409`. A page may take back
-a link it had before.
+QR code printed with the old link never breaks. The 301 carries `Cache-Control: public,
+max-age=3600`, so a browser asks again after an hour (a link changed and later changed back never
+sends anyone round in a circle). No other page may ever take an old link: a new sign up counts
+every one as taken, and staff giving one to another page get a `409`; who may take which address is
+decided one at a time (a transaction lock, `pg_advisory_xact_lock`, around picking a sign up's
+address and moving a page), so a sign up can never take an old address in the moment a page is
+moved off it. A page may take back a link it had before.
 
 ### Data (`migrations/1791200000130_fundraising-form-v2.js`, additive only)
 
 New nullable columns on `fundraisers`: `first_name`, `last_name`, `kind_other`, `instagram`,
 `facebook`. A new table, `fundraiser_slug_history`: the old link (primary key, so each once), the
 fundraiser (cleared with it), when and by whom. The requests' kind check is widened to take
-`qr_codes` (dropped by what it says, whatever Postgres named it, and added back under a name of our
-own; the rollback puts the old list back `NOT VALID`). Printed QR codes need no column: a new key in
-`wants`. Numbered 130, above main's 100 and the open fundraising PRs' 110 and 120. The nightly
+`qr_codes`: the old check is dropped by its name (`fundraiser_requests_kind_check`, the name
+Postgres gave the column check in 080), and any other check listing the kinds (found by
+`shout_out` in it: Postgres keeps `kind IN (...)` as `kind = ANY (ARRAY[...])`, so the words
+"kind IN" are never there), and the widened one is added back under that name; the rollback puts the
+old list back `NOT VALID`. Printed QR codes need no column: a new key in `wants`. Numbered 130,
+above 110 and 120. The nightly
 backup's table count is 70.
 
 ### Where it lives, and tests

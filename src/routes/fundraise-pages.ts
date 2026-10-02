@@ -78,6 +78,16 @@ async function movedTo(slug: string): Promise<string | null> {
   }
 }
 
+/**
+ * A 301 from an old address to the page's address now. Kept by a browser for an hour only (review
+ * fix): a 301 with no caching rule is kept for good, so if staff changed a link and later changed
+ * it back, someone who scanned in between would go round in a circle.
+ */
+function movedOn(res: Response, to: string): void {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.redirect(301, to);
+}
+
 /** The query string of the request, as it came ("?utm_source=poster"), or nothing. */
 function queryOf(req: Request): string {
   const at = req.originalUrl.indexOf("?");
@@ -275,7 +285,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       if (!f) {
         // TASK-511: an old address's PNG goes on to the page's address now, like the SVG.
         const now = await movedTo(String(req.params.slug));
-        return now ? res.redirect(301, `/fundraise/${now}/qr.png${queryOf(req)}`) : next();
+        return now ? movedOn(res, `/fundraise/${now}/qr.png${queryOf(req)}`) : next();
       }
       const [{ qrPng }, { fundraiserPageUrl }, { qrPngCache }] = await Promise.all([
         import("../fundraising/qr-png"),
@@ -299,7 +309,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       const f = await publicFundraiser(String(req.params.slug));
       if (!f) {
         const now = await movedTo(String(req.params.slug));
-        return now ? res.redirect(301, `/fundraise/${now}/qr.svg${queryOf(req)}`) : next();
+        return now ? movedOn(res, `/fundraise/${now}/qr.svg${queryOf(req)}`) : next();
       }
       const [{ qrSvg }, { fundraiserPageUrl }, { qrSvgCache }] = await Promise.all([
         import("../fundraising/qr"),
@@ -326,7 +336,7 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
       if (!f) {
         // TASK-511: an address the page used to have goes on to its address now, for good.
         const now = await movedTo(String(req.params.slug));
-        return now ? res.redirect(301, `/fundraise/${now}${queryOf(req)}`) : next();
+        return now ? movedOn(res, `/fundraise/${now}${queryOf(req)}`) : next();
       }
       const [{ wallRows }, { publicPage, wallEntries }, { renderFundraiserPage }, { fundraiserPageUrl }] = await Promise.all([
         import("../db/fundraisers"),

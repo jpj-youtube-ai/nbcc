@@ -18,6 +18,7 @@
     <!-- TASK-507: "Thank your supporters", added to each card by its own script. -->
     <script defer src="/assets/js/fundraise-thanks.js"></script>
     <script defer src="/assets/js/main.js"></script>
+    <script defer src="/assets/js/social-handles.js"></script>
     <script defer src="/assets/js/fundraise-manage.js"></script>
     <script defer src="/assets/js/fundraise-news.js"></script>
   </head>
@@ -300,9 +301,24 @@
                       <textarea class="give-field-input fr-short-text" id="editIncluded" name="included" rows="2" maxlength="300"></textarea>
                     </div>
                   </div>
-                  <div class="give-field">
+                  <!-- TASK-511 review: a sign up made since the form's second round has Instagram and
+                       Facebook in boxes of their own (data-link-two); one from before keeps its one
+                       link box (data-link-one). The script shows the one that fits. -->
+                  <div class="give-field" data-link-one>
                     <label for="editSocial">Your Facebook or Instagram page <span class="give-optional">(optional)</span></label>
                     <input class="give-field-input" id="editSocial" name="socialLink" type="url" maxlength="300" inputmode="url" placeholder="https://www.facebook.com/..." data-invalid-message="Paste the full link, starting https://" />
+                  </div>
+                  <div class="fr-row" data-link-two hidden>
+                    <div class="give-field">
+                      <label for="editInstagram">Your Instagram <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="editInstagram" name="instagram" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@yourname" aria-describedby="editInstagramHelp" />
+                      <p class="give-field-help" id="editInstagramHelp">Your name, like @yourname, or the link to your profile.</p>
+                    </div>
+                    <div class="give-field">
+                      <label for="editFacebook">Your Facebook <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="editFacebook" name="facebook" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="facebook.com/yourpage" aria-describedby="editFacebookHelp" />
+                      <p class="give-field-help" id="editFacebookHelp">Your page name, or the link to your page, group or event.</p>
+                    </div>
                   </div>
                   <div class="give-cta-row">
                     <button class="btn btn-primary give-cta" type="submit" data-f-edit-submit>Send my changes</button>

@@ -59,9 +59,17 @@ describe("a gift on a fundraiser's page", () => {
     });
   });
 
-  it("shows the name and the amount unless asked not to", async () => {
+  // TASK-502: the give form no longer asks, so a giver's name stays off the wall until they choose to
+  // show it, on the thank you after paying. The amount shows, as the give form's box was ticked; an
+  // amount alone says nothing about who gave it.
+  it("keeps the name off the wall until the giver chooses after paying, and shows the amount", async () => {
     await run({ ...gift, fundraiserId: 7 });
-    expect(lastParams().metadata).toMatchObject({ fundraiserId: "7", supporterMessage: "", showName: "true", showAmount: "true" });
+    expect(lastParams().metadata).toMatchObject({ fundraiserId: "7", supporterMessage: "", showName: "false", showAmount: "true" });
+  });
+
+  it("still honours a choice sent by a page opened before the change", async () => {
+    await run({ ...gift, fundraiserId: 7, showName: true });
+    expect(lastParams().metadata).toMatchObject({ showName: "true" });
   });
 
   it.each([

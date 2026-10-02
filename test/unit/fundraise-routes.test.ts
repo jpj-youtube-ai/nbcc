@@ -218,8 +218,8 @@ describe("a fundraiser's page", () => {
     const body = res.body as { wall: unknown[]; giving: unknown; meter: { raisedPence: number } };
     // The hidden message is gone; the gift itself stays.
     expect(body.wall).toEqual([
-      { name: "Hidden P.", amountPence: 100, message: null, createdAt: "2026-10-02T13:00:00.000Z" },
-      { name: "Alex E.", amountPence: 5000, message: "Go Sam", createdAt: "2026-10-02T12:00:00.000Z" },
+      { name: "Hidden P.", amountPence: 100, giftAidPence: null, message: null, createdAt: "2026-10-02T13:00:00.000Z" },
+      { name: "Alex E.", amountPence: 5000, giftAidPence: null, message: "Go Sam", createdAt: "2026-10-02T12:00:00.000Z" },
     ]);
     expect(body.giving).toEqual({ fundraiserId: 9, minimumPence: 200 });
   });
@@ -229,10 +229,19 @@ describe("a fundraiser's page", () => {
     ["it is not approved yet", record({ status: "new" })],
     ["it is private", record({ public: false })],
     ["it is an event, with no page", record({ path: "event" })],
-    ["it has finished", record({ status: "finished" })],
+    ["it was declined", record({ status: "declined" })],
   ])("is a 404 when %s", async (_why, found) => {
     db.getBySlug.mockResolvedValue(found);
     expect((await run(getFundraiserPage, { params: { slug: "x" } })).statusCode).toBe(404);
+  });
+
+  // TASK-502: a finished fundraiser keeps its page, saying so, and still takes gifts.
+  it("is there when it has finished, saying so", async () => {
+    db.getBySlug.mockResolvedValue(record({ status: "finished" }));
+    db.wallRows.mockResolvedValue([]);
+    const res = await run(getFundraiserPage, { params: { slug: "sams-sponsored-walk" } });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { finished: boolean }).finished).toBe(true);
   });
 
   it("is a 404 while fundraising is off, even when approved", async () => {

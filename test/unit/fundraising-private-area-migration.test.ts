@@ -44,10 +44,10 @@ describe("the private area migration", () => {
   const tableCols = (name: string) => (tables.find((t) => t.args[0] === name)?.args[1] ?? {}) as Record<string, Col>;
   const adds = calls.filter((c) => c.op === "addColumns");
 
-  it("sorts after everything already on main, and last", () => {
+  // It sorted last when it merged; later migrations (TASK-502 on) sort after it, as they must.
+  it("sorts after everything that was on main before it", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
     expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000040_fundraiser-sign-up-details.js"));
-    expect(all[all.length - 1]).toBe(NAME);
   });
 
   it("keeps one sign in code per email, as a hash, with an expiry and a count of tries", () => {

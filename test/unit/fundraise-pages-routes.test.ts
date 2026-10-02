@@ -16,6 +16,8 @@ const state = vi.hoisted(() => ({
   fundraisingOn: true,
   fundraisers: [] as unknown[],
   wall: [] as unknown[],
+  gift: null as unknown,
+  giftFails: false,
 }));
 
 vi.mock("../../src/db/ball", () => ({
@@ -36,6 +38,10 @@ vi.mock("../../src/db/fundraisers", () => ({
   listApprovedPublic: async () => state.fundraisers,
   getBySlug: async (slug: string) => (state.fundraisers as FundraiserRecord[]).find((f) => f.slug === slug) ?? null,
   wallRows: async () => state.wall,
+  giftForSession: async () => {
+    if (state.giftFails) throw new Error("database down");
+    return state.gift;
+  },
 }));
 vi.mock("../../src/fundraising/send", () => ({
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
@@ -97,6 +103,8 @@ beforeEach(() => {
   state.fundraisingOn = true;
   state.fundraisers = [record()];
   state.wall = [];
+  state.gift = null;
+  state.giftFails = false;
 });
 
 const get = (path: string) => fetch(`${base}${path}`, { redirect: "manual" });
@@ -256,11 +264,11 @@ describe("the QR code", () => {
   });
 
   // TASK-501 review: a finished fundraiser's organiser keeps their QR code in the private area.
-  // The page itself is still hidden once finished (stage 1); only the code's address answers.
-  it("still answers once the fundraiser has finished, while its page does not", async () => {
+  // TASK-502: and the page it points to stays up too, still taking gifts.
+  it("still answers once the fundraiser has finished, as its page does", async () => {
     state.fundraisers = [record({ status: "finished" })];
     expect((await get("/fundraise/robins-santa-dash/qr.svg")).status).toBe(200);
-    expect((await get("/fundraise/robins-santa-dash")).status).toBe(404);
+    expect((await get("/fundraise/robins-santa-dash")).status).toBe(200);
   });
 
   it.each(["new", "declined"] as const)("is a 404 while %s", async (status) => {
@@ -366,5 +374,102 @@ describe("review fixes", () => {
     expect(html).toContain("data-thanks-panel");
     expect(html).toContain("Your message will appear on the wall shortly.");
     expect(await (await get("/fundraise/robins-santa-dash")).text()).not.toContain("data-thanks-panel");
+  });
+});
+
+// --- TASK-502 ------------------------------------------------------------------------------------
+
+describe("a finished fundraiser's page (TASK-502)", () => {
+  it("stays at the same address, saying so, with its total, its meter, its wall and the give form", async () => {
+    state.fundraisers = [record({ status: "finished" })];
+    state.wall = [
+      { donationId: 1, fullName: "Alex Example", anonymous: false, showName: true, showAmount: true, amountPence: 2000, refundedPence: 0, message: "Well done", hidden: false, createdAt: "2026-10-01T10:00:00.000Z", giftAid: true },
+    ];
+    const res = await get("/fundraise/robins-santa-dash");
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Finished, thank you");
+    expect(html).toContain("<strong>£125</strong>");
+    expect(html).toContain('aria-valuenow="50"');
+    expect(html).toContain("You can still give");
+    expect(html).toContain('id="frGiveForm"');
+    expect(html).toContain("Well done");
+    expect(html).toContain("+ £5 Gift Aid");
+  });
+
+  it("is not listed on Get involved", async () => {
+    state.fundraisers = [record({ status: "finished" })];
+    const html = await (await get("/get-involved")).text();
+    expect(html).not.toContain("Robin&#39;s Santa Dash");
+  });
+
+  it("is still a 404 for one that is new or declined", async () => {
+    for (const status of ["new", "declined"] as const) {
+      state.fundraisers = [record({ status })];
+      expect((await get("/fundraise/robins-santa-dash")).status, status).toBe(404);
+    }
+  });
+});
+
+describe("the thank you after paying (TASK-502)", () => {
+  const SESSION = "cs_test_a1B2c3D4e5F6";
+  const paidGift = (over: Record<string, unknown> = {}) => ({
+    donationId: 55, fundraiserId: 7, paidIn: false, paymentStatus: "paid", message: null, wallAddedAt: null, ...over,
+  });
+
+  it("offers the optional wall step for this fundraiser's paid gift, kept private", async () => {
+    state.gift = paidGift();
+    const res = await get(`/fundraise/robins-santa-dash?thanks=1&session_id=${SESSION}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("data-wall-step");
+    expect(html).toContain(`data-session-id="${SESSION}"`);
+    expect(html).toContain("(optional)");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("referrer-policy")).toBe("same-origin");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+
+  it("offers it while the webhook has not recorded the payment yet", async () => {
+    state.gift = null;
+    expect(await (await get(`/fundraise/robins-santa-dash?thanks=1&session_id=${SESSION}`)).text()).toContain("data-wall-step");
+  });
+
+  it("is the plain thank you for a gift already added to, or on another fundraiser, or paid in", async () => {
+    for (const over of [{ wallAddedAt: "2026-10-02T10:00:00.000Z" }, { message: "Hello" }, { fundraiserId: 8 }, { paidIn: true }, { paymentStatus: "failed" }]) {
+      state.gift = paidGift(over);
+      const res = await get(`/fundraise/robins-santa-dash?thanks=1&session_id=${SESSION}`);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      const html = await res.text();
+      expect(html, JSON.stringify(over)).toContain("data-thanks-panel");
+      expect(html, JSON.stringify(over)).not.toContain("data-wall-step");
+    }
+  });
+
+  it("is the plain thank you without a session id, or with one that is not Stripe's", async () => {
+    for (const q of ["?thanks=1", "?thanks=1&session_id={CHECKOUT_SESSION_ID}", "?thanks=1&session_id=%22%3E%3Cscript%3E", "?thanks=1&session_id=cs_a&session_id=cs_b"]) {
+      const html = await (await get(`/fundraise/robins-santa-dash${q}`)).text();
+      expect(html, q).toContain("data-thanks-panel");
+      expect(html, q).not.toContain("data-wall-step");
+      expect(html, q).not.toContain("<script>");
+    }
+  });
+
+  it("is the plain thank you when the gift cannot be read", async () => {
+    state.giftFails = true;
+    const html = await (await get(`/fundraise/robins-santa-dash?thanks=1&session_id=${SESSION}`)).text();
+    expect(html).toContain("data-thanks-panel");
+    expect(html).not.toContain("data-wall-step");
+  });
+
+  it("is the plain thank you for a gift that already left a message on the give form", async () => {
+    const html = await (await get(`/fundraise/robins-santa-dash?thanks=1&message=1&session_id=${SESSION}`)).text();
+    expect(html).toContain("Your message will appear on the wall shortly.");
+    expect(html).not.toContain("data-wall-step");
+  });
+
+  it("thanks them once they have added to the wall", async () => {
+    const html = await (await get("/fundraise/robins-santa-dash?thanks=1&added=1")).text();
+    expect(html).toContain("We have added that to Robin's wall.");
   });
 });

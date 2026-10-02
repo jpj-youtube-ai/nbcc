@@ -1325,7 +1325,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraise` | **implemented** | TASK-493 (community fundraising sign up; honeypot, per IP limit and Turnstile like the contact form; refused while fundraising is switched off. Shapes: **Community fundraising (TASK-493)**) |
 | `GET /api/fundraise/captcha` | **implemented** | TASK-493 (the sign up form's Turnstile site key, or `null`) |
 | `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
-| `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless approved, public, raising money and switched on) |
+| `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless public, raising money, approved or (TASK-502) finished, and switched on) |
+| `POST /api/fundraisers/:slug/wall-message` | **implemented** | TASK-502 (the giver's message and wall choices, added from the thank you after paying, tied to the paid Stripe checkout session, once. Shapes: **Community fundraising, giving (TASK-502)**) |
 | `POST /api/fundraise/manage/request` | **implemented** | TASK-501 (emails an organiser a 6 digit sign in code for their private area; always the same answer, sent before looking; was TASK-493's 24 hour link) |
 | `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
 | `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details) |
@@ -1397,7 +1398,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
 | `GET /fundraise/manage` | **implemented** | TASK-501 (the organiser's private area, signed in with an emailed code; was TASK-494's `?token=` link page; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
 | `GET /fundraise/help` | **implemented** | TASK-498 (Fundraising help, a draft for sign off: ideas from A to Z, paying in, Gift Aid, staying safe and legal in Scotland, using our logo; indexed and in the site maps like `/fundraise`; 404 while fundraising is switched off; registered before `/fundraise/:slug`, and `help` is a reserved slug) |
-| `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on. `?thanks=1` (and `&message=1`) shows the thank you a giver comes back to after paying) |
+| `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless public, raising money, approved or (TASK-502) finished, and switched on. `?thanks=1` shows the thank you a giver comes back to after paying; TASK-502: with `&session_id=` it offers the optional step to add to the wall, served `no-store`, `noindex` and `Referrer-Policy: same-origin`; `&added=1` thanks them for it) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
@@ -7143,7 +7144,7 @@ is listed, every page is a 404, and the private area is closed, until an admin s
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js` |
 
 ### Data
 
@@ -7259,18 +7260,20 @@ paths, an event dropping off the day after its date. A **Card** is:
   "cardLine", "endTime", "timeTbc", "venueAddress", "venuePostcode", "access", "price", "booking",
   "ticketUrl", "ageLimit", "dressCode", "included",   // TASK-499: the event answers, for its card
   "meter": { "raisedPence": 6000, "onlinePence": 5000, "cashPence": 1000, "targetPence": 25000 | null,
-             "percent": 24 | null, "barPercent": 24 | null, "overTarget": false }
+             "percent": 24 | null, "barPercent": 24 | null, "overTarget": false,
+             "giftAidPence": 1250 }    // TASK-502: shown under the total, never part of it
 }
 ```
 
 No email, phone, posting address or social link is ever in a public answer.
 
 **`GET /api/fundraisers/:slug`**: a Card plus
-`"wall": [{ "name": "Alex E." | "Anonymous", "amountPence": 2500 | null, "message": "..." | null, "createdAt": "ISO" }]`
+`"wall": [{ "name": "Alex E." | "Anonymous", "amountPence": 2500 | null, "giftAidPence": 625 | null, "message": "..." | null, "createdAt": "ISO" }]`
 (newest first, every entry; the page shows the top 10 then Show all; a message staff hid shows as
 `message: null` with the gift kept; a gift refunded in full never appears; a giver whose details were
-redacted at the end of retention shows as Anonymous) and `"giving": { "fundraiserId": 9, "minimumPence": 200 }`. `404`
-unless approved, public, raising money and switched on.
+redacted at the end of retention shows as Anonymous) and `"giving": { "fundraiserId": 9, "minimumPence": 200 }`,
+and (TASK-502) `"finished": true | false`. `404` unless public, raising money, approved or finished,
+and switched on.
 
 **Managing a fundraiser** is the private area since TASK-501: signing in with an emailed code,
 then asking for changes (all 19 editable fields, the event details included, each waiting for staff
@@ -7283,15 +7286,17 @@ TASK-493 link routes (`/api/fundraise/manage/:token`) answer `410`.
 
 `POST /api/checkout-session` takes four more optional fields: `fundraiserId` (positive integer),
 `supporterMessage` (up to 200, held to the supporters wall's word check: `400` with "Please choose
-different words for your message on the supporter wall."), `showName` and `showAmount` (both default
-true). With
+different words for your message on the supporter wall."), `showName` (default **false** since
+TASK-502) and `showAmount` (default true). Since TASK-502 the give form sends only `fundraiserId`:
+the message and the choices are added after paying (see **Community fundraising, giving
+(TASK-502)**); the other three are still taken from a page opened before then. With
 `fundraiserId` the gift must be one off (`mode: "once"`) and at least 200 pence, and the four are
 stamped on the Stripe metadata. **Without `fundraiserId` nothing changes**: the other three are
 dropped and the session is exactly what the donate page always got (tested). Everything else
 (Gift Aid, the card fee, the newsletter tick box, email, name) is the donate page's.
 
 The webhook links the gift (`donations.fundraiser_id`, message, choices) **only if the id names an
-approved fundraiser**, in the same transaction as the donation, and audits
+approved or (TASK-502) finished fundraiser**, in the same transaction as the donation, and audits
 `fundraiser.gift_received`. Anything else is an ordinary donation with no message, audited as
 `fundraiser.gift_not_linked`.
 
@@ -7613,8 +7618,9 @@ organiser with more than one fundraiser sees them all. A Sign out button ends it
 organiser out. A finished one is listed as "Finished. Thank you for everything you raised." with its
 gifts and messages, its QR code and "Pay in what you collected", so late money still reaches it. It
 takes no more changes ("Your fundraiser is finished. To change anything, get in touch.", and the
-edit route answers `410` with the same words) and has no "I've finished". Stage 1 still hides a
-finished fundraiser's public page; only its QR code address keeps answering, for the private area.
+edit route answers `410` with the same words) and has no "I've finished". Since TASK-502 a finished
+fundraiser keeps its public page (and its QR code), still taking gifts: see **Community
+fundraising, giving (TASK-502)**.
 
 **Inside, for each of their approved or finished fundraisers:** where it is up to and its public page link
 (when it has one); its QR code (an `<img>` of `/fundraise/<slug>/qr.svg` with a download link,
@@ -7759,6 +7765,80 @@ answer for an unknown email, limits, cookie flags, a planted session ended, two 
 sign in, see only your own, ask for a change, someone else's is a 404, sign out; an unknown email
 gets the same answer and no email; a wrong code sets no cookie) and `fundraising-pages.feature` (no
 QR code on the page, the manage line).
+
+## Community fundraising, giving (TASK-502)
+
+Section 4 and "Finishing" in section 5 of
+`docs/superpowers/specs/2026-10-02-fundraising-stage-1b-part-1-design.md`. Three changes to giving
+on a fundraiser's page. Donate, the Ball and the admin are untouched (a donate page gift's Stripe
+session and receipt are pinned field for field: `test/unit/donate-checkout-pinned.test.ts`).
+
+**Gift Aid shown, never counted.** A gift that claimed Gift Aid shows it beside its amount on the
+supporter wall, "£20 + £5 Gift Aid", only when the amount is shown (a hidden amount never shows it;
+money paid in is never on the wall). Under the meter's total: "+ £45 Gift Aid", the Gift Aid on every
+paid online gift that claimed it, each on what is left after any refund, never on money the organiser
+paid in; no line at all when it is nothing. It is the basic rate value: a quarter of the gift,
+rounded **down** to whole pence per gift so it is never overstated (`giftAidPence`,
+`giftAidOnGifts` in `src/fundraising/model.ts`; the same sum in SQL, `GIFT_AID_SQL` in
+`src/db/fundraisers.ts`). The raised figure, the target and the percentage are exactly as before. The
+fundraiser cards on Get involved show the same line under their meter.
+
+**The message after paying.** The give form now asks only what the donate page asks (amount, Gift
+Aid, the card fee, name, email, the newsletter tick box). The giver comes back to
+`/fundraise/<slug>?thanks=1&session_id={CHECKOUT_SESSION_ID}` (Stripe fills in the paid session's id;
+`fundraiserReturnUrls` in `src/routes/api.ts`). The thank you then offers an optional step, clearly
+marked optional: "Add a message to Robin's wall (optional)", a message box (200 characters, the
+same rude words check), "Show my name" (chosen) or "Stay anonymous", "Show how much I gave" (ticked),
+"Add to the wall" and "No thanks" (which simply closes it). Until a giver chooses, their gift shows on
+the wall as **Anonymous with its amount** (the checkout now stamps `showName: false` when it is not
+sent): they never saw a name choice before paying, so their name is never shown without it.
+
+How the step is tied to the payment:
+
+- The page shows the step only when `session_id` looks like Stripe's (`cs_` and letters, digits and
+  underscores) and the gift recorded for it can still take one, or is not recorded yet; otherwise,
+  or if the gift cannot be read, it is the plain thank you. A page opened before TASK-502 that sent a
+  message with the gift (`&message=1`) gets the plain thank you too.
+- The page's script takes the id out of the address bar as soon as it loads (it becomes
+  `?thanks=1`), so it is never copied, shared, bookmarked or kept in the history; the page is served
+  `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: same-origin`.
+- **`POST /api/fundraisers/:slug/wall-message`** `{ sessionId, message?, showName?, showAmount? }`
+  (both choices default true, as the give form's did) checks, under the gift's row lock, that the
+  donation the webhook recorded for that session is on **this** fundraiser, has gone through (a
+  Direct Debit still settling is allowed: the wall shows a gift only once it is paid), is not money
+  the organiser paid in, and has never been added to (`donations.wall_added_at` is empty, and it
+  carries no message from the old give form). It saves once, sets `wall_added_at`, and audits
+  `fundraiser.wall_message_added` (actor `giver`). The giver cannot change it afterwards; staff can
+  still hide the message as before.
+- Answers: `200 { status: "added", entry }` (what the wall now shows for that gift; the page then
+  reopens at `?thanks=1&added=1`); `400 { error, fields }` (no or a made up session id, over 200
+  characters, or rude words, beside the message box); `404` for another fundraiser's gift, money paid
+  in, an unknown session, or a fundraiser with no page (never saying which, or whose); `409 { code:
+  "already" }` for a second time; `409 { code: "unpaid" }` for a payment that failed. Before the
+  webhook has recorded the payment, Stripe is asked: a completed session for this fundraiser (not a
+  pay in) is `409 { code: "confirming", error: "Your payment is still being confirmed. Please try
+  again in a moment." }`, anything else `404`, and Stripe out of reach `503`.
+- Refused unless it comes from our own page (`Sec-Fetch-Site` or `Origin`, as the private area).
+  Limited to 10 in 15 minutes from one address and 5 for one session (loopback exempt, for the BDD
+  suite). Nothing about the giver is ever returned beyond what the wall shows; never an email.
+
+Old gifts keep their messages, and a gift that left a message on the old give form can take no
+other. Migration `1791200000060_fundraising-wall-after-paying.js` adds the one nullable column,
+`donations.wall_added_at`.
+
+**Finished pages still take gifts** (Jaimie: "the link for giving works indefinitely"). A finished
+fundraiser that had a page (public, raising money) keeps it at the same address (`hasPage` is now
+approved **or** finished), with a "Finished, thank you" box giving the total raised, the meter, the
+wall, and the give form under "You can still give". Gifts there link to it and count on its meter
+(`linkFundraiserGift`: approved or finished, for supporters' gifts as for pay ins), and come back to
+its thank you. It is **not** listed on Get involved (`isListed` is still approved only). New and
+declined sign ups are still a 404. Its organiser's private area now links the page, and an update
+staff approve for it says "Your update is live", as the page is up.
+
+Tests: `fundraising-giving.test.ts` (the sums, the rules, the drawn page), `fundraising-giving-db.test.ts`
+(the SQL), `fundraise-wall-message.test.ts` (the endpoint), `fundraising-giving-migration.test.ts`,
+`donate-checkout-pinned.test.ts`, and updates to the page, route, checkout and contract tests; BDD
+`features/fundraising-giving.feature`.
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

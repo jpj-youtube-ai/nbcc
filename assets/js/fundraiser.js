@@ -3,9 +3,12 @@
 // The page itself is drawn by the server and reads fine without this file. This adds:
 //   - the give form: an amount (presets or your own, the smallest set by the server), the donate
 //     page's Gift Aid and card fee offers, then the donate page's checkout: POST /api/checkout-session
-//     with the same body the donate page sends for a one off gift, plus fundraiserId, the message and
-//     the two wall choices. Stripe opens on the page when it can and on Stripe's own page when it
-//     cannot, exactly as on the donate page (assets/js/main.js startCheckout);
+//     with the same body the donate page sends for a one off gift, plus fundraiserId. Stripe opens on
+//     the page when it can and on Stripe's own page when it cannot, exactly as on the donate page
+//     (assets/js/main.js startCheckout);
+//   - TASK-502: the thank you after paying: the payment's id comes out of the address bar at once,
+//     and the optional step to add a message and the wall choices is sent to
+//     POST /api/fundraisers/<slug>/wall-message (the message and choices left the give form);
 //   - the supporter wall: the newest ten, then Show all grows the page with the rest;
 //   - the copy link button, shown only where copying works.
 //
@@ -78,8 +81,6 @@
     var nonUk = doc.getElementById("frNonUk");
     var postcodeField = doc.getElementById("frPostcodeField");
     var postcode = doc.getElementById("frPostcode");
-    var message = doc.getElementById("frMessage");
-    var messageCount = form.querySelector("[data-message-count]");
     var headline = form.querySelector("[data-giftaid-headline]");
     var feeText = form.querySelector("[data-cover-fee-amount]");
     var busy = false;
@@ -118,10 +119,6 @@
       if (postcode) {
         postcode.disabled = abroad;
         postcode.required = !abroad;
-      }
-      if (messageCount && message) {
-        var left = 200 - message.value.length;
-        messageCount.textContent = message.value ? (left === 1 ? "1 character left." : left + " characters left.") : "Up to 200 characters.";
       }
     }
 
@@ -190,11 +187,7 @@
         email: val("frEmail"),
         emailConsent: checked("frEmailConsent"),
         fundraiserId: fundraiserId,
-        showName: !checked("frShowNameNo"),
-        showAmount: checked("frShowAmount"),
       };
-      var words = val("frMessage");
-      if (words) body.supporterMessage = words;
       if (body.giftAid) {
         var abroad = checked("frNonUk");
         body.declaration = {
@@ -209,7 +202,7 @@
       }
       // Keys in the order the donate page sends them, then the fundraiser's; tidy for anyone reading.
       var ordered = {};
-      ["mode", "plan", "amount", "giftAid", "coverFee", "donorType", "fullName", "email", "emailConsent", "declaration", "fundraiserId", "supporterMessage", "showName", "showAmount"].forEach(function (k) {
+      ["mode", "plan", "amount", "giftAid", "coverFee", "donorType", "fullName", "email", "emailConsent", "declaration", "fundraiserId"].forEach(function (k) {
         if (Object.prototype.hasOwnProperty.call(body, k)) ordered[k] = body[k];
       });
       return ordered;
@@ -246,25 +239,10 @@
         });
     }
 
-    // The server's word on the message (the core checks it the way the donate page checks a name on
-    // the supporters wall): beside the message box. Anything else: a plain line at the top.
-    function refusal(data) {
-      var fromFields = data.fields && data.fields.supporterMessage;
-      var fe = data.details && data.details.fieldErrors;
-      var fromDetails = fe && fe.supporterMessage && fe.supporterMessage[0];
-      var text = fromFields || fromDetails;
-      if (text && message) {
-        validate([{ control: message, message: text }]);
-        return;
-      }
-      showError(MSG.refused);
-    }
-
     function handle(r) {
       if (r.status === 200) return true;
       setBusy(false);
-      if (r.status === 400) refusal(r.data);
-      else showError(MSG.down);
+      showError(r.status === 400 ? MSG.refused : MSG.down);
       return false;
     }
 
@@ -449,8 +427,19 @@
     return { buttons: buttons };
   }
 
-  // Back from paying: the thank you takes focus, so a screen reader hears it first.
-  function initThanks(doc) {
+  // Back from paying: the thank you takes focus, so a screen reader hears it first. TASK-502: the
+  // payment's id (session_id, which Stripe filled in) comes straight out of the address bar, so it is
+  // never copied, shared, bookmarked or kept in the history. The page keeps it for the wall step, and
+  // a reload is the plain thank you.
+  function initThanks(doc, win) {
+    var loc = win && win.location;
+    if (loc && /[?&]session_id=/.test(String(loc.search || "")) && win.history && typeof win.history.replaceState === "function") {
+      try {
+        win.history.replaceState(null, "", loc.pathname + "?thanks=1");
+      } catch (e) {
+        /* the address stays as it is */
+      }
+    }
     var panel = doc.querySelector("[data-thanks-panel]");
     if (!panel) return null;
     try {
@@ -461,12 +450,148 @@
     return panel;
   }
 
+  // --- the optional step after paying (TASK-502) ---------------------------------------------------
+  // A message for the wall, and whether to show their name and the amount, tied to the payment by its
+  // checkout session id. The server checks everything again; this only sends it and says what it says.
+  var WALL_MSG = {
+    sending: "Adding…",
+    down: "We could not reach the wall just now. Please try again in a moment.",
+    refused: "Please check your message and try again.",
+  };
+
+  function initWallStep(doc, win, nav) {
+    var step = doc.querySelector("[data-wall-step]");
+    var form = doc.getElementById("frWallForm");
+    if (!step || !form) return null;
+    nav = nav || { assign: function (u) { win.location.href = u; } };
+    var slug = step.getAttribute("data-slug") || "";
+    var sessionId = step.getAttribute("data-session-id") || "";
+    var message = doc.getElementById("frMessage");
+    var count = form.querySelector("[data-message-count]");
+    var error = form.querySelector("[data-wall-error]");
+    var submit = form.querySelector("[data-wall-submit]");
+    var skip = form.querySelector("[data-wall-skip]");
+    var busy = false;
+    step.hidden = false;
+
+    function counted() {
+      if (!count || !message) return;
+      var left = 200 - message.value.length;
+      count.textContent = message.value ? (left === 1 ? "1 character left." : left + " characters left.") : "Up to 200 characters.";
+    }
+    if (message) message.addEventListener("input", counted);
+    counted();
+    growTextareas(form);
+
+    function showError(text) {
+      if (!error) return;
+      error.textContent = text;
+      error.hidden = false;
+      error.setAttribute("tabindex", "-1");
+      try {
+        error.focus();
+      } catch (e) {
+        /* focus unavailable */
+      }
+    }
+
+    function setBusy(on) {
+      busy = on;
+      if (!submit) return;
+      submit.disabled = on;
+      submit.textContent = on ? WALL_MSG.sending : "Add to the wall";
+    }
+
+    function checked(id) {
+      var e = doc.getElementById(id);
+      return !!(e && e.checked);
+    }
+
+    // The server's word on the message itself goes beside the box, the donate page's way when its
+    // shared field highlighting is there; anything else is the line at the top of the step.
+    function refusal(data) {
+      var text = data && data.fields && data.fields.message;
+      var shared = win.NBCCFormValidation;
+      if (text && message && shared && typeof shared.validateForm === "function") {
+        shared.validateForm(form, {
+          summary: error,
+          extraChecks: function () {
+            return [{ control: message, message: text }];
+          },
+        });
+        return;
+      }
+      showError(text || (data && data.error) || WALL_MSG.refused);
+    }
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      if (busy) return;
+      if (error) error.hidden = true;
+      if (typeof win.fetch !== "function") return showError(WALL_MSG.down);
+      setBusy(true);
+      var body = {
+        sessionId: sessionId,
+        message: message ? String(message.value || "").trim() : "",
+        showName: !checked("frShowNameNo"),
+        showAmount: checked("frShowAmount"),
+      };
+      win
+        .fetch("/api/fundraisers/" + encodeURIComponent(slug) + "/wall-message", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        })
+        .then(function (res) {
+          return res.json().then(
+            function (data) {
+              return { status: res.status, data: data || {} };
+            },
+            function () {
+              return { status: res.status, data: {} };
+            },
+          );
+        })
+        .then(function (r) {
+          if (r.status === 200) {
+            // Saved: the page again, with the thank you and the wall as it now is.
+            nav.assign("/fundraise/" + encodeURIComponent(slug) + "?thanks=1&added=1");
+            return;
+          }
+          setBusy(false);
+          if (r.status === 400) return refusal(r.data);
+          showError((r.data && r.data.error) || WALL_MSG.down);
+        })
+        .catch(function () {
+          setBusy(false);
+          showError(WALL_MSG.down);
+        });
+    });
+
+    // No thanks: the step simply closes, and the thank you keeps the focus.
+    if (skip) {
+      skip.addEventListener("click", function () {
+        step.hidden = true;
+        var panel = doc.querySelector("[data-thanks-panel]");
+        if (panel) {
+          try {
+            panel.focus({ preventScroll: true });
+          } catch (e) {
+            /* focus unavailable */
+          }
+        }
+      });
+    }
+    return { step: step };
+  }
+
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initGiveForm: initGiveForm, initWall: initWall, initShare: initShare, initThanks: initThanks };
+    module.exports = { initGiveForm: initGiveForm, initWall: initWall, initShare: initShare, initThanks: initThanks, initWallStep: initWallStep };
   } else {
     initGiveForm(document, window);
     initWall(document);
     initShare(document, window);
-    initThanks(document);
+    initThanks(document, window);
+    initWallStep(document, window);
   }
 })();

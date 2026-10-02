@@ -22,6 +22,9 @@ import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
 //   - A fundraiser's own page (/fundraise/<slug>): the story, the meter, the give form, the
 //     supporter wall and the share links. (TASK-501 moved its QR code to the organiser's private
 //     area; /fundraise/<slug>/qr.svg still answers, it is just not shown or linked here.)
+//     TASK-502: Gift Aid shown beside a gift and under the meter (never counted); the message and
+//     the wall choices moved from the give form to an optional step on the thank you after paying;
+//     and a finished fundraiser keeps its page, saying so, with "You can still give".
 //   - The sign up page (/fundraise): the form, or a gentle "not open yet" while switched off.
 //
 // Pure: no database, no config, no clock (the time is passed in). Everything a person typed is
@@ -93,10 +96,14 @@ const ICON = {
 export function renderMeter(m: Meter, opts: { large?: boolean } = {}): string {
   const raised = formatPounds(m.raisedPence);
   const size = opts.large ? " fr-meter--large" : "";
+  // TASK-502: the Gift Aid on the gifts, under the total. Shown only: never in the raised figure, the
+  // target or the percentage. No line at all when there is none.
+  const giftAid = m.giftAidPence > 0 ? `<p class="fr-meter__giftaid">+ ${formatPounds(m.giftAidPence)} Gift Aid</p>` : "";
   if (m.targetPence === null || m.percent === null || m.barPercent === null) {
     return (
       `<div class="fr-meter fr-meter--open${size}">` +
       `<p class="fr-meter__figures"><span class="fr-meter__raised">${raised}</span> raised</p>` +
+      giftAid +
       "</div>"
     );
   }
@@ -107,6 +114,7 @@ export function renderMeter(m: Meter, opts: { large?: boolean } = {}): string {
     `<div class="fr-meter${m.overTarget ? " is-over" : ""}${size}">` +
     `<p class="fr-meter__figures"><span class="fr-meter__raised">${raised}</span> raised` +
     `<span class="fr-meter__target"> of ${target}</span></p>` +
+    giftAid +
     `<div class="fr-meter__bar" role="progressbar" aria-label="Money raised" aria-valuemin="0" aria-valuemax="100"` +
     ` aria-valuenow="${m.barPercent}" aria-valuetext="${escapeHtml(words)}">` +
     `<span class="fr-meter__fill" style="width:${m.barPercent}%"></span></div>` +
@@ -372,7 +380,11 @@ function renderWallItem(w: WallEntry, i: number, now: Date): string {
     `<li class="fr-wall__item"${more}${i === WALL_FIRST ? ' tabindex="-1"' : ""}>` +
     '<p class="fr-wall__head">' +
     `<span class="fr-wall__who">${escapeHtml(w.name)}</span>` +
-    (w.amountPence !== null ? `<span class="fr-wall__amount">${formatPounds(w.amountPence)}</span>` : "") +
+    (w.amountPence !== null
+      ? `<span class="fr-wall__amount">${formatPounds(w.amountPence)}` +
+        (w.giftAidPence ? ` <span class="fr-wall__giftaid">+ ${formatPounds(w.giftAidPence)} Gift Aid</span>` : "") +
+        "</span>"
+      : "") +
     "</p>" +
     (w.message ? `<p class="fr-wall__msg">${escapeHtml(w.message)}</p>` : "") +
     `<p class="fr-wall__when"><time datetime="${escapeHtml(w.createdAt)}">${timeAgo(w.createdAt, now)}</time></p>` +
@@ -422,8 +434,11 @@ function renderShare(p: PublicPage, pageUrl: string): string {
   );
 }
 
+/** The organiser's first name, for "Robin's total" and "Robin's wall". */
+const firstName = (p: PublicCard) => escapeHtml(p.organisedBy.split(" ")[0]);
+
 function renderGiveForm(p: PublicPage): string {
-  const first = escapeHtml(p.organisedBy.split(" ")[0]);
+  const first = firstName(p);
   const presets = PRESETS_PENCE.map(
     (pence) =>
       `<label class="fr-amount"><input type="radio" name="frAmount" value="${pence}" />` +
@@ -433,8 +448,11 @@ function renderGiveForm(p: PublicPage): string {
   return (
     '<section class="fr-give" id="give" aria-labelledby="fr-give-heading" tabindex="-1">' +
     '<div class="card card-lg give-card fr-give-card"><div class="give-main">' +
-    `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-    `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${first}'s total.</p>` +
+    (p.finished
+      ? '<h2 class="give-step-title" id="fr-give-heading">You can still give</h2>' +
+        `<p class="give-step-sub">Your donation goes to NBCC and still counts towards ${first}'s total for ${escapeHtml(p.title)}.</p>`
+      : `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
+        `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${first}'s total.</p>`) +
     // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
     '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate hidden data-needs-js>` +
@@ -467,22 +485,8 @@ function renderGiveForm(p: PublicPage): string {
     "</label></div>" +
     '<p class="give-field-help give-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>.</p>' +
     "</fieldset></div>" +
-    // 3. the wall
-    '<div class="give-question">' +
-    `<fieldset class="fr-fieldset"><legend class="give-scope-legend">On ${first}'s page</legend>` +
-    '<div class="give-field"><label for="frMessage">A message for the supporters wall <span class="give-optional">(optional)</span></label>' +
-    '<textarea class="give-field-input fr-message" id="frMessage" name="frMessage" rows="3" maxlength="200" aria-describedby="frMessageCount"></textarea>' +
-    '<p class="give-field-help" id="frMessageCount" data-message-count>Up to 200 characters.</p></div>' +
-    '<div class="give-donor-options fr-choice" role="radiogroup" aria-label="Your name on the page">' +
-    // The whole pill is the label, so a tap anywhere on it chooses (the donate page's look).
-    '<label class="give-donor-option" for="frShowNameYes"><input id="frShowNameYes" name="frShowName" type="radio" value="yes" checked />Show my name</label>' +
-    '<label class="give-donor-option" for="frShowNameNo"><input id="frShowNameNo" name="frShowName" type="radio" value="no" />Stay anonymous</label>' +
-    "</div>" +
-    '<p class="give-field-help">We show your first name and the first letter of your surname, like Robin T.</p>' +
-    '<label class="give-check" for="frShowAmount"><input class="give-check-box" id="frShowAmount" name="frShowAmount" type="checkbox" checked />' +
-    '<span class="give-check-text">Show how much I gave</span></label>' +
-    "</fieldset></div>" +
-    // 4. Gift Aid, the donate page's callout and declaration, one off wording
+    // (TASK-502: the message and the two wall choices moved to the thank you after paying.)
+    // 3. Gift Aid, the donate page's callout and declaration, one off wording
     '<div class="give-question">' +
     '<div class="giftaid">' +
     '<div class="giftaid-head"><strong class="giftaid-headline" data-giftaid-headline>Make your donation worth 25% more</strong>' +
@@ -507,7 +511,7 @@ function renderGiveForm(p: PublicPage): string {
     '<span class="give-check-text">My home address is outside the UK</span></label>' +
     "</fieldset>" +
     "</div>" +
-    // 5. the card fee
+    // 4. the card fee
     '<div class="give-question">' +
     '<label class="give-check" for="frCoverFee"><input class="give-check-box" id="frCoverFee" name="frCoverFee" type="checkbox" />' +
     '<span class="give-check-text"><strong>Add <span data-cover-fee-amount>a little</span> to cover the card fee.</strong> Card payments cost NBCC a small fee. Cover it and your donation funds our work rather than the card company. Gift Aid still applies to your donation only.</span></label>' +
@@ -541,21 +545,76 @@ export interface FundraiserPageOptions {
   now: Date;
   /**
    * A giver coming back from paying (?thanks=1, the return address the server gave Stripe): a thank
-   * you at the top, and whether they left a message for the wall (?message=1).
+   * you at the top. TASK-502: with the paid checkout session's id (?session_id=, which Stripe fills
+   * in), when the route has checked it may still add to the wall, it offers the optional step;
+   * `added` is the thank you after that step. `message` is for a gift made before TASK-502, whose
+   * message was left on the give form (?message=1).
    */
-  thanks?: { message: boolean };
+  thanks?: { message: boolean; sessionId?: string | null; added?: boolean };
+}
+
+/**
+ * TASK-502: the optional step after paying: a message for the wall, and the name and amount choices
+ * that were on the give form. Tied to the paid checkout session by its id; the server checks it all
+ * again when it is sent (POST /api/fundraisers/:slug/wall-message). Shipped hidden: the script that
+ * can send it shows it, so without JavaScript the thank you is simply the plain one.
+ */
+function renderWallStep(p: PublicPage, sessionId: string): string {
+  const first = firstName(p);
+  return (
+    `<section class="fr-after" data-wall-step data-slug="${escapeHtml(p.slug)}" data-session-id="${escapeHtml(sessionId)}" aria-labelledby="fr-after-heading" hidden>` +
+    `<h3 class="fr-after__title" id="fr-after-heading">Add a message to ${first}'s wall <span class="give-optional">(optional)</span></h3>` +
+    "<p>Only if you would like to. Your donation already counts, with or without one.</p>" +
+    '<form id="frWallForm" class="fr-after__form" novalidate>' +
+    '<p class="form-error-summary" role="alert" data-wall-error hidden></p>' +
+    '<div class="give-field"><label for="frMessage">Your message <span class="give-optional">(optional)</span></label>' +
+    '<textarea class="give-field-input fr-message" id="frMessage" name="frMessage" rows="3" maxlength="200" aria-describedby="frMessageCount"></textarea>' +
+    '<p class="give-field-help" id="frMessageCount" data-message-count>Up to 200 characters.</p></div>' +
+    '<div class="give-donor-options fr-choice" role="radiogroup" aria-label="Your name on the wall">' +
+    // The whole pill is the label, so a tap anywhere on it chooses (the donate page's look).
+    '<label class="give-donor-option" for="frShowNameYes"><input id="frShowNameYes" name="frShowName" type="radio" value="yes" checked />Show my name</label>' +
+    '<label class="give-donor-option" for="frShowNameNo"><input id="frShowNameNo" name="frShowName" type="radio" value="no" />Stay anonymous</label>' +
+    "</div>" +
+    '<p class="give-field-help">We show your first name and the first letter of your surname, like Robin T.</p>' +
+    '<label class="give-check" for="frShowAmount"><input class="give-check-box" id="frShowAmount" name="frShowAmount" type="checkbox" checked />' +
+    '<span class="give-check-text">Show how much I gave</span></label>' +
+    '<div class="fr-after__actions">' +
+    '<button class="btn btn-primary" type="submit" data-wall-submit>Add to the wall</button>' +
+    '<button class="btn btn-ghost fr-after__skip" type="button" data-wall-skip>No thanks</button>' +
+    "</div>" +
+    "</form>" +
+    "</section>"
+  );
 }
 
 /** The thank you a giver sees on coming back from paying, with the share links. */
-function renderThanks(p: PublicPage, pageUrl: string, message: boolean): string {
-  const first = escapeHtml(p.organisedBy.split(" ")[0]);
+function renderThanks(p: PublicPage, pageUrl: string, thanks: NonNullable<FundraiserPageOptions["thanks"]>): string {
+  const first = firstName(p);
+  const lead = thanks.added
+    ? `<p>We have added that to ${first}'s wall. <a href="#fr-wall-heading">See the wall</a></p>`
+    : `<p>${thanks.message ? "Your message will appear on the wall shortly. " : ""}Your donation will show on the meter shortly.</p>`;
   return (
     '<div class="fr-thanks-panel" data-thanks-panel data-copy-scope tabindex="-1">' +
     `<h2>Thank you for supporting ${escapeHtml(p.title)}.</h2>` +
-    `<p>${message ? "Your message will appear on the wall shortly. " : ""}Your donation will show on the meter shortly.</p>` +
+    lead +
+    (thanks.sessionId && !thanks.added ? renderWallStep(p, thanks.sessionId) : "") +
     `<p>Could you share the page too? Every share helps ${first} reach more people.</p>` +
     shareLinks(p, pageUrl) +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
+    "</div>"
+  );
+}
+
+/**
+ * TASK-502: a finished fundraiser keeps its page. It says so, with what was raised, and the give
+ * form stays below under "You can still give": the link on a poster or a post works for good.
+ */
+function renderFinished(p: PublicPage): string {
+  return (
+    '<div class="fr-finished">' +
+    '<h2 class="fr-finished__title">Finished, thank you</h2>' +
+    `<p>${firstName(p)} has finished fundraising, and together supporters raised <strong>${formatPounds(p.meter.raisedPence)}</strong> for NBCC. ` +
+    'Thank you to everyone who gave. <a href="#give">You can still give</a>.</p>' +
     "</div>"
   );
 }
@@ -576,12 +635,13 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     `<h1 id="fr-title">${escapeHtml(p.title)}</h1>` +
     '<div class="rule"><i></i></div>' +
     renderFacts(p) +
-    (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks.message) : "");
+    (p.finished ? renderFinished(p) : "") +
+    (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks) : "");
   const body =
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +
     renderMeter(p.meter, { large: true }) +
-    '<a class="btn btn-primary fr-summary__give" href="#give">Give to this fundraiser</a>' +
+    `<a class="btn btn-primary fr-summary__give" href="#give">${p.finished ? "You can still give" : "Give to this fundraiser"}</a>` +
     "</div>" +
     '<div class="fr-main">' +
     (p.imageSrc

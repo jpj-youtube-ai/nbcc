@@ -223,10 +223,11 @@ describe("a finished fundraiser, in the database", () => {
     expect(q.mock.calls.some((c) => String(c[0]).includes("paid_in_by_organiser = $5"))).toBe(true);
   });
 
-  it("does not put a supporter's gift on a finished page (stage 1 hides it)", async () => {
+  // TASK-502: a finished fundraiser keeps its page and its give form, so a gift there reaches it.
+  it("puts a supporter's gift on a finished page too, which still takes gifts", async () => {
     const { client, q } = fakeClient("finished");
-    expect(await linkFundraiserGift(client, 56, gift, "evt_gift")).toBe(false);
-    expect(q.mock.calls.some((c) => String(c[0]).startsWith("UPDATE donations"))).toBe(false);
+    expect(await linkFundraiserGift(client, 56, gift, "evt_gift")).toBe(true);
+    expect(q.mock.calls.some((c) => String(c[0]).startsWith("UPDATE donations SET fundraiser_id"))).toBe(true);
   });
 
   it.each(["declined", "new", null])("keeps the paid in mark on money paid in when the fundraiser is %s", async (status) => {

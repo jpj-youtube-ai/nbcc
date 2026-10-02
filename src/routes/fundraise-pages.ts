@@ -11,11 +11,13 @@ import { join } from "node:path";
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
 //   GET /fundraise/help            ideas, paying in, Gift Aid and staying safe (TASK-498); indexed
 //   GET /fundraise/:slug/qr.svg    the page's QR code, to download
-//   GET /fundraise/:slug           one fundraiser's page
+//   GET /fundraise/:slug           one fundraiser's page (TASK-502: a finished one keeps it, saying
+//                                  so, and still takes gifts; ?thanks=1&session_id= is the thank you
+//                                  after paying, with the optional step to add to the wall)
 //
 // Added to the site router (src/routes/site.ts) before its catch-all, so "not here" is the site's own
-// 404 page: anything that is not an approved, public, raising money fundraiser while fundraising is
-// switched on simply falls through to it. The database modules are imported lazily, like the rest of
+// 404 page: anything that is not a public, raising money fundraiser, approved or finished, while
+// fundraising is switched on simply falls through to it. The database modules are imported lazily, like the rest of
 // the site router, so it stays import safe for tests that never touch a database; and every failure
 // falls through too, so a broken read shows the 404 rather than a broken page.
 
@@ -44,6 +46,35 @@ async function publicFundraiser(slug: string) {
   const [{ getBySlug }, { hasPage }] = await Promise.all([import("../db/fundraisers"), import("../fundraising/model")]);
   const f = await getBySlug(slug);
   return f && hasPage(f) ? f : null;
+}
+
+/**
+ * TASK-502: the thank you after paying. With Stripe's checkout session id (?session_id=, which Stripe
+ * fills in on the way back), it offers the optional step to add to the wall, unless the gift that
+ * session paid for already cannot take one (wallStepVerdict): another fundraiser's, paid in, failed,
+ * or added to already. Not recorded yet is fine: the webhook may be a moment behind, and the step
+ * asks again when it is sent. Missing, not Stripe's, or unreadable: the plain thank you. A gift that
+ * left a message on the give form (?message=1, a page opened before TASK-502) has had its say.
+ * ?added=1 is the thank you once they have added to the wall.
+ */
+async function thanksFor(
+  query: Request["query"],
+  fundraiserId: number,
+): Promise<{ message: boolean; sessionId: string | null; added: boolean }> {
+  const message = query.message === "1";
+  const added = query.added === "1";
+  const id = query.session_id;
+  const base = { message, sessionId: null, added };
+  try {
+    const { isCheckoutSessionId, wallStepVerdict } = await import("../fundraising/model");
+    if (message || added || !isCheckoutSessionId(id)) return base;
+    const { giftForSession } = await import("../db/fundraisers");
+    const verdict = wallStepVerdict(await giftForSession(id), fundraiserId);
+    return verdict === "ok" || verdict === "not_recorded" ? { ...base, sessionId: id } : base;
+  } catch (err) {
+    console.error("fundraiser thank you gift read failed:", err instanceof Error ? err.message : err);
+    return base;
+  }
 }
 
 export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: FundraisePageDeps): void {
@@ -147,14 +178,10 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   });
 
   // TASK-501 review: the code also answers for a finished fundraiser that had a page, so its
-  // organiser keeps it in their private area. The page itself is still hidden once finished.
+  // organiser keeps it in their private area. TASK-502: wherever the page is, as a finished one keeps it.
   router.get("/fundraise/:slug/qr.svg", async (req, res, next) => {
     try {
-      if (!(await fundraisingOn())) return next();
-      const { getBySlug } = await import("../db/fundraisers");
-      const found = await getBySlug(String(req.params.slug));
-      const coded = found && found.public && found.path === "raising" && (found.status === "approved" || found.status === "finished");
-      const f = coded ? found : null;
+      const f = await publicFundraiser(String(req.params.slug));
       if (!f) return next();
       const [{ qrSvg }, { fundraiserPageUrl }] = await Promise.all([import("../fundraising/qr"), import("../fundraising/send")]);
       res.setHeader("X-Content-Type-Options", "nosniff");
@@ -180,13 +207,22 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       const page = publicPage(f, f.meter, wallEntries(await wallRows(f.id)));
       // ?thanks=1 is where the server sends a giver back to after paying (src/routes/api.ts): a thank
       // you at the top. Anyone can add it to the address, and all it shows is a thank you.
-      const thanks = req.query.thanks === "1" ? { message: req.query.message === "1" } : undefined;
+      const thanks = req.query.thanks === "1" ? await thanksFor(req.query, f.id) : undefined;
+      const withSession = req.query.session_id !== undefined;
+      if (withSession) {
+        // TASK-502: a giver's own thank you, with their payment's id in the address: never kept by a
+        // browser or anything in between, never indexed, and never handed to another website as a
+        // referrer, whether or not the step is offered.
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Referrer-Policy", "same-origin");
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      }
       const html = renderFundraiserPage(readFileSync(pageFile, "utf8"), page, {
         pageUrl: fundraiserPageUrl(f.slug),
         now: new Date(),
         thanks,
       });
-      fresh(res);
+      if (!withSession) fresh(res);
       res.type("html").send(await deps.decorate(html, req.headers.cookie));
     } catch (err) {
       console.error("fundraiser page failed:", err instanceof Error ? err.message : err);

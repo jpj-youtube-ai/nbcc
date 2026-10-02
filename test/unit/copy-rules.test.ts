@@ -37,6 +37,8 @@ const PAGES = [
   // TASK-494: the fundraising pages (a fundraiser's page is checked as drawn, in fundraising-render.test.ts).
   "fundraise.html",
   "fundraise-manage.html",
+  // TASK-498: the fundraising help page.
+  "fundraise-help.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];

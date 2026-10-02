@@ -83,3 +83,17 @@ Feature: Get involved and the public fundraising pages (TASK-494)
     Given fundraising is switched off
     When a visitor opens "/contact"
     Then the page does not show '<a href="/fundraise">Fundraise for us</a>'
+
+  Scenario: the fundraising help page is there only while fundraising is on (TASK-498)
+    Given fundraising is switched on
+    When a visitor opens "/fundraise/help"
+    Then the visitor gets status 200
+    And the page shows "An A to Z of fundraising ideas"
+    And the page shows 'href="tel:+441292811015"'
+    And the page shows 'href="mailto:events@nbcc.scot"'
+    And the page does not show 'name="robots"'
+    When a visitor opens "/fundraise"
+    Then the page shows 'href="/fundraise/help"'
+    Given fundraising is switched off
+    When a visitor opens "/fundraise/help"
+    Then the visitor gets status 404

@@ -154,3 +154,20 @@ describe("the fundraising sign up in the site maps", () => {
     expect(renderSitemapTree(SITE_PAGES, false, false, true)).toContain('href="/fundraise"');
   });
 });
+
+// TASK-498: the fundraising help page, listed like the sign up and only while fundraising is on.
+describe("the fundraising help page in the site maps", () => {
+  it("is a real page", () => {
+    expect(isKnownPage("/fundraise/help")).toBe(true);
+    expect(aliasFromProblem("/fundraise/help")).not.toBeNull();
+  });
+
+  it("is listed under the sign up only while fundraising is switched on", () => {
+    expect(renderSitemapTree(SITE_PAGES, true, true)).not.toContain('href="/fundraise/help"');
+    expect(renderSitemapTree(SITE_PAGES, true, true, true)).toContain('<a href="/fundraise/help">Fundraising help</a>');
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), true, true)).not.toContain("/fundraise/help");
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), true, true, true)).toContain(
+      "<loc>https://nbcc.scot/fundraise/help</loc>",
+    );
+  });
+});

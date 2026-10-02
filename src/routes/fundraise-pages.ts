@@ -9,6 +9,7 @@ import { join } from "node:path";
 //   GET /get-involved              NBCC's events, plus fundraisers while fundraising is switched on
 //   GET /fundraise                 the sign up form, or "not open yet" while switched off
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
+//   GET /fundraise/help            ideas, paying in, Gift Aid and staying safe (TASK-498); indexed
 //   GET /fundraise/:slug/qr.svg    the page's QR code, to download
 //   GET /fundraise/:slug           one fundraiser's page
 //
@@ -50,6 +51,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   const signUpFile = join(siteRoot, "fundraise.html");
   const manageFile = join(siteRoot, "fundraise-manage.html");
   const pageFile = join(siteRoot, "fundraiser.html");
+  const helpFile = join(siteRoot, "fundraise-help.html");
 
   // The page was /events until TASK-494. Links in old newsletters and on Facebook still point there,
   // so it is a permanent redirect whether or not the page is on (switched off, /get-involved is the
@@ -126,6 +128,20 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       res.type("html").send(await deps.decorate(readFileSync(manageFile, "utf8"), req.headers.cookie));
     } catch (err) {
       console.error("fundraise manage page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
+
+  // TASK-498: the help page. Also before /fundraise/:slug, so "help" is never read as a fundraiser
+  // (the core refuses it as a slug too). Indexed like the sign up, but only there while fundraising
+  // is switched on: switched off it is the site's 404, so the words can merge before sign off.
+  router.get("/fundraise/help", async (req, res, next) => {
+    try {
+      if (!(await fundraisingOn())) return next();
+      fresh(res);
+      res.type("html").send(await deps.decorate(readFileSync(helpFile, "utf8"), req.headers.cookie));
+    } catch (err) {
+      console.error("fundraise help page failed:", err instanceof Error ? err.message : err);
       next();
     }
   });

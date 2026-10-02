@@ -38,7 +38,14 @@ export const SITE_PAGES: SitePage[] = [
   { path: "/hub", title: "Hub", listedByDefault: true },
   // TASK-494: the Events page renamed; /events redirects here.
   { path: "/get-involved", title: "Get involved", listedByDefault: true, eventsGated: true },
-  { path: "/fundraise", title: "Fundraise for us", listedByDefault: true, fundraisingGated: true },
+  {
+    path: "/fundraise",
+    title: "Fundraise for us",
+    listedByDefault: true,
+    fundraisingGated: true,
+    // TASK-498: gated itself too, since sitemap.xml lists every page flat, children included.
+    children: [{ path: "/fundraise/help", title: "Fundraising help", listedByDefault: true, fundraisingGated: true }],
+  },
   { path: "/contact", title: "Contact", listedByDefault: true },
   { path: "/privacy", title: "Privacy notice", listedByDefault: true },
   { path: "/donor-portal", title: "Donor portal", listedByDefault: false },

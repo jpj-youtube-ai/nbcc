@@ -272,9 +272,43 @@ describe("the manage page", () => {
   });
 });
 
+// TASK-498: the help page, a draft for sign off. Like the rest of fundraising it is there only while
+// fundraising is switched on, so it can merge before anyone has approved the words.
+describe("the help page", () => {
+  it("is served while fundraising is on, and kept fresh", async () => {
+    const res = await get("/fundraise/help");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0");
+    // Indexable, like the sign up: no noindex header.
+    expect(res.headers.get("x-robots-tag")).toBeNull();
+    const html = await res.text();
+    expect(html).toContain('id="help-heading"');
+    expect(navList(html)).toContain('href="/get-involved"');
+  });
+
+  it("is the site's 404 while fundraising is switched off", async () => {
+    state.fundraisingOn = false;
+    const res = await get("/fundraise/help");
+    expect(res.status).toBe(404);
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(await res.text()).not.toContain('id="help-heading"');
+  });
+
+  it("is never taken for a fundraiser called help", async () => {
+    state.fundraisers = [record({ slug: "help", title: "Robin Needs Help" })];
+    const html = await (await get("/fundraise/help")).text();
+    expect(html).toContain('id="help-heading"');
+    expect(html).not.toContain("Robin Needs Help");
+  });
+
+  it("is linked from the sign up form", async () => {
+    expect(await (await get("/fundraise")).text()).toContain('href="/fundraise/help"');
+  });
+});
+
 describe("the raw files", () => {
   it("are never served at their own addresses", async () => {
-    for (const f of ["/fundraiser.html", "/fundraise.html", "/fundraise-manage.html"]) {
+    for (const f of ["/fundraiser.html", "/fundraise.html", "/fundraise-manage.html", "/fundraise-help.html"]) {
       expect((await get(f)).status, f).not.toBe(200);
     }
   });
@@ -287,7 +321,7 @@ describe("the image", () => {
     const { readFileSync } = await import("node:fs");
     const docker = readFileSync(resolve(ROOT, "Dockerfile"), "utf8");
     const copy = docker.split(/\r?\n/).find((l) => l.startsWith("COPY index.html")) ?? "";
-    for (const f of ["events.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html"]) expect(copy.split(/\s+/), f).toContain(f);
+    for (const f of ["events.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html", "fundraise-help.html"]) expect(copy.split(/\s+/), f).toContain(f);
   });
 });
 

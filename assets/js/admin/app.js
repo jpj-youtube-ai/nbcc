@@ -9017,9 +9017,24 @@
 
   function frFlipSwitch() {
     var on = !!(frSettings && frSettings.pageOn);
+    if (on) return frConfirmFlip(on, null);
     // TASK-497: switching on emails "Your page is live" to every page holder approved while it was
-    // off. The server says how many are waiting (liveEmailsWaiting); without a number, say it anyway.
-    var waitingCount = frSettings && typeof frSettings.liveEmailsWaiting === "number" ? frSettings.liveEmailsWaiting : null;
+    // off. Approvals made since the screen opened add to that list, so ask the server how many are
+    // waiting now, as the switch is pressed. If it cannot say, the question still goes, without a number.
+    authFetch("/api/admin/fundraising/settings")
+      .then(okJson)
+      .then(function (s) {
+        return s && typeof s.liveEmailsWaiting === "number" ? s.liveEmailsWaiting : null;
+      })
+      .catch(function () {
+        return null;
+      })
+      .then(function (waitingCount) {
+        frConfirmFlip(on, waitingCount);
+      });
+  }
+
+  function frConfirmFlip(on, waitingCount) {
     var liveNote = waitingCount === null
       ? " “Your page is live” goes by email to everyone approved while it was off."
       : waitingCount > 0

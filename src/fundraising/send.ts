@@ -89,7 +89,13 @@ export async function sendWaitingLiveEmails(): Promise<{ sent: number; failed: n
   let failed = 0;
   let lastId = 0;
   try {
-    while (await fundraisingIsOn()) {
+    for (;;) {
+      if (!(await fundraisingIsOn())) {
+        // Switched off again, or the switch could not be read: either way, stop. Anyone not reached
+        // keeps their mark and is emailed at the next switch on. Say so, so a quiet stop is visible.
+        console.warn(`fundraising live emails stopped: fundraising is off or the switch could not be read (${sent} sent, ${failed} failed)`);
+        break;
+      }
       const f = await claimNextWaitingLiveEmail(lastId);
       if (!f) break;
       lastId = f.id;

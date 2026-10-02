@@ -114,6 +114,15 @@ describe("when fundraising is switched on", () => {
     expect(db.claimNextWaitingLiveEmail).toHaveBeenCalledTimes(1);
   });
 
+  it("says so in the log when it stops early, so a quiet stop is visible", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    waitingQueue(record({ id: 9 }));
+    db.fundraisingIsOn.mockResolvedValueOnce(false);
+    expect(await sendWaitingLiveEmails()).toEqual({ sent: 0, failed: 0 });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("fundraising live emails stopped"));
+    warn.mockRestore();
+  });
+
   it("marks one whose email failed as waiting again, and still sends the rest", async () => {
     waitingQueue(record({ id: 9, email: "sam@example.com" }), record({ id: 10, email: "kim@example.com" }));
     mail.sendFundraiseApproved.mockRejectedValueOnce(new Error("SES is down"));

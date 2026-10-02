@@ -147,7 +147,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     if (method === "PATCH") {
       settings = { pageOn: body.pageOn, updatedAt: "2026-10-02T09:00:00.000Z", updatedBy: "admin:fern@example.com" };
     }
-    return j(settings);
+    return j({ ...settings }); // a copy, as a real response is: later changes must not leak in
   }
   if (path === "/api/admin/fundraisers" && method === "GET") {
     return j({
@@ -371,6 +371,27 @@ describe("the switch", () => {
     el("frSwitchBtn").click();
     await settle();
     expect(confirmed[1]).not.toContain("Your page is live");
+  });
+
+  it("asks the server for the count when the switch is pressed, not when the screen opened", async () => {
+    // Approvals made after the screen opened (while it is off) add to the waiting list.
+    settings.liveEmailsWaiting = 0;
+    await openFundraising();
+    settings.liveEmailsWaiting = 2;
+    confirmAnswer = false;
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[0]).toContain("goes by email to the 2 fundraisers approved while it was off.");
+  });
+
+  it("still asks, without a number, when the count cannot be read", async () => {
+    await openFundraising();
+    failures["GET /api/admin/fundraising/settings"] = { status: 500, body: { error: "Admin is temporarily unavailable" } };
+    confirmAnswer = false;
+    el("frSwitchBtn").click();
+    await settle();
+    expect(confirmed[0]).toMatch(/switch fundraising on/i);
+    expect(confirmed[0]).toContain("goes by email to everyone approved while it was off.");
   });
 
   it("says it without a number when the server gives none", async () => {

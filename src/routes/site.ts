@@ -1,6 +1,7 @@
 import express, { Router } from "express";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { keepQuery } from "../site/redirect";
 import { addFundraisePageRoutes } from "./fundraise-pages";
 import {
   SUPPORTER_TIERS,
@@ -301,7 +302,8 @@ export function createSiteRouter(siteRoot: string): Router {
   for (const rule of rules) {
     router.get(rule.from, async (req, res) => {
       if (rule.status.startsWith("301")) {
-        res.redirect(301, rule.to);
+        // TASK-492: with the query it arrived with, so a visit's tags survive the hop.
+        res.redirect(301, keepQuery(rule.to, req.originalUrl));
         return;
       }
       const file = join(siteRoot, rule.to.replace(/^\//, ""));
@@ -404,7 +406,9 @@ export function createSiteRouter(siteRoot: string): Router {
     try {
       const { resolveAlias } = await import("../db/site-pages");
       const target = await resolveAlias(req.path);
-      if (target) return res.redirect(301, target);
+      // TASK-492: with the query it arrived with, so a QR code made for a spare address still
+      // counts its scans as QR code rather than Direct.
+      if (target) return res.redirect(301, keepQuery(target, req.originalUrl));
     } catch (err) {
       console.error("alias lookup failed:", err instanceof Error ? err.message : err);
     }

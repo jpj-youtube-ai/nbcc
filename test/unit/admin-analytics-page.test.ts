@@ -74,8 +74,11 @@ function panels(scale: number) {
       { channel: "search", visits: 30 },
       { channel: "newsletter", visits: 12 },
       { channel: "direct", visits: 8 },
+      { channel: "qr", visits: 5 },
     ],
     otherWebsites: [{ source: "www.example.org", visits: 4 }],
+    // TASK-492: QR code scans, by the page whose code it was.
+    qrCodes: [{ label: "Festive Ball", visits: 5 }],
     newsletters: [{ campaign: "41", label: "Our winter news", visits: 12 }],
     cities: towns.map((city, i) => ({ city, region: "Scotland", country: "GB", visitors: 20 - i })),
     countries: [
@@ -101,6 +104,7 @@ function empty() {
     daily: [{ day: "2026-09-30", visitors: 0 }],
     channels: [],
     otherWebsites: [],
+    qrCodes: [],
     newsletters: [],
     cities: [],
     countries: [],
@@ -141,7 +145,7 @@ function deferred() {
 const OFF = { collecting: false, updatedAt: null, updatedBy: null };
 const ON = { collecting: true, updatedAt: "2026-09-28T09:00:00.000Z", updatedBy: "admin:admin@nbcc" };
 
-const PANELS = ["anChannels", "anWebsites", "anNewsletters", "anCities", "anCountries", "anPages", "anClickKinds", "anClicks", "anDevices", "anBrowsers"];
+const PANELS = ["anChannels", "anWebsites", "anQrCodes", "anNewsletters", "anCities", "anCountries", "anPages", "anClickKinds", "anClicks", "anDevices", "anBrowsers"];
 
 beforeEach(() => {
   perms = effectivePermissions({ role: "admin", permissions: null });
@@ -279,6 +283,8 @@ describe("the numbers", () => {
     await openAnalytics();
     expect(text("anChannels")).toContain("Search");
     expect(text("anWebsites")).toContain("www.example.org");
+    expect(text("anChannels")).toContain("QR code");
+    expect(text("anQrCodes")).toContain("Festive Ball");
     expect(text("anNewsletters")).toContain("Our winter news");
     expect(text("anCities")).toContain("Aberlady");
     expect(text("anCountries")).toContain("United Kingdom");
@@ -422,6 +428,7 @@ describe("review of #605", () => {
       current: {
         ...REPORT.current,
         otherWebsites: [{ source: evil, visits: 2 }],
+        qrCodes: [{ label: evil, visits: 2 }],
         newsletters: [{ campaign: "41", label: evil, visits: 2 }],
         cities: [{ city: evil, region: evil, country: "GB", visitors: 2 }],
         countries: [{ country: "ZZ", name: evil, visitors: 2 }],
@@ -434,7 +441,7 @@ describe("review of #605", () => {
     served["GET /api/admin/analytics"] = { status: 200, body: hostile };
     await openAnalytics();
     expect(el("view-analytics").querySelectorAll("img")).toHaveLength(0);
-    for (const id of ["anWebsites", "anNewsletters", "anCities", "anCountries", "anPages", "anClickKinds", "anClicks", "anBrowsers"]) {
+    for (const id of ["anWebsites", "anQrCodes", "anNewsletters", "anCities", "anCountries", "anPages", "anClickKinds", "anClicks", "anBrowsers"]) {
       expect(text(id)).toContain("<img src=x");
     }
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();

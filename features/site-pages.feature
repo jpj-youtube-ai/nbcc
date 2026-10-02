@@ -29,6 +29,15 @@ Feature: Site addressing (site-pages feature)
     When I request the site path "/give"
     Then the site response should redirect permanently to "/donate"
 
+  # TASK-492: the tags a visit arrives with survive the hop, so a QR code made for a spare address
+  # still counts its scans as QR code, and a newsletter link to an old address still counts as the
+  # newsletter.
+  Scenario: a spare or old address passes on the query it arrived with
+    When I request the site path "/give?utm_medium=qr&utm_campaign=give"
+    Then the site response should redirect permanently to "/donate?utm_medium=qr&utm_campaign=give"
+    When I request the site path "/about?utm_source=newsletter"
+    Then the site response should redirect permanently to "/about-us?utm_source=newsletter"
+
   Scenario: an admin adds a spare address and it works immediately; guard rails hold
     Given a newsletter admin "site.admin.bdd@example.com" with role "admin" and password "pw-sp"
     When I add a spare address "/festive" pointing at "/donate"

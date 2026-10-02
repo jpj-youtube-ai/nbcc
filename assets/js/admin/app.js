@@ -576,6 +576,7 @@
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "analytics") loadAnalytics();
     else if (name === "site") loadSite();
+    else if (name === "qr") loadQr();
     else if (name === "team") loadTeam();
     else if (name === "account") loadAccount();
   }
@@ -2843,6 +2844,122 @@
         .catch(function () { siteStatus("Could not add that address.", "err"); });
     });
   }
+  // ---- QR codes (TASK-492) ----
+  // A code for every page, from GET /api/admin/qr-codes (site: view), which sends each page's code
+  // as an SVG for its preview. The downloads come from /api/admin/qr-codes/image, fetched with the
+  // session and handed to the browser to save, as the Festive Ball's CSVs are.
+  var QR_BAD_PATH = "Give an address on nbcc.scot, starting with /";
+  // The same rule as qrPath in src/site/qr.ts, so a bad address is refused before asking.
+  var QR_PATH = /^\/(?:[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?)?$/;
+  var qrWired = false;
+
+  // "/ball/terms" as "ball-terms", "/" as "home": the name of the file, as the server names it.
+  function qrSlug(path) {
+    return path.replace(/^\/+|\/+$/g, "").replace(/\//g, "-").toLowerCase() || "home";
+  }
+
+  function qrCard(page) {
+    var esc = H.escapeHtml;
+    var src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(page.svg);
+    return (
+      '<article class="qr-card">' +
+      '<img class="qr-img" src="' + src + '" alt="QR code for ' + esc(page.title) + '" width="132" height="132" />' +
+      '<div class="qr-body">' +
+      '<h3 class="qr-title">' + esc(page.title) + "</h3>" +
+      '<p class="qr-path">nbcc.scot' + esc(page.path) + "</p>" +
+      (page.live ? "" : '<p class="qr-note">Not live yet: the page is switched off for now.</p>') +
+      '<p class="qr-actions">' +
+      '<button type="button" class="admin-btn admin-btn--small" data-qr-path="' + esc(page.path) + '" data-qr-format="svg">Download SVG</button>' +
+      '<button type="button" class="admin-btn admin-btn--small" data-qr-path="' + esc(page.path) + '" data-qr-format="png">Download PNG</button>' +
+      "</p></div></article>"
+    );
+  }
+
+  function qrImageUrl(path, format) {
+    return "/api/admin/qr-codes/image?path=" + encodeURIComponent(path) + "&format=" + format;
+  }
+
+  function qrDownload(path, format) {
+    authFetch(qrImageUrl(path, format))
+      .then(function (r) { return r.ok ? r.blob() : Promise.reject(new Error("failed")); })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "nbcc-qr-" + qrSlug(path) + "." + format;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        window.alert("Could not download that QR code. Try again.");
+      });
+  }
+
+  function wireQr() {
+    if (qrWired) return;
+    qrWired = true;
+    // Delegated, and attached once: the list is drawn again on every visit.
+    el("view-qr").addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest("[data-qr-format]");
+      if (!btn) return;
+      qrDownload(btn.getAttribute("data-qr-path"), btn.getAttribute("data-qr-format"));
+    });
+    el("qrOtherForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      // A whole nbcc.scot address pasted from the browser becomes its path.
+      var typed = (el("qrOtherPath").value || "").trim();
+      var path = typed.replace(/^(https?:\/\/)?(www\.)?nbcc\.scot(?=\/|$)/i, "");
+      if (typed && !path) path = "/"; // "nbcc.scot" alone is the home page; an empty box stays empty
+      el("qrOther").innerHTML = "";
+      if (!QR_PATH.test(path) || path.length > 200) {
+        el("qrStatus").textContent = QR_BAD_PATH;
+        return;
+      }
+      el("qrStatus").textContent = "Making the code…";
+      authFetch(qrImageUrl(path, "svg"))
+        .then(okJsonOrSaidText)
+        .then(function (svg) {
+          el("qrStatus").textContent = "";
+          el("qrOther").innerHTML = qrCard({ path: path, title: "Another address", live: true, svg: svg });
+        })
+        .catch(function (err) {
+          if (err && err.message === "unauthorized") return;
+          el("qrStatus").textContent = (err && err.said) || "Could not make that QR code. Try again.";
+        });
+    });
+  }
+
+  // The SVG's text, or the server's own reason when it refuses.
+  function okJsonOrSaidText(res) {
+    if (res.ok) return res.text();
+    return res.json().then(
+      function (b) {
+        var err = new Error("status " + res.status);
+        err.said = b && typeof b.error === "string" ? b.error : "";
+        throw err;
+      },
+      function () { throw new Error("status " + res.status); },
+    );
+  }
+
+  function loadQr() {
+    wireQr();
+    authFetch("/api/admin/qr-codes")
+      .then(okJson)
+      .then(function (d) {
+        var pages = d.pages || [];
+        el("qrList").innerHTML = pages.length
+          ? pages.map(qrCard).join("")
+          : '<p class="admin-empty">There are no pages to make codes for.</p>';
+      })
+      .catch(function () {
+        el("qrList").innerHTML = unavailableHtml("The QR codes could not load.");
+      });
+  }
+
   function loadSite() {
     wireSite();
     var canWrite = canEdit("site");
@@ -12065,6 +12182,7 @@
   var AN_CHANNELS = {
     newsletter: "Newsletter",
     email: "Email",
+    qr: "QR code",
     search: "Search",
     social: "Social",
     other_websites: "Other websites",
@@ -12523,6 +12641,8 @@
     function clicks(r) { return r.clicks; }
     anBars("anChannels", c.channels, function (r) { return esc(AN_CHANNELS[r.channel] || r.channel); }, visits, { share: true });
     anBars("anWebsites", c.otherWebsites, function (r) { return esc(r.source); }, visits);
+    // TASK-492: QR code scans, by the page whose code it was (named by the server).
+    anBars("anQrCodes", c.qrCodes, function (r) { return esc(r.label); }, visits);
     anBars("anNewsletters", c.newsletters, function (r) { return esc(r.label); }, visits);
     anBars("anCities", c.cities, function (r) {
       return esc(r.city) + (r.region ? '<span class="an-row-sub">' + esc(r.region) + "</span>" : "");

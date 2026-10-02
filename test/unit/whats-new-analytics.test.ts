@@ -14,6 +14,14 @@ vi.mock("../../src/db/stories-pool", () => ({ storiesPool: { query: storiesQuery
 
 import { latestArrival } from "../../src/db/whats-new";
 
+// TASK-492: the QR codes screen likewise: new as a screen, with nothing arriving.
+describe("the QR codes section's arrivals", () => {
+  it("has none, and asks no database", async () => {
+    expect(await latestArrival("qr", new Date("2026-10-02T00:00:00Z"))).toBeNull();
+    expect(mainQuery).not.toHaveBeenCalled();
+  });
+});
+
 describe("the analytics section's arrivals", () => {
   it("has none, and asks no database", async () => {
     expect(await latestArrival("analytics", new Date("2026-10-01T00:00:00Z"))).toBeNull();

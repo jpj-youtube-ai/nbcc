@@ -14,6 +14,7 @@ export type Area =
   | "newsletter"
   | "events"
   | "analytics"
+  | "qr"
   | "fundraising";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
@@ -30,6 +31,8 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "events", section: "events", level: "view" },
   // TASK-482: Admin > Analytics. New as a screen only: page views are not news to tell staff about.
   { area: "analytics", section: "analytics", level: "view" },
+  // TASK-492: QR codes. No permission of its own: its menu link gates on Site pages.
+  { area: "qr", section: "site", level: "view" },
   // TASK-493: Admin > Fundraising. Each new sign up at /fundraise is an arrival.
   { area: "fundraising", section: "fundraising", level: "view" },
 ];
@@ -45,6 +48,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "monthly", added: new Date("2026-09-30T12:00:00Z"), what: "Monthly givers (TASK-447)" },
   { area: "stories", added: new Date("2026-09-30T12:00:00Z"), what: "Stories brought in from the old website (TASK-461)" },
   { area: "analytics", added: new Date("2026-10-01T12:00:00Z"), what: "Admin > Analytics: where visitors come from and what they look at (TASK-482)" },
+  { area: "qr", added: new Date("2026-10-02T12:00:00Z"), what: "QR codes for every page, to print or share (TASK-492)" },
   { area: "fundraising", added: new Date("2026-10-02T12:00:00Z"), what: "Admin > Fundraising: approve sign ups, check changes, record cash and look after the supporter wall (TASK-495)" },
 ];
 

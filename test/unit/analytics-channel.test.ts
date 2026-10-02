@@ -11,6 +11,23 @@ const arrive = (
   path = "/donate",
 ) => classifyArrival({ referrer, utm, ownHosts: OWN, path });
 
+// TASK-492: a scan of one of the admin's QR codes (src/site/qr.ts tags them utm_medium=qr), kept
+// apart from typed addresses so staff can tell a poster is working, with the page's code named.
+describe("a QR code scan", () => {
+  it("is its own channel, with the page whose code it was kept", () => {
+    expect(arrive("", { medium: "qr", campaign: "ball" }, "/ball")).toEqual({ channel: "qr", source: null, campaign: "ball" });
+  });
+
+  it("counts however the tag is written, and whatever source rides with it", () => {
+    expect(arrive("", { medium: "QR", campaign: "home" }).channel).toBe("qr");
+    expect(arrive("", { source: "facebook", medium: "qr" }).channel).toBe("qr");
+  });
+
+  it("does not take the newsletter's own visits", () => {
+    expect(arrive("", { source: "newsletter", medium: "qr" }).channel).toBe("newsletter");
+  });
+});
+
 describe("rule 1: newsletter", () => {
   it("utm_source=newsletter is the newsletter, with the issue kept", () => {
     expect(arrive("", { source: "newsletter", medium: "email", campaign: "42" })).toEqual({

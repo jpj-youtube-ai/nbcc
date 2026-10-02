@@ -95,6 +95,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       // TASK-482: site analytics, in the Admin group.
       "analytics",
       "site",
+      // TASK-492: QR codes for every page, beside Site pages.
+      "qr",
       "team",
     ]);
     for (const v of [
@@ -112,6 +114,7 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "outreach",
       "audit",
       "team",
+      "qr",
       "donor",
       "story",
     ]) {

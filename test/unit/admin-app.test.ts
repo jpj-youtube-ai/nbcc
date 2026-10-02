@@ -122,6 +122,10 @@ let awaitingTransfers: unknown[] = [];
 let ballBookings: unknown[] = [];
 // TASK-488: what adding a booking by hand answers.
 let addTransferAnswer: { status: number; body: unknown } = { status: 201, body: {} };
+// TASK-492: the QR codes screen's list, and every code image asked for.
+const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><path d="M0 0h1v1H0z"/></svg>';
+let qrPages: unknown[] = [];
+let qrImageUrls: string[] = [];
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
   const j = (body: unknown, status = 200) => ({
@@ -206,6 +210,16 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     return j(transferSettings);
   }
   if (url.includes("/api/admin/ball/transfer-bookings")) return j(addTransferAnswer.body, addTransferAnswer.status);
+  // TASK-492: a code image, as SVG text or a file; a path not on nbcc.scot is refused as the server does.
+  if (url.includes("/api/admin/qr-codes/image")) {
+    qrImageUrls.push(url);
+    const path = new URL(url, "https://nbcc.scot").searchParams.get("path") || "";
+    if (!path.startsWith("/")) {
+      return { ...j({ error: "Give an address on nbcc.scot, starting with /" }, 400), blob: () => Promise.resolve(new Blob([])) };
+    }
+    return { ...j({}), text: () => Promise.resolve(QR_SVG), blob: () => Promise.resolve(new Blob([QR_SVG])) };
+  }
+  if (url.includes("/api/admin/qr-codes")) return j({ pages: qrPages });
   if (url.includes("/api/admin/ball/transfers")) return j({ results: awaitingTransfers });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/mark-paid$/.test(url)) return j({ reference: "BALL-7KQ2MZ", reinstated: false });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/pay-by$/.test(url)) return j({ reference: "BALL-7KQ2MZ", payBy: "2026-10-20" });
@@ -250,6 +264,8 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     awaitingTransfers = [];
     ballBookings = [];
     addTransferAnswer = { status: 201, body: {} };
+    qrPages = [];
+    qrImageUrls = [];
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
     (window as unknown as { AdminHelpers: unknown }).AdminHelpers = helpers;
@@ -1166,6 +1182,123 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
   // TASK-478: a New pill on each section holding something this person has not seen. Opening the
   // section clears it for them; the server keeps everyone else's.
+  // TASK-492: QR codes for every page, to print or share. Anyone who can view Site pages.
+  describe("QR codes (TASK-492)", () => {
+    const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
+    const nav = () => document.querySelector('.admin-nav-link[data-view="qr"]') as HTMLElement;
+    const openQr = async () => {
+      await signIn();
+      nav().click();
+      await settle();
+    };
+    const PAGES = [
+      { path: "/", title: "Home", live: true, link: "https://nbcc.scot/?utm_medium=qr&utm_campaign=home", svg: QR_SVG },
+      { path: "/ball", title: "Festive Ball", live: false, link: "https://nbcc.scot/ball?utm_medium=qr&utm_campaign=ball", svg: QR_SVG },
+    ];
+    let saved: Array<{ href: string; download: string }> = [];
+    beforeEach(() => {
+      saved = [];
+      (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:qr";
+      (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {};
+      vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
+        saved.push({ href: this.href, download: this.download });
+      });
+    });
+
+    it("is in the menu for anyone who can view Site pages", async () => {
+      loginToken = tokenFor("viewer");
+      await signIn();
+      expect(nav().hidden).toBe(false);
+    });
+
+    it("is not in the menu for someone who cannot", async () => {
+      loginToken = tokenFor("viewer");
+      storedPermissions = { ...roleToPermissions("viewer"), site: "none" };
+      await signIn();
+      expect(nav().hidden).toBe(true);
+    });
+
+    it("lists every page with its name, address, a preview, and both downloads", async () => {
+      qrPages = PAGES;
+      await openQr();
+      const rows = Array.from(document.querySelectorAll("#qrList .qr-card"));
+      expect(rows).toHaveLength(2);
+      expect(rows[0].textContent).toContain("Home");
+      expect(rows[0].textContent).toContain("nbcc.scot/");
+      const img = rows[0].querySelector("img") as HTMLImageElement;
+      expect(img.getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
+      expect(img.getAttribute("alt")).toBe("QR code for Home");
+      expect(Array.from(rows[0].querySelectorAll("button")).map((b) => b.textContent)).toEqual(["Download SVG", "Download PNG"]);
+      expect(rows[0].textContent).not.toMatch(/not live yet/i);
+      expect(rows[1].textContent).toMatch(/not live yet/i);
+    });
+
+    it("downloads a code, named after its page", async () => {
+      qrPages = PAGES;
+      await openQr();
+      (document.querySelectorAll("#qrList .qr-card")[1].querySelectorAll("button")[1] as HTMLElement).click();
+      await settle();
+      expect(qrImageUrls.some((u) => u.includes("path=%2Fball") && u.includes("format=png"))).toBe(true);
+      expect(saved).toEqual([{ href: "blob:qr", download: "nbcc-qr-ball.png" }]);
+    });
+
+    it("makes a code for any other nbcc.scot address", async () => {
+      qrPages = PAGES;
+      await openQr();
+      (el("qrOtherPath") as HTMLInputElement).value = "/give";
+      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      const card = document.querySelector("#qrOther .qr-card") as HTMLElement;
+      expect(card.textContent).toContain("nbcc.scot/give");
+      expect((card.querySelector("img") as HTMLImageElement).getAttribute("src")).toMatch(/^data:image\/svg\+xml/);
+      (card.querySelectorAll("button")[0] as HTMLElement).click();
+      await settle();
+      expect(saved).toEqual([{ href: "blob:qr", download: "nbcc-qr-give.svg" }]);
+    });
+
+    // Staff often paste the address from the browser, whole.
+    it("takes a pasted whole nbcc.scot address", async () => {
+      qrPages = PAGES;
+      await openQr();
+      (el("qrOtherPath") as HTMLInputElement).value = "https://www.nbcc.scot/give";
+      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(qrImageUrls.some((u) => u.includes("path=%2Fgive&"))).toBe(true);
+      expect((document.querySelector("#qrOther .qr-card") as HTMLElement).textContent).toContain("nbcc.scot/give");
+    });
+
+    it("refuses an address that is not on nbcc.scot, before asking", async () => {
+      qrPages = PAGES;
+      await openQr();
+      const before = qrImageUrls.length;
+      (el("qrOtherPath") as HTMLInputElement).value = "give";
+      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(el("qrStatus").textContent).toBe("Give an address on nbcc.scot, starting with /");
+      expect(qrImageUrls.length).toBe(before);
+      expect(document.querySelector("#qrOther .qr-card")).toBeNull();
+      // An empty box is not the home page.
+      (el("qrOtherPath") as HTMLInputElement).value = "  ";
+      el("qrOtherForm").dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      await settle();
+      expect(el("qrStatus").textContent).toBe("Give an address on nbcc.scot, starting with /");
+      expect(qrImageUrls.length).toBe(before);
+    });
+
+    it("says so when the list cannot load", async () => {
+      qrPages = PAGES;
+      const original = globalThis.fetch;
+      (globalThis as unknown as { fetch: unknown }).fetch = vi.fn((url: string, init?: never) =>
+        String(url).endsWith("/api/admin/qr-codes")
+          ? Promise.resolve({ status: 500, ok: false, json: () => Promise.resolve({ error: "x" }), text: () => Promise.resolve(""), headers: { get: () => "application/json" } })
+          : (original as (u: string, i?: never) => Promise<unknown>)(url, init),
+      );
+      await openQr();
+      expect(el("qrList").textContent).toMatch(/could not load/i);
+      (globalThis as unknown as { fetch: unknown }).fetch = original;
+    });
+  });
+
   describe("New pills (TASK-478)", () => {
     const link = (view: string) => document.querySelector('.admin-nav-link[data-view="' + view + '"]') as HTMLElement;
     const pill = (host: Element | null) => host?.querySelector(".admin-new-pill") ?? null;

@@ -2471,3 +2471,197 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   #view-analytics .an-pages td.an-page::before { content: none; }
   #view-analytics .an-y, #view-analytics .an-plot { height: 150px; }
 }
+
+/* =================================================================
+   Admin > Fundraising (TASK-495). Built from the admin's own parts: the Events and Analytics
+   switch card, the status chips of the Events list, and Business supporters' expanding rows and
+   detail panels (.fx-*). Nothing scrolls inside a box: the list shows 25, the wall and History 10,
+   and "Show all" grows the page. Every rule here is scoped to the screen.
+   ================================================================= */
+
+/* ---- the switch, as the Events page's ---- */
+#view-fundraising .fr-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin: 0 0 6px;
+  padding: 16px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+#view-fundraising .fr-switch.is-on { background: var(--holly-soft); border-color: color-mix(in srgb, var(--holly) 30%, var(--line)); }
+#view-fundraising .fr-switch-text { flex: 1 1 320px; min-width: 0; }
+#view-fundraising .fr-switch .admin-subhead { margin: 0 0 4px; }
+#view-fundraising .fr-switch-state { margin: 0; max-width: 68ch; font-size: 0.95rem; line-height: 1.5; text-wrap: pretty; }
+#view-fundraising .fr-switch-state b { color: var(--maroon); }
+#view-fundraising .fr-switch.is-on .fr-switch-state b { color: var(--holly-dark); }
+#view-fundraising .fr-switch-who { margin: 4px 0 0; font-size: 0.82rem; color: var(--slate-soft); overflow-wrap: anywhere; }
+#view-fundraising .fr-switch-who:empty { display: none; }
+#view-fundraising .fr-switch-note { margin: 0; font-size: 0.85rem; color: var(--slate-soft); }
+#view-fundraising .fr-switch .btn { flex: 0 1 auto; max-width: 100%; }
+
+/* ---- the chips ---- */
+#view-fundraising .fr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 22px 0 14px; }
+#view-fundraising .fr-bar .admin-segmented { flex-wrap: wrap; max-width: 100%; }
+#view-fundraising .admin-seg { transition: background .2s, color .2s; font-variant-numeric: tabular-nums; }
+#view-fundraising .admin-seg:hover:not(.is-active) { color: var(--maroon); }
+#view-fundraising .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+
+/* ---- the list ---- */
+#view-fundraising .fr-table > thead > tr > th:nth-child(2),
+#view-fundraising .fr-table > tbody > tr > td:nth-child(2) { width: 120px; }
+#view-fundraising .fr-table > thead > tr > th:nth-child(3),
+#view-fundraising .fr-table > tbody > tr > td:nth-child(3) { width: 10rem; }
+#view-fundraising .fr-title { font-weight: 600; color: var(--slate); }
+#view-fundraising .fr-sub { display: block; margin: 3px 0 0 22px; font-size: 0.8rem; color: var(--slate-soft); }
+#view-fundraising .fr-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 0 22px; }
+#view-fundraising .fr-pills .admin-new-pill { margin-left: 0; }
+#view-fundraising .fr-money { font-variant-numeric: tabular-nums; }
+#view-fundraising .fr-raised { display: block; font-weight: 600; color: var(--slate); }
+#view-fundraising .fr-pct { font-size: 0.8rem; font-weight: 600; color: var(--holly-dark); font-variant-numeric: tabular-nums; }
+#view-fundraising .fr-empty { padding: 22px 20px; }
+#view-fundraising .fr-more-row { padding: 0 18px 18px; }
+#view-fundraising .fr-more {
+  margin-top: 14px;
+  min-height: 44px;
+  padding: 6px 18px;
+  border: 1.6px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background .2s, border-color .2s, transform .1s;
+}
+#view-fundraising .fr-more:hover { background: var(--tint); border-color: var(--tan); }
+#view-fundraising .fr-more:active { transform: translateY(1px); }
+#view-fundraising .fr-more:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+
+/* Narrow, each sign up is a card: its name and details across the top, status and money below.
+   Measured on the list itself, as the Events list is, so the side menu's share counts too. Child
+   combinators throughout, so the table of a waiting change inside the open row is left alone. */
+#view-fundraising #frList { container: frlist / inline-size; }
+@container frlist (max-width: 599px) {
+  #view-fundraising .fr-table,
+  #view-fundraising .fr-table > tbody { display: block; width: auto; }
+  #view-fundraising .fr-table > thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  #view-fundraising .fr-table > tbody > tr.fx-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "who who" "state money";
+    gap: 10px 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  #view-fundraising .fr-table > tbody > tr > td:nth-child(n) { display: block; width: auto; padding: 0; border: 0; }
+  #view-fundraising .fr-table > tbody > tr.fx-summary > td:nth-child(1) { grid-area: who; }
+  #view-fundraising .fr-table > tbody > tr.fx-summary > td:nth-child(2) { grid-area: state; align-self: center; }
+  #view-fundraising .fr-table > tbody > tr.fx-summary > td:nth-child(3) { grid-area: money; align-self: center; text-align: right; }
+  #view-fundraising .fr-table > tbody > tr.fx-detail-row { display: block; }
+}
+
+/* ---- one sign up ---- */
+#view-fundraising .fr-detail-msg { padding: 6px 4px; background: var(--card); }
+#view-fundraising .fr-field-hint { display: block; margin-top: 3px; font-size: 0.78rem; line-height: 1.45; color: var(--slate-soft); }
+#view-fundraising .fr-gap { margin-top: 14px; }
+#view-fundraising .fr-actions { margin-top: 14px; }
+#view-fundraising .fr-decline { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); max-width: 560px; }
+#view-fundraising .fr-status-line:empty { display: none; }
+/* The quieter of two buttons: Decline beside Approve, Reject beside Approve change. */
+#view-fundraising .fr-btn-quiet { background: var(--card); color: var(--maroon); box-shadow: inset 0 0 0 1.6px var(--line); }
+#view-fundraising .fr-btn-quiet:hover { background: var(--tan-soft); }
+#view-fundraising .admin-btn { transition: background .2s, transform .1s; }
+#view-fundraising .admin-btn:active { transform: translateY(1px); }
+#view-fundraising .admin-btn:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
+#view-fundraising .fr-qr-link { display: inline-block; margin-top: 6px; color: var(--maroon); font-weight: 600; font-size: 0.85rem; text-underline-offset: 2px; }
+#view-fundraising .fx-row dd .fx-tel { display: inline-block; }
+
+/* What they asked for, as a short list. */
+#view-fundraising .fr-wants { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 0.88rem; color: var(--slate); }
+
+/* The photo, never wider than its panel. */
+#view-fundraising .fr-photo { display: block; max-width: 100%; height: auto; max-height: 260px; border-radius: 12px; border: 1px solid var(--line); }
+#view-fundraising .fr-file { margin-top: 8px; max-width: 100%; font-size: 0.85rem; }
+
+/* The meter, as the public page draws it: held at 100 once past the target. */
+#view-fundraising .fr-meter-head { margin: 0; font-size: 0.95rem; color: var(--slate); font-variant-numeric: tabular-nums; }
+#view-fundraising .fr-meter-head b { font-size: 1.25rem; color: var(--maroon); }
+#view-fundraising .fr-meter-bar { height: 10px; margin: 10px 0 8px; border-radius: 999px; background: var(--tan-soft); }
+#view-fundraising .fr-meter-fill { display: block; height: 100%; border-radius: 999px; background: var(--holly); transition: width .3s ease; }
+#view-fundraising .fr-meter-split { margin: 0; font-size: 0.82rem; color: var(--slate-soft); font-variant-numeric: tabular-nums; }
+
+/* Cash paid in. */
+#view-fundraising .fr-cash { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-direction: column; }
+#view-fundraising .fr-cash li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+#view-fundraising .fr-cash li:last-child { border-bottom: 0; }
+#view-fundraising .fr-cash-amount { flex: none; min-width: 4.5rem; font-weight: 700; color: var(--slate); font-variant-numeric: tabular-nums; }
+#view-fundraising .fr-cash-text { flex: 1 1 10rem; display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 0.86rem; color: var(--slate); overflow-wrap: anywhere; }
+#view-fundraising .fr-cash-note { white-space: pre-line; }
+#view-fundraising .fr-link-btn {
+  flex: none;
+  min-height: 44px;
+  padding: 0 4px;
+  background: none;
+  border: 0;
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+#view-fundraising .fr-link-btn:hover { color: var(--crimson); }
+#view-fundraising .fr-link-btn:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; border-radius: 4px; }
+
+/* The forms: two fields across where there is room, one where there is not. */
+#view-fundraising .fr-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 14px 18px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+#view-fundraising .fr-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+#view-fundraising .fr-field--wide,
+#view-fundraising .fr-form > .fr-status-line { grid-column: 1 / -1; }
+#view-fundraising .fr-form .fx-call-input[aria-invalid="true"] { border-color: var(--crimson); }
+#view-fundraising textarea.fx-call-input { min-height: 88px; line-height: 1.5; resize: vertical; field-sizing: content; }
+#view-fundraising .fr-err { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--crimson); }
+#view-fundraising .fr-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 0.92rem; font-weight: 600; color: var(--slate); cursor: pointer; }
+#view-fundraising .fr-check input { width: 20px; height: 20px; accent-color: var(--holly); }
+
+/* A change the organiser asked for, beside what is live: three columns, or stacked when narrow. */
+#view-fundraising .fr-change-panel { background: color-mix(in srgb, var(--tan) 12%, var(--card)); }
+#view-fundraising .fr-change { width: 100%; table-layout: fixed; margin: 12px 0 0; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+#view-fundraising .fr-change th[scope="row"] { width: 9rem; font-size: 0.82rem; text-transform: none; letter-spacing: 0; color: var(--slate); }
+@container frlist (max-width: 599px) {
+  #view-fundraising .fr-change,
+  #view-fundraising .fr-change tbody,
+  #view-fundraising .fr-change tr,
+  #view-fundraising .fr-change th,
+  #view-fundraising .fr-change td { display: block; width: auto; }
+  #view-fundraising .fr-change thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  #view-fundraising .fr-change tr { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  #view-fundraising .fr-change tr:last-child { border-bottom: 0; }
+  #view-fundraising .fr-change th[scope="row"] { width: auto; padding: 0 0 4px; border: 0; }
+  #view-fundraising .fr-change td { padding: 2px 0; border: 0; }
+  #view-fundraising .fr-change td::before { content: attr(data-label); display: block; font-size: 0.74rem; color: var(--slate-soft); }
+}
+
+/* The supporter wall. */
+#view-fundraising .fr-wall { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; }
+#view-fundraising .fr-wall li { padding: 12px 0; border-bottom: 1px solid var(--line); }
+#view-fundraising .fr-wall li:last-child { border-bottom: 0; }
+#view-fundraising .fr-wall li.is-hidden .fr-wall-who,
+#view-fundraising .fr-wall li.is-hidden .fr-wall-msg { color: var(--slate-soft); }
+#view-fundraising .fr-wall-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+#view-fundraising .fr-wall-who { font-weight: 600; font-size: 0.9rem; color: var(--slate); overflow-wrap: anywhere; }
+#view-fundraising .fr-wall-msg { margin: 6px 0 0; max-width: 68ch; font-size: 0.88rem; line-height: 1.5; color: var(--slate); white-space: pre-line; overflow-wrap: anywhere; }

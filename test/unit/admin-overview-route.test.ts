@@ -25,10 +25,21 @@ const m = vi.hoisted(() => ({
   listBusinessFulfilments: vi.fn(),
   listOutreachForTodo: vi.fn(),
   listThankYouEligible: vi.fn(),
+  getDashboard: vi.fn(),
+  readSalesInputs: vi.fn(),
+  sumDonations: vi.fn(),
+  sumFundraisingCash: vi.fn(),
+  sumBallTaken: vi.fn(),
+  readWebsiteGlance: vi.fn(),
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: m.getUserAuthRow }));
 vi.mock("../../src/db/ball-transfer", () => ({ listAwaitingTransfers: m.listAwaitingTransfers }));
-vi.mock("../../src/db/ball", () => ({ getSettings: m.getSettings, listGuestProgress: m.listGuestProgress }));
+vi.mock("../../src/db/ball", () => ({ getSettings: m.getSettings, listGuestProgress: m.listGuestProgress, getDashboard: m.getDashboard }));
+vi.mock("../../src/db/ball-report", () => ({ readSalesInputs: m.readSalesInputs }));
+vi.mock("../../src/db/overview-numbers", () => ({ sumDonations: m.sumDonations, sumFundraisingCash: m.sumFundraisingCash, sumBallTaken: m.sumBallTaken }));
+vi.mock("../../src/db/analytics-report", () => ({ readWebsiteGlance: m.readWebsiteGlance }));
+// The Ball's night, without the run up's email sending behind it.
+vi.mock("../../src/ball/run-up-runner", () => ({ BALL_EVENT_DATE: new Date("2099-11-07T19:00:00Z") }));
 vi.mock("../../src/db/monthly-supporters", () => ({ listMonthlySupporters: m.listMonthlySupporters }));
 vi.mock("../../src/db/admin", () => ({
   listEligibleForClaim: m.listEligibleForClaim,
@@ -65,8 +76,14 @@ const call = async (token: string | null) => {
   await getAdminOverview({ headers: token ? { authorization: `Bearer ${token}` } : {} } as never, res as never);
   return res;
 };
-type Answer = { updatedAt: string; needs: Array<{ key: string; level: number; text: string; view: string }>; failed: string[] };
+type Answer = {
+  updatedAt: string;
+  needs: Array<{ key: string; level: number; text: string; view: string }>;
+  numbers: Array<{ key: string; title: string; headline: string; detail: string; view: string }>;
+  failed: string[];
+};
 const keys = (res: MockRes) => (res.body as Answer).needs.map((n) => n.key);
+const numberKeys = (res: MockRes) => (res.body as Answer).numbers.map((n) => n.key);
 
 const fundraiser = (over: Record<string, unknown>) => ({
   id: 1, status: "approved", editWaiting: false, finishedRequestedAt: null, eventDate: null, wants: {}, socialOk: false, ...over,
@@ -77,7 +94,8 @@ beforeEach(() => {
   m.listAwaitingTransfers.mockResolvedValue([{ payBy: "2020-01-01" }, { payBy: "2099-01-01" }, { payBy: "2099-01-02" }]);
   m.getSettings.mockResolvedValue({ guestDetailsLockAt: null });
   m.listGuestProgress.mockResolvedValue([]);
-  m.listMonthlySupporters.mockResolvedValue([{ state: "past_due" }, { state: "active" }, { state: "lapsed" }]);
+  const giver = (state: string, monthlyPence = 1_000) => ({ state, monthlyPence, firstPaidAt: "2020-01-10T10:00:00Z", cancelledAt: null, lapsedAt: null });
+  m.listMonthlySupporters.mockResolvedValue([giver("past_due"), giver("active", 2_500), giver("lapsed")]);
   m.listEligibleForClaim.mockResolvedValue([{ amount_pence: 1000 }, { amount_pence: "2050" }]);
   m.listAdjustmentDueDonations.mockResolvedValue([]);
   m.listAwaitingDeclarationDonations.mockResolvedValue([{}, {}, {}]);
@@ -103,6 +121,13 @@ beforeEach(() => {
     { alreadyThanked: false, sendState: "no_email" },
     { alreadyThanked: false, sendState: "opted_out" },
   ]);
+  // The numbers (TASK-509). Invented money in pence.
+  m.sumDonations.mockImplementation(async (_p: unknown, pages: boolean) => (pages ? { now: 10_000, before: 5_000 } : { now: 200_000, before: 150_000 }));
+  m.sumFundraisingCash.mockResolvedValue({ now: 2_000, before: 0 });
+  m.sumBallTaken.mockResolvedValue({ now: 50_000, before: 70_000 });
+  m.readSalesInputs.mockResolvedValue({ seatsSold: 212, totalSeats: 300, awaitingTransferSeats: 16 });
+  m.getDashboard.mockResolvedValue({ totalPence: 1_840_000 });
+  m.readWebsiteGlance.mockResolvedValue({ visitors: 1_240, visitorsBefore: 1_100, onNow: 3, topChannel: "search" });
 });
 
 describe("GET /api/admin/overview", () => {
@@ -165,5 +190,59 @@ describe("GET /api/admin/overview", () => {
     expect(keys(await call(tokenFor("admin")))).toContain("ballGuestsMissing");
     m.getSettings.mockResolvedValue({ guestDetailsLockAt: new Date(Date.now() + 40 * 86_400_000).toISOString() });
     expect(keys(await call(tokenFor("admin")))).not.toContain("ballGuestsMissing");
+  });
+});
+
+describe("GET /api/admin/overview: the numbers (TASK-509)", () => {
+  it("tells an admin how we are doing: money in, monthly givers, the Ball and the website", async () => {
+    const answer = (await call(tokenFor("admin"))).body as Answer;
+    expect(answer.numbers.map((n) => n.key)).toEqual(["money", "monthly", "ball", "website"]);
+    const line = (key: string) => answer.numbers.find((n) => n.key === key);
+    // Donations £2,000; fundraising pages £100 online and £20 cash paid in; the Ball £500.
+    expect(line("money")).toMatchObject({
+      headline: "£2,620 this month so far",
+      detail: "£2,250 by this time last month. Donations £2,000, Festive Ball £500, fundraising pages £120.",
+    });
+    // Only the active giver is giving; past due and lapsed are not.
+    expect(line("monthly")?.headline).toBe("1 person gives £25 a month");
+    expect(line("ball")?.headline).toBe("212 of 300 seats sold");
+    expect(line("ball")?.detail).toMatch(/^£18,400 taken\. 16 seats held for bank transfers\. [\d,]+ days to go\.$/);
+    expect(line("website")?.headline).toBe("1,240 visitors in the last 7 days");
+  });
+
+  it("reads the monthly givers once for both their Needs you line and their number", async () => {
+    await call(tokenFor("admin"));
+    expect(m.listMonthlySupporters).toHaveBeenCalledTimes(1);
+  });
+
+  // A viewer has no Analytics access by default.
+  it("never asks for, or shows, a number a person cannot see", async () => {
+    const res = await call(tokenFor("viewer"));
+    expect(numberKeys(res)).not.toContain("website");
+    expect(m.readWebsiteGlance).not.toHaveBeenCalled();
+  });
+
+  it("gives someone who sees only the Ball its share of the money, opening the Ball's screen", async () => {
+    const res = await call(tokenFor("editor", { ball: "view" }));
+    expect(numberKeys(res)).toEqual(["money", "ball"]);
+    const money = (res.body as Answer).numbers[0];
+    expect(money).toMatchObject({ headline: "£500 this month so far", detail: "£700 by this time last month.", view: "ball" });
+    expect(m.sumDonations).not.toHaveBeenCalled();
+    expect(m.sumFundraisingCash).not.toHaveBeenCalled();
+  });
+
+  it("names a number it could not check, and still shows the rest", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.readWebsiteGlance.mockRejectedValue(new Error("down"));
+    const res = await call(tokenFor("admin"));
+    expect((res.body as Answer).failed).toEqual(["Analytics"]);
+    expect(numberKeys(res)).toEqual(["money", "monthly", "ball"]);
+  });
+
+  it("leaves the website out while counting is switched off", async () => {
+    m.readWebsiteGlance.mockResolvedValue(null);
+    const res = await call(tokenFor("admin"));
+    expect(numberKeys(res)).not.toContain("website");
+    expect((res.body as Answer).failed).toEqual([]);
   });
 });

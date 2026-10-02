@@ -745,6 +745,34 @@
       : "";
     return list + quiet + gaps;
   }
+  // TASK-509: how we are doing, one line each, worded by src/admin/overview-numbers.ts. The card
+  // stays hidden for someone who may see none of them.
+  function numbersHtml(numbers) {
+    var esc = H.escapeHtml;
+    return (
+      '<ul class="ov-numbers">' +
+      numbers
+        .map(function (n) {
+          return (
+            '<li class="ov-number">' +
+            '<span class="ov-number-title">' + esc(n.title) + "</span>" +
+            '<span class="ov-number-body">' +
+            '<span class="ov-number-headline">' + esc(n.headline) + "</span>" +
+            '<span class="ov-number-detail">' + esc(n.detail) + "</span>" +
+            "</span>" +
+            '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(n.button) + "</button>" +
+            "</li>"
+          );
+        })
+        .join("") +
+      "</ul>"
+    );
+  }
+  function showNumbers(numbers) {
+    var list = numbers || [];
+    el("overviewNumbers").innerHTML = list.length ? numbersHtml(list) : "";
+    el("ovNumbersCard").hidden = !list.length;
+  }
   function overviewTime(iso) {
     var t = new Date(iso);
     if (isNaN(t.getTime())) return "";
@@ -755,20 +783,25 @@
     if (!overviewWired) {
       overviewWired = true;
       // Delegated, and attached once: the list is drawn again on every visit.
-      el("overviewNeeds").addEventListener("click", function (e) {
+      var openView = function (e) {
         var btn = e.target.closest && e.target.closest("[data-ov-view]");
         if (btn) selectView(btn.getAttribute("data-ov-view"));
-      });
+      };
+      el("overviewNeeds").addEventListener("click", openView);
+      el("overviewNumbers").addEventListener("click", openView);
     }
     authFetch("/api/admin/overview")
       .then(okJson)
       .then(function (d) {
         el("overviewNeeds").innerHTML = needsHtml(d);
+        showNumbers(d.numbers);
         el("overviewUpdated").textContent = overviewTime(d.updatedAt);
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
         el("overviewNeeds").innerHTML = unavailableHtml("The overview could not load. Open it again in a moment.");
+        // Never last visit's numbers under a message that says nothing could load.
+        showNumbers([]);
         el("overviewUpdated").textContent = "";
       });
     authFetch("/api/admin/donations?limit=5")

@@ -70,7 +70,12 @@ One line each, for those who may see them:
   donations, the Festive Ball and fundraising pages.
 - **Monthly givers** (donations: view): how many give, the monthly total, joined and stopped this month.
 - **Festive Ball** (ball: view): seats sold of the room, money taken, seats held for transfers, days to go.
-- **Website** (analytics: view): visitors this week against last week, people on now, the top channel.
+- **Website** (analytics: view): visitors in the last 7 days against the 7 before (the Analytics
+  screen's 7 day view), people on now, the top channel. Left out while counting is switched off.
+
+Built as TASK-509, a card titled "How we are doing" under Needs you. Money is in whole pounds; each
+part of Money in carries its own screen's gate, and the button opens the first screen the person may
+see. The card is hidden for someone who may see none of the numbers.
 
 ## Stage 3: Coming up
 

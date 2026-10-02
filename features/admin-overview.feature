@@ -20,3 +20,18 @@ Feature: The admin Overview says what needs us (TASK-508)
     When "cal.overview.admin.bdd@example.com" reads the overview
     Then the overview answer is 200
     And it says nothing about Fundraising
+
+  # TASK-509: how we are doing. Every number read runs against the real tables here; none may fail.
+  Scenario: cash paid in for a fundraiser today counts in this month's money
+    Given a new fundraising sign up "Overview coffee morning" waiting for approval
+    And £123.45 in cash was paid in for it today
+    When "ann.overview.admin.bdd@example.com" reads the overview
+    Then the overview answer is 200
+    And every number could be checked
+    And this month's money from fundraising pages is at least £123
+    And it says how the Festive Ball and the monthly givers are doing
+
+  Scenario: someone who can see only the contact form sees none of the numbers
+    When "cal.overview.admin.bdd@example.com" reads the overview
+    Then the overview answer is 200
+    And it shows no numbers

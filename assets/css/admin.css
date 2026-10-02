@@ -2782,6 +2782,8 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   /* The sentence wraps here, so the dot sits by its first line. */
   #view-overview .ov-need{align-items:flex-start}
   #view-overview .ov-dot{margin-top:7px}
+  /* The sentence takes the rest of the dot's row however narrow the phone; the button goes under. */
+  #view-overview .ov-text{flex-basis:calc(100% - 24px)}
   #view-overview .ov-go{margin-left:24px;align-self:flex-start}
 }
 /* ---- TASK-506: news updates in an open sign up. A photo shows small and cropped to one shape, as it
@@ -2800,3 +2802,17 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 }
 #view-fundraising .fr-news-list textarea.fr-input { max-width: 560px; }
 #view-fundraising .fr-news-list .fx-call-label { display: block; margin-top: 12px; }
+/* TASK-509: the Overview's "How we are doing": one row per number, in the Needs you card's shape.
+   A small label, the headline figure, the detail under it in a quieter voice, and the quiet button
+   to the screen with the full story. On a phone the label sits above and the button below. */
+#view-overview .ov-numbers{list-style:none;margin:0;padding:0}
+#view-overview .ov-number{display:grid;grid-template-columns:8.5rem minmax(0,1fr) auto;align-items:center;gap:4px 16px;padding:14px 0;border-bottom:1px solid var(--line)}
+#view-overview .ov-number:last-child{border-bottom:0;padding-bottom:2px}
+#view-overview .ov-number-title{font-size:.82rem;font-weight:600;letter-spacing:.02em;color:var(--slate-soft)}
+#view-overview .ov-number-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+#view-overview .ov-number-headline{font-size:1.08rem;font-weight:700;color:var(--slate);overflow-wrap:anywhere}
+#view-overview .ov-number-detail{font-size:.88rem;line-height:1.45;color:var(--slate-soft);overflow-wrap:anywhere}
+@media (max-width:600px){
+  #view-overview .ov-number{grid-template-columns:minmax(0,1fr);gap:4px}
+  #view-overview .ov-number .ov-go{margin:6px 0 0;justify-self:start}
+}

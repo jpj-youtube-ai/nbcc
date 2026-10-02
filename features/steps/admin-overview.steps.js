@@ -66,6 +66,16 @@ Given("a new fundraising sign up {string} waiting for approval", async function 
   );
 });
 
+// TASK-509: cash on the sign up just made (its organiser's address finds it); removed with it.
+Given("£{float} in cash was paid in for it today", async function (pounds) {
+  await pool.query(
+    `INSERT INTO fundraiser_cash (fundraiser_id, amount_pence, paid_in_on, note, created_by)
+     SELECT id, $2, (now() AT TIME ZONE 'Europe/London')::date, 'Bucket', 'bdd'
+       FROM fundraisers WHERE organiser_email = $1 ORDER BY id DESC LIMIT 1`,
+    [ORGANISER, Math.round(pounds * 100)],
+  );
+});
+
 When("I read the overview without a session", async function () {
   await read(this, null);
 });
@@ -95,4 +105,31 @@ Then("it says nothing about Fundraising", function () {
   assert.ok(this.ovBody.updatedAt, "the answer says when it was read");
   const others = this.ovBody.needs.filter((n) => n.view !== "contact");
   assert.deepEqual(others, [], JSON.stringify(this.ovBody));
+});
+
+// TASK-509: the numbers. Other scenarios may leave money of their own, so totals are "at least".
+const number = (world, key) => (world.ovBody.numbers || []).find((n) => n.key === key);
+
+Then("every number could be checked", function () {
+  assert.deepEqual(this.ovBody.failed, [], JSON.stringify(this.ovBody));
+  assert.ok(Array.isArray(this.ovBody.numbers), JSON.stringify(this.ovBody));
+});
+
+Then("this month's money from fundraising pages is at least £{int}", function (pounds) {
+  const money = number(this, "money");
+  assert.ok(money, JSON.stringify(this.ovBody));
+  const m = /fundraising pages £([\d,]+)\./.exec(money.detail);
+  assert.ok(m, money.detail);
+  assert.ok(Number(m[1].replace(/,/g, "")) >= pounds, money.detail);
+  assert.match(money.headline, /^£[\d,]+ this month so far$/);
+});
+
+Then("it says how the Festive Ball and the monthly givers are doing", function () {
+  assert.match(number(this, "ball")?.headline || "", /^[\d,]+ of [\d,]+ seats sold$/, JSON.stringify(this.ovBody));
+  assert.match(number(this, "monthly")?.headline || "", /^[\d,]+ (person gives|people give) £[\d,]+ a month$/, JSON.stringify(this.ovBody));
+});
+
+Then("it shows no numbers", function () {
+  assert.deepEqual(this.ovBody.numbers, [], JSON.stringify(this.ovBody));
+  assert.deepEqual(this.ovBody.failed, []);
 });

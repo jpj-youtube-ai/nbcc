@@ -1275,6 +1275,71 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     });
   });
 
+  // TASK-509: the Overview's numbers, how we are doing, one line each, under "Needs you". The server
+  // words them and decides which a person may see; this only draws them.
+  describe("How we are doing on the Overview (TASK-509)", () => {
+    const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
+    const NUMBERS = [
+      { key: "money", title: "Money in", headline: "£4,210 this month so far", detail: "£3,900 by this time last month.", view: "donations", button: "Donations" },
+      { key: "ball", title: "Festive Ball", headline: "212 of 300 seats sold", detail: "£18,400 taken. 36 days to go.", view: "ball", button: "Festive Ball" },
+    ];
+    const rows = () => Array.from(document.querySelectorAll("#overviewNumbers .ov-number")) as HTMLElement[];
+    const answer = (numbers: unknown[]) => {
+      overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], numbers, failed: [] } };
+    };
+
+    it("shows each number with its title, headline, detail and a button to its screen", async () => {
+      answer(NUMBERS);
+      await signIn();
+      await settle();
+      expect(el("ovNumbersCard").hidden).toBe(false);
+      expect(rows()).toHaveLength(2);
+      const first = rows()[0];
+      expect(first.querySelector(".ov-number-title")?.textContent).toBe("Money in");
+      expect(first.querySelector(".ov-number-headline")?.textContent).toBe("£4,210 this month so far");
+      expect(first.querySelector(".ov-number-detail")?.textContent).toBe("£3,900 by this time last month.");
+      expect(rows().map((r) => (r.querySelector("button") as HTMLElement).textContent)).toEqual(["Donations", "Festive Ball"]);
+    });
+
+    it("opens the screen behind a number", async () => {
+      answer(NUMBERS);
+      await signIn();
+      await settle();
+      (rows()[1].querySelector("button") as HTMLElement).click();
+      await settle();
+      expect(el("view-ball").hidden).toBe(false);
+      expect(el("view-overview").hidden).toBe(true);
+    });
+
+    it("leaves the card out for someone who may see none of the numbers", async () => {
+      answer([]);
+      await signIn();
+      await settle();
+      expect(el("ovNumbersCard").hidden).toBe(true);
+    });
+
+    it("leaves the card out when the whole overview could not load, rather than showing old numbers", async () => {
+      answer(NUMBERS);
+      await signIn();
+      await settle();
+      overviewAnswer = { status: 500, body: { error: "The overview could not load. Try again." } };
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await settle();
+      (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+      await settle();
+      expect(el("ovNumbersCard").hidden).toBe(true);
+      expect(rows()).toHaveLength(0);
+    });
+
+    it("escapes what it is given", async () => {
+      answer([{ ...NUMBERS[0], headline: "<img src=x onerror=alert(1)>" }]);
+      await signIn();
+      await settle();
+      expect(document.querySelector("#overviewNumbers img")).toBeNull();
+      expect(rows()[0].querySelector(".ov-number-headline")?.textContent).toBe("<img src=x onerror=alert(1)>");
+    });
+  });
+
   // TASK-492: QR codes for every page, to print or share. Anyone who can view Site pages.
   describe("QR codes (TASK-492)", () => {
     const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };

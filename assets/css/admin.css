@@ -2754,3 +2754,33 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-people-who > .fr-invite-expired { margin-left: 6px; background: var(--cream); color: var(--maroon); box-shadow: inset 0 0 0 1px var(--line); }
 #view-fundraising .fr-offlist-panel { background: color-mix(in srgb, var(--tan) 12%, var(--card)); }
 #view-fundraising .fr-call-form { margin-top: 12px; max-width: 560px; }
+
+/* TASK-507: the Overview. "Needs you" is a card like Analytics' cards: one line per waiting item,
+   a dot for how urgent it is (crimson: money or overdue; gold: waiting on a reply; grey: a slower
+   deadline, said in words for a screen reader too), the sentence, and a button to the screen that
+   deals with it. On a phone the button drops under the sentence rather than squeezing it. */
+#view-overview .ov-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 16px}
+#view-overview .ov-updated{margin:0;font-size:.82rem;color:var(--slate-soft)}
+#view-overview .ov-card{min-width:0;margin:6px 0 26px;padding:18px 22px 20px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm)}
+#view-overview .ov-card-head{margin:0 0 6px;font-size:1.12rem;color:var(--maroon)}
+#view-overview .ov-needs{list-style:none;margin:0;padding:0}
+#view-overview .ov-need{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:12px 0;border-bottom:1px solid var(--line)}
+#view-overview .ov-need:last-child{border-bottom:0;padding-bottom:2px}
+#view-overview .ov-dot{flex:none;width:10px;height:10px;border-radius:50%;background:var(--slate-soft)}
+#view-overview .ov-need[data-level="1"] .ov-dot{background:var(--crimson)}
+#view-overview .ov-need[data-level="2"] .ov-dot{background:var(--gold-ink)}
+#view-overview .ov-text{flex:1 1 260px;min-width:0;font-size:.95rem;color:var(--slate);overflow-wrap:anywhere}
+#view-overview .ov-need[data-level="1"] .ov-text{font-weight:600}
+#view-overview .ov-go{margin-left:auto;align-self:center}
+/* The sentence leads; the button is the quiet way there, as on QR codes. */
+#view-overview .ov-go.admin-btn{background:transparent;color:var(--maroon);border:1.6px solid var(--line)}
+#view-overview .ov-go.admin-btn:hover{background:var(--tan-soft);border-color:var(--maroon)}
+#view-overview .ov-clear{margin:6px 0 0;color:var(--holly);font-weight:600}
+#view-overview .ov-failed{margin:12px 0 0;font-size:.88rem;color:var(--maroon);background:var(--tan-soft);border-radius:10px;padding:8px 12px}
+@media (max-width:600px){
+  #view-overview .ov-card{padding:14px 16px 16px}
+  /* The sentence wraps here, so the dot sits by its first line. */
+  #view-overview .ov-need{align-items:flex-start}
+  #view-overview .ov-dot{margin-top:7px}
+  #view-overview .ov-go{margin-left:24px;align-self:flex-start}
+}

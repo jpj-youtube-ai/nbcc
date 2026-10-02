@@ -8,8 +8,8 @@ describe("the words for each waiting item", () => {
   it("says one and many properly", () => {
     expect(needsLines({ contactWaiting: { count: 1 } })[0].text).toBe("1 contact message is waiting for a reply");
     expect(needsLines({ contactWaiting: { count: 3 } })[0].text).toBe("3 contact messages are waiting for a reply");
-    expect(needsLines({ transfersOverdue: { count: 1 } })[0].text).toBe("1 bank transfer is past its pay-by date");
-    expect(needsLines({ transfersOverdue: { count: 2 } })[0].text).toBe("2 bank transfers are past their pay-by date");
+    expect(needsLines({ transfersOverdue: { count: 1 } })[0].text).toBe("1 bank transfer is overdue");
+    expect(needsLines({ transfersOverdue: { count: 2 } })[0].text).toBe("2 bank transfers are overdue");
   });
 
   it("gives the money where there is some to collect", () => {
@@ -25,7 +25,8 @@ describe("the words for each waiting item", () => {
       expect(one.text, need.key).toMatch(/^1 /);
       expect(many.text, need.key).toMatch(/^2 /);
       expect(one.text, need.key).not.toBe(many.text);
-      // House style: no hyphens joining words other than "pay-by", no dashes.
+      // House style: no hyphens joining words, no dashes.
+      expect(many.text, need.key).not.toMatch(/[A-Za-z]-[A-Za-z]/);
       expect(many.text, need.key).not.toMatch(/[–—]/);
     }
   });

@@ -93,51 +93,21 @@ beforeEach(() => {
   (0, eval)(appSrc);
 });
 
-describe("the Overview's figures say when they could not be counted (TASK-476)", () => {
-  const cards: [string, string][] = [
-    ["/api/admin/claims/adjustment-due", "Adjustments due"],
-    ["/api/admin/queues/retention-expiry", "Retention expiring"],
-    ["/api/admin/queues/awaiting-declaration", "Awaiting declaration"],
-    ["/api/admin/queues/gasds-deadline", "GASDS deadline near"],
-    ["/api/admin/queues/declaration-review", "Declaration review due"],
-  ];
-  const card = (label: string) =>
-    Array.from(document.querySelectorAll("#overviewStats .admin-stat")).find(
-      (c) => c.querySelector(".l")?.textContent === label,
-    ) as HTMLElement;
-
-  beforeEach(() => {
-    for (const [path] of cards) served[path] = { results: [{ id: 1 }, { id: 2 }] };
-  });
-
-  it("shows each count when it came back", async () => {
+// TASK-507: the five Gift Aid figures that used to stand here are lines in "Needs you" now. The
+// review of #600 still holds: what is not in your access is left out, not reported as a failure.
+describe("the Overview says when it could not check, never that nothing needs you (TASK-476, TASK-507)", () => {
+  it("names the parts it could not check", async () => {
+    served["/api/admin/overview"] = { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: ["Claims"] };
     await signIn();
-    for (const [, label] of cards) expect(card(label).querySelector(".n")?.textContent).toBe("2");
+    expect(el("overviewNeeds").textContent).toContain("Could not check: Claims");
+    expect(el("overviewNeeds").textContent).not.toContain("Nothing needs you");
   });
 
-  // Review of #600: a person whose saved access leaves out a section gets a 403 for its figure on
-  // every sign in. That is not a failure to report; the figure is simply not theirs to see.
-  it("leaves out a figure that is not in your access, rather than saying it could not load", async () => {
-    failing["/api/admin/claims/adjustment-due"] = { status: 403, body: { error: "forbidden" } };
+  it("says recent donations are not part of your access, rather than that they could not load", async () => {
     failing["/api/admin/donations"] = { status: 403, body: { error: "forbidden" } };
     await signIn();
-
-    expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(4);
-    expect(card("Adjustments due")).toBeUndefined();
-    expect(el("overviewStats").textContent).not.toContain("Could not load");
     expect(el("overviewRecent").textContent).toContain("Recent donations are not part of your access.");
     expect(el("overviewRecent").textContent).not.toContain("unavailable");
-  });
-
-  it.each(cards)("says %s could not load, not 0, and leaves the other figures alone", async (path, label) => {
-    failing[path] = SERVER_DOWN;
-    await signIn();
-
-    expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(5);
-    expect(card(label).querySelector(".n")?.textContent).toBe("Could not load");
-    for (const [otherPath, other] of cards) {
-      if (otherPath !== path) expect(card(other).querySelector(".n")?.textContent).toBe("2");
-    }
   });
 });
 
@@ -154,6 +124,8 @@ type Panel = {
   okText: string;
 };
 const panels: Panel[] = [
+  { name: "Needs you", view: null, path: "/api/admin/overview", target: "overviewNeeds",
+    unavailable: "The overview could not load.", okText: "Nothing needs you right now." },
   { name: "Recent donations", view: null, path: "/api/admin/donations", target: "overviewRecent",
     unavailable: "Recent donations are unavailable.", okText: "No donations yet." },
   { name: "Donations", view: "donations", path: "/api/admin/donations", target: "donationsTable",

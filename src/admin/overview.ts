@@ -50,7 +50,7 @@ const CLAIMS = { view: "claims", button: "Claims" };
 
 export const NEEDS: readonly Need[] = [
   // 1. Money or overdue.
-  { key: "transfersOverdue", level: 1, ...BALL, one: "bank transfer is past its pay-by date", many: "bank transfers are past their pay-by date" },
+  { key: "transfersOverdue", level: 1, ...BALL, one: "bank transfer is overdue", many: "bank transfers are overdue" },
   { key: "monthlyFailing", level: 1, view: "monthly", button: "Monthly givers", one: "monthly gift is failing to take", many: "monthly gifts are failing to take" },
   { key: "giftAidReady", level: 1, ...CLAIMS, one: "donation is ready to claim Gift Aid on", many: "donations are ready to claim Gift Aid on" },
   { key: "emailFailures", level: 1, view: "email-audit", button: "Email audit", one: "email failed or bounced in the last 2 weeks", many: "emails failed or bounced in the last 2 weeks" },

@@ -115,7 +115,7 @@ describe("GET /api/admin/overview", () => {
       "declarationsAwaiting",
     ]);
     const text = (key: string) => answer.needs.find((n) => n.key === key)?.text;
-    expect(text("transfersOverdue")).toBe("1 bank transfer is past its pay-by date");
+    expect(text("transfersOverdue")).toBe("1 bank transfer is overdue");
     expect(text("transfersWaiting")).toBe("2 bank transfers are still waiting for their money");
     expect(text("monthlyFailing")).toBe("1 monthly gift is failing to take");
     expect(text("giftAidReady")).toBe("2 donations are ready to claim Gift Aid on (£30.50 of giving)");

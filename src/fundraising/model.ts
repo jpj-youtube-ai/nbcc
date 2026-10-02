@@ -40,8 +40,9 @@ export const GIFT_MIN_PENCE = 200; // £2, as the design asks
 export const MAX_LEAFLETS = 1000;
 export const MAX_BUCKETS = 20;
 
-// Addresses under /fundraise/ that are pages of their own, so no fundraiser may take them.
-export const RESERVED_SLUGS: ReadonlySet<string> = new Set(["manage"]);
+// Addresses under /fundraise/ that are pages of their own, so no fundraiser may take them: the manage
+// page (TASK-494) and the help page (TASK-498).
+export const RESERVED_SLUGS: ReadonlySet<string> = new Set(["manage", "help"]);
 
 export interface Wants {
   leaflets: number;

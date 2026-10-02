@@ -7,6 +7,7 @@ import {
   adminPatchSchema,
   slugify,
   isValidSlug,
+  RESERVED_SLUGS,
   meter,
   giftNetPence,
   shortName,
@@ -192,6 +193,16 @@ describe("slugs", () => {
     expect(isValidSlug("a".repeat(61))).toBe(false);
     // An address the site already uses for its own pages.
     expect(isValidSlug("manage")).toBe(false);
+    // TASK-498: the help page at /fundraise/help.
+    expect(isValidSlug("help")).toBe(false);
+  });
+
+  // TASK-498: a sign up called "Help" or "Manage" is given help-2 or manage-2 when it is made
+  // (freeSlug in src/db/fundraisers.ts treats every reserved slug as taken), so neither page is ever
+  // hidden behind a fundraiser.
+  it("never take the addresses of the site's own fundraising pages", () => {
+    expect([...RESERVED_SLUGS].sort()).toEqual(["help", "manage"]);
+    for (const reserved of RESERVED_SLUGS) expect(slugify(reserved)).toBe(reserved);
   });
 });
 

@@ -1392,6 +1392,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
 | `GET /fundraise/manage` | **implemented** | TASK-494 (change your page by the emailed `?token=` link; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
+| `GET /fundraise/help` | **implemented** | TASK-498 (Fundraising help, a draft for sign off: ideas from A to Z, paying in, Gift Aid, staying safe and legal in Scotland, using our logo; indexed and in the site maps like `/fundraise`; 404 while fundraising is switched off; registered before `/fundraise/:slug`, and `help` is a reserved slug) |
 | `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on. `?thanks=1` (and `&message=1`) shows the thank you a giver comes back to after paying) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
@@ -7321,7 +7322,7 @@ kind on the Email audit:
 
 - Reserve nothing in `src/site/pages.ts` for the API: it is all under `/api`. The pages
   `/fundraise`, `/fundraise/<slug>`, `/fundraise/manage` and `/get-involved` are yours to add; the
-  slug `manage` can never be a fundraiser's (`RESERVED_SLUGS`).
+  slugs `manage` and `help` (TASK-498) can never be a fundraiser's (`RESERVED_SLUGS`).
 - The give form posts the donate page's body to `POST /api/checkout-session` with
   `fundraiserId: giving.fundraiserId`, `mode: "once"`, and the message and choices.
 - The QR code is `src/fundraising/qr.ts`, built separately.
@@ -7427,19 +7428,36 @@ link that has run out or matches nothing leads back to asking for a new one. The
 `noindex`, never cached, sends no referrer, does not load the visit counter, takes the token out of
 the address bar once it has read it, and is a 404 while fundraising is switched off.
 
+**Fundraising help (`/fundraise/help`, TASK-498).** A plain reading page for organisers, linked
+from the sign up form's intro ("New to fundraising? Read our help page"), with a contents list of
+anchor links to: an A to Z of fundraising ideas; paying in what you raise (online gifts come
+straight to NBCC; cash and sponsor money by card from the private area, by bank transfer after
+calling or emailing for the bank details, which the page never prints, or dropped in by
+arrangement; paper sponsor forms sent in for Gift Aid); Gift Aid made simple (25p per £1, the
+declaration, enough tax paid, never on raffle tickets, cake sales, event tickets or company
+payments); staying safe and legal in Scotland (general information, not legal advice: collection
+permits under the Civic Government (Scotland) Act 1982, raffles and lotteries, food, safety, and
+saying you are fundraising "for" NBCC); using our logo; and a questions panel with the phone and
+`events@nbcc.scot` side by side and a button back to the sign up. Outside links go only to pages
+checked by hand (GOV.UK, the Gambling Commission, Food Standards Scotland, the Fundraising
+Regulator), pinned in `test/unit/fundraise-help-page.test.ts`. It exists only while fundraising is
+switched on, so it merged as a draft for Jaimie to sign off before fundraising opens. Template
+`fundraise-help.html` (styles: `pages.css` and the help part of `fundraising.css`); listed in the
+site maps under `/fundraise` while fundraising is on.
+
 **Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
 `src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:
-`events.html` (Get involved), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html` (all in
+`events.html` (Get involved), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
 the Dockerfile's page list). Scripts: `assets/js/fundraise.js`, `fundraiser.js`,
 `fundraise-manage.js`; styles: `assets/css/fundraising.css` and the Get involved part of
 `events.css`. None of it touches `main.js` or `styles.css`, so donate.html's page weight budget is
 unchanged. Text boxes grow with what is typed rather than scroll.
 
 **Tests.** `fundraising-render`, `fundraise-pages-routes`, `get-involved-page`,
-`fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page` and
+`fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page`, `fundraise-help-page` and
 `fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
 redirect, Get involved with fundraising on and off, a fundraiser's page and QR code, 404s, the sign
-up while off, the manage page's headers).
+up while off, the manage page's headers, the help page on and off).
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

@@ -345,6 +345,47 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-form__lead { margin: 0 0 18px; }
 .fr-form__lead a { font-weight: 600; }
 
+/* ---------- the help page (TASK-498) ----------
+   A reading page: the privacy notice's .page-prose, centred in a column a little wider, with the
+   contents list and the questions panel built from the shared .card and .contact-point. Every list
+   wraps and the page grows; nothing scrolls inside itself. */
+.fr-aside-link--next { margin-top: 6px; }
+.help-body.page-prose { max-width: 760px; margin-inline: auto; }
+.help-section { scroll-margin-top: calc(var(--nav-h) + 1rem); margin-top: clamp(40px, 6vw, 64px); }
+.help-section h2 { margin-top: 0; }
+.help-body h3 { font-size: clamp(1.15rem, 1.05rem + 0.4vw, 1.3rem); color: var(--maroon); margin: 26px 0 8px; }
+.help-contents { padding: clamp(20px, 3.4vw, 28px); }
+.page-prose .help-contents__title { margin: 0 0 10px; font-size: 1.15rem; }
+.page-prose .help-contents ol { margin: 0; padding-left: 22px; display: grid; gap: 2px; }
+.page-prose .help-contents li { margin: 0; }
+.help-contents a { display: inline-block; padding: 8px 0; min-height: 44px; font-weight: 600; text-underline-offset: 3px; }
+.page-prose .help-az { list-style: none; margin: 18px 0 20px; padding: 0; display: grid; gap: 10px; }
+@media (min-width: 640px) { .page-prose .help-az { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.page-prose .help-az li {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.help-az strong { display: block; font-family: var(--font-head); font-size: 1.12rem; color: var(--crimson); }
+.help-note {
+  padding: 14px 16px;
+  border: 1.6px solid var(--holly);
+  border-radius: var(--radius);
+  background: var(--holly-soft);
+  font-weight: 600;
+}
+.help-questions { scroll-margin-top: calc(var(--nav-h) + 1rem); margin-top: clamp(44px, 6vw, 72px); }
+.page-prose .help-ways { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+@media (min-width: 560px) { .page-prose .help-ways { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.page-prose .help-ways li { margin: 0; }
+.help-ways .contact-point a { font-size: 1.08rem; overflow-wrap: anywhere; }
+.help-ways small { display: block; color: var(--slate-soft); font-weight: 400; font-size: 0.85rem; }
+.page-prose .help-questions__cta { margin: 22px 0 0; }
+
 /* ---------- motion off ---------- */
 @media (prefers-reduced-motion: reduce) {
   .fr-option, .fr-amount__face, .fr-share__btn, .fr-wall__more { transition: none; }

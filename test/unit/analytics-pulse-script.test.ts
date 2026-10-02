@@ -248,6 +248,8 @@ describe("which pages carry it", () => {
     "thank-you.html", "business-thank-you.html", "404.html",
     // TASK-494: the fundraising sign up and the template of every fundraiser's page.
     "fundraise.html", "fundraiser.html",
+    // TASK-498: the fundraising help page.
+    "fundraise-help.html",
   ];
   const TAG = '<script defer src="/assets/js/pulse.js"></script>';
 

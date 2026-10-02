@@ -112,3 +112,25 @@ describe("the give form's body, through the real checkout", () => {
     expect(res.statusCode, JSON.stringify(res.body)).toBe(200);
   });
 });
+
+describe("a message the core refuses", () => {
+  // The core checks the supporter's message as it checks a name on the supporters wall. The give form
+  // shows the refusal beside the message box by reading details.fieldErrors.supporterMessage
+  // (test/unit/fundraiser-page.test.ts); this pins that the real route answers in that shape.
+  it("comes back where the give form looks for it", async () => {
+    const body = browserBody((set) => {
+      set("frOwnAmount", "5");
+      set("frFirstName", "Alex");
+      set("frSurname", "Example");
+      set("frEmail", "alex@example.com");
+      set("frMessage", "what a load of bollocks");
+    });
+    const res = await post(body);
+    expect(res.statusCode).toBe(400);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const said = (res.body as any)?.details?.fieldErrors?.supporterMessage?.[0];
+    expect(typeof said).toBe("string");
+    expect(said.length).toBeGreaterThan(0);
+    expect(create).not.toHaveBeenCalled();
+  });
+});

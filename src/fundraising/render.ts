@@ -484,6 +484,8 @@ const EMBEDDED_CHECKOUT =
   '<div class="give-embedded-mount" id="frEmbeddedCheckout"></div></div></div>';
 
 export const PAGE_MARKER = "<!-- fundraiser:page -->";
+export const INTRO_MARKER = "<!-- fundraiser:intro -->";
+export const CHECKOUT_MARKER = "<!-- fundraiser:checkout -->";
 
 export interface FundraiserPageOptions {
   /** The page's own full address, for the QR code, sharing and the canonical link. */
@@ -491,7 +493,7 @@ export interface FundraiserPageOptions {
   now: Date;
 }
 
-/** One fundraiser's page: the template's head filled in, and the page where its marker is. */
+/** One fundraiser's page: the template's head filled in, and the page where its markers are. */
 export function renderFundraiserPage(template: string, p: PublicPage, opts: FundraiserPageOptions): string {
   const origin = (() => {
     try {
@@ -502,14 +504,12 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
   })();
   const description = `${p.organisedBy} is raising money for NBCC. ${shorten(p.description, 140)}`;
   const image = p.imageSrc ? `${origin}${p.imageSrc}` : "https://nbcc.scot/assets/img/og-image.png";
-  const body =
-    '<section class="page-top fr-intro" aria-labelledby="fr-title"><div class="wrap"><div class="intro-hero">' +
+  const intro =
     `<span class="eyebrow">${escapeHtml(p.kindLabel)}</span>` +
     `<h1 id="fr-title">${escapeHtml(p.title)}</h1>` +
     '<div class="rule"><i></i></div>' +
-    renderFacts(p) +
-    "</div></div></section>" +
-    '<div class="section flush-top"><div class="wrap fr-layout">' +
+    renderFacts(p);
+  const body =
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +
     renderMeter(p.meter, { large: true }) +
@@ -526,9 +526,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     renderGiveForm(p) +
     renderWall(p, opts.now) +
     "</div>" +
-    `<div class="fr-extras">${renderShare(p, opts.pageUrl)}${renderQr(p, opts.pageUrl)}</div>` +
-    "</div></div>" +
-    EMBEDDED_CHECKOUT;
+    `<div class="fr-extras">${renderShare(p, opts.pageUrl)}${renderQr(p, opts.pageUrl)}</div>`;
 
   const fill: Record<string, string> = {
     __TITLE__: escapeHtml(p.title),
@@ -538,7 +536,9 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
   };
   return template
     .replace(/__(TITLE|DESCRIPTION|PAGE_URL|OG_IMAGE)__/g, (token) => fill[token])
-    .replace(PAGE_MARKER, () => body);
+    .replace(INTRO_MARKER, () => intro)
+    .replace(PAGE_MARKER, () => body)
+    .replace(CHECKOUT_MARKER, () => EMBEDDED_CHECKOUT);
 }
 
 // --- the sign up page ----------------------------------------------------------------------------

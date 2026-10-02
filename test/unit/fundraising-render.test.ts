@@ -425,3 +425,16 @@ describe("forms without JavaScript", () => {
     for (const n of nojs) expect(n.hasAttribute("hidden")).toBe(false);
   });
 });
+
+describe("the fundraiser template", () => {
+  it("holds each marker exactly once, and none is left after drawing", () => {
+    const t = read("fundraiser.html");
+    for (const m of ["<!-- fundraiser:intro -->", "<!-- fundraiser:page -->", "<!-- fundraiser:checkout -->"]) {
+      expect(t.split(m), m).toHaveLength(2);
+    }
+    const out = renderFundraiserPage(t, page(), { pageUrl: PAGE_URL, now: NOW });
+    expect(out).not.toContain("<!-- fundraiser:");
+    expect(parse(out).querySelectorAll("h1")).toHaveLength(1);
+    expect(parse(out).querySelector("#embeddedCheckoutModal")).not.toBeNull();
+  });
+});

@@ -51,13 +51,21 @@
     </header>
 
     <main class="site-main" id="main" tabindex="-1">
-      <!-- TASK-494: one community fundraiser's page, drawn by the server where the marker is
-           (src/fundraising/render.ts renderFundraiserPage): the story, the meter, the give form, the
-           supporter wall, the QR code and the share links. The tokens in the head are filled in with
-           the fundraiser's own name and address, so a shared link shows them. Served only for an
-           approved, public, raising money fundraiser while fundraising is switched on; anything else
-           is the site's 404. -->
-      <!-- fundraiser:page -->
+      <!-- TASK-494: one community fundraiser's page, drawn by the server where the markers are
+           (src/fundraising/render.ts renderFundraiserPage): the name and facts in the intro; the
+           story, the meter, the give form, the supporter wall, the QR code and the share links in
+           the layout. The tokens in the head are filled in with the fundraiser's own name and
+           address, so a shared link shows them. Served only for an approved, public, raising money
+           fundraiser while fundraising is switched on; anything else is the site's 404. -->
+      <section class="page-top fr-intro" aria-labelledby="fr-title">
+        <div class="wrap">
+          <div class="intro-hero"><!-- fundraiser:intro --></div>
+        </div>
+      </section>
+      <div class="section flush-top">
+        <div class="wrap fr-layout"><!-- fundraiser:page --></div>
+      </div>
+      <!-- fundraiser:checkout -->
     </main>
 
     <footer class="site-footer" data-region="footer">

@@ -83,6 +83,10 @@ The next 14 days in date order: events (events: view), fundraisers' event days (
 scheduled newsletters (newsletter: view), the next ticket report (events and ball: view), and the
 Festive Ball's key dates: sales close, guest details close, the night itself (ball: view).
 
+Built as TASK-510, a card titled "Coming up" under the numbers, grouped by day. Draft events are
+shown and said to be drafts; ticket sales opening is listed too when it is set. The card is hidden
+when nothing the person may see is coming up.
+
 ## Errors
 
 - A source that fails: its name in "Could not check", the rest shown.

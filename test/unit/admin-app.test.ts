@@ -1340,6 +1340,79 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     });
   });
 
+  // TASK-510: Coming up, the next 14 days by day, under the numbers. The server gathers and words it.
+  describe("Coming up on the Overview (TASK-510)", () => {
+    const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
+    const COMING = [
+      {
+        day: "2026-10-03",
+        label: "Today",
+        items: [{ text: "The newsletter goes out: October news", when: "8am", view: "newsletter", button: "Newsletter" }],
+      },
+      {
+        day: "2026-10-07",
+        label: "Wednesday 7 October",
+        items: [
+          { text: "Quiz night", when: "7:30pm", view: "events", button: "Events" },
+          { text: "Bake sale (a fundraiser)", when: "", view: "fundraising", button: "Fundraising" },
+        ],
+      },
+    ];
+    const days = () => Array.from(document.querySelectorAll("#overviewComing .ov-day")) as HTMLElement[];
+    const answer = (comingUp: unknown[]) => {
+      overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], numbers: [], comingUp, failed: [] } };
+    };
+
+    it("shows the fortnight by day, each thing with its time and a button to its screen", async () => {
+      answer(COMING);
+      await signIn();
+      await settle();
+      expect(el("ovComingCard").hidden).toBe(false);
+      expect(days().map((d) => d.querySelector(".ov-day-label")?.textContent)).toEqual(["Today", "Wednesday 7 October"]);
+      const items = Array.from(days()[1].querySelectorAll(".ov-event")) as HTMLElement[];
+      expect(items.map((i) => i.querySelector(".ov-event-when")?.textContent)).toEqual(["7:30pm", ""]);
+      expect(items.map((i) => i.querySelector(".ov-event-text")?.textContent)).toEqual(["Quiz night", "Bake sale (a fundraiser)"]);
+      expect(items.map((i) => (i.querySelector("button") as HTMLElement).textContent)).toEqual(["Events", "Fundraising"]);
+    });
+
+    it("opens the screen behind a thing coming up", async () => {
+      answer(COMING);
+      await signIn();
+      await settle();
+      (days()[1].querySelector(".ov-event button") as HTMLElement).click();
+      await settle();
+      expect(el("view-events").hidden).toBe(false);
+      expect(el("view-overview").hidden).toBe(true);
+    });
+
+    it("leaves the card out when nothing this person may see is coming up", async () => {
+      answer([]);
+      await signIn();
+      await settle();
+      expect(el("ovComingCard").hidden).toBe(true);
+    });
+
+    it("leaves the card out when the whole overview could not load", async () => {
+      answer(COMING);
+      await signIn();
+      await settle();
+      overviewAnswer = { status: 500, body: { error: "The overview could not load. Try again." } };
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await settle();
+      (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+      await settle();
+      expect(el("ovComingCard").hidden).toBe(true);
+      expect(days()).toHaveLength(0);
+    });
+
+    it("escapes what it is given", async () => {
+      answer([{ day: "2026-10-03", label: "<b>x</b>", items: [{ text: "<img src=x onerror=alert(1)>", when: "", view: "events", button: "Events" }] }]);
+      await signIn();
+      await settle();
+      expect(document.querySelector("#overviewComing img, #overviewComing b")).toBeNull();
+    });
+  });
+
   // TASK-492: QR codes for every page, to print or share. Anyone who can view Site pages.
   describe("QR codes (TASK-492)", () => {
     const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };

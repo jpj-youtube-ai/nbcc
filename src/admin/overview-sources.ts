@@ -11,6 +11,8 @@ export interface Source<C extends object> {
   name: string;
   section: Section;
   level: "view" | "edit";
+  /** A second gate, for a screen that needs two (the ticket report: Events and Festive Ball). */
+  also?: { section: Section; level: "view" | "edit" };
   read: () => Promise<C>;
 }
 
@@ -44,7 +46,7 @@ export async function gather<C extends object>(
   perms: PermissionMap,
   sources: readonly Source<C>[],
 ): Promise<{ counts: C; failed: string[] }> {
-  const allowed = sources.filter((s) => can(perms, s.section, s.level));
+  const allowed = sources.filter((s) => can(perms, s.section, s.level) && (!s.also || can(perms, s.also.section, s.also.level)));
   const results = await settleInTurn(allowed.map((s) => () => s.read()), MAX_AT_ONCE);
   const counts = {} as C;
   const failed: string[] = [];

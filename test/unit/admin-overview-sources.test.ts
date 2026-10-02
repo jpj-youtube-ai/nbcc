@@ -66,6 +66,17 @@ describe("gathering what needs people", () => {
     expect(most).toBe(3);
   });
 
+  // The Festive Ball ticket report's screen needs Events and Festive Ball both.
+  it("asks a source with a second gate only of someone who passes both", async () => {
+    const read = vi.fn(async () => ({}));
+    const both = source({ section: "ball", also: { section: "events", level: "view" }, read });
+    const ballOnly = { ...roleToPermissions("admin"), events: "none" } as ReturnType<typeof roleToPermissions>;
+    await gather(ballOnly, [both]);
+    expect(read).not.toHaveBeenCalled();
+    await gather(roleToPermissions("admin"), [both]);
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
   it("asks nothing for someone who can see nothing", async () => {
     const read = vi.fn(async () => ({}));
     const none = Object.fromEntries(Object.keys(roleToPermissions("admin")).map((k) => [k, "none"])) as ReturnType<typeof roleToPermissions>;

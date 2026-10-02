@@ -116,6 +116,23 @@ describe("the old Events address", () => {
   });
 });
 
+describe("the easy to type addresses", () => {
+  // Said aloud, on a poster or on the radio, people type it without the dash, or just "involved".
+  for (const path of ["/getinvolved", "/involved", "/GetInvolved", "/getinvolved/"]) {
+    it(`${path} goes to Get involved for good`, async () => {
+      const res = await get(path);
+      expect(res.status).toBe(301);
+      expect(res.headers.get("location")).toBe("/get-involved");
+    });
+  }
+
+  it("keeps the query string, so poster and radio tags still count", async () => {
+    const res = await get("/involved?utm_source=poster");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/get-involved?utm_source=poster");
+  });
+});
+
 describe("Get involved", () => {
   it("is a 404 while the events page is switched off", async () => {
     state.eventsOn = false;

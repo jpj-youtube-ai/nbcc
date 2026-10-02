@@ -134,6 +134,9 @@ export const RESERVED_PREFIXES: string[] = [
   // TASK-494 renamed it /get-involved; the old address stays reserved because it redirects there.
   "/events",
   "/get-involved",
+  // TASK-496: the ways people type Get involved from a poster; both redirect there.
+  "/getinvolved",
+  "/involved",
   // TASK-494: the fundraising sign up, each fundraiser's page and the manage page.
   "/fundraise",
   "/g",

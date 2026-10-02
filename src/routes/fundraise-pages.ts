@@ -5,6 +5,7 @@ import { join } from "node:path";
 // TASK-494: the public pages of community fundraising, and Get involved (the Events page, renamed).
 //
 //   GET /events                    301 to /get-involved, query string kept (old links, newsletters)
+//   GET /getinvolved, /involved    301 to /get-involved too, the ways people type it from a poster
 //   GET /get-involved              NBCC's events, plus fundraisers while fundraising is switched on
 //   GET /fundraise                 the sign up form, or "not open yet" while switched off
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
@@ -54,7 +55,9 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   // so it is a permanent redirect whether or not the page is on (switched off, /get-involved is the
   // 404 the old address would have been). The query string goes too: newsletter links carry their
   // utm tags on it.
-  router.get("/events", (req, res) => {
+  // Said aloud, on a poster or on the radio, people type it without the dash, or just "involved", so
+  // those go there too (Express matches them in any case and with or without a trailing slash).
+  router.get(["/events", "/getinvolved", "/involved"], (req, res) => {
     const at = req.originalUrl.indexOf("?");
     res.redirect(301, `/get-involved${at === -1 ? "" : req.originalUrl.slice(at)}`);
   });

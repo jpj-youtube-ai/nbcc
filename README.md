@@ -7603,12 +7603,20 @@ the help page on and off).
 6 digit code we email; the 24 hour link it replaces is retired. Like everything else in
 fundraising, it is all a 404 while fundraising is switched off.
 
-**Signing in.** They put in the email they signed up with. If it belongs to an approved
-fundraiser (either path), we email a code (email 8, `fundraiseCode`). It works for 10 minutes and
+**Signing in.** They put in the email they signed up with. If it belongs to an approved or
+finished fundraiser (either path; never one that is new or declined), we email a code (email 8,
+`fundraiseCode`). It works for 10 minutes and
 allows 5 tries. A right code starts a signed in session for 2 hours, scoped to that email, so an
 organiser with more than one fundraiser sees them all. A Sign out button ends it.
 
-**Inside, for each of their approved fundraisers:** where it is up to and its public page link
+**Finished fundraisers stay (Jaimie's decision, TASK-501 review).** Finishing never locks an
+organiser out. A finished one is listed as "Finished. Thank you for everything you raised." with its
+gifts and messages, its QR code and "Pay in what you collected", so late money still reaches it. It
+takes no more changes ("Your fundraiser is finished. To change anything, get in touch.", and the
+edit route answers `410` with the same words) and has no "I've finished". Stage 1 still hides a
+finished fundraiser's public page; only its QR code address keeps answering, for the private area.
+
+**Inside, for each of their approved or finished fundraisers:** where it is up to and its public page link
 (when it has one); its QR code (an `<img>` of `/fundraise/<slug>/qr.svg` with a download link,
 only for a page); what it has raised; the latest gifts and messages exactly as the wall shows them
 (a short name or Anonymous, the amount unless hidden, the message unless staff hid it, the date,
@@ -7632,12 +7640,22 @@ change; "Pay in what you collected"; and "I've finished".
   fundraiser, Gift Aid off whatever is sent, no name or message for the wall, no newsletter, and one
   more metadata key, `paidInByOrganiser: "true"`, which only the server ever stamps (the public
   checkout drops it if sent). It comes back to `/fundraise/manage?paid=1` ("Thank you for paying
-  in"), or to the private area on a cancel. The webhook stores it with
+  in"), or to the private area on a cancel. The checkout closes after 31 minutes (Stripe's shortest
+  is 30 from when it is made; the extra minute covers clock drift), so a pay in left open cannot
+  complete hours later. The webhook links it to the fundraiser when that is approved **or
+  finished**, and stamps `paid_in_by_organiser` whatever happens to the link, so money paid in can
+  never pass as the organiser's own gift. It stores it with
   `donations.paid_in_by_organiser = true`, no message and nothing shown: it counts on the meter like
   any paid online gift, never appears on the wall (public or private), and staff see it on the
   admin wall with a "Paid in by the organiser" pill. The receipt email thanks them for paying it in
   ("The £X you paid in for your fundraiser has reached NBCC. Please pass on our thanks to everyone
   who gave.") and never has a Gift Aid line; every other receipt is word for word as before.
+  **It is never a gift of theirs:** pay ins are left out of the thank you letter list
+  (`listThankYouEligible`), the donor portal's giving history and total (`getDonorDonationHistory`),
+  the supporters wall's figures, and the outreach reports, "have they started giving?" check and
+  business donor picker. The donor portal never takes a donor row whose only donations are pay ins as
+  their main record (`findNewestDonorByEmail` passes over it for the newest row that is not, and only
+  falls back to it when every row is like that).
 - **I've finished.** Records `fundraisers.finished_requested_at` (the first press is kept), emails
   the events inbox once (`fundraiseFinishedStaff`, staff only so never link tagged, Reply-To the
   organiser), and says "Thank you, we'll be in touch." It finishes and hides nothing: staff still
@@ -7659,7 +7677,10 @@ change; "Pay in what you collected"; and "I've finished".
 - **Rate limits** (in memory, per task, like the rest of the site). Asking: 3 a quarter hour and 10
   a day per email, 20 a quarter hour per address. Trying: 10 a quarter hour per email, 30 per
   address. With 5 tries a code, guessing one email's codes is about one in twenty thousand a day at
-  most. Paying in: 10 checkouts a quarter hour per organiser.
+  most. Paying in: 10 checkouts a quarter hour per organiser. Requests made on the box itself
+  (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`: local development and the pr.yml BDD suite) are exempt,
+  exactly as admin login is (TASK-200); behind the ALB `req.ip` is always the real client address,
+  so no outside request can claim it.
 - **The session.** A right code always starts a NEW random 32 byte id (any session the browser
   already had is ended, so nobody can fix a session on someone else), stored only as its sha256 in
   `fundraiser_sessions`. The cookie `nbcc_fr_session` is `HttpOnly`, `SameSite=Lax`, `Secure` in
@@ -7683,10 +7704,20 @@ dropped in a later release (expand and contract).
 
 **The public page.** The QR code is no longer on a fundraiser's page (no picture, no download
 link). `/fundraise/<slug>/qr.svg` still answers, public but unlinked (it only encodes the public
-page's address), for the private area and the admin, which now shows the code itself beside its
+page's address), for an approved or finished fundraiser that has (or had) a page, for the private
+area and the admin, which now shows the code itself beside its
 download link. The page ends with a quiet line: "Is this your page? Manage it", linking
 `/fundraise/manage`. The help page's Paying in section now says to sign in with a code at
 nbcc.scot/fundraise/manage.
+
+**Known trade-offs (left as they are).**
+
+- The rate limiters are in memory and per task, like every other limiter on the site: with more
+  than one task the limits multiply, and a restart forgets them. A shared limiter is a site wide
+  follow up, not this feature's.
+- The same origin check lets through a POST that carries neither `Sec-Fetch-Site` nor `Origin`.
+  Every browser sends one of them on a POST, so only a non browser client gets through, and it
+  carries no visitor's cookie to misuse; it still needs a session of its own.
 
 ### API
 
@@ -7697,9 +7728,9 @@ All under `/api/fundraise/manage`, JSON, `404` while fundraising is off.
 | `POST /request` `{ email }` | always `200 { "message": "If that email belongs to an approved fundraiser, we have sent a sign in code to it. It works for 10 minutes." }`; `400` only for something that is not an email; `403` from another site |
 | `POST /sign-in` `{ email, code }` | `200 { "status": "signed_in" }` plus the cookie; `401 { "error": "That code does not work. Check it, or ask for a new one." }` for every refusal; `400` for a code that is not 6 digits (spaces and a dash are fine, not counted as a try); `429` over the limits |
 | `GET /me` | `200 { "fundraisers": [{ "id", "slug", "title", "path", "status", "public", "pageUrl", "qrUrl", "meter", "editable": {...19 fields}, "waitingEdit", "gifts": [wall entries], "finishedRequestedAt" }] }`; `401` signed out |
-| `POST /fundraisers/:id/edit` | any of the 19 editable fields; `202 { "status": "waiting", "edit" }`; `400` with `fields`; `404` not theirs; `410` no longer approved |
+| `POST /fundraisers/:id/edit` | any of the 19 editable fields; `202 { "status": "waiting", "edit" }`; `400` with `fields`; `404` not theirs; `410` finished ("Your fundraiser is finished. To change anything, get in touch."), new or declined |
 | `POST /fundraisers/:id/finished` | `200 { "status": "thanks", "finishedRequestedAt" }` |
-| `POST /fundraisers/:id/pay-in` `{ amountPence, coverFee? }` | `200 { "url" }` to Stripe; `400` outside £1 to £10,000; `502` if Stripe cannot be reached |
+| `POST /fundraisers/:id/pay-in` `{ amountPence, coverFee? }` | approved or finished; `200 { "url" }` to Stripe (closes after 31 minutes); `400` outside £1 to £10,000; `502` if Stripe cannot be reached |
 | `POST /sign-out` | `200 { "status": "signed_out" }`, cookie cleared |
 | `GET`, `POST /:token` | `410`: the retired links |
 

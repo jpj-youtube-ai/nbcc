@@ -437,3 +437,30 @@ describe("an old 24 hour link", () => {
     expect($("[data-manage-problem]").textContent).toBe("Links are no longer used. Put in your email address below and we will send you a sign in code.");
   });
 });
+
+// TASK-501 review (Jaimie's decision): a finished fundraiser stays in the private area. Its gifts,
+// its QR code and paying in late money all stay; changes and "I've finished" go.
+describe("a finished fundraiser", () => {
+  const finished = () => raising({ status: "finished", pageUrl: null, finishedRequestedAt: "2026-10-01T12:00:00.000Z" });
+
+  it("says it is finished, keeps its gifts, QR code and paying in, and takes no changes", async () => {
+    await load("", signedIn(finished()));
+    const c = card(7);
+    expect($("[data-f-status]", c).textContent).toBe("Finished. Thank you for everything you raised.");
+    expect($("[data-f-qr]", c).hidden).toBe(false);
+    expect($("[data-f-gifts-part]", c).hidden).toBe(false);
+    expect($("form[data-f-payin]", c).closest("[hidden]")).toBeNull();
+    expect($("form[data-f-edit]", c).hidden).toBe(true);
+    const note = $("[data-f-edit-closed]", c);
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe("Your fundraiser is finished. To change anything, get in touch.");
+    expect($("[data-f-done-part]", c).hidden).toBe(true);
+  });
+
+  it("still pays in", async () => {
+    await load("", (url, method) => (method === "POST" ? { status: 200, body: { url: "https://checkout.stripe.com/c/pay/late" } } : signedIn(finished())(url, method)));
+    type(field(7, "amount"), "40");
+    await submit($("form[data-f-payin]", card(7)));
+    expect(posts()[0]).toEqual({ url: "/api/fundraise/manage/fundraisers/7/pay-in", method: "POST", body: { amountPence: 4000, coverFee: false } });
+  });
+});

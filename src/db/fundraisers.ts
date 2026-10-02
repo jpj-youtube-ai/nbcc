@@ -603,6 +603,7 @@ const sameEmail = (a: string, b: string) => a.trim().toLowerCase() === b.trim().
 
 // TASK-501: under the row's lock, the fundraiser must be the signed in organiser's own. Someone
 // else's reads as not there at all, so the answer never says whose it is.
+// A finished fundraiser stays its organiser's (TASK-501 review), but takes no changes.
 async function lockOwn(client: PoolClient, fundraiserId: number, email: string): Promise<FundraiserRecord> {
   const f = await lockFundraiser(client, fundraiserId);
   if (!sameEmail(f.email, email)) throw new FundraiserError("not_found");
@@ -794,23 +795,17 @@ export async function markFinishedRequested(
 
 // --- the private area (TASK-501) ----------------------------------------------------------------
 
-/** Every approved fundraiser of this organiser's, newest first, with its meter. */
+/**
+ * Every fundraiser of this organiser's they may sign in to, newest first, with its meter: approved
+ * ones, and finished ones too (Jaimie's decision, TASK-501 review: finishing never locks an
+ * organiser out; they can still see it and pay in late money). Never one that is new or declined.
+ */
 export async function listForOrganiser(email: string): Promise<Array<FundraiserRecord & { meter: Meter; editWaiting: boolean }>> {
   const r = await pool.query(
-    `${WITH_SUMS} WHERE lower(f.organiser_email) = lower($1) AND f.status = 'approved' ORDER BY f.created_at DESC, f.id DESC LIMIT 20`,
+    `${WITH_SUMS} WHERE lower(f.organiser_email) = lower($1) AND f.status IN ('approved', 'finished') ORDER BY f.created_at DESC, f.id DESC LIMIT 20`,
     [email],
   );
   return r.rows.map((row) => ({ ...toRecord(row), meter: meterOf(row), editWaiting: Boolean(row.edit_waiting) }));
-}
-
-// --- organisers by email (the private area's sign in code, TASK-501) -----------------------------
-
-export async function findApprovedByEmail(email: string): Promise<FundraiserRecord[]> {
-  const r = await pool.query(
-    `${SELECT} WHERE lower(f.organiser_email) = lower($1) AND f.status = 'approved' ORDER BY f.created_at DESC LIMIT 5`,
-    [email],
-  );
-  return r.rows.map(toRecord);
 }
 
 export async function waitingEditFor(fundraiserId: number): Promise<EditRow | null> {
@@ -832,6 +827,10 @@ export interface FundraiserGift {
  * Inside the webhook's transaction: put a gift on its fundraiser's page, but only when the id names
  * an APPROVED fundraiser. Anything else stays an ordinary donation (no link, no message), and the
  * audit row says so. Returns whether it was linked.
+ *
+ * TASK-501 review: money an organiser pays in is linked to an approved OR finished fundraiser, so
+ * late money still reaches the meter (Jaimie's decision). And it keeps its paid in mark whatever
+ * happens to the link, so it can never pass as a gift of the organiser's own.
  */
 export async function linkFundraiserGift(
   client: PoolClient,
@@ -839,11 +838,13 @@ export async function linkFundraiserGift(
   gift: FundraiserGift,
   eventId: string,
 ): Promise<boolean> {
-  const found = await client.query<{ id: number }>(
-    "SELECT id FROM fundraisers WHERE id = $1 AND status = 'approved'",
-    [gift.fundraiserId],
-  );
-  if (!found.rows[0]) {
+  const found = await client.query<{ id: number; status: string }>("SELECT id, status FROM fundraisers WHERE id = $1", [
+    gift.fundraiserId,
+  ]);
+  const status = found.rows[0]?.status;
+  const linkable = status === "approved" || (gift.paidIn === true && status === "finished");
+  if (!linkable) {
+    if (gift.paidIn) await client.query("UPDATE donations SET paid_in_by_organiser = true WHERE id = $1", [donationId]);
     await insertAudit(client, {
       actor: "stripe",
       action: "fundraiser.gift_not_linked",

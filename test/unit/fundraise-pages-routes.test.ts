@@ -254,6 +254,19 @@ describe("the QR code", () => {
     state.fundraisers = [record({ public: false })];
     expect((await get("/fundraise/robins-santa-dash/qr.svg")).status).toBe(404);
   });
+
+  // TASK-501 review: a finished fundraiser's organiser keeps their QR code in the private area.
+  // The page itself is still hidden once finished (stage 1); only the code's address answers.
+  it("still answers once the fundraiser has finished, while its page does not", async () => {
+    state.fundraisers = [record({ status: "finished" })];
+    expect((await get("/fundraise/robins-santa-dash/qr.svg")).status).toBe(200);
+    expect((await get("/fundraise/robins-santa-dash")).status).toBe(404);
+  });
+
+  it.each(["new", "declined"] as const)("is a 404 while %s", async (status) => {
+    state.fundraisers = [record({ status })];
+    expect((await get("/fundraise/robins-santa-dash/qr.svg")).status).toBe(404);
+  });
 });
 
 describe("the manage page", () => {

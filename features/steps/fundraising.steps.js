@@ -371,6 +371,61 @@ When(
   },
 );
 
+// TASK-501: the organiser pays in what they collected. The session is built as the server builds it
+// (buildPayInSessionParams in src/routes/api.ts) and replayed as Stripe's signed webhook.
+When("the organiser of {string} pays in {int} pence, paid as {string}", async function (title, amount, paymentIntent) {
+  const r = await pool.query("SELECT id, organiser_name, organiser_email FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
+  const f = r.rows[0];
+  assert.ok(f, `no fundraiser called ${title}`);
+  const res = await postSignedWebhook("checkout.session.completed", {
+    id: `cs_fr_bdd_${paymentIntent}`,
+    object: "checkout.session",
+    metadata: {
+      mode: "once", plan: "", giftAid: "false", feeCoverPence: "0", donorType: "individual", businessName: "",
+      fullName: f.organiser_name, email: f.organiser_email, emailConsent: "false", anonymous: "true", ageConfirmed: "false",
+      listOnSupporters: "false", creditName: "", fundraiserId: String(f.id), supporterMessage: "", showName: "false",
+      showAmount: "false", declarationScope: "this_donation", paidInByOrganiser: "true",
+    },
+    mode: "payment",
+    amount_total: amount,
+    currency: "gbp",
+    payment_status: "paid",
+    payment_intent: paymentIntent,
+    subscription: null,
+    customer_details: { name: f.organiser_name, email: f.organiser_email },
+    created: Math.floor(Date.now() / 1000),
+  });
+  this.frStatus = res.status;
+  this.frBody = await res.text();
+});
+
+Then("the donation paid as {string} is marked as paid in by the organiser, with no Gift Aid", async function (paymentIntent) {
+  const r = await pool.query(
+    "SELECT paid_in_by_organiser, gift_aid, fundraiser_id FROM donations WHERE stripe_payment_intent_id = $1",
+    [paymentIntent],
+  );
+  assert.equal(r.rows.length, 1, "the pay in was not recorded");
+  assert.equal(r.rows[0].paid_in_by_organiser, true);
+  assert.equal(r.rows[0].gift_aid, false);
+  assert.ok(r.rows[0].fundraiser_id, "the pay in is not on the fundraiser");
+});
+
+Then("the wall for {string} is empty", async function (title) {
+  const f = await fundraiser(title);
+  const body = await call(this, "GET", `/api/fundraisers/${f.slug}`);
+  assert.deepEqual(body.wall, []);
+});
+
+Then("{string} reads the thank you letter list without {string}", async function (staff, email) {
+  const body = await adminCall(this, staff, "GET", "/api/admin/thank-you/eligible?threshold=100");
+  assert.equal(this.frStatus, 200, JSON.stringify(body));
+  assert.ok(!(body.results || []).some((d) => String(d.email || "").toLowerCase() === email.toLowerCase()), `${email} is on the list`);
+});
+
+Given("a finished fundraiser {string} raising {int} pence, organised by {string}", async function (title, target, email) {
+  await insertFundraiser({ title, status: "finished", targetPence: target, email });
+});
+
 Then("the donation paid as {string} belongs to no fundraiser and carries no message", async function (paymentIntent) {
   const r = await pool.query(
     "SELECT fundraiser_id, supporter_message FROM donations WHERE stripe_payment_intent_id = $1",

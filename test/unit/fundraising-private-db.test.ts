@@ -156,10 +156,10 @@ describe("I've finished", () => {
 });
 
 describe("reading for the private area", () => {
-  it("lists only that email's approved fundraisers, with their meters", async () => {
+  it("lists only that email's approved (and finished) fundraisers, with their meters", async () => {
     query.mockResolvedValueOnce({ rows: [{ ...fundraiserRow(), online_pence: 2500, cash_pence: 1000, edit_waiting: false }] });
     const list = await listForOrganiser("Sam@Example.com");
-    expect(sqlOf(/FROM fundraisers f/)).toMatch(/lower\(f\.organiser_email\) = lower\(\$1\) AND f\.status = 'approved'/);
+    expect(sqlOf(/FROM fundraisers f/)).toMatch(/lower\(f\.organiser_email\) = lower\(\$1\) AND f\.status IN \('approved', 'finished'\)/);
     expect(paramsOf(/FROM fundraisers f/)).toEqual(["Sam@Example.com"]);
     expect(list[0].meter.raisedPence).toBe(3500);
   });
@@ -182,7 +182,7 @@ describe("reading for the private area", () => {
 
 describe("money the organiser paid in, from the Stripe webhook", () => {
   it("is linked to their approved fundraiser and marked, with no message and nothing for the wall", async () => {
-    const q = vi.fn(async (sql: string) => (sql.startsWith("SELECT id FROM fundraisers") ? { rows: [{ id: 7 }] } : { rows: [] }));
+    const q = vi.fn(async (sql: string) => (sql.startsWith("SELECT id, status FROM fundraisers") ? { rows: [{ id: 7, status: "approved" }] } : { rows: [] }));
     const client = { query: q } as unknown as import("pg").PoolClient;
     const linked = await linkFundraiserGift(
       client,
@@ -196,5 +196,44 @@ describe("money the organiser paid in, from the Stripe webhook", () => {
       [7, null, false, false, true, 55],
     ]);
     expect((q.mock.calls[2] as unknown as unknown[])[1]).toEqual(["stripe", "fundraiser.paid_in", "fundraiser", 7, { eventId: "evt_1", donationId: 55 }]);
+  });
+});
+
+// ---- TASK-501 review fixes ----
+
+describe("a finished fundraiser, in the database", () => {
+  it("is still listed for its organiser, with the approved ones", async () => {
+    await listForOrganiser("sam@example.com");
+    expect(sqlOf(/FROM fundraisers f/)).toMatch(/f\.status IN \('approved', 'finished'\)/);
+  });
+
+  function fakeClient(statusOfFundraiser: string | null) {
+    const q = vi.fn(async (sql: string) => {
+      if (sql.startsWith("SELECT id, status FROM fundraisers")) return { rows: statusOfFundraiser ? [{ id: 7, status: statusOfFundraiser }] : [] };
+      return { rows: [] };
+    });
+    return { client: { query: q } as unknown as import("pg").PoolClient, q };
+  }
+  const payIn = { fundraiserId: 7, message: null, showName: false, showAmount: false, paidIn: true };
+  const gift = { fundraiserId: 7, message: "Go", showName: true, showAmount: true };
+
+  it("takes late money its organiser pays in", async () => {
+    const { client, q } = fakeClient("finished");
+    expect(await linkFundraiserGift(client, 55, payIn, "evt_late")).toBe(true);
+    expect(q.mock.calls.some((c) => String(c[0]).includes("paid_in_by_organiser = $5"))).toBe(true);
+  });
+
+  it("does not put a supporter's gift on a finished page (stage 1 hides it)", async () => {
+    const { client, q } = fakeClient("finished");
+    expect(await linkFundraiserGift(client, 56, gift, "evt_gift")).toBe(false);
+    expect(q.mock.calls.some((c) => String(c[0]).startsWith("UPDATE donations"))).toBe(false);
+  });
+
+  it.each(["declined", "new", null])("keeps the paid in mark on money paid in when the fundraiser is %s", async (status) => {
+    const { client, q } = fakeClient(status);
+    expect(await linkFundraiserGift(client, 57, payIn, "evt_odd")).toBe(false);
+    const mark = q.mock.calls.find((c) => String(c[0]).startsWith("UPDATE donations"));
+    expect(mark?.[0]).toBe("UPDATE donations SET paid_in_by_organiser = true WHERE id = $1");
+    expect((mark as unknown as unknown[])[1]).toEqual([57]);
   });
 });

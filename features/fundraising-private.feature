@@ -40,6 +40,18 @@ Feature: The fundraising private area, signed in with an emailed code (TASK-501)
     And no sign in code is stored for "nobody.code.fr.bdd@example.com"
     And no "fundraiseCode" email went to "nobody.code.fr.bdd@example.com"
 
+  # TASK-501 review (Jaimie's decision): finishing never locks an organiser out.
+  Scenario: the organiser of a finished fundraiser can still sign in and see it, but not change it
+    Given fundraising is switched on
+    And a finished fundraiser "Finished Fun Run (bdd-fr)" raising 50000 pence, organised by "finished.code.fr.bdd@example.com"
+    When the organiser asks for a sign in code for "finished.code.fr.bdd@example.com"
+    And "finished.code.fr.bdd@example.com" signs in with the code from their email
+    Then the fundraising answer is 200
+    When the signed in organiser opens their private area
+    Then the private area lists "Finished Fun Run (bdd-fr)" and not "Someone Elses Swim (bdd-fr)"
+    When the signed in organiser asks to change the target of "Finished Fun Run (bdd-fr)" to 75000 pence
+    Then the fundraising answer is 410
+
   Scenario: a wrong code lets nobody in
     Given fundraising is switched on
     And an approved fundraiser "Wrong Code Walk (bdd-fr)" raising 50000 pence, organised by "wrong.code.fr.bdd@example.com"

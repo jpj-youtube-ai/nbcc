@@ -146,9 +146,15 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     }
   });
 
+  // TASK-501 review: the code also answers for a finished fundraiser that had a page, so its
+  // organiser keeps it in their private area. The page itself is still hidden once finished.
   router.get("/fundraise/:slug/qr.svg", async (req, res, next) => {
     try {
-      const f = await publicFundraiser(String(req.params.slug));
+      if (!(await fundraisingOn())) return next();
+      const { getBySlug } = await import("../db/fundraisers");
+      const found = await getBySlug(String(req.params.slug));
+      const coded = found && found.public && found.path === "raising" && (found.status === "approved" || found.status === "finished");
+      const f = coded ? found : null;
       if (!f) return next();
       const [{ qrSvg }, { fundraiserPageUrl }] = await Promise.all([import("../fundraising/qr"), import("../fundraising/send")]);
       res.setHeader("X-Content-Type-Options", "nosniff");

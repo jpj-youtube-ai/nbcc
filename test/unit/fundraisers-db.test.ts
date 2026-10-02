@@ -33,7 +33,7 @@ describe("a gift made on a fundraiser's page", () => {
 
   function fakeClient(approved: boolean) {
     const query = vi.fn(async (sql: string) => {
-      if (sql.startsWith("SELECT id FROM fundraisers")) return { rows: approved ? [{ id: 7 }] : [] };
+      if (sql.startsWith("SELECT id, status FROM fundraisers")) return { rows: approved ? [{ id: 7, status: "approved" }] : [] };
       return { rows: [] };
     });
     return { query } as unknown as import("pg").PoolClient & { query: typeof query };
@@ -43,7 +43,7 @@ describe("a gift made on a fundraiser's page", () => {
     const client = fakeClient(true);
     expect(await linkFundraiserGift(client, 55, gift, "evt_1")).toBe(true);
     const calls = (client.query as unknown as ReturnType<typeof vi.fn>).mock.calls;
-    expect(calls[0][0]).toContain("status = 'approved'");
+    expect(calls[0][0]).toBe("SELECT id, status FROM fundraisers WHERE id = $1");
     expect(calls[1]).toEqual([
       "UPDATE donations SET fundraiser_id = $1, supporter_message = $2, show_name = $3, show_amount = $4 WHERE id = $5",
       [7, "Go Robin!", false, true, 55],

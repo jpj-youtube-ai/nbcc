@@ -554,9 +554,10 @@ async function handleCheckoutCompleted(
   // THIS transaction, but only when it names an approved fundraiser. Sessions without a fundraiserId
   // (every donate page gift) skip this entirely, so their writes are exactly what they were.
   const fundraiserGift = fundraiserGiftFromCheckoutSession(event.data.object);
-  const linkedToFundraiser = fundraiserGift ? await linkFundraiserGift(client, donationId, fundraiserGift, event.id) : false;
-  // TASK-501: money an organiser paid in is thanked as paid in, not as a gift of their own.
-  const paidIn = linkedToFundraiser && Boolean(fundraiserGift?.paidIn);
+  if (fundraiserGift) await linkFundraiserGift(client, donationId, fundraiserGift, event.id);
+  // TASK-501: money an organiser paid in is thanked as paid in, not as a gift of their own, whether
+  // or not it could be linked (linkFundraiserGift keeps its paid in mark either way).
+  const paidIn = Boolean(fundraiserGift?.paidIn);
 
   // Business-supporter fulfilment (TASK-206): a BUSINESS MONTHLY gift at/above the £10/month minimum
   // — an incorporated company, or a partnership/sole trader donating under a business name — earns a

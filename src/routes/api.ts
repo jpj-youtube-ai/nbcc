@@ -509,6 +509,7 @@ export async function fundraiserReturnPage(fundraiserId: number | undefined): Pr
 
 export const PAY_IN_MIN_PENCE = 100; // £1
 export const PAY_IN_MAX_PENCE = 1_000_000; // £10,000
+export const PAY_IN_SESSION_MINUTES = 31;
 
 /**
  * What the private area's "Pay in what you collected" may send. Only the amount and whether to
@@ -534,6 +535,7 @@ export const payInSchema = z.object({
 export function buildPayInSessionParams(
   input: { fundraiserId: number; amountPence: number; coverFee: boolean; name: string; email: string; manageUrl: string },
   cardFee: CardFeeRate = DEFAULT_CARD_FEE,
+  now: Date = new Date(),
 ): StripeNS.Checkout.SessionCreateParams {
   const body: CheckoutBody = {
     mode: "once",
@@ -559,6 +561,10 @@ export function buildPayInSessionParams(
     metadata: { ...params.metadata, paidInByOrganiser: "true" },
     success_url: `${manage}?paid=1`,
     cancel_url: manage,
+    // TASK-501 review: closes after 31 minutes (Stripe's shortest is 30 from when it is made; the
+    // extra minute covers the gap between our clock and theirs), so a pay in left open cannot
+    // complete hours later. Donate page sessions keep Stripe's own expiry.
+    expires_at: Math.floor(now.getTime() / 1000) + PAY_IN_SESSION_MINUTES * 60,
   };
 }
 

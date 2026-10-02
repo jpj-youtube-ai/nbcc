@@ -32,7 +32,6 @@ import {
 } from "../fundraising/sign-in";
 import {
   createFundraiser,
-  findApprovedByEmail,
   fundraisingIsOn,
   getBySlug,
   getFundraiser,
@@ -197,6 +196,7 @@ export const WRONG_CODE_MESSAGE = "That code does not work. Check it, or ask for
 const TOO_MANY = { error: "Too many tries. Please wait a few minutes and try again." };
 const NOT_OURS = { error: "Please use the form on our website." };
 const SIGN_IN_AGAIN = { error: "Please sign in again." };
+const FINISHED_NO_CHANGES = { error: "Your fundraiser is finished. To change anything, get in touch." };
 const NOT_FOUND = { error: "Not found" };
 const NO_LONGER = { error: "This fundraiser can no longer be changed online. Please email events@nbcc.scot." };
 
@@ -205,6 +205,17 @@ const header = (req: Request, name: string): string | undefined => {
   const v = (req.headers as Headers)[name];
   return Array.isArray(v) ? v[0] : v;
 };
+
+/**
+ * Exempt from the limits below exactly as admin login is (src/routes/admin.ts, isLoopbackRequest,
+ * approved in TASK-200): only a request made on the box itself, local development or the pr.yml BDD
+ * suite. Behind the ALB the app trusts one proxy, so req.ip is always the real client address and
+ * no outside request can present as loopback.
+ */
+function isLoopbackRequest(req: Request): boolean {
+  const ip = req.ip ?? "";
+  return ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
+}
 
 /** Refuse a POST that another website's page sent (the second lock after SameSite). */
 function fromOurOwnPage(req: Request, res: Response): boolean {
@@ -239,7 +250,10 @@ async function signedIn(req: Request, res: Response): Promise<Session | null> {
 
 type Owned = FundraiserRecord & { meter: Meter };
 
-/** The organiser's own approved fundraiser, or an answer: someone else's reads as not there. */
+/**
+ * The organiser's own fundraiser, approved or finished (a finished one stays theirs: TASK-501
+ * review), or an answer: someone else's reads as not there, and one new or declined is a 410.
+ */
 async function ownFundraiser(req: Request, res: Response, s: Session): Promise<Owned | null> {
   const raw = String(req.params.id ?? "");
   const id = /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : NaN;
@@ -248,7 +262,7 @@ async function ownFundraiser(req: Request, res: Response, s: Session): Promise<O
     res.status(404).json(NOT_FOUND);
     return null;
   }
-  if (f.status !== "approved") {
+  if (f.status !== "approved" && f.status !== "finished") {
     res.status(410).json(NO_LONGER);
     return null;
   }
@@ -262,16 +276,16 @@ export async function postManageRequest(req: Request, res: Response): Promise<Re
   const email = parsed.data.email.toLowerCase();
   const now = Date.now();
   // Every limit is counted every time, so a limited email still uses up its address's allowance.
-  const allowed = [emailLimiter.allow(email, now), emailDayLimiter.allow(email, now), ipLimiter.allow(req.ip ?? "unknown", now)].every(
-    Boolean,
-  );
+  const allowed =
+    isLoopbackRequest(req) ||
+    [emailLimiter.allow(email, now), emailDayLimiter.allow(email, now), ipLimiter.allow(req.ip ?? "unknown", now)].every(Boolean);
   // Always the same answer, and given BEFORE looking: match or not, limited or not, switched on or
   // not, so neither the words nor the time it takes tell anyone who is signed up.
   res.status(200).json({ message: MANAGE_REQUEST_MESSAGE });
   if (!allowed) return;
   try {
     if (!(await fundraisingIsOn())) return;
-    const mine = await findApprovedByEmail(email);
+    const mine = await listForOrganiser(email);
     if (mine.length === 0) return;
     const code = newSignInCode();
     await saveSignInCode(email, hashSignInCode(email, code, config.ADMIN_SESSION_SECRET), new Date(Date.now() + SIGN_IN_CODE_TTL_MS));
@@ -289,9 +303,11 @@ export async function postManageSignIn(req: Request, res: Response): Promise<Res
   if (!parsed.success || !code) return res.status(400).json({ error: "Please put in your email address and the 6 digit code." });
   const email = parsed.data.email.toLowerCase();
   const now = Date.now();
-  const emailOk = signInEmailLimiter.allow(email, now);
-  const ipOk = signInIpLimiter.allow(req.ip ?? "unknown", now);
-  if (!emailOk || !ipOk) return res.status(429).json(TOO_MANY);
+  if (!isLoopbackRequest(req)) {
+    const emailOk = signInEmailLimiter.allow(email, now);
+    const ipOk = signInIpLimiter.allow(req.ip ?? "unknown", now);
+    if (!emailOk || !ipOk) return res.status(429).json(TOO_MANY);
+  }
   try {
     if (!(await fundraisingIsOn())) return res.status(404).json(NOT_FOUND);
     // The try is counted before the code is compared (countCodeTry), so tries sent at once each use
@@ -332,6 +348,8 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
       mine.map(async (f) => {
         const [waiting, rows] = await Promise.all([waitingEditFor(f.id), wallRows(f.id)]);
         const page = hasPage(f);
+        // A finished one has no public page any more (stage 1), but its organiser keeps its code.
+        const coded = page || (f.status === "finished" && f.public && f.path === "raising");
         return {
           id: f.id,
           slug: f.slug,
@@ -341,7 +359,7 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           public: f.public,
           pageUrl: page ? fundraiserPageUrl(f.slug) : null,
           // The QR code is the page's, so only a page has one (it is no longer on the page itself).
-          qrUrl: page ? `/fundraise/${f.slug}/qr.svg` : null,
+          qrUrl: coded ? `/fundraise/${f.slug}/qr.svg` : null,
           meter: f.meter,
           editable: editableOf(f),
           waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
@@ -368,6 +386,7 @@ export async function postManageEdit(req: Request, res: Response): Promise<Respo
     if (!s) return;
     const f = await ownFundraiser(req, res, s);
     if (!f) return;
+    if (f.status === "finished") return res.status(410).json(FINISHED_NO_CHANGES);
     const parsed = editSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({ error: "Some of your changes need another look", fields: fieldErrors(parsed.error.issues) });
@@ -425,7 +444,7 @@ export async function postManagePayIn(req: Request, res: Response): Promise<Resp
   const { buildPayInSessionParams, currentCardFee, payInSchema } = await import("./api");
   const parsed = payInSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please check the amount", fields: fieldErrors(parsed.error.issues) });
-  if (!payInLimiter.allow(s.email, Date.now())) return res.status(429).json(TOO_MANY);
+  if (!isLoopbackRequest(req) && !payInLimiter.allow(s.email, Date.now())) return res.status(429).json(TOO_MANY);
   try {
     const { stripe } = await import("../clients/stripe");
     const params = buildPayInSessionParams(

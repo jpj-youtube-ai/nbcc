@@ -168,3 +168,22 @@ describe("the email after a pay in", () => {
     expect(confirmationEmailFor({ email: "a@example.com", fullName: "A" }, { amountPence: 1, currency: "gbp", giftAid: false, mode: "once" })).not.toHaveProperty("paidIn");
   });
 });
+
+// TASK-501 review: a pay in left open on Stripe's page should not complete hours later, after the
+// fundraiser has moved on. Stripe's shortest is 30 minutes from when the session is made; a minute
+// more covers the time between our clock and theirs.
+describe("how long a pay in checkout stays open", () => {
+  it("expires 31 minutes after it is made", () => {
+    const now = new Date("2026-10-02T12:00:00Z");
+    const params = buildPayInSessionParams(input, DEFAULT_CARD_FEE, now);
+    expect(params.expires_at).toBe(Math.floor(now.getTime() / 1000) + 31 * 60);
+  });
+
+  it("leaves the donate page's sessions with Stripe's own expiry", async () => {
+    create.mockReset().mockResolvedValue({ id: "cs_test_2", url: "https://checkout.stripe.com/c/pay/test_2" });
+    const res = { statusCode: 200, body: undefined as unknown, status(c: number) { this.statusCode = c; return this; }, json(b: unknown) { this.body = b; return this; } };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await postCheckoutSession({ body: { mode: "once", plan: null, amount: 2500, giftAid: false, email: "alex@example.com", fullName: "Alex Example" } } as any, res as any);
+    expect(create.mock.calls[0][0].expires_at).toBeUndefined();
+  });
+});

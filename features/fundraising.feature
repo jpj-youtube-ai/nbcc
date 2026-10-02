@@ -49,6 +49,27 @@ Feature: Community fundraising, the core (TASK-493)
     And the page for "Sam's Walk (bdd-fr)" shows 3500 pence raised of 50000
     And the history of "Sam's Walk (bdd-fr)" records "fundraiser.cash_added" and "fundraiser.message_hidden" by "e2.fr.bdd@example.com"
 
+  # TASK-501: money the organiser collected and paid in counts on the meter, but it is not their own
+  # gift: never on the wall, never Gift Aid, and never on the thank you letter list.
+  Scenario: money the organiser pays in counts on the meter and nowhere as their own gift
+    Given fundraising is switched on
+    And a fundraising staff member "a7.fr.bdd@example.com" with role "admin"
+    And an approved fundraiser "Ali's Pay In Run (bdd-fr)" raising 50000 pence, organised by "ali.payin.fr.bdd@example.com"
+    When the organiser of "Ali's Pay In Run (bdd-fr)" pays in 50000 pence, paid as "pi_fr_bdd_payin_1"
+    Then the fundraising answer is 200
+    And the donation paid as "pi_fr_bdd_payin_1" is marked as paid in by the organiser, with no Gift Aid
+    And the page for "Ali's Pay In Run (bdd-fr)" shows 50000 pence raised of 50000
+    And the wall for "Ali's Pay In Run (bdd-fr)" is empty
+    And "a7.fr.bdd@example.com" reads the thank you letter list without "ali.payin.fr.bdd@example.com"
+
+  # TASK-501 review (Jaimie's decision): late money still reaches a finished fundraiser.
+  Scenario: money paid in after a fundraiser has finished still reaches it
+    Given fundraising is switched on
+    And a finished fundraiser "Bo's Late Money (bdd-fr)" raising 50000 pence, organised by "bo.late.fr.bdd@example.com"
+    When the organiser of "Bo's Late Money (bdd-fr)" pays in 2500 pence, paid as "pi_fr_bdd_payin_2"
+    Then the fundraising answer is 200
+    And the donation paid as "pi_fr_bdd_payin_2" is marked as paid in by the organiser, with no Gift Aid
+
   Scenario: a gift naming a fundraiser that is not approved is an ordinary donation
     Given fundraising is switched on
     And a fundraiser "Not Yet (bdd-fr)" that is still new

@@ -6,7 +6,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const db = vi.hoisted(() => ({
   createFundraiser: vi.fn(),
-  findApprovedByEmail: vi.fn(),
   fundraisingIsOn: vi.fn(),
   getBySlug: vi.fn(),
   getFundraiser: vi.fn(),

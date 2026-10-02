@@ -349,6 +349,7 @@
     }
 
     function statusWords(f) {
+      if (f.status === "finished") return "Finished. Thank you for everything you raised.";
       if (f.path === "event") {
         return f.public ? "Approved. Your event is listed on our Get involved page." : "Approved. It is not shown on our website, as you asked.";
       }
@@ -400,6 +401,15 @@
       Array.prototype.forEach.call(card.querySelectorAll("[data-raising-only]"), function (n) {
         n.hidden = event;
       });
+      // Finished (Jaimie's decision): it stays here, with its gifts, QR code and paying in late
+      // money, but takes no more changes, and there is nothing left to say it has finished.
+      var finished = f.status === "finished";
+      if (finished) {
+        q("form[data-f-edit]").hidden = true;
+        q("[data-f-edit-intro]").hidden = true;
+        q("[data-f-edit-closed]").hidden = false;
+        q("[data-f-done-part]").hidden = true;
+      }
       wireEdit(card, f);
       wirePayIn(card, f);
       wireFinished(card, f);

@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const db = vi.hoisted(() => ({
   fundraisingIsOn: vi.fn(),
-  findApprovedByEmail: vi.fn(),
   listForOrganiser: vi.fn(),
   getFundraiser: vi.fn(),
   requestEdit: vi.fn(),
@@ -158,7 +157,7 @@ beforeEach(() => {
 
 describe("asking for a sign in code", () => {
   it("emails a code to an approved organiser, storing only its keyed hash", async () => {
-    db.findApprovedByEmail.mockResolvedValue([record(), record({ id: 10, name: "Sam Other" })]);
+    db.listForOrganiser.mockResolvedValue([record(), record({ id: 10, name: "Sam Other" })]);
     const res = await run(postManageRequest, { body: { email: "Sam@Example.com" } });
     expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
     expect(send.sendSignInCodeEmail).toHaveBeenCalledTimes(1);
@@ -175,7 +174,7 @@ describe("asking for a sign in code", () => {
   });
 
   it("gives exactly the same answer for an email nobody signed up with, and sends nothing", async () => {
-    db.findApprovedByEmail.mockResolvedValue([]);
+    db.listForOrganiser.mockResolvedValue([]);
     const known = await run(postManageRequest, { body: { email: "nobody@example.com" } });
     expect(known.statusCode).toBe(200);
     expect(known.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
@@ -185,28 +184,28 @@ describe("asking for a sign in code", () => {
 
   it("says the same while fundraising is off, and sends nothing", async () => {
     db.fundraisingIsOn.mockResolvedValue(false);
-    db.findApprovedByEmail.mockResolvedValue([record()]);
+    db.listForOrganiser.mockResolvedValue([record()]);
     const res = await run(postManageRequest, { body: { email: "sam@example.com" } });
     expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
     expect(send.sendSignInCodeEmail).not.toHaveBeenCalled();
   });
 
   it("says the same over the limit for one email, without looking", async () => {
-    db.findApprovedByEmail.mockResolvedValue([]);
+    db.listForOrganiser.mockResolvedValue([]);
     for (let i = 0; i < 3; i++) await run(postManageRequest, { body: { email: "limit.request@example.com" } });
-    db.findApprovedByEmail.mockClear();
+    db.listForOrganiser.mockClear();
     const res = await run(postManageRequest, { body: { email: "limit.request@example.com" } });
     expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
-    expect(db.findApprovedByEmail).not.toHaveBeenCalled();
+    expect(db.listForOrganiser).not.toHaveBeenCalled();
   });
 
   it("says the same over the limit for one address, without looking", async () => {
-    db.findApprovedByEmail.mockResolvedValue([]);
+    db.listForOrganiser.mockResolvedValue([]);
     for (let i = 0; i < 20; i++) await run(postManageRequest, { body: { email: `ip${i}@example.com` }, ip: "10.9.9.1" });
-    db.findApprovedByEmail.mockClear();
+    db.listForOrganiser.mockClear();
     const res = await run(postManageRequest, { body: { email: "fresh@example.com" }, ip: "10.9.9.1" });
     expect(res.body).toEqual({ message: MANAGE_REQUEST_MESSAGE });
-    expect(db.findApprovedByEmail).not.toHaveBeenCalled();
+    expect(db.listForOrganiser).not.toHaveBeenCalled();
   });
 
   it("refuses something that is not an email address", async () => {
@@ -216,11 +215,11 @@ describe("asking for a sign in code", () => {
   it("is refused from another website's page", async () => {
     const res = await run(postManageRequest, { body: { email: "sam@example.com" }, headers: { "sec-fetch-site": "cross-site" } });
     expect(res.statusCode).toBe(403);
-    expect(db.findApprovedByEmail).not.toHaveBeenCalled();
+    expect(db.listForOrganiser).not.toHaveBeenCalled();
   });
 
   it("never logs the code", async () => {
-    db.findApprovedByEmail.mockResolvedValue([record()]);
+    db.listForOrganiser.mockResolvedValue([record()]);
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     send.sendSignInCodeEmail.mockRejectedValueOnce(new Error("SES is down"));
@@ -520,5 +519,69 @@ describe("the 24 hour links", () => {
     const res = await run(retiredManageLink, { params: { token: "an-old-link-token" } });
     expect(res.statusCode).toBe(410);
     expect((res.body as { error: string }).error).toMatch(/sign in code/i);
+  });
+});
+
+// ---- TASK-501 review fixes ----
+
+// Jaimie's decision: finishing a fundraiser never locks its organiser out. They can still sign in,
+// see it, its gifts and QR code, and pay in late money; only changes stop.
+describe("a finished fundraiser", () => {
+  const finished = (over: Partial<FundraiserRecord> = {}) => record({ status: "finished", ...over });
+
+  it("can still be signed in to", async () => {
+    db.listForOrganiser.mockResolvedValue([finished()]);
+    await run(postManageRequest, { body: { email: "finished.request@example.com" } });
+    expect(send.sendSignInCodeEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("is listed as finished, with its gifts and its QR code", async () => {
+    db.listForOrganiser.mockResolvedValue([finished()]);
+    db.wallRows.mockResolvedValue([
+      { donationId: 1, fullName: "Alex Example", anonymous: false, showName: true, showAmount: true, amountPence: 2500,
+        refundedPence: 0, message: "Go Sam", hidden: false, createdAt: "2026-10-02T12:00:00.000Z" },
+    ]);
+    const res = await run(getManageSession, { cookie: SAM });
+    const f = (res.body as { fundraisers: Array<Record<string, unknown>> }).fundraisers[0];
+    expect(f.status).toBe("finished");
+    expect(f.qrUrl).toBe("/fundraise/sams-walk/qr.svg");
+    expect((f.gifts as unknown[]).length).toBe(1);
+  });
+
+  it("takes no more changes, and says to get in touch", async () => {
+    db.getFundraiser.mockResolvedValue(finished());
+    const res = await run(postManageEdit, { cookie: SAM, params: { id: "9" }, body: { description: "x" } });
+    expect(res.statusCode).toBe(410);
+    expect(res.body).toEqual({ error: "Your fundraiser is finished. To change anything, get in touch." });
+    expect(db.requestEdit).not.toHaveBeenCalled();
+  });
+
+  it("can still pay in what was collected", async () => {
+    db.getFundraiser.mockResolvedValue(finished());
+    stripeMock.create.mockResolvedValue({ id: "cs_test_late", url: "https://checkout.stripe.com/c/pay/late" });
+    const res = await run(postManagePayIn, { cookie: SAM, params: { id: "9" }, body: { amountPence: 500 } });
+    expect(res.statusCode).toBe(200);
+    expect(stripeMock.create.mock.calls[0][0].metadata).toMatchObject({ fundraiserId: "9", paidInByOrganiser: "true" });
+  });
+
+  it.each(["new", "declined"] as const)("is not reachable while %s", async (status) => {
+    db.getFundraiser.mockResolvedValue(record({ status }));
+    const pay = await run(postManagePayIn, { cookie: SAM, params: { id: "9" }, body: { amountPence: 500 } });
+    expect(pay.statusCode).toBe(410);
+    expect(stripeMock.create).not.toHaveBeenCalled();
+  });
+});
+
+// The BDD suite drives the app over http://localhost from one address, so loopback is exempt from
+// these limits exactly as admin login is (behind the ALB req.ip is always the real client address).
+describe("the limits, for the box itself", () => {
+  it.each(["127.0.0.1", "::1", "::ffff:127.0.0.1"])("never apply to requests from %s", async (ip) => {
+    db.listForOrganiser.mockResolvedValue([]);
+    for (let i = 0; i < 25; i++) await run(postManageRequest, { body: { email: `loop.${ip.replace(/[^0-9]/g, "")}@example.com` }, ip });
+    expect(db.listForOrganiser).toHaveBeenCalledTimes(25);
+    signIn.countCodeTry.mockResolvedValue(null);
+    for (let i = 0; i < 12; i++) {
+      expect((await run(postManageSignIn, { body: { email: `loop.signin.${ip.replace(/[^0-9]/g, "")}@example.com`, code: "000000" }, ip })).statusCode).toBe(401);
+    }
   });
 });

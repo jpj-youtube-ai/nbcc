@@ -59,7 +59,27 @@ Feature: Get involved and the public fundraising pages (TASK-494)
     Then the visitor gets status 200
     And the page does not show "data-fundraise-open hidden"
 
-  Scenario: the manage page is served, and kept out of search engines
+  Scenario: the manage page is served while fundraising is on, and kept out of search engines
+    Given fundraising is switched on
     When a visitor opens "/fundraise/manage?token=bdd-not-a-real-token"
     Then the visitor gets status 200
     And the page is kept out of search engines
+    Given fundraising is switched off
+    When a visitor opens "/fundraise/manage?token=bdd-not-a-real-token"
+    Then the visitor gets status 404
+
+  Scenario: a giver coming back from paying is thanked on the fundraiser's page
+    Given fundraising is switched on
+    And an approved fundraiser "Ewans Hill Run (bdd-fr)" raising 50000 pence
+    When a visitor opens the page for "Ewans Hill Run (bdd-fr)" with "?thanks=1&message=1"
+    Then the visitor gets status 200
+    And the page shows "Thank you for supporting Ewans Hill Run (bdd-fr)."
+    And the page shows "Your message will appear on the wall shortly."
+
+  Scenario: the footer sends Fundraise for us to the sign up only while fundraising is on
+    Given fundraising is switched on
+    When a visitor opens "/contact"
+    Then the page shows '<a href="/fundraise">Fundraise for us</a>'
+    Given fundraising is switched off
+    When a visitor opens "/contact"
+    Then the page does not show '<a href="/fundraise">Fundraise for us</a>'

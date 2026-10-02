@@ -1390,8 +1390,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /get-involved` | **implemented** | TASK-453, renamed in TASK-494 (Get involved: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the Events page switched on; otherwise falls through to the 404 / spare-address catch-all) |
 | `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
-| `GET /fundraise/manage` | **implemented** | TASK-494 (change your page by the emailed `?token=` link; `noindex`, `no-store`, `Referrer-Policy: no-referrer`) |
-| `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on) |
+| `GET /fundraise/manage` | **implemented** | TASK-494 (change your page by the emailed `?token=` link; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
+| `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on. `?thanks=1` (and `&message=1`) shows the thank you a giver comes back to after paying) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
@@ -7316,7 +7316,18 @@ decides whether the page exists. While **fundraising** is also switched on, the 
 - a **Fundraise for us** button in the intro and a panel under the cards, linking `/fundraise`
   and `/fundraise/manage`; the face down card's invitation also goes to `/fundraise`.
 
-Switched off, the page is exactly the Events page it was: no chips, no fundraisers, no panel.
+Switched off, the page is exactly the Events page it was: no chips, no fundraisers, no panel, and
+not even the fundraising stylesheet (the server adds it where `<!-- getinvolved:styles -->` is,
+only while fundraising is on). With fundraiser cards among the events, the hint above the deck says
+"Turn any event card over", since a fundraiser's card has one face; and a fundraiser's date sits in
+its card's corner only while it is still to come.
+
+**The footer.** Every page's footer sends "Fundraise for us" to `/contact`. While fundraising is
+switched on the server points it at `/fundraise` instead (`src/fundraising/footer-link.ts`, added
+wherever the menu items are); off, pages go out as they are on disk.
+
+**Search listing.** `1791200000010_site-seo-get-involved.js` copies an admin's saved listing choice
+for `/events` (`site_page_seo`) to `/get-involved`, once, never over a choice already saved there.
 
 **The meter** (`renderMeter`): raised so far, the target and the percentage, as a
 `role="progressbar"` bar with `aria-valuetext` and the same in words. Past the target the bar is
@@ -7347,6 +7358,14 @@ place, organised by, the photo, the story, the meter with a Give button, the **g
   on the page when it can and on Stripe's own page otherwise, exactly as the donate page does.
   A refused message (the core checks its words) appears beside the message box.
   `test/unit/fundraiser-checkout-contract.test.ts` feeds the browser's body through the real route.
+- **After paying** the giver comes back to the fundraiser's own page, not the donate page's thank
+  you. `POST /api/checkout-session` looks the fundraiser up itself (`fundraiserReturnPage`, never an
+  address from the browser) and, only for one with a public page, sets Stripe's return address to
+  `<page>?thanks=1` (`&message=1` if they left a message) and, on Stripe's own page, the cancel
+  address to the page itself. The page then shows "Thank you for supporting ..." with the share
+  links, saying the message will appear on the wall shortly when there is one; the meter and wall
+  catch up when the webhook lands. Anything else, and every donate page gift, comes back exactly
+  as before (tested byte for byte in `test/unit/fundraiser-return-url.test.ts`).
 - The wall shows the newest ten; Show all grows the page with the rest (no inner scrolling).
 - Sharing: copy the link (shown only where copying works), Facebook and WhatsApp as plain links.
   No script from anyone else.
@@ -7360,7 +7379,8 @@ site's own 404 page.
 With `?token=`: the editable fields (any change still waiting is shown in their place, with a
 note that it is waiting for staff), and saving sends only what differs from the approved page. A
 link that has run out or matches nothing leads back to asking for a new one. The page is
-`noindex`, never cached, sends no referrer, and does not load the visit counter.
+`noindex`, never cached, sends no referrer, does not load the visit counter, takes the token out of
+the address bar once it has read it, and is a 404 while fundraising is switched off.
 
 **Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
 `src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:

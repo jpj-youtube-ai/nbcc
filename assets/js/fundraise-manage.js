@@ -164,6 +164,15 @@
       token = "";
     }
     if (!token) return { token: null };
+    // Read: now out of the address bar, so it is not left on screen, in a bookmark or in history.
+    // Saving and reloading still work from the copy held here; a reload asks for a new link.
+    try {
+      if (win.history && typeof win.history.replaceState === "function") {
+        win.history.replaceState(null, "", win.location.pathname || "/fundraise/manage");
+      }
+    } catch (e) {
+      /* history unavailable */
+    }
     if (token.length > 100 || !/^[A-Za-z0-9_-]+$/.test(token)) {
       backToRequest(MSG.notFound);
       return { token: null };

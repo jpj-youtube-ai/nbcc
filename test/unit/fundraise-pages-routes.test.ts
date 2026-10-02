@@ -273,3 +273,34 @@ describe("the image", () => {
     for (const f of ["events.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html"]) expect(copy.split(/\s+/), f).toContain(f);
   });
 });
+
+describe("review fixes", () => {
+  it("the manage page is a 404 while fundraising is switched off, like the others", async () => {
+    state.fundraisingOn = false;
+    expect((await get("/fundraise/manage?token=abc")).status).toBe(404);
+  });
+
+  const footer = (html: string) => html.match(/<footer[\s\S]*?<\/footer>/)?.[0] ?? "";
+
+  it("the footer's Fundraise for us goes to the sign up on every page while fundraising is on", async () => {
+    for (const path of ["/contact", "/get-involved", "/fundraise", "/fundraise/robins-santa-dash"]) {
+      const f = footer(await (await get(path)).text());
+      expect(f, path).toContain('<a href="/fundraise">Fundraise for us</a>');
+    }
+  });
+
+  it("and to the contact page while it is off", async () => {
+    state.fundraisingOn = false;
+    for (const path of ["/contact", "/get-involved"]) {
+      const f = footer(await (await get(path)).text());
+      expect(f, path).toContain('<a href="/contact">Fundraise for us</a>');
+    }
+  });
+
+  it("a giver coming back from paying sees the thank you", async () => {
+    const html = await (await get("/fundraise/robins-santa-dash?thanks=1&message=1")).text();
+    expect(html).toContain("data-thanks-panel");
+    expect(html).toContain("Your message will appear on the wall shortly.");
+    expect(await (await get("/fundraise/robins-santa-dash")).text()).not.toContain("data-thanks-panel");
+  });
+});

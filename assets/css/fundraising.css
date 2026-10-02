@@ -47,6 +47,7 @@
   height: 100%;
   min-width: 0;
   border-radius: inherit;
+  background: var(--holly); /* for browsers without color-mix, such as older iPhones */
   background: linear-gradient(90deg, var(--holly), color-mix(in srgb, var(--holly) 78%, var(--cream)));
 }
 .fr-meter.is-over .fr-meter__fill { background: var(--holly); }
@@ -312,6 +313,22 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 
 /* A button that is busy sending says so in words; this makes it look it too. */
 .fr-form .btn:disabled, .fr-give-form .btn:disabled { opacity: 0.75; cursor: progress; transform: none; }
+
+/* ---------- the thank you after paying ---------- */
+.fr-thanks-panel {
+  margin: 28px auto 0;
+  max-width: 640px;
+  padding: clamp(20px, 3.5vw, 30px);
+  border: 1.6px solid var(--holly);
+  border-radius: var(--radius-lg);
+  background: var(--holly-soft);
+  text-align: left;
+}
+.fr-thanks-panel:focus { outline: none; }
+.fr-thanks-panel:focus-visible { outline: 3px solid var(--holly); outline-offset: 4px; }
+.fr-thanks-panel h2 { font-size: clamp(1.4rem, 1.2rem + 0.9vw, 1.8rem); color: var(--holly-dark); text-wrap: balance; overflow-wrap: anywhere; }
+.fr-thanks-panel p { margin: 10px 0 0; color: var(--slate); }
+.fr-thanks-panel .fr-share__links { margin-top: 16px; }
 
 /* ---------- the manage page ---------- */
 .fr-waiting {

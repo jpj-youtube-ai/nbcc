@@ -156,8 +156,8 @@ async function eventsPageIsOn(): Promise<boolean> {
   }
 }
 
-// TASK-494: is community fundraising switched on? For the site maps only; the pages ask for
-// themselves. Any failure reads as OFF.
+// TASK-494: is community fundraising switched on? For the site maps and the footer's "Fundraise for
+// us" link; the fundraising pages ask for themselves. Any failure reads as OFF.
 async function fundraisingIsOn(): Promise<boolean> {
   try {
     return await (await import("../db/fundraisers")).fundraisingIsOn();
@@ -167,13 +167,16 @@ async function fundraisingIsOn(): Promise<boolean> {
 }
 
 // The menu items a page gets on top of what is in its file: the Festive Ball's while the ball is
-// published (or being previewed), and Get involved (TASK-494, was Events) while that page is switched on. Each is idempotent,
-// so a page that already carries one is left as it is.
+// published (or being previewed), and Get involved (TASK-494, was Events) while that page is switched
+// on. And while fundraising is switched on, the footer's "Fundraise for us" goes to the sign up
+// rather than the contact page (TASK-494). Each is idempotent, so a page that already carries one
+// is left as it is.
 async function decorateNav(html: string, cookieHeader: string | undefined): Promise<string> {
-  const [ball, events] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn()]);
+  const [ball, events, fundraising] = await Promise.all([ballIsPublished(cookieHeader), eventsPageIsOn(), fundraisingIsOn()]);
   let out = html;
   if (ball) out = (await import("../ball/nav-link")).addBallNavLink(out);
   if (events) out = (await import("../events/nav-link")).addEventsNavLink(out);
+  if (fundraising) out = (await import("../fundraising/footer-link")).addFundraiseFooterLink(out);
   return out;
 }
 
@@ -215,11 +218,14 @@ export function createSiteRouter(siteRoot: string): Router {
       // hidden in it.
       const preview = gateOpen ? false : await holdsPreviewCookie(req.headers.cookie);
       if (!gateOpen && !preview) {
-        // TASK-453: the one change this branch can need is the Events menu item. Switched off,
-        // the file still goes out byte for byte.
-        if (await eventsPageIsOn()) {
-          const { addEventsNavLink } = await import("../events/nav-link");
-          res.type("html").send(addEventsNavLink(readFileSync(homeFile, "utf8")));
+        // TASK-453: the changes this branch can need are the Get involved menu item and (TASK-494)
+        // the footer's fundraising link. With both switched off, the file goes out byte for byte.
+        const [events, fundraising] = await Promise.all([eventsPageIsOn(), fundraisingIsOn()]);
+        if (events || fundraising) {
+          let html = readFileSync(homeFile, "utf8");
+          if (events) html = (await import("../events/nav-link")).addEventsNavLink(html);
+          if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
+          res.type("html").send(html);
           return;
         }
         res.sendFile(homeFile);
@@ -237,6 +243,7 @@ export function createSiteRouter(siteRoot: string): Router {
       // renderHomePromo adds the Festive Ball item itself; the Events item is ours to add.
       let html = renderHomePromo(template, { gateOpen: true });
       if (await eventsPageIsOn()) html = (await import("../events/nav-link")).addEventsNavLink(html);
+      if (await fundraisingIsOn()) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
       res.type("html").send(html);
     } catch (err) {
       console.error("home ball promo failed:", err instanceof Error ? err.message : err);
@@ -304,8 +311,12 @@ export function createSiteRouter(siteRoot: string): Router {
       }
       // While the ball is unpublished and the Events page is switched off this is byte-for-byte
       // the old behaviour: the file is sent as-is and no page mentions either.
-      const [ball, events] = await Promise.all([ballIsPublished(req.headers.cookie), eventsPageIsOn()]);
-      if (!ball && !events) {
+      const [ball, events, fundraising] = await Promise.all([
+        ballIsPublished(req.headers.cookie),
+        eventsPageIsOn(),
+        fundraisingIsOn(),
+      ]);
+      if (!ball && !events && !fundraising) {
         res.sendFile(file);
         return;
       }
@@ -313,6 +324,7 @@ export function createSiteRouter(siteRoot: string): Router {
         let html = readFileSync(file, "utf8");
         if (ball) html = (await import("../ball/nav-link")).addBallNavLink(html);
         if (events) html = (await import("../events/nav-link")).addEventsNavLink(html);
+        if (fundraising) html = (await import("../fundraising/footer-link")).addFundraiseFooterLink(html);
         res.type("html").send(html);
       } catch (err) {
         console.error("nav link failed:", err instanceof Error ? err.message : err);

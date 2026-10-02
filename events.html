@@ -32,10 +32,11 @@
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
     <!-- Get involved (TASK-494: the events page, renamed and widened) ships its OWN stylesheets rather
-         than growing the shared bundle (see the note at the top of events.css). fundraising.css holds
-         the meter its fundraiser cards carry. -->
+         than growing the shared bundle (see the note at the top of events.css). While fundraising is
+         switched on the server adds the fundraising stylesheet (the meter) where the marker is; off,
+         the page loads exactly what the Events page did. -->
     <link rel="stylesheet" href="/assets/css/events.css" />
-    <link rel="stylesheet" href="/assets/css/fundraising.css" />
+    <!-- getinvolved:styles -->
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>

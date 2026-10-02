@@ -28,6 +28,10 @@ When("a visitor opens the page for {string}", async function (title) {
   await open(this, `/fundraise/${await slugOf(title)}`);
 });
 
+When("a visitor opens the page for {string} with {string}", async function (title, query) {
+  await open(this, `/fundraise/${await slugOf(title)}${query}`);
+});
+
 When("a visitor opens the QR code for {string}", async function (title) {
   await open(this, `/fundraise/${await slugOf(title)}/qr.svg`);
 });

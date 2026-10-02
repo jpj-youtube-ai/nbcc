@@ -424,31 +424,49 @@
   }
 
   // --- copy the link ----------------------------------------------------------------------------
+  // Every copy button on the page (the share card's, and the thank you's after paying), each saying
+  // so in the status line beside it.
   function initShare(doc, win) {
-    var btn = doc.querySelector("[data-copy-link]");
-    var status = doc.querySelector("[data-copy-status]");
+    var buttons = Array.prototype.slice.call(doc.querySelectorAll("[data-copy-link]"));
     var clip = win && win.navigator && win.navigator.clipboard;
-    if (!btn || !clip || typeof clip.writeText !== "function") return null;
-    btn.hidden = false;
-    btn.addEventListener("click", function () {
-      var url = btn.getAttribute("data-copy-link");
-      clip.writeText(url).then(
-        function () {
-          if (status) status.textContent = "Link copied. You can paste it anywhere.";
-        },
-        function () {
-          if (status) status.textContent = "Copying did not work here. The link is " + url;
-        },
-      );
+    if (!buttons.length || !clip || typeof clip.writeText !== "function") return null;
+    buttons.forEach(function (btn) {
+      var scope = btn.closest("[data-copy-scope]") || doc;
+      var status = scope.querySelector("[data-copy-status]");
+      btn.hidden = false;
+      btn.addEventListener("click", function () {
+        var url = btn.getAttribute("data-copy-link");
+        clip.writeText(url).then(
+          function () {
+            if (status) status.textContent = "Link copied. You can paste it anywhere.";
+          },
+          function () {
+            if (status) status.textContent = "Copying did not work here. The link is " + url;
+          },
+        );
+      });
     });
-    return { button: btn };
+    return { buttons: buttons };
+  }
+
+  // Back from paying: the thank you takes focus, so a screen reader hears it first.
+  function initThanks(doc) {
+    var panel = doc.querySelector("[data-thanks-panel]");
+    if (!panel) return null;
+    try {
+      panel.focus({ preventScroll: true });
+    } catch (e) {
+      /* focus unavailable */
+    }
+    return panel;
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initGiveForm: initGiveForm, initWall: initWall, initShare: initShare };
+    module.exports = { initGiveForm: initGiveForm, initWall: initWall, initShare: initShare, initThanks: initThanks };
   } else {
     initGiveForm(document, window);
     initWall(document);
     initShare(document, window);
+    initThanks(document);
   }
 })();

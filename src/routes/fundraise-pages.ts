@@ -113,8 +113,10 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   // Registered before /fundraise/:slug, so "manage" is never read as a fundraiser (the core also
   // refuses it as a slug). The token rides in the address, so: never indexed, never cached, and
   // never handed to another website as a referrer when the organiser follows a link from here.
+  // A 404 while fundraising is switched off, like every other fundraising page.
   router.get("/fundraise/manage", async (req, res, next) => {
     try {
+      if (!(await fundraisingOn())) return next();
       res.setHeader("X-Robots-Tag", "noindex, nofollow");
       res.setHeader("Referrer-Policy", "no-referrer");
       res.setHeader("Cache-Control", "no-store");
@@ -151,9 +153,13 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
         import("../fundraising/send"),
       ]);
       const page = publicPage(f, f.meter, wallEntries(await wallRows(f.id)));
+      // ?thanks=1 is where the server sends a giver back to after paying (src/routes/api.ts): a thank
+      // you at the top. Anyone can add it to the address, and all it shows is a thank you.
+      const thanks = req.query.thanks === "1" ? { message: req.query.message === "1" } : undefined;
       const html = renderFundraiserPage(readFileSync(pageFile, "utf8"), page, {
         pageUrl: fundraiserPageUrl(f.slug),
         now: new Date(),
+        thanks,
       });
       fresh(res);
       res.type("html").send(await deps.decorate(html, req.headers.cookie));

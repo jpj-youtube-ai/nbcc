@@ -136,15 +136,19 @@ function cardArt(c: PublicCard): string {
   );
 }
 
-/** One raising money fundraiser as a deck card: the picture, the gist, the meter and the way in. */
-export function renderFundraiserCard(c: PublicCard): string {
+/**
+ * One raising money fundraiser as a deck card: the picture, the gist, the meter and the way in. Its
+ * date goes in the corner only while it is still to come (a fundraiser stays listed after its day,
+ * and an old date there would read as out of date). `today` is YYYY-MM-DD in UK time.
+ */
+export function renderFundraiserCard(c: PublicCard, today?: string): string {
   const id = escapeHtml(`fundraiser-${c.slug}`);
   const href = escapeHtml(c.url ?? `/fundraise/${c.slug}`);
   return (
     `<li class="ev-card ev-card--fundraiser" id="${id}" data-kind="fundraiser"><div class="ev-card__inner">` +
     `<article class="ev-face ev-front" aria-labelledby="${id}-title">` +
     cardArt(c) +
-    (c.eventDate ? renderIndex({ date: c.eventDate }) : "") +
+    (c.eventDate && (!today || c.eventDate >= today) ? renderIndex({ date: c.eventDate }) : "") +
     '<p class="ev-flag fr-flag">Fundraiser</p>' +
     '<div class="ev-body">' +
     `<p class="ev-host">${escapeHtml(c.kindLabel)}</p>` +
@@ -207,6 +211,12 @@ export function fundraiserEventRecord(c: PublicCard): EventRecord | null {
 }
 
 export const CHIPS_MARKER = "<!-- getinvolved:chips -->";
+export const STYLES_MARKER = "<!-- getinvolved:styles -->";
+const FUNDRAISING_STYLES = '<link rel="stylesheet" href="/assets/css/fundraising.css" />';
+// The hint above the deck: fundraiser cards have one face, so once they are among the cards only
+// the event cards are promised to turn over.
+const HINT_ALL = "Turn any card over for the full details.";
+const HINT_EVENTS = "Turn any event card over for the full details.";
 export const PANEL_MARKER = "<!-- getinvolved:panel -->";
 const INTRO_BLOCK = /<!-- getinvolved:intro -->([\s\S]*?)<!-- \/getinvolved:intro -->/;
 
@@ -274,11 +284,13 @@ export function renderGetInvolvedPage(template: string, input: GetInvolvedInput)
     const raising = input.fundraisers.filter((f) => f.path === "raising");
     deck =
       sortForPage([...input.events, ...community]).map((ev) => renderCard(ev)).join("") +
-      raising.map(renderFundraiserCard).join("") +
+      raising.map((f) => renderFundraiserCard(f, input.today)).join("") +
       renderMoreCard("", "/fundraise");
   }
   return template
     .replace(INTRO_BLOCK, (_all, inner: string) => (on ? INTRO_ON : inner))
+    .replace(STYLES_MARKER, () => (on ? FUNDRAISING_STYLES : ""))
+    .replace(HINT_ALL, () => (on ? HINT_EVENTS : HINT_ALL))
     .replace(CHIPS_MARKER, () => (on ? CHIPS : ""))
     .replace(PANEL_MARKER, () => (on ? PANEL : ""))
     .replace(DECK_MARKER, () => deck);
@@ -345,18 +357,25 @@ function renderWall(p: PublicPage, now: Date): string {
   );
 }
 
-function renderShare(p: PublicPage, pageUrl: string): string {
+/** Copy the link, Facebook and WhatsApp: plain links, no script from anyone else. */
+function shareLinks(p: PublicPage, pageUrl: string): string {
   const shareText = `${p.title}, raising money for NBCC: ${pageUrl}`;
-  const shown = pageUrl.replace(/^https?:\/\//, "");
   return (
-    '<section class="card fr-card fr-share" aria-labelledby="fr-share-heading">' +
-    '<h2 id="fr-share-heading">Share this page</h2>' +
-    `<p>Every share helps ${escapeHtml(p.organisedBy.split(" ")[0])} reach more people.</p>` +
     '<div class="fr-share__links">' +
     `<button class="fr-share__btn fr-share__copy" type="button" data-copy-link="${escapeHtml(pageUrl)}" hidden>${ICON.link}Copy the link</button>` +
     `<a class="fr-share__btn fr-share__facebook" href="https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(pageUrl)}" target="_blank" rel="noopener">${ICON.facebook}Facebook<span class="sr-only">, opens in a new tab</span></a>` +
     `<a class="fr-share__btn fr-share__whatsapp" href="https://wa.me/?text=${encodeURIComponent(shareText)}" target="_blank" rel="noopener">${ICON.whatsapp}WhatsApp<span class="sr-only">, opens in a new tab</span></a>` +
-    "</div>" +
+    "</div>"
+  );
+}
+
+function renderShare(p: PublicPage, pageUrl: string): string {
+  const shown = pageUrl.replace(/^https?:\/\//, "");
+  return (
+    '<section class="card fr-card fr-share" aria-labelledby="fr-share-heading" data-copy-scope>' +
+    '<h2 id="fr-share-heading">Share this page</h2>' +
+    `<p>Every share helps ${escapeHtml(p.organisedBy.split(" ")[0])} reach more people.</p>` +
+    shareLinks(p, pageUrl) +
     `<p class="fr-share__url"><span class="sr-only">The page address: </span>${escapeHtml(shown)}</p>` +
     '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
     "</section>"
@@ -491,6 +510,25 @@ export interface FundraiserPageOptions {
   /** The page's own full address, for the QR code, sharing and the canonical link. */
   pageUrl: string;
   now: Date;
+  /**
+   * A giver coming back from paying (?thanks=1, the return address the server gave Stripe): a thank
+   * you at the top, and whether they left a message for the wall (?message=1).
+   */
+  thanks?: { message: boolean };
+}
+
+/** The thank you a giver sees on coming back from paying, with the share links. */
+function renderThanks(p: PublicPage, pageUrl: string, message: boolean): string {
+  const first = escapeHtml(p.organisedBy.split(" ")[0]);
+  return (
+    '<div class="fr-thanks-panel" data-thanks-panel data-copy-scope tabindex="-1">' +
+    `<h2>Thank you for supporting ${escapeHtml(p.title)}.</h2>` +
+    `<p>${message ? "Your message will appear on the wall shortly. " : ""}Your donation will show on the meter shortly.</p>` +
+    `<p>Could you share the page too? Every share helps ${first} reach more people.</p>` +
+    shareLinks(p, pageUrl) +
+    '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
+    "</div>"
+  );
 }
 
 /** One fundraiser's page: the template's head filled in, and the page where its markers are. */
@@ -508,7 +546,8 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     `<span class="eyebrow">${escapeHtml(p.kindLabel)}</span>` +
     `<h1 id="fr-title">${escapeHtml(p.title)}</h1>` +
     '<div class="rule"><i></i></div>' +
-    renderFacts(p);
+    renderFacts(p) +
+    (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks.message) : "");
   const body =
     '<div class="card card-lg fr-summary">' +
     '<h2 class="sr-only">Money raised so far</h2>' +

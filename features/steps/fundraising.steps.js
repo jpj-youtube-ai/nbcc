@@ -473,3 +473,92 @@ Then("fundraising is on", async function () {
   const r = await pool.query("SELECT page_on FROM fundraising_settings WHERE id = 1");
   assert.equal(r.rows[0].page_on, true);
 });
+
+// ---- TASK-499: the event questions ----
+
+When(
+  "someone signs up the event {string}, ticketed on another website, to be shown on the website",
+  async function (title) {
+    await call(this, "POST", "/api/fundraise", {
+      path: "event",
+      kind: "quiz_party",
+      title,
+      description: "A quiz night in the village hall, with a raffle at half time.",
+      eventDate: "2099-11-21",
+      startTime: "19:30",
+      venue: "Example Village Hall",
+      town: "Exampleton",
+      targetPence: null,
+      public: true,
+      name: "Robin Testperson",
+      email: "robin.fr.bdd@example.com",
+      phone: "07700 900123",
+      socialLink: "",
+      socialOk: false,
+      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, shoutOut: false, attend: false },
+      newsletterOk: false,
+      cardLine: "Eight rounds and a raffle (bdd-fr).",
+      endTime: "22:30",
+      timeTbc: false,
+      venueAddress: "Main Street, Exampleton",
+      venuePostcode: "ka1 1aa",
+      access: ["a hearing loop", "step free entry"],
+      price: "£5 a head",
+      booking: "away",
+      ticketUrl: "https://tickets.example.com/bdd-quiz",
+      ageLimit: "18 and over",
+      dressCode: "",
+      included: "",
+      creditName: "The BDD Quiz Team",
+      company: "",
+    });
+  },
+);
+
+Then("the fundraiser {string} is stored with its event answers", async function (title) {
+  const r = await pool.query(
+    `SELECT card_line, to_char(end_time, 'HH24:MI') AS end_time, venue_postcode, access, price, booking, ticket_url, credit_name, post_address
+       FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1`,
+    [title],
+  );
+  assert.ok(r.rows[0], `no fundraiser called ${title}`);
+  assert.deepEqual(r.rows[0], {
+    card_line: "Eight rounds and a raffle (bdd-fr).",
+    end_time: "22:30",
+    venue_postcode: "KA1 1AA",
+    access: ["step free entry", "a hearing loop"],
+    price: "£5 a head",
+    booking: "away",
+    ticket_url: "https://tickets.example.com/bdd-quiz",
+    credit_name: "The BDD Quiz Team",
+    post_address: null,
+  });
+});
+
+Given("an approved event {string} signed up before the event questions", async function (title) {
+  await pool.query(
+    `INSERT INTO fundraisers (slug, path, kind, title, description, event_date, start_time, venue, town, public, status,
+                              organiser_name, organiser_email, organiser_phone, approved_at, approved_by, updated_by)
+     VALUES ($1, 'event', 'bake_sale', $2, 'Cakes and coffee.', '2099-11-22', '10:00', 'Example Church Hall', 'Exampleton', true,
+             'approved', 'Kim Testperson', 'kim.fr.bdd@example.com', '07700 900124', now(), 'bdd', 'bdd')`,
+    [slugFor(title), title],
+  );
+});
+
+// The one card on the page, from its opening tag to the end of its back.
+async function cardOf(world, title) {
+  const r = await pool.query("SELECT slug FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
+  assert.ok(r.rows[0], `no fundraiser called ${title}`);
+  const body = world.visitorBody || "";
+  const start = body.indexOf(`id="community-${r.rows[0].slug}"`);
+  assert.ok(start !== -1, `no card for ${title} on the page`);
+  return body.slice(start, body.indexOf("</article></div></li>", start));
+}
+
+Then("the card for {string} shows {string}", async function (title, text) {
+  assert.ok((await cardOf(this, title)).includes(text), `"${text}" is not on the card for ${title}`);
+});
+
+Then("the card for {string} does not show {string}", async function (title, text) {
+  assert.ok(!(await cardOf(this, title)).includes(text), `"${text}" should not be on the card for ${title}`);
+});

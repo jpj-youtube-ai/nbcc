@@ -8932,6 +8932,17 @@
     ["description", "Description"], ["targetPence", "Target"], ["eventDate", "Date"], ["startTime", "Start time"],
     ["venue", "Venue"], ["town", "Town"], ["socialLink", "Facebook or Instagram link"],
   ];
+  // TASK-499: the access ticks, stored in the events model's words, labelled as the events editor
+  // labels them (ACCESS in src/events/model.ts, ACCESS_LABELS in src/fundraising/model.ts).
+  var FR_ACCESS = [
+    ["step free entry", "Step free entry"], ["accessible toilets", "Accessible toilets"],
+    ["a hearing loop", "Hearing loop"], ["blue badge parking", "Blue badge parking"],
+  ];
+  // How people get in (BOOKING_LABELS in src/fundraising/model.ts).
+  var FR_BOOKING = [
+    ["away", "Tickets are sold on another website"], ["door", "Pay on the door, no booking needed"],
+    ["free", "Free, just come along"],
+  ];
   var FR_LIST_FIRST = 25;
   var FR_WALL_FIRST = 10;
   var FR_HISTORY_FIRST = 10;
@@ -9438,7 +9449,48 @@
         fulfilRow("On the website", f.public ? "Show it on our website" : "Just letting us know, or only wants materials") +
         fulfilRow("Web address", '<span class="fx-mono">/fundraise/' + H.escapeHtml(f.slug) + "</span>") +
         fulfilRow("Signed up", H.escapeHtml(H.fmtDate(f.createdAt))) +
+        (f.path === "event" ? frEventRows(f) : "") +
       "</dl>"
+    );
+  }
+
+  // TASK-499: the event questions, as they answered them. A sign up from before the questions has
+  // none of them, and says so plainly.
+  function frShortName(name) {
+    var parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return "Anonymous";
+    var first = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    return parts.length === 1 ? first : first + " " + parts[parts.length - 1].charAt(0).toUpperCase() + ".";
+  }
+  function frText(value, none) {
+    return value ? '<span class="fx-address">' + H.escapeHtml(value) + "</span>" : frNone(none || "Not given");
+  }
+  function frLabelOf(list, value) {
+    var hit = list.filter(function (o) { return o[0] === value; })[0];
+    return hit ? hit[1] : "";
+  }
+  function frEventRows(f) {
+    var access = (Array.isArray(f.access) ? f.access : []).map(function (a) { return frLabelOf(FR_ACCESS, a); }).filter(Boolean);
+    var booking = frLabelOf(FR_BOOKING, f.booking);
+    var ticket = f.booking === "away" && f.ticketUrl
+      ? frIsWebLink(f.ticketUrl)
+        ? '<a class="fx-tel" href="' + H.escapeHtml(f.ticketUrl) + '" target="_blank" rel="noopener noreferrer">' + H.escapeHtml(f.ticketUrl) + "</a>"
+        : '<span class="fx-mono">' + H.escapeHtml(f.ticketUrl) + "</span>"
+      : "";
+    return (
+      fulfilRow("Front of the card", frText(f.cardLine)) +
+      fulfilRow("Finish time", f.endTime ? H.escapeHtml(String(f.endTime).slice(0, 5)) : frNone("No finish time")) +
+      (f.timeTbc ? fulfilRow("Time", "The time is still to be confirmed") : "") +
+      fulfilRow("Full address and how to get there", frText(f.venueAddress)) +
+      fulfilRow("Venue postcode", frText(f.venuePostcode)) +
+      fulfilRow("Access", access.length ? H.escapeHtml(access.join(", ")) : frNone("None ticked")) +
+      fulfilRow("Price", frText(f.price)) +
+      fulfilRow("How people get in", booking ? H.escapeHtml(booking) : frNone("Not given")) +
+      (ticket ? fulfilRow("Ticket link", ticket) : "") +
+      fulfilRow("Age limit", frText(f.ageLimit)) +
+      fulfilRow("Dress code", frText(f.dressCode)) +
+      fulfilRow("What\u2019s included", frText(f.included)) +
+      fulfilRow("Credit it to", f.creditName ? H.escapeHtml(f.creditName) : frNone("Not given, so the card says " + frShortName(f.name)))
     );
   }
 
@@ -9460,11 +9512,25 @@
     );
   }
 
+  // TASK-499: what is in the post box of a sign up: the separate boxes, or the one old box.
+  function frPostAddress(f) {
+    var parts = [f.postLine1, f.postLine2, f.postTown, f.postPostcode].filter(function (p) { return p && String(p).trim(); });
+    return parts.length ? parts.join("\n") : f.postAddress || "";
+  }
+
   function frWantsPanel(f) {
     var w = f.wants || {};
     var items = [];
     var leaflets = Number(w.leaflets) || 0;
     var buckets = Number(w.buckets) || 0;
+    // TASK-499: posters, leaflets, buckets and tins each on their own; a sign up from before asked
+    // for "leaflets or posters" and "buckets or tins", and reads as it always did.
+    [["posterCount", " poster", " posters"], ["leafletCount", " leaflet", " leaflets"],
+      ["bucketCount", " collection bucket", " collection buckets"], ["tinCount", " collection tin", " collection tins"]].forEach(function (c) {
+      var n = Number(w[c[0]]) || 0;
+      if (n > 0) items.push(n + (n === 1 ? c[1] : c[2]));
+    });
+    var posted = items.length > 0 || leaflets > 0 || buckets > 0;
     if (leaflets > 0) items.push(leaflets + (leaflets === 1 ? " leaflet or poster" : " leaflets or posters"));
     if (buckets > 0) items.push(buckets + (buckets === 1 ? " bucket or tin" : " buckets or tins"));
     if (w.shoutOut) items.push("A social media shout out");
@@ -9472,9 +9538,10 @@
     var list = items.length
       ? '<ul class="fr-wants">' + items.map(function (s) { return "<li>" + H.escapeHtml(s) + "</li>"; }).join("") + "</ul>"
       : '<p class="fx-empty">Nothing asked for.</p>';
-    var address = f.postAddress
-      ? '<dl class="fx-dl fr-gap">' + fulfilRow("Post them to", '<span class="fx-address">' + H.escapeHtml(f.postAddress) + "</span>") + "</dl>"
-      : (leaflets > 0 || buckets > 0) ? '<p class="fx-warn fr-gap">No address given. Ask them before posting.</p>' : "";
+    var postTo = frPostAddress(f);
+    var address = postTo
+      ? '<dl class="fx-dl fr-gap">' + fulfilRow("Post them to", '<span class="fx-address">' + H.escapeHtml(postTo) + "</span>") + "</dl>"
+      : posted ? '<p class="fx-warn fr-gap">No address given. Ask them before posting.</p>' : "";
     return list + address;
   }
 
@@ -9565,9 +9632,30 @@
       name: f.name || "", email: f.email || "", phone: f.phone || "", socialLink: f.socialLink || "", socialOk: !!f.socialOk,
       postAddress: f.postAddress || "", leaflets: String(Number(w.leaflets) || 0), buckets: String(Number(w.buckets) || 0),
       shoutOut: !!w.shoutOut, attend: !!w.attend,
+      // TASK-499
+      posterCount: String(Number(w.posterCount) || 0), leafletCount: String(Number(w.leafletCount) || 0),
+      bucketCount: String(Number(w.bucketCount) || 0), tinCount: String(Number(w.tinCount) || 0),
+      postLine1: f.postLine1 || "", postLine2: f.postLine2 || "", postTown: f.postTown || "", postPostcode: f.postPostcode || "",
+      cardLine: f.cardLine || "", endTime: f.endTime ? String(f.endTime).slice(0, 5) : "", timeTbc: !!f.timeTbc,
+      venueAddress: f.venueAddress || "", venuePostcode: f.venuePostcode || "", price: f.price || "", booking: f.booking || "",
+      ticketUrl: f.ticketUrl || "", ageLimit: f.ageLimit || "", dressCode: f.dressCode || "", included: f.included || "",
+      creditName: f.creditName || "",
+      access0: frHas(f.access, 0), access1: frHas(f.access, 1), access2: frHas(f.access, 2), access3: frHas(f.access, 3),
     };
   }
-  var FR_TEXT_FIELDS = ["title", "kind", "path", "description", "venue", "town", "slug", "name", "email", "phone", "socialLink", "postAddress"];
+  function frHas(access, i) {
+    return Array.isArray(access) && access.indexOf(FR_ACCESS[i][0]) !== -1;
+  }
+  // A sign up from before TASK-499 asked for one number of "leaflets or posters" and one of "buckets
+  // or tins", and gave its address in one box: those boxes show only while they hold something.
+  function frHasOldRequests(f) {
+    var w = f.wants || {};
+    return (Number(w.leaflets) || 0) > 0 || (Number(w.buckets) || 0) > 0;
+  }
+  var FR_TEXT_FIELDS = ["title", "kind", "path", "description", "venue", "town", "slug", "name", "email", "phone", "socialLink", "postAddress",
+    "postLine1", "postLine2", "postTown", "postPostcode", "cardLine", "venueAddress", "venuePostcode", "price", "booking", "ticketUrl",
+    "ageLimit", "dressCode", "included", "creditName"];
+  var FR_COUNTS = [["posterCount", "5"], ["leafletCount", "50"], ["bucketCount", "2"], ["tinCount", "2"], ["leaflets", "50"], ["buckets", "2"]];
 
   function frEditForm(f) {
     // What is live, with only the boxes someone has typed in laid over it (frEditDraft).
@@ -9622,15 +9710,61 @@
         box("phone", "phone", "Phone", "tel", 'maxlength="20" autocomplete="off"') +
         box("socialLink", "socialLink", "Facebook or Instagram link (optional)", "url", 'maxlength="300" autocomplete="off" spellcheck="false"') +
         tick("socialOk", "socialOk", "They are happy for NBCC to post about it on social media") +
+        (f.path === "event" ? frEventEditFields(box, area, tick, head, v, e) : "") +
         head("What they would like") +
-        box("leaflets", "wants.leaflets", "Leaflets or posters", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 1,000.") +
-        box("buckets", "wants.buckets", "Buckets or tins to borrow", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
+        box("posterCount", "wants.posterCount", "Posters", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 1,000.") +
+        box("leafletCount", "wants.leafletCount", "Leaflets", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 1,000.") +
+        box("bucketCount", "wants.bucketCount", "Collection buckets", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
+        box("tinCount", "wants.tinCount", "Collection tins", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
+        (frHasOldRequests(f)
+          ? box("leaflets", "wants.leaflets", "Leaflets or posters", "text", 'inputmode="numeric" autocomplete="off"', "Asked for before posters and leaflets were split. 0 for none, up to 1,000.") +
+            box("buckets", "wants.buckets", "Buckets or tins to borrow", "text", 'inputmode="numeric" autocomplete="off"', "Asked for before buckets and tins were split. 0 for none, up to 20.")
+          : "") +
         tick("shoutOut", "wants.shoutOut", "A social media shout out") +
         tick("attend", "wants.attend", "Someone from NBCC to come along") +
-        area("postAddress", "postAddress", "Where to post leaflets or a bucket (optional)", 3, 500) +
+        head("Where to post them") +
+        box("postLine1", "postLine1", "Address line 1", "text", 'maxlength="120" autocomplete="off"') +
+        box("postLine2", "postLine2", "Address line 2 (optional)", "text", 'maxlength="120" autocomplete="off"') +
+        box("postTown", "postTown", "Town", "text", 'maxlength="80" autocomplete="off"') +
+        box("postPostcode", "postPostcode", "Postcode", "text", 'maxlength="10" autocomplete="off" spellcheck="false"') +
+        (f.postAddress ? area("postAddress", "postAddress", "Where to post leaflets or a bucket (optional)", 3, 500) : "") +
         '<div class="fx-call-row fr-field--wide"><button class="admin-btn admin-btn--small" type="submit">Save the changes</button></div>' +
         frNoticeHtml("edit", "frEditStatus") +
       "</form>"
+    );
+  }
+
+  // TASK-499: the event questions, worded like the events editor, for an event's sign up.
+  function frEventEditFields(box, area, tick, head, v, e) {
+    var access = FR_ACCESS.map(function (a, i) {
+      var name = "access" + i;
+      return '<label class="fr-check"><input type="checkbox" id="frf-' + name + '" name="' + name + '"' + (v[name] ? " checked" : "") + "> " +
+        H.escapeHtml(a[1]) + "</label>";
+    }).join("");
+    var booking = [["", "Not given"]].concat(FR_BOOKING);
+    return (
+      head("The event\u2019s card") +
+      area("cardLine", "cardLine", "A line for the front of the card", 2, 140) +
+      box("endTime", "endTime", "Finish time (optional)", "time", "") +
+      tick("timeTbc", "timeTbc", "The time is still to be confirmed") +
+      area("venueAddress", "venueAddress", "Full address and how to get there (optional)", 2, 300) +
+      box("venuePostcode", "venuePostcode", "Venue postcode (optional)", "text", 'maxlength="10" autocomplete="off" spellcheck="false"') +
+      '<fieldset class="fr-field fr-field--wide fr-checks-group"' + frInvalid(e, "access") + ">" +
+        '<legend class="fx-call-label">Access: tick only what the venue has confirmed</legend>' +
+        '<span class="fr-field-hint">Printed on the back, so a disabled guest can decide without having to ask.</span>' +
+        '<div class="fr-checks-row">' + access + "</div>" + frFieldError(e, "access") + "</fieldset>" +
+      box("price", "price", "Price (optional)", "text", 'maxlength="60" autocomplete="off"', "Short. For example: Free, or \u00a35 on the door.") +
+      // Full width, so the longest way in is never cut short in its box.
+      '<div class="fr-field fr-field--wide"><label class="fx-call-label" for="frf-booking">How people get in</label>' +
+        '<select class="fx-call-input" id="frf-booking" name="booking"' + frInvalid(e, "booking") + ">" +
+        booking.map(function (o) {
+          return '<option value="' + o[0] + '"' + (v.booking === o[0] ? " selected" : "") + ">" + H.escapeHtml(o[1]) + "</option>";
+        }).join("") + "</select>" + frFieldError(e, "booking") + "</div>" +
+      box("ticketUrl", "ticketUrl", "Ticket link (optional)", "url", 'maxlength="500" autocomplete="off" spellcheck="false"', "Only for tickets sold on another website. Starts https://") +
+      box("ageLimit", "ageLimit", "Age limit (optional)", "text", 'maxlength="60" autocomplete="off"') +
+      box("dressCode", "dressCode", "Dress code (optional)", "text", 'maxlength="60" autocomplete="off"') +
+      area("included", "included", "What\u2019s included (optional)", 2, 300) +
+      box("creditName", "creditName", "Credit it to (optional)", "text", 'maxlength="80" autocomplete="off"', "Shown as the organiser on the card. Left empty, the card shows their first name and last initial.")
     );
   }
 
@@ -9877,17 +10011,21 @@
     FR_TEXT_FIELDS.forEach(function (k) {
       if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k];
     });
-    ["eventDate", "startTime"].forEach(function (k) {
+    ["eventDate", "startTime", "endTime"].forEach(function (k) {
       if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k] === "" ? null : typed[k];
     });
-    ["public", "socialOk"].forEach(function (k) {
+    ["public", "socialOk", "timeTbc"].forEach(function (k) {
       if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k];
     });
+    // TASK-499: the access ticks go as one list, in the card's order, when any of them changed.
+    if (typed.access0 !== undefined && [0, 1, 2, 3].some(function (i) { return typed["access" + i] !== live["access" + i]; })) {
+      patch.access = FR_ACCESS.filter(function (a, i) { return typed["access" + i]; }).map(function (a) { return a[0]; });
+    }
     var target = frParsePounds(typed.target);
     if (typeof target === "number" && isNaN(target)) errors.targetPence = frPoundsMessage(typed.target, "250");
     else if (target !== (f.targetPence === undefined ? null : f.targetPence)) patch.targetPence = target;
     var counts = {};
-    [["leaflets", "50"], ["buckets", "2"]].forEach(function (c) {
+    FR_COUNTS.forEach(function (c) {
       var raw = String(typed[c[0]] === undefined ? live[c[0]] : typed[c[0]]).trim();
       if (!/^\d+$/.test(raw)) errors["wants." + c[0]] = "Give a whole number, like " + c[1] + ", or 0 for none.";
       else counts[c[0]] = Number(raw);
@@ -9898,9 +10036,12 @@
       frRenderList();
       return;
     }
-    var wants = { leaflets: counts.leaflets, buckets: counts.buckets, shoutOut: !!typed.shoutOut, attend: !!typed.attend };
-    if (String(wants.leaflets) !== live.leaflets || String(wants.buckets) !== live.buckets ||
-        wants.shoutOut !== live.shoutOut || wants.attend !== live.attend) {
+    var wants = {
+      posterCount: counts.posterCount, leafletCount: counts.leafletCount, bucketCount: counts.bucketCount, tinCount: counts.tinCount,
+      leaflets: counts.leaflets, buckets: counts.buckets, shoutOut: !!typed.shoutOut, attend: !!typed.attend,
+    };
+    var countChanged = FR_COUNTS.some(function (c) { return String(wants[c[0]]) !== live[c[0]]; });
+    if (countChanged || wants.shoutOut !== live.shoutOut || wants.attend !== live.attend) {
       patch.wants = wants; // the server takes what they would like as a whole
     }
     if (!Object.keys(patch).length) {

@@ -7139,7 +7139,7 @@ is listed, every page is a 404, and manage links do nothing, until an admin swit
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js` |
 
 ### Data
 
@@ -7150,6 +7150,27 @@ holder approved while fundraising is off, waiting for "Your page is live"; its m
 (`1791200000020_fundraiser-live-email-pending.js`) also marks any page holder already approved, if
 fundraising has never been switched on. On `donations`: `fundraiser_id`, `supporter_message`, `show_name`,
 `show_amount` and `message_hidden`, all nullable or defaulted, so existing gifts are untouched.
+
+**The sign up details (TASK-499, `1791200000040_fundraiser-sign-up-details.js`).** New columns on
+`fundraisers`, every one nullable or defaulted, so a sign up made before reads as "not answered":
+
+- where to post things, in separate boxes: `post_line1`, `post_line2`, `post_town`, `post_postcode`
+  (a UK postcode, stored upper case with one space). The old single box `post_address` stays and stays
+  readable: a sign up from before still shows it in the admin, and a new one leaves it empty;
+- the event questions, asked only of someone holding an event and worded like the admin's events
+  editor: `card_line` (the line for the front of the card, up to 140), `end_time`, `time_tbc`,
+  `venue_address` (up to 300), `venue_postcode`, `access` (a `text[]` of the events model's `ACCESS`
+  words, checked by `fundraisers_access_check`), `price` (up to 60), `booking` (`away` tickets on
+  another website, `door` pay on the door, `free` just come along, or null when not answered;
+  `fundraisers_booking_check`), `ticket_url` (https only), `age_limit`, `dress_code`, `included` and
+  `credit_name` (the name on the card as organiser; empty shows their first name and last initial).
+
+Columns rather than one jsonb, so each answer goes through the same field to column map
+(`COLUMNS` in `src/db/fundraisers.ts`) as every other staff change, and is audited the same way.
+Posters, leaflets, buckets and tins need no column: they are new keys in the existing `wants`
+jsonb, `posterCount`, `leafletCount`, `bucketCount` and `tinCount`. A sign up from before the split
+holds one number of "leaflets or posters" (`leaflets`) and one of "buckets or tins" (`buckets`);
+those keys keep that meaning, are still read, and show in those words everywhere.
 
 **Raised** = paid online gifts on the page, less any refund, plus cash staff recorded. The
 percentage is rounded down and can pass 100; the bar is held at 100.
@@ -7180,9 +7201,25 @@ All JSON. Money is always in **pence**. Dates are `YYYY-MM-DD`, times `HH:MM`.
   "name": "...", "email": "...", "phone": "...",   // all required
   "socialLink": "https://... or empty",
   "socialOk": false,                       // we may post about it on NBCC's social media
-  "wants": { "leaflets": 0, "buckets": 0, "shoutOut": false, "attend": false },
-  "postAddress": "...",                    // required when leaflets or buckets are above 0
+  "wants": { "posterCount": 0, "leafletCount": 0, "bucketCount": 0, "tinCount": 0,   // TASK-499
+             "shoutOut": false, "attend": false },  // printed up to 1,000 each, buckets and tins up to 20
+  "postLine1": "...", "postLine2": "", "postTown": "...", "postPostcode": "KA1 1AA",
+                                           // line 1, town and a UK postcode required once anything is
+                                           // to be posted; kept only then. postAddress is dropped.
   "newsletterOk": false,
+  // TASK-499, the event questions: required ones only when path is event, all ignored for raising money
+  "cardLine": "...",                       // required for an event, up to 140
+  "venue": "...",                          // (above) required for an event
+  "endTime": "22:30 or empty",             // after startTime when both are given
+  "timeTbc": false,
+  "venueAddress": "", "venuePostcode": "", // up to 300; a UK postcode if given
+  "access": ["step free entry", "accessible toilets", "a hearing loop", "blue badge parking"],
+  "price": "",                             // up to 60
+  "booking": "away | door | free",         // required for an event
+  "ticketUrl": "https://...",              // required when booking is away; https only; dropped otherwise
+  "ageLimit": "", "dressCode": "",         // up to 60 each
+  "included": "",                          // up to 300
+  "creditName": "",                        // up to 80
   "company": "",                           // the honeypot: leave empty and hidden
   "captchaToken": "..."                    // the Turnstile pass, when GET /api/fundraise/captcha gave a site key
 }
@@ -7213,14 +7250,16 @@ paths, an event dropping off the day after its date. A **Card** is:
   "kindLabel": "A Santa dash", "title": "...", "description": "...",
   "eventDate": "2026-12-05" | null, "startTime": "10:30" | null, "venue": "", "town": "",
   "imageSrc": "/media/events/<uuid>" | null,
-  "organisedBy": "Sam S.",                 // first name and last initial
+  "organisedBy": "Sam S.",                 // first name and last initial, or an event's creditName
   "url": "/fundraise/sams-santa-dash" | null,   // null for an event: it has no page
+  "cardLine", "endTime", "timeTbc", "venueAddress", "venuePostcode", "access", "price", "booking",
+  "ticketUrl", "ageLimit", "dressCode", "included",   // TASK-499: the event answers, for its card
   "meter": { "raisedPence": 6000, "onlinePence": 5000, "cashPence": 1000, "targetPence": 25000 | null,
              "percent": 24 | null, "barPercent": 24 | null, "overTarget": false }
 }
 ```
 
-No email, phone, address or social link is ever in a public answer.
+No email, phone, posting address or social link is ever in a public answer.
 
 **`GET /api/fundraisers/:slug`**: a Card plus
 `"wall": [{ "name": "Alex E." | "Anonymous", "amountPence": 2500 | null, "message": "..." | null, "createdAt": "ISO" }]`
@@ -7247,6 +7286,10 @@ an empty string or `null` clears a date, time, target or link). `202 { "status":
 staff can never approve words they did not see.
 The live page keeps the approved version until staff approve it. `400` with `fields` for anything
 else (title, slug and status cannot be changed this way), `404` and `410` as above.
+The event answers (TASK-499) are not among the seven: their rules hang together (a ticket link only
+for tickets elsewhere, a finish after the start), which a change carrying one field at a time
+cannot check, so for now staff change them in Admin > Fundraising. They belong with the private
+area that replaces the manage link (stage 1b part 1, "The private area").
 
 ### Giving on a fundraiser's page
 
@@ -7291,7 +7334,16 @@ transaction, with the actor `admin:<email>`.
 A **Fundraiser** (admin) is every column: `id, slug, path, kind, kindLabel, title, description,
 eventDate, startTime, venue, town, targetPence, public, status (new | approved | declined |
 finished), name, email, phone, socialLink, socialOk, wants, postAddress, newsletterOk, imageSrc,
-declinedReason, createdAt, approvedAt, approvedBy, updatedAt, updatedBy, pageUrl`. `edits` are
+declinedReason, createdAt, approvedAt, approvedBy, updatedAt, updatedBy, pageUrl`, and (TASK-499)
+`postLine1, postLine2, postTown, postPostcode, cardLine, endTime, timeTbc, venueAddress,
+venuePostcode, access, price, booking, ticketUrl, ageLimit, dressCode, included, creditName`.
+`PATCH` takes any of them, each checked on its own as the sign up checks it (a postcode, an https
+ticket link); `booking: ""` clears the answer. A change to either time is checked, under the row's
+lock, against the other time as stored, so the finish never ends up at or before the start: a staff
+`PATCH` that would do it is a `400` naming the time changed ("The finish time is before the start."),
+an organiser's change that would do it is refused when they send it (`400`) and again if it is
+approved later (`409`, nothing written; it can still be rejected). A sign up with no finish time,
+as every one from before TASK-499 has, is never refused. `edits` are
 `{ id, changes, status (waiting | approved | rejected | replaced), createdAt, decidedAt, decidedBy }`, the
 waiting one first. `cash` rows are `{ id, amountPence, paidInOn, note, createdBy, createdAt }`.
 `wall` rows (hidden ones included) are `{ donationId, fullName, shortName, anonymous, showName,
@@ -7332,6 +7384,14 @@ status chips and Business supporters' rows that open in place.
   NBCC may post about it, what they would like and where to post it), sending only what differs
   from the live version, with each message from the server under its own box; the supporter wall with the giver's full name, how it
   shows, Hide and Show (10, then "Show all"); and History in plain words (10, then "Show all").
+- **The sign up details (TASK-499).** What they would like shows posters, leaflets, collection
+  buckets and collection tins each on their own, and the address from its boxes; a sign up from
+  before shows "leaflets or posters", "buckets or tins" and its one address box as it always did,
+  and only such a sign up keeps those boxes in the edit form. An event's sign up shows every event
+  answer under "What they told us" (the access ticks and how people get in in the events editor's
+  words, the ticket link opened only if it is a web address, "Not given" or "None ticked" for a
+  sign up from before), and the edit form has **The event's card** with every one of them to
+  change. Changing one count sends all of what they would like, as the server takes it whole.
 - **Safety**: every stored string is escaped; a `401` signs you out as everywhere else; anything
   that fails to load says it could not load, never that there is nothing. One change at a time:
   from the press until the sign up has been read again its buttons rest and its status line says
@@ -7424,7 +7484,18 @@ decides whether the page exists. While **fundraising** is also switched on, the 
 - every approved, public fundraiser: a raising money one as its own card (photo or a holly cover,
   "Fundraiser" in the corner, organised by, the gist, the **meter**, and a button that opens its
   page; the whole card is a tap target); a "holding an event" one as an ordinary event card,
-  credited to its organiser, among NBCC's events by date;
+  credited to its organiser, among NBCC's events by date. Since TASK-499 that card is drawn from
+  the event questions (`fundraiserEventRecord` in `src/fundraising/render.ts`): the line for the
+  front, the finish time and "(to be confirmed)", the full address with its postcode, the access
+  ticks, the price, and how people get in: tickets elsewhere get the events page's **Book tickets**
+  button with "Tickets are sold on another website" under it, the door gets "Pay on the door. No
+  need to book.", and free gets the events page's "No need to book. Just come along." The age
+  limit, dress code and what is included join the description in the note on the back. A sign up
+  from before the questions is drawn as it always was, except that it no longer says "No need to
+  book. Just come along." (it may well be ticketed): it has no booking line at all. That neutral
+  line is `bookingSolo` on the card record (`CardRecord` in `src/events/render.ts`), which the
+  events editor never sets, so NBCC's own events render byte for byte as before
+  (`test/unit/community-event-card.test.ts` against `test/unit/helpers/card-golden.json`);
 - the **chips** All, Events and Fundraisers, which filter the cards without reloading
   (`assets/js/events.js` `initChips`). They ship hidden, so without JavaScript everything shows;
 - a **Fundraise for us** button in the intro and a panel under the cards, linking `/fundraise`
@@ -7450,9 +7521,17 @@ held full and the words give the real percentage; with no target it is just "£X
 **The sign up (`/fundraise`).** One page, numbered questions in the donate page's style: raising
 money or holding an event (a target only for raising money; a date required for an event), the
 name, kind, description (a characters left count), date, time and place, public or not, the
-organiser's details, the social media consent, what they would like (the address box appears only
-when leaflets or buckets are to be posted), and the newsletter tick box worded like the donate
-page's. Honeypot and Turnstile exactly as the contact form: `GET /api/fundraise/captcha`, and
+organiser's details, the social media consent, what they would like (posters, leaflets,
+collection buckets and collection tins, each its own number; the address boxes, line 1, line 2,
+town and postcode, appear only when something is to be posted), and the newsletter tick box worded
+like the donate page's. Choosing "I'm holding an event" (TASK-499) also asks the venue (then
+required), the finish time and "The time is still to be confirmed", and **For your event's card**:
+a line for the front (140 characters, counted down), the full address and how to get there, the
+venue postcode, "Access: tick only what the venue has confirmed", the price, how people get in
+(the ticket link only for tickets on another website, with a note that NBCC can sell the tickets
+if they say so in the description), the age limit, dress code, what is included and "Credit it
+to". The browser checks what it can (required answers, postcodes, an https ticket link, a finish
+after the start) and the server checks it all again. Honeypot and Turnstile exactly as the contact form: `GET /api/fundraise/captcha`, and
 Cloudflare's script loads only once someone starts on the form. Each of the server's `400 { fields }`
 messages appears beside its own field; a `404` shows the gentle "not open yet" panel; success shows
 a thank you saying what happens next. While fundraising is switched off the server sends the page

@@ -25,6 +25,14 @@ const ICON = {
 
 export const DECK_MARKER = "<!-- events:deck -->";
 
+/**
+ * A card to draw. NBCC's events are EventRecords exactly as the events editor saves them. A card
+ * drawn from something else (a community event from the fundraising sign up, TASK-499) may also say
+ * its own words where the booking goes (bookingSolo), or nothing there at all (null). The events
+ * editor never sets it, so NBCC's events come out exactly as they always have.
+ */
+export type CardRecord = EventRecord & { bookingSolo?: string | null };
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -141,8 +149,11 @@ function fact(icon: string, label: string, html: string): string {
   return `<li>${icon}<span><span class="sr-only">${label}: </span>${html}</span></li>`;
 }
 
-function renderBooking(ev: EventRecord): string {
+function renderBooking(ev: CardRecord): string {
   const gap = '<div class="ev-book-gap"></div>';
+  if (ev.bookingSolo !== undefined) {
+    return ev.bookingSolo ? `${gap}<p class="ev-book-note ev-book-note--solo">${escapeHtml(ev.bookingSolo)}</p>` : "";
+  }
   if (ev.bookingHow === "none") {
     return `${gap}<p class="ev-book-note ev-book-note--solo">No need to book. Just come along.</p>`;
   }
@@ -159,7 +170,7 @@ function renderBooking(ev: EventRecord): string {
 }
 
 /** One event as a card: the picture and the gist on the front, everything else on the back. */
-export function renderCard(ev: EventRecord, idPrefix = ""): string {
+export function renderCard(ev: CardRecord, idPrefix = ""): string {
   const id = escapeHtml(`${idPrefix}${ev.slug}`);
   const p = dateParts(ev.date);
   const time = timeText(ev, true);

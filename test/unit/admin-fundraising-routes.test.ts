@@ -32,7 +32,10 @@ const { getUserAuthRowMock, sendApprovedEmail, sendWaitingLiveEmails, sendEditDe
 
 vi.mock("../../src/db/fundraisers", () => {
   class FundraiserError extends Error {
-    constructor(public readonly reason: string) {
+    constructor(
+      public readonly reason: string,
+      public readonly field?: string,
+    ) {
       super(reason);
     }
   }
@@ -372,6 +375,118 @@ describe("deciding a change emails the organiser (TASK-497)", () => {
   it("emails nobody when the change could not be decided", async () => {
     db.decideEdit.mockRejectedValue(new FundraiserError("not_waiting"));
     expect((await run(routes.postRejectEdit, { params: E, token: tokenFor("editor") })).statusCode).toBe(409);
+    expect(sendEditDecisionEmail).not.toHaveBeenCalled();
+  });
+});
+
+// TASK-499: staff can change every new answer: the address in its boxes, the split requests and the
+// event questions. The same section rule as every other change.
+describe("changing the new answers", () => {
+  const body = {
+    postLine1: "2 Example Road",
+    postLine2: "",
+    postTown: "Exampleton",
+    postPostcode: "ex1 1ex",
+    wants: { posterCount: 3, leafletCount: 40, bucketCount: 1, tinCount: 2, leaflets: 0, buckets: 0, shoutOut: false, attend: false },
+    cardLine: "Eight rounds and a raffle.",
+    endTime: "22:30",
+    timeTbc: true,
+    venueAddress: "Main Street",
+    venuePostcode: "ka1 1aa",
+    access: ["a hearing loop", "step free entry"],
+    price: "£5",
+    booking: "away",
+    ticketUrl: "https://tickets.example.com/quiz",
+    ageLimit: "18 and over",
+    dressCode: "",
+    included: "A mince pie",
+    creditName: "The Quiz Team",
+  };
+
+  it("saves every one, tidied, for an editor", async () => {
+    db.patchFundraiser.mockResolvedValue(record({ path: "event" }));
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body });
+    expect(res.statusCode).toBe(200);
+    const [id, patch, actor] = db.patchFundraiser.mock.calls[0];
+    expect(id).toBe(9);
+    expect(actor).toBe(`admin:${EMAIL}`);
+    expect(patch).toEqual({
+      ...body,
+      postLine2: null,
+      postPostcode: "EX1 1EX",
+      venuePostcode: "KA1 1AA",
+      access: ["step free entry", "a hearing loop"],
+      dressCode: null,
+    });
+  });
+
+  it("is refused to a viewer, and saves nothing", async () => {
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("viewer"), body });
+    expect(res.statusCode).toBe(403);
+    expect(db.patchFundraiser).not.toHaveBeenCalled();
+  });
+
+  it("names each answer it cannot use", async () => {
+    const res = await run(routes.patchAdminFundraiser, {
+      params: P,
+      token: tokenFor("editor"),
+      body: { ticketUrl: "http://tickets.example.com", postPostcode: "12345" },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(Object.keys((res.body as { fields: object }).fields).sort()).toEqual(["postPostcode", "ticketUrl"]);
+    const times = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { startTime: "19:00", endTime: "18:00" } });
+    expect((times.body as { fields: object }).fields).toEqual({ endTime: "The finish time is before the start." });
+    expect(db.patchFundraiser).not.toHaveBeenCalled();
+  });
+
+  it("still saves the old single address box of a sign up from before", async () => {
+    db.patchFundraiser.mockResolvedValue(record({ postAddress: "1 Example Street" }));
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { postAddress: "1 Example Street" } });
+    expect(res.statusCode).toBe(200);
+    expect(db.patchFundraiser.mock.calls[0][1]).toEqual({ postAddress: "1 Example Street" });
+  });
+
+  it("sends the new answers to the admin screen with the rest", async () => {
+    db.getFundraiser.mockResolvedValue({
+      ...record({ path: "event", cardLine: "A line.", booking: "door", access: ["a hearing loop"], postLine1: "1 Example Road" }),
+      meter: meter({ onlinePence: 0, cashPence: 0, targetPence: null }),
+      editWaiting: false,
+    });
+    db.listEdits.mockResolvedValue([]);
+    db.listCash.mockResolvedValue([]);
+    db.wallRows.mockResolvedValue([]);
+    const res = await run(routes.getAdminFundraiser, { params: P, token: tokenFor("viewer") });
+    expect(res.statusCode).toBe(200);
+    expect((res.body as { fundraiser: Record<string, unknown> }).fundraiser).toMatchObject({
+      cardLine: "A line.",
+      booking: "door",
+      access: ["a hearing loop"],
+      postLine1: "1 Example Road",
+    });
+  });
+});
+
+// Review fix: the finish time can never end up before the start through a change of one of them.
+describe("a change that would put the finish before the start", () => {
+  it("names the start when staff move only the start past the stored finish", async () => {
+    db.patchFundraiser.mockRejectedValue(new FundraiserError("bad_times", "startTime"));
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { startTime: "13:00" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Some of it needs another look", fields: { startTime: "The finish time is before the start." } });
+  });
+
+  it("names the finish when staff move only the finish before the stored start", async () => {
+    db.patchFundraiser.mockRejectedValue(new FundraiserError("bad_times", "endTime"));
+    const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { endTime: "09:00" } });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: "Some of it needs another look", fields: { endTime: "The finish time is before the start." } });
+  });
+
+  it("says why an organiser's change cannot be approved, and emails nobody", async () => {
+    db.decideEdit.mockRejectedValue(new FundraiserError("bad_times", "startTime"));
+    const res = await run(routes.postApproveEdit, { params: { id: "9", editId: "3" }, token: tokenFor("editor") });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "This change would put the finish time before the start. Change the finish time first, or reject it." });
     expect(sendEditDecisionEmail).not.toHaveBeenCalled();
   });
 });

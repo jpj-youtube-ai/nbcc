@@ -25,9 +25,11 @@ const allowed = (sql: string): string[] => {
 const BEFORE = ["newsletter", "email", "search", "social", "other_websites", "direct"];
 
 describe("the QR code channel migration", () => {
-  it("sorts last, so production never sees it run out of order", () => {
+  // What matters is that nothing production had already run sorts after it; later work (TASK-499's
+  // 1791200000040) rightly comes after. So: it follows the fundraising migrations before it.
+  it("sorts after everything production had already run, so production never sees it run out of order", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
-    expect(all[all.length - 1]).toBe(FILE);
+    expect(all.indexOf(FILE)).toBeGreaterThan(all.indexOf("1791200000020_fundraiser-live-email-pending.js"));
   });
 
   it("only widens the channel check: everything allowed before, and qr", () => {

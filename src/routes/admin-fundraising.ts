@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { z, type ZodIssue } from "zod";
 import { authorizeSection, authorizeSectionAsAdmin } from "./admin-authz";
 import { actorOf } from "./admin";
-import { adminPatchSchema, hasPage, KIND_LABELS, shortName, type FundraiserRecord } from "../fundraising/model";
+import { adminPatchSchema, FINISH_BEFORE_START, hasPage, KIND_LABELS, shortName, type FundraiserRecord } from "../fundraising/model";
 import {
   addCash,
   decideEdit,
@@ -101,6 +101,13 @@ function failed(res: Response, what: string, err: unknown): Response {
         return res.status(409).json({ error: "That change has already been dealt with" });
       case "replaced":
         return res.status(409).json({ error: "This change has been replaced; look again" });
+      case "bad_times":
+        // A staff change names the box to look at; an organiser's change can only be rejected or
+        // waited on, so it says why it cannot be approved.
+        if (what === "update") {
+          return res.status(400).json({ error: "Some of it needs another look", fields: { [err.field ?? "endTime"]: FINISH_BEFORE_START } });
+        }
+        return res.status(409).json({ error: "This change would put the finish time before the start. Change the finish time first, or reject it." });
     }
   }
   // A slug taken in the moment between the check and the save.

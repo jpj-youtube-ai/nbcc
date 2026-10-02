@@ -71,7 +71,7 @@ describe("reading a row", () => {
       created_at: "2026-10-02T10:00:00Z", approved_at: null, approved_by: null, updated_at: "2026-10-02T10:00:00Z", updated_by: null,
     });
     expect(r.id).toBe(3);
-    expect(r.wants).toEqual({ leaflets: 0, buckets: 0, shoutOut: false, attend: false });
+    expect(r.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false });
     expect(r.createdAt).toBe("2026-10-02T10:00:00.000Z");
   });
 });
@@ -87,6 +87,7 @@ import {
   claimNextWaitingLiveEmail,
   countWaitingLiveEmails,
   markLiveEmailWaiting,
+  patchFundraiser,
   FundraiserError,
 } from "../../src/db/fundraisers";
 
@@ -276,5 +277,179 @@ describe("switching fundraising on, for the people waiting", () => {
       "UPDATE fundraisers SET live_email_pending = true WHERE id = $1 AND status = 'approved'",
       [9],
     ]);
+  });
+});
+
+// TASK-499: the posting address in separate boxes, and the event questions, as columns of their own.
+describe("the sign up details (TASK-499)", () => {
+  it("reads every new column, tidied", () => {
+    const r = toRecord(
+      fundraiserRow({
+        path: "event",
+        post_line1: "1 Example Road",
+        post_line2: null,
+        post_town: "Exampleton",
+        post_postcode: "EX1 1EX",
+        card_line: "Cakes for NBCC.",
+        end_time: "12:00",
+        time_tbc: true,
+        venue_address: "Main Street",
+        venue_postcode: "KA1 1AA",
+        access: ["step free entry", "a hearing loop"],
+        price: "Free",
+        booking: "free",
+        ticket_url: null,
+        age_limit: "All ages",
+        dress_code: null,
+        included: "A cuppa",
+        credit_name: "The Example Bakers",
+        wants: { posterCount: 2, leafletCount: 30, bucketCount: 1, tinCount: 4, shoutOut: true },
+      }),
+    );
+    expect(r).toMatchObject({
+      postLine1: "1 Example Road",
+      postLine2: null,
+      postTown: "Exampleton",
+      postPostcode: "EX1 1EX",
+      cardLine: "Cakes for NBCC.",
+      endTime: "12:00",
+      timeTbc: true,
+      venueAddress: "Main Street",
+      venuePostcode: "KA1 1AA",
+      access: ["step free entry", "a hearing loop"],
+      price: "Free",
+      booking: "free",
+      ticketUrl: null,
+      ageLimit: "All ages",
+      dressCode: null,
+      included: "A cuppa",
+      creditName: "The Example Bakers",
+    });
+    expect(r.wants).toEqual({ posterCount: 2, leafletCount: 30, bucketCount: 1, tinCount: 4, leaflets: 0, buckets: 0, shoutOut: true, attend: false });
+  });
+
+  it("reads a sign up from before the new questions as not answered, with its old combined requests", () => {
+    const r = toRecord(fundraiserRow({ wants: { leaflets: 20, buckets: 1, shoutOut: false, attend: true }, post_address: "1 Old Street" }));
+    expect(r.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 20, buckets: 1, shoutOut: false, attend: true });
+    expect(r.postAddress).toBe("1 Old Street");
+    expect(r).toMatchObject({ postLine1: null, cardLine: null, endTime: null, timeTbc: false, access: [], booking: null, creditName: null });
+  });
+
+  it("never reads a way in or an access tick the code does not know", () => {
+    const r = toRecord(fundraiserRow({ booking: "nbcc", access: ["a lift", "accessible toilets"] }));
+    expect(r.booking).toBeNull();
+    expect(r.access).toEqual(["accessible toilets"]);
+  });
+
+  it("changes each new field through its own column", () => {
+    const { sets, values } = patchAssignments({
+      postLine1: "2 Example Road",
+      postPostcode: "EX1 1EX",
+      cardLine: "Short.",
+      endTime: "12:00",
+      timeTbc: true,
+      access: ["a hearing loop"],
+      booking: "away",
+      ticketUrl: "https://tickets.example.com/a",
+      creditName: "Example Bakery",
+    });
+    expect(sets).toEqual([
+      "post_line1 = $1",
+      "post_postcode = $2",
+      "card_line = $3",
+      "end_time = $4",
+      "time_tbc = $5",
+      "access = $6",
+      "booking = $7",
+      "ticket_url = $8",
+      "credit_name = $9",
+    ]);
+    expect(values[5]).toEqual(["a hearing loop"]);
+  });
+
+  it("stores every answer of a new sign up, and nothing in the old address box", async () => {
+    let inserted: { sql: string; params: unknown[] } | null = null;
+    useClient((sql, params) => {
+      if (sql.startsWith("SELECT slug FROM fundraisers")) return { rows: [] };
+      if (sql.includes("INSERT INTO fundraisers")) {
+        inserted = { sql, params };
+        return { rows: [{ id: 14 }] };
+      }
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [fundraiserRow({ id: 14, status: "new" })] };
+      return { rows: [] };
+    });
+    await createFundraiser({
+      path: "event", kind: "quiz_party", title: "The Example Quiz", description: "A quiz.", eventDate: "2026-12-04", startTime: "19:30",
+      venue: "Example Hall", town: "Exampleton", targetPence: null, public: true, name: "Sam Sample", email: "sam@example.com",
+      phone: "07700 900456", socialLink: null, socialOk: false,
+      wants: { posterCount: 5, leafletCount: 0, bucketCount: 0, tinCount: 1, leaflets: 0, buckets: 0, shoutOut: false, attend: false },
+      postLine1: "1 Example Road", postLine2: null, postTown: "Exampleton", postPostcode: "EX1 1EX", newsletterOk: false,
+      cardLine: "Eight rounds.", endTime: "22:30", timeTbc: false, venueAddress: "Main Street", venuePostcode: "KA1 1AA",
+      access: ["step free entry"], price: "£5", booking: "away", ticketUrl: "https://tickets.example.com/q", ageLimit: "18 and over",
+      dressCode: null, included: null, creditName: "Quiz Team",
+    });
+    const got = inserted as unknown as { sql: string; params: unknown[] };
+    for (const col of ["post_line1", "post_line2", "post_town", "post_postcode", "card_line", "end_time", "time_tbc", "venue_address",
+      "venue_postcode", "access", "price", "booking", "ticket_url", "age_limit", "dress_code", "included", "credit_name"]) {
+      expect(got.sql).toContain(col);
+    }
+    expect(got.sql).not.toContain("post_address");
+    expect(got.params).toContain("Eight rounds.");
+    expect(got.params).toContainEqual(["step free entry"]);
+    expect(got.params).toContain("https://tickets.example.com/q");
+    expect(got.params).toContain("EX1 1EX");
+  });
+});
+
+// Review fix: a staff change or an approved organiser change can never leave the finish before the
+// start: each is checked against the row as it is, under its lock, and nothing is written if not.
+describe("a change that would put the finish before the start", () => {
+  const timed = (over: Record<string, unknown> = {}) => fundraiserRow({ path: "event", start_time: "10:00", end_time: "12:00", ...over });
+  const lockAnd = (row: Record<string, unknown>, extra: Answer = () => undefined) =>
+    useClient((sql, params) => {
+      if (sql.includes("FOR UPDATE") && sql.includes("FROM fundraisers f")) return { rows: [row] };
+      return extra(sql, params);
+    });
+
+  it("refuses a staff change of only the start, past the stored finish, naming the start", async () => {
+    const calls = lockAnd(timed());
+    await expect(patchFundraiser(9, { startTime: "13:00" }, "admin:kim@example.com")).rejects.toMatchObject({
+      reason: "bad_times",
+      field: "startTime",
+    });
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraisers"))).toBe(false);
+    expect(calls.map(([sql]) => sql)).toContain("ROLLBACK");
+  });
+
+  it("refuses a staff change of only the finish, before the stored start, naming the finish", async () => {
+    lockAnd(timed());
+    await expect(patchFundraiser(9, { endTime: "09:30" }, "admin:kim@example.com")).rejects.toMatchObject({
+      reason: "bad_times",
+      field: "endTime",
+    });
+  });
+
+  it("saves a start change on a sign up with no finish time, as every old one is", async () => {
+    const calls = lockAnd(timed({ end_time: null }), (sql) => (sql.includes("FROM fundraisers f WHERE f.id = $1") ? { rows: [timed({ end_time: null })] } : undefined));
+    await patchFundraiser(9, { startTime: "23:00" }, "admin:kim@example.com");
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraisers SET start_time = $1"))).toBe(true);
+  });
+
+  it("refuses to approve an organiser's new start that is past the stored finish", async () => {
+    const calls = lockAnd(timed(), (sql) =>
+      sql.startsWith("SELECT changes, status FROM fundraiser_edits") ? { rows: [{ changes: { startTime: "12:30" }, status: "waiting" }] } : undefined,
+    );
+    await expect(decideEdit(9, 3, true, "admin:kim@example.com")).rejects.toMatchObject({ reason: "bad_times", field: "startTime" });
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraisers") || sql.startsWith("UPDATE fundraiser_edits"))).toBe(false);
+  });
+
+  it("still lets staff reject that change", async () => {
+    const calls = lockAnd(timed(), (sql) => {
+      if (sql.startsWith("SELECT changes, status FROM fundraiser_edits")) return { rows: [{ changes: { startTime: "12:30" }, status: "waiting" }] };
+      if (sql.includes("FROM fundraisers f WHERE f.id = $1")) return { rows: [timed()] };
+      return undefined;
+    });
+    await decideEdit(9, 3, false, "admin:kim@example.com");
+    expect(calls.some(([sql]) => sql.startsWith("UPDATE fundraiser_edits SET status"))).toBe(true);
   });
 });

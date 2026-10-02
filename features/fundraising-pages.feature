@@ -97,3 +97,31 @@ Feature: Get involved and the public fundraising pages (TASK-494)
     Given fundraising is switched off
     When a visitor opens "/fundraise/help"
     Then the visitor gets status 404
+
+  Scenario: an event signed up with the event questions shows its price, booking and access on its card (TASK-499)
+    Given the events page is switched on
+    And fundraising is switched on
+    And a fundraising staff member "a5.fr.bdd@example.com" with role "admin"
+    When someone signs up the event "The BDD Quiz (bdd-fr)", ticketed on another website, to be shown on the website
+    Then the fundraising answer is 200
+    And the fundraiser "The BDD Quiz (bdd-fr)" is stored with its event answers
+    When "a5.fr.bdd@example.com" approves "The BDD Quiz (bdd-fr)"
+    And a visitor opens "/get-involved"
+    Then the visitor gets status 200
+    And the card for "The BDD Quiz (bdd-fr)" shows "Eight rounds and a raffle (bdd-fr)."
+    And the card for "The BDD Quiz (bdd-fr)" shows "£5 a head"
+    And the card for "The BDD Quiz (bdd-fr)" shows 'href="https://tickets.example.com/bdd-quiz"'
+    And the card for "The BDD Quiz (bdd-fr)" shows "Book tickets"
+    And the card for "The BDD Quiz (bdd-fr)" shows "Tickets are sold on another website"
+    And the card for "The BDD Quiz (bdd-fr)" shows "<b>Access:</b> step free entry and a hearing loop."
+    And the card for "The BDD Quiz (bdd-fr)" shows "Organised by The BDD Quiz Team"
+    And the card for "The BDD Quiz (bdd-fr)" does not show "No need to book"
+
+  Scenario: an event signed up before the event questions no longer promises there is no need to book (TASK-499)
+    Given the events page is switched on
+    And fundraising is switched on
+    And an approved event "Old Style Bake Sale (bdd-fr)" signed up before the event questions
+    When a visitor opens "/get-involved"
+    Then the visitor gets status 200
+    And the card for "Old Style Bake Sale (bdd-fr)" shows "Old Style Bake Sale (bdd-fr)"
+    And the card for "Old Style Bake Sale (bdd-fr)" does not show "No need to book"

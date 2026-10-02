@@ -1262,7 +1262,8 @@ describe("every detail staff may change", () => {
       path: "event",
       phone: "01632 960123",
       socialOk: false,
-      wants: { leaflets: 50, buckets: 3, shoutOut: true, attend: true },
+      // TASK-499: the whole of what they would like, the split counts at 0 for a sign up from before.
+      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 50, buckets: 3, shoutOut: true, attend: true },
     });
   });
 
@@ -1415,5 +1416,230 @@ describe("the stylesheet", () => {
       expect(r, r).not.toMatch(/overflow(-[xy])?\s*:\s*(auto|scroll)/);
       expect(r, r).not.toMatch(/white-space\s*:\s*nowrap/);
     }
+  });
+});
+
+// TASK-499: the new answers from the sign up form: the requests split into posters, leaflets,
+// buckets and tins, the address in its boxes, and for an event, the event questions. Staff see
+// every one and can change every one; a sign up from before reads and saves as it always did.
+describe("the new answers from the sign up form", () => {
+  const answered = (id: number, over: Record<string, unknown> = {}) =>
+    fundraiser(id, {
+      path: "event",
+      kind: "quiz_party",
+      kindLabel: "A quiz or party",
+      title: "The Test Quiz",
+      targetPence: null,
+      wants: { posterCount: 5, leafletCount: 100, bucketCount: 1, tinCount: 2, leaflets: 0, buckets: 0, shoutOut: false, attend: true },
+      postAddress: null,
+      postLine1: "2 Example Road",
+      postLine2: "Flat 1",
+      postTown: "Testtown",
+      postPostcode: "TE1 1ST",
+      cardLine: "Eight rounds and a raffle, all for NBCC.",
+      endTime: "22:30",
+      timeTbc: true,
+      venueAddress: "Main Street, Testtown",
+      venuePostcode: "KA1 1AA",
+      access: ["step free entry", "a hearing loop"],
+      price: "£5 on the door",
+      booking: "away",
+      ticketUrl: "https://tickets.example.com/quiz",
+      ageLimit: "18 and over",
+      dressCode: "Festive jumpers",
+      included: "A mince pie",
+      creditName: "The Quiz Team",
+      ...over,
+    });
+  const form = () => el("frEditForm");
+  const value = (n: string) => (form().querySelector(`[name="${n}"]`) as HTMLInputElement | null)?.value;
+  const ticked = (n: string) => (form().querySelector(`[name="${n}"]`) as HTMLInputElement).checked;
+  function tickBox(n: string, on: boolean) {
+    const box = q(`#frEditForm [name="${n}"]`) as HTMLInputElement;
+    box.checked = on;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  it("shows each request on its own, and the address from its boxes", async () => {
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    const d = text(detail());
+    for (const words of ["5 posters", "100 leaflets", "1 collection bucket", "2 collection tins", "2 Example Road", "Flat 1", "TE1 1ST"]) {
+      expect(d).toContain(words);
+    }
+    expect(d).not.toContain("leaflets or posters");
+  });
+
+  it("shows every event answer, in the events editor's words", async () => {
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    const d = text(detail());
+    for (const words of [
+      "Eight rounds and a raffle, all for NBCC.",
+      "22:30",
+      "The time is still to be confirmed",
+      "Main Street, Testtown",
+      "KA1 1AA",
+      "Step free entry, Hearing loop",
+      "£5 on the door",
+      "Tickets are sold on another website",
+      "18 and over",
+      "Festive jumpers",
+      "A mince pie",
+      "The Quiz Team",
+    ]) {
+      expect(d).toContain(words);
+    }
+    const link = q('#frList a[href="https://tickets.example.com/quiz"]') as HTMLAnchorElement;
+    expect(link).not.toBeNull();
+    expect(link.getAttribute("rel")).toContain("noopener");
+  });
+
+  it("asks no event questions of someone raising money", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    expect(text(detail())).not.toContain("Front of the card");
+    expect(form().querySelector('[name="cardLine"]')).toBeNull();
+  });
+
+  it("says what was not given for an event signed up before the questions", async () => {
+    records = [fundraiser(3, { path: "event", targetPence: null })];
+    await openFundraising();
+    await openRow(3);
+    const d = text(detail());
+    expect(d).toMatch(/How people get in\s*Not given/);
+    expect(d).toMatch(/Access\s*None ticked/);
+    expect(d).toMatch(/Credit it to\s*Not given, so the card says Robin E\./);
+  });
+
+  it("keeps the old combined requests and address box only for a sign up from before", async () => {
+    records = [fundraiser(1), answered(2)];
+    await openFundraising();
+    await openRow(1);
+    expect(text(form().querySelector('label[for="frf-leaflets"]'))).toBe("Leaflets or posters");
+    expect(text(form().querySelector('label[for="frf-buckets"]'))).toBe("Buckets or tins to borrow");
+    expect(value("postAddress")).toBe("1 Example Road\nTesttown");
+    await openRow(2);
+    expect(form().querySelector('[name="leaflets"]')).toBeNull();
+    expect(form().querySelector('[name="buckets"]')).toBeNull();
+    expect(form().querySelector('[name="postAddress"]')).toBeNull();
+  });
+
+  it("holds every new answer, filled in", async () => {
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    expect(value("posterCount")).toBe("5");
+    expect(value("leafletCount")).toBe("100");
+    expect(value("bucketCount")).toBe("1");
+    expect(value("tinCount")).toBe("2");
+    expect(value("postLine1")).toBe("2 Example Road");
+    expect(value("postLine2")).toBe("Flat 1");
+    expect(value("postTown")).toBe("Testtown");
+    expect(value("postPostcode")).toBe("TE1 1ST");
+    expect(value("cardLine")).toBe("Eight rounds and a raffle, all for NBCC.");
+    expect(value("endTime")).toBe("22:30");
+    expect(ticked("timeTbc")).toBe(true);
+    expect(value("venueAddress")).toBe("Main Street, Testtown");
+    expect(value("venuePostcode")).toBe("KA1 1AA");
+    expect([0, 1, 2, 3].map((i) => ticked("access" + i))).toEqual([true, false, true, false]);
+    expect(value("price")).toBe("£5 on the door");
+    expect(value("booking")).toBe("away");
+    expect(value("ticketUrl")).toBe("https://tickets.example.com/quiz");
+    expect(value("ageLimit")).toBe("18 and over");
+    expect(value("dressCode")).toBe("Festive jumpers");
+    expect(value("included")).toBe("A mince pie");
+    expect(value("creditName")).toBe("The Quiz Team");
+    expect(text(form())).toContain("Access: tick only what the venue has confirmed");
+  });
+
+  it("sends only the event answers that changed", async () => {
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    setValue('#frEditForm [name="price"]', "Free");
+    setValue('#frEditForm [name="booking"]', "free");
+    tickBox("access1", true);
+    tickBox("timeTbc", false);
+    setValue('#frEditForm [name="endTime"]', "");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/2")[0].body).toEqual({
+      price: "Free",
+      booking: "free",
+      access: ["step free entry", "accessible toilets", "a hearing loop"],
+      timeTbc: false,
+      endTime: null,
+    });
+  });
+
+  it("sends the address boxes that changed", async () => {
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    setValue('#frEditForm [name="postLine2"]', "");
+    setValue('#frEditForm [name="postPostcode"]', "te2 2st");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/2")[0].body).toEqual({ postLine2: "", postPostcode: "te2 2st" });
+  });
+
+  it("sends all of what they would like when one count changes", async () => {
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    setValue('#frEditForm [name="tinCount"]', "4");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/2")[0].body).toEqual({
+      wants: { posterCount: 5, leafletCount: 100, bucketCount: 1, tinCount: 4, leaflets: 0, buckets: 0, shoutOut: false, attend: true },
+    });
+  });
+
+  it("catches a new count that is not a whole number before sending", async () => {
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    setValue('#frEditForm [name="tinCount"]', "two");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/2")).toHaveLength(0);
+    expect(text(q('[data-frerr="wants.tinCount"]'))).toMatch(/whole number/i);
+  });
+
+  it("puts the server's messages under the new boxes", async () => {
+    records = [answered(2)];
+    failures["PATCH /api/admin/fundraisers/2"] = {
+      status: 400,
+      body: {
+        error: "Some of it needs another look",
+        fields: {
+          ticketUrl: "Paste the full web address, starting https://",
+          postPostcode: "That does not look like a UK postcode, like KA1 1AA.",
+          endTime: "The finish time is before the start.",
+        },
+      },
+    };
+    await openFundraising();
+    await openRow(2);
+    setValue('#frEditForm [name="ticketUrl"]', "http://tickets.example.com");
+    submit("#frEditForm");
+    await settle();
+    expect(text(q('[data-frerr="ticketUrl"]'))).toBe("Paste the full web address, starting https://");
+    expect(text(q('[data-frerr="postPostcode"]'))).toBe("That does not look like a UK postcode, like KA1 1AA.");
+    expect(text(q('[data-frerr="endTime"]'))).toBe("The finish time is before the start.");
+    expect((q('#frEditForm [name="ticketUrl"]') as HTMLInputElement).getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("lets a viewer read the new answers, with no form", async () => {
+    asRole("viewer");
+    records = [answered(2)];
+    await openFundraising();
+    await openRow(2);
+    expect(text(detail())).toContain("Tickets are sold on another website");
+    expect(q("#frEditForm")).toBeNull();
   });
 });

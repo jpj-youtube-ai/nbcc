@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- SEO -->
+    <title>Fundraise for us | Night Before Christmas Campaign</title>
+    <meta name="description" content="Raise money for NBCC your way: a sponsored walk, a bake sale, a quiz or a birthday. Tell us your plans and we will help with a page, posters and more." />
+    <link rel="canonical" href="https://nbcc.scot/fundraise" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Night Before Christmas Campaign" />
+    <meta property="og:title" content="Fundraise for us | Night Before Christmas Campaign" />
+    <meta property="og:description" content="Raise money for NBCC your way: a sponsored walk, a bake sale, a quiz or a birthday. Tell us your plans and we will help with a page, posters and more." />
+    <meta property="og:url" content="https://nbcc.scot/fundraise" />
+    <meta property="og:image" content="https://nbcc.scot/assets/img/og-image.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Fundraise for us | Night Before Christmas Campaign" />
+    <meta name="twitter:description" content="Raise money for NBCC your way: a sponsored walk, a bake sale, a quiz or a birthday. Tell us your plans and we will help with a page, posters and more." />
+    <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
+
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <!-- Community fundraising (TASK-494) has its OWN stylesheet and scripts rather than growing the
+         shared bundle, which donate.html's page weight budget counts. -->
+    <link rel="stylesheet" href="/assets/css/fundraising.css" />
+    <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
+    <script defer src="/assets/js/main.js"></script>
+    <script defer src="/assets/js/fundraise.js"></script>
+    <script defer src="/assets/js/pulse.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="nav" id="nav" data-region="nav">
+      <div class="wrap">
+        <a class="brand" href="/"><img src="/assets/img/nbcc-logo.png" alt="Night Before Christmas Campaign" width="50" height="50" loading="lazy" /></a>
+        <nav aria-label="Primary">
+          <ul class="nav-links" id="navLinks">
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+          </ul>
+        </nav>
+        <a class="nav-cta" href="/donate">Donate</a>
+        <button class="burger" id="burger" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks"><span></span><span></span><span></span></button>
+      </div>
+    </header>
+
+    <main class="site-main" id="main" tabindex="-1">
+      <section class="page-top fr-intro" aria-labelledby="fundraise-heading">
+        <div class="wrap">
+          <div class="intro-hero">
+            <span class="eyebrow">Fundraise for us</span>
+            <h1 id="fundraise-heading">Raise money your way, and we will help.</h1>
+            <div class="rule"><i></i></div>
+            <p class="lede">A sponsored walk, a bake sale, a quiz night or a birthday. Tell us what you are planning and we will be in touch. We read every sign up ourselves.</p>
+            <p class="fr-aside-link">Already signed up? <a href="/fundraise/manage">Change your page</a></p>
+          </div>
+        </div>
+      </section>
+
+      <div class="section flush-top">
+        <div class="wrap fr-narrow">
+          <!-- TASK-494: the server shows this instead of the form while fundraising is switched off
+               (src/fundraising/render.ts renderFundraiseSignUp), and fundraise.js shows it if the
+               switch goes off while someone is filling the form in. -->
+          <div class="card card-lg fr-panel fr-closed" data-fundraise-closed hidden>
+            <h2>Fundraising sign ups are not open yet</h2>
+            <p>We are getting everything ready, and it will not be long. In the meantime we would love to hear your plans. Email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> or send us a message through our <a href="/contact">contact page</a>.</p>
+          </div>
+
+          <div class="fr-signup" data-fundraise-open>
+            <form id="fundraiseForm" class="fr-form" action="/api/fundraise" method="post" novalidate>
+              <div hidden aria-hidden="true">
+                <label for="company">Leave blank
+                  <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
+                </label>
+              </div>
+              <p class="form-error-summary" role="alert" data-form-error hidden></p>
+
+              <div class="give-question">
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">What are you planning?</legend>
+                  <div class="fr-options">
+                    <label class="fr-option" for="pathRaising"><input id="pathRaising" name="path" type="radio" value="raising" required aria-required="true" data-invalid-message="Tell us whether you are raising money or holding an event" /><span><strong>I&rsquo;m raising money</strong><small>Sponsorship, a collection or a birthday. You get your own page with a meter and a QR code.</small></span></label>
+                    <label class="fr-option" for="pathEvent"><input id="pathEvent" name="path" type="radio" value="event" required aria-required="true" /><span><strong>I&rsquo;m holding an event</strong><small>A bake sale, a quiz or a coffee morning. We can list it with our events.</small></span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="give-question">
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">Tell us about it</legend>
+                  <div class="give-field">
+                    <label for="title">Give it a name <span class="give-req" aria-hidden="true">*</span></label>
+                    <input class="give-field-input" id="title" name="title" type="text" maxlength="100" required aria-required="true" aria-describedby="titleHelp" data-invalid-message="Give it a name, like Sam&rsquo;s Santa Dash" />
+                    <p class="give-field-help" id="titleHelp">For example, Sam&rsquo;s Santa Dash or The Office Bake Sale.</p>
+                  </div>
+                  <fieldset class="fr-fieldset fr-kinds" id="kindGroup">
+                    <legend class="fr-sublegend">What kind is it? <span class="give-req" aria-hidden="true">*</span></legend>
+                    <div class="fr-options fr-options--grid">
+                      <label class="fr-option fr-option--small" for="kind-run_walk"><input id="kind-run_walk" name="kind" type="radio" value="run_walk" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A run or walk</span></label>
+                      <label class="fr-option fr-option--small" for="kind-santa_dash"><input id="kind-santa_dash" name="kind" type="radio" value="santa_dash" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A Santa dash</span></label>
+                      <label class="fr-option fr-option--small" for="kind-bake_sale"><input id="kind-bake_sale" name="kind" type="radio" value="bake_sale" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A bake sale or coffee morning</span></label>
+                      <label class="fr-option fr-option--small" for="kind-quiz_party"><input id="kind-quiz_party" name="kind" type="radio" value="quiz_party" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A quiz or party</span></label>
+                      <label class="fr-option fr-option--small" for="kind-collection"><input id="kind-collection" name="kind" type="radio" value="collection" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A workplace or school collection</span></label>
+                      <label class="fr-option fr-option--small" for="kind-birthday"><input id="kind-birthday" name="kind" type="radio" value="birthday" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A birthday</span></label>
+                      <label class="fr-option fr-option--small" for="kind-other"><input id="kind-other" name="kind" type="radio" value="other" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>Something else</span></label>
+                    </div>
+                  </fieldset>
+                  <div class="give-field">
+                    <label for="description">A few words about it <span class="give-req" aria-hidden="true">*</span></label>
+                    <textarea class="give-field-input" id="description" name="description" rows="5" maxlength="1000" required aria-required="true" aria-describedby="descriptionCount" data-invalid-message="Tell us a little about it"></textarea>
+                    <p class="give-field-help" id="descriptionCount" data-count-for="description" data-count-max="1000">Up to 1,000 characters. If it gets a page, this is the story people read.</p>
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="eventDate">The date <span class="give-optional" data-date-optional>(if there is one)</span><span class="give-req" aria-hidden="true" data-date-required hidden>*</span></label>
+                      <input class="give-field-input" id="eventDate" name="eventDate" type="date" data-invalid-message="Tell us the date of your event" />
+                    </div>
+                    <div class="give-field">
+                      <label for="startTime">Start time <span class="give-optional">(if there is one)</span></label>
+                      <input class="give-field-input" id="startTime" name="startTime" type="time" />
+                    </div>
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="venue">Where <span class="give-optional">(if there is somewhere)</span></label>
+                      <input class="give-field-input" id="venue" name="venue" type="text" maxlength="120" placeholder="Like Example Village Hall" />
+                    </div>
+                    <div class="give-field">
+                      <label for="town">Town <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="town" name="town" type="text" maxlength="80" />
+                    </div>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="give-question" data-target-question>
+                <div class="give-field fr-target">
+                  <label class="give-custom-label" for="target">Your target <span class="give-optional">(optional)</span></label>
+                  <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span><input class="give-custom-input" id="target" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="targetHelp" data-invalid-message="A target can be from £10 to £100,000" /></div>
+                  <p class="give-field-help" id="targetHelp">Anything from £10 to £100,000. Your page shows how close you are. You can change it later.</p>
+                </div>
+              </div>
+
+              <div class="give-question">
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">Shall we show it on our website?</legend>
+                  <div class="fr-options">
+                    <label class="fr-option" for="publicYes"><input id="publicYes" name="public" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether to show it on our website" /><span><strong>Yes, show it on your website</strong><small>Once we have checked it with you, it goes on our Get involved page.</small></span></label>
+                    <label class="fr-option" for="publicNo"><input id="publicNo" name="public" type="radio" value="no" required aria-required="true" /><span><strong>No, I&rsquo;m just letting you know</strong><small>Or I only want materials, like posters or a bucket.</small></span></label>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="give-question">
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">Your details</legend>
+                  <div class="give-field">
+                    <label for="name">Your name <span class="give-req" aria-hidden="true">*</span></label>
+                    <input class="give-field-input" id="name" name="name" type="text" maxlength="100" autocomplete="name" required aria-required="true" data-invalid-message="Please tell us your name" />
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="email">Email <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="email" name="email" type="email" maxlength="254" autocomplete="email" required aria-required="true" placeholder="you@example.com" />
+                    </div>
+                    <div class="give-field">
+                      <label for="phone">Phone <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="phone" name="phone" type="tel" maxlength="20" autocomplete="tel" required aria-required="true" aria-describedby="phoneHelp" data-invalid-message="Please give us a phone number, so we can call you" />
+                      <p class="give-field-help" id="phoneHelp">So we can give you a call about it.</p>
+                    </div>
+                  </div>
+                  <div class="give-field">
+                    <label for="socialLink">Your Facebook or Instagram page <span class="give-optional">(optional)</span></label>
+                    <input class="give-field-input" id="socialLink" name="socialLink" type="url" maxlength="300" inputmode="url" placeholder="https://www.facebook.com/..." aria-describedby="socialHelp" data-invalid-message="Paste the full link, starting https://" />
+                    <p class="give-field-help" id="socialHelp">Paste the full link, starting https://</p>
+                  </div>
+                  <label class="give-check" for="socialOk"><input class="give-check-box" id="socialOk" name="socialOk" type="checkbox" /><span class="give-check-text">You can post about this on NBCC&rsquo;s social media.</span></label>
+                </fieldset>
+              </div>
+
+              <div class="give-question">
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">What would you like from us? <span class="give-optional">(optional)</span></legend>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="leaflets">Printed leaflets or posters, how many?</label>
+                      <input class="give-field-input fr-count" id="leaflets" name="leaflets" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 leaflets" />
+                    </div>
+                    <div class="give-field">
+                      <label for="buckets">Collection buckets or tins, how many?</label>
+                      <input class="give-field-input fr-count" id="buckets" name="buckets" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 buckets or tins" />
+                    </div>
+                  </div>
+                  <div class="give-field" data-address-field hidden>
+                    <label for="postAddress">Where should we send them? <span class="give-req" aria-hidden="true">*</span></label>
+                    <textarea class="give-field-input" id="postAddress" name="postAddress" rows="3" maxlength="500" autocomplete="street-address" required aria-required="true" aria-describedby="addressHelp" data-invalid-message="Tell us where to send your leaflets or bucket"></textarea>
+                    <p class="give-field-help" id="addressHelp">The full address with the postcode. If you are local, we may drop them off instead.</p>
+                  </div>
+                  <label class="give-check" for="shoutOut"><input class="give-check-box" id="shoutOut" name="shoutOut" type="checkbox" /><span class="give-check-text">A shout out on our social media</span></label>
+                  <label class="give-check" for="attend"><input class="give-check-box" id="attend" name="attend" type="checkbox" /><span class="give-check-text">Someone from NBCC to come along</span></label>
+                </fieldset>
+              </div>
+
+              <div class="give-question">
+                <div class="give-newsletter">
+                  <label class="give-check give-newsletter-check" for="newsletterOk">
+                    <input class="give-check-box" id="newsletterOk" name="newsletterOk" type="checkbox" />
+                    <span class="give-check-text"><strong>Add me to our newsletter.</strong> A warm little update from NBCC on the difference your support helps make. Unsubscribe anytime.</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Cloudflare Turnstile, exactly as on the contact form (TASK-490): fundraise.js asks
+                   GET /api/fundraise/captcha and only loads Cloudflare's script once someone starts
+                   on the form. -->
+              <div class="fr-captcha" id="fundraiseCaptcha" hidden></div>
+              <input type="hidden" id="captchaToken" name="captchaToken" value="" />
+              <noscript><p class="fr-noscript">This form needs JavaScript switched on. You can email your plans to <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> instead.</p></noscript>
+              <div class="give-cta-row">
+                <button class="btn btn-primary give-cta" type="submit" data-submit>Send my sign up</button>
+              </div>
+              <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>. Nothing goes on our website until we have checked it with you.</p>
+              <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+
+          <div class="card card-lg fr-panel fr-thanks" data-fundraise-thanks hidden tabindex="-1">
+            <span class="eyebrow">Sign up received</span>
+            <h2>Thank you<span data-thanks-name></span>.</h2>
+            <div class="rule"><i></i></div>
+            <p>We have your sign up, and we have emailed you to say so. Here is what happens next.</p>
+            <ol class="fr-steps">
+              <li>Someone from NBCC reads it and gets in touch, usually within a few days.</li>
+              <li data-thanks-raising>Once we have said yes, we email you the link to your own page and its QR code, ready to share.</li>
+              <li data-thanks-event hidden>Once we have said yes, and if you asked us to, we add it to our Get involved page.</li>
+              <li>Anything you asked for, like posters or a bucket, we sort out with you.</li>
+            </ol>
+            <p><a class="btn btn-ghost" href="/">Back to the home page</a></p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer" data-region="footer">
+      <div class="wrap">
+        <div class="foot-brand">
+          <img src="/assets/img/nbcc-logo-white.svg" alt="Night Before Christmas Campaign" width="74" height="74" loading="lazy" />
+          <p>A volunteer run Scottish charity in Annbank, Ayrshire, bringing comfort, dignity and joy to children, young people and vulnerable adults across South West Scotland, here all year.</p>
+          <div class="socials">
+            <a href="https://www.instagram.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F8F5EE" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1.2" fill="#F8F5EE" stroke="none"/></svg></a>
+            <a href="https://www.facebook.com/nbcc.scot" target="_blank" rel="noopener" aria-label="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg></a>
+            <a href="https://x.com/Nightbeforechr1" target="_blank" rel="noopener" aria-label="X"><svg width="18" height="18" viewBox="0 0 24 24" fill="#F8F5EE" aria-hidden="true"><path d="M18 2h3l-7 8 8 12h-6l-5-7-5 7H3l8-9L3 2h6l4 6z"/></svg></a>
+          </div>
+          <p class="handle">Find us at <b>nbcc.scot</b></p>
+        </div>
+        <div class="foot-col">
+          <h4>Explore</h4>
+          <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/about-us">About us</a></li>
+            <li><a href="/donate">Donate</a></li>
+            <li><a href="/contact">Contact</a></li>
+            <li><a href="/supporters">Supporters</a></li>
+            <li><a href="/my-story">Share your story</a></li>
+          </ul>
+        </div>
+        <div class="foot-col">
+          <h4>Ways to give</h4>
+          <ul>
+            <li><a href="/donate">Donate money</a></li>
+            <li><a href="/contact">Donate items</a></li>
+            <li><a href="/contact">Fundraise for us</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="legal">
+        <div class="wrap">
+          <span>Night Before Christmas Campaign, known as NBCC, is a Scottish Charitable Incorporated Organisation.</span>
+          <span>Scottish Charity Number <a href="https://www.oscr.org.uk/about-charities/search-the-register/charity-details?number=SC047995" target="_blank" rel="noopener">SC047995</a>. Regulated by the Scottish Charity Regulator, OSCR.</span>
+          <span>The Elves Workshop, Annbank Village Hall, Weston Avenue, Annbank, KA6 5EE</span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -15,6 +15,8 @@ export interface SitePage {
   // TASK-453: the same for the Events page, which an admin switches on and off. Off, /events is a
   // 404, so listing it would offer search engines and visitors a dead link.
   eventsGated?: boolean;
+  // TASK-494: the fundraising sign up, listed only while fundraising is switched on.
+  fundraisingGated?: boolean;
   children?: SitePage[];
 }
 
@@ -34,7 +36,9 @@ export const SITE_PAGES: SitePage[] = [
   { path: "/my-story", title: "Share your story", listedByDefault: true },
   { path: "/supporters", title: "Supporters", listedByDefault: true },
   { path: "/hub", title: "Hub", listedByDefault: true },
-  { path: "/events", title: "Events", listedByDefault: true, eventsGated: true },
+  // TASK-494: the Events page renamed; /events redirects here.
+  { path: "/get-involved", title: "Get involved", listedByDefault: true, eventsGated: true },
+  { path: "/fundraise", title: "Fundraise for us", listedByDefault: true, fundraisingGated: true },
   { path: "/contact", title: "Contact", listedByDefault: true },
   { path: "/privacy", title: "Privacy notice", listedByDefault: true },
   { path: "/donor-portal", title: "Donor portal", listedByDefault: false },
@@ -127,7 +131,11 @@ export const RESERVED_PREFIXES: string[] = [
   "/donate",
   "/donor-portal",
   // TASK-453: a real page (switched on and off from the admin), so no spare address may shadow it.
+  // TASK-494 renamed it /get-involved; the old address stays reserved because it redirects there.
   "/events",
+  "/get-involved",
+  // TASK-494: the fundraising sign up, each fundraiser's page and the manage page.
+  "/fundraise",
   "/g",
   "/gift-aid",
   "/health",
@@ -187,15 +195,16 @@ export function aliasToProblem(to: string): string | null {
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
-// The /sitemap page's tree: nested lists of links, filtered by the ball gate and the Events page
-// switch. Pure so the shape is testable; the route drops this into sitemap.html's .sitemap-tree
+// The /sitemap page's tree: nested lists of links, filtered by the ball gate, the Get involved page
+// switch and the fundraising switch. Pure so the shape is testable; the route drops this into sitemap.html's .sitemap-tree
 // placeholder.
-export function renderSitemapTree(pages: SitePage[], ballOpen: boolean, eventsOn = false): string {
+export function renderSitemapTree(pages: SitePage[], ballOpen: boolean, eventsOn = false, fundraisingOn = false): string {
   const items = pages
     .filter((p) => !p.ballGated || ballOpen)
     .filter((p) => !p.eventsGated || eventsOn)
+    .filter((p) => !p.fundraisingGated || fundraisingOn)
     .map((p) => {
-      const kids = p.children ? renderSitemapTree(p.children, ballOpen, eventsOn) : "";
+      const kids = p.children ? renderSitemapTree(p.children, ballOpen, eventsOn, fundraisingOn) : "";
       return `<li><a href="${escapeHtml(p.path)}">${escapeHtml(p.title)}</a>${kids}</li>`;
     })
     .join("");
@@ -211,10 +220,12 @@ export function renderSitemapXml(
   overrides: Map<string, boolean>,
   ballOpen: boolean,
   eventsOn = false,
+  fundraisingOn = false,
 ): string {
   const urls = flatten(pages)
     .filter((p) => !p.ballGated || ballOpen)
     .filter((p) => !p.eventsGated || eventsOn)
+    .filter((p) => !p.fundraisingGated || fundraisingOn)
     .filter((p) => overrides.get(p.path) ?? p.listedByDefault)
     .map((p) => `  <url><loc>${origin}${p.path === "/" ? "/" : escapeHtml(p.path)}</loc></url>`)
     .join("\n");

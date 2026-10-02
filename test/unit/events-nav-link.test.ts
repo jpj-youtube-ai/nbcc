@@ -15,10 +15,10 @@ const navList = (html: string) => html.match(/<ul class="nav-links"[\s\S]*?<\/ul
 const footer = (html: string) => html.match(/<footer[\s\S]*?<\/footer>/)?.[0] ?? "";
 const hrefs = (list: string) => [...list.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
 
-describe("the Events item in the menu", () => {
+describe("the Get involved item in the menu (TASK-494: Events renamed)", () => {
   it("goes straight after About", () => {
     const out = addEventsNavLink(page("contact.html"));
-    expect(hrefs(navList(out))).toEqual(["/", "/about-us", "/events", "/donate", "/contact", "/supporters"]);
+    expect(hrefs(navList(out))).toEqual(["/", "/about-us", "/get-involved", "/donate", "/contact", "/supporters"]);
   });
 
   // about.html's own About item carries class="active" aria-current="page", so a match on the
@@ -26,15 +26,15 @@ describe("the Events item in the menu", () => {
   it("finds About on the About page itself, and never touches the footer", () => {
     const before = page("about.html");
     const out = addEventsNavLink(before);
-    expect(hrefs(navList(out))).toContain("/events");
-    expect(hrefs(navList(out)).indexOf("/events")).toBe(hrefs(navList(out)).indexOf("/about-us") + 1);
+    expect(hrefs(navList(out))).toContain("/get-involved");
+    expect(hrefs(navList(out)).indexOf("/get-involved")).toBe(hrefs(navList(out)).indexOf("/about-us") + 1);
     expect(footer(out)).toBe(footer(before));
   });
 
   it("keeps the markup's own indentation", () => {
     const out = addEventsNavLink(page("contact.html"));
     // \r? because a Windows checkout has CRLF line endings; the inserted line must match the file's.
-    expect(out).toMatch(/\n( *)<li><a href="\/about-us">About<\/a><\/li>(\r?\n)\1<li><a href="\/events">Events<\/a><\/li>\2/);
+    expect(out).toMatch(/\n( *)<li><a href="\/about-us">About<\/a><\/li>(\r?\n)\1<li><a href="\/get-involved">Get involved<\/a><\/li>\2/);
   });
 
   it("is added once however many times it runs", () => {
@@ -43,9 +43,23 @@ describe("the Events item in the menu", () => {
     expect(once.split(EVENTS_NAV_ITEM)).toHaveLength(2);
   });
 
-  it("leaves the Events page alone, which already has its own item", () => {
+  it("leaves the Get involved page alone, which already has its own item", () => {
     const events = page("events.html");
     expect(addEventsNavLink(events)).toBe(events);
+  });
+
+  it("reads Get involved, not Events", () => {
+    expect(EVENTS_NAV_ITEM).toBe('<li><a href="/get-involved">Get involved</a></li>');
+    expect(navList(addEventsNavLink(page("contact.html")))).not.toContain(">Events<");
+  });
+
+  // A page cached or written before the rename may still carry the old item: it is not doubled.
+  it("does not add a second item to a menu that still offers the old /events", () => {
+    const old = page("contact.html").replace(
+      '<li><a href="/about-us">About</a></li>',
+      '<li><a href="/about-us">About</a></li><li><a href="/events">Events</a></li>',
+    );
+    expect(addEventsNavLink(old)).toBe(old);
   });
 
   it("leaves a page with no menu alone", () => {
@@ -57,6 +71,6 @@ describe("the Events item in the menu", () => {
     const a = addBallNavLink(addEventsNavLink(page("contact.html")));
     const b = addEventsNavLink(addBallNavLink(page("contact.html")));
     expect(a).toBe(b);
-    expect(hrefs(navList(a))).toEqual(["/", "/about-us", "/events", "/donate", "/contact", "/supporters", "/ball"]);
+    expect(hrefs(navList(a))).toEqual(["/", "/about-us", "/get-involved", "/donate", "/contact", "/supporters", "/ball"]);
   });
 });

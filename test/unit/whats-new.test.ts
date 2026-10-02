@@ -40,9 +40,11 @@ describe("the sections that can carry a New pill", () => {
     expect(FEATURES.some((f) => f.area === "analytics")).toBe(true);
   });
 
-  // TASK-493: each new sign up is an arrival. The screen's own New line arrives with the screen.
-  it("does not announce Admin > Fundraising before its screen exists", () => {
-    expect(FEATURES.some((f) => f.area === "fundraising")).toBe(false);
+  // TASK-495: Admin > Fundraising is a new screen, announced with the screen itself (the core,
+  // TASK-493, has the API and no screen). Each new sign up is an arrival as well.
+  it("announces Admin > Fundraising, with the screen that shows it", () => {
+    const line = FEATURES.find((f) => f.area === "fundraising");
+    expect(line?.what).toMatch(/^Admin > Fundraising: .*\(TASK-495\)$/);
   });
 
   it("lists new parts of the admin only against sections that exist", () => {

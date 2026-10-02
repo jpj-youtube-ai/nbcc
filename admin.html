@@ -103,6 +103,7 @@
               <li><button class="admin-nav-link" type="button" data-view="stories">Stories</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ticker">Partners</button></li>
               <li><button class="admin-nav-link" type="button" data-view="events">Events</button></li>
+              <li><button class="admin-nav-link" type="button" data-view="fundraising">Fundraising</button></li>
               <li><button class="admin-nav-link" type="button" data-view="ball">Festive Ball</button></li>
               <li><button class="admin-nav-link" type="button" data-view="contact">Contact form</button></li>
               <li><button class="admin-nav-link" type="button" data-view="newsletter">Newsletter</button></li>
@@ -1402,6 +1403,42 @@
                 <p id="evPagePrevNote">Every event on the page in date order, with the face down card last.</p>
                 <div id="evPageBox"><iframe class="ev-page-frame" id="evPagePreview" title="The Events page, as visitors would see it" scrolling="no"></iframe></div>
               </section>
+            </section>
+
+            <!-- TASK-495: Admin > Fundraising, community fundraising stage 1 (design:
+                 docs/superpowers/specs/2026-10-02-community-fundraising-design.md; API: README,
+                 "Community fundraising (TASK-493)"). Gated on fundraising:view; changes need
+                 fundraising:edit, and the switch needs an admin as well. app.js draws the list and
+                 opens one sign up below its row, like Business supporters. Nothing here scrolls
+                 inside a box: long lists show their top items and "Show all" grows the page. -->
+            <section class="admin-view" id="view-fundraising" aria-labelledby="fundraising-heading" hidden>
+              <h2 id="fundraising-heading">Fundraising</h2>
+              <p class="admin-view-intro">Everyone who has signed up to raise money for NBCC or hold an event for us. Nothing about a sign up is on the website until it is approved here, and every change an organiser asks for waits here for you too.</p>
+
+              <div class="fr-switch" id="frSwitch">
+                <div class="fr-switch-text">
+                  <h3 class="admin-subhead">Is fundraising on the website?</h3>
+                  <p class="fr-switch-state" id="frSwitchState" aria-live="polite">Checking&hellip;</p>
+                  <p class="fr-switch-who" id="frSwitchWho"></p>
+                </div>
+                <button class="btn" type="button" id="frSwitchBtn" hidden>Loading&hellip;</button>
+                <p class="fr-switch-note" id="frSwitchNote" hidden>Only an admin can switch fundraising on or off.</p>
+              </div>
+              <p class="ty-status" id="frSwitchStatus" role="status" aria-live="polite"></p>
+
+              <div class="fr-bar">
+                <div class="admin-segmented" id="frFilter" role="group" aria-label="Which sign ups to list">
+                  <button class="admin-seg is-active" type="button" data-frfilter="" aria-pressed="true">All (<span data-frcount="all">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="new" aria-pressed="false">New (<span data-frcount="new">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="approved" aria-pressed="false">Approved (<span data-frcount="approved">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="declined" aria-pressed="false">Declined (<span data-frcount="declined">0</span>)</button>
+                  <button class="admin-seg" type="button" data-frfilter="finished" aria-pressed="false">Finished (<span data-frcount="finished">0</span>)</button>
+                </div>
+              </div>
+              <!-- No aria-live on the list: it redraws whenever a sign up opens or saves, and a live
+                   region would read it all out again (TASK-465). Each action speaks through its own
+                   status line inside the sign up. -->
+              <div class="admin-table-wrap fr-list" id="frList"><p class="admin-loading">Loading&hellip;</p></div>
             </section>
 
             <!-- Festive Ball 2026 (TASK-313). The launch controls: the gate that publishes the

@@ -113,6 +113,12 @@ describe("adding to the wall after paying", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
   });
 
+  it("keeps the name off the wall when the request does not say, matching checkout", async () => {
+    const res = await send({ body: { sessionId: SESSION, message: "Go Robin!" } });
+    expect(res.statusCode).toBe(200);
+    expect(db.addWallMessage).toHaveBeenCalledWith(SESSION, 41, { message: "Go Robin!", showName: false, showAmount: true });
+  });
+
   it("works on a finished fundraiser's page too, which still takes gifts", async () => {
     db.getBySlug.mockResolvedValue(record({ status: "finished" }));
     expect((await send({ body: good })).statusCode).toBe(200);
@@ -194,9 +200,10 @@ describe("adding to the wall after paying", () => {
 
   it("is limited per session too", async () => {
     const statuses: number[] = [];
-    for (let i = 0; i < 7; i++) statuses.push((await send({ body: { ...good, sessionId: "cs_test_samesession" } })).statusCode);
-    expect(statuses.slice(0, 5).every((s) => s === 200)).toBe(true);
-    expect(statuses.slice(5)).toEqual([429, 429]);
+    // 10 for one session (room to retry while a slow payment is still being confirmed), but no more.
+    for (let i = 0; i < 12; i++) statuses.push((await send({ body: { ...good, sessionId: "cs_test_samesession" } })).statusCode);
+    expect(statuses.slice(0, 10).every((s) => s === 200)).toBe(true);
+    expect(statuses.slice(10)).toEqual([429, 429]);
   });
 });
 

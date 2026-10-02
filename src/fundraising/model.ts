@@ -721,8 +721,8 @@ export const wallMessageSchema = z.object({
   message: z
     .preprocess(blankable, z.string().max(MESSAGE_MAX, `Keep your message to ${MESSAGE_MAX} characters or fewer.`))
     .refine((v) => !containsBlockedWord(v), WALL_MESSAGE_REFUSED),
-  // The stage 1 give form's defaults: the name and the amount shown unless asked not to.
-  showName: z.boolean().default(true),
+  // Matches checkout: a giver's name stays off the wall unless they choose to show it (Jaimie, 2026-10-02).
+  showName: z.boolean().default(false),
   showAmount: z.boolean().default(true),
 });
 

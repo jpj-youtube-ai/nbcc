@@ -182,9 +182,10 @@ export async function getFundraiserPage(req: Request, res: Response): Promise<Re
 //   - limited per address and per session, and refused when another website's page sends it.
 // Nothing about the giver is ever returned except what the wall itself now shows for their gift.
 
-// Adding to the wall: 10 in 15 minutes from one address, 5 for one session.
+// Adding to the wall: 10 in 15 minutes from one address, 10 for one session (room to retry while a
+// slow payment is still being confirmed).
 const wallIpLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60_000 });
-const wallSessionLimiter = createRateLimiter({ max: 5, windowMs: 15 * 60_000 });
+const wallSessionLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60_000 });
 
 const GIFT_NOT_FOUND = { error: "We could not find that gift. If you have just paid, please try again in a moment." };
 const CONFIRMING = { error: "Your payment is still being confirmed. Please try again in a moment.", code: "confirming" };

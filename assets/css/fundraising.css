@@ -359,18 +359,45 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .page-prose .help-contents ol { margin: 0; padding-left: 22px; display: grid; gap: 2px; }
 .page-prose .help-contents li { margin: 0; }
 .help-contents a { display: inline-block; padding: 8px 0; min-height: 44px; font-weight: 600; text-underline-offset: 3px; }
-.page-prose .help-az { list-style: none; margin: 18px 0 20px; padding: 0; display: grid; gap: 10px; }
-@media (min-width: 640px) { .page-prose .help-az { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-.page-prose .help-az li {
-  margin: 0;
-  padding: 14px 16px;
+/* The A to Z reads like a little dictionary: one column, a big red letter in the margin of each
+   row, the idea and its line beside it. A second idea for the same letter leaves the margin empty. */
+.page-prose .help-az {
+  list-style: none;
+  margin: 20px 0 22px;
+  padding: 6px clamp(16px, 3.2vw, 30px);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--card);
+}
+.page-prose .help-az li {
+  display: grid;
+  grid-template-columns: 2.4rem minmax(0, 1fr);
+  column-gap: clamp(14px, 2.6vw, 22px);
+  align-items: baseline;
+  margin: 0;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
-.help-az strong { display: block; font-family: var(--font-head); font-size: 1.12rem; color: var(--crimson); }
+.page-prose .help-az li:last-child { border-bottom: 0; }
+.page-prose .help-az li::before {
+  content: attr(data-letter);
+  content: attr(data-letter) / "";
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  font-family: var(--font-head);
+  font-size: clamp(1.7rem, 1.4rem + 1.2vw, 2.2rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--crimson);
+  text-align: center;
+}
+.page-prose .help-az li.help-az__again { padding-top: 4px; border-top: 0; }
+.page-prose .help-az li.help-az__again::before { content: ""; }
+.page-prose .help-az li:has(+ .help-az__again) { border-bottom: 0; padding-bottom: 6px; }
+.help-az strong { grid-column: 2; display: block; font-family: var(--font-head); font-size: 1.12rem; color: var(--maroon); }
+.help-az__what { grid-column: 2; color: var(--slate); }
 .help-note {
   padding: 14px 16px;
   border: 1.6px solid var(--holly);

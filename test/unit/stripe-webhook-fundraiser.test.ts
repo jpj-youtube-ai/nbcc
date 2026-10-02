@@ -56,3 +56,14 @@ describe("a fundraiser gift on the session", () => {
     );
   });
 });
+
+// TASK-493: the supporter's newsletter choice lands on donors.email_consent exactly as a donate page
+// giver's does (and thank you consent with it), whether or not the gift was on a fundraiser's page.
+describe("a supporter's newsletter tick", () => {
+  it.each(["true", "false"])("becomes the donor's email consent (%s), as on the donate page", (consent) => {
+    const onPage = donationFromCheckoutSession(session({ fundraiserId: "7", emailConsent: consent }));
+    const donatePage = donationFromCheckoutSession(session({ emailConsent: consent }));
+    expect(onPage.donor).toEqual(donatePage.donor);
+    expect(onPage.donor.emailConsent).toBe(consent === "true");
+  });
+});

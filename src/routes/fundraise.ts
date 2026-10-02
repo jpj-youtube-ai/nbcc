@@ -36,6 +36,7 @@ import {
   FundraiserError,
 } from "../db/fundraisers";
 import { sendManageLinkEmail, sendSignUpEmails, fundraiserPageUrl } from "../fundraising/send";
+import { subscribeSelf } from "../newsletter/self-signup";
 
 // TASK-493: the public side of community fundraising. Everything here is OFF while the fundraising
 // switch is off (Admin > Fundraising, admins only): sign ups are refused and nothing is listed.
@@ -94,6 +95,15 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
   try {
     const record = await createFundraiser(parsed.data);
     await sendSignUpEmails(record);
+    // The newsletter tick box (unticked by default): a ticked one subscribes the organiser exactly as
+    // the footer form does. Best effort: the sign up stands either way. Unticked changes nothing.
+    if (parsed.data.newsletterOk) {
+      try {
+        await subscribeSelf({ name: parsed.data.name, email: parsed.data.email, phone: parsed.data.phone });
+      } catch (err) {
+        console.error("fundraise newsletter subscribe failed:", err instanceof Error ? err.message : err);
+      }
+    }
     return res.status(200).json({ status: "received" });
   } catch (err) {
     console.error("fundraise sign up failed:", err instanceof Error ? err.message : err);

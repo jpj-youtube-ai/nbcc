@@ -15,6 +15,7 @@ Feature: Community fundraising, the core (TASK-493)
     And a "fundraiseStaff" email went to the events inbox about "Robin's Santa Dash (bdd-fr)"
     And Get involved does not list "Robin's Santa Dash (bdd-fr)"
     And the page for "Robin's Santa Dash (bdd-fr)" is not found
+    And "robin.fr.bdd@example.com" is not on the newsletter list
     When "a1.fr.bdd@example.com" approves "Robin's Santa Dash (bdd-fr)"
     Then the fundraising answer is 200
     And the organiser of "Robin's Santa Dash (bdd-fr)" was sent a "fundraiseApproved" email
@@ -23,6 +24,12 @@ Feature: Community fundraising, the core (TASK-493)
     When fundraising is switched off
     Then Get involved lists no fundraisers and says fundraising is off
     And the page for "Robin's Santa Dash (bdd-fr)" is not found
+
+  Scenario: ticking the newsletter box on the sign up subscribes the organiser like the footer form
+    Given fundraising is switched on
+    When someone signs up "Jo's Coffee Morning (bdd-fr)" to raise 20000 pence, ticking the newsletter box
+    Then the fundraising answer is 200
+    And "jo.fr.bdd@example.com" is on the newsletter list as a self signup
 
   Scenario: a gift on the page raises the meter and joins the wall; cash adds; a hidden message goes
     Given fundraising is switched on

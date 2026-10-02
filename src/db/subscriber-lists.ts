@@ -39,7 +39,7 @@ export interface ListMember {
   name: string | null;
   email: string;
   phone: string | null;
-  consentSource: "footer" | "import" | "admin";
+  consentSource: ConsentSource;
   consentedAt: string;
   // TASK-278: the staff member who added them. NULL for a self-signup (the person is the actor) and
   // for memberships predating this — a blank means "we didn't record it", not "added by nobody".
@@ -201,6 +201,10 @@ export async function createSubscriberList(name: string): Promise<{ id: number; 
   }
 }
 
+// How consent arrived. 'fundraise' (TASK-493): the person ticked the newsletter box on the
+// fundraising sign up, joining themselves exactly as from the footer form.
+export type ConsentSource = "footer" | "import" | "admin" | "fundraise";
+
 export type AddSubscriberOutcome = "added" | "exists" | "resubscribed" | "previously_unsubscribed";
 
 // Add someone to a list. The tombstone decides the interesting case: an existing OPTED-OUT membership
@@ -210,7 +214,7 @@ export type AddSubscriberOutcome = "added" | "exists" | "resubscribed" | "previo
 export async function addListSubscriber(
   listId: number,
   person: { name: string | null; email: string; phone: string | null },
-  source: "footer" | "import" | "admin",
+  source: ConsentSource,
   // TASK-278: the staff member behind a manual add or an import. NULL for a self-signup, where the
   // person themselves is the actor — the first question when an address turns out to be wrong is
   // "who added them?", and consent_source alone could not answer it.

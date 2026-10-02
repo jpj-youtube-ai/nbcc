@@ -96,10 +96,10 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
     const record = await createFundraiser(parsed.data);
     await sendSignUpEmails(record);
     // The newsletter tick box (unticked by default): a ticked one subscribes the organiser exactly as
-    // the footer form does. Best effort: the sign up stands either way. Unticked changes nothing.
+    // the footer form does, recorded as joining from the fundraising form. Best effort: the sign up stands either way. Unticked changes nothing.
     if (parsed.data.newsletterOk) {
       try {
-        await subscribeSelf({ name: parsed.data.name, email: parsed.data.email, phone: parsed.data.phone });
+        await subscribeSelf({ name: parsed.data.name, email: parsed.data.email, phone: parsed.data.phone }, "fundraise");
       } catch (err) {
         console.error("fundraise newsletter subscribe failed:", err instanceof Error ? err.message : err);
       }

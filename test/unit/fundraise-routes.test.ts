@@ -226,7 +226,11 @@ describe("a fundraiser's page", () => {
     const res = await run(getFundraiserPage, { params: { slug: "sams-sponsored-walk" } });
     expect(res.statusCode).toBe(200);
     const body = res.body as { wall: unknown[]; giving: unknown; meter: { raisedPence: number } };
-    expect(body.wall).toEqual([{ name: "Alex E.", amountPence: 5000, message: "Go Sam", createdAt: "2026-10-02T12:00:00.000Z" }]);
+    // The hidden message is gone; the gift itself stays.
+    expect(body.wall).toEqual([
+      { name: "Hidden P.", amountPence: 100, message: null, createdAt: "2026-10-02T13:00:00.000Z" },
+      { name: "Alex E.", amountPence: 5000, message: "Go Sam", createdAt: "2026-10-02T12:00:00.000Z" },
+    ]);
     expect(body.giving).toEqual({ fundraiserId: 9, minimumPence: 200 });
   });
 
@@ -330,7 +334,7 @@ describe("the newsletter tick box on the sign up", () => {
   it("subscribes the organiser when ticked", async () => {
     db.createFundraiser.mockResolvedValue(record({ status: "new", newsletterOk: true }));
     await run(postFundraise, { body: signUp({ newsletterOk: true }) });
-    expect(newsletter.subscribeSelf).toHaveBeenCalledWith({ name: "Sam Sample", email: "sam@example.com", phone: "07700 900456" });
+    expect(newsletter.subscribeSelf).toHaveBeenCalledWith({ name: "Sam Sample", email: "sam@example.com", phone: "07700 900456" }, "fundraise");
   });
 
   it("does nothing when unticked", async () => {

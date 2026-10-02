@@ -19,6 +19,7 @@ const db = vi.hoisted(() => ({
   setFundraisingOn: vi.fn(),
   setMessageHidden: vi.fn(),
   wallRows: vi.fn(),
+  fundraisingIsOn: vi.fn(),
 }));
 const { getUserAuthRowMock, sendApprovedEmail, insertEventImage } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
@@ -129,6 +130,7 @@ beforeEach(() => {
   db.getFundraisingSettings.mockResolvedValue({ pageOn: false, updatedAt: null, updatedBy: null });
   db.listAllFundraisers.mockResolvedValue([]);
   db.fundraiserHistory.mockResolvedValue([]);
+  db.fundraisingIsOn.mockResolvedValue(true);
 });
 
 const P = { id: "9" };
@@ -194,8 +196,16 @@ describe("approving and the rest", () => {
     const res = await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
     expect(res.statusCode).toBe(200);
     expect(db.moveFundraiser).toHaveBeenCalledWith(9, "approve", `admin:${EMAIL}`, null);
-    expect(sendApprovedEmail).toHaveBeenCalledWith(after);
+    expect(sendApprovedEmail).toHaveBeenCalledWith(after, true);
     expect((res.body as { fundraiser: { pageUrl: string } }).fundraiser.pageUrl).toBe("https://nbcc.test/fundraise/sams-sponsored-walk");
+  });
+
+  it("approves while fundraising is off, emailing that the page will appear when the pages open", async () => {
+    db.fundraisingIsOn.mockResolvedValue(false);
+    const after = record({ status: "approved" });
+    db.moveFundraiser.mockResolvedValue({ before: record({ status: "new" }), after });
+    await run(routes.postApproveFundraiser, { params: P, token: tokenFor("editor") });
+    expect(sendApprovedEmail).toHaveBeenCalledWith(after, false);
   });
 
   it("declines with a reason kept for staff, and emails nobody", async () => {
@@ -212,6 +222,13 @@ describe("approving and the rest", () => {
     const res = await run(routes.patchAdminFundraiser, { params: P, token: tokenFor("editor"), body: { slug: "taken-already" } });
     expect(res.statusCode).toBe(409);
     expect(res.body).toEqual({ error: "Another fundraiser already uses that web address" });
+  });
+
+  it("refuses to decide a change the organiser has since replaced, and says to look again", async () => {
+    db.decideEdit.mockRejectedValue(new FundraiserError("replaced"));
+    const res = await run(routes.postApproveEdit, { params: { id: "9", editId: "3" }, token: tokenFor("editor") });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toEqual({ error: "This change has been replaced; look again" });
   });
 
   it("refuses an edit it cannot use, naming the field", async () => {

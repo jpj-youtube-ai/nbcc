@@ -321,15 +321,22 @@ export interface WallEntry {
   createdAt: string;
 }
 
-/** The public wall: newest first; hidden messages and gifts refunded in full never show. */
+// What a donor's name becomes when their details are redacted at the end of the retention period
+// (src/db/admin.ts). Such a giver shows as Anonymous, never as "Redacted R.".
+const REDACTED_NAME = "redacted";
+
+/**
+ * The public wall: newest first. Staff hiding a message hides only the message: the gift stays,
+ * under the same name and amount rules. A gift refunded in full never shows.
+ */
 export function wallEntries(rows: WallSourceRow[]): WallEntry[] {
   return rows
-    .filter((r) => !r.hidden && giftNetPence(r.amountPence, r.refundedPence) > 0)
+    .filter((r) => giftNetPence(r.amountPence, r.refundedPence) > 0)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.donationId - a.donationId))
     .map((r) => ({
-      name: r.showName && !r.anonymous ? shortName(r.fullName) : "Anonymous",
+      name: r.showName && !r.anonymous && r.fullName.trim().toLowerCase() !== REDACTED_NAME ? shortName(r.fullName) : "Anonymous",
       amountPence: r.showAmount ? giftNetPence(r.amountPence, r.refundedPence) : null,
-      message: r.message && r.message.trim() !== "" ? r.message.trim() : null,
+      message: !r.hidden && r.message && r.message.trim() !== "" ? r.message.trim() : null,
       createdAt: r.createdAt,
     }));
 }

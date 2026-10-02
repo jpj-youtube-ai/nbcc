@@ -550,6 +550,28 @@ describe("approving, declining and finishing", () => {
     expect(text(el("frDetailStatus"))).toMatch(/approved/i);
   });
 
+  it("says what the organiser's email will hold, which depends on the switch", async () => {
+    records = [fundraiser(1), fundraiser(2, { path: "event" }), fundraiser(3)];
+    await openFundraising();
+    await openRow(1);
+    (q('[data-fraction="approve"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed[0]).toMatch(/will appear when fundraising is switched on/);
+    expect(text(el("frDetailStatus"))).toBe("Approved, and the organiser has been emailed.");
+    await openRow(2);
+    (q('[data-fraction="approve"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed[1]).toMatch(/a short note to say they are on our list/);
+    settings.pageOn = true;
+    navLink().click();
+    await settle();
+    await openRow(3);
+    (q('[data-fraction="approve"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed[2]).toMatch(/their page link, and the page goes on the website/);
+    expect(text(el("frDetailStatus"))).toBe("Approved, and the organiser has been emailed their page link.");
+  });
+
   it("sends nothing when the question is answered no", async () => {
     records = [fundraiser(1)];
     await openFundraising();

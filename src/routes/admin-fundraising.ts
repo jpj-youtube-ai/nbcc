@@ -18,6 +18,7 @@ import {
   setFundraisingOn,
   setMessageHidden,
   wallRows,
+  fundraisingIsOn,
   FundraiserError,
 } from "../db/fundraisers";
 import { insertEventImage } from "../db/events";
@@ -91,6 +92,8 @@ function failed(res: Response, what: string, err: unknown): Response {
         return res.status(409).json({ error: "That cannot be done at this stage" });
       case "not_waiting":
         return res.status(409).json({ error: "That change has already been dealt with" });
+      case "replaced":
+        return res.status(409).json({ error: "This change has been replaced; look again" });
     }
   }
   // A slug taken in the moment between the check and the save.
@@ -216,7 +219,7 @@ function moveHandler(move: "approve" | "decline" | "finish") {
     try {
       const { after } = await moveFundraiser(got[0], move, actorOf(claims), reason);
       // After the approval has committed, best effort: it stands whether or not the email goes.
-      if (move === "approve") await sendApprovedEmail(after);
+      if (move === "approve") await sendApprovedEmail(after, await fundraisingIsOn());
       return res.status(200).json({ fundraiser: forAdmin(after) });
     } catch (err) {
       return failed(res, move, err);

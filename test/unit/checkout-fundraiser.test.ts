@@ -70,10 +70,20 @@ describe("a gift on a fundraiser's page", () => {
     ["a fundraiser id that is not one", { fundraiserId: -1 }],
     ["a fundraiser id in fractions", { fundraiserId: 1.5 }],
     ["less than £2", { amount: 150 }],
+    ["a message with a word we would not put on the wall", { supporterMessage: "Go on you shite" }],
   ])("refuses %s", async (_what, over) => {
     const res = await run({ ...gift, fundraiserId: 7, ...over });
     expect(res.statusCode).toBe(400);
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("a wall message we would not show", () => {
+  it("is refused with friendly words, as a supporters wall name is", async () => {
+    const res = await run({ ...gift, fundraiserId: 7, supporterMessage: "Go on you shite" });
+    expect(res.statusCode).toBe(400);
+    const details = (res.body as { details: { fieldErrors: Record<string, string[]> } }).details;
+    expect(details.fieldErrors.supporterMessage[0]).toBe("Please choose different words for your message on the supporter wall.");
   });
 });
 

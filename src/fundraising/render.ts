@@ -387,8 +387,9 @@ function renderGiveForm(p: PublicPage): string {
     '<div class="card card-lg give-card fr-give-card"><div class="give-main">' +
     `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
     `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${first}'s total.</p>` +
-    '<noscript><p class="fr-noscript">Giving on this page needs JavaScript switched on. You can still give on our <a href="/donate">donate page</a>.</p></noscript>' +
-    `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate>` +
+    // Shipped hidden: without JavaScript the browser would send it as a web address, names and all.
+    '<p class="fr-noscript" data-nojs>Giving on this page needs JavaScript switched on. You can still donate on our <a href="/donate">donate page</a>.</p>' +
+    `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate hidden data-needs-js>` +
     '<p class="form-error-summary" role="alert" data-give-error hidden></p>' +
     // 1. how much
     '<div class="give-question">' +

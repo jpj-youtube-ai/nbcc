@@ -280,3 +280,11 @@ describe("switched off", () => {
     expect($("[data-fundraise-open]").hidden).toBe(true);
   });
 });
+
+describe("once the script runs", () => {
+  it("shows the form and hides the no JavaScript line", () => {
+    load();
+    expect($("#fundraiseForm").hidden).toBe(false);
+    expect($("[data-nojs]").hidden).toBe(true);
+  });
+});

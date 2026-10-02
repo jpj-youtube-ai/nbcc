@@ -58,6 +58,17 @@
     });
   }
 
+  // The forms ship hidden (without JavaScript the browser would send them as a web address, names
+  // and all); the script that can send them properly shows them and hides the line saying so.
+  function showForms(doc, root) {
+    Array.prototype.forEach.call((root || doc).querySelectorAll("form[data-needs-js]"), function (f) {
+      f.hidden = false;
+    });
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-nojs]"), function (n) {
+      n.hidden = true;
+    });
+  }
+
   function initManage(doc, win) {
     var requestPanel = doc.querySelector("[data-manage-request]");
     var editPanel = doc.querySelector("[data-manage-edit]");
@@ -74,6 +85,7 @@
     var editSummary = doc.querySelector("[data-edit-error]");
     var editSubmit = doc.querySelector("[data-edit-submit]");
     var approved = null;
+    showForms(doc);
     if (editForm) growTextareas(editForm);
 
     function el(id) {

@@ -61,12 +61,12 @@
             <h2>Get a link to change your page</h2>
             <p class="fr-problem" data-manage-problem role="alert" hidden></p>
             <p>Put in the email address you signed up with. If it belongs to an approved fundraiser, we will email you a link. It works for 24 hours.</p>
-            <form id="manageRequestForm" class="fr-form fr-form--plain" novalidate>
+            <p class="fr-noscript" data-nojs>This page needs JavaScript switched on. You can email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> with your changes instead.</p>
+            <form id="manageRequestForm" class="fr-form fr-form--plain" novalidate hidden data-needs-js>
               <div class="give-field">
                 <label for="manageEmail">Your email address <span class="give-req" aria-hidden="true">*</span></label>
                 <input class="give-field-input" id="manageEmail" name="email" type="email" autocomplete="email" required aria-required="true" placeholder="you@example.com" />
               </div>
-              <noscript><p class="fr-noscript">This page needs JavaScript switched on. You can email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> with your changes instead.</p></noscript>
               <button class="btn btn-primary" type="submit" data-request-submit>Email me a link</button>
               <p class="form-status" role="status" aria-live="polite" data-request-status></p>
             </form>
@@ -77,7 +77,7 @@
               <strong>Your last change is waiting for us to check it.</strong>
               <span data-waiting-when></span> Your page keeps showing the version we last approved until then. The form below shows your change, and saving again replaces it.
             </div>
-            <form id="manageEditForm" class="fr-form" novalidate>
+            <form id="manageEditForm" class="fr-form" novalidate hidden data-needs-js>
               <p class="form-error-summary" role="alert" data-edit-error hidden></p>
               <h2 class="fr-form__title" data-manage-title></h2>
               <p class="fr-form__lead" data-manage-page-link hidden><a href="/" data-manage-page-url>See your page as it is now</a></p>

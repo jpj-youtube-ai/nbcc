@@ -404,3 +404,24 @@ describe("the words on the drawn pages", () => {
     expect('<a class="btn ev-book x">').toMatch(/class="[^"]*\bev-book(?![-\w])/);
   });
 });
+
+// Without JavaScript a form would submit the browser's own way, putting names and email addresses in
+// the web address. So every form ships hidden with a plain line saying how else to reach us, and the
+// page script swaps them round.
+describe("forms without JavaScript", () => {
+  const cases: Array<[string, string, string]> = [
+    ["the give form", renderFundraiserPage(read("fundraiser.html"), page(), { pageUrl: PAGE_URL, now: NOW }), "#frGiveForm"],
+    ["the sign up form", renderFundraiseSignUp(read("fundraise.html"), true), "#fundraiseForm"],
+    ["the manage request form", read("fundraise-manage.html"), "#manageRequestForm"],
+    ["the manage edit form", read("fundraise-manage.html"), "#manageEditForm"],
+  ];
+  it.each(cases)("%s ships hidden, with another way shown", (_n, html, sel) => {
+    const d = parse(html);
+    const form = d.querySelector(sel)!;
+    expect(form.hasAttribute("hidden")).toBe(true);
+    expect(form.hasAttribute("data-needs-js")).toBe(true);
+    const nojs = d.querySelectorAll("[data-nojs]");
+    expect(nojs.length).toBeGreaterThan(0);
+    for (const n of nojs) expect(n.hasAttribute("hidden")).toBe(false);
+  });
+});

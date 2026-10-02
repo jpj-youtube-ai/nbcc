@@ -74,7 +74,10 @@
           </div>
 
           <div class="fr-signup" data-fundraise-open>
-            <form id="fundraiseForm" class="fr-form" action="/api/fundraise" method="post" novalidate>
+            <!-- Shipped hidden, and shown by fundraise.js: without JavaScript the browser would send the
+                 form as a web address, with names and email addresses in it. -->
+            <p class="fr-noscript" data-nojs>This form needs JavaScript switched on. You can email your plans to <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> instead.</p>
+            <form id="fundraiseForm" class="fr-form" novalidate hidden data-needs-js>
               <div hidden aria-hidden="true">
                 <label for="company">Leave blank
                   <input type="text" id="company" name="company" tabindex="-1" autocomplete="off" />
@@ -222,7 +225,6 @@
                    on the form. -->
               <div class="fr-captcha" id="fundraiseCaptcha" hidden></div>
               <input type="hidden" id="captchaToken" name="captchaToken" value="" />
-              <noscript><p class="fr-noscript">This form needs JavaScript switched on. You can email your plans to <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> instead.</p></noscript>
               <div class="give-cta-row">
                 <button class="btn btn-primary give-cta" type="submit" data-submit>Send my sign up</button>
               </div>

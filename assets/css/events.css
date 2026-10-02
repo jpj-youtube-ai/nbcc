@@ -570,6 +570,7 @@
 .ev-card--fundraiser .ev-face { cursor: auto; height: 100%; }
 .ev-card--fundraiser .ev-body { flex: 1 0 auto; }
 .fr-flag { color: var(--holly); }
+.ev-card--fundraiser .ev-title { overflow-wrap: anywhere; }
 .fr-card__by { margin: 6px 0 0; font-size: 0.95rem; color: var(--slate-soft); }
 .ev-card--fundraiser .fr-meter { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .fr-card__go { position: static; width: 100%; justify-content: center; }

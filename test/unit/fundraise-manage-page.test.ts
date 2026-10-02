@@ -174,3 +174,16 @@ describe("with a link", () => {
     expect($("[data-manage-problem]").hidden).toBe(false);
   });
 });
+
+describe("once the script runs", () => {
+  it("shows the request form and hides the no JavaScript line", async () => {
+    await load("", () => ({ status: 200, body: {} }));
+    expect($("#manageRequestForm").hidden).toBe(false);
+    expect($("[data-nojs]").hidden).toBe(true);
+  });
+
+  it("shows the edit form with the page details", async () => {
+    await load("?token=tok123", () => ({ status: 200, body: opened() }));
+    expect($("#manageEditForm").hidden).toBe(false);
+  });
+});

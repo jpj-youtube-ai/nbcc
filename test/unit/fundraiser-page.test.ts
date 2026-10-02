@@ -348,3 +348,11 @@ describe("sharing", () => {
     expect($("[data-copy-link]").hidden).toBe(true);
   });
 });
+
+describe("once the script runs", () => {
+  it("shows the give form and hides the no JavaScript line", () => {
+    load();
+    expect($("#frGiveForm").hidden).toBe(false);
+    expect($("[data-nojs]").hidden).toBe(true);
+  });
+});

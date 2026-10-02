@@ -255,7 +255,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-wall__who { font-weight: 600; font-size: 1.05rem; color: var(--maroon); overflow-wrap: anywhere; }
 .fr-wall__amount { font-family: var(--font-head); font-weight: 800; font-size: 1.15rem; color: var(--holly); font-variant-numeric: lining-nums tabular-nums; }
 .fr-wall__msg { margin: 6px 0 0; font-size: 1rem; line-height: 1.6; overflow-wrap: anywhere; text-wrap: pretty; }
-.fr-wall__when { margin: 6px 0 0; font-size: 0.86rem; color: var(--slate-soft); }
+.fr-wall__when { margin: 6px 0 0; font-size: 0.9rem; color: var(--slate-soft); }
 .fr-wall__empty { padding: 18px 20px; border: 1.6px dashed var(--line); border-radius: var(--radius); text-align: center; color: var(--slate-soft); }
 .fr-wall__more {
   display: block;
@@ -305,6 +305,9 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-qr__code { width: min(240px, 100%); margin: 4px 0 16px; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: var(--white); }
 .fr-qr__code svg { display: block; width: 100%; height: auto; }
 .fr-qr__download { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-weight: 600; text-underline-offset: 3px; }
+
+/* A button that is busy sending says so in words; this makes it look it too. */
+.fr-form .btn:disabled, .fr-give-form .btn:disabled { opacity: 0.75; cursor: progress; transform: none; }
 
 /* ---------- the manage page ---------- */
 .fr-waiting {

@@ -1389,6 +1389,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
 | `GET /get-involved` | **implemented** | TASK-453, renamed in TASK-494 (Get involved: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the Events page switched on; otherwise falls through to the 404 / spare-address catch-all) |
 | `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
+| `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
 | `GET /fundraise/manage` | **implemented** | TASK-494 (change your page by the emailed `?token=` link; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
 | `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on. `?thanks=1` (and `&message=1`) shows the thank you a giver comes back to after paying) |

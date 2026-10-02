@@ -6055,6 +6055,48 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
+## The admin Overview: Needs you (TASK-507)
+
+The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent
+first, each with a button to the screen that deals with it. The design, and the two stages still to
+come (the numbers, then Coming up), are in `docs/superpowers/specs/2026-10-03-admin-overview-design.md`.
+
+- **Three levels**, marked by a dot (and said in words to a screen reader), in this order:
+  1. **Money or overdue** (crimson):
+     - bank transfers overdue;
+     - monthly gifts failing to take;
+     - Gift Aid ready to claim, with the amount;
+     - emails that failed or bounced in 2 weeks;
+     - fundraisers with buckets or tins due back.
+  2. **Waiting on a reply** (gold):
+     - contact messages;
+     - fundraising sign ups, changes to check, fundraisers who say they've finished, requests to do,
+       and fundraisers due a call;
+     - new stories;
+     - businesses due a thank you call;
+     - your own business outreach to-dos;
+     - generous donors not yet thanked;
+     - bank transfers still waiting.
+  3. **Slower deadlines** (grey):
+     - Gift Aid adjustments, declarations not back, declarations due a review, and records near the
+       end of their keep date;
+     - GASDS deadlines;
+     - Festive Ball guest details still missing, in the 3 weeks before they close.
+
+  Anything at zero is left out. A quiet day says "Nothing needs you right now."
+- **One request**, `GET /api/admin/overview` (any session), answers
+  `{ updatedAt, needs: [{ key, level, text, view, button }], failed: [screen names] }`
+  (`src/routes/admin-overview.ts`). Each item has the same gate as its own screen. A section the
+  person cannot open is never asked for (`gatherNeeds`, `src/admin/overview-sources.ts`). Each count
+  uses the same database function and rule as that screen, so the two cannot disagree.
+- **One that fails is named**: "Could not check: Festive Ball". The rest still show, and the list
+  never says "Nothing needs you" when it could not tell.
+- **The words and order** are one pure list, `NEEDS` in `src/admin/overview.ts`. A new kind of
+  waiting item is a line there, plus a reader in the route.
+- It is read afresh each time the Overview is opened, and says when ("Updated 09:41"). The five Gift
+  Aid figures that used to stand here are lines in level 3. Recent donations, underneath, shows the
+  latest 5.
+
 ## QR codes for every page (TASK-492)
 
 **Admin → QR codes** makes a QR code for any page of nbcc.scot, for posters, leaflets, table cards,

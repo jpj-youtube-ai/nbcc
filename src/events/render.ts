@@ -39,7 +39,7 @@ export function bolds(value: string): string {
   return escapeHtml(value).replace(/\*([^*\n]+)\*/g, "<b>$1</b>");
 }
 
-function dateParts(iso: string) {
+export function dateParts(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d));
   return {
@@ -88,7 +88,8 @@ function listPhrase(items: string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-function renderIndex(ev: EventRecord): string {
+/** The date in the card's corner, where a playing card keeps its rank. Shared with fundraiser cards. */
+export function renderIndex(ev: Pick<EventRecord, "date">): string {
   const p = dateParts(ev.date);
   return (
     '<p class="ev-index" aria-hidden="true">' +
@@ -226,14 +227,18 @@ export function renderCard(ev: EventRecord, idPrefix = ""): string {
     renderBooking(ev) +
     "</article>";
 
-  return `<li class="ev-card" id="${id}"><div class="ev-card__inner">${front}${back}</div></li>`;
+  // data-kind: which of Get involved's chips the card belongs to (TASK-494). Every event is an event.
+  return `<li class="ev-card" id="${id}" data-kind="event"><div class="ev-card__inner">${front}${back}</div></li>`;
 }
 
-/** The face down card that always ends the deck: more on the way, and an invitation on its back. */
-export function renderMoreCard(idPrefix = ""): string {
+/**
+ * The face down card that always ends the deck: more on the way, and an invitation on its back. The
+ * invitation goes to the contact page, or to the fundraising sign up while that is switched on.
+ */
+export function renderMoreCard(idPrefix = "", inviteHref = "/contact"): string {
   const id = escapeHtml(`${idPrefix}more-events`);
   return (
-    `<li class="ev-card ev-card--more" id="${id}"><div class="ev-card__inner">` +
+    `<li class="ev-card ev-card--more" id="${id}" data-kind="event"><div class="ev-card__inner">` +
     `<article class="ev-face ev-front" aria-labelledby="${id}-title"><div class="ev-cardback"><div class="ev-cardback__plate">` +
     '<img class="ev-cardback__elf" src="/assets/img/nbcc-elf.png" alt="" width="560" height="560" loading="lazy" decoding="async" />' +
     `<h2 id="${id}-title">More dates on the way</h2>` +
@@ -246,7 +251,7 @@ export function renderMoreCard(idPrefix = ""): string {
     `<h2 class="ev-title" id="${id}-back-title" tabindex="-1">Planning something for NBCC?</h2>` +
     '<div class="rule center"><i></i></div>' +
     "<p class=\"ev-note\">A coffee morning, a quiz night, a sponsored walk with your work. Whatever you have in mind, tell us about it and we’ll help where we can.</p>" +
-    '<a class="btn btn-primary ev-book" href="/contact">Tell us about it</a>' +
+    `<a class="btn btn-primary ev-book" href="${escapeHtml(inviteHref)}">Tell us about it</a>` +
     '<a class="ev-link" href="https://www.facebook.com/nbcc.scot" target="_blank" rel="noopener">Follow NBCC on Facebook<span class="sr-only">, opens in a new tab</span></a>' +
     "</div></article></div></li>"
   );

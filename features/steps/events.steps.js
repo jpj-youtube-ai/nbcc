@@ -200,7 +200,9 @@ Then("the visitor gets status {int}", function (status) {
 Then("the menu does not offer Events", function () {
   const nav = navList(this.visitorBody);
   assert.ok(nav.length > 0, "no nav list on the page");
-  assert.ok(!nav.includes('href="/events"'), "the menu offered a page that is switched off");
+  // TASK-494: the page is Get involved now; neither its new nor its old address may be offered.
+  assert.ok(!nav.includes('href="/get-involved"'), "the menu offered a page that is switched off");
+  assert.ok(!nav.includes('href="/events"'), "the menu offered the old address");
 });
 
 Then("the menu offers Events straight after About", function () {
@@ -208,15 +210,18 @@ Then("the menu offers Events straight after About", function () {
   const hrefs = [...nav.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
   const about = hrefs.indexOf("/about-us");
   assert.ok(about !== -1, `no About item in the menu: ${hrefs.join(" ")}`);
-  assert.equal(hrefs[about + 1], "/events", `Events did not follow About: ${hrefs.join(" ")}`);
+  // TASK-494: renamed Get involved, at /get-involved.
+  assert.equal(hrefs[about + 1], "/get-involved", `Get involved did not follow About: ${hrefs.join(" ")}`);
+  assert.ok(nav.includes(">Get involved</a>"), "the menu item does not read Get involved");
 });
 
 Then("the site map does not list the events page", function () {
-  assert.ok(!this.visitorBody.includes("/events</loc>"), "sitemap.xml listed a switched off page");
+  assert.ok(!this.visitorBody.includes("/get-involved</loc>"), "sitemap.xml listed a switched off page");
+  assert.ok(!this.visitorBody.includes("/events</loc>"), "sitemap.xml listed the old address");
 });
 
 Then("the site map lists the events page", function () {
-  assert.ok(this.visitorBody.includes("/events</loc>"), "sitemap.xml did not list the events page");
+  assert.ok(this.visitorBody.includes("/get-involved</loc>"), "sitemap.xml did not list the Get involved page");
 });
 
 Then("{string} comes before {string} on the page", function (first, second) {

@@ -5,42 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <!-- SEO -->
-    <title>Get involved | Night Before Christmas Campaign</title>
-    <meta
-      name="description"
-      content="Get involved with NBCC: nights out, workshops and gatherings, and local people raising money for children, young people and vulnerable adults across South West Scotland."
-    />
-    <link rel="canonical" href="https://nbcc.scot/get-involved" />
+    <title>__TITLE__ | Night Before Christmas Campaign</title>
+    <meta name="description" content="__DESCRIPTION__" />
+    <link rel="canonical" href="__PAGE_URL__" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Night Before Christmas Campaign" />
-    <meta property="og:title" content="Get involved | Night Before Christmas Campaign" />
-    <meta
-      property="og:description"
-      content="Get involved with NBCC: nights out, workshops and gatherings, and local people raising money for children, young people and vulnerable adults across South West Scotland."
-    />
-    <meta property="og:url" content="https://nbcc.scot/get-involved" />
-    <meta property="og:image" content="https://nbcc.scot/assets/img/og-image.png" />
+    <meta property="og:title" content="__TITLE__" />
+    <meta property="og:description" content="__DESCRIPTION__" />
+    <meta property="og:url" content="__PAGE_URL__" />
+    <meta property="og:image" content="__OG_IMAGE__" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Get involved | Night Before Christmas Campaign" />
-    <meta
-      name="twitter:description"
-      content="Get involved with NBCC: nights out, workshops and gatherings, and local people raising money for children, young people and vulnerable adults across South West Scotland."
-    />
-    <meta name="twitter:image" content="https://nbcc.scot/assets/img/og-image.png" />
+    <meta name="twitter:title" content="__TITLE__" />
+    <meta name="twitter:description" content="__DESCRIPTION__" />
+    <meta name="twitter:image" content="__OG_IMAGE__" />
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
-    <!-- Get involved (TASK-494: the events page, renamed and widened) ships its OWN stylesheets rather
-         than growing the shared bundle (see the note at the top of events.css). While fundraising is
-         switched on the server adds the fundraising stylesheet (the meter) where the marker is; off,
-         the page loads exactly what the Events page did. -->
-    <link rel="stylesheet" href="/assets/css/events.css" />
-    <!-- getinvolved:styles -->
+    <!-- Community fundraising (TASK-494) has its OWN stylesheet and scripts rather than growing the
+         shared bundle, which donate.html's page weight budget counts. -->
+    <link rel="stylesheet" href="/assets/css/fundraising.css" />
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
-    <script defer src="/assets/js/events.js"></script>
+    <script defer src="/assets/js/fundraiser.js"></script>
     <script defer src="/assets/js/pulse.js"></script>
   </head>
   <body>
@@ -52,7 +40,6 @@
           <ul class="nav-links" id="navLinks">
             <li><a href="/">Home</a></li>
             <li><a href="/about-us">About</a></li>
-            <li><a href="/get-involved" class="active" aria-current="page">Get involved</a></li>
             <li><a href="/donate">Donate</a></li>
             <li><a href="/contact">Contact</a></li>
             <li><a href="/supporters">Supporters</a></li>
@@ -64,36 +51,21 @@
     </header>
 
     <main class="site-main" id="main" tabindex="-1">
-      <section class="page-top events-intro" aria-labelledby="events-heading">
+      <!-- TASK-494: one community fundraiser's page, drawn by the server where the markers are
+           (src/fundraising/render.ts renderFundraiserPage): the name and facts in the intro; the
+           story, the meter, the give form, the supporter wall, the QR code and the share links in
+           the layout. The tokens in the head are filled in with the fundraiser's own name and
+           address, so a shared link shows them. Served only for an approved, public, raising money
+           fundraiser while fundraising is switched on; anything else is the site's 404. -->
+      <section class="page-top fr-intro" aria-labelledby="fr-title">
         <div class="wrap">
-          <div class="intro-hero">
-            <!-- getinvolved:intro --><span class="eyebrow">Get involved</span>
-            <h1 id="events-heading">Dates for your diary.</h1>
-            <div class="rule"><i></i></div>
-            <p class="lede">Nights out, workshops and gatherings raising money for NBCC. Some we run ourselves, and some are run for us by the local businesses who back us. The soonest is always first.</p><!-- /getinvolved:intro -->
-          </div>
+          <div class="intro-hero"><!-- fundraiser:intro --></div>
         </div>
       </section>
-
-      <!-- The deck. The server puts the cards where the marker is (src/fundraising/render.ts, using
-           src/events/render.ts): one <li> per event on the page, soonest first, then (while
-           fundraising is switched on) each fundraiser's card, then the face down "more on the way"
-           card. Past events drop off by themselves; drafts never appear. The intro, the chips and
-           the Fundraise for us panel are filled in only while fundraising is switched on. The page is
-           only served while an admin has the Events page switched on. -->
-      <section class="section flush-top events-deck" aria-labelledby="deck-heading">
-        <div class="wrap">
-          <h2 class="sr-only" id="deck-heading">Upcoming events and fundraisers</h2>
-          <!-- getinvolved:chips -->
-          <p class="deck-hint" data-deck-hint hidden>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 0-14.2-5"/><path d="M5 3v4h4"/><path d="M4 12a8 8 0 0 0 14.2 5"/><path d="M19 21v-4h-4"/></svg>
-            Turn any card over for the full details.
-          </p>
-
-          <ol class="deck" role="list" data-deck><!-- events:deck --></ol>
-        </div>
-      </section>
-      <!-- getinvolved:panel -->
+      <div class="section flush-top">
+        <div class="wrap fr-layout"><!-- fundraiser:page --></div>
+      </div>
+      <!-- fundraiser:checkout -->
     </main>
 
     <footer class="site-footer" data-region="footer">
@@ -113,7 +85,6 @@
           <ul>
             <li><a href="/">Home</a></li>
             <li><a href="/about-us">About us</a></li>
-            <li><a href="/get-involved">Get involved</a></li>
             <li><a href="/donate">Donate</a></li>
             <li><a href="/contact">Contact</a></li>
             <li><a href="/supporters">Supporters</a></li>

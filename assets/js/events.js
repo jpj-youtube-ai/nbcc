@@ -25,9 +25,11 @@
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", function () {
         api.initDeck(document, window);
+        api.initChips(document, window);
       });
     } else {
       api.initDeck(document, window);
+      api.initChips(document, window);
     }
   }
 })(typeof self !== "undefined" ? self : this, function () {
@@ -153,5 +155,47 @@
     return { deck: deck, cards: cards, setFace: setFace };
   }
 
-  return { initDeck: initDeck, setFace: setFace };
+  /* Get involved's chips (TASK-494): All, Events and Fundraisers filter the cards in place. They ship
+   * hidden, so without this script every card simply shows. Each card carries data-kind ("event" or
+   * "fundraiser"); the face down card counts as an event. A status line tells a screen reader what
+   * is showing, and an empty Fundraisers view says so rather than leaving a blank table. */
+  var STATUS = { all: "Showing everything", event: ["event", "events"], fundraiser: ["fundraiser", "fundraisers"] };
+
+  function initChips(doc, win) {
+    var group = doc.querySelector("[data-chips]");
+    var deck = doc.querySelector("[data-deck]");
+    if (!group || !deck) return null;
+    var buttons = Array.prototype.slice.call(group.querySelectorAll("[data-show]"));
+    var cards = Array.prototype.slice.call(deck.querySelectorAll(".ev-card"));
+    var status = doc.querySelector("[data-chips-status]");
+
+    function show(kind) {
+      var count = 0;
+      cards.forEach(function (card) {
+        var match = kind === "all" || card.getAttribute("data-kind") === kind;
+        card.hidden = !match;
+        if (match && !card.classList.contains("ev-card--more")) count += 1;
+      });
+      buttons.forEach(function (b) {
+        b.setAttribute("aria-pressed", b.getAttribute("data-show") === kind ? "true" : "false");
+      });
+      Array.prototype.forEach.call(doc.querySelectorAll("[data-chips-empty]"), function (el) {
+        el.hidden = !(el.getAttribute("data-chips-empty") === kind && count === 0);
+      });
+      if (status) {
+        var words = STATUS[kind];
+        status.textContent = kind === "all" ? words : "Showing " + count + " " + (count === 1 ? words[0] : words[1]);
+      }
+    }
+
+    buttons.forEach(function (b) {
+      b.addEventListener("click", function () {
+        show(b.getAttribute("data-show"));
+      });
+    });
+    group.hidden = false;
+    return { show: show, win: win };
+  }
+
+  return { initDeck: initDeck, setFace: setFace, initChips: initChips };
 });

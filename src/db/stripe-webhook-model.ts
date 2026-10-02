@@ -504,3 +504,30 @@ export function dunningFromStripeEvent(
       return null;
   }
 }
+
+// TASK-493: a gift made on a community fundraiser's page, off the session metadata the checkout
+// stamped (src/routes/api.ts). Null when there is none, so every other donation is untouched. Only
+// the READING is here: whether the id names an approved fundraiser is decided in the webhook's
+// transaction (linkFundraiserGift, src/db/fundraisers.ts), and anything else stays an ordinary gift.
+export interface FundraiserGiftWrite {
+  fundraiserId: number;
+  message: string | null;
+  showName: boolean;
+  showAmount: boolean;
+}
+
+export function fundraiserGiftFromCheckoutSession(session: Stripe.Checkout.Session): FundraiserGiftWrite | null {
+  const md = session.metadata ?? {};
+  if (md.mode === "monthly") return null; // one off only; the checkout refuses anything else
+  const raw = md.fundraiserId ?? "";
+  if (!/^[1-9]\d{0,9}$/.test(raw)) return null;
+  const fundraiserId = Number(raw);
+  if (fundraiserId > 2147483647) return null;
+  const message = (md.supporterMessage ?? "").trim().slice(0, 200);
+  return {
+    fundraiserId,
+    message: message === "" ? null : message,
+    showName: md.showName !== "false",
+    showAmount: md.showAmount !== "false",
+  };
+}

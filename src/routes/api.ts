@@ -23,6 +23,7 @@ import { contactEnquirySchema } from "../contact/schema";
 import { insertEnquiry } from "../db/contact";
 import { createRateLimiter } from "../portal/request-limiter";
 import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnstile";
+import { GIFT_MIN_PENCE, MESSAGE_MAX } from "../fundraising/model";
 
 // Marketing-site API endpoints, both implemented.
 // - POST /api/checkout-session (REQ-029): turns the REQ-028 front-end payload into
@@ -102,6 +103,24 @@ const checkoutBodySchema = z
     // company path (enforced in the superRefine below); optional here so the individual /
     // partnership and no-JS base contracts are unchanged.
     company: companyFieldsSchema.optional(),
+    // TASK-493: a gift made on a community fundraiser's page (/fundraise/<slug>). The webhook links
+    // it to the fundraiser only if this names an APPROVED one; otherwise it is an ordinary donation.
+    // The message and the two wall choices mean nothing without it, so they are only stamped with it
+    // (buildSessionParams), which keeps every donate page session exactly as it was.
+    fundraiserId: z.number().int().positive().optional(),
+    supporterMessage: z.string().trim().max(MESSAGE_MAX).optional(),
+    showName: z.boolean().optional(),
+    showAmount: z.boolean().optional(),
+  })
+  // TASK-493: giving on a fundraiser's page is one off only, and £2 at least, as the design asks.
+  // Monthly gifts there are not built yet (they would need the wall and meter to follow renewals).
+  .refine((b) => b.fundraiserId === undefined || b.mode === "once", {
+    message: "gifts on a fundraising page are one off",
+    path: ["mode"],
+  })
+  .refine((b) => b.fundraiserId === undefined || (b.amount ?? 0) >= GIFT_MIN_PENCE, {
+    message: "the smallest gift on a fundraising page is £2",
+    path: ["amount"],
   })
   // Every monthly gift builds its recurring price INLINE from the amount (pence, TASK-231) — preset
   // tiers and custom amounts alike — so a monthly gift always requires an amount. (A preset tier's
@@ -278,6 +297,15 @@ export function buildSessionParams(
     listOnSupporters: String(body.listOnSupporters ?? false),
     creditName: body.creditName ?? "",
   };
+
+  // TASK-493: only for a gift on a fundraiser's page, so a donate page session gains no keys at all.
+  // Stripe allows 500 characters a value; the message is held to 200 by the schema.
+  if (body.fundraiserId !== undefined) {
+    metadata.fundraiserId = String(body.fundraiserId);
+    metadata.supporterMessage = body.supporterMessage ?? "";
+    metadata.showName = String(body.showName ?? true);
+    metadata.showAmount = String(body.showAmount ?? true);
+  }
 
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
   // enduring — one declaration covers all the donor's gifts — while a one-off covers just

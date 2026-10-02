@@ -311,7 +311,8 @@ describe("staff only emails are never tagged", () => {
     expect([...STAFF_ONLY_KINDS].sort()).toEqual(
       // TASK-487: ballTransferStaff, the events@ email for each new bank transfer booking.
       // TASK-493: fundraiseStaff, the events@ summary of each new fundraising sign up.
-      ["adminInvite", "adminReset", "backupAlert", "ballReport", "ballTransferStaff", "fundraiseStaff", "lapsedAdmin", "loginCode"].sort(),
+      // TASK-501: fundraiseFinishedStaff, the events@ note when an organiser says they have finished.
+      ["adminInvite", "adminReset", "backupAlert", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraiseStaff", "lapsedAdmin", "loginCode"].sort(),
     );
   });
 

@@ -115,7 +115,7 @@ export async function listKnownBusinesses(): Promise<Known[]> {
             MIN(dn.email) AS email,
             MIN(d.created_at) AS since
        FROM donors dn
-       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid'
+       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid' AND NOT d.paid_in_by_organiser
       WHERE COALESCE(dn.business_name, '') <> ''
       GROUP BY dn.business_name`,
   );
@@ -281,7 +281,7 @@ export async function listOutreachForReports(): Promise<
             COALESCE((
               SELECT SUM(d.amount_pence - d.refunded_amount_pence)
                 FROM donations d
-               WHERE d.donor_id = b.donor_id AND d.payment_status = 'paid'
+               WHERE d.donor_id = b.donor_id AND d.payment_status = 'paid' AND NOT d.paid_in_by_organiser
             ), 0) AS raised_pence
        FROM business_outreach b`,
   );
@@ -311,7 +311,7 @@ export async function listBusinessDonors(): Promise<
     `SELECT dn.id, COALESCE(NULLIF(dn.business_name, ''), dn.full_name) AS name, dn.email,
             COALESCE(SUM(d.amount_pence - d.refunded_amount_pence), 0) AS total_pence
        FROM donors dn
-       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid'
+       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid' AND NOT d.paid_in_by_organiser
       WHERE COALESCE(dn.business_name, '') <> ''
       GROUP BY dn.id, dn.business_name, dn.full_name, dn.email
       ORDER BY name ASC`,

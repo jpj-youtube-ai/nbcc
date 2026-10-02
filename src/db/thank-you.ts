@@ -193,7 +193,8 @@ export async function listThankYouEligible(thresholdPence: number): Promise<Than
             BOOL_OR(d.gift_aid) AS gift_aided,
             (SELECT MAX(sent_at) FROM thank_you_sent ty WHERE ty.donor_id = dn.id) AS last_thanked_at
        FROM donors dn
-       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid'
+       -- TASK-501: money an organiser paid in for their fundraiser is not a gift of theirs.
+       JOIN donations d ON d.donor_id = dn.id AND d.payment_status = 'paid' AND NOT d.paid_in_by_organiser
       GROUP BY dn.id, dn.full_name, dn.business_name, dn.donor_type, dn.email, dn.thankyou_consent, dn.anonymous
      HAVING MAX(d.amount_pence) >= $1
       ORDER BY MAX(d.amount_pence) DESC, dn.id ASC`,

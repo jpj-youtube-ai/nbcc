@@ -228,14 +228,21 @@ export async function updateDonorPortal(
 // and always stored, the self-request route reaches ANY donor — including one-off donors with no
 // Stripe subscription — by their stored donors.email. Case-insensitive; newest row wins (that is
 // the canonical row the token targets). Returns null when no donor has that email.
+//
+// TASK-501: a donor row whose only donations are money its owner paid in for their fundraiser
+// (paid_in_by_organiser) is not them as a donor, so it is passed over for the newest row that is;
+// only when every row is like that does the newest one stand, as before.
 export async function findNewestDonorByEmail(
   email: string,
 ): Promise<{ donorId: number; fullName: string } | null> {
-  const res = await pool.query<{ id: number; full_name: string }>(
-    `SELECT id, full_name FROM donors WHERE LOWER(email) = LOWER($1) ORDER BY id DESC LIMIT 1`,
+  const res = await pool.query<{ id: number; full_name: string; pay_in_only: boolean }>(
+    `SELECT dn.id, dn.full_name,
+            (EXISTS (SELECT 1 FROM donations d WHERE d.donor_id = dn.id)
+             AND NOT EXISTS (SELECT 1 FROM donations d WHERE d.donor_id = dn.id AND NOT d.paid_in_by_organiser)) AS pay_in_only
+       FROM donors dn WHERE LOWER(dn.email) = LOWER($1) ORDER BY dn.id DESC LIMIT 50`,
     [email],
   );
-  const row = res.rows[0];
+  const row = res.rows.find((r) => !r.pay_in_only) ?? res.rows[0];
   return row ? { donorId: row.id, fullName: row.full_name } : null;
 }
 
@@ -262,14 +269,17 @@ export async function getDonorDonationHistory(email: string): Promise<DonorDonat
     mode: string;
     gift_aid: boolean;
     payment_status: string;
+    paid_in_by_organiser: boolean;
   }>(
-    `SELECT d.created_at, d.amount_pence, d.mode, d.gift_aid, d.payment_status
+    `SELECT d.created_at, d.amount_pence, d.mode, d.gift_aid, d.payment_status, d.paid_in_by_organiser
        FROM donations d JOIN donors dn ON dn.id = d.donor_id
       WHERE LOWER(dn.email) = LOWER($1)
       ORDER BY d.created_at DESC, d.id DESC`,
     [email],
   );
-  const donations = res.rows.map((r) => ({
+  // TASK-501: money they paid in for their fundraiser is their supporters' giving, not theirs: it is
+  // not in their history or their total.
+  const donations = res.rows.filter((r) => !r.paid_in_by_organiser).map((r) => ({
     date: r.created_at.toISOString(),
     amountPence: r.amount_pence,
     mode: r.mode === "monthly" ? ("monthly" as const) : ("once" as const),

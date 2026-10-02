@@ -3,7 +3,8 @@ Feature: Community fundraising, the core (TASK-493)
   People sign up at /fundraise to raise money or hold an event for NBCC. Staff approve every one
   before anything about it is public, and nothing shows at all while fundraising is switched off.
   A fundraiser's page has a meter (paid online gifts plus cash paid in) and a supporter wall staff
-  can tidy. Organisers change their page by an emailed link, and every change waits for staff.
+  can tidy. Organisers ask for changes from their private area, signed in with an emailed code
+  (TASK-501, fundraising-private.feature), and every change waits for staff.
 
   Scenario: a sign up shows only once it is approved, and only while fundraising is on
     Given fundraising is switched on
@@ -48,6 +49,27 @@ Feature: Community fundraising, the core (TASK-493)
     And the page for "Sam's Walk (bdd-fr)" shows 3500 pence raised of 50000
     And the history of "Sam's Walk (bdd-fr)" records "fundraiser.cash_added" and "fundraiser.message_hidden" by "e2.fr.bdd@example.com"
 
+  # TASK-501: money the organiser collected and paid in counts on the meter, but it is not their own
+  # gift: never on the wall, never Gift Aid, and never on the thank you letter list.
+  Scenario: money the organiser pays in counts on the meter and nowhere as their own gift
+    Given fundraising is switched on
+    And a fundraising staff member "a7.fr.bdd@example.com" with role "admin"
+    And an approved fundraiser "Ali's Pay In Run (bdd-fr)" raising 50000 pence, organised by "ali.payin.fr.bdd@example.com"
+    When the organiser of "Ali's Pay In Run (bdd-fr)" pays in 50000 pence, paid as "pi_fr_bdd_payin_1"
+    Then the fundraising answer is 200
+    And the donation paid as "pi_fr_bdd_payin_1" is marked as paid in by the organiser, with no Gift Aid
+    And the page for "Ali's Pay In Run (bdd-fr)" shows 50000 pence raised of 50000
+    And the wall for "Ali's Pay In Run (bdd-fr)" is empty
+    And "a7.fr.bdd@example.com" reads the thank you letter list without "ali.payin.fr.bdd@example.com"
+
+  # TASK-501 review (Jaimie's decision): late money still reaches a finished fundraiser.
+  Scenario: money paid in after a fundraiser has finished still reaches it
+    Given fundraising is switched on
+    And a finished fundraiser "Bo's Late Money (bdd-fr)" raising 50000 pence, organised by "bo.late.fr.bdd@example.com"
+    When the organiser of "Bo's Late Money (bdd-fr)" pays in 2500 pence, paid as "pi_fr_bdd_payin_2"
+    Then the fundraising answer is 200
+    And the donation paid as "pi_fr_bdd_payin_2" is marked as paid in by the organiser, with no Gift Aid
+
   Scenario: a gift naming a fundraiser that is not approved is an ordinary donation
     Given fundraising is switched on
     And a fundraiser "Not Yet (bdd-fr)" that is still new
@@ -59,12 +81,13 @@ Feature: Community fundraising, the core (TASK-493)
     Given fundraising is switched on
     And a fundraising staff member "e3.fr.bdd@example.com" with role "editor"
     And an approved fundraiser "Kim's Quiz (bdd-fr)" raising 50000 pence, organised by "kim.fr.bdd@example.com"
-    When the organiser asks for a manage link for "kim.fr.bdd@example.com"
+    When the organiser asks for a sign in code for "kim.fr.bdd@example.com"
     Then the fundraising answer is 200
-    And the organiser of "Kim's Quiz (bdd-fr)" was sent a "fundraiseManage" email
-    And "Kim's Quiz (bdd-fr)" has a manage link stored only as a hash
-    Given the organiser of "Kim's Quiz (bdd-fr)" holds a manage link
-    When the organiser changes the target of "Kim's Quiz (bdd-fr)" to 75000 pence by their link
+    And the organiser of "Kim's Quiz (bdd-fr)" is soon sent a "fundraiseCode" email
+    And a sign in code for "kim.fr.bdd@example.com" is stored only as a hash
+    When "kim.fr.bdd@example.com" signs in with the code from their email
+    Then the fundraising answer is 200
+    When the organiser changes the target of "Kim's Quiz (bdd-fr)" to 75000 pence in their private area
     Then the fundraising answer is 202
     And the page for "Kim's Quiz (bdd-fr)" shows 0 pence raised of 50000
     When "e3.fr.bdd@example.com" approves the waiting change to "Kim's Quiz (bdd-fr)"
@@ -110,8 +133,8 @@ Feature: Community fundraising, the core (TASK-493)
     Given fundraising is switched on
     And a fundraising staff member "e6.fr.bdd@example.com" with role "editor"
     And an approved fundraiser "Pat's Swim (bdd-fr)" raising 50000 pence, organised by "pat.fr.bdd@example.com"
-    And the organiser of "Pat's Swim (bdd-fr)" holds a manage link
-    When the organiser changes the target of "Pat's Swim (bdd-fr)" to 75000 pence by their link
+    And the organiser of "Pat's Swim (bdd-fr)" is signed in to their private area
+    When the organiser changes the target of "Pat's Swim (bdd-fr)" to 75000 pence in their private area
     Then the fundraising answer is 202
     When "e6.fr.bdd@example.com" rejects the waiting change to "Pat's Swim (bdd-fr)"
     Then the fundraising answer is 200

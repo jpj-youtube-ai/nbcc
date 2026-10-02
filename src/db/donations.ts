@@ -349,7 +349,7 @@ export async function listPublicSupporters(): Promise<Record<SupporterTier, Publ
             ) AS monthly_support_ended
        FROM donors dn
        LEFT JOIN donations d
-         ON d.donor_id = dn.id AND d.payment_status = 'paid'
+         ON d.donor_id = dn.id AND d.payment_status = 'paid' AND NOT d.paid_in_by_organiser
        LEFT JOIN business_supporter_fulfilment f ON f.donor_id = dn.id
       WHERE dn.grandfathered_on_supporters = true
          OR dn.list_on_supporters = true

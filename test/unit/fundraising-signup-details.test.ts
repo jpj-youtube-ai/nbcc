@@ -320,11 +320,11 @@ describe("a staff edit of the new answers", () => {
   });
 });
 
-describe("an organiser's change by their manage link", () => {
-  // TASK-499 leaves the manage link's fields as they were: the event details are for staff to
-  // change for now (see README, "Community fundraising").
-  it("still refuses the event answers", () => {
-    expect(editSchema.safeParse({ price: "£6" }).success).toBe(false);
+describe("an organiser's change from their private area", () => {
+  // TASK-499 left the event details for staff to change. TASK-501's private area lets the organiser
+  // ask to change them too (test/unit/fundraising-organiser-edit.test.ts); each change still waits.
+  it("now takes the event answers", () => {
+    expect(editSchema.safeParse({ price: "£6" }).success).toBe(true);
   });
 });
 

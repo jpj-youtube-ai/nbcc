@@ -1326,8 +1326,12 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/fundraise/captcha` | **implemented** | TASK-493 (the sign up form's Turnstile site key, or `null`) |
 | `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
 | `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless approved, public, raising money and switched on) |
-| `POST /api/fundraise/manage/request` | **implemented** | TASK-493 (emails an organiser a 24 hour link to change their page; always the same answer) |
-| `GET` and `POST /api/fundraise/manage/:token` | **implemented** | TASK-493 (what an organiser may change; a change waits for staff) |
+| `POST /api/fundraise/manage/request` | **implemented** | TASK-501 (emails an organiser a 6 digit sign in code for their private area; always the same answer, sent before looking; was TASK-493's 24 hour link) |
+| `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
+| `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details) |
+| `POST /api/fundraise/manage/fundraisers/:id/edit`, `/finished`, `/pay-in` | **implemented** | TASK-501 (a change that waits for staff; "I've finished"; a Stripe checkout to pay in what they collected. Only their own: anyone else's is a 404) |
+| `POST /api/fundraise/manage/sign-out` | **implemented** | TASK-501 (ends the session) |
+| `GET` and `POST /api/fundraise/manage/:token` | **retired** | TASK-501 (`410`: the 24 hour links no longer open anything; ask for a sign in code) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
@@ -1391,7 +1395,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
 | `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
 | `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
-| `GET /fundraise/manage` | **implemented** | TASK-494 (change your page by the emailed `?token=` link; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
+| `GET /fundraise/manage` | **implemented** | TASK-501 (the organiser's private area, signed in with an emailed code; was TASK-494's `?token=` link page; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
 | `GET /fundraise/help` | **implemented** | TASK-498 (Fundraising help, a draft for sign off: ideas from A to Z, paying in, Gift Aid, staying safe and legal in Scotland, using our logo; indexed and in the site maps like `/fundraise`; 404 while fundraising is switched off; registered before `/fundraise/:slug`, and `help` is a reserved slug) |
 | `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on. `?thanks=1` (and `&message=1`) shows the thank you a giver comes back to after paying) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
@@ -7125,7 +7129,7 @@ This is **stage 1, the backend core**. The public pages (`/fundraise`, `/fundrai
 Stages 2 to 4 (materials, keeping in touch, requests) follow.
 
 **It ships switched off.** `fundraising_settings.page_on` is false: sign ups are refused, nothing
-is listed, every page is a 404, and manage links do nothing, until an admin switches it on with
+is listed, every page is a 404, and the private area is closed, until an admin switches it on with
 `PATCH /api/admin/fundraising/settings`.
 
 ### Where it lives
@@ -7133,18 +7137,18 @@ is listed, every page is a 404, and manage links do nothing, until an admin swit
 | Piece | File |
 |---|---|
 | The rules: form and edit schemas, slugs, the meter, the wall, what the public sees | `src/fundraising/model.ts` |
-| The manage link: random token, sha256 at rest, 24 hours, clock passed in | `src/fundraising/manage-token.ts` |
+| Signing in to the private area (TASK-501; the 24 hour manage link it replaced is gone) | `src/fundraising/sign-in.ts`, `src/db/fundraiser-sign-in.ts` |
 | The four emails (pure) and sending them (best effort, after the write) | `src/fundraising/emails.ts`, `src/fundraising/send.ts` |
 | The SQL, every write audited in the same transaction (entity `fundraiser`) | `src/db/fundraisers.ts` |
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js` |
 
 ### Data
 
 `fundraising_settings` (the switch), `fundraisers`, `fundraiser_edits` (changes waiting for staff),
-`fundraiser_manage_tokens` (only `token_hash`, the sha256 of the emailed token), `fundraiser_cash`
+`fundraiser_manage_tokens` (only `token_hash`, the sha256 of the emailed token; no longer written since TASK-501), `fundraiser_cash`
 (paid in by hand). `fundraisers.live_email_pending` (TASK-497, boolean, default false) marks a page
 holder approved while fundraising is off, waiting for "Your page is live"; its migration
 (`1791200000020_fundraiser-live-email-pending.js`) also marks any page holder already approved, if
@@ -7268,28 +7272,12 @@ No email, phone, posting address or social link is ever in a public answer.
 redacted at the end of retention shows as Anonymous) and `"giving": { "fundraiserId": 9, "minimumPence": 200 }`. `404`
 unless approved, public, raising money and switched on.
 
-**`POST /api/fundraise/manage/request`** `{ "email": "..." }`: always
-`200 { "message": "If that email belongs to an approved fundraiser, ..." }`. For each approved
-fundraiser with that email (up to 5) it emails a link
-`<PORTAL_BASE_URL>/fundraise/manage?token=<token>`, good for 24 hours. Limits: 3 a quarter hour per
-email, 20 per address. `400` only for an address that is not one.
-
-**`GET /api/fundraise/manage/:token`**: the page reads `?token=` and calls this.
-`200 { "fundraiser": { "id", "slug", "title", "path", "pageUrl": "https://..." | null,
-"editable": { "description", "targetPence", "eventDate", "startTime", "venue", "town", "socialLink" } },
-"waitingEdit": { "id", "changes": {...}, "createdAt" } | null }`. `404` for a link that matches
-nothing (or while switched off), `410` for one that has run out or a fundraiser no longer approved.
-
-**`POST /api/fundraise/manage/:token`**: any of the seven editable fields (send only what changed;
-an empty string or `null` clears a date, time, target or link). `202 { "status": "waiting", "edit":
-{ "id", "changes", "createdAt" } }`. A change already waiting is marked `replaced` and the new one added (never rewritten in place), so
-staff can never approve words they did not see.
-The live page keeps the approved version until staff approve it. `400` with `fields` for anything
-else (title, slug and status cannot be changed this way), `404` and `410` as above.
-The event answers (TASK-499) are not among the seven: their rules hang together (a ticket link only
-for tickets elsewhere, a finish after the start), which a change carrying one field at a time
-cannot check, so for now staff change them in Admin > Fundraising. They belong with the private
-area that replaces the manage link (stage 1b part 1, "The private area").
+**Managing a fundraiser** is the private area since TASK-501: signing in with an emailed code,
+then asking for changes (all 19 editable fields, the event details included, each waiting for staff
+in `fundraiser_edits` exactly as before; a change already waiting is marked `replaced` and the new one
+added, never rewritten in place, so staff never approve words they did not see), paying in and "I've
+finished". Its API is documented in **Community fundraising, the private area (TASK-501)**. The
+TASK-493 link routes (`/api/fundraise/manage/:token`) answer `410`.
 
 ### Giving on a fundraiser's page
 
@@ -7423,7 +7411,9 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up | "Exciting news: a new fundraiser!", everything they told us and asked for, Next steps. Staff only, so its links are never tagged |
 | `fundraiseApproved` | the organiser | approved with a page (raising money and public) while fundraising is on, or at the switch on (below) | "Your page is live!", the page link and three things to do today |
 | `fundraiseApproved` | the organiser | approved with no page (private, or an event) | "You're on our list!" |
-| `fundraiseManage` | the organiser | they ask for a manage link | the 24 hour link (replaced by the sign in code in a later part of stage 1b) |
+| `fundraiseManage` | the organiser | (retired by TASK-501) | the 24 hour link; no longer sent, still named on the Email audit for the rows already there |
+| `fundraiseCode` | the email asked for | they ask for a sign in code (TASK-501, email 8) | "Here's your code": the 6 digit code in its box, works for 10 minutes, what is inside the private area, "Didn't ask for this?", "Happy fundraising!". Subject "Your NBCC sign in code: 482 915"; the Email audit keeps the subject without the code |
+| `fundraiseFinishedStaff` | `events@` (Reply-To the organiser) | the organiser presses "I've finished" (TASK-501), once | "A fundraiser says they've finished": who, what it has raised, next steps. Staff only, so never link tagged |
 | `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
 | `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
 
@@ -7454,18 +7444,18 @@ Every email goes after its write has committed, best effort: a failed send never
 ### Not yet (stage 1)
 
 A supporter's newsletter tick when giving is the donate page's `emailConsent`, landing on
-`donors.email_consent` exactly as a donate page gift does (tested). Approval emails point to the page, which carries the QR code; the code is not attached to the
+`donors.email_consent` exactly as a donate page gift does (tested). Approval emails point to the page; the QR code is in the organiser's private area (TASK-501), not attached to the
 email. Monthly gifts on fundraiser pages, materials, automatic emails and the requests' tracking are
 later stages.
 
 ### Tests
 
-Unit: `fundraising-model`, `fundraising-manage-token`, `fundraising-emails`, `fundraisers-db`,
+Unit: `fundraising-model`, `fundraising-emails`, `fundraisers-db`,
 `fundraise-routes`, `admin-fundraising-routes`, `checkout-fundraiser`, `stripe-webhook-fundraiser`,
 `fundraising-migration`, `whats-new-fundraising`, `newsletter-self-signup`, `fundraising-send`, `fundraising-qr`, plus the permission, backfill, backup, email kind
 and tracked link tests. BDD: `features/fundraising.feature` (approval and the switch, a gift raising
 the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
-manage change waiting for staff, who may do what; TASK-497: a page approved while fundraising is off
+change from the private area waiting for staff, who may do what; TASK-497: a page approved while fundraising is off
 hears it is live at the switch on, and the emails about an approved or rejected change). TASK-497
 unit tests: `fundraising-emails` (the approved words, the safe first name, the questions box and
 sign off in both parts), `fundraising-send`, `fundraisers-db`, `admin-fundraising-routes`,
@@ -7562,18 +7552,17 @@ place, organised by, the photo, the story, the meter with a Give button, the **g
 - The wall shows the newest ten; Show all grows the page with the rest (no inner scrolling).
 - Sharing: copy the link (shown only where copying works), Facebook and WhatsApp as plain links.
   No script from anyone else.
-- The QR code is inline SVG (`src/fundraising/qr.ts`), also served at `/fundraise/<slug>/qr.svg`
-  with a Download link.
+- The QR code (`src/fundraising/qr.ts`) is served at `/fundraise/<slug>/qr.svg`. Since TASK-501 it
+  is no longer on the page: it is in the organiser's private area and the admin. The page ends with
+  a quiet "Is this your page? Manage it" line linking `/fundraise/manage`.
 
 Anything that is not an approved, public, raising money fundraiser while fundraising is on is the
 site's own 404 page.
 
-**Managing a page (`/fundraise/manage`).** Without a token: an email box that asks for a link.
-With `?token=`: the editable fields (any change still waiting is shown in their place, with a
-note that it is waiting for staff), and saving sends only what differs from the approved page. A
-link that has run out or matches nothing leads back to asking for a new one. The page is
-`noindex`, never cached, sends no referrer, does not load the visit counter, takes the token out of
-the address bar once it has read it, and is a 404 while fundraising is switched off.
+**Managing a page (`/fundraise/manage`).** Since TASK-501 the organiser's private area, signed in
+with an emailed code (below). The page is `noindex`, never cached, sends no referrer, does not load
+the visit counter, takes an old link's `?token=` out of the address bar, and is a 404 while
+fundraising is switched off.
 
 **Fundraising help (`/fundraise/help`, TASK-498).** A plain reading page for organisers, linked
 from the sign up form's intro ("New to fundraising? Read our help page"), with a contents list of
@@ -7603,8 +7592,173 @@ unchanged. Text boxes grow with what is typed rather than scroll.
 **Tests.** `fundraising-render`, `fundraise-pages-routes`, `get-involved-page`,
 `fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page`, `fundraise-help-page` and
 `fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
-redirect, Get involved with fundraising on and off, a fundraiser's page and QR code, 404s, the sign
-up while off, the manage page's headers, the help page on and off).
+redirect, Get involved with fundraising on and off, a fundraiser's page (no QR code since TASK-501,
+the manage line) and its QR code address, 404s, the sign up while off, the manage page's headers,
+the help page on and off).
+
+## Community fundraising, the private area (TASK-501)
+
+`/fundraise/manage` is the organiser's private area (stage 1b part 1, section 3 of
+`docs/superpowers/specs/2026-10-02-fundraising-stage-1b-part-1-design.md`). They sign in with a
+6 digit code we email; the 24 hour link it replaces is retired. Like everything else in
+fundraising, it is all a 404 while fundraising is switched off.
+
+**Signing in.** They put in the email they signed up with. If it belongs to an approved or
+finished fundraiser (either path; never one that is new or declined), we email a code (email 8,
+`fundraiseCode`). It works for 10 minutes and
+allows 5 tries. A right code starts a signed in session for 2 hours, scoped to that email, so an
+organiser with more than one fundraiser sees them all. A Sign out button ends it.
+
+**Finished fundraisers stay (Jaimie's decision, TASK-501 review).** Finishing never locks an
+organiser out. A finished one is listed as "Finished. Thank you for everything you raised." with its
+gifts and messages, its QR code and "Pay in what you collected", so late money still reaches it. It
+takes no more changes ("Your fundraiser is finished. To change anything, get in touch.", and the
+edit route answers `410` with the same words) and has no "I've finished". Stage 1 still hides a
+finished fundraiser's public page; only its QR code address keeps answering, for the private area.
+
+**Inside, for each of their approved or finished fundraisers:** where it is up to and its public page link
+(when it has one); its QR code (an `<img>` of `/fundraise/<slug>/qr.svg` with a download link,
+only for a page); what it has raised; the latest gifts and messages exactly as the wall shows them
+(a short name or Anonymous, the amount unless hidden, the message unless staff hid it, the date,
+first ten then Show all; never a giver's email, full name or anything else); their details to
+change; "Pay in what you collected"; and "I've finished".
+
+- **Changing the details.** Everything editable before (story, target, date, start time, where,
+  town, social link) plus the event details TASK-499 added, for an event: the line for the front of
+  the card, the finish time beside the start, time to be confirmed, full address, venue postcode,
+  the access ticks, price, how people get in and the ticket link (shown only for tickets sold on
+  another website), age limit, dress code and what's included. A page raising money is asked for a
+  target and no event details; an event the other way round (the server refuses them too). Every
+  change still waits for staff in `fundraiser_edits`, exactly as before. The server checks the change
+  as it would land, what is stored with the change on top (`checkOrganiserEdit` in
+  `src/fundraising/model.ts`, reusing `finishTimeProblem`): the finish after the start, a ticket link
+  only and always for tickets sold elsewhere (switching away from that clears the stored link with
+  the change), and an event card's date, line, venue and way in never emptied. A sign up from before
+  the event questions is only held to an answer when that answer is the one being changed.
+- **Pay in what you collected.** £1 to £10,000, card fee cover optional. It opens the same Stripe
+  checkout every gift uses (`buildPayInSessionParams` in `src/routes/api.ts`): one off, tied to the
+  fundraiser, Gift Aid off whatever is sent, no name or message for the wall, no newsletter, and one
+  more metadata key, `paidInByOrganiser: "true"`, which only the server ever stamps (the public
+  checkout drops it if sent). It comes back to `/fundraise/manage?paid=1` ("Thank you for paying
+  in"), or to the private area on a cancel. The checkout closes after 31 minutes (Stripe's shortest
+  is 30 from when it is made; the extra minute covers clock drift), so a pay in left open cannot
+  complete hours later. The webhook links it to the fundraiser when that is approved **or
+  finished**, and stamps `paid_in_by_organiser` whatever happens to the link, so money paid in can
+  never pass as the organiser's own gift. It stores it with
+  `donations.paid_in_by_organiser = true`, no message and nothing shown: it counts on the meter like
+  any paid online gift, never appears on the wall (public or private), and staff see it on the
+  admin wall with a "Paid in by the organiser" pill. The receipt email thanks them for paying it in
+  ("The £X you paid in for your fundraiser has reached NBCC. Please pass on our thanks to everyone
+  who gave.") and never has a Gift Aid line; every other receipt is word for word as before.
+  **It is never a gift of theirs:** pay ins are left out of the thank you letter list
+  (`listThankYouEligible`), the donor portal's giving history and total (`getDonorDonationHistory`),
+  the supporters wall's figures, and the outreach reports, "have they started giving?" check and
+  business donor picker. The donor portal never takes a donor row whose only donations are pay ins as
+  their main record (`findNewestDonorByEmail` passes over it for the newest row that is not, and only
+  falls back to it when every row is like that).
+- **I've finished.** Records `fundraisers.finished_requested_at` (the first press is kept), emails
+  the events inbox once (`fundraiseFinishedStaff`, staff only so never link tagged, Reply-To the
+  organiser), and says "Thank you, we'll be in touch." It finishes and hides nothing: staff still
+  press Mark finished. Admin > Fundraising shows a **Says they've finished** pill on the row and the
+  date in the detail while it is approved.
+
+**Security.**
+
+- **No enumeration.** `POST /api/fundraise/manage/request` gives exactly the same `200` answer
+  whether or not the email is signed up, limited, or fundraising is off, and sends it **before** it
+  looks anything up, so the time taken says nothing either. Unknown codes, wrong codes, expired
+  codes and used up codes all get the same `401`.
+- **The code.** 6 digits from `crypto.randomInt`, stored only as HMAC SHA256 under
+  `ADMIN_SESSION_SECRET` with its own domain prefix (`fundraisecode.v1:`) and bound to the email
+  (`src/fundraising/sign-in.ts`; the admin email code's approach, no new config). One code per email:
+  a new one replaces the last. Every try is counted in the same statement that reads the code
+  (`UPDATE ... SET attempts = attempts + 1 ... RETURNING`), before the compare, so tries sent at once
+  cannot share a count; the sixth try kills it. Compared in constant time. Deleted once used.
+- **Rate limits** (in memory, per task, like the rest of the site). Asking: 3 a quarter hour and 10
+  a day per email, 20 a quarter hour per address. Trying: 10 a quarter hour per email, 30 per
+  address. With 5 tries a code, guessing one email's codes is about one in twenty thousand a day at
+  most. Paying in: 10 checkouts a quarter hour per organiser. Requests made on the box itself
+  (`127.0.0.1`, `::1`, `::ffff:127.0.0.1`: local development and the pr.yml BDD suite) are exempt,
+  exactly as admin login is (TASK-200); behind the ALB `req.ip` is always the real client address,
+  so no outside request can claim it.
+- **The session.** A right code always starts a NEW random 32 byte id (any session the browser
+  already had is ended, so nobody can fix a session on someone else), stored only as its sha256 in
+  `fundraiser_sessions`. The cookie `nbcc_fr_session` is `HttpOnly`, `SameSite=Lax`, `Secure` in
+  production (like the ball's), `Path=/api/fundraise/manage`, 2 hours. Sign out deletes it on the
+  server and clears the cookie.
+- **Cross site requests.** Every private area POST (including asking and signing in) is refused
+  with `403` unless it comes from our own page: `Sec-Fetch-Site` must be `same-origin`, or, from a
+  browser that sends only `Origin`, that must be one of our hosts. SameSite Lax is the first lock.
+- **Only their own.** Every per fundraiser endpoint loads the fundraiser and requires its organiser
+  email to be the signed in one (and checks again under the row lock when writing); anyone else's
+  is a `404`, never a `403`.
+- **Never logged.** Codes and session ids are never logged. Email 8's subject carries the code, so
+  its Email audit row keeps "Your NBCC sign in code" instead (`logSubject` in `src/clients/email.ts`).
+
+**The old 24 hour links.** No new links are sent (`fundraiseManage` is still named on the Email
+audit for the rows already there). A link already in an inbox no longer opens anything: the page
+takes `?token=` out of the address bar and says "Links are no longer used. Put in your email
+address below and we will send you a sign in code.", and `GET`/`POST /api/fundraise/manage/:token`
+answer `410` saying the same. The `fundraiser_manage_tokens` table is no longer written; it is
+dropped in a later release (expand and contract).
+
+**The public page.** The QR code is no longer on a fundraiser's page (no picture, no download
+link). `/fundraise/<slug>/qr.svg` still answers, public but unlinked (it only encodes the public
+page's address), for an approved or finished fundraiser that has (or had) a page, for the private
+area and the admin, which now shows the code itself beside its
+download link. The page ends with a quiet line: "Is this your page? Manage it", linking
+`/fundraise/manage`. The help page's Paying in section now says to sign in with a code at
+nbcc.scot/fundraise/manage.
+
+**Known trade-offs (left as they are).**
+
+- The rate limiters are in memory and per task, like every other limiter on the site: with more
+  than one task the limits multiply, and a restart forgets them. A shared limiter is a site wide
+  follow up, not this feature's.
+- The same origin check lets through a POST that carries neither `Sec-Fetch-Site` nor `Origin`.
+  Every browser sends one of them on a POST, so only a non browser client gets through, and it
+  carries no visitor's cookie to misuse; it still needs a session of its own.
+
+### API
+
+All under `/api/fundraise/manage`, JSON, `404` while fundraising is off.
+
+| Route | Answer |
+|---|---|
+| `POST /request` `{ email }` | always `200 { "message": "If that email belongs to an approved fundraiser, we have sent a sign in code to it. It works for 10 minutes." }`; `400` only for something that is not an email; `403` from another site |
+| `POST /sign-in` `{ email, code }` | `200 { "status": "signed_in" }` plus the cookie; `401 { "error": "That code does not work. Check it, or ask for a new one." }` for every refusal; `400` for a code that is not 6 digits (spaces and a dash are fine, not counted as a try); `429` over the limits |
+| `GET /me` | `200 { "fundraisers": [{ "id", "slug", "title", "path", "status", "public", "pageUrl", "qrUrl", "meter", "editable": {...19 fields}, "waitingEdit", "gifts": [wall entries], "finishedRequestedAt" }] }`; `401` signed out |
+| `POST /fundraisers/:id/edit` | any of the 19 editable fields; `202 { "status": "waiting", "edit" }`; `400` with `fields`; `404` not theirs; `410` finished ("Your fundraiser is finished. To change anything, get in touch."), new or declined |
+| `POST /fundraisers/:id/finished` | `200 { "status": "thanks", "finishedRequestedAt" }` |
+| `POST /fundraisers/:id/pay-in` `{ amountPence, coverFee? }` | approved or finished; `200 { "url" }` to Stripe (closes after 31 minutes); `400` outside £1 to £10,000; `502` if Stripe cannot be reached |
+| `POST /sign-out` | `200 { "status": "signed_out" }`, cookie cleared |
+| `GET`, `POST /:token` | `410`: the retired links |
+
+### Data (`migrations/1791200000050_fundraising-private-area.js`, additive only)
+
+`fundraiser_sign_in_codes` (email, the code's keyed hash, expiry, tries), `fundraiser_sessions`
+(the session id's sha256, email, expiry; both tidied a day after expiry when a session starts),
+`fundraisers.finished_requested_at` (nullable), `donations.paid_in_by_organiser` (boolean, default
+false, so every existing gift reads false). Both new tables are in the nightly backup's table count.
+
+### Where it lives, and tests
+
+Rules: `src/fundraising/sign-in.ts` (code, hash, session, same origin check) and
+`src/fundraising/model.ts` (`editSchema`, `checkOrganiserEdit`, the wall leaving out pay ins). SQL:
+`src/db/fundraiser-sign-in.ts`, `src/db/fundraisers.ts` (`listForOrganiser`, `requestEdit` held to
+the owner, `markFinishedRequested`, `linkFundraiserGift` for pay ins). Routes: `src/routes/fundraise.ts`.
+Emails: `buildSignInCodeEmail`, `buildFinishedStaffEmail` in `src/fundraising/emails.ts`, sent by
+`src/fundraising/send.ts`. Page: `fundraise-manage.html` and `assets/js/fundraise-manage.js` (one card
+per fundraiser, copied from a hidden pattern with every id given its own ending; works at 390px,
+nothing scrolls inside a box). Unit tests: `fundraising-sign-in`, `fundraise-private-routes` (same
+answer for an unknown email, limits, cookie flags, a planted session ended, two organisers),
+`fundraising-private-db`, `fundraising-organiser-edit`, `fundraising-pay-in`,
+`fundraising-code-email-log`, `fundraise-manage-page`, `fundraising-emails`, `fundraising-send`,
+`fundraising-render` (no QR, the manage line), `fundraise-help-page`, `admin-fundraising-page`,
+`fundraising-private-area-migration`. BDD: `features/fundraising-private.feature` (ask for a code,
+sign in, see only your own, ask for a change, someone else's is a 404, sign out; an unknown email
+gets the same answer and no email; a wrong code sets no cookie) and `fundraising-pages.feature` (no
+QR code on the page, the manage line).
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

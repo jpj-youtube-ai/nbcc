@@ -328,13 +328,26 @@ describe("a fundraiser's own page", () => {
     expect(doc(page({ wall: [] })).querySelector(".fr-wall__empty")?.textContent).toContain("first");
   });
 
-  it("draws the QR code inline, and offers it to download", () => {
+  // TASK-501: the QR code moved to the organiser's private area (and staff see it in the admin).
+  // /fundraise/<slug>/qr.svg still answers; the public page just no longer shows or links it.
+  it("has no QR code and no link to one", () => {
     const d = doc();
-    expect(d.querySelector(".fr-qr svg")).not.toBeNull();
-    const dl = d.querySelector<HTMLAnchorElement>("a.fr-qr__download")!;
-    expect(dl.getAttribute("href")).toBe("/fundraise/robins-santa-dash/qr.svg");
-    expect(dl.hasAttribute("download")).toBe(true);
-    expect(dl.textContent).toContain("Download the QR code");
+    expect(d.querySelector(".fr-qr")).toBeNull();
+    expect(d.querySelector("a.fr-qr__download")).toBeNull();
+    expect(render()).not.toContain("qr.svg");
+    expect(d.body.textContent).not.toMatch(/QR code/i);
+  });
+
+  // TASK-501: a quiet way in for the organiser, at the very foot of the page.
+  it("ends with a quiet line for the organiser, pointing to their private area", () => {
+    const d = doc();
+    const line = d.querySelector("main .fr-owner")!;
+    expect(line.textContent?.replace(/\s+/g, " ").trim()).toBe("Is this your page? Manage it");
+    expect(line.querySelector("a")?.getAttribute("href")).toBe("/fundraise/manage");
+    // The last thing in the page's main content (the payment panel, hidden until used, aside).
+    const blocks = [...d.querySelector("main")!.children].filter((el) => el.id !== "embeddedCheckoutModal");
+    expect(blocks[blocks.length - 1].contains(line)).toBe(true);
+    expect(line.classList.contains("fr-owner")).toBe(true);
   });
 
   it("shares by plain links, with no script from anyone else", () => {
@@ -413,7 +426,7 @@ describe("forms without JavaScript", () => {
     ["the give form", renderFundraiserPage(read("fundraiser.html"), page(), { pageUrl: PAGE_URL, now: NOW }), "#frGiveForm"],
     ["the sign up form", renderFundraiseSignUp(read("fundraise.html"), true), "#fundraiseForm"],
     ["the manage request form", read("fundraise-manage.html"), "#manageRequestForm"],
-    ["the manage edit form", read("fundraise-manage.html"), "#manageEditForm"],
+    ["the sign in code form", read("fundraise-manage.html"), "#manageCodeForm"],
   ];
   it.each(cases)("%s ships hidden, with another way shown", (_n, html, sel) => {
     const d = parse(html);

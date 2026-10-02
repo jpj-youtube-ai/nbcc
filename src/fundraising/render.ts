@@ -11,7 +11,6 @@ import {
   time12,
 } from "../events/render";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
-import { qrSvg } from "./qr";
 import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
 
 // TASK-494: the public fundraising pages, drawn on the server.
@@ -21,7 +20,8 @@ import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
 //     "holding an event" sign ups as ordinary event cards, the All / Events / Fundraisers chips and
 //     the Fundraise for us panel.
 //   - A fundraiser's own page (/fundraise/<slug>): the story, the meter, the give form, the
-//     supporter wall, the QR code and the share links.
+//     supporter wall and the share links. (TASK-501 moved its QR code to the organiser's private
+//     area; /fundraise/<slug>/qr.svg still answers, it is just not shown or linked here.)
 //   - The sign up page (/fundraise): the form, or a gentle "not open yet" while switched off.
 //
 // Pure: no database, no config, no clock (the time is passed in). Everything a person typed is
@@ -81,7 +81,6 @@ const ICON = {
   link: `<svg width="18" height="18" ${SVG}><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>`,
   facebook: '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M14 9h3V6h-3c-2.2 0-4 1.8-4 4v2H7v3h3v6h3v-6h3l1-3h-4v-2c0-.6.4-1 1-1z"/></svg>',
   whatsapp: `<svg width="18" height="18" ${SVG}><path d="M3.5 20.5l1.3-4.2A8.5 8.5 0 1 1 8 19.3z"/><path d="M9 8.5c0 3.5 2.6 6.5 6.5 6.5l1-1.6-2-1-1 .9c-1.2-.5-2.3-1.6-2.8-2.8l.9-1-1-2z"/></svg>`,
-  download: `<svg width="18" height="18" ${SVG}><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>`,
 };
 
 // --- the meter -----------------------------------------------------------------------------------
@@ -423,17 +422,6 @@ function renderShare(p: PublicPage, pageUrl: string): string {
   );
 }
 
-function renderQr(p: PublicPage, pageUrl: string): string {
-  return (
-    '<section class="card fr-card fr-qr" aria-labelledby="fr-qr-heading">' +
-    '<h2 id="fr-qr-heading">The QR code</h2>' +
-    "<p>Put it on a poster or a sponsor form. Scanning it with a phone camera opens this page.</p>" +
-    `<div class="fr-qr__code">${qrSvg(pageUrl, { title: `QR code for ${p.title}` })}</div>` +
-    `<a class="fr-qr__download" href="/fundraise/${escapeHtml(p.slug)}/qr.svg" download="nbcc-${escapeHtml(p.slug)}-qr-code.svg">${ICON.download}Download the QR code</a>` +
-    "</section>"
-  );
-}
-
 function renderGiveForm(p: PublicPage): string {
   const first = escapeHtml(p.organisedBy.split(" ")[0]);
   const presets = PRESETS_PENCE.map(
@@ -548,7 +536,7 @@ export const INTRO_MARKER = "<!-- fundraiser:intro -->";
 export const CHECKOUT_MARKER = "<!-- fundraiser:checkout -->";
 
 export interface FundraiserPageOptions {
-  /** The page's own full address, for the QR code, sharing and the canonical link. */
+  /** The page's own full address, for sharing and the canonical link. */
   pageUrl: string;
   now: Date;
   /**
@@ -606,7 +594,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     renderGiveForm(p) +
     renderWall(p, opts.now) +
     "</div>" +
-    `<div class="fr-extras">${renderShare(p, opts.pageUrl)}${renderQr(p, opts.pageUrl)}</div>`;
+    `<div class="fr-extras">${renderShare(p, opts.pageUrl)}</div>`;
 
   const fill: Record<string, string> = {
     __TITLE__: escapeHtml(p.title),

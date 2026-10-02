@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <!-- SEO -->
-    <title>Change your fundraising page | Night Before Christmas Campaign</title>
-    <meta name="description" content="Change the details on your NBCC fundraising page." />
+    <title>Your private fundraising area | Night Before Christmas Campaign</title>
+    <meta name="description" content="Your private NBCC fundraising area: your QR code, your gifts and messages, changes to your page and paying in." />
     <meta name="robots" content="noindex, nofollow" />
 
     <link rel="stylesheet" href="/assets/css/styles.css" />
@@ -42,92 +42,242 @@
         <div class="wrap">
           <div class="intro-hero">
             <span class="eyebrow">Your fundraiser</span>
-            <h1 id="manage-heading">Change your fundraising page</h1>
+            <h1 id="manage-heading">Your private fundraising area</h1>
             <div class="rule"><i></i></div>
-            <p class="lede">Change your story, your target, the date or the place. We check every change before it goes on your page.</p>
+            <p class="lede">Your QR code, your latest gifts and messages, and everything you need to update your page or pay in what you&rsquo;ve collected. We email you a code to get in, so there are no passwords to remember.</p>
           </div>
         </div>
       </section>
 
-      <!-- TASK-494: reached from the link in the organiser's email (?token=...). fundraise-manage.js
-           reads the token, asks GET /api/fundraise/manage/:token and shows the edit form; without a
-           token, or with one that has run out, it shows the request a link form. noindex: a private
-           page, never for search engines. -->
+      <!-- TASK-501: the organiser's private area, signed in with a 6 digit code we email
+           (fundraise-manage.js). Signed out: the email box, then the code box. Signed in: one card
+           per fundraiser of theirs, drawn from the hidden pattern below. Every change waits for
+           staff. noindex: a private page, never for search engines. -->
       <div class="section flush-top">
         <div class="wrap fr-narrow">
-          <p class="fr-loading" data-manage-loading role="status" hidden>Opening your link&hellip;</p>
+          <p class="fr-loading" data-manage-loading role="status" hidden>Opening your private area&hellip;</p>
 
           <div class="card card-lg fr-panel" data-manage-request>
-            <h2>Get a link to change your page</h2>
+            <h2>Sign in</h2>
             <p class="fr-problem" data-manage-problem role="alert" hidden></p>
-            <p>Put in the email address you signed up with. If it belongs to an approved fundraiser, we will email you a link. It works for 24 hours.</p>
-            <p class="fr-noscript" data-nojs>This page needs JavaScript switched on. You can email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> with your changes instead.</p>
+            <p>Put in the email address you signed up with. If it belongs to an approved fundraiser, we will email you a 6 digit code. It works for 10 minutes.</p>
+            <p class="fr-noscript" data-nojs>This page needs JavaScript switched on. You can email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> instead, and we will gladly help.</p>
             <form id="manageRequestForm" class="fr-form fr-form--plain" novalidate hidden data-needs-js>
               <div class="give-field">
                 <label for="manageEmail">Your email address <span class="give-req" aria-hidden="true">*</span></label>
                 <input class="give-field-input" id="manageEmail" name="email" type="email" autocomplete="email" required aria-required="true" placeholder="you@example.com" />
               </div>
-              <button class="btn btn-primary" type="submit" data-request-submit>Email me a link</button>
+              <button class="btn btn-primary" type="submit" data-request-submit>Email me a code</button>
               <p class="form-status" role="status" aria-live="polite" data-request-status></p>
             </form>
           </div>
 
-          <div class="fr-manage" data-manage-edit hidden>
-            <div class="fr-waiting" data-manage-waiting role="status" hidden>
-              <strong>Your last change is waiting for us to check it.</strong>
-              <span data-waiting-when></span> Your page keeps showing the version we last approved until then. The form below shows your change, and saving again replaces it.
-            </div>
-            <form id="manageEditForm" class="fr-form" novalidate hidden data-needs-js>
-              <p class="form-error-summary" role="alert" data-edit-error hidden></p>
-              <h2 class="fr-form__title" data-manage-title></h2>
-              <p class="fr-form__lead" data-manage-page-link hidden><a href="/" data-manage-page-url>See your page as it is now</a></p>
+          <div class="card card-lg fr-panel" data-manage-code hidden>
+            <h2>Check your email</h2>
+            <p>If <strong data-code-email></strong> belongs to an approved fundraiser, we have sent it a 6 digit code. It works for 10 minutes. It can take a minute or two to arrive, so check your junk folder too.</p>
+            <form id="manageCodeForm" class="fr-form fr-form--plain" novalidate hidden data-needs-js>
               <div class="give-field">
-                <label for="editDescription">Your story <span class="give-req" aria-hidden="true">*</span></label>
-                <textarea class="give-field-input" id="editDescription" name="description" rows="7" maxlength="1000" required aria-required="true" aria-describedby="editDescriptionCount" data-invalid-message="Tell us a little about it"></textarea>
-                <p class="give-field-help" id="editDescriptionCount" data-count-for="editDescription" data-count-max="1000">Up to 1,000 characters.</p>
+                <label for="manageCode">Your code <span class="give-req" aria-hidden="true">*</span></label>
+                <input class="give-field-input fr-code-input" id="manageCode" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required aria-required="true" placeholder="123456" data-invalid-message="Put in the 6 digit code from the email" />
               </div>
-              <div class="give-field fr-target" data-edit-target>
-                <label class="give-custom-label" for="editTarget">Your target <span class="give-optional">(optional)</span></label>
-                <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span><input class="give-custom-input" id="editTarget" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" data-invalid-message="A target can be from £10 to £100,000" /></div>
-                <p class="give-field-help">Anything from £10 to £100,000. Leave it empty for no target.</p>
-              </div>
-              <div class="fr-row">
-                <div class="give-field">
-                  <label for="editDate">The date <span class="give-optional">(if there is one)</span></label>
-                  <input class="give-field-input" id="editDate" name="eventDate" type="date" />
-                </div>
-                <div class="give-field">
-                  <label for="editTime">Start time <span class="give-optional">(if there is one)</span></label>
-                  <input class="give-field-input" id="editTime" name="startTime" type="time" />
-                </div>
-              </div>
-              <div class="fr-row">
-                <div class="give-field">
-                  <label for="editVenue">Where <span class="give-optional">(optional)</span></label>
-                  <input class="give-field-input" id="editVenue" name="venue" type="text" maxlength="120" />
-                </div>
-                <div class="give-field">
-                  <label for="editTown">Town <span class="give-optional">(optional)</span></label>
-                  <input class="give-field-input" id="editTown" name="town" type="text" maxlength="80" />
-                </div>
-              </div>
-              <div class="give-field">
-                <label for="editSocial">Your Facebook or Instagram page <span class="give-optional">(optional)</span></label>
-                <input class="give-field-input" id="editSocial" name="socialLink" type="url" maxlength="300" inputmode="url" placeholder="https://www.facebook.com/..." data-invalid-message="Paste the full link, starting https://" />
-              </div>
-              <div class="give-cta-row">
-                <button class="btn btn-primary give-cta" type="submit" data-edit-submit>Send my changes</button>
-              </div>
-              <p class="form-status" role="status" aria-live="polite" data-edit-status></p>
+              <button class="btn btn-primary" type="submit" data-code-submit>Sign in</button>
+              <p class="form-status" role="status" aria-live="polite" data-code-status></p>
             </form>
+            <p class="fr-code-links">
+              <button class="fr-link-btn" type="button" data-code-again>Send me a new code</button>
+              <button class="fr-link-btn" type="button" data-code-change>Use a different email</button>
+            </p>
           </div>
 
-          <div class="card card-lg fr-panel fr-thanks" data-manage-sent hidden tabindex="-1">
-            <span class="eyebrow">Changes sent</span>
-            <h2>Thank you. We will check your changes soon.</h2>
-            <div class="rule"><i></i></div>
-            <p>Your page keeps showing the version we last approved until we have looked. If you think of something else, you can use the same link again for 24 hours.</p>
-            <p><button class="btn btn-ghost" type="button" data-manage-again>Make another change</button></p>
+          <div class="fr-area" data-manage-area hidden>
+            <div class="fr-area__top">
+              <p class="fr-area__who">You are signed in. For your safety, it lasts two hours.</p>
+              <button class="btn btn-ghost fr-area__out" type="button" data-sign-out>Sign out</button>
+            </div>
+            <div class="fr-thanks-panel" data-paid-thanks role="status" tabindex="-1" hidden>
+              <h2>Thank you for paying in.</h2>
+              <p>Your payment will show on your meter shortly. We will email you a receipt.</p>
+            </div>
+            <p class="form-status" role="status" aria-live="polite" data-area-status></p>
+            <div class="card card-lg fr-panel" data-manage-none hidden>
+              <h2>Nothing to change just now</h2>
+              <p>We could not find a fundraiser that is running for this email address. If you think that is wrong, please email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a>.</p>
+            </div>
+            <div class="fr-area__list" data-manage-list></div>
+          </div>
+
+          <!-- One fundraiser of theirs. fundraise-manage.js copies this for each, giving every id its
+               own ending so two never share one, and takes the pattern itself off the page. -->
+          <div hidden data-manage-pattern>
+            <article class="card card-lg fr-panel fr-mine" aria-labelledby="mineTitle">
+              <h2 id="mineTitle" data-f-title></h2>
+              <p class="fr-mine__status" data-f-status></p>
+              <p class="fr-mine__page" data-f-page-line><a href="/" data-f-page target="_blank" rel="noopener">See your page</a></p>
+
+              <div class="fr-waiting" data-f-waiting role="status" hidden>
+                <strong>Your last change is waiting for us to check it.</strong>
+                <span data-f-waiting-when></span> Your page keeps showing the version we last approved until then. The form below shows your change, and sending again replaces it.
+              </div>
+
+              <section class="fr-mine__part" aria-labelledby="mineRaisedHeading">
+                <h3 id="mineRaisedHeading">Raised so far</h3>
+                <p class="fr-mine__raised" data-f-raised></p>
+              </section>
+
+              <section class="fr-mine__part" data-f-qr aria-labelledby="mineQrHeading">
+                <h3 id="mineQrHeading">Your QR code</h3>
+                <p>Put it on posters, buckets and sponsor forms. Scanning it with a phone camera opens your page.</p>
+                <div class="fr-qr__code"><img data-f-qr-img src="data:," alt="Your QR code" width="200" height="200" decoding="async" /></div>
+                <a class="fr-qr__download" href="/" data-f-qr-download download>Download your QR code</a>
+              </section>
+
+              <section class="fr-mine__part" data-f-gifts-part aria-labelledby="mineGiftsHeading">
+                <h3 id="mineGiftsHeading">Latest gifts and messages</h3>
+                <p class="fr-wall__empty" data-f-gifts-empty hidden>No gifts on your page yet. Sharing it is the best way to get the first one.</p>
+                <ol class="fr-wall__list" role="list" data-f-gifts></ol>
+                <button class="fr-wall__more" type="button" data-f-gifts-more hidden>Show all</button>
+              </section>
+
+              <section class="fr-mine__part" aria-labelledby="mineEditHeading">
+                <h3 id="mineEditHeading">Change your details</h3>
+                <p data-f-edit-intro>We check every change before it goes on your page.</p>
+                <p class="fr-mine__done" data-f-edit-closed hidden>Your fundraiser is finished. To change anything, get in touch.</p>
+                <div class="fr-thanks-panel" data-f-sent role="status" tabindex="-1" hidden>
+                  <h4>Thank you. We will check your changes soon.</h4>
+                  <p>Your page keeps showing the version we last approved until we have looked.</p>
+                </div>
+                <form class="fr-form fr-form--plain" novalidate data-f-edit>
+                  <p class="form-error-summary" role="alert" data-f-edit-error hidden></p>
+                  <div class="give-field">
+                    <label for="editDescription">Your story <span class="give-req" aria-hidden="true">*</span></label>
+                    <textarea class="give-field-input" id="editDescription" name="description" rows="6" maxlength="1000" required aria-required="true" data-invalid-message="Tell us a little about it"></textarea>
+                    <p class="give-field-help">Up to 1,000 characters.</p>
+                  </div>
+                  <div class="give-field fr-target" data-raising-only>
+                    <label class="give-custom-label" for="editTarget">Your target <span class="give-optional">(optional)</span></label>
+                    <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">&pound;</span><input class="give-custom-input" id="editTarget" name="targetPence" type="number" inputmode="numeric" min="10" max="100000" step="1" data-invalid-message="A target can be from &pound;10 to &pound;100,000" /></div>
+                    <p class="give-field-help">Anything from &pound;10 to &pound;100,000. Leave it empty for no target.</p>
+                  </div>
+                  <div class="give-field" data-event-only>
+                    <label for="editCardLine">A line for the front of the card <span class="give-req" aria-hidden="true">*</span></label>
+                    <textarea class="give-field-input fr-short-text" id="editCardLine" name="cardLine" rows="2" maxlength="140" required aria-required="true" data-invalid-message="Add a line for the front of the card"></textarea>
+                    <p class="give-field-help">One or two sentences. What is it, and why come?</p>
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="editDate">The date</label>
+                      <input class="give-field-input" id="editDate" name="eventDate" type="date" />
+                    </div>
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="editStart">Start time</label>
+                      <input class="give-field-input" id="editStart" name="startTime" type="time" />
+                    </div>
+                    <div class="give-field" data-event-only>
+                      <label for="editEnd">Finish time</label>
+                      <input class="give-field-input" id="editEnd" name="endTime" type="time" data-invalid-message="The finish time is before the start." />
+                    </div>
+                  </div>
+                  <label class="give-check" for="editTbc" data-event-only><input class="give-check-box" id="editTbc" name="timeTbc" type="checkbox" /><span class="give-check-text">The time is still to be confirmed</span></label>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="editVenue">Where</label>
+                      <input class="give-field-input" id="editVenue" name="venue" type="text" maxlength="120" data-invalid-message="Tell us the venue" />
+                    </div>
+                    <div class="give-field">
+                      <label for="editTown">Town</label>
+                      <input class="give-field-input" id="editTown" name="town" type="text" maxlength="80" />
+                    </div>
+                  </div>
+                  <div data-event-only>
+                    <div class="give-field">
+                      <label for="editVenueAddress">Full address and how to get there <span class="give-optional">(optional)</span></label>
+                      <textarea class="give-field-input fr-short-text" id="editVenueAddress" name="venueAddress" rows="2" maxlength="300"></textarea>
+                    </div>
+                    <div class="fr-row">
+                      <div class="give-field">
+                        <label for="editVenuePostcode">Venue postcode <span class="give-optional">(optional)</span></label>
+                        <input class="give-field-input" id="editVenuePostcode" name="venuePostcode" type="text" maxlength="10" autocomplete="off" placeholder="e.g. KA1 1AA" pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Please give a UK postcode, like KA1 1AA" />
+                      </div>
+                    </div>
+                    <fieldset class="fr-fieldset fr-subgroup">
+                      <legend class="fr-sublegend">Access: tick only what the venue has confirmed</legend>
+                      <div class="fr-checks">
+                        <label class="give-check" for="editAccess0"><input class="give-check-box" id="editAccess0" name="access" type="checkbox" value="step free entry" /><span class="give-check-text">Step free entry</span></label>
+                        <label class="give-check" for="editAccess1"><input class="give-check-box" id="editAccess1" name="access" type="checkbox" value="accessible toilets" /><span class="give-check-text">Accessible toilets</span></label>
+                        <label class="give-check" for="editAccess2"><input class="give-check-box" id="editAccess2" name="access" type="checkbox" value="a hearing loop" /><span class="give-check-text">Hearing loop</span></label>
+                        <label class="give-check" for="editAccess3"><input class="give-check-box" id="editAccess3" name="access" type="checkbox" value="blue badge parking" /><span class="give-check-text">Blue badge parking</span></label>
+                      </div>
+                    </fieldset>
+                    <div class="give-field">
+                      <label for="editPrice">Price <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="editPrice" name="price" type="text" maxlength="60" autocomplete="off" />
+                    </div>
+                    <fieldset class="fr-fieldset fr-subgroup">
+                      <legend class="fr-sublegend">How do people get in?</legend>
+                      <div class="fr-options fr-options--stack">
+                        <label class="fr-option fr-option--small" for="editBookingAway"><input id="editBookingAway" name="booking" type="radio" value="away" /><span>Tickets are sold on another website</span></label>
+                        <label class="fr-option fr-option--small" for="editBookingDoor"><input id="editBookingDoor" name="booking" type="radio" value="door" /><span>Pay on the door, no booking needed</span></label>
+                        <label class="fr-option fr-option--small" for="editBookingFree"><input id="editBookingFree" name="booking" type="radio" value="free" /><span>Free, just come along</span></label>
+                      </div>
+                      <div class="give-field" data-ticket-link hidden>
+                        <label for="editTicket">The link to buy tickets <span class="give-req" aria-hidden="true">*</span></label>
+                        <input class="give-field-input" id="editTicket" name="ticketUrl" type="url" maxlength="500" inputmode="url" autocomplete="off" placeholder="https://..." required aria-required="true" pattern="https://[^\s]+" data-invalid-message="Paste the full web address, starting https://" />
+                      </div>
+                    </fieldset>
+                    <div class="fr-row">
+                      <div class="give-field">
+                        <label for="editAge">Age limit <span class="give-optional">(optional)</span></label>
+                        <input class="give-field-input" id="editAge" name="ageLimit" type="text" maxlength="60" autocomplete="off" />
+                      </div>
+                      <div class="give-field">
+                        <label for="editDress">Dress code <span class="give-optional">(optional)</span></label>
+                        <input class="give-field-input" id="editDress" name="dressCode" type="text" maxlength="60" autocomplete="off" />
+                      </div>
+                    </div>
+                    <div class="give-field">
+                      <label for="editIncluded">What&rsquo;s included <span class="give-optional">(optional)</span></label>
+                      <textarea class="give-field-input fr-short-text" id="editIncluded" name="included" rows="2" maxlength="300"></textarea>
+                    </div>
+                  </div>
+                  <div class="give-field">
+                    <label for="editSocial">Your Facebook or Instagram page <span class="give-optional">(optional)</span></label>
+                    <input class="give-field-input" id="editSocial" name="socialLink" type="url" maxlength="300" inputmode="url" placeholder="https://www.facebook.com/..." data-invalid-message="Paste the full link, starting https://" />
+                  </div>
+                  <div class="give-cta-row">
+                    <button class="btn btn-primary give-cta" type="submit" data-f-edit-submit>Send my changes</button>
+                  </div>
+                  <p class="form-status" role="status" aria-live="polite" data-f-edit-status></p>
+                </form>
+              </section>
+
+              <section class="fr-mine__part" aria-labelledby="minePayHeading">
+                <h3 id="minePayHeading">Pay in what you collected</h3>
+                <p>Collected cash or sponsor money? Pay it in here by card and it counts towards what you have raised. You can also pay in by bank transfer, or drop it in to us: just get in touch.</p>
+                <form class="fr-form fr-form--plain" novalidate data-f-payin>
+                  <div class="give-field">
+                    <label class="give-custom-label" for="payAmount">How much are you paying in? <span class="give-req" aria-hidden="true">*</span></label>
+                    <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">&pound;</span><input class="give-custom-input" id="payAmount" name="amount" type="number" inputmode="decimal" min="1" max="10000" step="0.01" required aria-required="true" placeholder="Amount" data-invalid-message="Put in an amount from &pound;1 to &pound;10,000" /></div>
+                    <p class="give-field-help">From &pound;1 to &pound;10,000 at a time.</p>
+                  </div>
+                  <label class="give-check" for="payCoverFee"><input class="give-check-box" id="payCoverFee" name="coverFee" type="checkbox" /><span class="give-check-text">Add a little to cover the card fee, so all of it reaches NBCC.</span></label>
+                  <div class="give-cta-row">
+                    <button class="btn btn-primary give-cta" type="submit" data-f-payin-submit>Pay in by card</button>
+                    <p class="give-pay-note">Secure payment by Stripe. You come back here when it is done.</p>
+                  </div>
+                  <p class="form-status" role="status" aria-live="polite" data-f-payin-status></p>
+                </form>
+              </section>
+
+              <section class="fr-mine__part" data-f-done-part aria-labelledby="mineDoneHeading">
+                <h3 id="mineDoneHeading">All done?</h3>
+                <p>When your fundraiser is over, let us know. Nothing changes on your page straight away: we will be in touch to say thank you and tie up any loose ends.</p>
+                <button class="btn btn-ghost" type="button" data-f-finished>I&rsquo;ve finished</button>
+                <p class="fr-mine__done" data-f-finished-thanks role="status" hidden>Thank you, we&rsquo;ll be in touch.</p>
+                <p class="form-status" role="status" aria-live="polite" data-f-finished-status></p>
+              </section>
+            </article>
           </div>
         </div>
       </div>

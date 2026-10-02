@@ -271,6 +271,9 @@ export interface DonationConfirmationEmail {
   // mapper stays usable without them and existing callers are unaffected.
   reference?: string;
   donationDate?: Date | string;
+  // TASK-501: money an organiser collected and paid in for their fundraiser. The email thanks them
+  // for paying it in rather than for a gift of their own, and never mentions Gift Aid.
+  paidIn?: boolean;
 }
 
 // Decide whether — and with what payload — to send a donation-confirmation email.
@@ -281,7 +284,7 @@ export interface DonationConfirmationEmail {
 export function confirmationEmailFor(
   donor: { email?: string | null; emailConsent?: boolean; fullName: string },
   gift: { amountPence: number; currency: string; giftAid: boolean; mode: "once" | "monthly" },
-  extra?: { reference?: string; donationDate?: Date | string },
+  extra?: { reference?: string; donationDate?: Date | string; paidIn?: boolean },
 ): DonationConfirmationEmail | null {
   if (!donor.email) return null;
   return {
@@ -293,6 +296,7 @@ export function confirmationEmailFor(
     mode: gift.mode,
     ...(extra?.reference ? { reference: extra.reference } : {}),
     ...(extra?.donationDate ? { donationDate: extra.donationDate } : {}),
+    ...(extra?.paidIn ? { paidIn: true } : {}),
   };
 }
 
@@ -514,6 +518,8 @@ export interface FundraiserGiftWrite {
   message: string | null;
   showName: boolean;
   showAmount: boolean;
+  /** TASK-501: paid in by the organiser from their private area (stamped only by the server). */
+  paidIn?: boolean;
 }
 
 export function fundraiserGiftFromCheckoutSession(session: Stripe.Checkout.Session): FundraiserGiftWrite | null {
@@ -523,6 +529,8 @@ export function fundraiserGiftFromCheckoutSession(session: Stripe.Checkout.Sessi
   if (!/^[1-9]\d{0,9}$/.test(raw)) return null;
   const fundraiserId = Number(raw);
   if (fundraiserId > 2147483647) return null;
+  // TASK-501: money the organiser paid in: on the meter, never on the wall, so nothing to show.
+  if (md.paidInByOrganiser === "true") return { fundraiserId, message: null, showName: false, showAmount: false, paidIn: true };
   const message = (md.supporterMessage ?? "").trim().slice(0, 200);
   return {
     fundraiserId,

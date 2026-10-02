@@ -53,8 +53,9 @@
     <main class="site-main" id="main" tabindex="-1">
       <!-- TASK-494: one community fundraiser's page, drawn by the server where the markers are
            (src/fundraising/render.ts renderFundraiserPage): the name and facts in the intro; the
-           story, the meter, the give form, the supporter wall, the QR code and the share links in
-           the layout. The tokens in the head are filled in with the fundraiser's own name and
+           story, the meter, the give form, the supporter wall and the share links in the layout.
+           TASK-501: the QR code moved to the organiser's private area, and the page ends with a
+           quiet line pointing the organiser there. The tokens in the head are filled in with the fundraiser's own name and
            address, so a shared link shows them. Served only for an approved, public, raising money
            fundraiser while fundraising is switched on; anything else is the site's 404. -->
       <section class="page-top fr-intro" aria-labelledby="fr-title">
@@ -65,6 +66,7 @@
       <div class="section flush-top">
         <div class="wrap fr-layout"><!-- fundraiser:page --></div>
       </div>
+      <div class="wrap"><p class="fr-owner">Is this your page? <a href="/fundraise/manage">Manage it</a></p></div>
       <!-- fundraiser:checkout -->
     </main>
 

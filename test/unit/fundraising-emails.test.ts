@@ -3,13 +3,14 @@ import {
   buildSignUpThanksEmail,
   buildSignUpStaffEmail,
   buildApprovedEmail,
-  buildManageLinkEmail,
+  buildSignInCodeEmail,
+  buildFinishedStaffEmail,
   buildEditApprovedEmail,
   buildEditRejectedEmail,
   safeFirstName,
   FUNDRAISING_EMAIL,
 } from "../../src/fundraising/emails";
-import { questionsBox, signOff, PHONE_DISPLAY, PHONE_HREF } from "../../src/email/brand";
+import { codeBox, questionsBox, signOff, PHONE_DISPLAY, PHONE_HREF } from "../../src/email/brand";
 import type { SignUp } from "../../src/fundraising/model";
 
 // TASK-493, reworded in TASK-497 to the words Jaimie signed off on 2026-10-02. Pure builders;
@@ -273,18 +274,68 @@ describe("you're on our list", () => {
   it("is plain English", () => expectPlainEnglish(mail.text));
 });
 
-describe("the manage link", () => {
-  const link = "https://nbcc.scot/fundraise/manage?token=abcDEF123_xyz";
-  const mail = buildManageLinkEmail(who, link);
+// TASK-501: email 8, the sign in code, in the words Jaimie approved. The 24 hour link it replaces is
+// no longer sent.
+describe("the sign in code", () => {
+  const mail = buildSignInCodeEmail("Sam Example", "482915");
 
-  it("carries the link, and says it lasts 24 hours", () => {
-    expect(mail.text).toContain(link);
-    expect(mail.html).toContain(link);
-    expect(mail.text).toMatch(/24 hours/);
-    expect(mail.text).toMatch(/did not ask/);
+  it("says the approved words, with the code in its box and in the subject", () => {
+    expect(mail.subject).toBe("Your NBCC sign in code: 482 915");
+    expect(mail.html).toContain("Fundraising for NBCC");
+    expect(mail.html).toContain("Here’s your code");
+    expect(mail.html).toContain("Hi Sam,");
+    expect(mail.html).toContain("Here’s your code to open your private fundraising area. It works for 10 minutes.");
+    expect(mail.html).toContain(codeBox("482915"));
+    expect(mail.html).toContain(
+      "Inside you’ll find your QR code, your latest gifts and messages, and everything you need to update your page or pay in what you’ve collected.",
+    );
+    expect(mail.html).toContain("Didn’t ask for this? No problem, just ignore this email. Nobody can get in without the code.");
+  });
+
+  it("has a plain text part with the same words and the code", () => {
+    expect(mail.text).toContain("Hi Sam,");
+    expect(mail.text).toContain("Here’s your code to open your private fundraising area. It works for 10 minutes.");
+    expect(mail.text).toContain("482915");
+    expect(mail.text).toContain("Didn’t ask for this? No problem, just ignore this email. Nobody can get in without the code.");
+  });
+
+  it("greets anyone without a safe first name as Hi there", () => {
+    expect(buildSignInCodeEmail("<b>x</b>", "000123").text).toContain("Hi there,");
+    expect(buildSignInCodeEmail(null, "000123").html).toContain("Hi there,");
+    expect(buildSignInCodeEmail("http://evil.example", "000123").html).not.toContain("evil");
+  });
+
+  it("carries no link that could be mistaken for a way in", () => {
+    expect(mail.html).not.toMatch(/fundraise\/manage\?/);
+    expect(mail.text).not.toMatch(/token=/);
   });
 
   it("is signed, with the questions box", () => expectSignedWithQuestions(mail, "Happy fundraising!"));
+  it("is plain English", () => expectPlainEnglish(mail.text));
+});
+
+// TASK-501: the organiser pressed "I've finished": a short note to the events inbox.
+describe("a fundraiser says they have finished", () => {
+  const mail = buildFinishedStaffEmail(
+    { id: 9, name: "Sam Example", title: "Sam's <Santa> Dash", email: "sam@example.com", raisedPence: 12550 },
+    { adminUrl: "https://nbcc.scot/admin" },
+  );
+
+  it("names the fundraiser, the organiser and what it has raised, escaped", () => {
+    expect(mail.subject).toBe("Sam's <Santa> Dash says they've finished");
+    expect(mail.html).toContain("Sam&#39;s &lt;Santa&gt; Dash");
+    expect(mail.html).not.toContain("<Santa>");
+    expect(mail.text).toContain("Sam Example says Sam's <Santa> Dash has finished.");
+    expect(mail.text).toContain("£125.50");
+    expect(mail.text).toContain("https://nbcc.scot/admin");
+    expect(mail.text).toMatch(/Mark finished/);
+  });
+
+  it("is for the team, so it has no questions box", () => {
+    expect(mail.html).not.toContain("Got any questions?");
+    expect(mail.html).toContain("NBCC Team");
+  });
+
   it("is plain English", () => expectPlainEnglish(mail.text));
 });
 

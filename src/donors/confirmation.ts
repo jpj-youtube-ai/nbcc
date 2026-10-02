@@ -48,6 +48,9 @@ export const confirmationInputSchema = z.object({
   // labelled receipt line, so our confirmation email stands in for the Stripe receipt.
   reference: z.string().trim().min(1).optional(),
   donationDate: z.union([z.date(), z.string().min(1)]).optional(),
+  // TASK-501: money a fundraiser collected and paid in from their private area. Not their own gift,
+  // so it is thanked as paid in, and never with a Gift Aid line.
+  paidIn: z.boolean().optional(),
 });
 export type ConfirmationInput = z.input<typeof confirmationInputSchema>;
 
@@ -80,12 +83,15 @@ export function donationReference(id: number): string {
 // Gift Aid was opted in (with the enduring clause for a monthly gift); the manage/cancel line only
 // for a monthly gift. A one-off / non-Gift-Aid gift simply omits the parts that don't apply.
 export function buildDonationConfirmation(input: ConfirmationInput): DonationConfirmationContent {
-  const { fullName, amountPence, currency, giftAid, mode, reference, donationDate } =
+  const { fullName, amountPence, currency, giftAid, mode, reference, donationDate, paidIn } =
     confirmationInputSchema.parse(input);
   const amount = formatAmount(amountPence, currency);
   const monthly = mode === "monthly";
 
-  const thanks = monthly
+  const thanks = paidIn
+    ? `Thank you, ${fullName}. The ${amount} you paid in for your fundraiser has reached ${CHARITY_SHORT_NAME}. ` +
+      `Please pass on our thanks to everyone who gave.`
+    : monthly
     ? `Thank you, ${fullName}. Your monthly donation of ${amount} to ${CHARITY_SHORT_NAME} is all set up, ` +
       `and we are so grateful to have you with us. We will email you each time a monthly donation is taken.`
     : `Thank you, ${fullName}. Your donation of ${amount} to ${CHARITY_SHORT_NAME} has been received, ` +
@@ -98,7 +104,7 @@ export function buildDonationConfirmation(input: ConfirmationInput): DonationCon
   if (reference) details.push(`Reference: ${reference}`);
   if (donationDate) details.push(`Payment date: ${formatDate(donationDate)}`);
   if (details.length > 0) paragraphs.push(details.join(". ") + ".");
-  if (giftAid) {
+  if (giftAid && !paidIn) {
     paragraphs.push(GIFT_AID_CONFIRMATION_LINE + (monthly ? GIFT_AID_MONTHLY_CLAUSE : ""));
   }
   if (monthly) {

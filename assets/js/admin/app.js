@@ -2592,6 +2592,8 @@
     ["fundraiseApproved", "Fundraiser approved"], ["fundraiseManage", "Fundraiser manage link"],
     // TASK-497: a change the organiser asked for, approved or rejected by staff.
     ["fundraiseEditApproved", "Fundraiser update live"], ["fundraiseEditRejected", "Fundraiser update held back"],
+    // TASK-501: the private area's sign in code, and "I've finished" to events@.
+    ["fundraiseCode", "Fundraiser sign in code"], ["fundraiseFinishedStaff", "Fundraiser finished (to events@)"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -8928,9 +8930,14 @@
     finished: { label: "Finished", cls: "" },
   };
   // The fields an organiser can ask to change (EDITABLE_FIELDS in src/fundraising/model.ts), in order.
+  // TASK-501: from their private area, the event details too.
   var FR_EDITABLE = [
     ["description", "Description"], ["targetPence", "Target"], ["eventDate", "Date"], ["startTime", "Start time"],
     ["venue", "Venue"], ["town", "Town"], ["socialLink", "Facebook or Instagram link"],
+    ["cardLine", "Line for the front of the card"], ["endTime", "Finish time"], ["timeTbc", "Time still to be confirmed"],
+    ["venueAddress", "Full address"], ["venuePostcode", "Venue postcode"], ["access", "Access"], ["price", "Price"],
+    ["booking", "How people get in"], ["ticketUrl", "Ticket link"], ["ageLimit", "Age limit"], ["dressCode", "Dress code"],
+    ["included", "What's included"],
   ];
   // TASK-499: the access ticks, stored in the events model's words, labelled as the events editor
   // labels them (ACCESS in src/events/model.ts, ACCESS_LABELS in src/fundraising/model.ts).
@@ -9224,6 +9231,8 @@
     var open = frOpenId === f.id;
     var sub = [f.name, frPathWords(f.path), f.eventDate ? H.fmtDate(f.eventDate) : "No date"];
     var pills = (f.editWaiting ? '<span class="admin-pill admin-pill--pending fr-changes-pill">Changes to check</span>' : "") +
+      // TASK-501: the organiser pressed "I've finished" in their private area (it finishes nothing).
+      (f.finishedRequestedAt && f.status === "approved" ? '<span class="admin-pill admin-pill--pending fr-finished-pill">Says they\'ve finished</span>' : "") +
       rowNewPill("fundraising", f.createdAt);
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
@@ -9360,6 +9369,10 @@
   function frStatePanel(f, write) {
     var rows = "";
     if (f.approvedAt) rows += fulfilRow("Approved", H.escapeHtml(H.fmtDate(f.approvedAt) + (f.approvedBy ? " by " + frWho(f.approvedBy) : "")));
+    if (f.finishedRequestedAt && f.status === "approved") {
+      rows += fulfilRow("Says they've finished", H.escapeHtml(H.fmtDate(f.finishedRequestedAt)) +
+        '<span class="fr-field-hint">They pressed I\'ve finished in their private area. Give them a ring, then Mark finished when everything is in.</span>');
+    }
     if (f.status === "declined" && f.declinedReason) {
       rows += fulfilRow("Why it was declined", '<span class="fx-address">' + H.escapeHtml(f.declinedReason) + "</span>" +
         '<span class="fr-field-hint">Kept inside NBCC, never shown to them.</span>');
@@ -9368,6 +9381,9 @@
     if (f.pageUrl && frIsWebLink(f.pageUrl)) {
       page = '<a class="fx-tel" id="frPageLink" href="' + H.escapeHtml(f.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
         H.escapeHtml(f.pageUrl) + "</a>" +
+        // TASK-501: the QR code itself, now it is no longer on the public page.
+        '<img class="fr-qr-preview" src="/fundraise/' + encodeURIComponent(f.slug) + '/qr.svg" alt="' +
+        H.escapeHtml("QR code for " + f.title) + '" width="120" height="120" loading="lazy" />' +
         '<a class="fr-qr-link" id="frQrLink" href="/fundraise/' + encodeURIComponent(f.slug) + '/qr.svg" download="' +
         H.escapeHtml("qr-" + f.slug + ".svg") + '">Download its QR code</a>';
     } else {
@@ -9405,6 +9421,14 @@
   }
 
   function frShowValue(key, value) {
+    // TASK-501: the event details an organiser can now ask to change, in words.
+    if (key === "timeTbc") return value ? "Yes" : "No";
+    if (key === "access") {
+      var ticks = Array.isArray(value) ? value : [];
+      return ticks.length ? H.escapeHtml(ticks.map(function (a) { return frLabelOf(FR_ACCESS, a) || a; }).join(", ")) : frNone("None ticked");
+    }
+    if (key === "booking" && value) return H.escapeHtml(frLabelOf(FR_BOOKING, value) || value);
+    if (key === "endTime" && value) return H.escapeHtml(String(value).slice(0, 5));
     if (value === null || value === undefined || value === "") return frNone("Nothing");
     if (key === "targetPence") return H.escapeHtml(frMoney(value));
     if (key === "eventDate") return H.escapeHtml(H.fmtDate(value));
@@ -9782,9 +9806,11 @@
           '<div class="fr-wall-head"><span class="fr-wall-who">' + H.escapeHtml(g.fullName) + "</span>" +
             '<span class="fx-hist-who">Shown as ' + H.escapeHtml(g.shortName) + " · " + H.escapeHtml(amount) + " · " +
             H.escapeHtml(H.fmtDate(g.createdAt)) + "</span>" +
-            (g.hidden ? '<span class="admin-pill admin-pill--cancelled fr-hidden-pill">Hidden</span>' : "") + "</div>" +
+            (g.hidden ? '<span class="admin-pill admin-pill--cancelled fr-hidden-pill">Hidden</span>' : "") +
+            // TASK-501: money the organiser collected and paid in: on the meter, never on the page.
+            (g.paidIn ? '<span class="admin-pill fr-paidin-pill">Paid in by the organiser</span>' : "") + "</div>" +
           (g.message ? '<p class="fr-wall-msg">' + H.escapeHtml(g.message) + "</p>" : '<p class="fx-empty">No message.</p>') +
-          (write
+          (write && !g.paidIn
             ? g.hidden
               ? '<button class="fr-link-btn" type="button" data-frshow="' + Number(g.donationId) + '">Show on the page</button>'
               : '<button class="fr-link-btn" type="button" data-frhide="' + Number(g.donationId) + '">Hide from the page</button>'
@@ -9808,6 +9834,9 @@
     "fundraiser.message_shown": "A message shown on the page again",
     "fundraiser.gift_received": "A gift on its page",
     "fundraiser.manage_link_sent": "A link to change the page emailed to the organiser",
+    // TASK-501: from the organiser's private area.
+    "fundraiser.finish_requested": "The organiser said they have finished",
+    "fundraiser.paid_in": "The organiser paid in money they collected",
   };
 
   function frPaintHistory() {

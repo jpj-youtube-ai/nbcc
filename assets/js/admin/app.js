@@ -2594,6 +2594,8 @@
     ["fundraiseEditApproved", "Fundraiser update live"], ["fundraiseEditRejected", "Fundraiser update held back"],
     // TASK-501: the private area's sign in code, and "I've finished" to events@.
     ["fundraiseCode", "Fundraiser sign in code"], ["fundraiseFinishedStaff", "Fundraiser finished (to events@)"],
+    // TASK-503: the invite staff send, and the Monday summary.
+    ["fundraiseInvite", "Fundraising invite"], ["fundraiseSummary", "Fundraising Monday summary"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -8970,6 +8972,16 @@
   var frReasonDraft = "";
   var frWired = false;
   var frBusy = false; // a change is on its way: a second press waits rather than sending it twice
+  // TASK-503: the team's tools (src/routes/admin-fundraising-team.ts): the calls and the "Take off
+  // Get involved?" prompts for each fundraiser, the invites not taken up, and who can sign one.
+  var frTeam = null; // GET /api/admin/fundraising/team: { today, me, calls, prompts, invites, signers }
+  var frTeamState = "loading"; // loading, failed or ok
+  var frTeamBusy = false; // an invite is on its way
+  var frSummaryData = null; // GET /api/admin/fundraising/summary (admins only)
+  var frCallDraft = ""; // the note typed for a call, kept across a redraw
+  // The same rule the server checks addresses by (zod's), as the ticket report's card has it.
+  var FR_EMAIL = /^(?!\.)(?!.*\.\.)([A-Z0-9_'+\-\.]*)[A-Z0-9_+-]@([A-Z0-9][A-Z0-9\-]*\.)+[A-Z]{2,}$/i;
+  var FR_CALL_WORDS = { before: "The call a week before", after: "The call a week after" };
 
   function frCanWrite() {
     return canEdit("fundraising");
@@ -9028,7 +9040,11 @@
     var n = frNotice[key];
     return n && n.id === frOpenId ? n : { msg: "", error: false };
   }
-  var FR_NOTICE_IDS = { detail: "frDetailStatus", edit: "frEditStatus", cash: "frCashStatus", photo: "frPhotoStatus" };
+  var FR_NOTICE_IDS = {
+    detail: "frDetailStatus", edit: "frEditStatus", cash: "frCashStatus", photo: "frPhotoStatus",
+    // TASK-503
+    call: "frCallStatus", list: "frListStatus",
+  };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
     var line = el(FR_NOTICE_IDS[key]);
@@ -9053,6 +9069,10 @@
     frLoadSettings();
     frLoadList();
     if (frOpenId != null) frLoadDetail(frOpenId);
+    // TASK-503: the team's tools. Each loads on its own, so the rest of the screen never waits on it.
+    frRenderInvitePanel();
+    frLoadTeam();
+    frLoadSummary();
   }
 
   function frLoadSettings() {
@@ -9125,9 +9145,10 @@
   }
 
   // After a change: the list (status, pills, the raised column) and the open sign up, afresh.
+  // TASK-503: and the team's tools, whose calls and prompts the list shows.
   function frReload() {
     var id = frOpenId;
-    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null]);
+    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam()]);
   }
 
   // ---- the switch ----
@@ -9215,6 +9236,9 @@
       var c = doc.querySelector('[data-frcount="' + k + '"]');
       if (c) c.textContent = counts[k];
     });
+    // TASK-503: how many have a call due today.
+    var calls = doc.querySelector('[data-frcount="calls"]');
+    if (calls) calls.textContent = list.filter(frCallDue).length;
   }
 
   function frRaisedCell(f) {
@@ -9233,6 +9257,10 @@
     var pills = (f.editWaiting ? '<span class="admin-pill admin-pill--pending fr-changes-pill">Changes to check</span>' : "") +
       // TASK-501: the organiser pressed "I've finished" in their private area (it finishes nothing).
       (f.finishedRequestedAt && f.status === "approved" ? '<span class="admin-pill admin-pill--pending fr-finished-pill">Says they\'ve finished</span>' : "") +
+      // TASK-503: a call due, as Business supporters show it; and the finishing prompt.
+      (frCallDue(f) ? '<span class="admin-pill is-call-due fx-call-pill">Time to call</span>' : "") +
+      (frPrompt(f) ? '<span class="admin-pill admin-pill--pending fr-offlist-pill">Take off Get involved?</span>' : "") +
+      (f.offListAt && f.status === "approved" ? '<span class="admin-pill fr-offlist-done">Off Get involved</span>' : "") +
       rowNewPill("fundraising", f.createdAt);
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
@@ -9291,9 +9319,12 @@
       wrap.innerHTML = '<p class="fx-empty fr-empty">Nobody has signed up yet. Sign ups from the Fundraise for us form arrive here, with a New pill.</p>';
       return;
     }
-    var rows = all.filter(function (f) { return !frFilter || f.status === frFilter; });
+    var rows = all.filter(function (f) { return !frFilter || (frFilter === "calls" ? frCallDue(f) : f.status === frFilter); });
     if (!rows.length) {
-      var none = { new: "No new sign ups are waiting.", approved: "None approved yet.", declined: "None declined.", finished: "None finished yet." };
+      var none = {
+        new: "No new sign ups are waiting.", approved: "None approved yet.", declined: "None declined.", finished: "None finished yet.",
+        calls: "No calls due.",
+      };
       wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml(none[frFilter] || "None here.") + "</p>";
       return;
     }
@@ -9325,6 +9356,7 @@
     frCashDraft = null;
     frCashErrors = {};
     frReasonDraft = "";
+    frCallDraft = "";
     frRenderList();
     if (frOpenId != null) frLoadDetail(frOpenId);
   }
@@ -9343,6 +9375,8 @@
     return (
       '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
         '<section class="fx-panel fx-panel--wide"><h4>Where it is up to</h4>' + frStatePanel(f, write) + "</section>" +
+        frOffListSection(f, write) +
+        frCallsSection(f, write) +
         (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
@@ -9361,6 +9395,11 @@
     if (f.status === "new") return "New: waiting for you to approve or decline it. Nothing about it is public until it is approved.";
     if (f.status === "declined") return "Declined. Nothing about it is public.";
     if (f.status === "finished") return "Finished. It is off the Get involved list, but its page stays up with a thank you banner and can still take gifts. To take the page down, make it not public.";
+    // TASK-503: still approved, but taken off the Get involved list by staff (off_list_at); a page
+    // stays up and takes gifts, as a finished one does.
+    if (f.offListAt && f.public) {
+      return "Approved, and taken off the Get involved list." + (f.path === "raising" ? " Its page stays up and can still take gifts." : "");
+    }
     if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
     if (f.path === "event") return "Approved. It is listed on Get involved as an event while fundraising is switched on.";
     return "Approved. Its page is on the website while fundraising is switched on.";
@@ -9838,6 +9877,10 @@
     // TASK-501: from the organiser's private area.
     "fundraiser.finish_requested": "The organiser said they have finished",
     "fundraiser.paid_in": "The organiser paid in money they collected",
+    // TASK-503: the team's tools.
+    "fundraiser.called": "Called",
+    "fundraiser.taken_off_list": "Taken off Get involved",
+    "fundraiser.put_back_on_list": "Put back on Get involved",
   };
 
   function frPaintHistory() {
@@ -9862,9 +9905,9 @@
         var what = FR_HISTORY_WORDS[h.action] || String(h.action || "");
         if (h.action === "fundraiser.cash_added") what = "Cash added: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.cash_removed" && data.amountPence) what = "Cash removed: " + frMoney(data.amountPence);
-        var note = h.action === "fundraiser.declined" && data.reason
-          ? '<span class="fx-hist-note">' + H.escapeHtml(data.reason) + "</span>"
-          : "";
+        if (h.action === "fundraiser.called") what = data.which === "after" ? "Called, a week after its date" : "Called, a week before its date";
+        var said = h.action === "fundraiser.declined" ? data.reason : h.action === "fundraiser.called" ? data.note : "";
+        var note = said ? '<span class="fx-hist-note">' + H.escapeHtml(said) + "</span>" : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
           '<span class="fx-hist-who">' + H.escapeHtml(H.fmtDate(h.createdAt) + " · " + frWho(h.actor)) + "</span>" + note + "</li>";
       }).join("") + "</ul>" + frMoreButton("history", FR_HISTORY_FIRST, frHistoryRows.length);
@@ -10228,6 +10271,19 @@
       if (hide) return frWallChoice(hide.getAttribute("data-frhide"), true);
       var show = t.closest("[data-frshow]");
       if (show) return frWallChoice(show.getAttribute("data-frshow"), false);
+      // TASK-503: the team's tools.
+      var callBtn = t.closest("[data-frcall]");
+      if (callBtn) return frRecordCall(callBtn.getAttribute("data-frcall"));
+      var listBtn = t.closest("[data-frlist]");
+      if (listBtn) return frSetList(listBtn.getAttribute("data-frlist") === "off");
+      var resend = t.closest("[data-frinviteresend]");
+      if (resend) return frResendInvite(resend.getAttribute("data-frinviteresend"));
+      var removeInvite = t.closest("[data-frinviteremove]");
+      if (removeInvite) return frRemoveInvite(removeInvite.getAttribute("data-frinviteremove"));
+      var removeTo = t.closest("[data-frsummaryremove]");
+      if (removeTo) return frSummaryRemove(removeTo.getAttribute("data-frsummaryremove"));
+      if (t.closest("#frSummaryAdd")) return frSummaryAdd();
+      if (t.closest("#frSummaryTest")) return frSummaryTest();
       // Last, so a control inside the open sign up never also closes it.
       var toggle = t.closest("[data-frtoggle]");
       if (toggle) frToggle(toggle.getAttribute("data-frtoggle"));
@@ -10241,6 +10297,9 @@
       } else if (form.id === "frCashForm") {
         e.preventDefault();
         frAddCash(form);
+      } else if (form.id === "frInviteForm") {
+        e.preventDefault();
+        frSendInvite();
       }
     });
     // What is typed is kept as it is typed, so a redraw (another action, a reload) never loses it.
@@ -10248,6 +10307,7 @@
       var t = e.target;
       if (!t || !t.closest) return;
       if (t.id === "frDeclineReason") frReasonDraft = t.value;
+      if (t.id === "frCallNote") frCallDraft = t.value;
       // Only the boxes typed in are kept: the rest always show what is live now.
       if (t.closest("#frEditForm") && t.name) {
         frEditDraft = frEditDraft || {};
@@ -10270,6 +10330,12 @@
     });
     // The rows are role="button", so they answer Enter and Space as a button does.
     view.addEventListener("keydown", function (e) {
+      // TASK-503: Enter in the summary's address box adds it, as the button does.
+      if (e.key === "Enter" && e.target && e.target.id === "frSummaryEmail") {
+        e.preventDefault();
+        frSummaryAdd();
+        return;
+      }
       if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
       var t = e.target;
       if (!t || !t.closest || t.closest("button, a, input, select, textarea")) return;
@@ -10279,6 +10345,408 @@
       frToggle(toggle.getAttribute("data-frtoggle"));
     });
   }
+
+  // ---- the team's tools (TASK-503) ----
+  // Beside the list: "Invite someone" (editors and admins) with the invites not taken up, and the
+  // Weekly summary card (admins). On each fundraiser: "Time to call" a week before and a week after
+  // its date, as Business supporters have it, and "Take off Get involved?" four weeks after its date
+  // or once the organiser says they've finished. The server decides what is due
+  // (src/fundraising/follow-up.ts); this only says it. Every stored string is escaped.
+
+  function frLoadTeam() {
+    return authFetch("/api/admin/fundraising/team")
+      .then(okJson)
+      .then(function (d) {
+        var ok = d && d.calls && typeof d.calls === "object" && Array.isArray(d.invites);
+        frTeam = ok ? d : null;
+        frTeamState = ok ? "ok" : "failed";
+        frRenderInvitePanel();
+        frRenderList();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frTeam = null;
+        frTeamState = "failed";
+        frRenderInvitePanel();
+        frRenderList();
+      });
+  }
+
+  function frCallDue(f) {
+    var c = frTeam && frTeam.calls ? frTeam.calls[f.id] : null;
+    return !!(c && c.due);
+  }
+  function frPrompt(f) {
+    if (f.offListAt || !frTeam || !frTeam.prompts) return null;
+    return frTeam.prompts[f.id] || null;
+  }
+  function frTeamSay(id, msg, isError) {
+    var s = el(id);
+    if (!s) return;
+    s.textContent = msg || "";
+    s.classList.toggle("is-error", !!isError);
+    s.classList.toggle("is-ok", !isError && !!msg);
+  }
+
+  // ---- Time to call ----
+  function frCallsSection(f, write) {
+    if (!f.eventDate) return "";
+    return '<section class="fx-panel fr-calls-panel" data-frcalls><h4>Calls</h4>' + frCallsPanel(f, write) + "</section>";
+  }
+
+  function frCallRow(label, s) {
+    if (!s) return "";
+    var v = s.called
+      ? H.escapeHtml(H.fmtDate(s.called.calledAt) + (s.called.calledBy ? " by " + s.called.calledBy : ""))
+      : '<span class="fx-none">Not called yet. Due from ' + H.escapeHtml(H.fmtDate(s.dueOn)) + "</span>";
+    return fulfilRow(label, v) +
+      (s.called && s.called.note ? fulfilRow("Note from that call", '<span class="fx-address">' + H.escapeHtml(s.called.note) + "</span>") : "");
+  }
+
+  function frCallsPanel(f, write) {
+    var c = frTeam && frTeam.calls ? frTeam.calls[f.id] : null;
+    if (!c) {
+      return frTeamState === "loading" ? '<p class="admin-loading">Loading…</p>' : '<p class="fx-empty">The calls could not load just now.</p>';
+    }
+    var today = frTeam.today || "";
+    var state;
+    if (c.due && c.dueWhich && c[c.dueWhich]) {
+      state = '<span class="fx-state fx-state--todo">Time to call</span> ' + FR_CALL_WORDS[c.dueWhich] + " is due since " +
+        H.escapeHtml(H.fmtDate(c[c.dueWhich].dueOn)) + ".";
+    } else {
+      var next = [c.before, c.after].filter(function (s) { return s && !s.called && today < s.dueOn; })[0];
+      if (f.status !== "approved" && f.status !== "finished") {
+        state = '<span class="fx-state fx-state--waiting">No calls yet</span> They start once it is approved.';
+      } else if (next && f.status === "approved") {
+        state = '<span class="fx-state fx-state--done">Next call due ' + H.escapeHtml(H.fmtDate(next.dueOn)) + "</span>";
+      } else {
+        state = '<span class="fx-state fx-state--done">No calls due</span>';
+      }
+    }
+    // Which call the button records: the one due, or else the next one still to make.
+    var which = c.dueWhich;
+    if (!which && f.status === "approved") {
+      if (c.before && !c.before.called && c.after && today < c.after.dueOn) which = "before";
+      else if (c.after && !c.after.called) which = "after";
+    }
+    var form = "";
+    if (write && which) {
+      form =
+        '<div class="fx-call-form fr-call-form">' +
+          '<label class="fx-call-label" for="frCallNote">Note about the call (optional)</label>' +
+          '<textarea class="fx-call-input fr-input" id="frCallNote" rows="3" maxlength="500">' + H.escapeHtml(frCallDraft) + "</textarea>" +
+          '<p class="fx-help">Up to 500 characters. This records ' + FR_CALL_WORDS[which].toLowerCase() + " as made today.</p>" +
+          '<div class="fx-call-row"><button class="admin-btn admin-btn--small" type="button" data-frcall="' + which + '">Mark as called</button></div>' +
+        "</div>";
+    }
+    return (
+      '<p class="fx-letter">' + state + "</p>" +
+      '<dl class="fx-dl">' + frCallRow("A week before", c.before) + frCallRow("A week after", c.after) + "</dl>" +
+      form + frNoticeHtml("call", "frCallStatus")
+    );
+  }
+
+  function frRecordCall(which) {
+    if (frBusy || !FR_CALL_WORDS[which]) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var note = String(frCallDraft || "").trim();
+    if (note.length > 500) {
+      frSay("call", "A note can be up to 500 characters.", true);
+      frPaintNotice("call");
+      return;
+    }
+    if (!window.confirm("Record " + FR_CALL_WORDS[which].toLowerCase() + " " + f.title + " as made today?\n\n" +
+      "This is recorded against your name and clears the reminder.")) return;
+    frRun("call", "Saving…", function (run) {
+      var body = { which: which };
+      if (note) body.note = note;
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/calls", body).then(function (r) {
+        if (!r.ok) {
+          run.say(frRefusal(r, "That was not recorded. Please try again."), true);
+          return;
+        }
+        if (run.open()) frCallDraft = "";
+        run.say("Call recorded.", false);
+        return frReload();
+      });
+    });
+  }
+
+  // ---- Take off Get involved? ----
+  function frOffListSection(f, write) {
+    var prompt = frPrompt(f);
+    var off = !!(f.offListAt && f.status === "approved");
+    if (!off && !prompt) return "";
+    var body;
+    if (off) {
+      body = '<p class="fx-letter"><span class="fx-state fx-state--done">Taken off Get involved</span> on ' +
+        H.escapeHtml(H.fmtDate(f.offListAt)) + (f.offListBy ? " by " + H.escapeHtml(frWho(f.offListBy)) : "") + ". " +
+        (f.path === "raising" ? "Its page and giving link still work, so late gifts still count." : "It is no longer on the list.") + "</p>" +
+        (write ? '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frlist="on">Put it back on Get involved</button></div>' : "");
+    } else {
+      body = '<p class="fx-letter"><span class="fx-state fx-state--todo">Take off Get involved?</span> ' +
+        (prompt === "finished" ? "They say they've finished." : "It is four weeks past its date.") +
+        " Taking it off only takes it off the Get involved list. Its page and giving link keep working.</p>" +
+        (write ? '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="button" data-frlist="off">Take it off</button></div>' : "");
+    }
+    return '<section class="fx-panel fx-panel--wide fr-offlist-panel" data-frofflist><h4>Get involved</h4>' + body +
+      frNoticeHtml("list", "frListStatus") + "</section>";
+  }
+
+  function frSetList(off) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var question = off
+      ? "Take " + f.title + " off Get involved? It comes off the list only: its page and giving link keep working, so late gifts still count."
+      : "Put " + f.title + " back on Get involved?";
+    if (!window.confirm(question)) return;
+    frRun("list", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + (off ? "/off-list" : "/on-list")).then(function (r) {
+        if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+        else run.say(off ? "Taken off Get involved. Its page still works." : "Back on Get involved.", false);
+        return frReload();
+      });
+    });
+  }
+
+  // ---- Invite someone ----
+  function frRenderInvitePanel() {
+    var box = el("frInvite");
+    if (!box) return;
+    var write = frCanWrite();
+    box.hidden = !write;
+    if (!write) return;
+    var select = el("frInviteSigner");
+    var signers = (frTeam && frTeam.signers) || [];
+    var key = signers.map(function (s) { return s.id + ":" + s.firstName; }).join("|");
+    if (select.getAttribute("data-frsigners") !== key) {
+      // Signed by the person signed in, unless they have chosen someone else.
+      var chosen = select.getAttribute("data-frsigners") === null || !select.value ? (frTeam ? String(frTeam.me) : "") : select.value;
+      select.innerHTML = signers.map(function (s) {
+        return '<option value="' + Number(s.id) + '">' + H.escapeHtml(s.firstName) + "</option>";
+      }).join("");
+      select.setAttribute("data-frsigners", key);
+      if (signers.some(function (s) { return String(s.id) === chosen; })) select.value = chosen;
+    }
+    frRenderInvites();
+  }
+
+  function frRenderInvites() {
+    var ul = el("frInvites");
+    if (!ul) return;
+    if (frTeamState !== "ok") {
+      ul.innerHTML = '<li class="fr-people-empty">' + (frTeamState === "loading" ? "Loading…" : "The invites could not load just now.") + "</li>";
+      return;
+    }
+    var list = frTeam.invites || [];
+    if (!list.length) {
+      ul.innerHTML = '<li class="fr-people-empty">Nobody is waiting to take up an invite.</li>';
+      return;
+    }
+    ul.innerHTML = list.map(function (i) {
+      var id = Number(i.id);
+      // An invite past its 60 days: its link no longer works, so say so, and Resend sends a new one.
+      var expired = i.expired === true;
+      return '<li data-frinvite="' + id + '"><span class="fr-people-who"><b>' + H.escapeHtml(i.name) + "</b> <span>" + H.escapeHtml(i.email) + "</span>" +
+        (expired ? ' <span class="admin-pill fr-invite-expired">Expired</span>' : "") +
+        '<span class="fr-people-when">Invited by ' + H.escapeHtml(i.signedBy) + " on " + H.escapeHtml(H.fmtDate(i.createdAt)) +
+        (i.resentAt ? ", sent again on " + H.escapeHtml(H.fmtDate(i.resentAt)) : "") +
+        (expired ? ". The link has expired. Resend to send a new one." : "") + "</span></span>" +
+        '<span class="fr-people-actions">' +
+          '<button class="fr-link-btn" type="button" data-frinviteresend="' + id + '" aria-label="' + H.escapeHtml("Resend the invite to " + i.name) + '">Resend</button>' +
+          '<button class="fr-link-btn" type="button" data-frinviteremove="' + id + '" aria-label="' + H.escapeHtml("Remove the invite to " + i.name) + '">Remove</button>' +
+        "</span></li>";
+    }).join("");
+  }
+
+  function frInviteFound(id) {
+    return ((frTeam && frTeam.invites) || []).filter(function (i) { return String(i.id) === String(id); })[0] || null;
+  }
+  function frInviteRefusal(r, fallback) {
+    if (r.status === 400 && r.body && r.body.fields) {
+      var keys = Object.keys(r.body.fields);
+      if (keys.length) return String(r.body.fields[keys[0]]);
+    }
+    return frRefusal(r, fallback);
+  }
+  function frInviteSent(r, name, sentWords) {
+    return r.body && r.body.emailed === false ? "Saved, but the email did not go. Press Resend to try again." : sentWords + " " + name + ".";
+  }
+  // One invite at a time: the button rests until the answer is in.
+  function frInviteRun(work) {
+    if (frTeamBusy) return;
+    frTeamBusy = true;
+    var send = el("frInviteSend");
+    if (send) send.disabled = true;
+    return Promise.resolve()
+      .then(work)
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frTeamSay("frInviteStatus", "That did not work. Please try again.", true);
+      })
+      .then(function () {
+        frTeamBusy = false;
+        if (send) send.disabled = false;
+      });
+  }
+
+  function frSendInvite() {
+    if (frTeamBusy) return;
+    var name = String(el("frInviteName").value || "").trim();
+    var email = String(el("frInviteEmail").value || "").trim().toLowerCase();
+    var note = String(el("frInviteNote").value || "").trim();
+    var select = el("frInviteSigner");
+    var signedBy = Number(select.value);
+    if (!name) return frTeamSay("frInviteStatus", "Add their name.", true);
+    if (!FR_EMAIL.test(email)) return frTeamSay("frInviteStatus", "That isn't a whole email address.", true);
+    if (note.length > 600) return frTeamSay("frInviteStatus", "Keep the note to 600 characters or fewer.", true);
+    if (!signedBy) return frTeamSay("frInviteStatus", "Choose who it is from.", true);
+    var signer = select.options[select.selectedIndex] ? select.options[select.selectedIndex].textContent : "";
+    if (!window.confirm("Send the invite to " + name + " (" + email + "), signed by " + signer + "?")) return;
+    var body = { name: name, email: email, signedBy: signedBy };
+    if (note) body.note = note;
+    frTeamSay("frInviteStatus", "Sending…", false);
+    return frInviteRun(function () {
+      return frSend("POST", "/api/admin/fundraising/invites", body).then(function (r) {
+        if (!r.ok) return frTeamSay("frInviteStatus", frInviteRefusal(r, "That did not send. Please try again."), true);
+        el("frInviteName").value = "";
+        el("frInviteEmail").value = "";
+        el("frInviteNote").value = "";
+        frTeamSay("frInviteStatus", frInviteSent(r, name, "Invite sent to"), r.body && r.body.emailed === false);
+        return frLoadTeam();
+      });
+    });
+  }
+
+  function frResendInvite(id) {
+    var inv = frInviteFound(id);
+    if (!inv || frTeamBusy) return;
+    if (!window.confirm("Send the invite to " + inv.name + " again? The link in the first email stops working.")) return;
+    frTeamSay("frInviteStatus", "Sending…", false);
+    return frInviteRun(function () {
+      return frSend("POST", "/api/admin/fundraising/invites/" + encodeURIComponent(id) + "/resend").then(function (r) {
+        if (!r.ok) frTeamSay("frInviteStatus", frRefusal(r, "That did not send. Please try again."), true);
+        else frTeamSay("frInviteStatus", frInviteSent(r, inv.name, "Sent again to"), r.body && r.body.emailed === false);
+        return frLoadTeam();
+      });
+    });
+  }
+
+  function frRemoveInvite(id) {
+    var inv = frInviteFound(id);
+    if (!inv || frTeamBusy) return;
+    if (!window.confirm("Remove the invite to " + inv.name + "? Their link stops working.")) return;
+    return frInviteRun(function () {
+      return frSend("DELETE", "/api/admin/fundraising/invites/" + encodeURIComponent(id)).then(function (r) {
+        frTeamSay("frInviteStatus", r.ok ? "Removed the invite to " + inv.name + "." : frRefusal(r, "That was not removed. Please try again."), !r.ok);
+        return frLoadTeam();
+      });
+    });
+  }
+
+  // ---- the Weekly summary (admins) ----
+  function frLoadSummary() {
+    var card = el("frSummary");
+    if (!card) return;
+    if (!(isAdmin() && frCanWrite())) {
+      card.hidden = true;
+      return;
+    }
+    return authFetch("/api/admin/fundraising/summary")
+      .then(okJson)
+      .then(function (d) {
+        if (!d || !Array.isArray(d.recipients)) {
+          card.hidden = true;
+          return;
+        }
+        frSummaryData = d;
+        card.hidden = false;
+        frRenderSummary();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        card.hidden = true;
+      });
+  }
+
+  function frRenderSummary() {
+    var d = frSummaryData;
+    var n = d.recipients.length;
+    el("frSummary").classList.toggle("is-on", n > 0);
+    el("frSummaryState").innerHTML = n
+      ? "<b>On.</b> It goes to " + (n === 1 ? "1 person" : n + " people") + " at 8am on Mondays." +
+        (d.lastWeek ? " The last one went on " + H.escapeHtml(H.fmtDate(d.lastWeek)) + "." : "")
+      : "<b>Off.</b> Nobody is on the list, so no summary goes.";
+    el("frSummaryList").innerHTML = n
+      ? d.recipients.map(function (e) {
+          return '<li><span class="fr-people-who">' + H.escapeHtml(e) + "</span>" +
+            '<button class="fr-link-btn" type="button" data-frsummaryremove="' + H.escapeHtml(e) + '" aria-label="' + H.escapeHtml("Remove " + e) + '">Remove</button></li>';
+        }).join("")
+      : '<li class="fr-people-empty">Nobody on the list yet.</li>';
+  }
+
+  function frSummarySave(next, saidOk) {
+    if (frTeamBusy) return Promise.resolve(false);
+    frTeamBusy = true;
+    frTeamSay("frSummaryStatus", "Saving…", false);
+    return frSend("PUT", "/api/admin/fundraising/summary", { recipients: next })
+      .then(function (r) {
+        if (!r.ok) {
+          frTeamSay("frSummaryStatus", frRefusal(r, "That did not save. Please try again."), true);
+          return false;
+        }
+        frSummaryData = r.body;
+        frRenderSummary();
+        frTeamSay("frSummaryStatus", saidOk, false);
+        return true;
+      })
+      .catch(function (err) {
+        if (!(err && err.message === "unauthorized")) frTeamSay("frSummaryStatus", "That did not save. Please try again.", true);
+        return false;
+      })
+      .then(function (ok) {
+        frTeamBusy = false;
+        return ok;
+      });
+  }
+
+  function frSummaryAdd() {
+    if (!frSummaryData) return;
+    var box = el("frSummaryEmail");
+    var email = String(box.value || "").trim().toLowerCase();
+    var list = frSummaryData.recipients.slice();
+    if (!FR_EMAIL.test(email)) return frTeamSay("frSummaryStatus", "That isn't a whole email address.", true);
+    if (list.indexOf(email) !== -1) return frTeamSay("frSummaryStatus", "That address is already on the list.", true);
+    if (list.length >= 10) return frTeamSay("frSummaryStatus", "The summary can go to up to 10 people. Remove someone to add another.", true);
+    return frSummarySave(list.concat([email]).sort(), "Saved. " + email + " gets the next one.").then(function (ok) {
+      if (ok) box.value = "";
+    });
+  }
+
+  function frSummaryRemove(email) {
+    if (!frSummaryData) return;
+    if (!window.confirm("Stop sending the Monday summary to " + email + "?")) return;
+    return frSummarySave(frSummaryData.recipients.filter(function (e) { return e !== email; }), "Saved. " + email + " no longer gets it.");
+  }
+
+  function frSummaryTest() {
+    if (frTeamBusy) return;
+    frTeamBusy = true;
+    frTeamSay("frSummaryStatus", "Sending a test…", false);
+    return frSend("POST", "/api/admin/fundraising/summary/test")
+      .then(function (r) {
+        frTeamSay("frSummaryStatus", r.ok ? "A test is on its way to " + r.body.sentTo + "." : frRefusal(r, "The test did not go. Please try again."), !r.ok);
+      })
+      .catch(function (err) {
+        if (!(err && err.message === "unauthorized")) frTeamSay("frSummaryStatus", "The test did not go. Please try again.", true);
+      })
+      .then(function () {
+        frTeamBusy = false;
+      });
+  }
+
 
   // ---- boot: restore an in-tab session ----
   var claims = H.parseClaims(token());

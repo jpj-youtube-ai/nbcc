@@ -195,3 +195,21 @@ export const questionsBox = (contactEmail: string): string =>
 /** The questions box in a plain text part: the same words, the number and the address. */
 export const questionsText = (contactEmail: string): string =>
   [QUESTIONS_HEADING, QUESTIONS_LINE, `Call us: ${PHONE_DISPLAY}`, `Email us: ${contactEmail}`].join("\n");
+
+// --- a quoted note and a close signed by a person (TASK-503) ---------------------------------
+// For the fundraising invite (email 7): the personal note staff add, in a quiet serif italic box,
+// and a close signed by the member of staff who sent it ("Warmest wishes,", then "Fern", then
+// "NBCC Team") so the organiser recognises who they spoke to. Both additive; nothing else moves.
+
+/** A quoted note: cream box, maroon serif italic. Escaped, with its line breaks kept. */
+export const quoteBox = (text: string): string =>
+  `<div style="background:#FFFDFA;border:1px solid ${TAN_SOFT};border-radius:10px;padding:14px 18px;margin:4px 0 16px;font-family:${HEAD};font-style:italic;font-size:15px;color:${MAROON};line-height:1.55">` +
+  `${esc(text).replace(/\r?\n/g, "<br>")}</div>`;
+
+/** The close signed by a person: the line, then the name, then "NBCC Team". */
+export const signOffAs = (line: string, name: string): string =>
+  `<p style="margin:22px 0 0;font-family:${BODY_FONT};font-size:14px;color:${SLATE};line-height:1.6">${esc(line)}<br>${esc(name)}<br>` +
+  `<span style="font-family:${HEAD};font-size:20px;font-weight:800;color:${MAROON}">NBCC Team</span></p>`;
+
+/** The same in a plain text part. */
+export const signOffAsText = (line: string, name: string): string => `${line}\n${name}\nNBCC Team`;

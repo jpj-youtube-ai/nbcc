@@ -781,6 +781,12 @@ export interface FundraiserRecord {
   creditName: string | null;
   /** TASK-501: when the organiser pressed "I've finished" (it finishes nothing by itself). */
   finishedRequestedAt?: string | null;
+  /**
+   * TASK-503: when staff took it off the Get involved list. Its page and giving link keep working;
+   * it is only no longer listed.
+   */
+  offListAt?: string | null;
+  offListBy?: string | null;
 }
 
 /** The event answers a card shows. All of them are meant for the public; none is private. */
@@ -868,9 +874,16 @@ export function publicPage(f: FundraiserRecord, m: Meter, wall: WallEntry[]): Pu
   };
 }
 
-/** Is it on the public side at all? Approved and public; an event drops off after its day. */
-export function isListed(f: Pick<FundraiserRecord, "status" | "public" | "path" | "eventDate">, today: string): boolean {
+/**
+ * Is it on the public side at all? Approved and public; an event drops off after its day. TASK-503:
+ * one staff have taken off Get involved is not listed (its page, if it has one, still works).
+ */
+export function isListed(
+  f: Pick<FundraiserRecord, "status" | "public" | "path" | "eventDate" | "offListAt">,
+  today: string,
+): boolean {
   if (f.status !== "approved" || !f.public) return false;
+  if (f.offListAt) return false;
   if (f.path === "event" && f.eventDate !== null && f.eventDate < today) return false;
   return true;
 }

@@ -575,6 +575,18 @@ export async function sendFundraiseEditRejected(name: string, message: Fundraise
   await sendVerbatim("fundraiseEditRejected", name, message);
 }
 
+// TASK-503: the invite staff send from Admin > Fundraising (email 7), from and replying to the
+// events inbox. Its link carries the invite token, which the link tagging leaves alone.
+export async function sendFundraiseInvite(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseInvite", name, message);
+}
+
+// TASK-503: the Monday summary (email 11), one email to each person chosen in the admin. Staff only,
+// so never tagged.
+export async function sendFundraiseSummary(message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseSummary", null, message);
+}
+
 // --- Backup alerts (TASK-423) ---------------------------------------------------------------
 // An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
 // ship, or reaches only one of its two destinations.

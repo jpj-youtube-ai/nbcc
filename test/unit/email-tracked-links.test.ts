@@ -312,7 +312,8 @@ describe("staff only emails are never tagged", () => {
       // TASK-487: ballTransferStaff, the events@ email for each new bank transfer booking.
       // TASK-493: fundraiseStaff, the events@ summary of each new fundraising sign up.
       // TASK-501: fundraiseFinishedStaff, the events@ note when an organiser says they have finished.
-      ["adminInvite", "adminReset", "backupAlert", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraiseStaff", "lapsedAdmin", "loginCode"].sort(),
+      // TASK-503: fundraiseSummary, the Monday fundraising summary to the people chosen in the admin.
+      ["adminInvite", "adminReset", "backupAlert", "ballReport", "ballTransferStaff", "fundraiseFinishedStaff", "fundraiseStaff", "fundraiseSummary", "lapsedAdmin", "loginCode"].sort(),
     );
   });
 

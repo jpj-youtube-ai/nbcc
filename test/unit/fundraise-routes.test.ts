@@ -151,6 +151,19 @@ describe("signing up", () => {
     expect((await run(postFundraise, { body: signUp(), ip: "10.9.9.9" })).statusCode).toBe(429);
   });
 
+  // TASK-503: as for the admin sign in, same-host requests (only the CI suite and local development;
+  // behind the load balancer req.ip is always the real client) are not limited, so the BDD suite can
+  // grow without being turned away.
+  it("does not limit sign ups from the machine itself", async () => {
+    db.createFundraiser.mockResolvedValue(record({ status: "new" }));
+    for (const ip of ["127.0.0.1", "::1", "::ffff:127.0.0.1"]) {
+      for (let i = 0; i < 7; i++) expect((await run(postFundraise, { body: signUp(), ip })).statusCode).toBe(200);
+    }
+    // Anything else still is: one that only looks a little like it, too.
+    for (let i = 0; i < 5; i++) expect((await run(postFundraise, { body: signUp(), ip: "127.0.0.2" })).statusCode).toBe(200);
+    expect((await run(postFundraise, { body: signUp(), ip: "127.0.0.2" })).statusCode).toBe(429);
+  });
+
   it("refuses a sign up while fundraising is switched off", async () => {
     db.fundraisingIsOn.mockResolvedValue(false);
     expect((await run(postFundraise, { body: signUp() })).statusCode).toBe(404);

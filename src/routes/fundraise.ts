@@ -48,6 +48,7 @@ import {
 import { countCodeTry, createSession, deleteSession, deleteSignInCode, findSession, saveSignInCode } from "../db/fundraiser-sign-in";
 import { sendFinishedStaffEmail, sendSignInCodeEmail, sendSignUpEmails, fundraiserPageUrl, manageUrl } from "../fundraising/send";
 import { subscribeSelf } from "../newsletter/self-signup";
+import { useInvite } from "./fundraise-invite";
 import { readCookie } from "../ball/gate";
 import { config } from "../config";
 
@@ -93,12 +94,16 @@ const NOT_OPEN = { error: "Fundraising is not open yet" };
 
 const signUpLimiter = createRateLimiter({ max: 5, windowMs: 10 * 60_000 });
 
+// TASK-503: same-host requests (isLoopbackRequest, below, as for the admin sign in) are not
+// limited: behind the load balancer req.ip is always the real client, so only the CI suite and
+// local development arrive that way, and every real visitor stays limited.
+
 export async function postFundraise(req: Request, res: Response): Promise<Response> {
   // Honeypot: a real browser never fills the hidden `company` field. Pretend success, store nothing.
   if (typeof req.body?.company === "string" && req.body.company.trim() !== "") {
     return res.status(200).json({ status: "received" });
   }
-  if (!signUpLimiter.allow(req.ip ?? "unknown", Date.now())) {
+  if (!isLoopbackRequest(req) && !signUpLimiter.allow(req.ip ?? "unknown", Date.now())) {
     return res.status(429).json({ error: "Too many sign ups. Please try again shortly." });
   }
   if (!(await fundraisingIsOn())) return res.status(404).json(NOT_OPEN);
@@ -117,6 +122,8 @@ export async function postFundraise(req: Request, res: Response): Promise<Respon
   }
   try {
     const record = await createFundraiser(parsed.data);
+    // TASK-503: made from a staff invite's link? Mark the invite used and linked. Best effort.
+    await useInvite(req.body?.invite, record.id);
     await sendSignUpEmails(record);
     // The newsletter tick box (unticked by default): a ticked one subscribes the organiser exactly as
     // the footer form does, recorded as joining from the fundraising form. Best effort: the sign up stands either way. Unticked changes nothing.

@@ -139,6 +139,16 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
       const { renderFundraiseSignUp } = await import("../fundraising/render");
       const html = renderFundraiseSignUp(readFileSync(signUpFile, "utf8"), await fundraisingOn());
       fresh(res);
+      // TASK-503: opened from a staff invite, its token in the address until the page's script takes
+      // it out. Until then: never kept by a browser or anything in between, never indexed, and only
+      // ever our origin as a referrer, never the address with its token, to anyone, our own pages
+      // included (same-origin would still send it in full to ours). Only the origin keeps the spam
+      // check, which may look at it, working. A plain visit to the form is unchanged.
+      if (req.query.invite !== undefined) {
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Referrer-Policy", "strict-origin");
+        res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      }
       res.type("html").send(await deps.decorate(html, req.headers.cookie));
     } catch (err) {
       console.error("fundraise page failed:", err instanceof Error ? err.message : err);

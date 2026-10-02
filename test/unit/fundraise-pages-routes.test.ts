@@ -195,6 +195,23 @@ describe("the sign up page", () => {
     expect(html).toMatch(/data-fundraise-open>/);
   });
 
+  it("keeps an invite link's token from leaving in a referrer, and out of any cache", async () => {
+    const res = await get("/fundraise?invite=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ");
+    expect(res.status).toBe(200);
+    // Only ever the origin, never the address with its token, to anyone, our own pages included.
+    expect(res.headers.get("referrer-policy")).toBe("strict-origin");
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(await res.text()).toMatch(/data-fundraise-open>/);
+  });
+
+  it("leaves the plain sign up page's headers as they were", async () => {
+    const res = await get("/fundraise");
+    expect(res.headers.get("referrer-policy")).toBeNull();
+    expect(res.headers.get("cache-control")).toBe("public, max-age=0");
+    expect(res.headers.get("x-robots-tag")).toBeNull();
+  });
+
   it("says it is not open yet while fundraising is off, rather than vanishing", async () => {
     state.fundraisingOn = false;
     const res = await get("/fundraise");

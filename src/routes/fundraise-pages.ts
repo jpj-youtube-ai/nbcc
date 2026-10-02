@@ -14,6 +14,9 @@ import { join } from "node:path";
 //   GET /fundraise/sponsor-form    a blank sponsor form to print, with HMRC's Gift Aid columns (TASK-504)
 //   GET /fundraise/:slug/qr.svg    the page's QR code, to download
 //   GET /fundraise/:slug/qr.png    the same code as a print size PNG, about 2000px square (TASK-504)
+//   GET /fundraise/<old>[/qr.svg|/qr.png]  TASK-511: an address the page used to have, before staff
+//                                  changed it: a 301 to its address now, query string kept, so a QR
+//                                  code printed with the old link never breaks
 //   GET /fundraise/:slug           one fundraiser's page (TASK-502: a finished one keeps it, saying
 //                                  so, and still takes gifts; ?thanks=1&session_id= is the thank you
 //                                  after paying, with the optional step to add to the wall;
@@ -56,6 +59,29 @@ async function publicFundraiser(slug: string) {
   const [{ getBySlug }, { hasPage }] = await Promise.all([import("../db/fundraisers"), import("../fundraising/model")]);
   const f = await getBySlug(slug);
   return f && hasPage(f) ? f : null;
+}
+
+/**
+ * TASK-511: the address now of the page that used to be at /fundraise/<slug>, if it still has a page
+ * (staff changed its address, and the old one is kept in fundraiser_slug_history). Null otherwise,
+ * and on any failure, so the caller falls through to the site's 404. Only asked once no page has
+ * that address now: a page with it always answers first.
+ */
+async function movedTo(slug: string): Promise<string | null> {
+  try {
+    const { currentSlugFor } = await import("../db/fundraiser-slugs");
+    const now = await currentSlugFor(slug);
+    return now && now !== slug && (await publicFundraiser(now)) ? now : null;
+  } catch (err) {
+    console.error("fundraiser old address lookup failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+/** The query string of the request, as it came ("?utm_source=poster"), or nothing. */
+function queryOf(req: Request): string {
+  const at = req.originalUrl.indexOf("?");
+  return at === -1 ? "" : req.originalUrl.slice(at);
 }
 
 /**
@@ -246,7 +272,11 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   router.get("/fundraise/:slug/qr.png", async (req, res, next) => {
     try {
       const f = await publicFundraiser(String(req.params.slug));
-      if (!f) return next();
+      if (!f) {
+        // TASK-511: an old address's PNG goes on to the page's address now, like the SVG.
+        const now = await movedTo(String(req.params.slug));
+        return now ? res.redirect(301, `/fundraise/${now}/qr.png${queryOf(req)}`) : next();
+      }
       const [{ qrPng }, { fundraiserPageUrl }, { qrPngCache }] = await Promise.all([
         import("../fundraising/qr-png"),
         import("../fundraising/send"),
@@ -267,7 +297,10 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   router.get("/fundraise/:slug/qr.svg", async (req, res, next) => {
     try {
       const f = await publicFundraiser(String(req.params.slug));
-      if (!f) return next();
+      if (!f) {
+        const now = await movedTo(String(req.params.slug));
+        return now ? res.redirect(301, `/fundraise/${now}/qr.svg${queryOf(req)}`) : next();
+      }
       const [{ qrSvg }, { fundraiserPageUrl }, { qrSvgCache }] = await Promise.all([
         import("../fundraising/qr"),
         import("../fundraising/send"),
@@ -290,7 +323,11 @@ ${title}`, () => qrSvg(url, { title, size: 1024 })));
   router.get("/fundraise/:slug", async (req, res, next) => {
     try {
       const f = await publicFundraiser(String(req.params.slug));
-      if (!f) return next();
+      if (!f) {
+        // TASK-511: an address the page used to have goes on to its address now, for good.
+        const now = await movedTo(String(req.params.slug));
+        return now ? res.redirect(301, `/fundraise/${now}${queryOf(req)}`) : next();
+      }
       const [{ wallRows }, { publicPage, wallEntries }, { renderFundraiserPage }, { fundraiserPageUrl }] = await Promise.all([
         import("../db/fundraisers"),
         import("../fundraising/model"),

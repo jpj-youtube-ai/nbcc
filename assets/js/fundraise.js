@@ -12,6 +12,15 @@
 // gives a site key AND someone starts on the form is Cloudflare's script loaded. Without a pass, a
 // send is held with a message. The server is the real check.
 //
+// TASK-511, round two: the questions come one after another, each once the one before is answered
+// (a step with nothing it needs comes along with the one before), and a step once shown is never
+// taken away. Each new question is said in a polite live region for screen readers, focus stays
+// where they are, and "Show all the questions at once" (or pressing Send) shows every one. The words
+// of each question follow the answer to the first (data-say-raising, data-say-event). Without this
+// script every question is in the page as it is. The name is in two boxes, Something else says what,
+// social media is a step of its own, every yes or no is a pair of choices with nothing chosen, and
+// someone raising money can ask for printed QR codes.
+//
 // Its own file, never main.js: main.js counts towards donate.html's page weight budget. It uses
 // main.js's shared field highlighting (window.NBCCFormValidation) when it is there. A classic
 // <script defer>, exported under a CommonJS guard so it can be unit tested in jsdom.
@@ -43,11 +52,20 @@
     town: "town",
     targetPence: "target",
     public: "publicYes",
-    name: "name",
+    // TASK-511
+    kindOther: "kindOther",
+    firstName: "firstName",
+    lastName: "lastName",
+    name: "firstName",
     email: "email",
     phone: "phone",
-    socialLink: "socialLink",
-    socialOk: "socialOk",
+    instagram: "instagram",
+    facebook: "facebook",
+    socialLink: "facebook",
+    socialOk: "socialOkYes",
+    "wants.shoutOut": "shoutOutYes",
+    "wants.attend": "attendYes",
+    "wants.qrCount": "qrCodes",
     "wants.posterCount": "posters",
     "wants.leafletCount": "leaflets",
     "wants.bucketCount": "buckets",
@@ -169,9 +187,28 @@
       if (required) control.setAttribute("aria-required", "true");
       else control.removeAttribute("aria-required");
     }
+    // TASK-511: the words of each question follow the first answer. Before it is given, the words
+    // in the page stand.
+    var sayings = Array.prototype.slice.call(form.querySelectorAll("[data-say-raising]"));
+    var raisingOnly = Array.prototype.slice.call(form.querySelectorAll("[data-raising-only]"));
+    function applyWords(path) {
+      if (path !== "raising" && path !== "event") return;
+      sayings.forEach(function (n) {
+        var words = n.getAttribute("data-say-" + path);
+        if (words && n.textContent !== words) n.textContent = words;
+      });
+      Array.prototype.forEach.call(form.querySelectorAll("[data-invalid-" + path + "]"), function (n) {
+        n.setAttribute("data-invalid-message", n.getAttribute("data-invalid-" + path));
+      });
+    }
     function applyPath() {
       var path = radio("path");
       var event = path === "event";
+      applyWords(path);
+      // Printed QR codes carry a page's QR code, and an event has no page.
+      raisingOnly.forEach(function (n) {
+        n.hidden = event;
+      });
       if (targetQ) targetQ.hidden = event;
       need(date, event);
       if (dateRequired) dateRequired.hidden = !event;
@@ -184,6 +221,23 @@
       if (eventTimes) eventTimes.hidden = !event;
     }
 
+    // --- TASK-511: what Something else is, only when it is chosen -------------------------------
+    var kindOtherField = form.querySelector("[data-kind-other]");
+    function applyKind() {
+      var other = radio("kind") === "other";
+      if (kindOtherField) kindOtherField.hidden = !other;
+      need(el("kindOther"), other);
+    }
+
+    // --- TASK-511: a shout out needs their OK to post ------------------------------------------
+    var shoutNote = form.querySelector("[data-shout-note]");
+    var SHOUT_NEEDS_OK = "We can only give you a shout out if we can post about it. If that\u2019s OK, choose Yes above.";
+    function applyShoutOut() {
+      if (!shoutNote) return;
+      var words = radio("shoutOut") === "yes" && radio("socialOk") === "no" ? SHOUT_NEEDS_OK : "";
+      if (shoutNote.textContent !== words) shoutNote.textContent = words;
+    }
+
     // --- the ticket link, only for tickets sold on another website ------------------------------
     var ticketField = form.querySelector("[data-ticket-field]");
     function applyBooking() {
@@ -193,7 +247,8 @@
     // --- the address, only for something posted ------------------------------------------------
     var addressField = form.querySelector("[data-address-field]");
     function applyAddress() {
-      if (addressField) addressField.hidden = !(whole("posters") + whole("leaflets") + whole("buckets") + whole("tins") > 0);
+      var qr = radio("path") === "event" ? 0 : whole("qrCodes");
+      if (addressField) addressField.hidden = !(whole("posters") + whole("leaflets") + whole("buckets") + whole("tins") + qr > 0);
     }
 
     // --- characters left -----------------------------------------------------------------------
@@ -208,18 +263,119 @@
       });
     }
 
-    form.addEventListener("change", function () {
+    // --- TASK-511: one question after another --------------------------------------------------
+    // Every step starts waiting but the first. A step is answered when every question in it that
+    // needs an answer, and is in play for their path, has a good one (read from validity, so no
+    // field is flagged while they are still on their way). Steps are revealed in order up to and
+    // including the first one not yet answered; one with nothing it needs comes along with the one
+    // before. Once shown, a step stays shown.
+    var steps = Array.prototype.slice.call(form.querySelectorAll("[data-step]"));
+    var news = form.querySelector("[data-step-news]");
+    var showAllRow = form.querySelector("[data-show-all-row]");
+    var stepped = steps.length > 1;
+    function inPlay(c) {
+      if (c.disabled || c.type === "hidden" || c.type === "submit" || c.type === "button") return false;
+      for (var n = c; n && n !== form; n = n.parentElement) if (n.hidden) return false;
+      return true;
+    }
+    function answered(step) {
+      var controls = step.querySelectorAll("input, select, textarea");
+      for (var i = 0; i < controls.length; i++) {
+        var c = controls[i];
+        if (!inPlay(c) || !c.willValidate) continue;
+        if (c.validity && !c.validity.valid) return false;
+      }
+      return true;
+    }
+    function titleOf(step) {
+      if (step.getAttribute("data-step-title")) return step.getAttribute("data-step-title");
+      var t = step.querySelector("legend, label");
+      return t ? String(t.textContent || "").replace(/\s+/g, " ").replace(/\*/g, "").trim() : "";
+    }
+    function show(step) {
+      step.classList.remove("is-waiting");
+      step.classList.add("is-arriving");
+    }
+    function finishStepping() {
+      stepped = false;
+      if (showAllRow) showAllRow.hidden = true;
+    }
+    function reveal() {
+      if (!stepped) return;
+      var open = true;
+      var first = null;
+      steps.forEach(function (step) {
+        if (step.hidden || !open) return;
+        if (step.classList.contains("is-waiting")) {
+          show(step);
+          if (!first) first = step;
+        }
+        if (!answered(step)) open = false;
+      });
+      if (first && news) news.textContent = "Next question: " + titleOf(first);
+      if (!form.querySelector("[data-step].is-waiting")) finishStepping();
+    }
+    // Every question at once: from the button, or when they press Send.
+    function revealAll() {
+      var first = null;
+      steps.forEach(function (step) {
+        if (step.classList.contains("is-waiting")) {
+          show(step);
+          if (!first && !step.hidden) first = step;
+        }
+      });
+      finishStepping();
+      return first;
+    }
+    if (stepped) {
+      form.classList.add("fr-stepped");
+      steps.forEach(function (step, i) {
+        if (i > 0) step.classList.add("is-waiting");
+      });
+      if (showAllRow) showAllRow.hidden = false;
+      var showAll = form.querySelector("[data-show-all]");
+      if (showAll) {
+        showAll.addEventListener("click", function () {
+          revealAll();
+          if (news) news.textContent = "Every question is showing.";
+          // On to the first question still to answer, as the button they pressed has gone.
+          var next = steps.filter(function (s) {
+            return !s.hidden && !answered(s);
+          })[0];
+          var to = next && Array.prototype.filter.call(next.querySelectorAll("input, select, textarea"), function (c) {
+            return inPlay(c) && c.willValidate && c.validity && !c.validity.valid;
+          })[0];
+          if (to && to.focus) {
+            try {
+              to.focus();
+            } catch (e) {
+              /* focus unavailable */
+            }
+          }
+        });
+      }
+    }
+
+    function applyAll() {
       applyPath();
+      applyKind();
       applyBooking();
       applyAddress();
+      applyShoutOut();
+    }
+    form.addEventListener("change", function () {
+      applyAll();
+      reveal();
     });
     form.addEventListener("input", function () {
       applyAddress();
       applyCounts();
+      reveal();
     });
-    applyPath();
-    applyBooking();
-    applyAddress();
+    applyAll();
+    reveal();
+    // The first step is there as the page loads: nothing to announce yet.
+    if (news) news.textContent = "";
 
     // --- the spam check, loaded only when needed ------------------------------------------------
     var captcha = { on: false, siteKey: null, loading: false, widgetId: null, broken: false, interactive: false };
@@ -327,10 +483,16 @@
         .then(function (data) {
           if (!data) return;
           inviteToken = inviteMatch[1];
-          [["name", data.name], ["email", data.email]].forEach(function (pair) {
+          // TASK-511: the name in two boxes: the first word, and the rest as the surname.
+          var parts = typeof data.name === "string" ? data.name.trim().split(/\s+/) : [];
+          var firstWord = parts.length ? parts[0] : "";
+          var rest = parts.slice(1).join(" ");
+          [["firstName", firstWord], ["lastName", rest], ["email", data.email]].forEach(function (pair) {
             var box = el(pair[0]);
-            if (box && !String(box.value || "").trim() && typeof pair[1] === "string") box.value = pair[1];
+            if (box && !String(box.value || "").trim() && typeof pair[1] === "string" && pair[1]) box.value = pair[1];
           });
+          applyAll();
+          reveal();
         })
         .catch(function () {
           /* Could not ask: the form works the same without it. */
@@ -376,6 +538,12 @@
       return typeof form.checkValidity !== "function" || form.checkValidity();
     }
 
+    // TASK-511: a yes or no: true, false, or null when not answered (the server asks for it).
+    function yesNo(name) {
+      var v = radio(name);
+      return v === "yes" ? true : v === "no" ? false : null;
+    }
+
     function payload() {
       var path = radio("path");
       var event = path === "event";
@@ -394,6 +562,7 @@
       var body = {
         path: path,
         kind: radio("kind"),
+        kindOther: radio("kind") === "other" ? val("kindOther") : "",
         title: val("title"),
         description: val("description"),
         eventDate: val("eventDate"),
@@ -402,18 +571,21 @@
         town: val("town"),
         targetPence: path === "raising" && isFinite(pounds) && pounds > 0 ? Math.round(pounds * 100) : null,
         public: radio("public") === "yes",
-        name: val("name"),
+        firstName: val("firstName"),
+        lastName: val("lastName"),
         email: val("email"),
         phone: val("phone"),
-        socialLink: val("socialLink"),
-        socialOk: checked("socialOk"),
+        instagram: val("instagram"),
+        facebook: val("facebook"),
+        socialOk: yesNo("socialOk"),
         wants: {
           posterCount: whole("posters"),
           leafletCount: whole("leaflets"),
           bucketCount: whole("buckets"),
           tinCount: whole("tins"),
-          shoutOut: checked("shoutOut"),
-          attend: checked("attend"),
+          qrCount: event ? 0 : whole("qrCodes"),
+          shoutOut: yesNo("shoutOut"),
+          attend: yesNo("attend"),
         },
         postLine1: posted ? val("postLine1") : "",
         postLine2: posted ? val("postLine2") : "",
@@ -435,7 +607,7 @@
     }
 
     function done(body) {
-      var first = body.name.split(/\s+/)[0] || "";
+      var first = String(body.firstName || "").split(/\s+/)[0] || "";
       var nameSlot = doc.querySelector("[data-thanks-name]");
       if (nameSlot) nameSlot.textContent = first ? ", " + first : "";
       var raising = doc.querySelector("[data-thanks-raising]");
@@ -471,6 +643,8 @@
       e.preventDefault();
       if (sending) return;
       say("", null);
+      // Every question shows before anything is checked, so nothing that needs an answer is hidden.
+      revealAll();
       if (!validate(null)) return;
       if (captcha.on && !tokenField.value) {
         loadCaptcha();
@@ -518,6 +692,7 @@
           if (r.status === 400 && r.data.error === "captcha") return say(MSG.captcha, "error");
           if (r.status === 400 && r.data.fields) {
             say("", null);
+            revealAll();
             validate(r.data.fields);
             return;
           }

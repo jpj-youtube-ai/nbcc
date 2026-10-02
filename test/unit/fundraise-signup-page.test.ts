@@ -70,9 +70,14 @@ function fillRaising() {
   type("town", "Exampleton");
   type("target", "250");
   tick("publicYes");
-  type("name", "Jo Example");
+  // TASK-511: the name in two boxes, and every yes or no answered on purpose.
+  type("firstName", "Jo");
+  type("lastName", "Example");
   type("email", "jo@example.com");
   type("phone", "07700 900222");
+  tick("socialOkNo");
+  tick("shoutOutNo");
+  tick("attendNo");
 }
 
 // The event questions (TASK-499), answered.
@@ -124,6 +129,7 @@ describe("what they would like", () => {
     expect([...document.querySelectorAll<HTMLInputElement>(".fr-count")].map((i) => [i.id, i.max])).toEqual([
       ["posters", "1000"],
       ["leaflets", "1000"],
+      ["qrCodes", "200"],
       ["buckets", "20"],
       ["tins", "20"],
     ]);
@@ -167,8 +173,9 @@ describe("sending", () => {
     type("postLine1", "1 Example Road");
     type("postTown", "Exampleton");
     type("postPostcode", "ex1 1ex");
-    tick("shoutOut");
-    tick("socialOk");
+    tick("shoutOutYes");
+    tick("socialOkYes");
+    type("instagram", "@jo.swims");
     tick("newsletterOk");
     await submit();
     expect(posts()).toHaveLength(1);
@@ -184,12 +191,15 @@ describe("sending", () => {
       town: "Exampleton",
       targetPence: 25000,
       public: true,
-      name: "Jo Example",
+      kindOther: "",
+      firstName: "Jo",
+      lastName: "Example",
       email: "jo@example.com",
       phone: "07700 900222",
-      socialLink: "",
+      instagram: "@jo.swims",
+      facebook: "",
       socialOk: true,
-      wants: { posterCount: 0, leafletCount: 25, bucketCount: 0, tinCount: 2, shoutOut: true, attend: false },
+      wants: { posterCount: 0, leafletCount: 25, bucketCount: 0, tinCount: 2, qrCount: 0, shoutOut: true, attend: false },
       postLine1: "1 Example Road",
       postLine2: "",
       postTown: "Exampleton",

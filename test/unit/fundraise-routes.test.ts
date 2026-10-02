@@ -79,10 +79,13 @@ const signUp = (over: Record<string, unknown> = {}) => ({
   town: "Exampleton",
   targetPence: 25000,
   public: true,
-  name: "Sam Sample",
+  // TASK-511: the name in two boxes, and every yes or no answered.
+  firstName: "Sam",
+  lastName: "Sample",
   email: "sam@example.com",
   phone: "07700 900456",
   socialOk: false,
+  wants: { shoutOut: false, attend: false },
   newsletterOk: true,
   ...over,
 });

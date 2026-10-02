@@ -48,6 +48,8 @@ vi.mock("../../src/fundraising/send", () => ({
 }));
 // TASK-506: the page's news (tested in fundraiser-page-news-route.test.ts); none here.
 vi.mock("../../src/db/fundraiser-updates", () => ({ approvedForPage: async () => [] }));
+// TASK-511: no page here ever had another address (fundraise-old-address.test.ts tests those).
+vi.mock("../../src/db/fundraiser-slugs", () => ({ currentSlugFor: async () => null }));
 
 import { createSiteRouter } from "../../src/routes/site";
 

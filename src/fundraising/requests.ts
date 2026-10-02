@@ -9,6 +9,7 @@ import { addDays } from "./follow-up";
 //
 //   posters, leaflets           To send, then Sent (posted or dropped off, the date, who, how many,
 //   (and the old combined ask)  an optional note). Staff can change how many were actually sent.
+//   printed QR codes            TASK-511: the same as posters.
 //   buckets, tins               lent and tracked: To send, With them (the date, how many, who), then
 //   (and the old combined ask)  Back (the date, how many came back, an optional note on the money
 //                               inside or any missing). Due back two weeks after the fundraiser's
@@ -20,7 +21,18 @@ import { addDays } from "./follow-up";
 // A request needs no row until staff first act on it: with none it is at its first step, so sign ups
 // from before this need no backfill. Forward one step at a time; the only way back is Undo, one step.
 
-export const REQUEST_KINDS = ["posters", "leaflets", "leaflets_or_posters", "buckets", "tins", "buckets_or_tins", "shout_out", "attend"] as const;
+export const REQUEST_KINDS = [
+  "posters",
+  "leaflets",
+  "leaflets_or_posters",
+  // TASK-511: printed QR codes, cards or stickers with their page's QR code. Sent like posters.
+  "qr_codes",
+  "buckets",
+  "tins",
+  "buckets_or_tins",
+  "shout_out",
+  "attend",
+] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 
 export type RequestGroup = "printed" | "lent" | "shout_out" | "attend";
@@ -39,6 +51,7 @@ export const KIND_INFO: Record<RequestKind, { group: RequestGroup; label: string
   posters: { group: "printed", label: "Posters", wantsKey: "posterCount" },
   leaflets: { group: "printed", label: "Leaflets", wantsKey: "leafletCount" },
   leaflets_or_posters: { group: "printed", label: "Leaflets or posters", wantsKey: "leaflets" },
+  qr_codes: { group: "printed", label: "QR codes", wantsKey: "qrCount" },
   buckets: { group: "lent", label: "Collection buckets", wantsKey: "bucketCount" },
   tins: { group: "lent", label: "Collection tins", wantsKey: "tinCount" },
   buckets_or_tins: { group: "lent", label: "Buckets or tins", wantsKey: "buckets" },
@@ -145,6 +158,7 @@ export function parseWants(raw: unknown): Wants {
     tinCount: num(w.tinCount),
     leaflets: num(w.leaflets),
     buckets: num(w.buckets),
+    qrCount: num(w.qrCount),
     shoutOut: w.shoutOut === true,
     attend: w.attend === true,
   };
@@ -265,6 +279,8 @@ export interface RequestMaterials {
   tins: number;
   leafletsOrPosters: number;
   bucketsOrTins: number;
+  /** TASK-511: printed QR codes. */
+  qrCodes: number;
 }
 
 export interface RequestTotals {
@@ -293,11 +309,12 @@ const MATERIAL_KEY: Partial<Record<RequestKind, keyof RequestMaterials>> = {
   buckets: "buckets",
   tins: "tins",
   buckets_or_tins: "bucketsOrTins",
+  qr_codes: "qrCodes",
 };
 
 export function requestTotals(list: Array<{ f: RequestSubject; rows: RequestRow[] }>, today: string): RequestTotals {
   const t: RequestTotals = {
-    materials: { posters: 0, leaflets: 0, buckets: 0, tins: 0, leafletsOrPosters: 0, bucketsOrTins: 0 },
+    materials: { posters: 0, leaflets: 0, buckets: 0, tins: 0, leafletsOrPosters: 0, bucketsOrTins: 0, qrCodes: 0 },
     materialsFundraisers: 0,
     shoutOuts: 0,
     attend: [],

@@ -3,6 +3,7 @@ import { ACCESS, isSafeImageSrc, isWebAddress } from "../events/model";
 import { isValidUkPostcode } from "../declarations/fields";
 import { containsBlockedWord } from "../donors/display-name-filter";
 import type { NewsEntry } from "./news";
+import { facebookLink, instagramLink, type SocialResult } from "./social";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -42,6 +43,12 @@ export const MESSAGE_MAX = 200;
 export const GIFT_MIN_PENCE = 200; // £2, as the design asks
 export const MAX_LEAFLETS = 1000;
 export const MAX_BUCKETS = 20;
+/** TASK-511: printed QR codes, cards or stickers with their page's QR code. */
+export const MAX_QR_CODES = 200;
+/** TASK-511: the first name and the surname, each. */
+export const NAME_PART_MAX = 50;
+/** TASK-511: what "Something else" is, in their words. */
+export const KIND_OTHER_MAX = 80;
 /** The line for the front of an event's card: one or two sentences, as the events editor asks. */
 export const CARD_LINE_MAX = 140;
 
@@ -67,13 +74,15 @@ export interface Wants {
   leaflets: number;
   /** Before TASK-499: buckets OR tins, one number. */
   buckets: number;
+  /** TASK-511: printed QR codes, cards or stickers with their page's QR code. None before then. */
+  qrCount?: number;
   shoutOut: boolean;
   attend: boolean;
 }
 
 /** Is anything to be posted? Then we need an address. Old combined requests count too. */
 export function wantsPosted(w: Wants): boolean {
-  return w.posterCount + w.leafletCount + w.bucketCount + w.tinCount + w.leaflets + w.buckets > 0;
+  return w.posterCount + w.leafletCount + w.bucketCount + w.tinCount + w.leaflets + w.buckets + (w.qrCount ?? 0) > 0;
 }
 
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -85,6 +94,7 @@ export function wantsLines(w: Wants): string[] {
   if (w.leafletCount > 0) lines.push(count(w.leafletCount, "leaflet", "leaflets"));
   if (w.bucketCount > 0) lines.push(count(w.bucketCount, "collection bucket", "collection buckets"));
   if (w.tinCount > 0) lines.push(count(w.tinCount, "collection tin", "collection tins"));
+  if ((w.qrCount ?? 0) > 0) lines.push(count(w.qrCount ?? 0, "printed QR code", "printed QR codes"));
   if (w.leaflets > 0) lines.push(count(w.leaflets, "leaflet or poster", "leaflets or posters"));
   if (w.buckets > 0) lines.push(count(w.buckets, "bucket or tin", "buckets or tins"));
   return lines;
@@ -199,19 +209,51 @@ const howMany = (max: number, tooMany: string) =>
     .max(max, tooMany)
     .default(0);
 
+const wantsCounts = {
+  posterCount: howMany(MAX_LEAFLETS, "We can send up to 1,000 posters."),
+  leafletCount: howMany(MAX_LEAFLETS, "We can send up to 1,000 leaflets."),
+  bucketCount: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets.`),
+  tinCount: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} tins.`),
+  // Before TASK-499, one number each: still taken, so a sign up from then can be saved as it is.
+  leaflets: howMany(MAX_LEAFLETS, `We can send up to ${MAX_LEAFLETS} leaflets.`),
+  buckets: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets or tins.`),
+  // TASK-511: printed QR codes, cards or stickers with their page's QR code.
+  qrCount: howMany(MAX_QR_CODES, `We can print up to ${MAX_QR_CODES} QR codes.`),
+};
+
+// What staff save: a yes or no not given is No, as it always was. Printed QR codes not given are left
+// as they are (patchFundraiser keeps the stored number), so an admin page opened before they were
+// asked can never wipe them.
 const wantsSchema = z
   .object({
-    posterCount: howMany(MAX_LEAFLETS, "We can send up to 1,000 posters."),
-    leafletCount: howMany(MAX_LEAFLETS, "We can send up to 1,000 leaflets."),
-    bucketCount: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets.`),
-    tinCount: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} tins.`),
-    // Before TASK-499, one number each: still taken, so a sign up from then can be saved as it is.
-    leaflets: howMany(MAX_LEAFLETS, `We can send up to ${MAX_LEAFLETS} leaflets.`),
-    buckets: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets or tins.`),
+    ...wantsCounts,
+    qrCount: wantsCounts.qrCount.removeDefault().optional(),
     shoutOut: z.boolean().default(false),
     attend: z.boolean().default(false),
   })
   .strict();
+
+// TASK-511: a yes or no question on the sign up form. Nothing is chosen for them, so an answer not
+// given is asked for (in the refinements below, so every missing answer is named at once), never
+// taken as No.
+const yesNo = z.preprocess((v) => (typeof v === "boolean" ? v : undefined), z.boolean().optional());
+
+export const SHOUT_OUT_MISSING = "Tell us whether you would like a shout out from us.";
+export const ATTEND_MISSING = "Tell us whether you would like someone from NBCC to come along.";
+export const SOCIAL_OK_MISSING = "Tell us whether we can post about it on NBCC’s social media.";
+
+const signUpWantsSchema = z
+  .object({
+    ...wantsCounts,
+    shoutOut: yesNo,
+    attend: yesNo,
+  })
+  .strict()
+  .superRefine((w, ctx) => {
+    if (w.shoutOut === undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["shoutOut"], message: SHOUT_OUT_MISSING });
+    if (w.attend === undefined) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["attend"], message: ATTEND_MISSING });
+  })
+  .transform((w) => ({ ...w, shoutOut: w.shoutOut === true, attend: w.attend === true }));
 
 const optionalPostcode = z
   .preprocess(
@@ -272,6 +314,29 @@ export function finishTimeProblem(stored: Times, change: Record<string, unknown>
 
 
 const wants = z.preprocess((v) => (v == null ? {} : v), wantsSchema);
+const signUpWants = z.preprocess((v) => (v == null ? {} : v), signUpWantsSchema);
+
+// TASK-511: their Instagram or Facebook, a handle or a link, tidied to a full link (./social.ts).
+const socialBox = (tidy: (raw: unknown) => SocialResult) =>
+  z.unknown().transform((v, ctx) => {
+    const r = tidy(v);
+    if (!r.ok) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: r.message });
+      return z.NEVER;
+    }
+    return r.link;
+  });
+
+const firstNameText = requiredText(NAME_PART_MAX, "Please tell us your first name.");
+const lastNameText = requiredText(NAME_PART_MAX, "Please tell us your surname.");
+
+/** TASK-511: the kind question's words follow their answer to the first question. */
+export function kindMissing(path: FundraiserPath | undefined): string {
+  return path === "event" ? "Choose what kind of event it is." : "Choose what you are doing to raise money.";
+}
+export function kindOtherMissing(path: FundraiserPath | undefined): string {
+  return path === "event" ? "Tell us what kind of event it is, in a few words." : "Tell us what you are doing, in a few words.";
+}
 
 const optionalImage = z
   .preprocess(
@@ -288,7 +353,9 @@ const optionalImage = z
 export const signUpSchema = z
   .object({
     path: z.enum(PATHS, { errorMap: () => ({ message: "Tell us whether you are raising money or holding an event." }) }),
-    kind: z.enum(KINDS, { errorMap: () => ({ message: "Choose what kind of fundraiser it is." }) }),
+    // TASK-511: checked below, so the message can follow what they chose first.
+    kind: z.preprocess((v) => ((KINDS as readonly unknown[]).includes(v) ? v : undefined), z.enum(KINDS).optional()),
+    kindOther: nullableText(KIND_OTHER_MAX),
     title: requiredText(100, "Give it a name, like Sam's Santa Dash."),
     description: requiredText(DESCRIPTION_MAX, "Tell us a little about it."),
     eventDate: optionalDate,
@@ -296,13 +363,18 @@ export const signUpSchema = z
     venue: optionalText(120),
     town: optionalText(80),
     targetPence: optionalTarget.optional().transform((v) => v ?? null),
-    public: z.boolean({ errorMap: () => ({ message: "Tell us whether to show it on our website." }) }),
-    name: requiredText(100, "Please tell us your name."),
+    public: z.boolean({ errorMap: () => ({ message: "Tell us whether to show it on the NBCC website." }) }),
+    // TASK-511: the name in two boxes; the whole name (name) is made from them below.
+    firstName: firstNameText,
+    lastName: lastNameText,
     email,
     phone,
-    socialLink: optionalWebLink,
-    socialOk: z.boolean().default(false),
-    wants,
+    // TASK-511: Instagram and Facebook in boxes of their own. The old single link is no longer asked
+    // for; it is filled from these below, for anything that still reads it.
+    instagram: socialBox(instagramLink),
+    facebook: socialBox(facebookLink),
+    socialOk: yesNo,
+    wants: signUpWants,
     // TASK-499: where to post things, in separate boxes. The old single box (postAddress) is no
     // longer on the form; one sent anyway is dropped, never stored.
     postLine1: nullableText(120),
@@ -327,6 +399,9 @@ export const signUpSchema = z
   })
   .superRefine((b, ctx) => {
     const missing = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    if (!b.kind) missing("kind", kindMissing(b.path));
+    if (b.kind === "other" && !b.kindOther) missing("kindOther", kindOtherMissing(b.path));
+    if (b.socialOk === undefined) missing("socialOk", SOCIAL_OK_MISSING);
     if (b.path === "event") {
       if (!b.eventDate) missing("eventDate", "Tell us the date of your event.");
       if (!b.cardLine) missing("cardLine", "Add a line for the front of the card.");
@@ -335,21 +410,33 @@ export const signUpSchema = z
       if (b.booking === "away" && !b.ticketUrl) missing("ticketUrl", "Paste the link to where the tickets are sold, starting https://");
       finishAfterStart(b, ctx);
     }
-    if (wantsPosted(b.wants)) {
+    // TASK-511: an event asks for no printed QR codes (it has no page), so none are posted to it.
+    if (wantsPosted({ ...b.wants, qrCount: b.path === "event" ? 0 : b.wants.qrCount })) {
       if (!b.postLine1) missing("postLine1", "Tell us the first line of the address.");
       if (!b.postTown) missing("postTown", "Tell us the town.");
       if (!b.postPostcode) missing("postPostcode", "Tell us the postcode.");
     }
   })
   .transform((b) => {
-    // Nothing to post, no address kept.
-    const posted = wantsPosted(b.wants);
     // Holding an event is listed as an event: it has no page and no meter in stage 1, so no target.
     // Raising money gets a page, never an event card, so none of the event answers are kept.
     const event = b.path === "event";
+    // TASK-511: printed QR codes carry a page's QR code, and an event has no page.
+    const wanted = { ...b.wants, qrCount: event ? 0 : b.wants.qrCount };
+    // Nothing to post, no address kept.
+    const posted = wantsPosted(wanted);
     const only = <T>(keep: boolean, value: T) => (keep ? value : null);
     return {
       ...b,
+      // Checked above: a sign up without a kind never gets this far.
+      kind: b.kind as FundraiserKind,
+      kindOther: only(b.kind === "other", b.kindOther),
+      // TASK-511: the whole name, for everything that reads it (emails, the admin, the page).
+      name: `${b.firstName} ${b.lastName}`,
+      socialOk: b.socialOk === true,
+      // The old single link, filled for anything that still reads it: Facebook first.
+      socialLink: b.facebook ?? b.instagram,
+      wants: wanted,
       targetPence: event ? null : b.targetPence,
       postLine1: only(posted, b.postLine1),
       postLine2: only(posted, b.postLine2),
@@ -496,9 +583,16 @@ export const adminPatchSchema = z
     targetPence: optionalTarget,
     public: z.boolean(),
     name: requiredText(100, "The organiser needs a name."),
+    // TASK-511: a sign up made since has its name in two parts; changing either changes the whole
+    // name with it (organiserNameFor). One from before keeps its single name.
+    firstName: firstNameText,
+    lastName: lastNameText,
+    kindOther: nullableText(KIND_OTHER_MAX),
     email,
     phone,
     socialLink: optionalWebLink,
+    instagram: socialBox(instagramLink),
+    facebook: socialBox(facebookLink),
     socialOk: z.boolean(),
     wants,
     // The single address box of a sign up made before TASK-499, still there to correct.
@@ -532,6 +626,20 @@ export const adminPatchSchema = z
   .refine((b) => Object.keys(b).length > 0, { message: "There is nothing to change." });
 
 export type AdminPatch = z.infer<typeof adminPatchSchema>;
+
+type NameParts = { firstName?: string | null; lastName?: string | null; name: string };
+
+/**
+ * TASK-511: the whole name ("first last") a staff change leaves, when it changes the first name or the
+ * surname of a sign up that has both; undefined when the whole name stays as it is. A sign up from
+ * before the split has no parts, and keeps its single name.
+ */
+export function organiserNameFor(before: NameParts, patch: { firstName?: string | null; lastName?: string | null }): string | undefined {
+  if (patch.firstName === undefined && patch.lastName === undefined) return undefined;
+  const first = (patch.firstName ?? before.firstName ?? "").trim();
+  const last = (patch.lastName ?? before.lastName ?? "").trim();
+  return first && last ? `${first} ${last}` : undefined;
+}
 
 // --- slugs ---------------------------------------------------------------------------------------
 
@@ -788,6 +896,15 @@ export interface FundraiserRecord {
    */
   offListAt?: string | null;
   offListBy?: string | null;
+  // TASK-511: the sign up form, round two. A sign up from before has them all null: one name (name),
+  // and its one social link (socialLink).
+  firstName?: string | null;
+  lastName?: string | null;
+  /** What "Something else" is, in their words. */
+  kindOther?: string | null;
+  /** Their Instagram and Facebook, each a full https link. */
+  instagram?: string | null;
+  facebook?: string | null;
 }
 
 /** The event answers a card shows. All of them are meant for the public; none is private. */

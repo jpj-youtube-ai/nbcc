@@ -129,9 +129,13 @@ describe("a sign up made from an invite", () => {
     town: "Exampleton",
     targetPence: 25000,
     public: true,
-    name: "Alex Example",
+    // TASK-511: the name in two boxes, and every yes or no answered.
+    firstName: "Alex",
+    lastName: "Example",
     email: "alex@example.com",
     phone: "07700 900456",
+    socialOk: false,
+    wants: { shoutOut: false, attend: false },
   };
 
   it("marks the invite used, linked to the new sign up", async () => {

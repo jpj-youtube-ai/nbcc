@@ -868,6 +868,95 @@ describe("editing the details directly", () => {
   });
 });
 
+// ---- TASK-511: the sign up form, round two ----
+
+describe("a sign up from the form's second round", () => {
+  const roundTwo = (over: Record<string, unknown> = {}) =>
+    fundraiser(1, {
+      kind: "other",
+      kindLabel: "Something else",
+      kindOther: "A sponsored silence",
+      name: "Robin Example",
+      firstName: "Robin",
+      lastName: "Example",
+      socialLink: "https://www.instagram.com/robin.quiet",
+      instagram: "https://www.instagram.com/robin.quiet",
+      facebook: null,
+      socialOk: false,
+      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 30, shoutOut: true, attend: false },
+      postAddress: null,
+      postLine1: "1 Example Road",
+      postTown: "Testtown",
+      postPostcode: "EX1 1EX",
+      ...over,
+    });
+
+  it("shows the first name and surname, Something else in their words, each link, and printed QR codes", async () => {
+    records = [roundTwo()];
+    await openFundraising();
+    await openRow(1);
+    const d = text(detail());
+    expect(d).toMatch(/First name\s*Robin/);
+    expect(d).toMatch(/Surname\s*Example/);
+    expect(d).toContain("Something else: A sponsored silence");
+    expect(d).toMatch(/Facebook\s*Not given/);
+    expect(q('#frList a[href="https://www.instagram.com/robin.quiet"]')).not.toBeNull();
+    expect(d).not.toContain("Facebook or Instagram");
+    expect(d).toContain("30 printed QR codes");
+    expect(d).toContain("A social media shout out, but they have not said we can post about it yet");
+  });
+
+  it("edits the two parts of the name, the two links, Something else and QR codes, never the single name box", async () => {
+    records = [roundTwo()];
+    await openFundraising();
+    await openRow(1);
+    const form = el("frEditForm");
+    const value = (n: string) => (form.querySelector(`[name="${n}"]`) as HTMLInputElement | null)?.value;
+    expect(value("firstName")).toBe("Robin");
+    expect(value("lastName")).toBe("Example");
+    expect(value("kindOther")).toBe("A sponsored silence");
+    expect(value("instagram")).toBe("https://www.instagram.com/robin.quiet");
+    expect(value("facebook")).toBe("");
+    expect(value("qrCount")).toBe("30");
+    expect(form.querySelector('[name="name"]')).toBeNull();
+    expect(form.querySelector('[name="socialLink"]')).toBeNull();
+    setValue('#frEditForm [name="firstName"]', "Robyn");
+    setValue('#frEditForm [name="facebook"]', "facebook.com/robyn");
+    submit("#frEditForm");
+    await settle();
+    expect(sent("PATCH", "/api/admin/fundraisers/1")[0].body).toEqual({ firstName: "Robyn", facebook: "facebook.com/robyn" });
+  });
+
+  it("keeps the QR codes asked for when another count changes", async () => {
+    records = [roundTwo()];
+    await openFundraising();
+    await openRow(1);
+    setValue('#frEditForm [name="posterCount"]', "4");
+    submit("#frEditForm");
+    await settle();
+    expect((sent("PATCH", "/api/admin/fundraisers/1")[0].body as { wants: Record<string, unknown> }).wants).toMatchObject({ posterCount: 4, qrCount: 30 });
+  });
+
+  it("leaves a sign up from before with its one name and one link", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    const form = el("frEditForm");
+    expect(form.querySelector('[name="name"]')).not.toBeNull();
+    expect(form.querySelector('[name="socialLink"]')).not.toBeNull();
+    expect(form.querySelector('[name="firstName"]')).toBeNull();
+    expect(form.querySelector('[name="instagram"]')).toBeNull();
+    expect(text(detail())).toContain("Facebook or Instagram");
+  });
+
+  it("says a changed web address keeps the old one working", async () => {
+    records = [roundTwo()];
+    await openFundraising();
+    await openRow(1);
+    expect(text(el("frEditForm"))).toContain("Change it and the old address still works, sending people on to the new one.");
+  });
+});
+
 // ---- the waiting change ----
 
 describe("a change waiting for staff", () => {
@@ -1292,7 +1381,7 @@ describe("every detail staff may change", () => {
       phone: "01632 960123",
       socialOk: false,
       // TASK-499: the whole of what they would like, the split counts at 0 for a sign up from before.
-      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 50, buckets: 3, shoutOut: true, attend: true },
+      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 50, buckets: 3, qrCount: 0, shoutOut: true, attend: true },
     });
   });
 
@@ -1624,7 +1713,7 @@ describe("the new answers from the sign up form", () => {
     submit("#frEditForm");
     await settle();
     expect(sent("PATCH", "/api/admin/fundraisers/2")[0].body).toEqual({
-      wants: { posterCount: 5, leafletCount: 100, bucketCount: 1, tinCount: 4, leaflets: 0, buckets: 0, shoutOut: false, attend: true },
+      wants: { posterCount: 5, leafletCount: 100, bucketCount: 1, tinCount: 4, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: true },
     });
   });
 

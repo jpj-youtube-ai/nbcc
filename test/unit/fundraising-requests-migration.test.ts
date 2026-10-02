@@ -79,7 +79,8 @@ describe("the requests migration", () => {
   });
 
   it("allows only the kinds, steps and ways of sending the code knows", () => {
-    for (const k of REQUEST_KINDS) expect(cols.kind.check).toContain(`'${k}'`);
+    // TASK-511 widened the check for printed QR codes in its own migration (1791200000130).
+    for (const k of REQUEST_KINDS.filter((k) => k !== "qr_codes")) expect(cols.kind.check).toContain(`'${k}'`);
     for (const s of REQUEST_STATUSES) expect(cols.status.check).toContain(`'${s}'`);
     for (const h of SEND_HOW) expect(cols.how.check).toContain(`'${h}'`);
   });

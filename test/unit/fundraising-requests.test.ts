@@ -19,7 +19,7 @@ import type { Wants } from "../../src/fundraising/model";
 
 const TODAY = "2026-12-07";
 
-const NONE: Wants = { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false };
+const NONE: Wants = { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, qrCount: 0, shoutOut: false, attend: false };
 const subject = (wants: Partial<Wants>, over: Partial<RequestSubject> = {}): RequestSubject => ({
   wants: { ...NONE, ...wants },
   socialOk: true,
@@ -59,7 +59,7 @@ describe("what shows", () => {
 
   it("shows each thing asked for, in a fixed order, the split and the old combined requests alike", () => {
     expect(
-      kinds(subject({ posterCount: 10, leafletCount: 50, bucketCount: 2, tinCount: 1, leaflets: 3, buckets: 1, shoutOut: true, attend: true })),
+      kinds(subject({ posterCount: 10, leafletCount: 50, bucketCount: 2, tinCount: 1, leaflets: 3, buckets: 1, qrCount: 5, shoutOut: true, attend: true })),
     ).toEqual([...REQUEST_KINDS]);
   });
 
@@ -191,7 +191,7 @@ describe("the totals the Monday summary and the list use", () => {
       ],
       TODAY,
     );
-    expect(t.materials).toEqual({ posters: 10, leaflets: 0, buckets: 0, tins: 0, leafletsOrPosters: 3, bucketsOrTins: 0 });
+    expect(t.materials).toEqual({ posters: 10, leaflets: 0, buckets: 0, tins: 0, leafletsOrPosters: 3, bucketsOrTins: 0, qrCodes: 0 });
     expect(t.materialsFundraisers).toBe(2);
     expect(t.shoutOuts).toBe(1);
     expect(t.attend).toEqual([]);

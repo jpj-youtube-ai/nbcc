@@ -78,6 +78,11 @@
             <!-- Shipped hidden, and shown by fundraise.js: without JavaScript the browser would send the
                  form as a web address, with names and email addresses in it. -->
             <p class="fr-noscript" data-nojs>This form needs JavaScript switched on. You can email your plans to <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> instead.</p>
+            <!-- TASK-511: the questions come one after another, each once the one before is answered
+                 (fundraise.js adds fr-stepped and reveals them). Every question is in the page as it
+                 is sent, so nothing a valid sign up needs is ever left out of it; and the words of
+                 each question follow the answer to the first one (data-say-raising and
+                 data-say-event). -->
             <form id="fundraiseForm" class="fr-form" novalidate hidden data-needs-js>
               <div hidden aria-hidden="true">
                 <label for="company">Leave blank
@@ -85,8 +90,10 @@
                 </label>
               </div>
               <p class="form-error-summary" role="alert" data-form-error hidden></p>
+              <!-- Says each new question as it appears, for anyone using a screen reader. -->
+              <p class="sr-only" aria-live="polite" data-step-news></p>
 
-              <div class="give-question">
+              <div class="give-question" data-step>
                 <fieldset class="fr-fieldset">
                   <legend class="give-scope-legend">What are you planning?</legend>
                   <div class="fr-options">
@@ -94,36 +101,46 @@
                     <label class="fr-option" for="pathEvent"><input id="pathEvent" name="path" type="radio" value="event" required aria-required="true" /><span><strong>I&rsquo;m holding an event</strong><small>A bake sale, a quiz or a coffee morning. We can list it with our events.</small></span></label>
                   </div>
                 </fieldset>
+                <p class="fr-show-all" data-show-all-row hidden><button class="fr-link-btn" type="button" data-show-all>Show all the questions at once</button></p>
               </div>
 
-              <div class="give-question">
+              <div class="give-question" data-step>
+                <fieldset class="fr-fieldset fr-kinds" id="kindGroup">
+                  <legend class="give-scope-legend"><span data-say-raising="What are you doing to raise money?" data-say-event="What kind of event is it?">What are you doing?</span></legend>
+                  <div class="fr-options fr-options--grid">
+                    <label class="fr-option fr-option--small" for="kind-run_walk"><input id="kind-run_walk" name="kind" type="radio" value="run_walk" required aria-required="true" data-invalid-message="Choose what you are doing" data-invalid-raising="Choose what you are doing to raise money" data-invalid-event="Choose what kind of event it is" /><span>A run or walk</span></label>
+                    <label class="fr-option fr-option--small" for="kind-santa_dash"><input id="kind-santa_dash" name="kind" type="radio" value="santa_dash" required aria-required="true" /><span>A Santa dash</span></label>
+                    <label class="fr-option fr-option--small" for="kind-bake_sale"><input id="kind-bake_sale" name="kind" type="radio" value="bake_sale" required aria-required="true" /><span>A bake sale or coffee morning</span></label>
+                    <label class="fr-option fr-option--small" for="kind-quiz_party"><input id="kind-quiz_party" name="kind" type="radio" value="quiz_party" required aria-required="true" /><span>A quiz or party</span></label>
+                    <label class="fr-option fr-option--small" for="kind-collection"><input id="kind-collection" name="kind" type="radio" value="collection" required aria-required="true" /><span>A workplace or school collection</span></label>
+                    <label class="fr-option fr-option--small" for="kind-birthday"><input id="kind-birthday" name="kind" type="radio" value="birthday" required aria-required="true" /><span>A birthday</span></label>
+                    <label class="fr-option fr-option--small" for="kind-other"><input id="kind-other" name="kind" type="radio" value="other" required aria-required="true" /><span>Something else</span></label>
+                  </div>
+                  <!-- TASK-511: only for Something else (fundraise.js hides it otherwise). -->
+                  <div class="give-field fr-kind-other" data-kind-other>
+                    <label for="kindOther"><span data-say-raising="What are you doing?" data-say-event="What kind of event is it?">If it is something else, what is it?</span> <span class="give-req" aria-hidden="true">*</span></label>
+                    <input class="give-field-input" id="kindOther" name="kindOther" type="text" maxlength="80" autocomplete="off" aria-describedby="kindOtherHelp" data-invalid-message="Tell us in a few words" placeholder="Like a sponsored silence" />
+                    <p class="give-field-help" id="kindOtherHelp">A few words, up to 80 characters.</p>
+                  </div>
+                </fieldset>
+              </div>
+
+              <div class="give-question" data-step>
                 <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend">Tell us about it</legend>
+                  <legend class="give-scope-legend"><span data-say-raising="Tell us about your fundraising" data-say-event="Tell us about your event">Tell us about it</span></legend>
                   <div class="give-field">
                     <label for="title">Give it a name <span class="give-req" aria-hidden="true">*</span></label>
                     <input class="give-field-input" id="title" name="title" type="text" maxlength="100" required aria-required="true" aria-describedby="titleHelp" data-invalid-message="Give it a name, like Sam&rsquo;s Santa Dash" />
-                    <p class="give-field-help" id="titleHelp">For example, Sam&rsquo;s Santa Dash or The Office Bake Sale.</p>
+                    <p class="give-field-help" id="titleHelp"><span data-say-raising="For example, Sam&rsquo;s Santa Dash or Jo&rsquo;s Sponsored Swim." data-say-event="For example, The Office Bake Sale or the Exampleton Quiz Night.">For example, Sam&rsquo;s Santa Dash or The Office Bake Sale.</span></p>
                   </div>
-                  <fieldset class="fr-fieldset fr-kinds" id="kindGroup">
-                    <legend class="fr-sublegend">What kind is it? <span class="give-req" aria-hidden="true">*</span></legend>
-                    <div class="fr-options fr-options--grid">
-                      <label class="fr-option fr-option--small" for="kind-run_walk"><input id="kind-run_walk" name="kind" type="radio" value="run_walk" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A run or walk</span></label>
-                      <label class="fr-option fr-option--small" for="kind-santa_dash"><input id="kind-santa_dash" name="kind" type="radio" value="santa_dash" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A Santa dash</span></label>
-                      <label class="fr-option fr-option--small" for="kind-bake_sale"><input id="kind-bake_sale" name="kind" type="radio" value="bake_sale" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A bake sale or coffee morning</span></label>
-                      <label class="fr-option fr-option--small" for="kind-quiz_party"><input id="kind-quiz_party" name="kind" type="radio" value="quiz_party" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A quiz or party</span></label>
-                      <label class="fr-option fr-option--small" for="kind-collection"><input id="kind-collection" name="kind" type="radio" value="collection" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A workplace or school collection</span></label>
-                      <label class="fr-option fr-option--small" for="kind-birthday"><input id="kind-birthday" name="kind" type="radio" value="birthday" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>A birthday</span></label>
-                      <label class="fr-option fr-option--small" for="kind-other"><input id="kind-other" name="kind" type="radio" value="other" required aria-required="true" data-invalid-message="Choose what kind of fundraiser it is" /><span>Something else</span></label>
-                    </div>
-                  </fieldset>
                   <div class="give-field">
-                    <label for="description">A few words about it <span class="give-req" aria-hidden="true">*</span></label>
+                    <label for="description"><span data-say-raising="A few words about what you are doing" data-say-event="A few words about your event">A few words about it</span> <span class="give-req" aria-hidden="true">*</span></label>
                     <textarea class="give-field-input" id="description" name="description" rows="5" maxlength="1000" required aria-required="true" aria-describedby="descriptionCount" data-invalid-message="Tell us a little about it"></textarea>
                     <p class="give-field-help" id="descriptionCount" data-count-for="description" data-count-max="1000">Up to 1,000 characters. If it gets a page, this is the story people read.</p>
                   </div>
                   <div class="fr-row">
                     <div class="give-field">
-                      <label for="eventDate">The date <span class="give-optional" data-date-optional>(if there is one)</span><span class="give-req" aria-hidden="true" data-date-required hidden>*</span></label>
+                      <label for="eventDate"><span data-say-raising="The date" data-say-event="The date of your event">The date</span> <span class="give-optional" data-date-optional>(if there is one)</span><span class="give-req" aria-hidden="true" data-date-required hidden>*</span></label>
                       <input class="give-field-input" id="eventDate" name="eventDate" type="date" data-invalid-message="Tell us the date of your event" />
                     </div>
                     <div class="give-field">
@@ -156,7 +173,7 @@
 
               <!-- TASK-499: the event questions, only for someone holding an event. Worded like the
                    admin's events editor; their answers make the event's card on Get involved. -->
-              <div class="give-question" data-event-questions hidden>
+              <div class="give-question" data-step data-event-questions hidden>
                 <fieldset class="fr-fieldset">
                   <legend class="give-scope-legend">For your event&rsquo;s card</legend>
                   <p class="give-field-help fr-lead-help">If we put your event on our Get involved page, its card is made from these.</p>
@@ -229,7 +246,7 @@
                 </fieldset>
               </div>
 
-              <div class="give-question" data-target-question>
+              <div class="give-question" data-step data-target-question>
                 <div class="give-field fr-target">
                   <label class="give-custom-label" for="target">Your target <span class="give-optional">(optional)</span></label>
                   <div class="give-custom-field"><span class="give-custom-currency" aria-hidden="true">£</span><input class="give-custom-input" id="target" name="target" type="number" inputmode="numeric" min="10" max="100000" step="1" aria-describedby="targetHelp" data-invalid-message="A target can be from £10 to £100,000" /></div>
@@ -237,22 +254,29 @@
                 </div>
               </div>
 
-              <div class="give-question">
+              <div class="give-question" data-step>
                 <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend">Shall we show it on our website?</legend>
+                  <legend class="give-scope-legend">Shall we show it on the NBCC website, on our Get involved page?</legend>
                   <div class="fr-options">
-                    <label class="fr-option" for="publicYes"><input id="publicYes" name="public" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether to show it on our website" /><span><strong>Yes, show it on your website</strong><small>Once we have checked it with you, it goes on our Get involved page.</small></span></label>
-                    <label class="fr-option" for="publicNo"><input id="publicNo" name="public" type="radio" value="no" required aria-required="true" /><span><strong>No, I&rsquo;m just letting you know</strong><small>Or I only want materials, like posters or a bucket.</small></span></label>
+                    <label class="fr-option" for="publicYes"><input id="publicYes" name="public" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether to show it on the NBCC website" /><span><strong>Yes, show it on the NBCC website</strong><small>Once we have checked it with you, it goes on our Get involved page at nbcc.scot.</small></span></label>
+                    <label class="fr-option" for="publicNo"><input id="publicNo" name="public" type="radio" value="no" required aria-required="true" /><span><strong>No, keep it off the website</strong><small>That&rsquo;s fine. We&rsquo;ll keep it between us.</small></span></label>
                   </div>
+                  <p class="fr-either-way">Either way, we&rsquo;re happy to help with posters, leaflets, collection buckets and the rest.</p>
                 </fieldset>
               </div>
 
-              <div class="give-question">
+              <div class="give-question" data-step>
                 <fieldset class="fr-fieldset">
                   <legend class="give-scope-legend">Your details</legend>
-                  <div class="give-field">
-                    <label for="name">Your name <span class="give-req" aria-hidden="true">*</span></label>
-                    <input class="give-field-input" id="name" name="name" type="text" maxlength="100" autocomplete="name" required aria-required="true" data-invalid-message="Please tell us your name" />
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="firstName">First name <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="firstName" name="firstName" type="text" maxlength="50" autocomplete="given-name" required aria-required="true" data-invalid-message="Please tell us your first name" />
+                    </div>
+                    <div class="give-field">
+                      <label for="lastName">Surname <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="lastName" name="lastName" type="text" maxlength="50" autocomplete="family-name" required aria-required="true" data-invalid-message="Please tell us your surname" />
+                    </div>
                   </div>
                   <div class="fr-row">
                     <div class="give-field">
@@ -265,18 +289,49 @@
                       <p class="give-field-help" id="phoneHelp">So we can give you a call about it.</p>
                     </div>
                   </div>
-                  <div class="give-field">
-                    <label for="socialLink">Your Facebook or Instagram page <span class="give-optional">(optional)</span></label>
-                    <input class="give-field-input" id="socialLink" name="socialLink" type="url" maxlength="300" inputmode="url" placeholder="https://www.facebook.com/..." aria-describedby="socialHelp" data-invalid-message="Paste the full link, starting https://" />
-                    <p class="give-field-help" id="socialHelp">Paste the full link, starting https://</p>
-                  </div>
-                  <label class="give-check" for="socialOk"><input class="give-check-box" id="socialOk" name="socialOk" type="checkbox" /><span class="give-check-text">You can post about this on NBCC&rsquo;s social media.</span></label>
                 </fieldset>
               </div>
 
-              <div class="give-question">
+              <!-- TASK-511: social media, a step of its own. -->
+              <div class="give-question" data-step>
                 <fieldset class="fr-fieldset">
-                  <legend class="give-scope-legend">What would you like from us? <span class="give-optional">(optional)</span></legend>
+                  <legend class="give-scope-legend">Social media</legend>
+                  <p class="give-field-help fr-lead-help">We love cheering our fundraisers on. Tell us where to find you, if you like.</p>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="instagram">Your Instagram <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="instagram" name="instagram" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="@yourname" aria-describedby="instagramHelp" data-invalid-message="Give your Instagram name, like @yourname, or the link to your profile" />
+                      <p class="give-field-help" id="instagramHelp">Your name, like @yourname, or the link to your profile.</p>
+                    </div>
+                    <div class="give-field">
+                      <label for="facebook">Your Facebook <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="facebook" name="facebook" type="text" maxlength="300" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="facebook.com/yourpage" aria-describedby="facebookHelp" data-invalid-message="Give your Facebook page name, or the link to your page, group or event" />
+                      <p class="give-field-help" id="facebookHelp">Your page name, or the link to your page, group or event.</p>
+                    </div>
+                  </div>
+                  <fieldset class="fr-fieldset fr-subgroup" id="socialOkGroup">
+                    <legend class="fr-sublegend">Can we post about it on NBCC&rsquo;s social media? <span class="give-req" aria-hidden="true">*</span></legend>
+                    <div class="fr-options fr-options--yesno">
+                      <label class="fr-option fr-option--small" for="socialOkYes"><input id="socialOkYes" name="socialOk" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether we can post about it on NBCC&rsquo;s social media" /><span>Yes</span></label>
+                      <label class="fr-option fr-option--small" for="socialOkNo"><input id="socialOkNo" name="socialOk" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                    </div>
+                  </fieldset>
+                  <fieldset class="fr-fieldset fr-subgroup" id="shoutOutGroup">
+                    <legend class="fr-sublegend">Would you like a shout out from us? <span class="give-req" aria-hidden="true">*</span></legend>
+                    <p class="give-field-help fr-sublegend-help">A post on NBCC&rsquo;s Facebook and Instagram, cheering you on.</p>
+                    <div class="fr-options fr-options--yesno">
+                      <label class="fr-option fr-option--small" for="shoutOutYes"><input id="shoutOutYes" name="shoutOut" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether you would like a shout out from us" /><span>Yes</span></label>
+                      <label class="fr-option fr-option--small" for="shoutOutNo"><input id="shoutOutNo" name="shoutOut" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                    </div>
+                    <p class="fr-note" aria-live="polite" data-shout-note></p>
+                  </fieldset>
+                </fieldset>
+              </div>
+
+              <div class="give-question" data-step>
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">What would you like from us?</legend>
+                  <p class="give-field-help fr-lead-help">Leave a box empty, or at 0, for none.</p>
                   <div class="fr-row">
                     <div class="give-field">
                       <label for="posters">Posters, how many?</label>
@@ -286,6 +341,13 @@
                       <label for="leaflets">Leaflets, how many?</label>
                       <input class="give-field-input fr-count" id="leaflets" name="leaflets" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 leaflets" />
                     </div>
+                  </div>
+                  <!-- TASK-511: printed QR codes carry a page's QR code, so only someone raising money,
+                       who gets a page, is asked. -->
+                  <div class="give-field" data-raising-only>
+                    <label for="qrCodes">How many printed QR codes would you like?</label>
+                    <input class="give-field-input fr-count" id="qrCodes" name="qrCodes" type="number" inputmode="numeric" min="0" max="200" step="1" placeholder="0" aria-describedby="qrCodesHelp" data-invalid-message="We can print up to 200 QR codes" />
+                    <p class="give-field-help" id="qrCodesHelp">Cards or stickers with your page&rsquo;s QR code, so people can scan it and give. Up to 200.</p>
                   </div>
                   <div class="fr-row">
                     <div class="give-field">
@@ -320,30 +382,35 @@
                       </div>
                     </div>
                   </fieldset>
-                  <label class="give-check" for="shoutOut"><input class="give-check-box" id="shoutOut" name="shoutOut" type="checkbox" /><span class="give-check-text">A shout out on our social media</span></label>
-                  <label class="give-check" for="attend"><input class="give-check-box" id="attend" name="attend" type="checkbox" /><span class="give-check-text">Someone from NBCC to come along</span></label>
+                  <fieldset class="fr-fieldset fr-subgroup" id="attendGroup">
+                    <legend class="fr-sublegend">Would you like someone from NBCC to come along? <span class="give-req" aria-hidden="true">*</span></legend>
+                    <div class="fr-options fr-options--yesno">
+                      <label class="fr-option fr-option--small" for="attendYes"><input id="attendYes" name="attend" type="radio" value="yes" required aria-required="true" data-invalid-message="Tell us whether you would like someone from NBCC to come along" /><span>Yes</span></label>
+                      <label class="fr-option fr-option--small" for="attendNo"><input id="attendNo" name="attend" type="radio" value="no" required aria-required="true" /><span>No</span></label>
+                    </div>
+                  </fieldset>
                 </fieldset>
               </div>
 
-              <div class="give-question">
+              <div class="give-question" data-step data-step-title="Last of all: our newsletter, and sending your sign up">
                 <div class="give-newsletter">
                   <label class="give-check give-newsletter-check" for="newsletterOk">
                     <input class="give-check-box" id="newsletterOk" name="newsletterOk" type="checkbox" />
                     <span class="give-check-text"><strong>Add me to our newsletter.</strong> A warm little update from NBCC on the difference your support helps make. Unsubscribe anytime.</span>
                   </label>
                 </div>
-              </div>
 
-              <!-- Cloudflare Turnstile, exactly as on the contact form (TASK-490): fundraise.js asks
-                   GET /api/fundraise/captcha and only loads Cloudflare's script once someone starts
-                   on the form. -->
-              <div class="fr-captcha" id="fundraiseCaptcha" hidden></div>
-              <input type="hidden" id="captchaToken" name="captchaToken" value="" />
-              <div class="give-cta-row">
-                <button class="btn btn-primary give-cta" type="submit" data-submit>Send my sign up</button>
+                <!-- Cloudflare Turnstile, exactly as on the contact form (TASK-490): fundraise.js asks
+                     GET /api/fundraise/captcha and only loads Cloudflare's script once someone starts
+                     on the form. -->
+                <div class="fr-captcha" id="fundraiseCaptcha" hidden></div>
+                <input type="hidden" id="captchaToken" name="captchaToken" value="" />
+                <div class="give-cta-row">
+                  <button class="btn btn-primary give-cta" type="submit" data-submit>Send my sign up</button>
+                </div>
+                <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>. Nothing goes on our website until we have checked it with you.</p>
+                <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
               </div>
-              <p class="form-privacy">We handle your details as set out in our <a href="/privacy">Privacy notice</a>. Nothing goes on our website until we have checked it with you.</p>
-              <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
             </form>
           </div>
 

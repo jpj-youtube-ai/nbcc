@@ -14,7 +14,7 @@ import {
   questionsText,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { ACCESS_LABELS, BOOKING_LABELS, KIND_LABELS, shortName, type SignUp } from "./model";
+import { ACCESS_LABELS, BOOKING_LABELS, KIND_LABELS, shortName, type SignUp, type Wants } from "./model";
 
 // TASK-493: the community fundraising emails, built here and sent by src/fundraising/send.ts.
 // TASK-497: reworded to the words Jaimie signed off on 2026-10-02 (warmer, a signed close, and a
@@ -131,7 +131,10 @@ export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
 
 // What the summary needs: a sign up, or the stored record (which may carry the single address box of
 // a sign up made before TASK-499).
-export type StaffSummary = SignUp & { id: number; postAddress?: string | null };
+// TASK-511: the new answers are absent on a sign up from before them.
+type NewAnswers = "firstName" | "lastName" | "kindOther" | "instagram" | "facebook";
+export type StaffSummary = Omit<SignUp, NewAnswers | "wants"> &
+  Partial<Record<NewAnswers, string | null>> & { id: number; postAddress?: string | null; wants: Wants };
 
 /** "1 Example Road, Exampleton, EX1 1EX": the boxes of an address, leaving out the empty ones. */
 function joinParts(...parts: Array<string | null | undefined>): string {
@@ -140,7 +143,7 @@ function joinParts(...parts: Array<string | null | undefined>): string {
 
 // TASK-499: posters, leaflets, buckets and tins each have their own number. A sign up from before
 // the split asked for "leaflets or posters" and "buckets or tins", and reads as it always did.
-function requestFacts(w: SignUp["wants"]): Array<[string, string]> {
+function requestFacts(w: Wants): Array<[string, string]> {
   const n = (v: number | undefined) => Number(v) || 0;
   const split = n(w.posterCount) + n(w.leafletCount) + n(w.bucketCount) + n(w.tinCount) > 0;
   const combined = n(w.leaflets) + n(w.buckets) > 0;
@@ -153,6 +156,8 @@ function requestFacts(w: SignUp["wants"]): Array<[string, string]> {
       ["Collection tins: " + n(w.tinCount), ""],
     );
   }
+  // TASK-511: printed QR codes, only on a sign up that asked for some.
+  if (n(w.qrCount) > 0) facts.push(["Printed QR codes: " + n(w.qrCount), ""]);
   if (combined) facts.push(["Leaflets or posters: " + n(w.leaflets), ""], ["Buckets or tins: " + n(w.buckets), ""]);
   return facts;
 }
@@ -178,9 +183,11 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
   const time = f.startTime && f.endTime ? `${f.startTime} to ${f.endTime}` : f.startTime;
   const when = [f.eventDate, time].filter(Boolean).join(" at ") + (f.timeTbc ? ", the time is still to be confirmed" : "");
   const where = [f.venue, f.town].filter(Boolean).join(", ");
+  // TASK-511: Something else, in their words.
+  const kind = KIND_LABELS[f.kind] + (f.kind === "other" && f.kindOther ? `: ${f.kindOther}` : "");
   const facts: Array<[string, string]> = [
     ["What", f.path === "raising" ? "Raising money" : "Holding an event"],
-    ["Kind", KIND_LABELS[f.kind]],
+    ["Kind", kind],
     ["Name for it", f.title],
     ["About it", f.description],
     ["When", when || "Not given"],
@@ -188,15 +195,28 @@ function staffFacts(f: StaffSummary): Array<[string, string]> {
   ];
   if (f.path === "event") facts.push(...eventFacts(f));
   if (f.path === "raising") facts.push(["Target", f.targetPence ? pounds(f.targetPence) : "No target"]);
+  // TASK-511: a sign up made since has the name in two parts, and Instagram and Facebook apart; one
+  // from before reads as it always did.
+  const split = Boolean(f.firstName || f.lastName);
+  const ownLinks = f.instagram !== undefined || f.facebook !== undefined;
+  const social: Array<[string, string]> = ownLinks || !f.socialLink
+    ? [["Instagram", f.instagram ?? "Not given"], ["Facebook", f.facebook ?? "Not given"]]
+    : [["Facebook or Instagram", f.socialLink]];
+  const shoutOut = !f.wants.shoutOut
+    ? "No"
+    : f.socialOk
+      ? "Yes please"
+      : "Yes please, but they have not said we can post about it, so ask them first";
   facts.push(
-    ["On the website", f.public ? "Yes, they would like it shown" : "No, not to be shown on the website"],
+    ["On the NBCC website", f.public ? "Yes, they would like it shown" : "No, not to be shown on the website"],
     ["Organiser", f.name],
+    ...(split ? ([["First name", f.firstName ?? ""], ["Surname", f.lastName ?? ""]] as Array<[string, string]>) : []),
     ["Email", f.email],
     ["Phone", f.phone],
-    ["Facebook or Instagram", f.socialLink ?? "Not given"],
+    ...social,
     ["We can post about it", f.socialOk ? "Yes" : "No"],
     ...requestFacts(f.wants),
-    ["A social media shout out", f.wants.shoutOut ? "Yes please" : "No"],
+    ["A social media shout out", shoutOut],
     ["Someone from NBCC to come along", f.wants.attend ? "Yes please" : "No"],
   );
   const address = joinParts(f.postLine1, f.postLine2, f.postTown, f.postPostcode) || f.postAddress;

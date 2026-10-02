@@ -597,6 +597,12 @@ export async function sendFundraiseSummary(message: FundraiseEmailMessage): Prom
   await sendVerbatim("fundraiseSummary", null, message);
 }
 
+// TASK-507: email 20, an organiser's thank you passed on to a giver once staff have checked it. From
+// and replying to the events inbox, so a reply reaches NBCC and never the organiser.
+export async function sendFundraiseSupporterThanks(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseSupporterThanks", name, message);
+}
+
 // --- Backup alerts (TASK-423) ---------------------------------------------------------------
 // An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
 // ship, or reaches only one of its two destinations.

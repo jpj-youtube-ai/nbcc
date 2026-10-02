@@ -1,4 +1,5 @@
 import { pool } from "./pool";
+import { liftOptOut } from "./email-opt-outs";
 // TASK-252: deleting/redacting a newsletter is an audited STATE CHANGE, so it goes through
 // writeWithAudit — the row and its audit_log entry commit in one transaction. recordAudit would let
 // the content vanish while its audit failed, which is precisely the gap this feature exists to close.
@@ -396,6 +397,8 @@ export async function unsubscribeAllListsForEmail(email: string): Promise<number
 export async function addNewsletterSubscriber(
   email: string,
   name?: string,
+  // TASK-507: who turned it all back on, for the opt out list's tombstone ("admin:<email>").
+  by = "admin",
 ): Promise<{ email: string; status: "added" | "resubscribed" }> {
   const trimmed = email.trim();
   const lower = trimmed.toLowerCase();
@@ -410,6 +413,10 @@ export async function addNewsletterSubscriber(
       `UPDATE donors SET email_consent = true, thankyou_consent = true WHERE lower(email) = $1`,
       [lower],
     );
+    // TASK-507: "all our emails back on" is an explicit choice by staff, so it lifts the address's
+    // opt out too (src/db/email-opt-outs.ts), which a fundraiser's thank you respects. After the
+    // consents, so a failed save never lifts the opt out on its own.
+    await liftOptOut(lower, by);
     return { email: lower, status: "resubscribed" };
   }
   const fullName = name && name.trim() ? name.trim() : trimmed.split("@")[0];
@@ -418,6 +425,7 @@ export async function addNewsletterSubscriber(
      VALUES ('individual', $1, $2, true, true)`,
     [fullName, trimmed],
   );
+  await liftOptOut(lower, by);
   return { email: lower, status: "added" };
 }
 

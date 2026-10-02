@@ -432,6 +432,31 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-form__title { font-size: clamp(1.5rem, 1.25rem + 1vw, 1.95rem); color: var(--maroon); margin-bottom: 6px; overflow-wrap: anywhere; }
 .fr-form__lead { margin: 0 0 18px; }
 .fr-form__lead a { font-weight: 600; }
+/* TASK-507: Thank your supporters. A gift a row, the whole row its tick box's label (44px and up to
+   tap); a picked one is tinted; a thanked one is quiet and closed. Everything wraps and the page
+   grows; nothing scrolls inside a box. */
+.fr-thanks__pick { margin: 0 0 6px; }
+.fr-thanks__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; margin: 0 0 6px; }
+.fr-thanks__picked { color: var(--holly-dark); font-weight: 600; }
+.fr-thanks__picked:empty { display: none; }
+.fr-thanks__pick-msg { margin: 0 0 8px; }
+.fr-thanks__done-status:empty { display: none; }
+.fr-thanks__gifts { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.fr-thanks__gift { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
+.fr-thanks__gift:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }
+.fr-thanks__gift:has(input:focus-visible) { outline: 3px solid var(--holly); outline-offset: 2px; }
+.fr-form .fr-thanks__check { margin: 0; padding: 12px 16px; min-height: 44px; }
+.fr-thanks__words { display: block; flex: 1 1 auto; min-width: 0; }
+.fr-thanks__words .fr-wall__head { display: flex; }
+.fr-thanks__words .fr-wall__msg, .fr-thanks__words .fr-wall__when { display: block; }
+.fr-thanks__gift.is-thanked .fr-thanks__check { cursor: default; color: var(--slate-soft); }
+.fr-thanks__done { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: var(--radius-pill); background: var(--holly-soft); color: var(--holly-dark); font-size: 0.85rem; font-weight: 600; }
+.fr-thanks__past { margin-top: clamp(20px, 3vw, 26px); }
+.fr-thanks__past h4 { margin: 0 0 10px; font-size: 1.1rem; color: var(--maroon); }
+.fr-thanks__past-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.fr-thanks__status { margin: 0; font-weight: 600; color: var(--holly-dark); }
+.fr-thanks__status.is-pending { color: var(--maroon); }
+.fr-thanks__status.is-rejected { color: var(--slate-soft); }
 
 /* ---------- the help page (TASK-498) ----------
    A reading page: the privacy notice's .page-prose, centred in a column a little wider, with the

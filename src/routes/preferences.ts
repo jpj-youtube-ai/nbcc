@@ -9,6 +9,7 @@ import {
   addListSubscriber,
 } from "../db/subscriber-lists";
 import { pool } from "../db/pool";
+import { addOptOut, liftOptOut } from "../db/email-opt-outs";
 import {
   buildPreferences,
   applyPreferences,
@@ -150,52 +151,67 @@ preferencesRouter.get("/preferences/:token", async (req: Request, res: Response)
   return res.type("html").send(render(view, offers, req.params.token, false));
 });
 
-preferencesRouter.post(
-  "/preferences/:token",
-  express.urlencoded({ extended: false }),
-  async (req: Request, res: Response) => {
-    const email = await emailForToken(req.params.token);
-    if (!email) return invalid(res);
-    const { view, offers } = await viewFor(email);
+// Exported so it can be unit tested without a server (test/unit/preferences-opt-out.test.ts).
+export async function postPreferences(req: Request, res: Response): Promise<Response> {
+  const email = await emailForToken(req.params.token);
+  if (!email) return invalid(res);
+  const { view, offers } = await viewFor(email);
 
-    // "Stop all emails" is a submit button of its own, so the way OUT is always one click — a
-    // preference centre that makes leaving harder than it was is a dark pattern and a PECR problem.
-    const stopAll = req.body?.all === "off";
-    const raw = req.body?.keep;
-    const keepListIds = stopAll
-      ? []
-      : (Array.isArray(raw) ? raw : raw == null ? [] : [raw])
-          .map((v: unknown) => Number(v))
-          .filter((n: number) => Number.isInteger(n) && n > 0);
-
-    const plan = applyPreferences(view, {
-      keepListIds,
-      newsletter: stopAll ? false : req.body?.newsletter != null,
-      thankYou: stopAll ? false : req.body?.thankyou != null,
-    });
-
-    // Joining is opt-IN only, and only from what was actually offered: a submission naming a
-    // private list is ignored rather than obeyed, or the page becomes a way to add yourself to
-    // audiences you were never meant to see.
-    if (!stopAll) {
-      const offered = new Set(offers.map((o) => o.id));
-      const rawJoin = req.body?.join;
-      const joinIds = (Array.isArray(rawJoin) ? rawJoin : rawJoin == null ? [] : [rawJoin])
+  // "Stop all emails" is a submit button of its own, so the way OUT is always one click — a
+  // preference centre that makes leaving harder than it was is a dark pattern and a PECR problem.
+  const stopAll = req.body?.all === "off";
+  const raw = req.body?.keep;
+  const keepListIds = stopAll
+    ? []
+    : (Array.isArray(raw) ? raw : raw == null ? [] : [raw])
         .map((v: unknown) => Number(v))
-        .filter((n: number) => Number.isInteger(n) && offered.has(n));
-      for (const listId of joinIds) {
-        await addListSubscriber(listId, { name: null, email, phone: null }, "footer", { revive: true });
-      }
-    }
+        .filter((n: number) => Number.isInteger(n) && n > 0);
 
-    // Memberships first, then donor consent. A person can hold both, and the plan already covers
-    // each independently — "stop all emails" simply produces a plan where everything is off.
-    for (const memberId of plan.unsubscribeMemberIds) await unsubscribeListMember(memberId);
-    if (plan.setNewsletter !== null && plan.setThankYou !== null) {
-      await setDonorConsents(email, { newsletter: plan.setNewsletter, thankYou: plan.setThankYou });
-    }
+  const plan = applyPreferences(view, {
+    keepListIds,
+    newsletter: stopAll ? false : req.body?.newsletter != null,
+    thankYou: stopAll ? false : req.body?.thankyou != null,
+  });
 
-    const after = await viewFor(email);
-    return res.type("html").send(render(after.view, after.offers, req.params.token, true));
-  },
-);
+  // Joining is opt-IN only, and only from what was actually offered: a submission naming a
+  // private list is ignored rather than obeyed, or the page becomes a way to add yourself to
+  // audiences you were never meant to see.
+  if (!stopAll) {
+    const offered = new Set(offers.map((o) => o.id));
+    const rawJoin = req.body?.join;
+    const joinIds = (Array.isArray(rawJoin) ? rawJoin : rawJoin == null ? [] : [rawJoin])
+      .map((v: unknown) => Number(v))
+      .filter((n: number) => Number.isInteger(n) && offered.has(n));
+    for (const listId of joinIds) {
+      await addListSubscriber(listId, { name: null, email, phone: null }, "footer", { revive: true });
+    }
+  }
+
+  // TASK-507: the address level opt out list, which a fundraiser's thank you (email 20) respects.
+  // Written FIRST, so a failure later in the save never loses someone's "stop". "Stop all emails"
+  // always records it, donor row or not; thank yous turned off records it; thank yous turned back on
+  // lifts it (a tombstone, never a delete). A failure here is logged loudly and the rest still saves,
+  // so the person's choice about everything else is never lost to it.
+  try {
+    if (stopAll) await addOptOut(email, "all", "preferences");
+    else if (plan.setThankYou === false) await addOptOut(email, "thank_you", "preferences");
+    else if (plan.setThankYou === true) await liftOptOut(email, "preferences");
+  } catch (err) {
+    console.error(
+      "PREFERENCES OPT OUT NOT RECORDED: the email_opt_outs write failed; check this address by hand:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
+  // Memberships first, then donor consent. A person can hold both, and the plan already covers
+  // each independently — "stop all emails" simply produces a plan where everything is off.
+  for (const memberId of plan.unsubscribeMemberIds) await unsubscribeListMember(memberId);
+  if (plan.setNewsletter !== null && plan.setThankYou !== null) {
+    await setDonorConsents(email, { newsletter: plan.setNewsletter, thankYou: plan.setThankYou });
+  }
+
+  const after = await viewFor(email);
+  return res.type("html").send(render(after.view, after.offers, req.params.token, true));
+}
+
+preferencesRouter.post("/preferences/:token", express.urlencoded({ extended: false }), postPreferences);

@@ -15,6 +15,8 @@
     <link rel="stylesheet" href="/assets/css/fundraising.css" />
     <link rel="preload" href="/assets/fonts/playfair-var.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- TASK-507: "Thank your supporters", added to each card by its own script. -->
+    <script defer src="/assets/js/fundraise-thanks.js"></script>
     <script defer src="/assets/js/main.js"></script>
     <script defer src="/assets/js/fundraise-manage.js"></script>
     <script defer src="/assets/js/fundraise-news.js"></script>
@@ -106,6 +108,43 @@
             </div>
             <div class="fr-area__list" data-manage-list></div>
           </div>
+
+          <!-- TASK-507: Thank your supporters. fundraise-thanks.js copies this into each card with gifts
+               to thank or thank yous to show (just after the latest gifts), giving every id its own
+               ending. Each thank you waits for staff; NBCC emails it, so no address is ever shown. -->
+          <template data-thanks-pattern>
+            <section class="fr-mine__part" data-thanks-part aria-labelledby="mineThanksHeading">
+              <h3 id="mineThanksHeading">Thank your supporters</h3>
+              <p>Pick the gifts you would like to say thank you for and write a few words. We check every thank you, then email it to each of them for you. You never see their email addresses, and any reply comes to us.</p>
+              <form class="fr-form fr-form--plain fr-thanks" novalidate data-thanks-form>
+                <p class="form-error-summary" role="alert" data-thanks-error hidden></p>
+                <fieldset class="fr-fieldset fr-thanks__pick" data-thanks-fieldset>
+                  <legend class="fr-sublegend">Who to thank</legend>
+                  <p class="fr-thanks__tools">
+                    <button class="fr-link-btn" type="button" data-thanks-all>Select all not yet thanked</button>
+                    <span class="fr-thanks__picked" data-thanks-picked aria-live="polite"></span>
+                  </p>
+                  <ol class="fr-thanks__gifts" role="list" data-thanks-gifts></ol>
+                  <button class="fr-wall__more" type="button" data-thanks-more hidden>Show all</button>
+                </fieldset>
+                <div class="give-field">
+                  <label for="thanksMessage">Your thank you <span class="give-req" aria-hidden="true">*</span></label>
+                  <textarea class="give-field-input" id="thanksMessage" name="message" rows="4" maxlength="600" required aria-required="true" aria-describedby="thanksCount" data-invalid-message="Write a few words to say thank you"></textarea>
+                  <p class="give-field-help" id="thanksCount" data-thanks-count>Up to 600 characters.</p>
+                </div>
+                <div class="give-cta-row">
+                  <button class="btn btn-primary give-cta" type="submit" data-thanks-submit>Send for checking</button>
+                </div>
+                <p class="form-status" role="status" aria-live="polite" data-thanks-status></p>
+              </form>
+              <p class="form-status is-success fr-thanks__done-status" role="status" aria-live="polite" data-thanks-done-status></p>
+              <p class="fr-mine__done" data-thanks-everyone hidden>Everyone has been thanked. Thank you for saying thank you!</p>
+              <div class="fr-thanks__past" data-thanks-past hidden>
+                <h4 id="mineThanksPastHeading">Your thank yous</h4>
+                <ol class="fr-thanks__past-list" role="list" aria-labelledby="mineThanksPastHeading" data-thanks-list></ol>
+              </div>
+            </section>
+          </template>
 
           <!-- One fundraiser of theirs. fundraise-manage.js copies this for each, giving every id its
                own ending so two never share one, and takes the pattern itself off the page. -->

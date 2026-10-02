@@ -1195,12 +1195,13 @@ const newsletterSubscriberSchema = z.object({
   name: z.string().trim().max(200).optional(),
 });
 export async function postAdminNewsletterSubscriber(req: Request, res: Response): Promise<Response | void> {
-  if (!(await authorizeSection(req, res, "newsletter", "edit"))) return;
+  const claims = await authorizeSection(req, res, "newsletter", "edit");
+  if (!claims) return;
   const parsed = newsletterSubscriberSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: "Invalid subscriber", details: parsed.error.flatten() });
   }
-  const result = await addNewsletterSubscriber(parsed.data.email, parsed.data.name);
+  const result = await addNewsletterSubscriber(parsed.data.email, parsed.data.name, `admin:${claims.email}`);
   return res.status(result.status === "added" ? 201 : 200).json(result);
 }
 

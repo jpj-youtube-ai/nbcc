@@ -131,15 +131,100 @@
                       <input class="give-field-input" id="startTime" name="startTime" type="time" />
                     </div>
                   </div>
+                  <!-- TASK-499: only for an event, as the admin's events editor asks it. -->
+                  <div data-event-times hidden>
+                    <div class="fr-row">
+                      <div class="give-field">
+                        <label for="endTime">Finish time <span class="give-optional">(optional)</span></label>
+                        <input class="give-field-input" id="endTime" name="endTime" type="time" data-invalid-message="The finish time is before the start." />
+                      </div>
+                    </div>
+                    <label class="give-check" for="timeTbc"><input class="give-check-box" id="timeTbc" name="timeTbc" type="checkbox" /><span class="give-check-text">The time is still to be confirmed</span></label>
+                  </div>
                   <div class="fr-row">
                     <div class="give-field">
-                      <label for="venue">Where <span class="give-optional">(if there is somewhere)</span></label>
-                      <input class="give-field-input" id="venue" name="venue" type="text" maxlength="120" placeholder="Like Example Village Hall" />
+                      <label for="venue">Where <span class="give-optional" data-venue-optional>(if there is somewhere)</span><span class="give-req" aria-hidden="true" data-venue-required hidden>*</span></label>
+                      <input class="give-field-input" id="venue" name="venue" type="text" maxlength="120" placeholder="Like Example Village Hall" data-invalid-message="Tell us the venue" />
                     </div>
                     <div class="give-field">
                       <label for="town">Town <span class="give-optional">(optional)</span></label>
                       <input class="give-field-input" id="town" name="town" type="text" maxlength="80" />
                     </div>
+                  </div>
+                </fieldset>
+              </div>
+
+              <!-- TASK-499: the event questions, only for someone holding an event. Worded like the
+                   admin's events editor; their answers make the event's card on Get involved. -->
+              <div class="give-question" data-event-questions hidden>
+                <fieldset class="fr-fieldset">
+                  <legend class="give-scope-legend">For your event&rsquo;s card</legend>
+                  <p class="give-field-help fr-lead-help">If we put your event on our Get involved page, its card is made from these.</p>
+                  <div class="give-field">
+                    <label for="cardLine">A line for the front of the card <span class="give-req" aria-hidden="true">*</span></label>
+                    <textarea class="give-field-input fr-short-text" id="cardLine" name="cardLine" rows="2" maxlength="140" required aria-required="true" aria-describedby="cardLineHelp cardLineCount" data-invalid-message="Add a line for the front of the card"></textarea>
+                    <p class="give-field-help" id="cardLineHelp">One or two sentences. What is it, and why come?</p>
+                    <p class="give-field-help" id="cardLineCount" data-count-for="cardLine" data-count-max="140">Up to 140 characters, so it fits on the card.</p>
+                  </div>
+                  <div class="give-field">
+                    <label for="venueAddress">Full address and how to get there <span class="give-optional">(optional)</span></label>
+                    <textarea class="give-field-input fr-short-text" id="venueAddress" name="venueAddress" rows="2" maxlength="300" aria-describedby="venueAddressHelp"></textarea>
+                    <p class="give-field-help" id="venueAddressHelp">Shown on the back. For example: Example Village Hall, Main Street, Exampleton. Parking behind the hall.</p>
+                  </div>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="venuePostcode">Venue postcode <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="venuePostcode" name="venuePostcode" type="text" maxlength="10" autocomplete="off" placeholder="e.g. KA1 1AA" pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Please give a UK postcode, like KA1 1AA" />
+                    </div>
+                  </div>
+                  <fieldset class="fr-fieldset fr-subgroup" id="accessGroup">
+                    <legend class="fr-sublegend">Access: tick only what the venue has confirmed</legend>
+                    <p class="give-field-help fr-sublegend-help">Printed on the back, so a disabled guest can decide without having to ask.</p>
+                    <div class="fr-checks">
+                      <label class="give-check" for="access-0"><input class="give-check-box" id="access-0" name="access" type="checkbox" value="step free entry" /><span class="give-check-text">Step free entry</span></label>
+                      <label class="give-check" for="access-1"><input class="give-check-box" id="access-1" name="access" type="checkbox" value="accessible toilets" /><span class="give-check-text">Accessible toilets</span></label>
+                      <label class="give-check" for="access-2"><input class="give-check-box" id="access-2" name="access" type="checkbox" value="a hearing loop" /><span class="give-check-text">Hearing loop</span></label>
+                      <label class="give-check" for="access-3"><input class="give-check-box" id="access-3" name="access" type="checkbox" value="blue badge parking" /><span class="give-check-text">Blue badge parking</span></label>
+                    </div>
+                  </fieldset>
+                  <div class="give-field">
+                    <label for="price">Price <span class="give-optional">(optional)</span></label>
+                    <input class="give-field-input" id="price" name="price" type="text" maxlength="60" autocomplete="off" aria-describedby="priceHelp" />
+                    <p class="give-field-help" id="priceHelp">Short. For example: Free, or &pound;5 on the door.</p>
+                  </div>
+                  <fieldset class="fr-fieldset fr-subgroup" id="bookingGroup">
+                    <legend class="fr-sublegend">How do people get in? <span class="give-req" aria-hidden="true">*</span></legend>
+                    <div class="fr-options fr-options--stack">
+                      <label class="fr-option fr-option--small" for="booking-away"><input id="booking-away" name="booking" type="radio" value="away" required aria-required="true" data-invalid-message="Tell us how people get in" /><span>Tickets are sold on another website</span></label>
+                      <label class="fr-option fr-option--small" for="booking-door"><input id="booking-door" name="booking" type="radio" value="door" required aria-required="true" /><span>Pay on the door, no booking needed</span></label>
+                      <label class="fr-option fr-option--small" for="booking-free"><input id="booking-free" name="booking" type="radio" value="free" required aria-required="true" /><span>Free, just come along</span></label>
+                    </div>
+                    <div class="give-field" data-ticket-field hidden>
+                      <label for="ticketUrl">The link to buy tickets <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="ticketUrl" name="ticketUrl" type="url" maxlength="500" inputmode="url" autocomplete="off" placeholder="https://..." required aria-required="true" aria-describedby="ticketUrlHelp" pattern="https://[^\s]+" data-invalid-message="Paste the full web address, starting https://" />
+                      <p class="give-field-help" id="ticketUrlHelp">Paste the full web address, starting https://</p>
+                    </div>
+                    <p class="give-field-help fr-ticket-note">Want NBCC to sell the tickets for you? Tell us in the description and we&rsquo;ll be in touch.</p>
+                  </fieldset>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="ageLimit">Age limit <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="ageLimit" name="ageLimit" type="text" maxlength="60" autocomplete="off" placeholder="Like 18 and over" />
+                    </div>
+                    <div class="give-field">
+                      <label for="dressCode">Dress code <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="dressCode" name="dressCode" type="text" maxlength="60" autocomplete="off" placeholder="Like festive jumpers" />
+                    </div>
+                  </div>
+                  <div class="give-field">
+                    <label for="included">What&rsquo;s included <span class="give-optional">(optional)</span></label>
+                    <textarea class="give-field-input fr-short-text" id="included" name="included" rows="2" maxlength="300" aria-describedby="includedHelp"></textarea>
+                    <p class="give-field-help" id="includedHelp">For example: a drink on arrival and a two course meal.</p>
+                  </div>
+                  <div class="give-field">
+                    <label for="creditName">Credit it to <span class="give-optional">(optional)</span></label>
+                    <input class="give-field-input" id="creditName" name="creditName" type="text" maxlength="80" autocomplete="off" aria-describedby="creditNameHelp" />
+                    <p class="give-field-help" id="creditNameHelp">The name on the card as the organiser: you, your group or your business. Leave it empty and we show your first name and the first letter of your surname.</p>
                   </div>
                 </fieldset>
               </div>
@@ -194,19 +279,47 @@
                   <legend class="give-scope-legend">What would you like from us? <span class="give-optional">(optional)</span></legend>
                   <div class="fr-row">
                     <div class="give-field">
-                      <label for="leaflets">Printed leaflets or posters, how many?</label>
-                      <input class="give-field-input fr-count" id="leaflets" name="leaflets" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 leaflets" />
+                      <label for="posters">Posters, how many?</label>
+                      <input class="give-field-input fr-count" id="posters" name="posters" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 posters" />
                     </div>
                     <div class="give-field">
-                      <label for="buckets">Collection buckets or tins, how many?</label>
-                      <input class="give-field-input fr-count" id="buckets" name="buckets" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 buckets or tins" />
+                      <label for="leaflets">Leaflets, how many?</label>
+                      <input class="give-field-input fr-count" id="leaflets" name="leaflets" type="number" inputmode="numeric" min="0" max="1000" step="1" placeholder="0" data-invalid-message="We can send up to 1,000 leaflets" />
                     </div>
                   </div>
-                  <div class="give-field" data-address-field hidden>
-                    <label for="postAddress">Where should we send them? <span class="give-req" aria-hidden="true">*</span></label>
-                    <textarea class="give-field-input" id="postAddress" name="postAddress" rows="3" maxlength="500" autocomplete="street-address" required aria-required="true" aria-describedby="addressHelp" data-invalid-message="Tell us where to send your leaflets or bucket"></textarea>
-                    <p class="give-field-help" id="addressHelp">The full address with the postcode. If you are local, we may drop them off instead.</p>
+                  <div class="fr-row">
+                    <div class="give-field">
+                      <label for="buckets">Collection buckets, how many?</label>
+                      <input class="give-field-input fr-count" id="buckets" name="buckets" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 buckets" />
+                    </div>
+                    <div class="give-field">
+                      <label for="tins">Collection tins, how many?</label>
+                      <input class="give-field-input fr-count" id="tins" name="tins" type="number" inputmode="numeric" min="0" max="20" step="1" placeholder="0" data-invalid-message="We can lend up to 20 tins" />
+                    </div>
                   </div>
+                  <!-- TASK-499: the address in separate boxes, only when something is to be posted. -->
+                  <fieldset class="fr-fieldset fr-subgroup" data-address-field hidden>
+                    <legend class="fr-sublegend">Where should we send them?</legend>
+                    <p class="give-field-help fr-sublegend-help">If you are local, we may drop them off instead.</p>
+                    <div class="give-field">
+                      <label for="postLine1">Address line 1 <span class="give-req" aria-hidden="true">*</span></label>
+                      <input class="give-field-input" id="postLine1" name="postLine1" type="text" maxlength="120" autocomplete="address-line1" required aria-required="true" data-invalid-message="Tell us the first line of the address" />
+                    </div>
+                    <div class="give-field">
+                      <label for="postLine2">Address line 2 <span class="give-optional">(optional)</span></label>
+                      <input class="give-field-input" id="postLine2" name="postLine2" type="text" maxlength="120" autocomplete="address-line2" />
+                    </div>
+                    <div class="fr-row">
+                      <div class="give-field">
+                        <label for="postTown">Town <span class="give-req" aria-hidden="true">*</span></label>
+                        <input class="give-field-input" id="postTown" name="postTown" type="text" maxlength="80" autocomplete="address-level2" required aria-required="true" data-invalid-message="Tell us the town" />
+                      </div>
+                      <div class="give-field">
+                        <label for="postPostcode">Postcode <span class="give-req" aria-hidden="true">*</span></label>
+                        <input class="give-field-input" id="postPostcode" name="postPostcode" type="text" maxlength="10" autocomplete="postal-code" required aria-required="true" placeholder="e.g. KA1 1AA" pattern="[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}" data-invalid-message="Please give a UK postcode, like KA1 1AA" />
+                      </div>
+                    </div>
+                  </fieldset>
                   <label class="give-check" for="shoutOut"><input class="give-check-box" id="shoutOut" name="shoutOut" type="checkbox" /><span class="give-check-text">A shout out on our social media</span></label>
                   <label class="give-check" for="attend"><input class="give-check-box" id="attend" name="attend" type="checkbox" /><span class="give-check-text">Someone from NBCC to come along</span></label>
                 </fieldset>

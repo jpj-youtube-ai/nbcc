@@ -13,7 +13,7 @@ import {
   questionsText,
 } from "../email/brand";
 import { FOOTER_TEXT, POSTAL_ADDRESS } from "../legal/registration";
-import { KIND_LABELS, shortName, type SignUp } from "./model";
+import { ACCESS_LABELS, BOOKING_LABELS, KIND_LABELS, shortName, type SignUp } from "./model";
 
 // TASK-493: the community fundraising emails, built here and sent by src/fundraising/send.ts.
 // TASK-497: reworded to the words Jaimie signed off on 2026-10-02 (warmer, a signed close, and a
@@ -124,8 +124,54 @@ export function buildSignUpThanksEmail(typedName?: string | null): BuiltEmail {
 
 // --- the summary to the events inbox --------------------------------------------------------------
 
-function staffFacts(f: SignUp & { id: number }): Array<[string, string]> {
-  const when = [f.eventDate, f.startTime].filter(Boolean).join(" at ");
+// What the summary needs: a sign up, or the stored record (which may carry the single address box of
+// a sign up made before TASK-499).
+export type StaffSummary = SignUp & { id: number; postAddress?: string | null };
+
+/** "1 Example Road, Exampleton, EX1 1EX": the boxes of an address, leaving out the empty ones. */
+function joinParts(...parts: Array<string | null | undefined>): string {
+  return parts.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(", ");
+}
+
+// TASK-499: posters, leaflets, buckets and tins each have their own number. A sign up from before
+// the split asked for "leaflets or posters" and "buckets or tins", and reads as it always did.
+function requestFacts(w: SignUp["wants"]): Array<[string, string]> {
+  const n = (v: number | undefined) => Number(v) || 0;
+  const split = n(w.posterCount) + n(w.leafletCount) + n(w.bucketCount) + n(w.tinCount) > 0;
+  const combined = n(w.leaflets) + n(w.buckets) > 0;
+  const facts: Array<[string, string]> = [];
+  if (split || !combined) {
+    facts.push(
+      ["Posters: " + n(w.posterCount), ""],
+      ["Leaflets: " + n(w.leafletCount), ""],
+      ["Collection buckets: " + n(w.bucketCount), ""],
+      ["Collection tins: " + n(w.tinCount), ""],
+    );
+  }
+  if (combined) facts.push(["Leaflets or posters: " + n(w.leaflets), ""], ["Buckets or tins: " + n(w.buckets), ""]);
+  return facts;
+}
+
+// TASK-499: the event questions, as the form asks them.
+function eventFacts(f: StaffSummary): Array<[string, string]> {
+  const facts: Array<[string, string]> = [
+    ["Front of the card", f.cardLine ?? "Not given"],
+    ["Full address", joinParts(f.venueAddress, f.venuePostcode) || "Not given"],
+    ["Access", f.access?.length ? f.access.map((a) => ACCESS_LABELS[a]).join(", ") : "None ticked"],
+    ["Price", f.price ?? "Not given"],
+    ["Getting in", f.booking ? BOOKING_LABELS[f.booking] : "Not given"],
+  ];
+  if (f.booking === "away" && f.ticketUrl) facts.push(["Ticket link", f.ticketUrl]);
+  if (f.ageLimit) facts.push(["Age limit", f.ageLimit]);
+  if (f.dressCode) facts.push(["Dress code", f.dressCode]);
+  if (f.included) facts.push(["What's included", f.included]);
+  facts.push(["Credit it to", f.creditName ?? `Not given, so the card says ${shortName(f.name)}`]);
+  return facts;
+}
+
+function staffFacts(f: StaffSummary): Array<[string, string]> {
+  const time = f.startTime && f.endTime ? `${f.startTime} to ${f.endTime}` : f.startTime;
+  const when = [f.eventDate, time].filter(Boolean).join(" at ") + (f.timeTbc ? ", the time is still to be confirmed" : "");
   const where = [f.venue, f.town].filter(Boolean).join(", ");
   const facts: Array<[string, string]> = [
     ["What", f.path === "raising" ? "Raising money" : "Holding an event"],
@@ -135,6 +181,7 @@ function staffFacts(f: SignUp & { id: number }): Array<[string, string]> {
     ["When", when || "Not given"],
     ["Where", where || "Not given"],
   ];
+  if (f.path === "event") facts.push(...eventFacts(f));
   if (f.path === "raising") facts.push(["Target", f.targetPence ? pounds(f.targetPence) : "No target"]);
   facts.push(
     ["On the website", f.public ? "Yes, they would like it shown" : "No, not to be shown on the website"],
@@ -143,18 +190,18 @@ function staffFacts(f: SignUp & { id: number }): Array<[string, string]> {
     ["Phone", f.phone],
     ["Facebook or Instagram", f.socialLink ?? "Not given"],
     ["We can post about it", f.socialOk ? "Yes" : "No"],
-    ["Leaflets or posters: " + f.wants.leaflets, ""],
-    ["Buckets or tins: " + f.wants.buckets, ""],
+    ...requestFacts(f.wants),
     ["A social media shout out", f.wants.shoutOut ? "Yes please" : "No"],
     ["Someone from NBCC to come along", f.wants.attend ? "Yes please" : "No"],
   );
-  if (f.postAddress) facts.push(["Address for materials", f.postAddress]);
+  const address = joinParts(f.postLine1, f.postLine2, f.postTown, f.postPostcode) || f.postAddress;
+  if (address) facts.push(["Address for materials", address]);
   facts.push(["Newsletter", f.newsletterOk ? "Yes, they ticked the box" : "No"]);
   return facts;
 }
 
 // For the team only, so no questions box: they are the people the questions go to.
-export function buildSignUpStaffEmail(f: SignUp & { id: number }, o: { adminUrl: string }): BuiltEmail {
+export function buildSignUpStaffEmail(f: StaffSummary, o: { adminUrl: string }): BuiltEmail {
   const facts = staffFacts(f);
   const first = firstName(f.name);
   const rows = facts

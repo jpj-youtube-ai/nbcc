@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { isSafeImageSrc, isWebAddress } from "../events/model";
+import { ACCESS, isSafeImageSrc, isWebAddress } from "../events/model";
+import { isValidUkPostcode } from "../declarations/fields";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -39,16 +40,84 @@ export const MESSAGE_MAX = 200;
 export const GIFT_MIN_PENCE = 200; // £2, as the design asks
 export const MAX_LEAFLETS = 1000;
 export const MAX_BUCKETS = 20;
+/** The line for the front of an event's card: one or two sentences, as the events editor asks. */
+export const CARD_LINE_MAX = 140;
 
 // Addresses under /fundraise/ that are pages of their own, so no fundraiser may take them: the manage
 // page (TASK-494) and the help page (TASK-498).
 export const RESERVED_SLUGS: ReadonlySet<string> = new Set(["manage", "help"]);
 
+/**
+ * What they would like from us, stored as the fundraisers.wants jsonb.
+ *
+ * TASK-499 split the requests: posters, leaflets, collection buckets and collection tins each have a
+ * number of their own (posterCount, leafletCount, bucketCount, tinCount). Sign ups made before then
+ * asked for one combined number of "leaflets or posters" (leaflets) and one of "buckets or tins"
+ * (buckets). Those two keys keep that old meaning and are still read, and shown in the old words; a
+ * new sign up leaves them at 0.
+ */
 export interface Wants {
+  posterCount: number;
+  leafletCount: number;
+  bucketCount: number;
+  tinCount: number;
+  /** Before TASK-499: leaflets OR posters, one number. */
   leaflets: number;
+  /** Before TASK-499: buckets OR tins, one number. */
   buckets: number;
   shoutOut: boolean;
   attend: boolean;
+}
+
+/** Is anything to be posted? Then we need an address. Old combined requests count too. */
+export function wantsPosted(w: Wants): boolean {
+  return w.posterCount + w.leafletCount + w.bucketCount + w.tinCount + w.leaflets + w.buckets > 0;
+}
+
+const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** Each thing to be posted, in words: "50 leaflets", and an old combined one as it was asked for. */
+export function wantsLines(w: Wants): string[] {
+  const lines: string[] = [];
+  if (w.posterCount > 0) lines.push(count(w.posterCount, "poster", "posters"));
+  if (w.leafletCount > 0) lines.push(count(w.leafletCount, "leaflet", "leaflets"));
+  if (w.bucketCount > 0) lines.push(count(w.bucketCount, "collection bucket", "collection buckets"));
+  if (w.tinCount > 0) lines.push(count(w.tinCount, "collection tin", "collection tins"));
+  if (w.leaflets > 0) lines.push(count(w.leaflets, "leaflet or poster", "leaflets or posters"));
+  if (w.buckets > 0) lines.push(count(w.buckets, "bucket or tin", "buckets or tins"));
+  return lines;
+}
+
+// --- the event questions (TASK-499), worded like the admin's events editor ------------------------
+
+export type AccessFeature = (typeof ACCESS)[number];
+
+/** The access ticks, as the events editor labels them. The stored values are the events model's. */
+export const ACCESS_LABELS: Record<AccessFeature, string> = {
+  "step free entry": "Step free entry",
+  "accessible toilets": "Accessible toilets",
+  "a hearing loop": "Hearing loop",
+  "blue badge parking": "Blue badge parking",
+};
+
+/** How people get in. NBCC selling the tickets comes with the ticketing stage, not here. */
+export const BOOKINGS = ["away", "door", "free"] as const;
+export type FundraiserBooking = (typeof BOOKINGS)[number];
+export const BOOKING_LABELS: Record<FundraiserBooking, string> = {
+  away: "Tickets are sold on another website",
+  door: "Pay on the door, no booking needed",
+  free: "Free, just come along",
+};
+
+/** "ka65ee" -> "KA1 1AA": upper case, one space before the last three. Check it is valid first. */
+export function normalisePostcode(value: string): string {
+  const compact = value.replace(/\s+/g, "").toUpperCase();
+  return `${compact.slice(0, -3)} ${compact.slice(-3)}`;
+}
+
+/** A ticket link: a real web address, and https only, as it goes on a public button. */
+export function isTicketLink(value: string): boolean {
+  return /^https:\/\//i.test(value) && isWebAddress(value);
 }
 
 // --- small shared pieces ---------------------------------------------------------------------------
@@ -120,14 +189,67 @@ const phone = z.preprocess(
 
 const email = z.preprocess(blankable, z.string().email("Please check your email address.").max(254));
 
+const howMany = (max: number, tooMany: string) =>
+  z
+    .number({ invalid_type_error: "Give a whole number, or 0 for none." })
+    .int("Give a whole number, or 0 for none.")
+    .min(0, "Give a whole number, or 0 for none.")
+    .max(max, tooMany)
+    .default(0);
+
 const wantsSchema = z
   .object({
-    leaflets: z.number().int().min(0).max(MAX_LEAFLETS, `We can send up to ${MAX_LEAFLETS} leaflets.`).default(0),
-    buckets: z.number().int().min(0).max(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets or tins.`).default(0),
+    posterCount: howMany(MAX_LEAFLETS, "We can send up to 1,000 posters."),
+    leafletCount: howMany(MAX_LEAFLETS, "We can send up to 1,000 leaflets."),
+    bucketCount: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets.`),
+    tinCount: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} tins.`),
+    // Before TASK-499, one number each: still taken, so a sign up from then can be saved as it is.
+    leaflets: howMany(MAX_LEAFLETS, `We can send up to ${MAX_LEAFLETS} leaflets.`),
+    buckets: howMany(MAX_BUCKETS, `We can lend up to ${MAX_BUCKETS} buckets or tins.`),
     shoutOut: z.boolean().default(false),
     attend: z.boolean().default(false),
   })
   .strict();
+
+const optionalPostcode = z
+  .preprocess(
+    blankable,
+    z.union([z.literal(""), z.string().refine(isValidUkPostcode, "That does not look like a UK postcode, like KA1 1AA.")]),
+  )
+  .transform((v) => (v === "" ? null : normalisePostcode(v)));
+
+const optionalTicketLink = z
+  .preprocess(
+    blankable,
+    z.union([
+      z.literal(""),
+      z.string().max(500, "That link is too long.").refine(isTicketLink, "Paste the full web address, starting https://"),
+    ]),
+  )
+  .transform((v) => (v === "" ? null : v));
+
+const optionalBooking = z.preprocess(
+  (v) => (v == null || v === "" ? null : v),
+  z.enum(BOOKINGS, { errorMap: () => ({ message: "Choose how people get in." }) }).nullable(),
+);
+
+const accessList = z
+  .array(z.enum(ACCESS, { errorMap: () => ({ message: "Tick only the access listed." }) }))
+  .max(ACCESS.length)
+  .transform((list) => ACCESS.filter((a) => list.includes(a)));
+
+const cardLine = z
+  .preprocess(blankable, z.string().max(CARD_LINE_MAX, `Keep this to ${CARD_LINE_MAX} characters or fewer, so it fits on the card.`))
+  .transform((v) => (v === "" ? null : v));
+
+// The finish time, when both are given, has to be after the start (the events editor's words).
+function finishAfterStart(b: { startTime?: string | null; endTime?: string | null }, ctx: z.RefinementCtx) {
+  if (b.startTime && b.endTime && b.endTime <= b.startTime) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endTime"], message: "The finish time is before the start." });
+  }
+}
+
+
 
 const wants = z.preprocess((v) => (v == null ? {} : v), wantsSchema);
 
@@ -161,23 +283,74 @@ export const signUpSchema = z
     socialLink: optionalWebLink,
     socialOk: z.boolean().default(false),
     wants,
-    postAddress: nullableText(500),
+    // TASK-499: where to post things, in separate boxes. The old single box (postAddress) is no
+    // longer on the form; one sent anyway is dropped, never stored.
+    postLine1: nullableText(120),
+    postLine2: nullableText(120),
+    postTown: nullableText(80),
+    postPostcode: optionalPostcode,
     newsletterOk: z.boolean().default(false),
+    // TASK-499: the event questions, asked only when holding an event.
+    cardLine,
+    endTime: optionalTime,
+    timeTbc: z.boolean().default(false),
+    venueAddress: nullableText(300),
+    venuePostcode: optionalPostcode,
+    access: z.preprocess((v) => (v == null ? [] : v), accessList),
+    price: nullableText(60),
+    booking: optionalBooking.optional().transform((v) => v ?? null),
+    ticketUrl: optionalTicketLink,
+    ageLimit: nullableText(60),
+    dressCode: nullableText(60),
+    included: nullableText(300),
+    creditName: nullableText(80),
   })
   .superRefine((b, ctx) => {
-    if (b.path === "event" && !b.eventDate) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["eventDate"], message: "Tell us the date of your event." });
+    const missing = (path: string, message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path: [path], message });
+    if (b.path === "event") {
+      if (!b.eventDate) missing("eventDate", "Tell us the date of your event.");
+      if (!b.cardLine) missing("cardLine", "Add a line for the front of the card.");
+      if (!b.venue) missing("venue", "Tell us the venue.");
+      if (!b.booking) missing("booking", "Tell us how people get in.");
+      if (b.booking === "away" && !b.ticketUrl) missing("ticketUrl", "Paste the link to where the tickets are sold, starting https://");
+      finishAfterStart(b, ctx);
     }
-    if ((b.wants.leaflets > 0 || b.wants.buckets > 0) && !b.postAddress) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["postAddress"],
-        message: "Tell us where to send your leaflets or bucket.",
-      });
+    if (wantsPosted(b.wants)) {
+      if (!b.postLine1) missing("postLine1", "Tell us the first line of the address.");
+      if (!b.postTown) missing("postTown", "Tell us the town.");
+      if (!b.postPostcode) missing("postPostcode", "Tell us the postcode.");
     }
   })
-  // Holding an event is listed as an event: it has no page and no meter in stage 1, so no target.
-  .transform((b) => (b.path === "event" ? { ...b, targetPence: null } : b));
+  .transform((b) => {
+    // Nothing to post, no address kept.
+    const posted = wantsPosted(b.wants);
+    // Holding an event is listed as an event: it has no page and no meter in stage 1, so no target.
+    // Raising money gets a page, never an event card, so none of the event answers are kept.
+    const event = b.path === "event";
+    const only = <T>(keep: boolean, value: T) => (keep ? value : null);
+    return {
+      ...b,
+      targetPence: event ? null : b.targetPence,
+      postLine1: only(posted, b.postLine1),
+      postLine2: only(posted, b.postLine2),
+      postTown: only(posted, b.postTown),
+      postPostcode: only(posted, b.postPostcode),
+      cardLine: only(event, b.cardLine),
+      endTime: only(event, b.endTime),
+      timeTbc: event && b.timeTbc,
+      venueAddress: only(event, b.venueAddress),
+      venuePostcode: only(event, b.venuePostcode),
+      access: event ? b.access : [],
+      price: only(event, b.price),
+      booking: only(event, b.booking),
+      // A ticket link for the door or for free would never show and could never be checked.
+      ticketUrl: only(event && b.booking === "away", b.ticketUrl),
+      ageLimit: only(event, b.ageLimit),
+      dressCode: only(event, b.dressCode),
+      included: only(event, b.included),
+      creditName: only(event, b.creditName),
+    };
+  });
 
 export type SignUp = z.infer<typeof signUpSchema>;
 
@@ -225,13 +398,34 @@ export const adminPatchSchema = z
     socialLink: optionalWebLink,
     socialOk: z.boolean(),
     wants,
+    // The single address box of a sign up made before TASK-499, still there to correct.
     postAddress: nullableText(500),
+    postLine1: nullableText(120),
+    postLine2: nullableText(120),
+    postTown: nullableText(80),
+    postPostcode: optionalPostcode,
     newsletterOk: z.boolean(),
     imageSrc: optionalImage,
     slug: z.string().refine(isValidSlug, "Use lower case letters and numbers, joined by single hyphens."),
+    // TASK-499: the event questions. Staff may set any of them on any sign up, including one from
+    // before they were asked; each is checked on its own, as a change may carry only one.
+    cardLine,
+    endTime: optionalTime,
+    timeTbc: z.boolean(),
+    venueAddress: nullableText(300),
+    venuePostcode: optionalPostcode,
+    access: accessList,
+    price: nullableText(60),
+    booking: optionalBooking,
+    ticketUrl: optionalTicketLink,
+    ageLimit: nullableText(60),
+    dressCode: nullableText(60),
+    included: nullableText(300),
+    creditName: nullableText(80),
   })
   .partial()
   .strict()
+  .superRefine(finishAfterStart)
   .refine((b) => Object.keys(b).length > 0, { message: "There is nothing to change." });
 
 export type AdminPatch = z.infer<typeof adminPatchSchema>;
@@ -364,7 +558,12 @@ export interface FundraiserRecord {
   socialLink: string | null;
   socialOk: boolean;
   wants: Wants;
+  /** The single address box of a sign up made before TASK-499; null for one made since. */
   postAddress: string | null;
+  postLine1: string | null;
+  postLine2: string | null;
+  postTown: string | null;
+  postPostcode: string | null;
   newsletterOk: boolean;
   imageSrc: string | null;
   declinedReason: string | null;
@@ -373,9 +572,40 @@ export interface FundraiserRecord {
   approvedBy: string | null;
   updatedAt: string;
   updatedBy: string | null;
+  // TASK-499: the event questions. A sign up from before they were asked has them all empty
+  // (null, false or []), and its card is drawn as it always was.
+  cardLine: string | null;
+  endTime: string | null;
+  timeTbc: boolean;
+  venueAddress: string | null;
+  venuePostcode: string | null;
+  access: AccessFeature[];
+  price: string | null;
+  booking: FundraiserBooking | null;
+  ticketUrl: string | null;
+  ageLimit: string | null;
+  dressCode: string | null;
+  included: string | null;
+  creditName: string | null;
 }
 
-export interface PublicCard {
+/** The event answers a card shows. All of them are meant for the public; none is private. */
+export interface PublicEventAnswers {
+  cardLine: string | null;
+  endTime: string | null;
+  timeTbc: boolean;
+  venueAddress: string | null;
+  venuePostcode: string | null;
+  access: AccessFeature[];
+  price: string | null;
+  booking: FundraiserBooking | null;
+  ticketUrl: string | null;
+  ageLimit: string | null;
+  dressCode: string | null;
+  included: string | null;
+}
+
+export interface PublicCard extends Partial<PublicEventAnswers> {
   id: number;
   slug: string;
   path: FundraiserPath;
@@ -414,9 +644,22 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
     venue: f.venue,
     town: f.town,
     imageSrc: f.imageSrc,
-    organisedBy: shortName(f.name),
+    // An event may be credited to the name they gave (their group or business); a page never is.
+    organisedBy: f.path === "event" && f.creditName ? f.creditName : shortName(f.name),
     url: f.path === "raising" ? `/fundraise/${f.slug}` : null,
     meter: m,
+    cardLine: f.cardLine,
+    endTime: f.endTime,
+    timeTbc: f.timeTbc,
+    venueAddress: f.venueAddress,
+    venuePostcode: f.venuePostcode,
+    access: f.access,
+    price: f.price,
+    booking: f.booking,
+    ticketUrl: f.ticketUrl,
+    ageLimit: f.ageLimit,
+    dressCode: f.dressCode,
+    included: f.included,
   };
 }
 

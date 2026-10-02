@@ -59,8 +59,8 @@ describe("the sign up form", () => {
       name: "Robin Testperson",
       email: "robin@example.com",
       socialLink: "https://www.facebook.com/example.page",
-      postAddress: null,
-      wants: { leaflets: 0, buckets: 0, shoutOut: true, attend: false },
+      postLine1: null,
+      wants: { posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: true, attend: false },
     });
   });
 
@@ -79,7 +79,7 @@ describe("the sign up form", () => {
     expect(r.data.startTime).toBeNull();
     expect(r.data.targetPence).toBeNull();
     expect(r.data.socialLink).toBeNull();
-    expect(r.data.wants).toEqual({ leaflets: 0, buckets: 0, shoutOut: false, attend: false });
+    expect(r.data.wants).toEqual({ posterCount: 0, leafletCount: 0, bucketCount: 0, tinCount: 0, leaflets: 0, buckets: 0, shoutOut: false, attend: false });
   });
 
   it.each(KINDS)("knows the kind %s, with a name for people", (kind) => {
@@ -106,17 +106,20 @@ describe("the sign up form", () => {
     expect(signUpSchema.safeParse(signUp(over)).success).toBe(false);
   });
 
+  // TASK-499: the address is now separate boxes (test/unit/fundraising-signup-details.test.ts).
   it("asks for an address when leaflets or buckets are wanted", () => {
     const wants = { leaflets: 20, buckets: 1, shoutOut: false, attend: false };
-    const without = signUpSchema.safeParse(signUp({ wants, postAddress: "" }));
+    const without = signUpSchema.safeParse(signUp({ wants }));
     expect(without.success).toBe(false);
-    if (!without.success) expect(without.error.issues[0].path).toEqual(["postAddress"]);
-    expect(signUpSchema.safeParse(signUp({ wants, postAddress: "1 Example Street, Exampleton" })).success).toBe(true);
+    if (!without.success) expect(without.error.issues.map((i) => i.path[0])).toEqual(["postLine1", "postTown", "postPostcode"]);
+    const address = { postLine1: "1 Example Street", postTown: "Exampleton", postPostcode: "EX1 1EX" };
+    expect(signUpSchema.safeParse(signUp({ wants, ...address })).success).toBe(true);
   });
 
   it("asks for the date when someone is holding an event, and takes no target for one", () => {
     expect(signUpSchema.safeParse(signUp({ path: "event", eventDate: "" })).success).toBe(false);
-    const r = signUpSchema.safeParse(signUp({ path: "event", kind: "bake_sale", targetPence: 50000 }));
+    const event = { cardLine: "Cakes for NBCC.", booking: "free" }; // TASK-499: asked of every event
+    const r = signUpSchema.safeParse(signUp({ path: "event", kind: "bake_sale", targetPence: 50000, ...event }));
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.targetPence).toBeNull();
   });

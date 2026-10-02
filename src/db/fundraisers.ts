@@ -1,7 +1,9 @@
 import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit } from "./donations";
+import { ACCESS } from "../events/model";
 import {
+  BOOKINGS,
   hasPage,
   meter,
   slugify,
@@ -56,6 +58,24 @@ const COLUMNS = {
   newsletterOk: "newsletter_ok",
   imageSrc: "image_src",
   slug: "slug",
+  // TASK-499
+  postLine1: "post_line1",
+  postLine2: "post_line2",
+  postTown: "post_town",
+  postPostcode: "post_postcode",
+  cardLine: "card_line",
+  endTime: "end_time",
+  timeTbc: "time_tbc",
+  venueAddress: "venue_address",
+  venuePostcode: "venue_postcode",
+  access: "access",
+  price: "price",
+  booking: "booking",
+  ticketUrl: "ticket_url",
+  ageLimit: "age_limit",
+  dressCode: "dress_code",
+  included: "included",
+  creditName: "credit_name",
 } as const;
 type PatchField = keyof typeof COLUMNS;
 
@@ -65,7 +85,11 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.venue, f.town, f.target_pence, f.public, f.status,
          f.organiser_name, f.organiser_email, f.organiser_phone, f.social_link, f.social_ok,
          f.wants, f.post_address, f.newsletter_ok, f.image_src, f.declined_reason,
-         f.created_at, f.approved_at, f.approved_by, f.updated_at, f.updated_by`;
+         f.created_at, f.approved_at, f.approved_by, f.updated_at, f.updated_by,
+         f.post_line1, f.post_line2, f.post_town, f.post_postcode, f.card_line,
+         to_char(f.end_time, 'HH24:MI') AS end_time,
+         f.time_tbc, f.venue_address, f.venue_postcode, f.access, f.price, f.booking, f.ticket_url,
+         f.age_limit, f.dress_code, f.included, f.credit_name`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
     FROM fundraisers f`;
@@ -79,6 +103,8 @@ const WAITING_SQL = `EXISTS (SELECT 1 FROM fundraiser_edits e WHERE e.fundraiser
 
 type Row = Record<string, unknown>;
 const iso = (v: unknown): string | null => (v == null ? null : new Date(v as string).toISOString());
+const textOrNull = (v: unknown): string | null => (v == null ? null : String(v));
+const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
 export function toRecord(r: Row): FundraiserRecord {
   const wants = (r.wants ?? {}) as Record<string, unknown>;
@@ -101,13 +127,22 @@ export function toRecord(r: Row): FundraiserRecord {
     phone: String(r.organiser_phone),
     socialLink: (r.social_link as string | null) ?? null,
     socialOk: Boolean(r.social_ok),
+    // TASK-499: the four split requests, and the two combined ones a sign up from before carries.
     wants: {
-      leaflets: Number(wants.leaflets ?? 0),
-      buckets: Number(wants.buckets ?? 0),
+      posterCount: num(wants.posterCount ?? 0),
+      leafletCount: num(wants.leafletCount ?? 0),
+      bucketCount: num(wants.bucketCount ?? 0),
+      tinCount: num(wants.tinCount ?? 0),
+      leaflets: num(wants.leaflets ?? 0),
+      buckets: num(wants.buckets ?? 0),
       shoutOut: Boolean(wants.shoutOut),
       attend: Boolean(wants.attend),
     },
     postAddress: (r.post_address as string | null) ?? null,
+    postLine1: textOrNull(r.post_line1),
+    postLine2: textOrNull(r.post_line2),
+    postTown: textOrNull(r.post_town),
+    postPostcode: textOrNull(r.post_postcode),
     newsletterOk: Boolean(r.newsletter_ok),
     imageSrc: (r.image_src as string | null) ?? null,
     declinedReason: (r.declined_reason as string | null) ?? null,
@@ -116,6 +151,20 @@ export function toRecord(r: Row): FundraiserRecord {
     approvedBy: (r.approved_by as string | null) ?? null,
     updatedAt: iso(r.updated_at) as string,
     updatedBy: (r.updated_by as string | null) ?? null,
+    cardLine: textOrNull(r.card_line),
+    endTime: textOrNull(r.end_time),
+    timeTbc: Boolean(r.time_tbc),
+    venueAddress: textOrNull(r.venue_address),
+    venuePostcode: textOrNull(r.venue_postcode),
+    // Only what the code knows, in the card's order, whatever the row holds.
+    access: ACCESS.filter((a) => Array.isArray(r.access) && (r.access as unknown[]).includes(a)),
+    price: textOrNull(r.price),
+    booking: (BOOKINGS as readonly string[]).includes(String(r.booking)) ? (r.booking as FundraiserRecord["booking"]) : null,
+    ticketUrl: textOrNull(r.ticket_url),
+    ageLimit: textOrNull(r.age_limit),
+    dressCode: textOrNull(r.dress_code),
+    included: textOrNull(r.included),
+    creditName: textOrNull(r.credit_name),
   };
 }
 
@@ -260,15 +309,21 @@ export async function createFundraiser(s: SignUp): Promise<FundraiserRecord> {
 
 async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promise<FundraiserRecord> {
   const inserted = await client.query<{ id: number }>(
+    // TASK-499: the address goes in its separate boxes; the old single box is left empty.
     `INSERT INTO fundraisers
        (slug, path, kind, title, description, event_date, start_time, venue, town, target_pence, public,
-        organiser_name, organiser_email, organiser_phone, social_link, social_ok, wants, post_address,
-        newsletter_ok, updated_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'public')
+        organiser_name, organiser_email, organiser_phone, social_link, social_ok, wants,
+        newsletter_ok, updated_by,
+        post_line1, post_line2, post_town, post_postcode, card_line, end_time, time_tbc, venue_address,
+        venue_postcode, access, price, booking, ticket_url, age_limit, dress_code, included, credit_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 'public',
+             $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
      RETURNING id`,
     [
       slug, s.path, s.kind, s.title, s.description, s.eventDate, s.startTime, s.venue, s.town, s.targetPence, s.public,
-      s.name, s.email, s.phone, s.socialLink, s.socialOk, JSON.stringify(s.wants), s.postAddress, s.newsletterOk,
+      s.name, s.email, s.phone, s.socialLink, s.socialOk, JSON.stringify(s.wants), s.newsletterOk,
+      s.postLine1, s.postLine2, s.postTown, s.postPostcode, s.cardLine, s.endTime, s.timeTbc, s.venueAddress,
+      s.venuePostcode, s.access, s.price, s.booking, s.ticketUrl, s.ageLimit, s.dressCode, s.included, s.creditName,
     ],
   );
   const id = Number(inserted.rows[0].id);

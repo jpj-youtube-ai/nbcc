@@ -2660,6 +2660,10 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-err { margin: 0; font-size: 0.82rem; font-weight: 600; color: var(--crimson); }
 #view-fundraising .fr-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 0.92rem; font-weight: 600; color: var(--slate); cursor: pointer; }
 #view-fundraising .fr-check input { width: 20px; height: 20px; accent-color: var(--holly); }
+/* TASK-499: the access ticks of an event, as one group, two across where there is room. */
+#view-fundraising .fr-checks-group { border: 0; margin: 0; padding: 0; }
+#view-fundraising .fr-checks-group > legend { padding: 0; margin-bottom: 6px; }
+#view-fundraising .fr-checks-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0 18px; margin-top: 4px; }
 
 /* A change the organiser asked for, beside what is live: three columns, or stacked when narrow. */
 #view-fundraising .fr-change-panel { background: color-mix(in srgb, var(--tan) 12%, var(--card)); }

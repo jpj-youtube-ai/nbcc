@@ -139,6 +139,18 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-target .give-custom-field { max-width: 320px; }
 .fr-target .give-custom-label { font-size: 1.15rem; }
 .fr-count { max-width: 160px; }
+
+/* ---------- TASK-499: the address boxes and the event questions ---------- */
+.fr-subgroup { margin: 8px 0 18px; }
+.fr-lead-help, .fr-sublegend-help { margin: -4px 0 12px; }
+.fr-checks { display: grid; gap: 0 16px; }
+@media (min-width: 640px) { .fr-checks { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+/* Three ways in read best one under another, whatever the width. */
+.fr-options.fr-options--stack { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.fr-subgroup [data-ticket-field] { margin-top: 14px; }
+.fr-ticket-note { margin: 12px 0 0; }
+/* A short answer starts small, and still grows with what is typed. */
+.fr-form textarea.fr-short-text { min-height: 3.4em; }
 .fr-captcha { margin: 24px 0 0; max-width: 100%; }
 
 /* ---------- thank you ---------- */

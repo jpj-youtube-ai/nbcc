@@ -1,6 +1,7 @@
 import type { EventRecord } from "../events/model";
 import { sortForPage } from "../events/model";
 import {
+  type CardRecord,
   DECK_MARKER,
   dateParts,
   escapeHtml,
@@ -162,14 +163,57 @@ export function renderFundraiserCard(c: PublicCard, today?: string): string {
   );
 }
 
+/** "Age limit: 18 and over." A sentence for the card's note, with a full stop if it needs one. */
+function noteSentence(label: string, value: string | null | undefined): string {
+  const v = (value ?? "").trim();
+  return v ? `${label}: ${v}${/[.!?]$/.test(v) ? "" : "."}` : "";
+}
+
+/** The full address for the back, with the venue postcode added unless it already says it. */
+function fullAddress(c: PublicCard): string {
+  const address = (c.venueAddress ?? "").trim();
+  const postcode = (c.venuePostcode ?? "").trim();
+  if (!postcode) return address;
+  const says = (text: string) => text.replace(/\s+/g, "").toUpperCase().includes(postcode.replace(/\s+/g, "").toUpperCase());
+  const base = address || [c.venue, c.town].filter(Boolean).join(", ");
+  if (says(base)) return base;
+  if (!base) return postcode;
+  return /[.!?]$/.test(base) ? `${base} ${postcode}` : `${base}, ${postcode}`;
+}
+
 /**
- * A "holding an event" sign up as an ordinary event card, credited to its organiser. It has no page
- * of its own and nothing to book, so the card says to just come along. No date, no card: there would
- * be nothing to put in the corner, and Get involved is a list of dates.
+ * How people get in, for the card (TASK-499). Tickets on another website get the events page's own
+ * button and the line under it; the door and free get a line of their own. A sign up from before
+ * the question was asked gets no booking line at all: it may well be ticketed, so it must never
+ * promise there is no need to book.
  */
-export function fundraiserEventRecord(c: PublicCard): EventRecord | null {
+function bookingFor(c: PublicCard): Pick<CardRecord, "bookingHow" | "bookingUrl" | "bookingLabel" | "bookingNote" | "bookingSolo"> {
+  const none = { bookingHow: "none" as const, bookingUrl: "", bookingLabel: "", bookingNote: "" };
+  if (c.booking === "away" && c.ticketUrl) {
+    return { bookingHow: "away", bookingUrl: c.ticketUrl, bookingLabel: "Book tickets", bookingNote: "Tickets are sold on another website" };
+  }
+  if (c.booking === "away") return { ...none, bookingSolo: "Tickets are sold on another website." };
+  if (c.booking === "door") return { ...none, bookingSolo: "Pay on the door. No need to book." };
+  if (c.booking === "free") return none; // the events page's own "No need to book. Just come along."
+  return { ...none, bookingSolo: null };
+}
+
+/**
+ * A "holding an event" sign up as an ordinary event card, credited to its organiser (or the name
+ * they gave to credit it to). It has no page of its own. No date, no card: there would be nothing
+ * to put in the corner, and Get involved is a list of dates.
+ *
+ * TASK-499: drawn from the event questions: the line for the front, the finish time and "to be
+ * confirmed", the full address, the access ticks, the price, how people get in, and the age limit,
+ * dress code and what is included in the note on the back. A sign up from before those questions
+ * has none of them, and is drawn exactly as before, less the booking line.
+ */
+export function fundraiserEventRecord(c: PublicCard): CardRecord | null {
   if (!c.eventDate) return null;
-  const gist = shorten(c.description, 200);
+  const description = c.description.replace(/\s+/g, " ").trim();
+  const gist = c.cardLine ? c.cardLine : shorten(c.description, 200);
+  const story = gist === description ? "" : c.description;
+  const extras = [noteSentence("Age limit", c.ageLimit), noteSentence("Dress code", c.dressCode), noteSentence("Included", c.included)];
   return {
     id: -c.id,
     slug: `community-${c.slug}`,
@@ -178,33 +222,30 @@ export function fundraiserEventRecord(c: PublicCard): EventRecord | null {
     gist,
     date: c.eventDate,
     start: c.startTime,
-    end: null,
-    timeTbc: false,
+    end: c.endTime ?? null,
+    timeTbc: c.timeTbc ?? false,
     venue: c.venue,
     town: c.town,
-    address: "",
-    access: [],
+    address: fullAddress(c),
+    access: c.access ?? [],
     imageSrc: c.imageSrc,
     imageFit: "cover",
     imageGround: "night",
     imageAlt: `A picture for ${c.title}`,
     cover: "holly",
-    costFront: "",
+    costFront: c.price ?? "",
     costBack: "",
     flag: "",
     listHeading: "",
     whatsOn: "",
-    note: gist === c.description.replace(/\s+/g, " ").trim() ? "" : c.description,
+    note: [story, ...extras].filter(Boolean).join(" "),
     runBy: "partner",
     partnerName: c.organisedBy,
     partnerFront: "Organised by",
     partnerCredit: "Organised by",
     partnerLogoSrc: null,
     partnerLine: "A community event raising money for NBCC.",
-    bookingHow: "none",
-    bookingUrl: "",
-    bookingLabel: "",
-    bookingNote: "",
+    ...bookingFor(c),
     status: "live",
     showFrom: null,
   };
@@ -280,7 +321,7 @@ export function renderGetInvolvedPage(template: string, input: GetInvolvedInput)
     const community = input.fundraisers
       .filter((f) => f.path === "event")
       .map(fundraiserEventRecord)
-      .filter((ev): ev is EventRecord => ev !== null && ev.date >= input.today);
+      .filter((ev): ev is CardRecord => ev !== null && ev.date >= input.today);
     const raising = input.fundraisers.filter((f) => f.path === "raising");
     deck =
       sortForPage([...input.events, ...community]).map((ev) => renderCard(ev)).join("") +

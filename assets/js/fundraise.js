@@ -1,7 +1,9 @@
 // The fundraising sign up form at /fundraise (TASK-494).
 //
-// Two paths: raising money (asks for a target) or holding an event (needs a date). The address box
-// appears only when leaflets or a bucket are to be posted. Sending goes to POST /api/fundraise as
+// Two paths: raising money (asks for a target) or holding an event (needs a date). The address boxes
+// appear only when posters, leaflets, buckets or tins are to be posted. Holding an event also asks
+// the event questions (TASK-499), worded like the admin's events editor, whose answers make the
+// event's card on Get involved; the ticket link is asked only when tickets are sold elsewhere. Sending goes to POST /api/fundraise as
 // JSON; a 400 puts each of the server's plain English messages next to its own field, a 404 means
 // fundraising has been switched off meanwhile (the gentle "not open yet" panel shows), and success
 // swaps the form for a thank you that says what happens next.
@@ -46,12 +48,43 @@
     phone: "phone",
     socialLink: "socialLink",
     socialOk: "socialOk",
+    "wants.posterCount": "posters",
+    "wants.leafletCount": "leaflets",
+    "wants.bucketCount": "buckets",
+    "wants.tinCount": "tins",
+    // The combined numbers of a sign up from before the split, if the server ever names them.
     "wants.leaflets": "leaflets",
     "wants.buckets": "buckets",
-    wants: "leaflets",
-    postAddress: "postAddress",
+    wants: "posters",
+    postLine1: "postLine1",
+    postLine2: "postLine2",
+    postTown: "postTown",
+    postPostcode: "postPostcode",
     newsletterOk: "newsletterOk",
+    cardLine: "cardLine",
+    endTime: "endTime",
+    timeTbc: "timeTbc",
+    venueAddress: "venueAddress",
+    venuePostcode: "venuePostcode",
+    access: "access-0",
+    price: "price",
+    booking: "booking-away",
+    ticketUrl: "ticketUrl",
+    ageLimit: "ageLimit",
+    dressCode: "dressCode",
+    included: "included",
+    creditName: "creditName",
   };
+  // The answers only an event is asked: what is sent for one, and blanks for raising money.
+  var EVENT_TEXT = ["cardLine", "endTime", "venueAddress", "venuePostcode", "price", "ageLimit", "dressCode", "included", "creditName"];
+
+  // The server names a field inside a list or an object with dots ("access.0", "wants.tinCount"):
+  // the control it belongs beside, or the nearest one that stands for the whole.
+  function controlFor(key) {
+    if (FIELD_CONTROL[key]) return FIELD_CONTROL[key];
+    var top = String(key).split(".")[0];
+    return FIELD_CONTROL[top] || key;
+  }
 
   // A text box grows with what is typed, so nothing ever scrolls inside it (Jaimie's rule). CSS
   // field-sizing does this where the browser supports it; this does it everywhere else.
@@ -125,23 +158,42 @@
     var date = el("eventDate");
     var dateRequired = form.querySelector("[data-date-required]");
     var dateOptional = form.querySelector("[data-date-optional]");
+    var venue = el("venue");
+    var venueRequired = form.querySelector("[data-venue-required]");
+    var venueOptional = form.querySelector("[data-venue-optional]");
+    var eventQuestions = form.querySelector("[data-event-questions]");
+    var eventTimes = form.querySelector("[data-event-times]");
+    function need(control, required) {
+      if (!control) return;
+      control.required = required;
+      if (required) control.setAttribute("aria-required", "true");
+      else control.removeAttribute("aria-required");
+    }
     function applyPath() {
       var path = radio("path");
-      if (targetQ) targetQ.hidden = path === "event";
-      var needsDate = path === "event";
-      if (date) {
-        date.required = needsDate;
-        if (needsDate) date.setAttribute("aria-required", "true");
-        else date.removeAttribute("aria-required");
-      }
-      if (dateRequired) dateRequired.hidden = !needsDate;
-      if (dateOptional) dateOptional.hidden = needsDate;
+      var event = path === "event";
+      if (targetQ) targetQ.hidden = event;
+      need(date, event);
+      if (dateRequired) dateRequired.hidden = !event;
+      if (dateOptional) dateOptional.hidden = event;
+      // An event's card needs somewhere to say it is.
+      need(venue, event);
+      if (venueRequired) venueRequired.hidden = !event;
+      if (venueOptional) venueOptional.hidden = event;
+      if (eventQuestions) eventQuestions.hidden = !event;
+      if (eventTimes) eventTimes.hidden = !event;
+    }
+
+    // --- the ticket link, only for tickets sold on another website ------------------------------
+    var ticketField = form.querySelector("[data-ticket-field]");
+    function applyBooking() {
+      if (ticketField) ticketField.hidden = radio("booking") !== "away";
     }
 
     // --- the address, only for something posted ------------------------------------------------
     var addressField = form.querySelector("[data-address-field]");
     function applyAddress() {
-      if (addressField) addressField.hidden = !(whole("leaflets") > 0 || whole("buckets") > 0);
+      if (addressField) addressField.hidden = !(whole("posters") + whole("leaflets") + whole("buckets") + whole("tins") > 0);
     }
 
     // --- characters left -----------------------------------------------------------------------
@@ -158,6 +210,7 @@
 
     form.addEventListener("change", function () {
       applyPath();
+      applyBooking();
       applyAddress();
     });
     form.addEventListener("input", function () {
@@ -165,6 +218,7 @@
       applyCounts();
     });
     applyPath();
+    applyBooking();
     applyAddress();
 
     // --- the spam check, loaded only when needed ------------------------------------------------
@@ -240,13 +294,23 @@
     }
 
     // --- checking and sending -------------------------------------------------------------------
+    // The rule the browser cannot check on its own: an event's finish is after its start.
+    function finishBeforeStart() {
+      if (radio("path") !== "event") return null;
+      var start = val("startTime");
+      var end = val("endTime");
+      return start && end && end <= start ? el("endTime") : null;
+    }
+
     function validate(serverFields) {
       var shared = win.NBCCFormValidation;
       var extra = function () {
         var out = [];
+        var end = finishBeforeStart();
+        if (end) out.push({ control: end, message: "The finish time is before the start." });
         if (serverFields) {
           Object.keys(serverFields).forEach(function (key) {
-            var control = el(FIELD_CONTROL[key] || key);
+            var control = el(controlFor(key));
             if (control) out.push({ control: control, message: serverFields[key] });
           });
         }
@@ -257,6 +321,10 @@
         return shared.validateForm(form, { summary: summary, extraChecks: extra }).valid;
       }
       // Without main.js: the browser's own check, and the server's messages in the status line.
+      if (!serverFields && finishBeforeStart()) {
+        say("The finish time is before the start.", "error");
+        return false;
+      }
       if (serverFields) {
         say(Object.keys(serverFields).map(function (k) { return serverFields[k]; }).join(" "), "error");
         return false;
@@ -266,9 +334,20 @@
 
     function payload() {
       var path = radio("path");
+      var event = path === "event";
       var pounds = parseFloat(val("target"));
       var posted = addressField && !addressField.hidden;
-      return {
+      var booking = event ? radio("booking") : "";
+      var access = event
+        ? Array.prototype.filter
+            .call(form.querySelectorAll('input[name="access"]'), function (b) {
+              return b.checked;
+            })
+            .map(function (b) {
+              return b.value;
+            })
+        : [];
+      var body = {
         path: path,
         kind: radio("kind"),
         title: val("title"),
@@ -284,12 +363,30 @@
         phone: val("phone"),
         socialLink: val("socialLink"),
         socialOk: checked("socialOk"),
-        wants: { leaflets: whole("leaflets"), buckets: whole("buckets"), shoutOut: checked("shoutOut"), attend: checked("attend") },
-        postAddress: posted ? val("postAddress") : "",
+        wants: {
+          posterCount: whole("posters"),
+          leafletCount: whole("leaflets"),
+          bucketCount: whole("buckets"),
+          tinCount: whole("tins"),
+          shoutOut: checked("shoutOut"),
+          attend: checked("attend"),
+        },
+        postLine1: posted ? val("postLine1") : "",
+        postLine2: posted ? val("postLine2") : "",
+        postTown: posted ? val("postTown") : "",
+        postPostcode: posted ? val("postPostcode") : "",
         newsletterOk: checked("newsletterOk"),
-        company: val("company"),
-        captchaToken: tokenField ? tokenField.value : "",
       };
+      EVENT_TEXT.forEach(function (k) {
+        body[k] = event ? val(k) : "";
+      });
+      body.timeTbc = event && checked("timeTbc");
+      body.access = access;
+      body.booking = booking;
+      body.ticketUrl = booking === "away" ? val("ticketUrl") : "";
+      body.company = val("company");
+      body.captchaToken = tokenField ? tokenField.value : "";
+      return body;
     }
 
     function done(body) {

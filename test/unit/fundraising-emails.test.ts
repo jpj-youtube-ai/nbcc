@@ -345,3 +345,92 @@ describe("about your update", () => {
   it("is signed, with the questions box", () => expectSignedWithQuestions(mail, "Speak soon,"));
   it("is plain English", () => expectPlainEnglish(mail.text));
 });
+
+// TASK-499: the summary shows every new answer: the split requests, the address in its boxes, and
+// for an event, the event questions. A sign up from before them reads as it always did.
+describe("the summary to the events inbox, with the new answers", () => {
+  const NO_EVENT = {
+    cardLine: null, endTime: null, timeTbc: false, venueAddress: null, venuePostcode: null, access: [], price: null, booking: null,
+    ticketUrl: null, ageLimit: null, dressCode: null, included: null, creditName: null,
+  } as const;
+  const event: SignUp = {
+    ...signUp,
+    ...NO_EVENT,
+    path: "event",
+    kind: "quiz_party",
+    title: "The Example Quiz",
+    eventDate: "2026-12-04",
+    startTime: "19:30",
+    venue: "Example Village Hall",
+    targetPence: null,
+    wants: { posterCount: 5, leafletCount: 0, bucketCount: 0, tinCount: 2, leaflets: 0, buckets: 0, shoutOut: false, attend: true },
+    postLine1: "1 Example Road",
+    postLine2: "Flat 2",
+    postTown: "Exampleton",
+    postPostcode: "EX1 1EX",
+    cardLine: "Eight rounds and a raffle.",
+    endTime: "22:30",
+    timeTbc: true,
+    venueAddress: "Main Street, Exampleton",
+    venuePostcode: "KA1 1AA",
+    access: ["step free entry", "a hearing loop"],
+    price: "£5 on the door",
+    booking: "away",
+    ticketUrl: "https://tickets.example.com/quiz",
+    ageLimit: "18 and over",
+    dressCode: "Festive jumpers",
+    included: "A mince pie",
+    creditName: "The Quiz Team",
+  };
+  const mail = buildSignUpStaffEmail({ ...event, id: 44 }, { adminUrl: "https://nbcc.scot/admin" });
+
+  it("lists each request on its own, and the address from its boxes", () => {
+    for (const line of ["Posters: 5", "Leaflets: 0", "Collection buckets: 0", "Collection tins: 2", "Address for materials: 1 Example Road, Flat 2, Exampleton, EX1 1EX"]) {
+      expect(mail.text).toContain(line);
+    }
+    expect(mail.text).not.toContain("Leaflets or posters");
+  });
+
+  it("shows every event answer", () => {
+    for (const line of [
+      "Front of the card: Eight rounds and a raffle.",
+      "When: 2026-12-04 at 19:30 to 22:30, the time is still to be confirmed",
+      "Full address: Main Street, Exampleton, KA1 1AA",
+      "Access: Step free entry, Hearing loop",
+      "Price: £5 on the door",
+      "Getting in: Tickets are sold on another website",
+      "Ticket link: https://tickets.example.com/quiz",
+      "Age limit: 18 and over",
+      "Dress code: Festive jumpers",
+      "What's included: A mince pie",
+      "Credit it to: The Quiz Team",
+    ]) {
+      expect(mail.text).toContain(line);
+    }
+  });
+
+  it("says when nothing was ticked or no name was given to credit", () => {
+    const bare = buildSignUpStaffEmail(
+      { ...event, id: 45, access: [], creditName: null, booking: "door", ticketUrl: null, ageLimit: null, dressCode: null, included: null },
+      { adminUrl: "https://nbcc.scot/admin" },
+    );
+    expect(bare.text).toContain("Access: None ticked");
+    expect(bare.text).toContain("Credit it to: Not given, so the card says Robin T.");
+    expect(bare.text).toContain("Getting in: Pay on the door, no booking needed");
+    expect(bare.text).not.toContain("Ticket link");
+    expect(bare.text).not.toContain("Age limit");
+  });
+
+  it("asks no event questions of someone raising money", () => {
+    const raise = buildSignUpStaffEmail({ ...signUp, ...NO_EVENT, id: 46 }, { adminUrl: "https://nbcc.scot/admin" });
+    for (const label of ["Front of the card", "Access:", "Getting in", "Credit it to"]) expect(raise.text).not.toContain(label);
+  });
+
+  it("still shows a sign up from before the split as it did", () => {
+    expect(buildSignUpStaffEmail({ ...signUp, id: 47 }, { adminUrl: "https://nbcc.scot/admin" }).text).toContain(
+      "Address for materials: 1 Example Street, Exampleton",
+    );
+  });
+
+  it("is plain English", () => expectPlainEnglish(mail.text));
+});

@@ -6,6 +6,8 @@ import { portalRouter } from "./routes/portal";
 import { adminRouter } from "./routes/admin";
 import { adminUsersRouter } from "./routes/admin-users";
 import { adminEventsRouter } from "./routes/admin-events";
+import { adminFundraisingRouter } from "./routes/admin-fundraising";
+import { fundraiseRouter } from "./routes/fundraise";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
@@ -61,6 +63,8 @@ export function createApp() {
   app.use("/api/admin/newsletter-images", express.json({ limit: IMAGE_JSON_BODY_LIMIT }));
   // TASK-453: event pictures and organiser logos arrive the same way, so the same limit.
   app.use("/api/admin/event-images", express.json({ limit: IMAGE_JSON_BODY_LIMIT }));
+  // TASK-493: a fundraiser's photo, stored like an event picture, so the same limit.
+  app.use("/api/admin/fundraiser-images", express.json({ limit: IMAGE_JSON_BODY_LIMIT }));
   // Hosted-document uploads (TASK-265): same problem, bigger files — the 10 MB document cap is
   // ~13.7 MB base64-encoded, so without this the parser 413s a real certificate BEFORE auth runs
   // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the
@@ -82,6 +86,10 @@ export function createApp() {
   app.use(adminUsersRouter);
   // The admin's Events section (TASK-453): events, the page switch, previews, picture uploads.
   app.use(adminEventsRouter);
+  // Community fundraising (TASK-493): the public sign up, Get involved's list, each fundraiser's page,
+  // the emailed manage links, and Admin > Fundraising. All of it off until an admin switches it on.
+  app.use(fundraiseRouter);
+  app.use(adminFundraisingRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
   // Admin > Analytics (TASK-482): the numbers and the collecting switch.

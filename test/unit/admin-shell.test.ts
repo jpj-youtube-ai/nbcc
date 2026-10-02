@@ -83,6 +83,8 @@ describe("admin dashboard shell (REQ-066 · TASK-115)", () => {
       "ticker",
       // TASK-453: the Events page's events and its switch, beside the other website content.
       "events",
+      // TASK-495: community fundraising, beside the Events page it grows out of.
+      "fundraising",
       "ball",
       "contact",
       "newsletter",

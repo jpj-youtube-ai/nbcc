@@ -30,11 +30,11 @@ function record(fn: "up" | "down"): Call[] {
 }
 
 describe("the business supporter calls migration", () => {
-  // It sorted last when it shipped; later migrations sort after it (TASK-492 is the next), so this
-  // now checks it still sorts after the one that was highest before it.
-  it("sorts after every migration that was on main before it, so production never saw it out of order", () => {
+  // What matters is that nothing production had already run sorts after it; later work (TASK-493's
+  // 1791200000000) rightly comes after. So: it follows 1791000000003, the highest on main before it.
+  it("sorts after everything production had already run, so production never sees it out of order", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
-    expect(all.indexOf(FILE)).toBeGreaterThan(all.indexOf("1791000000003_ball-transfer-invoices.js"));
+    expect(all.indexOf(FILE)).toBe(all.indexOf("1791000000003_ball-transfer-invoices.js") + 1);
   });
 
   it("adds a nullable phone to the fulfilment record", () => {

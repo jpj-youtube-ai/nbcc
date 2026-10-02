@@ -33,6 +33,12 @@ const PAGES = [
   "privacy.html",
   "404.html",
   "sitemap.html",
+  // TASK-494
+  "events.html",
+  "fundraise.html",
+  "fundraise-manage.html",
+  // TASK-498
+  "fundraise-help.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 // Tabbable = what the first Tab from page load can reach, in DOM order. A

@@ -516,3 +516,114 @@
   .ev-turn:hover svg { transform: none; }
 }
 @keyframes ev-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* =================================================================
+   GET INVOLVED (TASK-494): the Events page widened with community
+   fundraisers. The chips, a fundraiser's card and the Fundraise for us
+   panel. The meter on a fundraiser's card is in fundraising.css.
+   ================================================================= */
+
+/* ---------- the hero ---------- */
+.events-intro h1 { text-wrap: balance; }
+.gi-hero-cta { margin: 26px 0 0; }
+
+/* ---------- the chips: All, Events, Fundraisers ---------- */
+.gi-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto clamp(18px, 2.4vw, 26px);
+}
+.gi-chip {
+  min-height: 48px;
+  padding: 10px 24px;
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--maroon);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+}
+.gi-chip:hover { border-color: var(--maroon); }
+.gi-chip:active { transform: translateY(1px); }
+.gi-chip[aria-pressed="true"] { border-color: var(--holly); background: var(--holly); color: var(--cream); }
+.gi-empty {
+  max-width: 34rem;
+  margin: 0 auto 24px;
+  padding: 18px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  text-align: center;
+  font-size: 1.02rem;
+  text-wrap: pretty;
+}
+.gi-empty a { font-weight: 600; }
+
+/* ---------- a fundraiser's card: one face, the whole of it a way in ---------- */
+/* No back to turn to: the fundraiser's own page holds everything. The card's button reaches over the
+   whole face, so a tap anywhere on it opens the page, and the face never shows the turn cursor. */
+.ev-card--fundraiser .ev-face { cursor: auto; height: 100%; }
+.ev-card--fundraiser .ev-body { flex: 1 0 auto; }
+.fr-flag { color: var(--holly); }
+.ev-card--fundraiser .ev-title { overflow-wrap: anywhere; }
+.fr-card__by { margin: 6px 0 0; font-size: 0.95rem; color: var(--slate-soft); }
+.ev-card--fundraiser .fr-meter { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.fr-card__go { position: static; width: 100%; justify-content: center; }
+.fr-card__go::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: var(--card-r); }
+.fr-card__go:hover { transform: none; }
+.fr-card__go:focus-visible { outline: none; }
+.fr-card__go:focus-visible::before { outline: 3px solid var(--holly); outline-offset: 3px; }
+@media (hover: hover) and (pointer: fine) {
+  .ev-card--fundraiser:hover .fr-card__go { --bg: var(--maroon); }
+}
+
+/* ---------- the Fundraise for us panel ---------- */
+.gi-fundraise { padding-top: 0; }
+.gi-panel {
+  display: grid;
+  gap: clamp(20px, 3vw, 36px);
+  align-items: center;
+  padding: clamp(26px, 4.5vw, 52px);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(110% 120% at 100% 0%, rgba(248, 245, 238, 0.14), transparent 60%),
+    var(--holly);
+  color: var(--cream);
+  box-shadow: var(--shadow);
+}
+@media (min-width: 900px) {
+  .gi-panel { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+}
+.gi-panel .eyebrow { color: var(--cream-82); }
+.gi-panel h2 { color: var(--cream); font-size: clamp(1.8rem, 1.5rem + 1.4vw, 2.5rem); text-wrap: balance; }
+.gi-panel .rule::before, .gi-panel .rule::after { background: var(--cream); opacity: 0.45; }
+.gi-panel .rule i { background: var(--tan-light); }
+.gi-panel p { margin: 18px 0 0; color: var(--cream-90); font-size: 1.05rem; max-width: 52ch; text-wrap: pretty; }
+.gi-panel__list { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; color: var(--cream-90); }
+.gi-panel__list li { position: relative; padding-left: 22px; line-height: 1.5; }
+.gi-panel__list li::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0.6em;
+  width: 7px;
+  height: 7px;
+  background: var(--tan-light);
+  transform: rotate(45deg);
+}
+.gi-panel__actions { display: grid; gap: 16px; justify-items: start; }
+@media (min-width: 900px) { .gi-panel__actions { justify-items: center; text-align: center; } }
+.gi-panel .btn { --bg: var(--cream); --fg: var(--maroon); font-size: 1.08rem; padding: 16px 32px; }
+.gi-panel .btn:hover { --bg: var(--white); }
+.gi-panel__link { display: inline-flex; align-items: center; min-height: 44px; color: var(--cream); font-weight: 600; text-underline-offset: 3px; }
+.gi-panel__link:hover { color: var(--white); }
+.gi-panel :focus-visible { outline-color: var(--cream); }
+@media (prefers-reduced-motion: reduce) {
+  .gi-chip, .gi-chip:active { transition: none; transform: none; }
+}
+

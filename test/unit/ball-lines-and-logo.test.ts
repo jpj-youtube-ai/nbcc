@@ -100,7 +100,9 @@ describe("the ball page carries its own nav item (TASK-334)", () => {
   it("applies the nav link to the page it serves", () => {
     // The CALL, not the mention. Asserting the file merely contains "addBallNavLink" passes on
     // the import line alone — verified by deleting the call and watching this go green.
-    expect(ballRoute).toMatch(/send\(\s*addBallNavLink\(/);
+    // TASK-494: the call now goes through decorateBallPage (src/ball/page-decor.ts), which adds the
+    // Festive Ball item when asked to (pinned in ball-page-decor.test.ts); the page must ask.
+    expect(ballRoute).toMatch(/send\(\s*decorateBallPage\(\s*page,\s*\{\s*ballItem:\s*true/);
   });
 });
 

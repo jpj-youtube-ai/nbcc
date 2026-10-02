@@ -10,7 +10,7 @@ const at = (iso: string) => new Date(iso);
 describe("the sections that can carry a New pill", () => {
   it("covers every kind of arrival the client asked for, and the Events page", () => {
     expect(AREAS.map((a) => a.area)).toEqual([
-      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "qr",
+      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "qr", "fundraising",
     ]);
   });
 
@@ -23,6 +23,7 @@ describe("the sections that can carry a New pill", () => {
       newsletter: "newsletter:view", events: "events:view", analytics: "analytics:view",
       // TASK-492: QR codes has no permission of its own; its menu link gates on Site pages.
       qr: "site:view",
+      fundraising: "fundraising:view",
     });
     for (const a of AREAS) expect(SECTIONS).toContain(a.section);
   });
@@ -39,6 +40,13 @@ describe("the sections that can carry a New pill", () => {
   // TASK-482: Admin > Analytics is a new screen, so everyone who can open it sees it as New once.
   it("announces Admin > Analytics", () => {
     expect(FEATURES.some((f) => f.area === "analytics")).toBe(true);
+  });
+
+  // TASK-495: Admin > Fundraising is a new screen, announced with the screen itself (the core,
+  // TASK-493, has the API and no screen). Each new sign up is an arrival as well.
+  it("announces Admin > Fundraising, with the screen that shows it", () => {
+    const line = FEATURES.find((f) => f.area === "fundraising");
+    expect(line?.what).toMatch(/^Admin > Fundraising: .*\(TASK-495\)$/);
   });
 
   it("lists new parts of the admin only against sections that exist", () => {

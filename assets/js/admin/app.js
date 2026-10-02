@@ -33,7 +33,7 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "events", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
+    "ticker", "ball", "events", "fundraising", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
     "business-supporters", "analytics", "team",
   ];
   // KEEP IN SYNC with OPERATIONAL_EDITOR_SECTIONS there as well. Not cosmetic either: Manage access
@@ -41,7 +41,7 @@
   // taken from editors on save (TASK-459). admin-sections-in-sync.test.ts checks every role.
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
-    "outreach", "events",
+    "outreach", "events", "fundraising",
   ];
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
   // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.
@@ -571,6 +571,7 @@
       loadEvents();
       loadBallReport();
     }
+    else if (name === "fundraising") loadFundraising();
     else if (name === "audit") loadAudit();
     else if (name === "email-audit") loadEmailAudit();
     else if (name === "analytics") loadAnalytics();
@@ -2586,6 +2587,11 @@
     // TASK-487: every kind the server sends has a name here (test/unit/admin-email-kinds.test.ts).
     ["ballTransfer", "Ball bank transfer"], ["ballTransferStaff", "Ball bank transfer (to events@)"],
     ["outreach", "Business outreach"], ["backupAlert", "Backup alert"],
+    // TASK-493: community fundraising.
+    ["fundraiseThanks", "Fundraiser sign up thanks"], ["fundraiseStaff", "Fundraiser sign up (to events@)"],
+    ["fundraiseApproved", "Fundraiser approved"], ["fundraiseManage", "Fundraiser manage link"],
+    // TASK-497: a change the organiser asked for, approved or rejected by staff.
+    ["fundraiseEditApproved", "Fundraiser update live"], ["fundraiseEditRejected", "Fundraiser update held back"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -5727,7 +5733,8 @@
     // TASK-278: the full provenance of a membership — when they joined, how consent arrived, and
     // which of us added them. "Who put this person on the list?" is the first question asked when an
     // address turns out to be wrong, or when someone says they never signed up.
-    var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff" };
+    var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff", fundraise: "Signed up while fundraising" };
+    var selfSignup = function (m) { return m.consentSource === "footer" || m.consentSource === "fundraise"; };
     // TASK-287: three columns, not seven. Seven never fitted the card, and .admin-table sets
     // white-space:nowrap on every cell, so the table grew to its longest email address and the card
     // scrolled sideways with Remove pushed off the edge. Nothing is lost — the same six facts are
@@ -5739,13 +5746,13 @@
       var contact = [m.email, m.phone].filter(Boolean).map(H.escapeHtml).join(" · ");
       var by = m.addedBy
         ? H.escapeHtml(m.addedBy)
-        : m.consentSource === "footer" ? "themselves" : "not recorded";
+        : selfSignup(m) ? "themselves" : "not recorded";
       var how = [H.escapeHtml(howLabel[m.consentSource] || m.consentSource), "by " + by].join(" · ");
       html +=
         '<tr><td><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
         '</span><span class="nl-meta">' + contact + "</span></td>" +
         '<td><span class="nl-person-nm">' + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") +
-        rowNewPill("newsletter", m.consentSource === "footer" ? m.consentedAt : null) +
+        rowNewPill("newsletter", selfSignup(m) ? m.consentedAt : null) +
         '</span><span class="nl-meta">' + how + "</span></td>" +
         '<td class="nl-r">' +
         (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +
@@ -8901,6 +8908,1207 @@
     }
   }
 
+  // ---- Admin > Fundraising (TASK-495) ----
+  // Community fundraising, stage 1 (docs/superpowers/specs/2026-10-02-community-fundraising-design.md).
+  // Everyone who signed up at /fundraise, and one sign up opening below its row with everything
+  // staff need: approve or decline it, change its details, check a change the organiser asked for,
+  // record cash paid in, and hide a message on the supporter wall. Built against the core's admin
+  // API (README, "Community fundraising (TASK-493)"); the server is the real gate on every route.
+  // Every stored string is escaped on the way in. Nothing scrolls inside a box: the list shows 25,
+  // the wall and History 10, and "Show all" grows the page.
+  var FR_KINDS = [
+    ["run_walk", "A run or walk"], ["santa_dash", "A Santa dash"], ["bake_sale", "A bake sale or coffee morning"],
+    ["quiz_party", "A quiz or party"], ["collection", "A workplace or school collection"], ["birthday", "A birthday"],
+    ["other", "Something else"],
+  ];
+  var FR_STATUS = {
+    new: { label: "New", cls: "is-new" },
+    approved: { label: "Approved", cls: "admin-pill--active" },
+    declined: { label: "Declined", cls: "admin-pill--cancelled" },
+    finished: { label: "Finished", cls: "" },
+  };
+  // The fields an organiser can ask to change (EDITABLE_FIELDS in src/fundraising/model.ts), in order.
+  var FR_EDITABLE = [
+    ["description", "Description"], ["targetPence", "Target"], ["eventDate", "Date"], ["startTime", "Start time"],
+    ["venue", "Venue"], ["town", "Town"], ["socialLink", "Facebook or Instagram link"],
+  ];
+  var FR_LIST_FIRST = 25;
+  var FR_WALL_FIRST = 10;
+  var FR_HISTORY_FIRST = 10;
+
+  var frData = null; // the last GET /api/admin/fundraisers
+  var frSettings = null; // the last GET /api/admin/fundraising/settings
+  var frFilter = ""; // "" is every status
+  var frOpenId = null; // the sign up open below its row
+  var frDetail = null; // GET /api/admin/fundraisers/:id for the open one
+  var frDetailFailed = false;
+  var frHistoryRows = null; // null loading, false failed, else the rows
+  var frMore = {}; // list, wall, history -> showing everything
+  var frNotice = {}; // detail, edit, cash, photo -> { msg, error }: said once after an action
+  var frEditDraft = null; // the edit form's boxes someone typed in (name -> value), so a redraw keeps them
+  var frEditErrors = {};
+  var frCashDraft = null;
+  var frCashErrors = {};
+  var frReasonDraft = "";
+  var frWired = false;
+  var frBusy = false; // a change is on its way: a second press waits rather than sending it twice
+
+  function frCanWrite() {
+    return canEdit("fundraising");
+  }
+  function frMoney(pence) {
+    return H.formatPence(Number(pence) || 0);
+  }
+  // 25000 -> "250", 30050 -> "300.50", for a box that takes pounds.
+  function frPounds(pence) {
+    if (pence === null || pence === undefined || pence === "") return "";
+    var n = Number(pence);
+    return n % 100 === 0 ? String(n / 100) : (n / 100).toFixed(2);
+  }
+  // "12.50", "£1,250", "1,250.50" or "250" -> pence; "" -> null; anything else -> NaN. A comma only
+  // counts between thousands: "12,50" is how some write twelve pounds fifty, and reading it as
+  // £1,250 would put a hundred times the money on the meter.
+  function frParsePounds(value) {
+    var s = String(value || "").replace(/[£\s]/g, "");
+    if (s === "") return null;
+    if (/^\d{1,3}(,\d{3})+(\.\d{1,2})?$/.test(s)) s = s.replace(/,/g, "");
+    if (!/^\d+(\.\d{1,2})?$/.test(s)) return NaN;
+    return Math.round(parseFloat(s) * 100);
+  }
+  // What to say when frParsePounds could not read it; example is whole pounds, like "12".
+  function frPoundsMessage(value, example) {
+    return /,\d{1,2}$/.test(String(value || "").trim())
+      ? "Use a full stop for the pence, like " + example + ".50."
+      : "Give the amount in pounds, like " + example + ".50.";
+  }
+  function frWho(actor) {
+    var a = String(actor || "");
+    if (a.indexOf("admin:") === 0) return a.slice(6);
+    if (a === "public") return "the sign up form";
+    if (a === "organiser") return "the organiser";
+    if (a === "stripe") return "a gift by card";
+    return a || "unknown";
+  }
+  function frIsWebLink(v) {
+    return typeof v === "string" && /^https?:\/\/[^\s]+$/i.test(v);
+  }
+  function frNone(words) {
+    return '<span class="fx-none">' + H.escapeHtml(words) + "</span>";
+  }
+  function frStatusPill(status) {
+    var s = FR_STATUS[status] || { label: String(status || ""), cls: "" };
+    return '<span class="admin-pill fr-status' + (s.cls ? " " + s.cls : "") + '">' + H.escapeHtml(s.label) + "</span>";
+  }
+  function frPathWords(path) {
+    return path === "event" ? "Holding an event" : "Raising money";
+  }
+  // A message belongs to the sign up it is about (id), and only shows while that one is open.
+  function frSay(key, msg, error, id) {
+    frNotice[key] = { msg: msg, error: !!error, id: id === undefined ? frOpenId : id };
+  }
+  function frNoticeFor(key) {
+    var n = frNotice[key];
+    return n && n.id === frOpenId ? n : { msg: "", error: false };
+  }
+  var FR_NOTICE_IDS = { detail: "frDetailStatus", edit: "frEditStatus", cash: "frCashStatus", photo: "frPhotoStatus" };
+  // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
+  function frPaintNotice(key) {
+    var line = el(FR_NOTICE_IDS[key]);
+    if (!line) return;
+    var n = frNoticeFor(key);
+    line.textContent = n.msg;
+    line.className = "ty-status fr-status-line" + (n.error ? " is-error" : n.msg ? " is-ok" : "");
+  }
+  function frNoticeHtml(key, id) {
+    var n = frNoticeFor(key);
+    return '<p class="ty-status fr-status-line' + (n.error ? " is-error" : n.msg ? " is-ok" : "") + '" id="' + id +
+      '" role="status" aria-live="polite">' + H.escapeHtml(n.msg) + "</p>";
+  }
+  function frMoreButton(key, shown, total) {
+    if (frMore[key] || total <= shown) return "";
+    return '<button class="fr-more" type="button" data-frmore="' + key + '" aria-expanded="false">Show all ' + total + "</button>";
+  }
+
+  // ---- loading ----
+  function loadFundraising() {
+    frWire();
+    frLoadSettings();
+    frLoadList();
+    if (frOpenId != null) frLoadDetail(frOpenId);
+  }
+
+  function frLoadSettings() {
+    return authFetch("/api/admin/fundraising/settings")
+      .then(okJson)
+      .then(function (s) {
+        frSettings = s;
+        frRenderSwitch();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frSettings = null;
+        el("frSwitch").classList.remove("is-on");
+        el("frSwitchState").textContent = "Could not check whether fundraising is on. Try again in a moment.";
+        el("frSwitchWho").textContent = "";
+        el("frSwitchBtn").hidden = true;
+        el("frSwitchNote").hidden = true;
+      });
+  }
+
+  function frLoadList() {
+    return authFetch("/api/admin/fundraisers")
+      .then(okJson)
+      .then(function (d) {
+        frData = d;
+        frRenderList();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        frData = null;
+        frRenderCounts([]);
+        el("frList").innerHTML = '<div role="alert">' +
+          unavailableHtml("The sign ups could not load just now. Try again in a moment.") + "</div>";
+      });
+  }
+
+  function frLoadDetail(id) {
+    return authFetch("/api/admin/fundraisers/" + encodeURIComponent(id))
+      .then(okJson)
+      .then(function (d) {
+        if (frOpenId !== id) return;
+        frDetail = d;
+        frDetailFailed = false;
+        frRenderList();
+        frLoadHistory(id);
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (frOpenId !== id) return;
+        frDetail = null;
+        frDetailFailed = true;
+        frRenderList();
+      });
+  }
+
+  function frLoadHistory(id) {
+    return authFetch("/api/admin/fundraisers/" + encodeURIComponent(id) + "/history")
+      .then(okJson)
+      .then(function (d) {
+        if (frOpenId !== id) return;
+        frHistoryRows = (d && d.history) || [];
+        frPaintHistory();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (frOpenId !== id) return;
+        frHistoryRows = false;
+        frPaintHistory();
+      });
+  }
+
+  // After a change: the list (status, pills, the raised column) and the open sign up, afresh.
+  function frReload() {
+    var id = frOpenId;
+    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null]);
+  }
+
+  // ---- the switch ----
+  function frRenderSwitch() {
+    var on = !!(frSettings && frSettings.pageOn);
+    el("frSwitch").classList.toggle("is-on", on);
+    el("frSwitchState").innerHTML = on
+      ? "<b>Yes.</b> The Fundraise for us form takes sign ups, approved public fundraisers are on Get involved, and each one raising money has its own page."
+      : "<b>No.</b> Fundraising is switched off: the form takes no sign ups, nothing is listed and every fundraiser page is hidden. Check and approve sign ups here, then switch it on when you are ready.";
+    var by = frSettings && frSettings.updatedBy && String(frSettings.updatedBy).indexOf("admin:") === 0
+      ? String(frSettings.updatedBy).slice(6) : "";
+    el("frSwitchWho").textContent = by
+      ? "Last " + (on ? "switched on" : "switched off") + " by " + by + " on " + H.fmtDate(frSettings.updatedAt) + "."
+      : "";
+    var mayFlip = isAdmin() && frCanWrite();
+    var btn = el("frSwitchBtn");
+    btn.hidden = !mayFlip;
+    el("frSwitchNote").hidden = mayFlip;
+    btn.textContent = on ? "Switch fundraising off" : "Switch fundraising on";
+    btn.className = on ? "btn btn-ghost" : "btn btn-primary";
+  }
+
+  function frFlipSwitch() {
+    var on = !!(frSettings && frSettings.pageOn);
+    if (on) return frConfirmFlip(on, null);
+    // TASK-497: switching on emails "Your page is live" to every page holder approved while it was
+    // off. Approvals made since the screen opened add to that list, so ask the server how many are
+    // waiting now, as the switch is pressed. If it cannot say, the question still goes, without a number.
+    authFetch("/api/admin/fundraising/settings")
+      .then(okJson)
+      .then(function (s) {
+        return s && typeof s.liveEmailsWaiting === "number" ? s.liveEmailsWaiting : null;
+      })
+      .catch(function () {
+        return null;
+      })
+      .then(function (waitingCount) {
+        frConfirmFlip(on, waitingCount);
+      });
+  }
+
+  function frConfirmFlip(on, waitingCount) {
+    var liveNote = waitingCount === null
+      ? " “Your page is live” goes by email to everyone approved while it was off."
+      : waitingCount > 0
+        ? " “Your page is live” goes by email to the " + waitingCount + (waitingCount === 1 ? " fundraiser" : " fundraisers") + " approved while it was off."
+        : "";
+    var question = on
+      ? "Switch fundraising off? The form stops taking sign ups, and every fundraiser comes off the website straight away."
+      : "Switch fundraising on? The Fundraise for us form opens, and every approved public fundraiser goes on the website straight away." + liveNote;
+    if (!window.confirm(question)) return;
+    var btn = el("frSwitchBtn");
+    var status = el("frSwitchStatus");
+    btn.disabled = true;
+    status.className = "ty-status";
+    status.textContent = on ? "Switching off…" : "Switching on…";
+    authFetch("/api/admin/fundraising/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pageOn: !on }),
+    })
+      .then(okJsonOrSaid)
+      .then(function (s) {
+        btn.disabled = false;
+        frSettings = s;
+        frRenderSwitch();
+        status.className = "ty-status is-ok";
+        status.textContent = s.pageOn ? "Fundraising is now on." : "Fundraising is now off.";
+      })
+      .catch(function (err) {
+        btn.disabled = false;
+        if (err && err.message === "unauthorized") return;
+        status.className = "ty-status is-error";
+        status.textContent = (err && err.said) || "That did not work. Please try again.";
+      });
+  }
+
+  // ---- the list ----
+  function frRenderCounts(list) {
+    var counts = { all: list.length, new: 0, approved: 0, declined: 0, finished: 0 };
+    list.forEach(function (f) {
+      if (counts[f.status] !== undefined) counts[f.status] += 1;
+    });
+    Object.keys(counts).forEach(function (k) {
+      var c = doc.querySelector('[data-frcount="' + k + '"]');
+      if (c) c.textContent = counts[k];
+    });
+  }
+
+  function frRaisedCell(f) {
+    var m = f.meter || {};
+    var raised = frMoney(m.raisedPence);
+    if (m.targetPence) {
+      return '<span class="fr-raised">' + raised + " of " + frMoney(m.targetPence) + "</span>" +
+        '<span class="fr-pct">' + (m.percent === null || m.percent === undefined ? 0 : m.percent) + "%</span>";
+    }
+    return '<span class="fr-raised">' + raised + " raised</span>";
+  }
+
+  function frSummaryRow(f) {
+    var open = frOpenId === f.id;
+    var sub = [f.name, frPathWords(f.path), f.eventDate ? H.fmtDate(f.eventDate) : "No date"];
+    var pills = (f.editWaiting ? '<span class="admin-pill admin-pill--pending fr-changes-pill">Changes to check</span>' : "") +
+      rowNewPill("fundraising", f.createdAt);
+    return (
+      '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
+      '" tabindex="0" role="button" aria-expanded="' + (open ? "true" : "false") + '">' +
+        '<td><span class="fx-caret" aria-hidden="true"></span><span class="fr-title">' + H.escapeHtml(f.title) + "</span>" +
+          '<span class="fr-sub">' + sub.map(function (s) { return H.escapeHtml(s); }).join(" · ") + "</span>" +
+          (pills ? '<span class="fr-pills">' + pills + "</span>" : "") + "</td>" +
+        "<td>" + frStatusPill(f.status) + "</td>" +
+        '<td class="fr-money">' + frRaisedCell(f) + "</td>" +
+      "</tr>" +
+      (open ? '<tr class="fx-detail-row"><td colspan="3">' + frDetailHtml(f) + "</td></tr>" : "")
+    );
+  }
+
+  // Every change redraws the list, which used to drop keyboard focus to the top of the page. Where
+  // focus was is remembered by the element's id or its data-fr* mark, and put back after the redraw;
+  // if that control has gone (Approve, once approved), focus goes to the open sign up's row.
+  var frFocusKey = null;
+  function frRememberFocus(wrap) {
+    var active = doc.activeElement;
+    if (active && wrap.contains(active)) {
+      frFocusKey = { sel: null };
+      if (active.id) frFocusKey.sel = "#" + active.id;
+      else {
+        for (var i = 0; i < active.attributes.length; i++) {
+          var a = active.attributes[i];
+          if (a.name.indexOf("data-fr") === 0) {
+            frFocusKey.sel = "[" + a.name + '="' + String(a.value).replace(/"/g, "") + '"]';
+            break;
+          }
+        }
+      }
+    } else if (active && active !== doc.body) {
+      frFocusKey = null; // focus moved somewhere else on purpose: leave it there
+    }
+  }
+  function frRestoreFocus(wrap) {
+    if (!frFocusKey) return;
+    var target = (frFocusKey.sel && wrap.querySelector(frFocusKey.sel)) ||
+      (frOpenId != null ? wrap.querySelector('[data-frtoggle="' + frOpenId + '"]') : null);
+    if (target && target.focus) target.focus({ preventScroll: true });
+  }
+
+  function frRenderList() {
+    var wrap = el("frList");
+    if (!wrap || !frData) return;
+    frRememberFocus(wrap);
+    var all = frData.fundraisers || [];
+    frRenderCounts(all);
+    Array.prototype.forEach.call(doc.querySelectorAll("[data-frfilter]"), function (b) {
+      var on = b.getAttribute("data-frfilter") === frFilter;
+      b.classList.toggle("is-active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    if (!all.length) {
+      wrap.innerHTML = '<p class="fx-empty fr-empty">Nobody has signed up yet. Sign ups from the Fundraise for us form arrive here, with a New pill.</p>';
+      return;
+    }
+    var rows = all.filter(function (f) { return !frFilter || f.status === frFilter; });
+    if (!rows.length) {
+      var none = { new: "No new sign ups are waiting.", approved: "None approved yet.", declined: "None declined.", finished: "None finished yet." };
+      wrap.innerHTML = '<p class="fx-empty fr-empty">' + H.escapeHtml(none[frFilter] || "None here.") + "</p>";
+      return;
+    }
+    var openAt = -1;
+    rows.forEach(function (f, i) { if (f.id === frOpenId) openAt = i; });
+    var showAll = frMore.list || openAt >= FR_LIST_FIRST;
+    var shown = showAll ? rows : rows.slice(0, FR_LIST_FIRST);
+    wrap.innerHTML =
+      '<p class="fx-hint">Select a sign up to see everything they told us, approve it and look after its page.</p>' +
+      '<table class="admin-table fx-table fr-table"><thead><tr><th>Sign up</th><th>Status</th><th>Raised</th></tr></thead><tbody>' +
+      shown.map(frSummaryRow).join("") + "</tbody></table>" +
+      (showAll ? "" : '<div class="fr-more-row">' + frMoreButton("list", FR_LIST_FIRST, rows.length) + "</div>");
+    nlFitBoxes(Array.prototype.slice.call(wrap.querySelectorAll("textarea.fr-input")));
+    frPaintHistory();
+    frRestDetail();
+    frRestoreFocus(wrap);
+  }
+
+  function frToggle(id) {
+    var n = Number(id);
+    frOpenId = frOpenId === n ? null : n;
+    frDetail = null;
+    frDetailFailed = false;
+    frHistoryRows = null;
+    frMore = { list: frMore.list };
+    frNotice = {};
+    frEditDraft = null;
+    frEditErrors = {};
+    frCashDraft = null;
+    frCashErrors = {};
+    frReasonDraft = "";
+    frRenderList();
+    if (frOpenId != null) frLoadDetail(frOpenId);
+  }
+
+  // ---- one sign up ----
+  function frDetailHtml(listRow) {
+    if (frDetailFailed) {
+      return '<div class="fr-detail-msg" data-frdetail="' + listRow.id + '" role="alert">' +
+        unavailableHtml("This sign up could not load just now. Close it and open it again in a moment.") + "</div>";
+    }
+    if (!frDetail || !frDetail.fundraiser || frDetail.fundraiser.id !== listRow.id) {
+      return '<div class="fr-detail-msg" data-frdetail="' + listRow.id + '"><p class="admin-loading">Loading…</p></div>';
+    }
+    var f = frDetail.fundraiser;
+    var write = frCanWrite();
+    return (
+      '<div class="fx-detail fr-detail" data-frdetail="' + f.id + '">' +
+        '<section class="fx-panel fx-panel--wide"><h4>Where it is up to</h4>' + frStatePanel(f, write) + "</section>" +
+        (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
+        '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
+        '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
+        '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
+        '<section class="fx-panel"><h4>Photo for its page</h4>' + frPhotoPanel(f, write) + "</section>" +
+        '<section class="fx-panel"><h4>Money raised</h4>' + frMeterHtml(frDetail.meter) + "</section>" +
+        '<section class="fx-panel"><h4>Cash paid in</h4>' + frCashPanel(frDetail.cash || [], write) + "</section>" +
+        (write ? '<section class="fx-panel fx-panel--wide"><h4>Change the details</h4>' + frEditForm(f) + "</section>" : "") +
+        '<section class="fx-panel fx-panel--wide"><h4>Supporter wall</h4>' + frWallPanel(frDetail.wall || [], write) + "</section>" +
+        '<section class="fx-panel fx-panel--wide"><h4>History</h4><div class="fx-history" id="frHistory"></div></section>' +
+      "</div>"
+    );
+  }
+
+  function frStateWords(f) {
+    if (f.status === "new") return "New: waiting for you to approve or decline it. Nothing about it is public until it is approved.";
+    if (f.status === "declined") return "Declined. Nothing about it is public.";
+    if (f.status === "finished") return "Finished. It is no longer on the website, and what it raised stays in the records.";
+    if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
+    if (f.path === "event") return "Approved. It is listed on Get involved as an event while fundraising is switched on.";
+    return "Approved. Its page is on the website while fundraising is switched on.";
+  }
+
+  function frStatePanel(f, write) {
+    var rows = "";
+    if (f.approvedAt) rows += fulfilRow("Approved", H.escapeHtml(H.fmtDate(f.approvedAt) + (f.approvedBy ? " by " + frWho(f.approvedBy) : "")));
+    if (f.status === "declined" && f.declinedReason) {
+      rows += fulfilRow("Why it was declined", '<span class="fx-address">' + H.escapeHtml(f.declinedReason) + "</span>" +
+        '<span class="fr-field-hint">Kept inside NBCC, never shown to them.</span>');
+    }
+    var page;
+    if (f.pageUrl && frIsWebLink(f.pageUrl)) {
+      page = '<a class="fx-tel" id="frPageLink" href="' + H.escapeHtml(f.pageUrl) + '" target="_blank" rel="noopener noreferrer">' +
+        H.escapeHtml(f.pageUrl) + "</a>" +
+        '<a class="fr-qr-link" id="frQrLink" href="/fundraise/' + encodeURIComponent(f.slug) + '/qr.svg" download="' +
+        H.escapeHtml("qr-" + f.slug + ".svg") + '">Download its QR code</a>';
+    } else {
+      page = frNone(f.path === "event" && f.status === "approved" && f.public
+        ? "No page on the website: an event is listed on Get involved instead."
+        : "No page on the website.");
+    }
+    rows += fulfilRow("Its page", page);
+    var actions = "";
+    if (write) {
+      var buttons = "";
+      if (f.status === "new" || f.status === "declined") {
+        buttons += '<button class="admin-btn admin-btn--small" type="button" data-fraction="approve">Approve</button>';
+      }
+      if (f.status === "approved") {
+        buttons += '<button class="admin-btn admin-btn--small" type="button" data-fraction="finish">Mark finished</button>';
+      }
+      var decline = "";
+      if (f.status === "new" || f.status === "approved") {
+        decline =
+          '<div class="fr-decline">' +
+            '<label class="fx-call-label" for="frDeclineReason">Reason for declining (optional)</label>' +
+            '<span class="fr-field-hint">Kept inside NBCC, never shown to them. They are not emailed.</span>' +
+            '<textarea class="fx-call-input fr-input" id="frDeclineReason" rows="2" maxlength="500">' + H.escapeHtml(frReasonDraft) + "</textarea>" +
+            '<div class="fx-call-row"><button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-fraction="decline">Decline</button></div>' +
+          "</div>";
+      }
+      actions = (buttons ? '<div class="fx-call-row fr-actions">' + buttons + "</div>" : "") + decline;
+    }
+    return (
+      '<p class="fx-letter"><span class="fx-state fx-state--' + (f.status === "new" ? "todo" : f.status === "approved" ? "done" : "waiting") + '">' +
+        H.escapeHtml(frStateWords(f)) + "</span></p>" +
+      '<dl class="fx-dl">' + rows + "</dl>" + actions + frNoticeHtml("detail", "frDetailStatus")
+    );
+  }
+
+  function frShowValue(key, value) {
+    if (value === null || value === undefined || value === "") return frNone("Nothing");
+    if (key === "targetPence") return H.escapeHtml(frMoney(value));
+    if (key === "eventDate") return H.escapeHtml(H.fmtDate(value));
+    if (key === "startTime") return H.escapeHtml(String(value).slice(0, 5));
+    return '<span class="fx-address">' + H.escapeHtml(value) + "</span>";
+  }
+
+  function frChangePanel(f, edit, write) {
+    var changes = edit.changes || {};
+    var lines = FR_EDITABLE.filter(function (k) { return Object.prototype.hasOwnProperty.call(changes, k[0]); }).map(function (k) {
+      return '<tr><th scope="row">' + H.escapeHtml(k[1]) + "</th>" +
+        '<td data-label="Live now">' + frShowValue(k[0], f[k[0]]) + "</td>" +
+        '<td data-label="Their change">' + frShowValue(k[0], changes[k[0]]) + "</td></tr>";
+    });
+    return (
+      '<p class="fx-help">The organiser asked for this on ' + H.escapeHtml(H.fmtDate(edit.createdAt)) +
+        ". The website keeps the live version until you approve it.</p>" +
+      '<table class="admin-table fr-change" id="frChange"><thead><tr><th>What</th><th>Live now</th><th>Their change</th></tr></thead><tbody>' +
+        lines.join("") + "</tbody></table>" +
+      (write
+        ? '<div class="fx-call-row fr-actions"><button class="admin-btn admin-btn--small" type="button" data-fredit="approve" data-freditid="' +
+            Number(edit.id) + '">Approve change</button>' +
+          '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-fredit="reject" data-freditid="' + Number(edit.id) +
+            '">Reject change</button></div>'
+        : "")
+    );
+  }
+
+  function frAboutPanel(f) {
+    var kind = f.kindLabel || (FR_KINDS.filter(function (k) { return k[0] === f.kind; })[0] || [0, f.kind])[1];
+    var where = [f.venue, f.town].filter(Boolean).join(", ");
+    return (
+      '<dl class="fx-dl">' +
+        fulfilRow("Name for it", H.escapeHtml(f.title)) +
+        fulfilRow("They are", H.escapeHtml(frPathWords(f.path))) +
+        fulfilRow("Kind", H.escapeHtml(kind)) +
+        fulfilRow("About it", f.description ? '<span class="fx-address">' + H.escapeHtml(f.description) + "</span>" : frNone("Nothing yet")) +
+        fulfilRow("Date", f.eventDate ? H.escapeHtml(H.fmtDate(f.eventDate)) : frNone("No date")) +
+        fulfilRow("Start time", f.startTime ? H.escapeHtml(String(f.startTime).slice(0, 5)) : frNone("No time")) +
+        fulfilRow("Where", where ? H.escapeHtml(where) : frNone("Not given")) +
+        fulfilRow("Target", f.targetPence ? H.escapeHtml(frMoney(f.targetPence)) : frNone("No target")) +
+        fulfilRow("On the website", f.public ? "Show it on our website" : "Just letting us know, or only wants materials") +
+        fulfilRow("Web address", '<span class="fx-mono">/fundraise/' + H.escapeHtml(f.slug) + "</span>") +
+        fulfilRow("Signed up", H.escapeHtml(H.fmtDate(f.createdAt))) +
+      "</dl>"
+    );
+  }
+
+  function frContactPanel(f) {
+    var social = f.socialLink
+      ? frIsWebLink(f.socialLink)
+        ? '<a class="fx-tel" href="' + H.escapeHtml(f.socialLink) + '" target="_blank" rel="noopener noreferrer">' + H.escapeHtml(f.socialLink) + "</a>"
+        : '<span class="fx-mono">' + H.escapeHtml(f.socialLink) + "</span>"
+      : frNone("Not given");
+    return (
+      '<dl class="fx-dl">' +
+        fulfilRow("Name", H.escapeHtml(f.name)) +
+        fulfilRow("Phone", f.phone ? '<a class="fx-tel" href="' + H.escapeHtml(telHref(f.phone)) + '">' + H.escapeHtml(f.phone) + "</a>" : frNone("Not given")) +
+        fulfilRow("Email", f.email ? '<a class="fx-tel" href="mailto:' + H.escapeHtml(f.email) + '">' + H.escapeHtml(f.email) + "</a>" : frNone("Not given")) +
+        fulfilRow("Facebook or Instagram", social) +
+        fulfilRow("Post about it on NBCC's social media", fulfilYesNo(f.socialOk)) +
+        fulfilRow("Newsletter", fulfilYesNo(f.newsletterOk)) +
+      "</dl>"
+    );
+  }
+
+  function frWantsPanel(f) {
+    var w = f.wants || {};
+    var items = [];
+    var leaflets = Number(w.leaflets) || 0;
+    var buckets = Number(w.buckets) || 0;
+    if (leaflets > 0) items.push(leaflets + (leaflets === 1 ? " leaflet or poster" : " leaflets or posters"));
+    if (buckets > 0) items.push(buckets + (buckets === 1 ? " bucket or tin" : " buckets or tins"));
+    if (w.shoutOut) items.push("A social media shout out");
+    if (w.attend) items.push("Someone from NBCC to come along");
+    var list = items.length
+      ? '<ul class="fr-wants">' + items.map(function (s) { return "<li>" + H.escapeHtml(s) + "</li>"; }).join("") + "</ul>"
+      : '<p class="fx-empty">Nothing asked for.</p>';
+    var address = f.postAddress
+      ? '<dl class="fx-dl fr-gap">' + fulfilRow("Post them to", '<span class="fx-address">' + H.escapeHtml(f.postAddress) + "</span>") + "</dl>"
+      : (leaflets > 0 || buckets > 0) ? '<p class="fx-warn fr-gap">No address given. Ask them before posting.</p>' : "";
+    return list + address;
+  }
+
+  function frPhotoPanel(f, write) {
+    var src = typeof f.imageSrc === "string" && /^\/media\/[A-Za-z0-9/_-]+$/.test(f.imageSrc) ? f.imageSrc : "";
+    var shown = src
+      ? '<img class="fr-photo" src="' + H.escapeHtml(src) + '" alt="The photo on its page">'
+      : '<p class="fx-empty">No photo yet. ' + (write ? "Their page shows without one until you add it." : "") + "</p>";
+    var upload = write
+      ? '<label class="fx-call-label fr-gap" for="frPhotoInput">' + (src ? "Change the photo" : "Add a photo") + "</label>" +
+        '<span class="fr-field-hint">A JPG or PNG. Big phone photos are made smaller first.</span>' +
+        '<input class="fr-file" type="file" id="frPhotoInput" accept="image/*">' + frNoticeHtml("photo", "frPhotoStatus")
+      : "";
+    return shown + upload;
+  }
+
+  function frMeterHtml(m) {
+    m = m || {};
+    var head = "<b>" + H.escapeHtml(frMoney(m.raisedPence) + " raised") + "</b>" +
+      (m.targetPence ? " of " + H.escapeHtml(frMoney(m.targetPence)) + ' <span class="fr-pct">' + (m.percent || 0) + "%</span>" : "");
+    var bar = m.targetPence
+      ? '<div class="fr-meter-bar" role="progressbar" aria-label="Raised so far, against the target" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' +
+          (Number(m.barPercent) || 0) + '" aria-valuetext="' + (m.percent || 0) + '% of the target"><span class="fr-meter-fill" style="width:' +
+          Math.max(0, Math.min(100, Number(m.barPercent) || 0)) + '%"></span></div>'
+      : '<p class="fx-help">No target set.</p>';
+    return (
+      '<div class="fr-meter"><p class="fr-meter-head">' + head + "</p>" + bar +
+        '<p class="fr-meter-split">' + H.escapeHtml(frMoney(m.onlinePence) + " online · " + frMoney(m.cashPence) + " cash") + "</p></div>"
+    );
+  }
+
+  // The server names a field inside another with a dot ("wants.buckets"), which is no good in an id.
+  function frErrId(key) {
+    return "frErr-" + String(key).replace(/[^A-Za-z0-9]/g, "-");
+  }
+  function frFieldError(errors, key) {
+    var msg = errors[key];
+    return '<p class="fr-err" id="' + frErrId(key) + '" data-frerr="' + H.escapeHtml(key) + '"' + (msg ? "" : " hidden") + ">" +
+      H.escapeHtml(msg || "") + "</p>";
+  }
+  function frInvalid(errors, key) {
+    return errors[key] ? ' aria-invalid="true" aria-describedby="' + frErrId(key) + '"' : "";
+  }
+
+  function frCashPanel(rows, write) {
+    var list = rows.length
+      ? '<ul class="fr-cash">' + rows.map(function (c) {
+          return '<li data-frcash="' + Number(c.id) + '"><span class="fr-cash-amount">' + H.escapeHtml(frMoney(c.amountPence)) + "</span>" +
+            '<span class="fr-cash-text"><span>Paid in on ' + H.escapeHtml(H.fmtDate(c.paidInOn)) + "</span>" +
+            (c.note ? '<span class="fr-cash-note">' + H.escapeHtml(c.note) + "</span>" : "") +
+            '<span class="fx-hist-who">Added by ' + H.escapeHtml(frWho(c.createdBy)) + "</span></span>" +
+            (write
+              ? '<button class="fr-link-btn" type="button" data-frcashremove="' + Number(c.id) + '" aria-label="' +
+                  H.escapeHtml("Remove " + frMoney(c.amountPence) + " paid in " + H.fmtDate(c.paidInOn)) + '">Remove</button>'
+              : "") +
+            "</li>";
+        }).join("") + "</ul>"
+      : '<p class="fx-empty">No cash recorded yet.</p>';
+    if (!write) return list;
+    var d = frCashDraft || { amount: "", paidInOn: evToday(), note: "" };
+    var e = frCashErrors;
+    return (
+      list +
+      '<form class="fx-call-form fr-form fr-cash-form" id="frCashForm" novalidate>' +
+        '<div class="fr-field"><label class="fx-call-label" for="frCashAmount">Amount in pounds</label>' +
+          '<input class="fx-call-input" id="frCashAmount" name="amount" type="text" inputmode="decimal" autocomplete="off" value="' +
+          H.escapeHtml(d.amount) + '"' + frInvalid(e, "amountPence") + ">" + frFieldError(e, "amountPence") + "</div>" +
+        '<div class="fr-field"><label class="fx-call-label" for="frCashDate">Paid in on</label>' +
+          '<input class="fx-call-input" id="frCashDate" name="paidInOn" type="date" value="' + H.escapeHtml(d.paidInOn) + '"' +
+          frInvalid(e, "paidInOn") + ">" + frFieldError(e, "paidInOn") + "</div>" +
+        '<div class="fr-field fr-field--wide"><label class="fx-call-label" for="frCashNote">Note (optional)</label>' +
+          '<input class="fx-call-input" id="frCashNote" name="note" type="text" maxlength="500" autocomplete="off" value="' +
+          H.escapeHtml(d.note) + '"' + frInvalid(e, "note") + ">" + frFieldError(e, "note") + "</div>" +
+        '<div class="fx-call-row fr-field--wide"><button class="admin-btn admin-btn--small" type="submit">Add the cash</button></div>' +
+        frNoticeHtml("cash", "frCashStatus") +
+      "</form>"
+    );
+  }
+
+  // Every field staff may change (adminPatchSchema in src/fundraising/model.ts), as the form shows
+  // them. Strings throughout, so what is typed compares straight with what is live.
+  function frEditValues(f) {
+    var w = f.wants || {};
+    return {
+      title: f.title || "", kind: f.kind || "other", path: f.path || "raising", description: f.description || "",
+      eventDate: f.eventDate || "", startTime: f.startTime ? String(f.startTime).slice(0, 5) : "", venue: f.venue || "",
+      town: f.town || "", target: frPounds(f.targetPence), public: !!f.public, slug: f.slug || "",
+      name: f.name || "", email: f.email || "", phone: f.phone || "", socialLink: f.socialLink || "", socialOk: !!f.socialOk,
+      postAddress: f.postAddress || "", leaflets: String(Number(w.leaflets) || 0), buckets: String(Number(w.buckets) || 0),
+      shoutOut: !!w.shoutOut, attend: !!w.attend,
+    };
+  }
+  var FR_TEXT_FIELDS = ["title", "kind", "path", "description", "venue", "town", "slug", "name", "email", "phone", "socialLink", "postAddress"];
+
+  function frEditForm(f) {
+    // What is live, with only the boxes someone has typed in laid over it (frEditDraft).
+    var v = frEditValues(f);
+    var draft = frEditDraft || {};
+    Object.keys(draft).forEach(function (k) { if (Object.prototype.hasOwnProperty.call(v, k)) v[k] = draft[k]; });
+    var e = frEditErrors;
+    function box(name, key, label, type, attrs, hint) {
+      // A hint goes under its box, so the boxes in a row of fields stay level with each other.
+      return '<div class="fr-field"><label class="fx-call-label" for="frf-' + name + '">' + H.escapeHtml(label) + "</label>" +
+        '<input class="fx-call-input" id="frf-' + name + '" name="' + name + '" type="' + type + '" ' + (attrs || "") +
+        ' value="' + H.escapeHtml(v[name]) + '"' + frInvalid(e, key) + ">" + frFieldError(e, key) +
+        (hint ? '<span class="fr-field-hint">' + H.escapeHtml(hint) + "</span>" : "") + "</div>";
+    }
+    function area(name, key, label, rows, max) {
+      return '<div class="fr-field fr-field--wide"><label class="fx-call-label" for="frf-' + name + '">' + H.escapeHtml(label) + "</label>" +
+        '<textarea class="fx-call-input fr-input" id="frf-' + name + '" name="' + name + '" rows="' + rows + '" maxlength="' + max + '"' +
+        frInvalid(e, key) + ">" + H.escapeHtml(v[name]) + "</textarea>" + frFieldError(e, key) + "</div>";
+    }
+    function pick(name, label, options) {
+      return '<div class="fr-field"><label class="fx-call-label" for="frf-' + name + '">' + H.escapeHtml(label) + "</label>" +
+        '<select class="fx-call-input" id="frf-' + name + '" name="' + name + '"' + frInvalid(e, name) + ">" +
+        options.map(function (o) {
+          return '<option value="' + o[0] + '"' + (v[name] === o[0] ? " selected" : "") + ">" + H.escapeHtml(o[1]) + "</option>";
+        }).join("") + "</select>" + frFieldError(e, name) + "</div>";
+    }
+    function tick(name, key, label) {
+      return '<div class="fr-field fr-field--wide"><label class="fr-check"><input type="checkbox" id="frf-' + name + '" name="' + name + '"' +
+        (v[name] ? " checked" : "") + frInvalid(e, key) + "> " + H.escapeHtml(label) + "</label>" + frFieldError(e, key) + "</div>";
+    }
+    function head(words) {
+      return '<p class="fr-form-head">' + H.escapeHtml(words) + "</p>";
+    }
+    return (
+      '<p class="fx-help">Changes here go straight onto the website. Only what you change is saved, and it is recorded in History.</p>' +
+      '<form class="fx-call-form fr-form" id="frEditForm" novalidate>' +
+        head("The fundraiser") +
+        box("title", "title", "Name for it", "text", 'maxlength="100" autocomplete="off"') +
+        pick("kind", "Kind", FR_KINDS) +
+        pick("path", "They are", [["raising", "Raising money"], ["event", "Holding an event"]]) +
+        area("description", "description", "About it", 4, 1000) +
+        box("eventDate", "eventDate", "Date (optional)", "date", "") +
+        box("startTime", "startTime", "Start time (optional)", "time", "") +
+        box("venue", "venue", "Venue (optional)", "text", 'maxlength="120" autocomplete="off"') +
+        box("town", "town", "Town (optional)", "text", 'maxlength="80" autocomplete="off"') +
+        box("target", "targetPence", "Target in pounds (optional)", "text", 'inputmode="decimal" autocomplete="off"', "From £10 to £100,000. Leave it empty for no target.") +
+        box("slug", "slug", "Web address", "text", 'maxlength="60" autocomplete="off" spellcheck="false"', "The end of nbcc.scot/fundraise/ in small letters and numbers, with a hyphen between words.") +
+        tick("public", "public", "Show it on our website") +
+        head("The organiser") +
+        box("name", "name", "Name", "text", 'maxlength="100" autocomplete="off"') +
+        box("email", "email", "Email", "email", 'maxlength="254" autocomplete="off" spellcheck="false"') +
+        box("phone", "phone", "Phone", "tel", 'maxlength="20" autocomplete="off"') +
+        box("socialLink", "socialLink", "Facebook or Instagram link (optional)", "url", 'maxlength="300" autocomplete="off" spellcheck="false"') +
+        tick("socialOk", "socialOk", "They are happy for NBCC to post about it on social media") +
+        head("What they would like") +
+        box("leaflets", "wants.leaflets", "Leaflets or posters", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 1,000.") +
+        box("buckets", "wants.buckets", "Buckets or tins to borrow", "text", 'inputmode="numeric" autocomplete="off"', "How many. 0 for none, up to 20.") +
+        tick("shoutOut", "wants.shoutOut", "A social media shout out") +
+        tick("attend", "wants.attend", "Someone from NBCC to come along") +
+        area("postAddress", "postAddress", "Where to post leaflets or a bucket (optional)", 3, 500) +
+        '<div class="fx-call-row fr-field--wide"><button class="admin-btn admin-btn--small" type="submit">Save the changes</button></div>' +
+        frNoticeHtml("edit", "frEditStatus") +
+      "</form>"
+    );
+  }
+
+  function frWallPanel(rows, write) {
+    if (!rows.length) return '<div id="frWall"><p class="fx-empty">No gifts on this page yet.</p></div>';
+    var shown = frMore.wall ? rows : rows.slice(0, FR_WALL_FIRST);
+    return (
+      '<div id="frWall"><p class="fx-help">Every gift made on its page, newest first, with the giver\'s full name for you. ' +
+        "Hiding takes the gift and its message off the page; the money still counts.</p>" +
+      '<ul class="fr-wall">' + shown.map(function (g) {
+        var amount = frMoney(g.amountPence) +
+          (Number(g.refundedPence) > 0 ? " (" + frMoney(g.refundedPence) + " refunded)" : "") +
+          (g.showAmount === false ? ", amount hidden on the page" : "");
+        return '<li data-frwall="' + Number(g.donationId) + '"' + (g.hidden ? ' class="is-hidden"' : "") + ">" +
+          '<div class="fr-wall-head"><span class="fr-wall-who">' + H.escapeHtml(g.fullName) + "</span>" +
+            '<span class="fx-hist-who">Shown as ' + H.escapeHtml(g.shortName) + " · " + H.escapeHtml(amount) + " · " +
+            H.escapeHtml(H.fmtDate(g.createdAt)) + "</span>" +
+            (g.hidden ? '<span class="admin-pill admin-pill--cancelled fr-hidden-pill">Hidden</span>' : "") + "</div>" +
+          (g.message ? '<p class="fr-wall-msg">' + H.escapeHtml(g.message) + "</p>" : '<p class="fx-empty">No message.</p>') +
+          (write
+            ? g.hidden
+              ? '<button class="fr-link-btn" type="button" data-frshow="' + Number(g.donationId) + '">Show on the page</button>'
+              : '<button class="fr-link-btn" type="button" data-frhide="' + Number(g.donationId) + '">Hide from the page</button>'
+            : "") +
+          "</li>";
+      }).join("") + "</ul>" + frMoreButton("wall", FR_WALL_FIRST, rows.length) + "</div>"
+    );
+  }
+
+  var FR_HISTORY_WORDS = {
+    "fundraiser.signed_up": "Signed up",
+    "fundraiser.approved": "Approved",
+    "fundraiser.declined": "Declined",
+    "fundraiser.finished": "Marked finished",
+    "fundraiser.updated": "Details changed",
+    "fundraiser.edit_requested": "The organiser asked for a change",
+    "fundraiser.edit_approved": "Change approved",
+    "fundraiser.edit_rejected": "Change rejected",
+    "fundraiser.cash_removed": "Cash removed",
+    "fundraiser.message_hidden": "A message hidden from the page",
+    "fundraiser.message_shown": "A message shown on the page again",
+    "fundraiser.gift_received": "A gift on its page",
+    "fundraiser.manage_link_sent": "A link to change the page emailed to the organiser",
+  };
+
+  function frPaintHistory() {
+    var box = el("frHistory");
+    if (!box) return;
+    if (frHistoryRows === null) {
+      box.innerHTML = '<p class="admin-loading">Loading…</p>';
+      return;
+    }
+    if (frHistoryRows === false) {
+      box.innerHTML = '<p class="fx-empty">The history could not load just now.</p>';
+      return;
+    }
+    if (!frHistoryRows.length) {
+      box.innerHTML = '<p class="fx-empty">Nothing recorded yet.</p>';
+      return;
+    }
+    var shown = frMore.history ? frHistoryRows : frHistoryRows.slice(0, FR_HISTORY_FIRST);
+    box.innerHTML =
+      '<ul class="fx-history-list">' + shown.map(function (h) {
+        var data = h.data || {};
+        var what = FR_HISTORY_WORDS[h.action] || String(h.action || "");
+        if (h.action === "fundraiser.cash_added") what = "Cash added: " + frMoney(data.amountPence);
+        if (h.action === "fundraiser.cash_removed" && data.amountPence) what = "Cash removed: " + frMoney(data.amountPence);
+        var note = h.action === "fundraiser.declined" && data.reason
+          ? '<span class="fx-hist-note">' + H.escapeHtml(data.reason) + "</span>"
+          : "";
+        return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
+          '<span class="fx-hist-who">' + H.escapeHtml(H.fmtDate(h.createdAt) + " · " + frWho(h.actor)) + "</span>" + note + "</li>";
+      }).join("") + "</ul>" + frMoreButton("history", FR_HISTORY_FIRST, frHistoryRows.length);
+  }
+
+  // ---- changing things ----
+  // Every write: { ok, status, body }, so a refusal's own words (and a form's field messages) reach
+  // the person. A 401 has already gone back to sign in, inside authFetch.
+  function frSend(method, path, body) {
+    return authFetch(path, {
+      method: method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (b) {
+        return { ok: res.ok, status: res.status, body: b || {} };
+      });
+    });
+  }
+  function frSetBusy(on) {
+    frBusy = on;
+    var view = el("view-fundraising");
+    if (view) view.setAttribute("aria-busy", on ? "true" : "false");
+    if (on) frRestDetail();
+  }
+  // While a change is on its way, every button and the photo picker in the open sign up rest, so a
+  // second press cannot send it twice. frRenderList calls this too, as a redraw makes them afresh.
+  function frRestDetail() {
+    var wrap = el("frList");
+    if (!wrap || !frBusy) return;
+    Array.prototype.forEach.call(wrap.querySelectorAll("[data-frdetail] button, #frPhotoInput"), function (b) {
+      b.disabled = true;
+    });
+  }
+  function frRefusal(r, fallback) {
+    return r.status < 500 && r.body && typeof r.body.error === "string" && r.body.error ? r.body.error : fallback;
+  }
+
+  function frOpenRecord() {
+    return frDetail && frDetail.fundraiser;
+  }
+
+  // One change at a time, from the press to the redraw after it. Busy holds until the sign up has
+  // been read again, not only until the server answers, because until then the old form (with the
+  // amount still in it) is on screen and would send the same thing again. Each message belongs to
+  // the sign up it was about, so a late answer never lands under another one opened meanwhile.
+  //   key   which status line speaks (detail, edit, cash, photo)
+  //   doing what it says at once ("Adding…"), or null for nothing
+  //   work  given { id, open(), say(msg, isError) }; returns a promise
+  function frRun(key, doing, work) {
+    if (frBusy) return;
+    var id = frOpenId;
+    var run = {
+      id: id,
+      open: function () { return frOpenId === id; },
+      say: function (msg, isError) { frSay(key, msg, isError, id); },
+    };
+    if (doing) {
+      run.say(doing, false);
+      frPaintNotice(key);
+    }
+    frSetBusy(true);
+    return Promise.resolve()
+      .then(function () { return work(run); })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        run.say("That did not work. Please try again.", true);
+      })
+      .then(function () {
+        frSetBusy(false);
+        frRenderList();
+      });
+  }
+
+  function frMove(move) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var hasPage = f.path === "raising" && f.public;
+    var pageOn = !!(frSettings && frSettings.pageOn);
+    // TASK-497: a page holder approved while fundraising is off is sent nothing yet; the server
+    // emails them "Your page is live" when fundraising is switched on.
+    var waitsForSwitch = hasPage && !pageOn;
+    var question = {
+      approve: "Approve " + f.title + "? " +
+        (waitsForSwitch
+          ? "Nothing is emailed yet: " + f.name + " gets “Your page is live” by email automatically when fundraising is switched on."
+          : "We email " + f.name + " straight away: " +
+            (!hasPage ? "a short note to say they are on our list." : "their page link, and the page goes on the website.")),
+      decline: "Decline " + f.title + "?" + (f.status === "approved" ? " It comes off the website straight away." : "") +
+        " They are not emailed, so tell them yourself if you need to.",
+      finish: "Mark " + f.title + " as finished? It comes off the website. What it raised stays in the records.",
+    }[move];
+    if (!window.confirm(question)) return;
+    var body = {};
+    if (move === "decline") {
+      var reason = String(frReasonDraft || "").trim();
+      if (reason) body.reason = reason;
+    }
+    frRun("detail", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/" + move, body).then(function (r) {
+        if (!r.ok) {
+          run.say(frRefusal(r, "That did not work. Please try again."), true);
+          return frReload();
+        }
+        if (run.open()) frReasonDraft = "";
+        // The server sends the email after the approval has saved, best effort, so this says it is
+        // on its way rather than that it arrived. A page holder approved while fundraising is off
+        // hears nothing until it is switched on.
+        run.say({
+          approve: waitsForSwitch
+            ? "Approved. The organiser is emailed “Your page is live” when fundraising is switched on."
+            : hasPage
+              ? "Approved. An email with their page link is on its way to the organiser."
+              : "Approved. An email to the organiser is on its way.",
+          decline: "Declined.",
+          finish: "Marked finished.",
+        }[move], false);
+        return frReload();
+      });
+    });
+  }
+
+  function frDecideEdit(btn) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var approve = btn.getAttribute("data-fredit") === "approve";
+    var editId = btn.getAttribute("data-freditid");
+    // TASK-497: either way the organiser is emailed ("Your update is live" or "About your update").
+    var live = f.path === "raising" && f.public && f.status === "approved" && !!(frSettings && frSettings.pageOn);
+    var question = approve
+      ? (live ? "Approve this change? It goes on the website straight away" : "Approve this change? It is saved straight away") +
+        ", and the organiser is emailed to say so."
+      : "Reject this change? The page stays as it is, and the organiser is emailed a short, kind note to say we will be in touch.";
+    if (!window.confirm(question)) return;
+    frRun("detail", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/edits/" + encodeURIComponent(editId) + "/" + (approve ? "approve" : "reject"))
+        .then(function (r) {
+          // A 409 means the change was dealt with, or replaced by a newer one, while this was open:
+          // the reload shows whatever is waiting now, with the server's words above it.
+          if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+          else {
+            // What was typed in the edit form was typed against the old version. Kept, it would show
+            // the old words and Save would send them back over the change just approved.
+            if (approve && run.open()) {
+              frEditDraft = null;
+              frEditErrors = {};
+            }
+            run.say(approve ? "Change approved. It is on the website now." : "Change rejected. The page stays as it was.", false);
+          }
+          return frReload();
+        });
+    });
+  }
+
+  function frReadEditForm(form) {
+    var out = {};
+    Array.prototype.forEach.call(form.querySelectorAll("[name]"), function (i) {
+      out[i.name] = i.type === "checkbox" ? !!i.checked : String(i.value || "");
+    });
+    return out;
+  }
+
+  function frSaveEdit(form) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var typed = frReadEditForm(form);
+    var live = frEditValues(f);
+    var patch = {};
+    var errors = {};
+    // Only what differs from the live version is sent.
+    FR_TEXT_FIELDS.forEach(function (k) {
+      if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k];
+    });
+    ["eventDate", "startTime"].forEach(function (k) {
+      if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k] === "" ? null : typed[k];
+    });
+    ["public", "socialOk"].forEach(function (k) {
+      if (typed[k] !== undefined && typed[k] !== live[k]) patch[k] = typed[k];
+    });
+    var target = frParsePounds(typed.target);
+    if (typeof target === "number" && isNaN(target)) errors.targetPence = frPoundsMessage(typed.target, "250");
+    else if (target !== (f.targetPence === undefined ? null : f.targetPence)) patch.targetPence = target;
+    var counts = {};
+    [["leaflets", "50"], ["buckets", "2"]].forEach(function (c) {
+      var raw = String(typed[c[0]] === undefined ? live[c[0]] : typed[c[0]]).trim();
+      if (!/^\d+$/.test(raw)) errors["wants." + c[0]] = "Give a whole number, like " + c[1] + ", or 0 for none.";
+      else counts[c[0]] = Number(raw);
+    });
+    if (Object.keys(errors).length) {
+      frEditErrors = errors;
+      frSay("edit", "Some of it needs another look", true);
+      frRenderList();
+      return;
+    }
+    var wants = { leaflets: counts.leaflets, buckets: counts.buckets, shoutOut: !!typed.shoutOut, attend: !!typed.attend };
+    if (String(wants.leaflets) !== live.leaflets || String(wants.buckets) !== live.buckets ||
+        wants.shoutOut !== live.shoutOut || wants.attend !== live.attend) {
+      patch.wants = wants; // the server takes what they would like as a whole
+    }
+    if (!Object.keys(patch).length) {
+      frEditErrors = {};
+      frSay("edit", "Nothing has changed, so there is nothing to save.", false);
+      frRenderList();
+      return;
+    }
+    frEditErrors = {};
+    frRun("edit", "Saving…", function (run) {
+      return frSend("PATCH", "/api/admin/fundraisers/" + f.id, patch).then(function (r) {
+        if (!r.ok) {
+          if (run.open()) {
+            if (r.status === 400 && r.body && r.body.fields) frEditErrors = r.body.fields;
+            else if (r.status === 409) frEditErrors = { slug: frRefusal(r, "Another fundraiser already uses that web address") };
+          }
+          run.say(frRefusal(r, "That did not save. Please try again."), true);
+          return;
+        }
+        if (run.open()) {
+          frEditDraft = null;
+          frEditErrors = {};
+        }
+        run.say("Saved.", false);
+        return frReload();
+      });
+    });
+  }
+
+  function frAddCash(form) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    function val(n) {
+      var i = form.querySelector('[name="' + n + '"]');
+      return i ? String(i.value || "") : "";
+    }
+    frCashDraft = { amount: val("amount"), paidInOn: val("paidInOn"), note: val("note") };
+    var pence = frParsePounds(frCashDraft.amount);
+    if (pence === null || isNaN(pence) || pence < 1) {
+      frCashErrors = { amountPence: frPoundsMessage(frCashDraft.amount, "12") };
+      frSay("cash", "", false);
+      frRenderList();
+      return;
+    }
+    frCashErrors = {};
+    var body = { amountPence: pence, paidInOn: frCashDraft.paidInOn, note: frCashDraft.note.trim() };
+    frRun("cash", "Adding…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/cash", body).then(function (r) {
+        if (!r.ok) {
+          if (run.open() && r.status === 400 && r.body && r.body.fields) frCashErrors = r.body.fields;
+          run.say(frRefusal(r, "That was not added. Please try again."), true);
+          return;
+        }
+        // Added: the form empties, so the same amount is not sitting there ready to go twice.
+        if (run.open()) frCashDraft = null;
+        run.say(frMoney(pence) + " added. The meter now counts it.", false);
+        return frReload();
+      });
+    });
+  }
+
+  function frRemoveCash(cashId) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var row = (frDetail.cash || []).filter(function (c) { return String(c.id) === String(cashId); })[0];
+    if (!row) return;
+    if (!window.confirm("Remove " + frMoney(row.amountPence) + " paid in on " + H.fmtDate(row.paidInOn) + "? The meter comes down by the same.")) return;
+    frRun("cash", "Removing…", function (run) {
+      return frSend("DELETE", "/api/admin/fundraisers/" + f.id + "/cash/" + encodeURIComponent(cashId)).then(function (r) {
+        run.say(r.ok ? frMoney(row.amountPence) + " removed." : frRefusal(r, "That was not removed. Please try again."), !r.ok);
+        return frReload();
+      });
+    });
+  }
+
+  function frWallChoice(donationId, hide) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    frRun("detail", null, function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/wall/" + encodeURIComponent(donationId) + "/" + (hide ? "hide" : "show"))
+        .then(function (r) {
+          if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+          return frReload();
+        });
+    });
+  }
+
+  function frUploadPhoto(input) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    var file = input.files && input.files[0];
+    if (!f || !file) return;
+    frRun("photo", "Uploading…", function (run) {
+      return new Promise(function (finish) {
+        // evUpload writes its progress into this; what it says is kept in frNotice instead, so the
+        // redraw after an upload cannot throw the message away.
+        var sink = doc.createElement("p");
+        evUpload(
+          file,
+          sink,
+          function (src) {
+            frSend("PATCH", "/api/admin/fundraisers/" + f.id, { imageSrc: src })
+              .then(function (r) {
+                run.say(r.ok ? "Uploaded. It is the photo on its page now." : frRefusal(r, "The photo did not save. Please try again."), !r.ok);
+                return frReload();
+              })
+              .then(finish, function (err) {
+                if (!(err && err.message === "unauthorized")) run.say("The photo did not save. Please try again.", true);
+                finish();
+              });
+          },
+          "/api/admin/fundraiser-images",
+          function (message) {
+            if (message) run.say(message, true);
+            finish();
+          }
+        );
+      });
+    });
+  }
+
+  function frWire() {
+    if (frWired) return;
+    frWired = true;
+    el("frSwitchBtn").addEventListener("click", frFlipSwitch);
+    var view = el("view-fundraising");
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var chip = t.closest("[data-frfilter]");
+      if (chip) {
+        frFilter = chip.getAttribute("data-frfilter") || "";
+        frRenderList();
+        return;
+      }
+      var more = t.closest("[data-frmore]");
+      if (more) {
+        var key = more.getAttribute("data-frmore");
+        frMore[key] = true;
+        if (key === "history") frPaintHistory();
+        else frRenderList();
+        return;
+      }
+      var action = t.closest("[data-fraction]");
+      if (action) return frMove(action.getAttribute("data-fraction"));
+      var decide = t.closest("[data-fredit]");
+      if (decide) return frDecideEdit(decide);
+      var remove = t.closest("[data-frcashremove]");
+      if (remove) return frRemoveCash(remove.getAttribute("data-frcashremove"));
+      var hide = t.closest("[data-frhide]");
+      if (hide) return frWallChoice(hide.getAttribute("data-frhide"), true);
+      var show = t.closest("[data-frshow]");
+      if (show) return frWallChoice(show.getAttribute("data-frshow"), false);
+      // Last, so a control inside the open sign up never also closes it.
+      var toggle = t.closest("[data-frtoggle]");
+      if (toggle) frToggle(toggle.getAttribute("data-frtoggle"));
+    });
+    view.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form || !form.id) return;
+      if (form.id === "frEditForm") {
+        e.preventDefault();
+        frSaveEdit(form);
+      } else if (form.id === "frCashForm") {
+        e.preventDefault();
+        frAddCash(form);
+      }
+    });
+    // What is typed is kept as it is typed, so a redraw (another action, a reload) never loses it.
+    function keepTyping(e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      if (t.id === "frDeclineReason") frReasonDraft = t.value;
+      // Only the boxes typed in are kept: the rest always show what is live now.
+      if (t.closest("#frEditForm") && t.name) {
+        frEditDraft = frEditDraft || {};
+        frEditDraft[t.name] = t.type === "checkbox" ? !!t.checked : String(t.value || "");
+      }
+      var cashForm = t.closest("#frCashForm");
+      if (cashForm) {
+        frCashDraft = {
+          amount: cashForm.querySelector('[name="amount"]').value,
+          paidInOn: cashForm.querySelector('[name="paidInOn"]').value,
+          note: cashForm.querySelector('[name="note"]').value,
+        };
+      }
+      if (t.matches && t.matches("textarea.fr-input")) nlFitBox(t);
+    }
+    view.addEventListener("input", keepTyping);
+    view.addEventListener("change", function (e) {
+      if (e.target && e.target.id === "frPhotoInput") return frUploadPhoto(e.target);
+      keepTyping(e);
+    });
+    // The rows are role="button", so they answer Enter and Space as a button does.
+    view.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " " && e.key !== "Spacebar") return;
+      var t = e.target;
+      if (!t || !t.closest || t.closest("button, a, input, select, textarea")) return;
+      var toggle = t.closest("[data-frtoggle]");
+      if (!toggle) return;
+      e.preventDefault();
+      frToggle(toggle.getAttribute("data-frtoggle"));
+    });
+  }
+
   // ---- boot: restore an in-tab session ----
   var claims = H.parseClaims(token());
   if (claims && typeof claims.exp === "number" && claims.exp > Date.now()) showApp(claims);
@@ -9988,7 +11196,7 @@
     var box = el("evSwitch");
     box.classList.toggle("is-on", on);
     el("evSwitchState").innerHTML = on
-      ? "<b>Yes.</b> The page is at nbcc.scot/events, and every page’s menu offers it. Visitors see every event marked “On the website”."
+      ? "<b>Yes.</b> The page is at nbcc.scot/get-involved, and every page’s menu offers it as Get involved. Visitors see every event marked “On the website”."
       : "<b>No.</b> The page is switched off: nobody can see it and no menu mentions it. Build and check events here, then switch it on when you are ready.";
     el("evSwitchWho").textContent = evData && evData.updatedBy && evData.updatedBy.indexOf("admin:") === 0
       ? "Last " + (on ? "switched on" : "switched off") + " by " + evData.updatedBy.slice(6) + " on " + H.fmtDate(evData.updatedAt) + "."
@@ -10354,17 +11562,21 @@
   }
 
   // ---- pictures ----
-  function evUpload(file, statusEl, done) {
+  // TASK-495: url is where the picture goes; Admin > Fundraising sends its photos to its own upload,
+  // gated on fundraising rather than events. Events pictures go where they always have.
+  // failed (optional, TASK-495) hears every way it can end without a picture, with what was said.
+  function evUpload(file, statusEl, done, url, failed) {
     if (!file) return;
     if (!/^image\//.test(file.type)) {
       statusEl.className = "ty-status is-error";
       statusEl.textContent = "That file is not a picture. Try a JPG or PNG.";
+      if (failed) failed(statusEl.textContent);
       return;
     }
     statusEl.className = "ty-status";
     statusEl.textContent = "Uploading…";
     function send(mime, base64) {
-      authFetch("/api/admin/event-images", {
+      authFetch(url || "/api/admin/event-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mime: mime, dataBase64: base64, filename: file.name }),
@@ -10376,6 +11588,7 @@
           if (r.status !== 201) {
             statusEl.className = "ty-status is-error";
             statusEl.textContent = r.body.error || nlUploadHttpMessage(r.status);
+            if (failed) failed(statusEl.textContent);
             return;
           }
           statusEl.className = "ty-status is-ok";
@@ -10383,9 +11596,13 @@
           done(r.body.src);
         })
         .catch(function (err) {
-          if (err && err.message === "unauthorized") return;
+          if (err && err.message === "unauthorized") {
+            if (failed) failed("");
+            return;
+          }
           statusEl.className = "ty-status is-error";
           statusEl.textContent = "Upload failed. Please try again.";
+          if (failed) failed(statusEl.textContent);
         });
     }
     // Shrunk in the browser first, exactly as a newsletter picture is (TASK-300): phone photos are
@@ -10396,6 +11613,12 @@
       reader.onload = function () {
         var url = String(reader.result);
         send(file.type, url.slice(url.indexOf(",") + 1));
+      };
+      // A file the browser cannot read must not leave the screen waiting for an upload forever.
+      reader.onerror = function () {
+        statusEl.className = "ty-status is-error";
+        statusEl.textContent = "That picture could not be read. Please try another.";
+        if (failed) failed(statusEl.textContent);
       };
       reader.readAsDataURL(file);
     });

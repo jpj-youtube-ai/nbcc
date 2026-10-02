@@ -527,6 +527,41 @@ export async function sendOutreachInvitation(
   await sendVerbatim("outreach", businessName, message);
 }
 
+// --- Community fundraising (TASK-493) -------------------------------------------------------
+// Four emails, each its own kind so they can be told apart in the email audit and a bounce report.
+// Built by the pure src/fundraising/emails.ts and sent verbatim by src/fundraising/send.ts. From and
+// Reply-To are config.BALL_FROM_EMAIL (events@nbcc.scot), the APEX domain, never news.nbcc.scot;
+// the staff summary goes TO that inbox with Reply-To the organiser.
+export type FundraiseEmailMessage = BallConfirmationMessage;
+
+export async function sendFundraiseThanks(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseThanks", name, message);
+}
+
+// Staff only: its links are never tagged (STAFF_ONLY_KINDS in src/email/tracked-links.ts).
+export async function sendFundraiseStaff(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseStaff", name, message);
+}
+
+export async function sendFundraiseApproved(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseApproved", name, message);
+}
+
+// Carries a 24 hour manage link; the token is a ?token= query word, which link tagging leaves alone.
+export async function sendFundraiseManage(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseManage", name, message);
+}
+
+// TASK-497: to the organiser when staff approve ("Your update is live") or reject ("About your
+// update") a change they asked for.
+export async function sendFundraiseEditApproved(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseEditApproved", name, message);
+}
+
+export async function sendFundraiseEditRejected(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseEditRejected", name, message);
+}
+
 // --- Backup alerts (TASK-423) ---------------------------------------------------------------
 // An operational notice to ADMIN_NOTIFICATION_EMAIL when the nightly backup fails, refuses to
 // ship, or reaches only one of its two destinations.

@@ -24,3 +24,19 @@ describe("the names of email kinds on the Email audit", () => {
     expect([...new Set(sent)].filter((k) => !labelled.includes(k))).toEqual([]);
   });
 });
+
+// TASK-493: the four community fundraising emails each have a kind of their own, and a name.
+describe("the fundraising email kinds", () => {
+  it.each(["fundraiseThanks", "fundraiseStaff", "fundraiseApproved", "fundraiseManage"])("sends and names %s", (kind) => {
+    expect(sent).toContain(kind);
+    expect(labelled).toContain(kind);
+  });
+});
+
+// TASK-497: the two emails about a change staff approved or rejected.
+describe("the fundraising change email kinds", () => {
+  it.each(["fundraiseEditApproved", "fundraiseEditRejected"])("sends and names %s", (kind) => {
+    expect(sent).toContain(kind);
+    expect(labelled).toContain(kind);
+  });
+});

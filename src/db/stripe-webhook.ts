@@ -22,6 +22,7 @@ import {
   donationFromCheckoutSession,
   declarationFromCheckoutSession,
   partnerSharesFromCheckoutSession,
+  fundraiserGiftFromCheckoutSession,
   companyDonorFromCheckoutSession,
   dunningFromStripeEvent,
   recurringChargeFromInvoice,
@@ -34,6 +35,7 @@ import {
   type DonationConfirmationEmail,
 } from "./stripe-webhook-model";
 import { recalculateClaimOnRefund } from "../claims/refund";
+import { linkFundraiserGift } from "./fundraisers";
 import {
   sendDonationConfirmation,
   sendDeclarationEmail,
@@ -546,6 +548,12 @@ async function handleCheckoutCompleted(
     entityId: donationId,
     data: { eventId: event.id, donorId, giftAid: donation.giftAid, declarationId },
   });
+
+  // TASK-493: a gift made on a community fundraiser's page joins its meter and supporter wall, in
+  // THIS transaction, but only when it names an approved fundraiser. Sessions without a fundraiserId
+  // (every donate page gift) skip this entirely, so their writes are exactly what they were.
+  const fundraiserGift = fundraiserGiftFromCheckoutSession(event.data.object);
+  if (fundraiserGift) await linkFundraiserGift(client, donationId, fundraiserGift, event.id);
 
   // Business-supporter fulfilment (TASK-206): a BUSINESS MONTHLY gift at/above the £10/month minimum
   // — an incorporated company, or a partnership/sole trader donating under a business name — earns a

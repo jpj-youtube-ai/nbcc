@@ -108,25 +108,66 @@ describe("renderSitemapXml", () => {
 
 // TASK-453: the Events page is switched on and off from the admin. Off, it is a 404 - so a search
 // engine offered it would be offered a dead link, and the site map would show a page that is not
-// there.
-describe("the Events page in the site maps", () => {
-  it("is a real page, and no spare address may take its place", () => {
-    expect(isKnownPage("/events")).toBe(true);
+// there. TASK-494 renamed it Get involved, at /get-involved; /events redirects there.
+describe("the Get involved page in the site maps", () => {
+  it("is a real page, and no spare address may take its place or its old address", () => {
+    expect(isKnownPage("/get-involved")).toBe(true);
+    expect(isKnownPage("/events")).toBe(false);
+    expect(aliasFromProblem("/get-involved")).not.toBeNull();
     expect(aliasFromProblem("/events")).not.toBeNull();
   });
 
   it("is left out of both maps while the page is switched off", () => {
-    expect(renderSitemapTree(SITE_PAGES, true)).not.toContain('href="/events"');
-    expect(renderSitemapTree(SITE_PAGES, true, false)).not.toContain('href="/events"');
-    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map([["/events", true]]), true, false)).not.toContain(
-      "/events",
+    expect(renderSitemapTree(SITE_PAGES, true)).not.toContain('href="/get-involved"');
+    expect(renderSitemapTree(SITE_PAGES, true, false)).not.toContain('href="/get-involved"');
+    expect(
+      renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map([["/get-involved", true]]), true, false),
+    ).not.toContain("/get-involved");
+  });
+
+  it("is in both maps once the page is switched on, named Get involved", () => {
+    expect(renderSitemapTree(SITE_PAGES, false, true)).toContain('<a href="/get-involved">Get involved</a>');
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), false, true)).toContain(
+      "<loc>https://nbcc.scot/get-involved</loc>",
+    );
+  });
+});
+
+// TASK-494: the sign up form is a page of its own while fundraising is switched on.
+describe("the fundraising sign up in the site maps", () => {
+  it("is a real page, and nothing under /fundraise may become a spare address", () => {
+    expect(isKnownPage("/fundraise")).toBe(true);
+    expect(aliasFromProblem("/fundraise")).not.toBeNull();
+    expect(aliasFromProblem("/fundraise/my-walk")).not.toBeNull();
+  });
+
+  it("is listed only while fundraising is switched on", () => {
+    expect(renderSitemapTree(SITE_PAGES, true, true)).not.toContain('href="/fundraise"');
+    expect(renderSitemapTree(SITE_PAGES, true, true, true)).toContain('<a href="/fundraise">Fundraise for us</a>');
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), true, true)).not.toContain("/fundraise<");
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), true, true, true)).toContain(
+      "<loc>https://nbcc.scot/fundraise</loc>",
     );
   });
 
-  it("is in both maps once the page is switched on", () => {
-    expect(renderSitemapTree(SITE_PAGES, false, true)).toContain('<a href="/events">Events</a>');
-    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), false, true)).toContain(
-      "<loc>https://nbcc.scot/events</loc>",
+  it("does not depend on the Get involved page being on", () => {
+    expect(renderSitemapTree(SITE_PAGES, false, false, true)).toContain('href="/fundraise"');
+  });
+});
+
+// TASK-498: the fundraising help page, listed like the sign up and only while fundraising is on.
+describe("the fundraising help page in the site maps", () => {
+  it("is a real page", () => {
+    expect(isKnownPage("/fundraise/help")).toBe(true);
+    expect(aliasFromProblem("/fundraise/help")).not.toBeNull();
+  });
+
+  it("is listed under the sign up only while fundraising is switched on", () => {
+    expect(renderSitemapTree(SITE_PAGES, true, true)).not.toContain('href="/fundraise/help"');
+    expect(renderSitemapTree(SITE_PAGES, true, true, true)).toContain('<a href="/fundraise/help">Fundraising help</a>');
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), true, true)).not.toContain("/fundraise/help");
+    expect(renderSitemapXml(SITE_PAGES, "https://nbcc.scot", new Map(), true, true, true)).toContain(
+      "<loc>https://nbcc.scot/fundraise/help</loc>",
     );
   });
 });

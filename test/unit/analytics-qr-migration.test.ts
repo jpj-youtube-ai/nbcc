@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 const ROOT = resolve(__dirname, "../..");
-const FILE = "1791200000000_analytics-qr-channel.js";
+const FILE = "1791200000030_analytics-qr-channel.js";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const migration = require(resolve(ROOT, "migrations", FILE));
 

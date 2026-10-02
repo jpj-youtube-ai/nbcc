@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { authorizeSection } from "./admin-authz";
 import { SITE_PAGES } from "../site/pages";
-import { drawQr, qrLink, qrPath, qrRows, qrSlug } from "../site/qr";
+import { drawQr, qrLink, qrPath, qrRows, qrSlug, type QrGates } from "../site/qr";
 
 // TASK-492: QR codes for the pages of nbcc.scot, in the admin.
 //
@@ -14,9 +14,9 @@ import { drawQr, qrLink, qrPath, qrRows, qrSlug } from "../site/qr";
 
 const BAD_PATH = "Give an address on nbcc.scot, starting with /";
 
-// Whether the Festive Ball and Events pages are up. A switch that cannot be read counts as off:
-// better "not live yet" on a row than a poster pointing at a page that is not there.
-async function gates(): Promise<{ ballOpen: boolean; eventsOn: boolean }> {
+// Whether the Festive Ball, Get involved and Fundraising pages are up. A switch that cannot be read
+// counts as off: better "not live yet" on a row than a poster pointing at a page that is not there.
+async function gates(): Promise<QrGates> {
   const ballOpen = (async () => {
     const [{ getSettings }, { isGateOpen }] = await Promise.all([import("../db/ball"), import("../ball/gate")]);
     return isGateOpen(await getSettings(), new Date());
@@ -25,7 +25,8 @@ async function gates(): Promise<{ ballOpen: boolean; eventsOn: boolean }> {
     const { getEventsSettings } = await import("../db/events");
     return (await getEventsSettings()).pageOn;
   })().catch(() => false);
-  return { ballOpen: await ballOpen, eventsOn: await eventsOn };
+  const fundraisingOn = (async () => (await import("../db/fundraisers")).fundraisingIsOn())().catch(() => false);
+  return { ballOpen: await ballOpen, eventsOn: await eventsOn, fundraisingOn: await fundraisingOn };
 }
 
 export async function getQrCodes(req: Request, res: Response): Promise<Response | void> {

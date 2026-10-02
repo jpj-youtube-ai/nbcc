@@ -143,8 +143,8 @@ Every page mounts the same sticky top nav in its `<header class="nav">` slot
 (REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
 links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
 Donate button, and a mobile burger. Two items are added by the server rather than written into
-the files: "Festive Ball" while the ball is published (TASK-326) and "Events", after About, while
-the Events page is switched on (TASK-453).
+the files: "Festive Ball" while the ball is published (TASK-326) and "Get involved" (called Events
+until TASK-494), after About, while the Events page is switched on (TASK-453).
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -1322,6 +1322,12 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec; checks a Cloudflare Turnstile pass first whenever the spam check is on, TASK-490) |
 | `GET /api/contact/captcha` | **implemented** | TASK-490 (the contact form's spam check: `{ siteKey }`, the public Turnstile site key, or `null` while the check is off; see **A spam check on the contact form (TASK-490)**) |
+| `POST /api/fundraise` | **implemented** | TASK-493 (community fundraising sign up; honeypot, per IP limit and Turnstile like the contact form; refused while fundraising is switched off. Shapes: **Community fundraising (TASK-493)**) |
+| `GET /api/fundraise/captcha` | **implemented** | TASK-493 (the sign up form's Turnstile site key, or `null`) |
+| `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
+| `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless approved, public, raising money and switched on) |
+| `POST /api/fundraise/manage/request` | **implemented** | TASK-493 (emails an organiser a 24 hour link to change their page; always the same answer) |
+| `GET` and `POST /api/fundraise/manage/:token` | **implemented** | TASK-493 (what an organiser may change; a change waits for staff) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
@@ -1381,7 +1387,14 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
-| `GET /events` | **implemented** | TASK-453 (the Events page, rendered from the `events` table. Served only while an admin has the page switched on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /get-involved` | **implemented** | TASK-453, renamed in TASK-494 (Get involved: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the Events page switched on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
+| `GET /getinvolved`, `GET /involved` | **implemented** | TASK-496 (301 to `/get-involved` too, query string kept: the ways people type it from a poster) |
+| `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
+| `GET /fundraise/manage` | **implemented** | TASK-494 (change your page by the emailed `?token=` link; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
+| `GET /fundraise/help` | **implemented** | TASK-498 (Fundraising help, a draft for sign off: ideas from A to Z, paying in, Gift Aid, staying safe and legal in Scotland, using our logo; indexed and in the site maps like `/fundraise`; 404 while fundraising is switched off; registered before `/fundraise/:slug`, and `help` is a reserved slug) |
+| `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on. `?thanks=1` (and `&message=1`) shows the thank you a giver comes back to after paying) |
+| `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
 | `POST /api/admin/events`, `PUT/DELETE /api/admin/events/:id` | **implemented** | TASK-453 (events: edit; drafts may be half finished, live or scheduled events must pass `publishProblems`. Audited as `events.created` / `events.updated` / `events.deleted`) |
@@ -6043,8 +6056,9 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
 
 - **Every page, automatically.** The list comes from the site's one page list (`SITE_PAGES` in
   `src/site/pages.ts`), which also feeds /sitemap, sitemap.xml and Admin → Site pages. A page
-  added there gets its QR code with no more work. The Festive Ball and Events pages are listed
-  even while switched off, marked "Not live yet", so posters can be made before launch.
+  added there gets its QR code with no more work. The Festive Ball, Get involved and Fundraising
+  pages are listed even while switched off, marked "Not live yet", so posters can be made before
+  launch.
 - **Two downloads per code**, named after the page (`nbcc-qr-donate.svg`):
   - **SVG** for printers and designers: it stays sharp at any size;
   - **PNG**, 1200 pixels square, for slides, social posts and documents.
@@ -6068,7 +6082,7 @@ slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-adm
   `https://nbcc.scot/donate?utm_medium=qr&utm_campaign=donate` (`qrLink`).
   - Admin → Analytics files these under a **QR code** channel (`src/analytics/channel.ts`).
   - Its "QR codes scanned" list names the page whose code was scanned (`labelQrScans`).
-  - Migration `1791200000000_analytics-qr-channel.js` only widens the `analytics_views` channel
+  - Migration `1791200000030_analytics-qr-channel.js` only widens the `analytics_views` channel
     check to allow `qr`.
 
 ## Monthly or one off, on the donations list (TASK-446)
@@ -6888,6 +6902,10 @@ a name we supplied ourselves — and "no such table" is reported as exactly that
 
 ## The Events page (TASK-453)
 
+**Renamed Get involved in TASK-494**, at `/get-involved`, with community fundraisers alongside the
+events: see **Community fundraising, the public pages (TASK-494)**. `/events` is now a permanent
+redirect there. What follows describes the events part, which is unchanged.
+
 A public page at **`/events`**: every upcoming event as a card in a deck, soonest first, with a face
 down "more on the way" card last. The front of a card is the picture and the gist, with the date in
 the corner where a playing card keeps its index; the back holds everything else and the booking
@@ -7093,6 +7111,447 @@ analytics area). BDD: `features/analytics-admin.feature` against Postgres (the p
 audited switch, and the figures from seeded page views, including a gap of over 30 minutes that
 splits a visit and one of exactly 30 that does not).
 
+## Community fundraising (TASK-493)
+
+People sign up at `/fundraise` to raise money for NBCC or to hold an event (a bake sale, a quiz).
+Staff approve every one in **Admin > Fundraising** before anything about it is public. An approved,
+public, raising money fundraiser gets its own page at `/fundraise/<slug>` with a meter and a
+supporter wall, and giving on it goes through the donate page's checkout. Organisers change their
+page by an emailed link, and every change waits for staff. Design:
+`docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
+
+This is **stage 1, the backend core**. The public pages (`/fundraise`, `/fundraise/<slug>`,
+`/fundraise/manage`, Get involved) are TASK-494, below, and the admin screen is TASK-495, below.
+Stages 2 to 4 (materials, keeping in touch, requests) follow.
+
+**It ships switched off.** `fundraising_settings.page_on` is false: sign ups are refused, nothing
+is listed, every page is a 404, and manage links do nothing, until an admin switches it on with
+`PATCH /api/admin/fundraising/settings`.
+
+### Where it lives
+
+| Piece | File |
+|---|---|
+| The rules: form and edit schemas, slugs, the meter, the wall, what the public sees | `src/fundraising/model.ts` |
+| The manage link: random token, sha256 at rest, 24 hours, clock passed in | `src/fundraising/manage-token.ts` |
+| The four emails (pure) and sending them (best effort, after the write) | `src/fundraising/emails.ts`, `src/fundraising/send.ts` |
+| The SQL, every write audited in the same transaction (entity `fundraiser`) | `src/db/fundraisers.ts` |
+| Public API | `src/routes/fundraise.ts` |
+| Admin API | `src/routes/admin-fundraising.ts` |
+| Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js` |
+
+### Data
+
+`fundraising_settings` (the switch), `fundraisers`, `fundraiser_edits` (changes waiting for staff),
+`fundraiser_manage_tokens` (only `token_hash`, the sha256 of the emailed token), `fundraiser_cash`
+(paid in by hand). `fundraisers.live_email_pending` (TASK-497, boolean, default false) marks a page
+holder approved while fundraising is off, waiting for "Your page is live"; its migration
+(`1791200000020_fundraiser-live-email-pending.js`) also marks any page holder already approved, if
+fundraising has never been switched on. On `donations`: `fundraiser_id`, `supporter_message`, `show_name`,
+`show_amount` and `message_hidden`, all nullable or defaulted, so existing gifts are untouched.
+
+**Raised** = paid online gifts on the page, less any refund, plus cash staff recorded. The
+percentage is rounded down and can pass 100; the bar is held at 100.
+
+### Permissions
+
+A new admin section, `fundraising`: admins **edit**, editors **edit**, viewers **view** by default,
+and the migration writes those into every access matrix already saved (the TASK-479 pattern).
+Switching fundraising on or off needs edit **and** the admin role, read live from the database.
+
+### Public API
+
+All JSON. Money is always in **pence**. Dates are `YYYY-MM-DD`, times `HH:MM`.
+
+**`POST /api/fundraise`**: sign up. Body:
+
+```json
+{
+  "path": "raising | event",
+  "kind": "run_walk | santa_dash | bake_sale | quiz_party | collection | birthday | other",
+  "title": "Sam's Santa Dash",            // 1 to 100
+  "description": "...",                    // 1 to 1,000
+  "eventDate": "2026-12-05 or empty",      // required when path is event
+  "startTime": "10:30 or empty",
+  "venue": "", "town": "",
+  "targetPence": 50000,                    // optional, 1000 to 10000000; ignored for an event
+  "public": true,                          // show it on the website, or only to let us know
+  "name": "...", "email": "...", "phone": "...",   // all required
+  "socialLink": "https://... or empty",
+  "socialOk": false,                       // we may post about it on NBCC's social media
+  "wants": { "leaflets": 0, "buckets": 0, "shoutOut": false, "attend": false },
+  "postAddress": "...",                    // required when leaflets or buckets are above 0
+  "newsletterOk": false,
+  "company": "",                           // the honeypot: leave empty and hidden
+  "captchaToken": "..."                    // the Turnstile pass, when GET /api/fundraise/captcha gave a site key
+}
+```
+
+Answers: `200 { "status": "received" }` (also for a filled honeypot, which stores nothing);
+`400 { "error": "...", "fields": { "phone": "Please give us a phone number, so we can call you." } }`
+with a plain English message per field; `400 { "error": "captcha" }`; `404` while switched off;
+`429` after 5 sign ups from one address in 10 minutes. On success the organiser is emailed a thank
+you and `events@` a summary. The thank you is a **fixed message carrying nothing the visitor typed**
+(no name, title or description), so the form cannot be used to send any words from NBCC to any
+address; everything they told us goes to `events@`. A ticked `newsletterOk` subscribes the organiser
+**exactly as the footer form does**: both call `subscribeSelf` (`src/newsletter/self-signup.ts`, moved
+unchanged out of `src/routes/subscribe.ts`): the newsletter list, `consent_source` `fundraise` (the
+footer's is `footer`; both are self signups and both are welcomed), deduped by address, an
+earlier opt out of their own revived, the welcome email with its one click unsubscribe, and
+suppressed addresses held back at send time like every newsletter. Unticked changes nothing.
+
+**`GET /api/fundraise/captcha`**: `{ "siteKey": "..." | null }`, the same key as the contact form.
+
+**`GET /api/fundraisers`**: for Get involved. `{ "fundraisingOn": false, "fundraisers": [] }` while
+off. Otherwise `{ "fundraisingOn": true, "fundraisers": [Card, ...] }`: approved and public, both
+paths, an event dropping off the day after its date. A **Card** is:
+
+```json
+{
+  "id": 9, "slug": "sams-santa-dash", "path": "raising", "kind": "santa_dash",
+  "kindLabel": "A Santa dash", "title": "...", "description": "...",
+  "eventDate": "2026-12-05" | null, "startTime": "10:30" | null, "venue": "", "town": "",
+  "imageSrc": "/media/events/<uuid>" | null,
+  "organisedBy": "Sam S.",                 // first name and last initial
+  "url": "/fundraise/sams-santa-dash" | null,   // null for an event: it has no page
+  "meter": { "raisedPence": 6000, "onlinePence": 5000, "cashPence": 1000, "targetPence": 25000 | null,
+             "percent": 24 | null, "barPercent": 24 | null, "overTarget": false }
+}
+```
+
+No email, phone, address or social link is ever in a public answer.
+
+**`GET /api/fundraisers/:slug`**: a Card plus
+`"wall": [{ "name": "Alex E." | "Anonymous", "amountPence": 2500 | null, "message": "..." | null, "createdAt": "ISO" }]`
+(newest first, every entry; the page shows the top 10 then Show all; a message staff hid shows as
+`message: null` with the gift kept; a gift refunded in full never appears; a giver whose details were
+redacted at the end of retention shows as Anonymous) and `"giving": { "fundraiserId": 9, "minimumPence": 200 }`. `404`
+unless approved, public, raising money and switched on.
+
+**`POST /api/fundraise/manage/request`** `{ "email": "..." }`: always
+`200 { "message": "If that email belongs to an approved fundraiser, ..." }`. For each approved
+fundraiser with that email (up to 5) it emails a link
+`<PORTAL_BASE_URL>/fundraise/manage?token=<token>`, good for 24 hours. Limits: 3 a quarter hour per
+email, 20 per address. `400` only for an address that is not one.
+
+**`GET /api/fundraise/manage/:token`**: the page reads `?token=` and calls this.
+`200 { "fundraiser": { "id", "slug", "title", "path", "pageUrl": "https://..." | null,
+"editable": { "description", "targetPence", "eventDate", "startTime", "venue", "town", "socialLink" } },
+"waitingEdit": { "id", "changes": {...}, "createdAt" } | null }`. `404` for a link that matches
+nothing (or while switched off), `410` for one that has run out or a fundraiser no longer approved.
+
+**`POST /api/fundraise/manage/:token`**: any of the seven editable fields (send only what changed;
+an empty string or `null` clears a date, time, target or link). `202 { "status": "waiting", "edit":
+{ "id", "changes", "createdAt" } }`. A change already waiting is marked `replaced` and the new one added (never rewritten in place), so
+staff can never approve words they did not see.
+The live page keeps the approved version until staff approve it. `400` with `fields` for anything
+else (title, slug and status cannot be changed this way), `404` and `410` as above.
+
+### Giving on a fundraiser's page
+
+`POST /api/checkout-session` takes four more optional fields: `fundraiserId` (positive integer),
+`supporterMessage` (up to 200, held to the supporters wall's word check: `400` with "Please choose
+different words for your message on the supporter wall."), `showName` and `showAmount` (both default
+true). With
+`fundraiserId` the gift must be one off (`mode: "once"`) and at least 200 pence, and the four are
+stamped on the Stripe metadata. **Without `fundraiserId` nothing changes**: the other three are
+dropped and the session is exactly what the donate page always got (tested). Everything else
+(Gift Aid, the card fee, the newsletter tick box, email, name) is the donate page's.
+
+The webhook links the gift (`donations.fundraiser_id`, message, choices) **only if the id names an
+approved fundraiser**, in the same transaction as the donation, and audits
+`fundraiser.gift_received`. Anything else is an ordinary donation with no message, audited as
+`fundraiser.gift_not_linked`.
+
+### Admin API
+
+Every route needs a session and the `fundraising` section: **view** to read, **edit** to change.
+Every write is recorded in `audit_log` (entity `fundraiser`, the fundraiser's id) in the same
+transaction, with the actor `admin:<email>`.
+
+| Route | Body | Answer |
+|---|---|---|
+| `GET /api/admin/fundraising/settings` | | `{ pageOn, updatedAt, updatedBy, liveEmailsWaiting }`; `liveEmailsWaiting` (TASK-497) is how many page holders wait for "Your page is live", left out if it cannot be counted |
+| `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | `{ pageOn, updatedAt, updatedBy }`; switching on then sends "Your page is live" to every approved page holder still waiting, in the background (see Emails) |
+| `GET /api/admin/fundraisers` | | `{ pageOn, fundraisers: [Fundraiser + meter + editWaiting] }`, newest first |
+| `GET /api/admin/fundraisers/:id` | | `{ fundraiser, meter, waitingEdit, editWaiting, edits, cash, wall }` |
+| `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` | `{ fundraiser }`; `409` if the slug is taken |
+| `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser, or marks a page holder as waiting while fundraising is off (see below); from New or Declined |
+| `POST /api/admin/fundraisers/:id/decline` | `{ reason? }` (internal, up to 500) | `{ fundraiser }`; from New or Approved; no email |
+| `POST /api/admin/fundraisers/:id/finish` | | `{ fundraiser }`; from Approved |
+| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied, and "Your update is live" (or "saved") to the organiser; `409` "This change has been replaced; look again" if the organiser saved a newer one |
+| `POST /api/admin/fundraisers/:id/edits/:editId/reject` | | `{ fundraiser }`, and "About your update" to the organiser; `409` if already dealt with or replaced |
+| `POST /api/admin/fundraisers/:id/cash` | `{ amountPence, paidInOn, note? }` | `201 { cash }` |
+| `DELETE /api/admin/fundraisers/:id/cash/:cashId` | | `{ removed }` |
+| `POST /api/admin/fundraisers/:id/wall/:donationId/hide` and `/show` | | `{ donationId, hidden }` |
+| `GET /api/admin/fundraisers/:id/history` | | `{ history: [{ id, actor, action, data, createdAt }] }`, newest first |
+| `POST /api/admin/fundraiser-images` | `{ mime, dataBase64 }` | `201 { id, src: "/media/events/<id>" }`, stored and served like an event picture |
+
+A **Fundraiser** (admin) is every column: `id, slug, path, kind, kindLabel, title, description,
+eventDate, startTime, venue, town, targetPence, public, status (new | approved | declined |
+finished), name, email, phone, socialLink, socialOk, wants, postAddress, newsletterOk, imageSrc,
+declinedReason, createdAt, approvedAt, approvedBy, updatedAt, updatedBy, pageUrl`. `edits` are
+`{ id, changes, status (waiting | approved | rejected | replaced), createdAt, decidedAt, decidedBy }`, the
+waiting one first. `cash` rows are `{ id, amountPence, paidInOn, note, createdBy, createdAt }`.
+`wall` rows (hidden ones included) are `{ donationId, fullName, shortName, anonymous, showName,
+showAmount, amountPence, refundedPence, message, hidden, createdAt }`. Refusals are
+`{ error }` in plain English: `400` (with `fields`), `403`, `404`, `409`.
+
+Admin > Fundraising has a **New pill** (area `fundraising`, lit by each new sign up). Its line in the
+admin's new features list arrives with the screen itself (TASK-495, below).
+
+### The admin screen: Admin > Fundraising (TASK-495)
+
+In Content, after Events. The menu link shows to anyone with `fundraising` view; changing anything
+needs edit; the switch needs an admin as well. Markup `#view-fundraising` in `admin.html`, code the
+`fr` block in `assets/js/admin/app.js` (`loadFundraising`), styles at the end of
+`assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
+status chips and Business supporters' rows that open in place.
+
+- **The switch**, as on Events: an admin can switch fundraising on or off after a question; everyone
+  else sees it read only, with "Only an admin can switch fundraising on or off."
+- **The list**: every sign up with its name, organiser, raising money or holding an event, date,
+  status pill (New, Approved, Declined, Finished) and raised against target. Pills: the per person
+  **New** pill (TASK-478) and **Changes to check** when an organiser's change is waiting. Chips
+  filter by status, with counts. The first 25 show, then "Show all".
+- **One sign up** opens below its row: where it is up to, Approve (from New or Declined), Decline
+  (from New or Approved, with an optional reason kept inside NBCC) and Mark finished (from
+  Approved), each after a question; its page link and a "Download its QR code" link to
+  `/fundraise/<slug>/qr.svg` once it is approved and public (that address is served by the public
+  pages, built separately; the core has no admin QR route); the waiting change beside the live
+  values with Approve change and Reject change (a `409`, such as a change replaced by a newer one,
+  reads the sign up again and shows the server's words); everything from the form, with the phone
+  as a `tel:` link, the email as a `mailto:` link and the Facebook or Instagram link opened only if
+  it is a web address; their requests and consents; a photo uploaded through
+  `POST /api/admin/fundraiser-images` and saved as `imageSrc`; the meter (raised, online, cash, an
+  accessible progress bar held at 100); cash paid in (add in pounds, with the date and a note;
+  remove after a question; a comma only between thousands, so "12,50" is questioned rather than
+  read as £1,250); every field staff may change (the name, kind, path, description, date, time,
+  place, target, public, web address, the organiser's name, email, phone and social link, whether
+  NBCC may post about it, what they would like and where to post it), sending only what differs
+  from the live version, with each message from the server under its own box; the supporter wall with the giver's full name, how it
+  shows, Hide and Show (10, then "Show all"); and History in plain words (10, then "Show all").
+- **Safety**: every stored string is escaped; a `401` signs you out as everywhere else; anything
+  that fails to load says it could not load, never that there is nothing. One change at a time:
+  from the press until the sign up has been read again its buttons rest and its status line says
+  what is happening, so a second press sends nothing; added cash empties the form. A message
+  belongs to the sign up it is about and never shows under another. Only the boxes someone typed
+  in survive a redraw, and approving an organiser's change forgets them, so Save cannot put old
+  words back over it. Keyboard focus survives a redraw too. Approving says the organiser's email
+  is on its way, as the server sends it after the approval, best effort.
+- **Tests**: `test/unit/admin-fundraising-page.test.ts` (the jsdom admin harness, invented data):
+  the menu for each role, the switch, the list and its pills and chips, approve, decline and finish,
+  editing and its field messages, the photo, the waiting change, cash and the meter, the wall,
+  History, hostile stored text, the keyboard, failures, and no scrolling inside a box.
+
+### Emails
+
+All from and replying to `events@nbcc.scot` (`BALL_FROM_EMAIL`), in NBCC's usual shell, each its own
+kind on the Email audit. Built in `src/fundraising/emails.ts`, sent by `src/fundraising/send.ts`.
+
+TASK-497 gave them the wording Jaimie signed off on 2026-10-02: warmer, with a signed close (a
+friendly line above "NBCC Team", `signOff` in `src/email/brand.ts`) and then a **"Got any
+questions?"** box with "Call us" (01292 811 015, a `tel:` link) and "Email us" (the events inbox, a
+`mailto:` link) side by side, equally prominent (`questionsBox`). The staff summary has the sign off
+("Go team!") but no box. The plain text part of each carries the same words, the questions (phone
+and email) and the sign off. Plain English, no dashes, every stored value escaped.
+
+| Kind | To | When | Says |
+|---|---|---|---|
+| `fundraiseThanks` | the address typed in the form | they sign up | "Thank you, you've made our day!", what happens next. Greets "Hi there <first name>," only with a safe first name (`safeFirstName`: put together first (NFC), then the first word, Latin letters only, accents included, with apostrophes or hyphens inside, at most 20 characters; another script, a lookalike or an invisible letter is refused), otherwise "Hi there,". No other typed words, since anyone can type any address |
+| `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up | "Exciting news: a new fundraiser!", everything they told us and asked for, Next steps. Staff only, so its links are never tagged |
+| `fundraiseApproved` | the organiser | approved with a page (raising money and public) while fundraising is on, or at the switch on (below) | "Your page is live!", the page link and three things to do today |
+| `fundraiseApproved` | the organiser | approved with no page (private, or an event) | "You're on our list!" |
+| `fundraiseManage` | the organiser | they ask for a manage link | the 24 hour link (replaced by the sign in code in a later part of stage 1b) |
+| `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
+| `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
+
+**Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
+open" email is retired. A page holder approved while fundraising is off gets no email then: the
+approval marks them `live_email_pending` (reading the switch under a share lock, so an approval and a
+switch on at the same moment cannot miss each other). When an admin switches fundraising on, the
+switch is saved and the admin answered first; then, in the background, `sendWaitingLiveEmails`
+claims ONE waiting page holder at a time (`FOR UPDATE SKIP LOCKED`, clearing its mark in the same
+statement, so a restart part way loses at most the one in flight and a second switch on emails
+nobody twice), reads the switch again before each, and stops if fundraising has been switched off
+meanwhile. A send that fails is logged and that fundraiser marked as waiting again, for the next
+switch on; nothing about the emails can fail the switch. Declining or finishing clears the mark.
+Admin > Fundraising says all this in its questions: approving a page holder while fundraising is off
+says nothing is emailed yet, switching on says "Your page is live" goes to the waiting fundraisers
+(with how many), and rejecting a change says the organiser is emailed a short, kind note.
+Every email goes after its write has committed, best effort: a failed send never fails the answer.
+
+### For the page builders
+
+- Reserve nothing in `src/site/pages.ts` for the API: it is all under `/api`. The pages
+  `/fundraise`, `/fundraise/<slug>`, `/fundraise/manage` and `/get-involved` are yours to add; the
+  slugs `manage` and `help` (TASK-498) can never be a fundraiser's (`RESERVED_SLUGS`).
+- The give form posts the donate page's body to `POST /api/checkout-session` with
+  `fundraiserId: giving.fundraiserId`, `mode: "once"`, and the message and choices.
+- The QR code is `src/fundraising/qr.ts`, built separately.
+
+### Not yet (stage 1)
+
+A supporter's newsletter tick when giving is the donate page's `emailConsent`, landing on
+`donors.email_consent` exactly as a donate page gift does (tested). Approval emails point to the page, which carries the QR code; the code is not attached to the
+email. Monthly gifts on fundraiser pages, materials, automatic emails and the requests' tracking are
+later stages.
+
+### Tests
+
+Unit: `fundraising-model`, `fundraising-manage-token`, `fundraising-emails`, `fundraisers-db`,
+`fundraise-routes`, `admin-fundraising-routes`, `checkout-fundraiser`, `stripe-webhook-fundraiser`,
+`fundraising-migration`, `whats-new-fundraising`, `newsletter-self-signup`, `fundraising-send`, `fundraising-qr`, plus the permission, backfill, backup, email kind
+and tracked link tests. BDD: `features/fundraising.feature` (approval and the switch, a gift raising
+the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
+manage change waiting for staff, who may do what; TASK-497: a page approved while fundraising is off
+hears it is live at the switch on, and the emails about an approved or rejected change). TASK-497
+unit tests: `fundraising-emails` (the approved words, the safe first name, the questions box and
+sign off in both parts), `fundraising-send`, `fundraisers-db`, `admin-fundraising-routes`,
+`fundraiser-live-email-migration`, `admin-email-kinds`.
+
+## Community fundraising, the public pages (TASK-494)
+
+What the public sees of community fundraising (stage 1), built on the API above. Design:
+`docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
+
+**Get involved (`/get-involved`).** The Events page, renamed and widened. The menu item reads "Get
+involved" everywhere it is added (`src/events/nav-link.ts`), and `/events` redirects for good,
+keeping its query string, so old links and newsletter utm tags still land. The Events switch still
+decides whether the page exists. While **fundraising** is also switched on, the page adds:
+
+- every approved, public fundraiser: a raising money one as its own card (photo or a holly cover,
+  "Fundraiser" in the corner, organised by, the gist, the **meter**, and a button that opens its
+  page; the whole card is a tap target); a "holding an event" one as an ordinary event card,
+  credited to its organiser, among NBCC's events by date;
+- the **chips** All, Events and Fundraisers, which filter the cards without reloading
+  (`assets/js/events.js` `initChips`). They ship hidden, so without JavaScript everything shows;
+- a **Fundraise for us** button in the intro and a panel under the cards, linking `/fundraise`
+  and `/fundraise/manage`; the face down card's invitation also goes to `/fundraise`.
+
+Switched off, the page is exactly the Events page it was: no chips, no fundraisers, no panel, and
+not even the fundraising stylesheet (the server adds it where `<!-- getinvolved:styles -->` is,
+only while fundraising is on). With fundraiser cards among the events, the hint above the deck says
+"Turn any event card over", since a fundraiser's card has one face; and a fundraiser's date sits in
+its card's corner only while it is still to come.
+
+**The footer.** Every page's footer sends "Fundraise for us" to `/contact`. While fundraising is
+switched on the server points it at `/fundraise` instead (`src/fundraising/footer-link.ts`, added
+wherever the menu items are, the Festive Ball pages included through `src/ball/page-decor.ts`); off, pages go out as they are on disk.
+
+**Search listing.** `1791200000010_site-seo-get-involved.js` copies an admin's saved listing choice
+for `/events` (`site_page_seo`) to `/get-involved`, once, never over a choice already saved there.
+
+**The meter** (`renderMeter`): raised so far, the target and the percentage, as a
+`role="progressbar"` bar with `aria-valuetext` and the same in words. Past the target the bar is
+held full and the words give the real percentage; with no target it is just "£X raised".
+
+**The sign up (`/fundraise`).** One page, numbered questions in the donate page's style: raising
+money or holding an event (a target only for raising money; a date required for an event), the
+name, kind, description (a characters left count), date, time and place, public or not, the
+organiser's details, the social media consent, what they would like (the address box appears only
+when leaflets or buckets are to be posted), and the newsletter tick box worded like the donate
+page's. Honeypot and Turnstile exactly as the contact form: `GET /api/fundraise/captcha`, and
+Cloudflare's script loads only once someone starts on the form. Each of the server's `400 { fields }`
+messages appears beside its own field; a `404` shows the gentle "not open yet" panel; success shows
+a thank you saying what happens next. While fundraising is switched off the server sends the page
+with that panel instead of the form.
+
+**A fundraiser's page (`/fundraise/<slug>`)**, drawn on the server so it is complete without
+JavaScript and a shared link shows the fundraiser's own title and description: kind, date and
+place, organised by, the photo, the story, the meter with a Give button, the **give form**, the
+**supporter wall**, **sharing** and the **QR code**.
+
+- The give form is the donate page's: presets (£5, £10, £20, £50) or your own amount (£2 at least,
+  from the API), name and email, the newsletter tick box, a message up to 200 characters, show my
+  name or stay anonymous, show the amount or not, Gift Aid with the donate page's one off
+  declaration word for word (from `src/declarations/wording.ts`) and the home address only once it
+  is ticked, and the card fee offer. It posts the donate page's one off body plus `fundraiserId`,
+  `supporterMessage`, `showName` and `showAmount` to `POST /api/checkout-session`, and opens Stripe
+  on the page when it can and on Stripe's own page otherwise, exactly as the donate page does.
+  A refused message (the core checks its words) appears beside the message box.
+  `test/unit/fundraiser-checkout-contract.test.ts` feeds the browser's body through the real route.
+- **After paying** the giver comes back to the fundraiser's own page, not the donate page's thank
+  you. `POST /api/checkout-session` looks the fundraiser up itself (`fundraiserReturnPage`, never an
+  address from the browser) and, only while fundraising is on and for one with a public page, sets Stripe's return address to
+  `<page>?thanks=1` (`&message=1` if they left a message) and, on Stripe's own page, the cancel
+  address to the page itself. The page then shows "Thank you for supporting ..." with the share
+  links, saying the message will appear on the wall shortly when there is one; the meter and wall
+  catch up when the webhook lands. Anything else, and every donate page gift, comes back exactly
+  as before (tested byte for byte in `test/unit/fundraiser-return-url.test.ts`).
+- The wall shows the newest ten; Show all grows the page with the rest (no inner scrolling).
+- Sharing: copy the link (shown only where copying works), Facebook and WhatsApp as plain links.
+  No script from anyone else.
+- The QR code is inline SVG (`src/fundraising/qr.ts`), also served at `/fundraise/<slug>/qr.svg`
+  with a Download link.
+
+Anything that is not an approved, public, raising money fundraiser while fundraising is on is the
+site's own 404 page.
+
+**Managing a page (`/fundraise/manage`).** Without a token: an email box that asks for a link.
+With `?token=`: the editable fields (any change still waiting is shown in their place, with a
+note that it is waiting for staff), and saving sends only what differs from the approved page. A
+link that has run out or matches nothing leads back to asking for a new one. The page is
+`noindex`, never cached, sends no referrer, does not load the visit counter, takes the token out of
+the address bar once it has read it, and is a 404 while fundraising is switched off.
+
+**Fundraising help (`/fundraise/help`, TASK-498).** A plain reading page for organisers, linked
+from the sign up form's intro ("New to fundraising? Read our help page"), with a contents list of
+anchor links to: an A to Z of fundraising ideas; paying in what you raise (online gifts come
+straight to NBCC; cash and sponsor money by card from the private area, by bank transfer after
+calling or emailing for the bank details, which the page never prints, or dropped in by
+arrangement; paper sponsor forms sent in for Gift Aid); Gift Aid made simple (25p per £1, the
+declaration, enough tax paid, never on raffle tickets, cake sales, event tickets or company
+payments); staying safe and legal in Scotland (general information, not legal advice: collection
+permits under the Civic Government (Scotland) Act 1982, raffles and lotteries, food, safety, and
+saying you are fundraising "for" NBCC); using our logo; and a questions panel with the phone and
+`events@nbcc.scot` side by side and a button back to the sign up. Outside links go only to pages
+checked by hand (GOV.UK, the Gambling Commission, Food Standards Scotland, the Fundraising
+Regulator), pinned in `test/unit/fundraise-help-page.test.ts`. It exists only while fundraising is
+switched on, so it merged as a draft for Jaimie to sign off before fundraising opens. Template
+`fundraise-help.html` (styles: `pages.css` and the help part of `fundraising.css`); listed in the
+site maps under `/fundraise` while fundraising is on.
+
+**Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
+`src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:
+`events.html` (Get involved), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html`, `fundraise-help.html` (all in
+the Dockerfile's page list). Scripts: `assets/js/fundraise.js`, `fundraiser.js`,
+`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the Get involved part of
+`events.css`. None of it touches `main.js` or `styles.css`, so donate.html's page weight budget is
+unchanged. Text boxes grow with what is typed rather than scroll.
+
+**Tests.** `fundraising-render`, `fundraise-pages-routes`, `get-involved-page`,
+`fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page`, `fundraise-help-page` and
+`fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
+redirect, Get involved with fundraising on and off, a fundraiser's page and QR code, 404s, the sign
+up while off, the manage page's headers, the help page on and off).
+
+## A QR code encoder for fundraiser pages (TASK-493)
+
+`src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
+(ISO/IEC 18004). It is pure: no files, no network.
+
+- `encodeQr(text, { ecc })` returns the grid of modules (`true` = dark), row by row. The text is
+  sent as UTF-8 bytes. Error correction defaults to **M** (L, M, Q and H are allowed). It picks the
+  smallest size that fits, from version 1 (21 by 21) to version 10 (57 by 57); text that does not
+  fit throws an error saying how many bytes it has and how many fit (213 at M, enough for any of
+  our page links). It tries all eight masks and keeps the one the standard's four penalty rules
+  score lowest.
+- `qrSvg(text, { ecc, margin, size, title })` returns a small SVG to put straight into a page:
+  a white background and one path of dark squares, `shape-rendering="crispEdges"`, a `viewBox` in
+  modules, a 4-module quiet zone by default, a pixel `size` if given (otherwise it fills its
+  container), and an escaped `<title>` with `role="img"` when a title is given.
+
+**Tests.** `test/unit/fundraising-qr.test.ts`: 22 codes across every version 1 to 10 and every
+level match, module for module, grids made once by a separate encoder; the Reed-Solomon, format and
+version bits match the standard's published values; and every code generated (every length from
+empty to the version 10 limit at each level, UTF-8 text, the fundraiser link at each level, all
+eight masks) is read back by a separate strict decoder in `test/unit/helpers/qr-decode.ts`, which
+checks the fixed patterns, the format and version bits, the error correction of every block and
+the padding before returning the original text. The SVG tests redraw the path and compare it with
+the grid, and check the escaping.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a
@@ -7109,13 +7568,14 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 52 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 57 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
-four in TASK-479, and the business supporter call log in TASK-491),
+four in TASK-479, the business supporter call log in TASK-491, and community fundraising five
+in TASK-493),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 52 of **55** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 57 of **60** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

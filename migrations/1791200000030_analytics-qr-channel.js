@@ -9,7 +9,8 @@
 // Rather than guess that name, every check on the table that mentions channel is dropped, and the
 // widened one is added back under a name of our own.
 //
-// Numbered after 1791100000000_business-supporter-calls.js, the highest on main.
+// Numbered after 1791200000020_fundraiser-live-email-pending.js, the highest on main (first written
+// as 1791200000000, which would have sorted before the fundraising migrations production had run).
 
 const OLD = "channel IN ('newsletter', 'email', 'search', 'social', 'other_websites', 'direct')";
 const NEW = "channel IN ('newsletter', 'email', 'qr', 'search', 'social', 'other_websites', 'direct')";

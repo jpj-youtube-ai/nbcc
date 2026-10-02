@@ -40,20 +40,25 @@ export function qrPath(raw: unknown): string | null {
 export interface QrRow {
   path: string;
   title: string;
-  /** False for a page switched off (the Festive Ball before launch, Events while off). */
+  /** False for a page switched off (the Festive Ball before launch, Get involved or Fundraising while off). */
   live: boolean;
   link: string;
 }
 
+export interface QrGates {
+  ballOpen: boolean;
+  eventsOn: boolean;
+  fundraisingOn: boolean;
+}
+
 /** Every page in the list, children after their parent, in order. */
-export function qrRows(
-  pages: readonly SitePage[],
-  gates: { ballOpen: boolean; eventsOn: boolean },
-  parentLive = true,
-): QrRow[] {
+export function qrRows(pages: readonly SitePage[], gates: QrGates, parentLive = true): QrRow[] {
   return pages.flatMap((p) => {
     const live =
-      parentLive && (!p.ballGated || gates.ballOpen) && (!p.eventsGated || gates.eventsOn);
+      parentLive &&
+      (!p.ballGated || gates.ballOpen) &&
+      (!p.eventsGated || gates.eventsOn) &&
+      (!p.fundraisingGated || gates.fundraisingOn);
     return [
       { path: p.path, title: p.title, live, link: qrLink(p.path) },
       ...qrRows(p.children ?? [], gates, live),
@@ -69,7 +74,9 @@ export function labelQrScans(
   rows: readonly { campaign: string | null; visits: number }[],
   pages: readonly SitePage[],
 ): { label: string; visits: number }[] {
-  const titles = new Map(qrRows(pages, { ballOpen: true, eventsOn: true }).map((r) => [qrSlug(r.path), r.title]));
+  const titles = new Map(
+    qrRows(pages, { ballOpen: true, eventsOn: true, fundraisingOn: true }).map((r) => [qrSlug(r.path), r.title]),
+  );
   return rows.map((r) => ({
     label: r.campaign === null ? "Not named" : (titles.get(r.campaign) ?? `/${r.campaign}`),
     visits: r.visits,

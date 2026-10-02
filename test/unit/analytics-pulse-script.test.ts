@@ -246,6 +246,10 @@ describe("which pages carry it", () => {
     "index.html", "about.html", "donate.html", "events.html", "ball.html", "ball-terms.html", "gift-aid.html",
     "contact.html", "my-story.html", "supporters.html", "hub.html", "privacy.html", "sitemap.html",
     "thank-you.html", "business-thank-you.html", "404.html",
+    // TASK-494: the fundraising sign up and the template of every fundraiser's page.
+    "fundraise.html", "fundraiser.html",
+    // TASK-498: the fundraising help page.
+    "fundraise-help.html",
   ];
   const TAG = '<script defer src="/assets/js/pulse.js"></script>';
 
@@ -254,7 +258,8 @@ describe("which pages carry it", () => {
     expect(html.split(TAG)).toHaveLength(2);
   });
 
-  it.each(["admin.html", "portal.html", "set-password.html"])("%s does not", (page) => {
+  // TASK-494: the manage page is reached by a private emailed link, like the donor portal.
+  it.each(["admin.html", "portal.html", "set-password.html", "fundraise-manage.html"])("%s does not", (page) => {
     expect(readFileSync(resolve(ROOT, page), "utf8")).not.toContain("pulse.js");
   });
 });

@@ -135,7 +135,7 @@ Then("the kept page view came from {string} via {string}", async function (chann
   assert.equal(view.source, source);
 });
 
-// The channel check on analytics_views had to be widened for this (migration 1791200000000).
+// The channel check on analytics_views had to be widened for this (migration 1791200000030).
 Then("the kept page view came from a QR code for {string}", async function (campaign) {
   const view = await keptView(this);
   assert.ok(view, "no page view was kept");

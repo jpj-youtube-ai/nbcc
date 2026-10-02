@@ -10,11 +10,13 @@ const m = vi.hoisted(() => ({
   getSettings: vi.fn(),
   isGateOpen: vi.fn(),
   getEventsSettings: vi.fn(),
+  fundraisingIsOn: vi.fn(),
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: m.getUserAuthRow }));
 vi.mock("../../src/db/ball", () => ({ getSettings: m.getSettings }));
 vi.mock("../../src/ball/gate", () => ({ isGateOpen: m.isGateOpen }));
 vi.mock("../../src/db/events", () => ({ getEventsSettings: m.getEventsSettings }));
+vi.mock("../../src/db/fundraisers", () => ({ fundraisingIsOn: m.fundraisingIsOn }));
 vi.mock("../../src/config", () => ({ config: { NODE_ENV: "development", ADMIN_SESSION_SECRET: "test-admin-secret" } }));
 
 import { getQrCodes, getQrImage } from "../../src/routes/admin-qr";
@@ -62,6 +64,7 @@ beforeEach(() => {
   m.getSettings.mockResolvedValue({});
   m.isGateOpen.mockReturnValue(false);
   m.getEventsSettings.mockResolvedValue({ pageOn: true });
+  m.fundraisingIsOn.mockResolvedValue(false);
 });
 
 describe("GET /api/admin/qr-codes", () => {
@@ -80,7 +83,8 @@ describe("GET /api/admin/qr-codes", () => {
     expect(pages[0]).toMatchObject({ path: "/", title: "Home", live: true, link: "https://nbcc.scot/?utm_medium=qr&utm_campaign=home" });
     expect(pages.every((p) => p.svg.startsWith("<svg"))).toBe(true);
     expect(pages.find((p) => p.path === "/ball")?.live).toBe(false);
-    expect(pages.find((p) => p.path === "/events")?.live).toBe(true);
+    expect(pages.find((p) => p.path === "/get-involved")?.live).toBe(true);
+    expect(pages.find((p) => p.path === "/fundraise")?.live).toBe(false);
     expect(pages.length).toBeGreaterThanOrEqual(SITE_PAGES.length);
   });
 
@@ -89,7 +93,7 @@ describe("GET /api/admin/qr-codes", () => {
     m.getEventsSettings.mockRejectedValue(new Error("down"));
     const res = await call(getQrCodes, tokenFor("viewer"));
     const pages = (res.body as { pages: Array<{ path: string; live: boolean }> }).pages;
-    expect(pages.find((p) => p.path === "/events")?.live).toBe(false);
+    expect(pages.find((p) => p.path === "/get-involved")?.live).toBe(false);
   });
 });
 

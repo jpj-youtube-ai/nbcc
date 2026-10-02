@@ -101,26 +101,29 @@ const allPaths = (pages: SitePage[]): string[] => pages.flatMap((p) => [p.path, 
 
 describe("the pages that get a code", () => {
   it("is every page in the site's page list, children included, so a new page is never missed", () => {
-    const rows = qrRows(SITE_PAGES, { ballOpen: true, eventsOn: true });
+    const rows = qrRows(SITE_PAGES, { ballOpen: true, eventsOn: true, fundraisingOn: true });
     expect(rows.map((r) => r.path)).toEqual(allPaths(SITE_PAGES));
   });
 
   it("gives each its title and the link its code carries", () => {
-    const home = qrRows(SITE_PAGES, { ballOpen: true, eventsOn: true })[0];
+    const home = qrRows(SITE_PAGES, { ballOpen: true, eventsOn: true, fundraisingOn: true })[0];
     expect(home).toEqual({ path: "/", title: "Home", live: true, link: "https://nbcc.scot/?utm_medium=qr&utm_campaign=home" });
   });
 
   // Posters can be made before launch, but staff should know the page is not up yet.
-  it("marks the Festive Ball and Events pages not live while they are switched off", () => {
-    const live = (open: { ballOpen: boolean; eventsOn: boolean }) =>
+  it("marks the Festive Ball, Get involved and Fundraising pages not live while they are switched off", () => {
+    const live = (open: { ballOpen: boolean; eventsOn: boolean; fundraisingOn: boolean }) =>
       Object.fromEntries(qrRows(SITE_PAGES, open).map((r) => [r.path, r.live]));
-    const off = live({ ballOpen: false, eventsOn: false });
+    const off = live({ ballOpen: false, eventsOn: false, fundraisingOn: false });
     expect(off["/ball"]).toBe(false);
     expect(off["/ball/terms"]).toBe(false);
-    expect(off["/events"]).toBe(false);
+    expect(off["/get-involved"]).toBe(false);
+    expect(off["/fundraise"]).toBe(false);
+    expect(off["/fundraise/help"]).toBe(false);
     expect(off["/donate"]).toBe(true);
-    const on = live({ ballOpen: true, eventsOn: true });
+    const on = live({ ballOpen: true, eventsOn: true, fundraisingOn: true });
     expect(on["/ball"]).toBe(true);
-    expect(on["/events"]).toBe(true);
+    expect(on["/get-involved"]).toBe(true);
+    expect(on["/fundraise"]).toBe(true);
   });
 });

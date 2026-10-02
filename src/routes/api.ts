@@ -23,6 +23,7 @@ import { contactEnquirySchema } from "../contact/schema";
 import { insertEnquiry } from "../db/contact";
 import { createRateLimiter } from "../portal/request-limiter";
 import { captchaEnabled, captchaSiteKey, verifyCaptcha } from "../clients/turnstile";
+import { GIFT_MIN_PENCE, MESSAGE_MAX } from "../fundraising/model";
 
 // Marketing-site API endpoints, both implemented.
 // - POST /api/checkout-session (REQ-029): turns the REQ-028 front-end payload into
@@ -102,6 +103,24 @@ const checkoutBodySchema = z
     // company path (enforced in the superRefine below); optional here so the individual /
     // partnership and no-JS base contracts are unchanged.
     company: companyFieldsSchema.optional(),
+    // TASK-493: a gift made on a community fundraiser's page (/fundraise/<slug>). The webhook links
+    // it to the fundraiser only if this names an APPROVED one; otherwise it is an ordinary donation.
+    // The message and the two wall choices mean nothing without it, so they are only stamped with it
+    // (buildSessionParams), which keeps every donate page session exactly as it was.
+    fundraiserId: z.number().int().positive().optional(),
+    supporterMessage: z.string().trim().max(MESSAGE_MAX).optional(),
+    showName: z.boolean().optional(),
+    showAmount: z.boolean().optional(),
+  })
+  // TASK-493: giving on a fundraiser's page is one off only, and £2 at least, as the design asks.
+  // Monthly gifts there are not built yet (they would need the wall and meter to follow renewals).
+  .refine((b) => b.fundraiserId === undefined || b.mode === "once", {
+    message: "gifts on a fundraising page are one off",
+    path: ["mode"],
+  })
+  .refine((b) => b.fundraiserId === undefined || (b.amount ?? 0) >= GIFT_MIN_PENCE, {
+    message: "the smallest gift on a fundraising page is £2",
+    path: ["amount"],
   })
   // Every monthly gift builds its recurring price INLINE from the amount (pence, TASK-231) — preset
   // tiers and custom amounts alike — so a monthly gift always requires an amount. (A preset tier's
@@ -188,6 +207,14 @@ const checkoutBodySchema = z
         message: "Please choose a different name to show on our supporters page.",
       });
     }
+    // TASK-493: the same check for a message on a fundraiser's supporter wall, which is public too.
+    if (b.supporterMessage && containsBlockedWord(b.supporterMessage)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["supporterMessage"],
+        message: "Please choose different words for your message on the supporter wall.",
+      });
+    }
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;
@@ -246,6 +273,11 @@ export function donationFeeCoverPence(body: CheckoutBody, cardFee: CardFeeRate):
 export function buildSessionParams(
   body: CheckoutBody,
   cardFee: CardFeeRate = DEFAULT_CARD_FEE,
+  // TASK-494: the full address of the fundraiser's own page, worked out by the SERVER from the
+  // fundraiser the gift names (fundraiserReturnPage), never taken from the browser. Given, the giver
+  // comes back to that page with a thank you; absent (every donate page gift, and any fundraiser
+  // without a public page), the session is exactly what it always was.
+  fundraiserPage: string | null = null,
 ): StripeNS.Checkout.SessionCreateParams {
   // Capture the Gift Aid declaration (and the gift context) on the session so the
   // 25% claim can be reconciled later. NOTE: durable storage of the declaration
@@ -278,6 +310,15 @@ export function buildSessionParams(
     listOnSupporters: String(body.listOnSupporters ?? false),
     creditName: body.creditName ?? "",
   };
+
+  // TASK-493: only for a gift on a fundraiser's page, so a donate page session gains no keys at all.
+  // Stripe allows 500 characters a value; the message is held to 200 by the schema.
+  if (body.fundraiserId !== undefined) {
+    metadata.fundraiserId = String(body.fundraiserId);
+    metadata.supporterMessage = body.supporterMessage ?? "";
+    metadata.showName = String(body.showName ?? true);
+    metadata.showAmount = String(body.showAmount ?? true);
+  }
 
   // The declaration scope defaults from the gift's frequency (REQ-041): monthly is
   // enduring — one declaration covers all the donor's gifts — while a one-off covers just
@@ -361,9 +402,11 @@ export function buildSessionParams(
     // BOTH land the SAME type-aware thank-you page (TASK-221) via thankYouReturnUrl — carrying the
     // gift's mode+donor (which of the four variants to show) and {CHECKOUT_SESSION_ID} (the business
     // supporter recognition lookup). cancel_url is unchanged (a cancel is not a thank-you).
-    ...(embeddedRequested(body)
-      ? { ui_mode: "embedded_page", return_url: thankYouReturnUrl(body.mode, body.donorType) }
-      : { success_url: thankYouReturnUrl(body.mode, body.donorType), cancel_url: config.STRIPE_CANCEL_URL }),
+    ...(fundraiserPage
+      ? fundraiserReturnUrls(fundraiserPage, Boolean(body.supporterMessage), embeddedRequested(body))
+      : embeddedRequested(body)
+        ? { ui_mode: "embedded_page", return_url: thankYouReturnUrl(body.mode, body.donorType) }
+        : { success_url: thankYouReturnUrl(body.mode, body.donorType), cancel_url: config.STRIPE_CANCEL_URL }),
   };
 
   if (body.mode === "monthly") {
@@ -426,6 +469,42 @@ export function buildSessionParams(
   return { ...base, mode: "payment", line_items: lineItems };
 }
 
+// TASK-494: where a gift made on a fundraiser's page comes back to. The thank you is that page with
+// ?thanks=1 (and &message=1 when they left a message, so it can say the wall will show it); a
+// cancel on Stripe's own page goes back to the page itself.
+function fundraiserReturnUrls(
+  page: string,
+  leftMessage: boolean,
+  embedded: boolean,
+): Pick<StripeNS.Checkout.SessionCreateParams, "ui_mode" | "return_url" | "success_url" | "cancel_url"> {
+  const thanks = `${page}?thanks=1${leftMessage ? "&message=1" : ""}`;
+  return embedded ? { ui_mode: "embedded_page", return_url: thanks } : { success_url: thanks, cancel_url: page };
+}
+
+/**
+ * TASK-494: the page a fundraiser gift should come back to, from the fundraiser the gift names, or
+ * null for anything without a public page right now: switched off, or not approved, public and
+ * raising money. A failed read is null too: the gift still goes ahead, and comes back the donate
+ * page's way, rather than failing over where the giver lands.
+ */
+export async function fundraiserReturnPage(fundraiserId: number | undefined): Promise<string | null> {
+  if (fundraiserId === undefined) return null;
+  try {
+    const [{ getFundraiser, fundraisingIsOn }, { hasPage }, { fundraiserPageUrl }] = await Promise.all([
+      import("../db/fundraisers"),
+      import("../fundraising/model"),
+      import("../fundraising/send"),
+    ]);
+    // Switched off, the fundraiser's page is a 404: coming back there would be a dead end.
+    if (!(await fundraisingIsOn())) return null;
+    const f = await getFundraiser(fundraiserId);
+    return f && hasPage(f) ? fundraiserPageUrl(f.slug) : null;
+  } catch (err) {
+    console.error("fundraiser return page lookup failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
 export async function postCheckoutSession(req: Request, res: Response): Promise<Response> {
   const parsed = checkoutBodySchema.safeParse(req.body);
   if (!parsed.success) {
@@ -445,7 +524,7 @@ export async function postCheckoutSession(req: Request, res: Response): Promise<
     } catch (err) {
       console.error("card fee rate read failed, using default:", err instanceof Error ? err.message : err);
     }
-    const params = buildSessionParams(parsed.data, cardFee);
+    const params = buildSessionParams(parsed.data, cardFee, await fundraiserReturnPage(parsed.data.fundraiserId));
     const session = await stripe.checkout.sessions.create(params);
     // Embedded (inline) returns a { clientSecret } the browser mounts on nbcc.scot, plus the PUBLIC
     // publishable key it needs to construct Stripe.js (TASK-215) — but ONLY when a key is configured

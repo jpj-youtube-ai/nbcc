@@ -96,7 +96,13 @@ beforeEach(() => {
   m.listStories.mockResolvedValue([{}]);
   m.listBusinessFulfilments.mockResolvedValue([]);
   m.listOutreachForTodo.mockResolvedValue([]);
-  m.listThankYouEligible.mockResolvedValue([{ alreadyThanked: false }, { alreadyThanked: true }]);
+  // Only those ready to write to count, as on the Thank you screen: no email, or opted out, never clears.
+  m.listThankYouEligible.mockResolvedValue([
+    { alreadyThanked: false, sendState: "ready" },
+    { alreadyThanked: true, sendState: "ready" },
+    { alreadyThanked: false, sendState: "no_email" },
+    { alreadyThanked: false, sendState: "opted_out" },
+  ]);
 });
 
 describe("GET /api/admin/overview", () => {
@@ -118,6 +124,7 @@ describe("GET /api/admin/overview", () => {
     expect(text("transfersOverdue")).toBe("1 bank transfer is overdue");
     expect(text("transfersWaiting")).toBe("2 bank transfers are still waiting for their money");
     expect(text("monthlyFailing")).toBe("1 monthly gift is failing to take");
+    expect(text("thankYouLetters")).toBe("1 generous donor has not had a thank you letter yet");
     expect(text("giftAidReady")).toBe("2 donations are ready to claim Gift Aid on (£30.50 of giving)");
     expect(new Date(answer.updatedAt).getTime()).toBeGreaterThan(0);
   });

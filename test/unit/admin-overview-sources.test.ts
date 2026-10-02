@@ -47,6 +47,25 @@ describe("gathering what needs people", () => {
     expect(got.failed).toEqual(["Claims"]);
   });
 
+  // The main database pool takes 5 at a time; one Overview must not take all of them, or a donor's
+  // checkout waits behind it.
+  it("asks at most three at a time", async () => {
+    let running = 0;
+    let most = 0;
+    const slow = () =>
+      source({
+        read: async () => {
+          running += 1;
+          most = Math.max(most, running);
+          await new Promise((r) => setTimeout(r, 5));
+          running -= 1;
+          return {};
+        },
+      });
+    await gatherNeeds(roleToPermissions("admin"), Array.from({ length: 10 }, slow));
+    expect(most).toBe(3);
+  });
+
   it("asks nothing for someone who can see nothing", async () => {
     const read = vi.fn(async () => ({}));
     const none = Object.fromEntries(Object.keys(roleToPermissions("admin")).map((k) => [k, "none"])) as ReturnType<typeof roleToPermissions>;

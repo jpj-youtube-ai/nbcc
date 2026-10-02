@@ -1252,6 +1252,15 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       expect(document.querySelector("#overviewRecent table")).not.toBeNull();
     });
 
+    it("asks once when you sign in, not twice", async () => {
+      await signIn();
+      await settle();
+      const asked = (globalThis.fetch as unknown as { mock: { calls: Array<[unknown]> } }).mock.calls.filter(
+        ([u]) => String(u) === "/api/admin/overview",
+      ).length;
+      expect(asked).toBe(1);
+    });
+
     it("asks again each time the Overview is opened", async () => {
       await signIn();
       await settle();

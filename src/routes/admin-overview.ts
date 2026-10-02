@@ -162,7 +162,11 @@ function sources(email: string, now: Date): NeedSource[] {
       section: "thank-you",
       level: "view",
       read: async () => ({
-        thankYouLetters: count((await listThankYouEligible(DEFAULT_THANK_YOU_THRESHOLD_PENCE)).filter((d) => !d.alreadyThanked).length),
+        // Ready to write to, as the Thank you screen counts them: a donor with no email, or who has
+        // opted out, can never be thanked from there, so would never clear.
+        thankYouLetters: count(
+          (await listThankYouEligible(DEFAULT_THANK_YOU_THRESHOLD_PENCE)).filter((d) => d.sendState === "ready" && !d.alreadyThanked).length,
+        ),
       }),
     },
   ];

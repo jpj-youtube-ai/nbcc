@@ -14,12 +14,34 @@ export interface NeedSource {
   read: () => Promise<NeedCounts>;
 }
 
+// The main database pool takes 5 connections at a time (src/db/pool.ts). One Overview asking all of
+// its sources at once would take every one, and a donor's checkout would wait behind it; three at a
+// time leaves room.
+export const MAX_AT_ONCE = 3;
+
+async function settleInTurn<T>(jobs: ReadonlyArray<() => Promise<T>>, atOnce: number): Promise<PromiseSettledResult<T>[]> {
+  const results: PromiseSettledResult<T>[] = new Array(jobs.length);
+  let next = 0;
+  async function worker() {
+    while (next < jobs.length) {
+      const i = next++;
+      try {
+        results[i] = { status: "fulfilled", value: await jobs[i]() };
+      } catch (reason) {
+        results[i] = { status: "rejected", reason };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(atOnce, jobs.length) }, worker));
+  return results;
+}
+
 export async function gatherNeeds(
   perms: PermissionMap,
   sources: readonly NeedSource[],
 ): Promise<{ counts: NeedCounts; failed: string[] }> {
   const allowed = sources.filter((s) => can(perms, s.section, s.level));
-  const results = await Promise.allSettled(allowed.map((s) => s.read()));
+  const results = await settleInTurn(allowed.map((s) => () => s.read()), MAX_AT_ONCE);
   const counts: NeedCounts = {};
   const failed: string[] = [];
   results.forEach((r, i) => {

@@ -36,7 +36,8 @@ levels, shown by a coloured dot and kept in this order:
 - Contact messages waiting for a reply (contact: view).
 - Fundraising sign ups to approve, changes to check, and fundraisers who say they have finished (fundraising: view).
 - New stories to read (stories: view).
-- Businesses due a call, and business supporter thank-yous still to do (business-supporters: edit).
+- Businesses due a thank you call (business-supporters: edit). (Built in stage 1: the calls. The other
+  business supporter to-dos are left to that screen's own "things to do" for now.)
 - Fundraisers to call (fundraising: view).
 - Your own outreach to-dos (outreach: view).
 - Big gifts not yet thanked with a letter (thank-you: view).

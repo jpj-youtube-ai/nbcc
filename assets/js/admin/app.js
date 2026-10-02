@@ -179,12 +179,10 @@
       // draft is exactly when you most want to start from a template.
       nlRefreshTemplates();
       nlRefreshAudiences(); // TASK-259: fill the audience pickers once permissions are known
-      // Back to where they were, or the overview on a fresh sign-in. loadOverview() runs either
-      // way: the overview's own figures are cheap, and the notice bar at the top of every screen
-      // reads from them.
+      // Back to where they were, or the overview on a fresh sign-in. TASK-507: opening the overview
+      // loads it (selectView), so it is read once, and only when it is the screen being shown.
       var resume = restorableView();
       selectView(resume || "overview");
-      loadOverview();
     }
     authFetch("/api/admin/me")
       .then(j)

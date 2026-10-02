@@ -87,7 +87,12 @@ Then("it says fundraising sign ups are waiting, with a button to {string}", func
   assert.deepEqual(this.ovBody.failed, []);
 });
 
+// A real answer, checked in full (not an empty one that would pass by accident), with nothing from a
+// screen this person cannot open: their only access is the contact form.
 Then("it says nothing about Fundraising", function () {
-  const lines = (this.ovBody.needs || []).filter((n) => n.view === "fundraising");
-  assert.deepEqual(lines, [], JSON.stringify(this.ovBody));
+  assert.ok(Array.isArray(this.ovBody.needs), JSON.stringify(this.ovBody));
+  assert.deepEqual(this.ovBody.failed, []);
+  assert.ok(this.ovBody.updatedAt, "the answer says when it was read");
+  const others = this.ovBody.needs.filter((n) => n.view !== "contact");
+  assert.deepEqual(others, [], JSON.stringify(this.ovBody));
 });

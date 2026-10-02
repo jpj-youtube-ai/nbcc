@@ -7277,6 +7277,31 @@ and tracked link tests. BDD: `features/fundraising.feature` (approval and the sw
 the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
 manage change waiting for staff, who may do what).
 
+## A QR code encoder for fundraiser pages (TASK-493)
+
+`src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
+(ISO/IEC 18004). It is pure: no files, no network.
+
+- `encodeQr(text, { ecc })` returns the grid of modules (`true` = dark), row by row. The text is
+  sent as UTF-8 bytes. Error correction defaults to **M** (L, M, Q and H are allowed). It picks the
+  smallest size that fits, from version 1 (21 by 21) to version 10 (57 by 57); text that does not
+  fit throws an error saying how many bytes it has and how many fit (213 at M, enough for any of
+  our page links). It tries all eight masks and keeps the one the standard's four penalty rules
+  score lowest.
+- `qrSvg(text, { ecc, margin, size, title })` returns a small SVG to put straight into a page:
+  a white background and one path of dark squares, `shape-rendering="crispEdges"`, a `viewBox` in
+  modules, a 4-module quiet zone by default, a pixel `size` if given (otherwise it fills its
+  container), and an escaped `<title>` with `role="img"` when a title is given.
+
+**Tests.** `test/unit/fundraising-qr.test.ts`: 22 codes across every version 1 to 10 and every
+level match, module for module, grids made once by a separate encoder; the Reed-Solomon, format and
+version bits match the standard's published values; and every code generated (every length from
+empty to the version 10 limit at each level, UTF-8 text, the fundraiser link at each level, all
+eight masks) is read back by a separate strict decoder in `test/unit/helpers/qr-decode.ts`, which
+checks the fixed patterns, the format and version bits, the error correction of every block and
+the padding before returning the original text. The SVG tests redraw the path and compare it with
+the grid, and check the escaping.
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a

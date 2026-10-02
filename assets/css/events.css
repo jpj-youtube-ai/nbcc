@@ -572,7 +572,7 @@
 .fr-flag { color: var(--holly); }
 .fr-card__by { margin: 6px 0 0; font-size: 0.95rem; color: var(--slate-soft); }
 .ev-card--fundraiser .fr-meter { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-.fr-card__go { position: static; }
+.fr-card__go { position: static; width: 100%; justify-content: center; }
 .fr-card__go::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: var(--card-r); }
 .fr-card__go:hover { transform: none; }
 .fr-card__go:focus-visible { outline: none; }

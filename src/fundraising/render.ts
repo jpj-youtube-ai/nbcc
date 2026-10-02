@@ -153,7 +153,7 @@ export function renderFundraiserCard(c: PublicCard): string {
     (c.description ? `<p class="ev-tldr">${escapeHtml(shorten(c.description, 150))}</p>` : "") +
     renderMeter(c.meter) +
     '<div class="ev-book-gap"></div>' +
-    `<a class="btn btn-primary ev-book fr-card__go" href="${href}">See the page and give<span class="sr-only">: ${escapeHtml(c.title)}</span></a>` +
+    `<a class="btn btn-primary fr-card__go" href="${href}">See the page and give<span class="sr-only">: ${escapeHtml(c.title)}</span></a>` +
     "</div></article></div></li>"
   );
 }
@@ -335,7 +335,7 @@ function renderWall(p: PublicPage, now: Date): string {
       (count > WALL_FIRST
         ? `<button class="fr-wall__more" type="button" data-wall-show-all hidden>Show all ${count} supporters</button>`
         : "")
-    : '<p class="fr-wall__empty">No gifts yet. Yours could be the first.</p>';
+    : '<p class="fr-wall__empty">No donations yet. Yours could be the first.</p>';
   return (
     '<section class="fr-wall" aria-labelledby="fr-wall-heading">' +
     '<h2 id="fr-wall-heading">Supporters</h2>' +
@@ -386,7 +386,7 @@ function renderGiveForm(p: PublicPage): string {
     '<section class="fr-give" id="give" aria-labelledby="fr-give-heading" tabindex="-1">' +
     '<div class="card card-lg give-card fr-give-card"><div class="give-main">' +
     `<h2 class="give-step-title" id="fr-give-heading">Give to ${escapeHtml(p.title)}</h2>` +
-    `<p class="give-step-sub">Your gift goes to NBCC and counts towards ${first}'s total.</p>` +
+    `<p class="give-step-sub">Your donation goes to NBCC and counts towards ${first}'s total.</p>` +
     '<noscript><p class="fr-noscript">Giving on this page needs JavaScript switched on. You can still give on our <a href="/donate">donate page</a>.</p></noscript>' +
     `<form id="frGiveForm" class="fr-give-form" data-fundraiser-id="${p.giving.fundraiserId}" data-minimum-pence="${p.giving.minimumPence}" novalidate>` +
     '<p class="form-error-summary" role="alert" data-give-error hidden></p>' +
@@ -435,7 +435,7 @@ function renderGiveForm(p: PublicPage): string {
     // 4. Gift Aid, the donate page's callout and declaration, one off wording
     '<div class="give-question">' +
     '<div class="giftaid">' +
-    '<div class="giftaid-head"><strong class="giftaid-headline" data-giftaid-headline>Make your gift worth 25% more</strong>' +
+    '<div class="giftaid-head"><strong class="giftaid-headline" data-giftaid-headline>Make your donation worth 25% more</strong>' +
     '<span class="giftaid-logo" aria-hidden="true">gift aid it</span></div>' +
     '<p class="giftaid-intro">If you are a UK taxpayer, NBCC can turn every £1 you give into £1.25 on eligible donations, at no cost to you. That is 25% more for the people NBCC helps.</p>' +
     '<div class="giftaid-check-row">' +
@@ -445,7 +445,7 @@ function renderGiveForm(p: PublicPage): string {
     "</div></div>" +
     '<fieldset class="give-declaration fr-declaration" id="frDeclaration" hidden>' +
     '<legend class="give-declaration-legend">Your home address for Gift Aid</legend>' +
-    '<p class="give-declaration-help">HMRC needs these to match your gift to your tax record.</p>' +
+    '<p class="give-declaration-help">HMRC needs these to match your donation to your tax record.</p>' +
     '<div class="give-field"><label for="frHouse">House name or number <span class="give-req" aria-hidden="true">*</span></label>' +
     '<input class="give-field-input" id="frHouse" name="frHouse" type="text" required aria-required="true" placeholder="e.g. 12 or Rose Cottage" data-invalid-message="Please give your house name or number" /></div>' +
     '<div class="give-field"><label for="frAddress">Home address <span class="give-req" aria-hidden="true">*</span></label>' +
@@ -460,10 +460,10 @@ function renderGiveForm(p: PublicPage): string {
     // 5. the card fee
     '<div class="give-question">' +
     '<label class="give-check" for="frCoverFee"><input class="give-check-box" id="frCoverFee" name="frCoverFee" type="checkbox" />' +
-    '<span class="give-check-text"><strong>Add <span data-cover-fee-amount>a little</span> to cover the card fee.</strong> Card payments cost NBCC a small fee. Cover it and your gift funds our work rather than the card company. Gift Aid still applies to your donation only.</span></label>' +
+    '<span class="give-check-text"><strong>Add <span data-cover-fee-amount>a little</span> to cover the card fee.</strong> Card payments cost NBCC a small fee. Cover it and your donation funds our work rather than the card company. Gift Aid still applies to your donation only.</span></label>' +
     "</div>" +
     '<div class="give-cta-row">' +
-    '<button class="btn btn-primary give-cta" type="submit" data-give-submit>Give now</button>' +
+    '<button class="btn btn-primary give-cta" type="submit" data-give-submit data-give-pay>Give now</button>' +
     '<p class="give-pay-note">Secure payment by Stripe. Card, Apple Pay and Direct Debit.</p>' +
     "</div>" +
     "</form>" +

@@ -324,7 +324,7 @@ describe("a fundraiser's own page", () => {
     expect(item.textContent).toBe("yesterday");
   });
 
-  it("invites the first gift when the wall is empty", () => {
+  it("invites the first donation when the wall is empty", () => {
     expect(doc(page({ wall: [] })).querySelector(".fr-wall__empty")?.textContent).toContain("first");
   });
 
@@ -363,5 +363,44 @@ describe("the sign up page", () => {
     const closed = d.querySelector("[data-fundraise-closed]")!;
     expect(closed.hasAttribute("hidden")).toBe(false);
     expect(closed.textContent).toContain("not open yet");
+  });
+});
+
+// The house style on every public page (copy-rules.test.ts): no hyphen between words and no en or em
+// dash in what people read, and on a donor facing page the money is a donation, never a gift (only
+// the Gift Aid scheme's own name may say gift). Checked on the pages as the server draws them.
+describe("the words on the drawn pages", () => {
+  function visible(html: string): string {
+    const d = parse(html);
+    d.body.querySelectorAll("script, style, svg").forEach((e) => e.remove());
+    const attrs = [...d.body.querySelectorAll("[alt],[title],[aria-label],[placeholder]")].map((e) =>
+      ["alt", "title", "aria-label", "placeholder"].map((a) => e.getAttribute(a) ?? "").join(" "),
+    );
+    return [d.body.textContent ?? "", ...attrs].join(" ").replace(/\s+/g, " ");
+  }
+  const fundraiserHtml = renderFundraiserPage(read("fundraiser.html"), page({ wall: [] }), { pageUrl: PAGE_URL, now: NOW });
+  const pages: Array<[string, string]> = [
+    ["Get involved", renderGetInvolvedPage(read("events.html"), { events: SEED_EVENTS, fundraisers: [card(), card({ path: "event", eventDate: "2026-11-01", slug: "e" })], fundraisingOn: true, today: "2026-10-02" })],
+    ["a fundraiser's page", fundraiserHtml],
+    ["the sign up", renderFundraiseSignUp(read("fundraise.html"), true)],
+    ["the manage page", read("fundraise-manage.html")],
+  ];
+
+  it.each(pages)("%s has no hyphen between words and no en or em dash", (_name, html) => {
+    // A web address shown for copying is an address, not words: its hyphens are the slug's.
+    const text = visible(html).replace(/\S*\/\S*/g, " ");
+    expect(text.match(/\w-\w/g) ?? []).toEqual([]);
+    expect(text).not.toMatch(/[–—]/);
+  });
+
+  it("a fundraiser's page calls the money a donation", () => {
+    const text = visible(fundraiserHtml).toLowerCase().split("gift aid").join(" ");
+    expect(text.match(/gift/g) ?? []).toEqual([]);
+  });
+
+  it("the give button counts as a donation in the site's visit counter, and the card's button never as tickets", () => {
+    expect(parse(fundraiserHtml).querySelector("[data-give-submit]")?.hasAttribute("data-give-pay")).toBe(true);
+    expect(renderFundraiserCard(card())).not.toMatch(/class="[^"]*\bev-book(?![-\w])/);
+    expect('<a class="btn ev-book x">').toMatch(/class="[^"]*\bev-book(?![-\w])/);
   });
 });

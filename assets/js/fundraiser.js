@@ -98,7 +98,7 @@
     function refresh() {
       var a = amount();
       if (submitBtn && !busy) submitBtn.textContent = a ? "Give " + pounds(a) + " now" : "Give now";
-      if (headline) headline.textContent = a ? "Make your " + pounds(a) + " worth " + pounds(Math.round(a * 1.25)) : "Make your gift worth 25% more";
+      if (headline) headline.textContent = a ? "Make your " + pounds(a) + " worth " + pounds(Math.round(a * 1.25)) : "Make your donation worth 25% more";
       if (feeText) feeText.textContent = a ? pounds(Math.ceil((a * CARD_FEE_BP) / 10000) + CARD_FEE_FIXED_PENCE) : "a little";
       if (declaration && giftAid) declaration.hidden = !giftAid.checked;
       var abroad = !!(nonUk && nonUk.checked);
@@ -139,7 +139,7 @@
         if (serverChecks) return serverChecks;
         var a = amount();
         if (!a) return [{ control: own, message: MSG.noAmount }];
-        if (a < minimum) return [{ control: own, message: "The smallest gift here is " + pounds(minimum) + "." }];
+        if (a < minimum) return [{ control: own, message: "The smallest donation here is " + pounds(minimum) + "." }];
         return [];
       };
       if (shared && typeof shared.validateForm === "function") {

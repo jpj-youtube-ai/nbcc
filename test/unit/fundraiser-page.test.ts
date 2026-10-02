@@ -123,7 +123,7 @@ describe("choosing an amount", () => {
     type("frOwnAmount", "1.50");
     await submit();
     expect(calls).toHaveLength(0);
-    expect(document.getElementById("frOwnAmount-error")?.textContent).toBe("The smallest gift here is £2.");
+    expect(document.getElementById("frOwnAmount-error")?.textContent).toBe("The smallest donation here is £2.");
   });
 
   it("will not send without an amount", async () => {

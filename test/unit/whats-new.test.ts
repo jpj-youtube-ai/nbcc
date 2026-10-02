@@ -10,7 +10,7 @@ const at = (iso: string) => new Date(iso);
 describe("the sections that can carry a New pill", () => {
   it("covers every kind of arrival the client asked for, and the Events page", () => {
     expect(AREAS.map((a) => a.area)).toEqual([
-      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics",
+      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "fundraising",
     ]);
   });
 
@@ -21,6 +21,7 @@ describe("the sections that can carry a New pill", () => {
       contact: "contact:view", stories: "stories:view", donations: "donations:view",
       monthly: "donations:view", fulfilments: "business-supporters:edit", ball: "ball:view",
       newsletter: "newsletter:view", events: "events:view", analytics: "analytics:view",
+      fundraising: "fundraising:view",
     });
     for (const a of AREAS) expect(SECTIONS).toContain(a.section);
   });
@@ -37,6 +38,11 @@ describe("the sections that can carry a New pill", () => {
   // TASK-482: Admin > Analytics is a new screen, so everyone who can open it sees it as New once.
   it("announces Admin > Analytics", () => {
     expect(FEATURES.some((f) => f.area === "analytics")).toBe(true);
+  });
+
+  // TASK-493: each new sign up is an arrival. The screen's own New line arrives with the screen.
+  it("does not announce Admin > Fundraising before its screen exists", () => {
+    expect(FEATURES.some((f) => f.area === "fundraising")).toBe(false);
   });
 
   it("lists new parts of the admin only against sections that exist", () => {

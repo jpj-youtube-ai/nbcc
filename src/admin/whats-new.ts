@@ -13,7 +13,8 @@ export type Area =
   | "ball"
   | "newsletter"
   | "events"
-  | "analytics";
+  | "analytics"
+  | "fundraising";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
 // never sits on a section the person cannot open. Every one except events and analytics also has
@@ -29,6 +30,8 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "events", section: "events", level: "view" },
   // TASK-482: Admin > Analytics. New as a screen only: page views are not news to tell staff about.
   { area: "analytics", section: "analytics", level: "view" },
+  // TASK-493: Admin > Fundraising. Each new sign up at /fundraise is an arrival.
+  { area: "fundraising", section: "fundraising", level: "view" },
 ];
 
 export function isArea(value: unknown): value is Area {

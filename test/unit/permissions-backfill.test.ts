@@ -108,3 +108,39 @@ describe("the TASK-479 analytics backfill", () => {
     expect(files.indexOf("1790900000002_ball-bank-transfer.js")).toBe(tables - 1);
   });
 });
+
+// TASK-493: community fundraising arrives with its own backfill, the TASK-479 way.
+describe("the TASK-493 fundraising backfill", () => {
+  const FUNDRAISING_BACKFILL = "1791200000001_permissions-fundraising.js";
+  const source = () => withoutComments(readFileSync(resolve(MIGRATIONS, FUNDRAISING_BACKFILL), "utf8"));
+
+  it("gives each role what roleToPermissions gives it", () => {
+    const found = [
+      ...source().matchAll(
+        /jsonb_build_object\(\s*'fundraising',\s*CASE role WHEN 'admin' THEN '(\w+)' WHEN 'editor' THEN '(\w+)' ELSE '(\w+)' END/g,
+      ),
+    ];
+    expect(found).toHaveLength(1);
+    const [, admin, editor, anyoneElse] = found[0];
+    expect({ admin, editor, anyoneElse }).toEqual({
+      admin: roleToPermissions("admin").fundraising ?? "none",
+      editor: roleToPermissions("editor").fundraising ?? "none",
+      anyoneElse: roleToPermissions("viewer").fundraising ?? "none",
+    });
+    // As the design asks: admins and editors edit, viewers look.
+    expect({ admin, editor, anyoneElse }).toEqual({ admin: "edit", editor: "edit", anyoneElse: "view" });
+  });
+
+  it("records every key it adds in the audit log, by migration:TASK-493", () => {
+    expect(source()).toContain("INSERT INTO audit_log");
+    expect(source()).toContain("'migration:TASK-493'");
+    expect(source()).toContain("'admin_user.permissions_backfilled'");
+  });
+
+  it("follows its own tables, and both follow everything production had already run", () => {
+    const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".js")).sort();
+    const tables = files.indexOf("1791200000000_fundraising.js");
+    expect(files[tables + 1]).toBe(FUNDRAISING_BACKFILL);
+    expect(files.indexOf("1791100000000_business-supporter-calls.js")).toBe(tables - 1);
+  });
+});

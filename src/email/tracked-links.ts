@@ -40,6 +40,8 @@ export const STAFF_ONLY_KINDS: ReadonlySet<string> = new Set([
   "lapsedAdmin",
   "ballReport",
   "ballTransferStaff",
+  // TASK-493: the events@ summary of each new fundraising sign up.
+  "fundraiseStaff",
   "backupAlert",
 ]);
 

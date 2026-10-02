@@ -75,3 +75,11 @@ describe("buildWelcomeEmail", () => {
     expect(text).not.toContain("<"); // no markup left in the text part
   });
 });
+
+// TASK-493: ticking the newsletter box on the fundraising sign up is the person joining themselves,
+// exactly like the footer form, so they are welcomed the same way.
+describe("a fundraising sign up who ticked the newsletter box", () => {
+  it("is welcomed like a website signup", () => {
+    expect(shouldSendWelcome("fundraise")).toBe(true);
+  });
+});

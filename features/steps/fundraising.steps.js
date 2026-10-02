@@ -257,6 +257,21 @@ Then("the organiser of {string} was not sent a {string} email", async function (
   assert.equal(r.rows.length, 0, `a ${kind} email went to the organiser of ${title}`);
 });
 
+// TASK-497: "Your page is live" goes in the background after the switch on is answered, so wait a
+// little for it rather than expecting it the moment the answer comes back.
+Then("the organiser of {string} is soon sent a {string} email", { timeout: 15000 }, async function (title, kind) {
+  for (let tries = 0; tries < 40; tries += 1) {
+    const r = await pool.query(
+      `SELECT 1 FROM email_log e JOIN fundraisers f ON lower(f.organiser_email) = lower(e.recipient)
+        WHERE f.title = $1 AND e.kind = $2 AND e.created_at > now() - interval '10 minutes'`,
+      [title, kind],
+    );
+    if (r.rows.length > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  assert.fail(`no ${kind} email to the organiser of ${title} within 10 seconds`);
+});
+
 Then("{string} is waiting for its live email", async function (title) {
   const r = await pool.query("SELECT live_email_pending FROM fundraisers WHERE title = $1 ORDER BY id DESC LIMIT 1", [title]);
   assert.equal(r.rows[0].live_email_pending, true);

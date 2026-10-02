@@ -19,6 +19,7 @@ import {
   setMessageHidden,
   wallRows,
   fundraisingIsOn,
+  countWaitingLiveEmails,
   FundraiserError,
 } from "../db/fundraisers";
 import { insertEventImage } from "../db/events";
@@ -51,8 +52,9 @@ import { sendApprovedEmail, sendEditDecisionEmail, sendWaitingLiveEmails, fundra
 //
 // TASK-497, the emails: approving emails the organiser at once, except a page holder approved while
 // fundraising is off, who is marked as waiting and sent "Your page is live" when an admin switches
-// it on. Approving or rejecting a waiting change emails the organiser too. Every email goes after
-// its write has committed, best effort: a failed send is logged and never fails the answer.
+// it on (in the background, after the answer). Approving or rejecting a waiting change emails the
+// organiser too. Every email goes after its write has committed, best effort: a failed send is
+// logged and never fails the answer.
 
 export const adminFundraisingRouter = Router();
 
@@ -127,10 +129,19 @@ function forAdmin(f: FundraiserRecord) {
 
 export async function getAdminFundraisingSettings(req: Request, res: Response): Promise<Response | void> {
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
+  let settings;
   try {
-    return res.status(200).json(await getFundraisingSettings());
+    settings = await getFundraisingSettings();
   } catch (err) {
     return failed(res, "settings read", err);
+  }
+  // How many page holders are waiting for "Your page is live", for the question before switching
+  // on. Only a nicety: if it cannot be counted the screen says it without a number.
+  try {
+    return res.status(200).json({ ...settings, liveEmailsWaiting: await countWaitingLiveEmails() });
+  } catch (err) {
+    console.error("admin fundraising waiting count failed:", err instanceof Error ? err.message : err);
+    return res.status(200).json(settings);
   }
 }
 
@@ -147,10 +158,13 @@ export async function patchAdminFundraisingSettings(req: Request, res: Response)
   } catch (err) {
     return failed(res, "switch", err);
   }
-  // Switched on: everyone approved while it was off hears their page is live. Idempotent, since
-  // each waiting fundraiser is claimed as it is read (sendWaitingLiveEmails).
-  if (settings.pageOn) await bestEffort("live", sendWaitingLiveEmails);
-  return res.status(200).json(settings);
+  res.status(200).json(settings);
+  // Switched on: everyone approved while it was off hears their page is live. In the background,
+  // after the answer, so the admin is not kept waiting on a run of emails; sendWaitingLiveEmails
+  // claims one at a time, stops if fundraising is switched off again, and never throws, and this
+  // catches anything that slips past it anyway.
+  if (settings.pageOn) void bestEffort("live", sendWaitingLiveEmails);
+  return res;
 }
 
 // --- reading -------------------------------------------------------------------------------------

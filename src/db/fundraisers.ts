@@ -493,18 +493,33 @@ export async function moveFundraiser(
   });
 }
 
+// An approved page holder still waiting for "Your page is live".
+const WAITING_LIVE = "live_email_pending AND status = 'approved' AND public AND path = 'raising'";
+
 /**
- * Every approved page holder still waiting for "Your page is live", with the mark cleared in the
- * same statement. Claiming as it reads means two switch ons at once cannot both email the same
- * person; one whose email then fails is marked again (markLiveEmailWaiting) for the next switch on.
+ * Claim ONE approved page holder still waiting for "Your page is live", past `afterId`, clearing its
+ * mark in the same statement. One at a time, so a restart in the middle of a run loses at most the
+ * one in flight; SKIP LOCKED, so two runs at once never take the same row. A failed send marks it
+ * again (markLiveEmailWaiting), and looking only past the last id tried keeps a run from looping on it.
  */
-export async function claimWaitingLiveEmails(): Promise<FundraiserRecord[]> {
+export async function claimNextWaitingLiveEmail(afterId: number): Promise<FundraiserRecord | null> {
   const r = await pool.query(
     `UPDATE fundraisers f SET live_email_pending = false
-      WHERE f.live_email_pending AND f.status = 'approved' AND f.public AND f.path = 'raising'
+      WHERE f.id = (
+        SELECT id FROM fundraisers
+         WHERE ${WAITING_LIVE} AND id > $1
+         ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
+      )
       RETURNING ${RECORD_COLUMNS}`,
+    [afterId],
   );
-  return r.rows.map(toRecord);
+  return r.rows[0] ? toRecord(r.rows[0]) : null;
+}
+
+/** How many approved page holders are waiting for "Your page is live". */
+export async function countWaitingLiveEmails(): Promise<number> {
+  const r = await pool.query<{ n: string }>(`SELECT count(*) AS n FROM fundraisers WHERE ${WAITING_LIVE}`);
+  return Number(r.rows[0]?.n ?? 0);
 }
 
 /** Mark one approved fundraiser as waiting for its live email again, after a send that failed. */

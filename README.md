@@ -7235,15 +7235,15 @@ transaction, with the actor `admin:<email>`.
 
 | Route | Body | Answer |
 |---|---|---|
-| `GET /api/admin/fundraising/settings` | | `{ pageOn, updatedAt, updatedBy }` |
-| `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | the same; switching on sends "Your page is live" to every approved page holder still waiting (see Emails) |
+| `GET /api/admin/fundraising/settings` | | `{ pageOn, updatedAt, updatedBy, liveEmailsWaiting }`; `liveEmailsWaiting` (TASK-497) is how many page holders wait for "Your page is live", left out if it cannot be counted |
+| `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | `{ pageOn, updatedAt, updatedBy }`; switching on then sends "Your page is live" to every approved page holder still waiting, in the background (see Emails) |
 | `GET /api/admin/fundraisers` | | `{ pageOn, fundraisers: [Fundraiser + meter + editWaiting] }`, newest first |
 | `GET /api/admin/fundraisers/:id` | | `{ fundraiser, meter, waitingEdit, editWaiting, edits, cash, wall }` |
 | `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` | `{ fundraiser }`; `409` if the slug is taken |
 | `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser, or marks a page holder as waiting while fundraising is off (see below); from New or Declined |
 | `POST /api/admin/fundraisers/:id/decline` | `{ reason? }` (internal, up to 500) | `{ fundraiser }`; from New or Approved; no email |
 | `POST /api/admin/fundraisers/:id/finish` | | `{ fundraiser }`; from Approved |
-| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied, and "Your update is live" to the organiser; `409` "This change has been replaced; look again" if the organiser saved a newer one |
+| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied, and "Your update is live" (or "saved") to the organiser; `409` "This change has been replaced; look again" if the organiser saved a newer one |
 | `POST /api/admin/fundraisers/:id/edits/:editId/reject` | | `{ fundraiser }`, and "About your update" to the organiser; `409` if already dealt with or replaced |
 | `POST /api/admin/fundraisers/:id/cash` | `{ amountPence, paidInOn, note? }` | `201 { cash }` |
 | `DELETE /api/admin/fundraisers/:id/cash/:cashId` | | `{ removed }` |
@@ -7322,22 +7322,27 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 
 | Kind | To | When | Says |
 |---|---|---|---|
-| `fundraiseThanks` | the address typed in the form | they sign up | "Thank you, you've made our day!", what happens next. Greets "Hi there <first name>," only with a safe first name (the first word, letters only with apostrophes or hyphens inside, at most 20 characters; `safeFirstName`), otherwise "Hi there,". No other typed words, since anyone can type any address |
+| `fundraiseThanks` | the address typed in the form | they sign up | "Thank you, you've made our day!", what happens next. Greets "Hi there <first name>," only with a safe first name (`safeFirstName`: put together first (NFC), then the first word, Latin letters only, accents included, with apostrophes or hyphens inside, at most 20 characters; another script, a lookalike or an invisible letter is refused), otherwise "Hi there,". No other typed words, since anyone can type any address |
 | `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up | "Exciting news: a new fundraiser!", everything they told us and asked for, Next steps. Staff only, so its links are never tagged |
 | `fundraiseApproved` | the organiser | approved with a page (raising money and public) while fundraising is on, or at the switch on (below) | "Your page is live!", the page link and three things to do today |
 | `fundraiseApproved` | the organiser | approved with no page (private, or an event) | "You're on our list!" |
 | `fundraiseManage` | the organiser | they ask for a manage link | the 24 hour link (replaced by the sign in code in a later part of stage 1b) |
-| `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!", with the page link while it would open |
-| `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring |
+| `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
+| `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
 open" email is retired. A page holder approved while fundraising is off gets no email then: the
 approval marks them `live_email_pending` (reading the switch under a share lock, so an approval and a
 switch on at the same moment cannot miss each other). When an admin switches fundraising on, the
-switch is saved first, then `sendWaitingLiveEmails` claims every approved page holder still waiting
-(clearing the mark as it reads them, so a second switch on emails nobody twice) and sends each "Your
-page is live". A send that fails is logged and that fundraiser marked as waiting again, for the next
+switch is saved and the admin answered first; then, in the background, `sendWaitingLiveEmails`
+claims ONE waiting page holder at a time (`FOR UPDATE SKIP LOCKED`, clearing its mark in the same
+statement, so a restart part way loses at most the one in flight and a second switch on emails
+nobody twice), reads the switch again before each, and stops if fundraising has been switched off
+meanwhile. A send that fails is logged and that fundraiser marked as waiting again, for the next
 switch on; nothing about the emails can fail the switch. Declining or finishing clears the mark.
+Admin > Fundraising says all this in its questions: approving a page holder while fundraising is off
+says nothing is emailed yet, switching on says "Your page is live" goes to the waiting fundraisers
+(with how many), and rejecting a change says the organiser is emailed a short, kind note.
 Every email goes after its write has committed, best effort: a failed send never fails the answer.
 
 ### For the page builders

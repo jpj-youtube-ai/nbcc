@@ -25,7 +25,7 @@ import { KIND_LABELS, shortName, type SignUp } from "./model";
 //   approved        to the organiser: "your page is live" (raising money and public, sent once
 //                   fundraising is on), or "you're on our list" for anyone else
 //   manage          to the organiser: the 24 hour link to change their page
-//   edit approved   to the organiser: "your update is live"
+//   edit approved   to the organiser: "your update is live" (or "saved", with no live page)
 //   edit rejected   to the organiser: "about your update", we'll give you a ring
 //
 // They wear NBCC's usual shell with the events inbox as the contact, because a fundraiser's
@@ -74,17 +74,20 @@ const bulleted = (items: string[]): string[] => items.map((item) => `* ${item}`)
 // --- thanks for signing up ------------------------------------------------------------------------
 
 const MAX_FIRST_NAME = 20;
-// One word of letters (any alphabet), with an apostrophe or hyphen only BETWEEN letters: O'Neill,
-// Anne-Marie. No digits, dots, slashes, @ or markup, so it can never be a link or a tag.
-const NAME_WORD = /^\p{L}+(?:['’-]\p{L}+)*$/u;
+// One word of Latin letters (accents included: Siân, José, Zoë), with an apostrophe or hyphen only
+// BETWEEN letters: O'Neill, Anne-Marie. No digits, dots, slashes, @ or markup, so it can never be a
+// link or a tag; and no other script, so no letter that only looks Latin (Cyrillic, Cherokee,
+// maths bold) and no invisible one (the Hangul filler) can pass as a word it is not.
+const NAME_WORD = /^\p{Script=Latin}+(?:['’-]\p{Script=Latin}+)*$/u;
 
 /**
  * The first name from the sign up form, if it is safe to put in an email to the address they typed:
- * the first word only, letters (with apostrophes or hyphens inside it), at most 20 characters, first
- * letter capitalised. Anything else is null, and the email says "Hi there," instead.
+ * the first word only, Latin letters (with apostrophes or hyphens inside it), at most 20 characters,
+ * first letter capitalised. Put together first (NFC), so an accent typed as a separate mark counts
+ * as part of its letter. Anything else is null, and the email says "Hi there," instead.
  */
 export function safeFirstName(typed: string | null | undefined): string | null {
-  const word = String(typed ?? "").trim().split(/\s+/)[0] ?? "";
+  const word = String(typed ?? "").normalize("NFC").trim().split(/\s+/)[0] ?? "";
   if (word.length === 0 || word.length > MAX_FIRST_NAME || !NAME_WORD.test(word)) return null;
   return word.charAt(0).toUpperCase() + word.slice(1);
 }
@@ -292,30 +295,41 @@ export function buildManageLinkEmail(f: { name: string; title: string }, link: s
 
 // --- a change, approved or rejected ---------------------------------------------------------------
 
-/** Staff approved a change the organiser asked for. The page link and the nudge to share only when there is a page. */
+/**
+ * Staff approved a change the organiser asked for. `pageUrl` is given only when their page is up
+ * (they have one, it is approved and fundraising is on): then it says the change is on their page,
+ * with the link and a nudge to share. Otherwise neutral words: the changes are saved.
+ */
 export function buildEditApprovedEmail(f: { name: string; title: string }, o: { pageUrl: string | null }): BuiltEmail {
   const hi = `Hi ${firstName(f.name)},`;
   const share = "Why not share it again so everyone sees what’s new? A fresh share often brings in a few more gifts.";
+  const where = o.pageUrl ? "they’re now on your page" : "they’re all saved";
   const body =
     EYEBROW +
-    heading("Your update is live!") +
+    heading(o.pageUrl ? "Your update is live!" : "Your update is saved!") +
     bodyP(escapeHtml(hi)) +
-    bodyP(`Good news: we’ve checked your changes to <b>${escapeHtml(f.title)}</b> and they’re now on your page.`) +
+    bodyP(`Good news: we’ve checked your changes to <b>${escapeHtml(f.title)}</b> and ${where}.`) +
     (o.pageUrl ? bodyP(share) + button(o.pageUrl, "See my page") : "");
   const text = [
     hi,
     "",
-    `Good news: we’ve checked your changes to ${f.title} and they’re now on your page.`,
+    `Good news: we’ve checked your changes to ${f.title} and ${where}.`,
     ...(o.pageUrl ? ["", share, "", `See my page: ${o.pageUrl}`] : []),
   ];
-  return toOrganiser(`Your update is live: ${f.title}`, body, text, "Thanks so much,");
+  const subject = o.pageUrl ? `Your update is live: ${f.title}` : `Your update is saved: ${f.title}`;
+  return toOrganiser(subject, body, text, "Thanks so much,");
 }
 
-/** Staff rejected a change the organiser asked for: nothing to worry about, we'll ring. */
-export function buildEditRejectedEmail(f: { name: string; title: string }): BuiltEmail {
+/**
+ * Staff rejected a change the organiser asked for: nothing to worry about, we'll ring. Only while
+ * their page is up (`pageLive`) does it say the page is still live and gifts still coming in.
+ */
+export function buildEditRejectedEmail(f: { name: string; title: string }, o: { pageLive: boolean }): BuiltEmail {
   const hi = `Hi ${firstName(f.name)},`;
   const held = "We haven’t put this change on your page just yet, and someone from our team will give you a quick ring to talk it through.";
-  const calm = "Nothing to worry about: your page is still live, just as it was, and gifts are still coming in.";
+  const calm = o.pageLive
+    ? "Nothing to worry about: your page is still live, just as it was, and gifts are still coming in."
+    : "Nothing to worry about: everything stays just as it was.";
   const body =
     EYEBROW +
     heading("About your update") +

@@ -102,7 +102,7 @@ Feature: Community fundraising, the core (TASK-493)
     And "Lee's Bake Off (bdd-fr)" is waiting for its live email
     When "a5.fr.bdd@example.com" switches fundraising on
     Then the fundraising answer is 200
-    And the organiser of "Lee's Bake Off (bdd-fr)" was sent a "fundraiseApproved" email
+    And the organiser of "Lee's Bake Off (bdd-fr)" is soon sent a "fundraiseApproved" email
     And "Lee's Bake Off (bdd-fr)" is not waiting for its live email
 
   # TASK-497: a change staff hold back is not applied, and the organiser is told we will ring.

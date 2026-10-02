@@ -20,6 +20,7 @@ const db = vi.hoisted(() => ({
   setMessageHidden: vi.fn(),
   wallRows: vi.fn(),
   fundraisingIsOn: vi.fn(),
+  countWaitingLiveEmails: vi.fn(),
 }));
 const { getUserAuthRowMock, sendApprovedEmail, sendWaitingLiveEmails, sendEditDecisionEmail, insertEventImage } = vi.hoisted(() => ({
   getUserAuthRowMock: vi.fn(),
@@ -137,6 +138,7 @@ beforeEach(() => {
   db.listAllFundraisers.mockResolvedValue([]);
   db.fundraiserHistory.mockResolvedValue([]);
   db.fundraisingIsOn.mockResolvedValue(true);
+  db.countWaitingLiveEmails.mockResolvedValue(0);
 });
 
 const P = { id: "9" };
@@ -291,6 +293,37 @@ describe("switching fundraising on (TASK-497)", () => {
     expect(sendWaitingLiveEmails).toHaveBeenCalledTimes(1);
     // Only once the switch has been saved.
     expect(db.setFundraisingOn.mock.invocationCallOrder[0]).toBeLessThan(sendWaitingLiveEmails.mock.invocationCallOrder[0]);
+  });
+
+  it("answers the admin straight away, without waiting for the emails to go", async () => {
+    db.setFundraisingOn.mockResolvedValue(on);
+    sendWaitingLiveEmails.mockReturnValue(new Promise(() => {})); // never settles
+    const res = await run(routes.patchAdminFundraisingSettings, { token: tokenFor("admin"), body: { pageOn: true } });
+    expect(res.statusCode).toBe(200);
+    expect(sendWaitingLiveEmails).toHaveBeenCalledTimes(1);
+  });
+
+  it("still switches on when starting the emails throws at once", async () => {
+    db.setFundraisingOn.mockResolvedValue(on);
+    sendWaitingLiveEmails.mockImplementation(() => {
+      throw new Error("boom");
+    });
+    expect((await run(routes.patchAdminFundraisingSettings, { token: tokenFor("admin"), body: { pageOn: true } })).statusCode).toBe(200);
+  });
+
+  it("tells the screen how many are waiting, for the question before switching on", async () => {
+    db.getFundraisingSettings.mockResolvedValue({ pageOn: false, updatedAt: null, updatedBy: null });
+    db.countWaitingLiveEmails.mockResolvedValue(3);
+    const res = await run(routes.getAdminFundraisingSettings, { token: tokenFor("viewer") });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ pageOn: false, updatedAt: null, updatedBy: null, liveEmailsWaiting: 3 });
+  });
+
+  it("still answers with the switch when the count fails, just without the number", async () => {
+    db.countWaitingLiveEmails.mockRejectedValue(new Error("database went away"));
+    const res = await run(routes.getAdminFundraisingSettings, { token: tokenFor("viewer") });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ pageOn: false, updatedAt: null, updatedBy: null });
   });
 
   it("sends nothing when switching it off", async () => {

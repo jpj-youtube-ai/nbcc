@@ -9017,9 +9017,17 @@
 
   function frFlipSwitch() {
     var on = !!(frSettings && frSettings.pageOn);
+    // TASK-497: switching on emails "Your page is live" to every page holder approved while it was
+    // off. The server says how many are waiting (liveEmailsWaiting); without a number, say it anyway.
+    var waitingCount = frSettings && typeof frSettings.liveEmailsWaiting === "number" ? frSettings.liveEmailsWaiting : null;
+    var liveNote = waitingCount === null
+      ? " “Your page is live” goes by email to everyone approved while it was off."
+      : waitingCount > 0
+        ? " “Your page is live” goes by email to the " + waitingCount + (waitingCount === 1 ? " fundraiser" : " fundraisers") + " approved while it was off."
+        : "";
     var question = on
       ? "Switch fundraising off? The form stops taking sign ups, and every fundraiser comes off the website straight away."
-      : "Switch fundraising on? The Fundraise for us form opens, and every approved public fundraiser goes on the website straight away.";
+      : "Switch fundraising on? The Fundraise for us form opens, and every approved public fundraiser goes on the website straight away." + liveNote;
     if (!window.confirm(question)) return;
     var btn = el("frSwitchBtn");
     var status = el("frSwitchStatus");
@@ -9641,11 +9649,15 @@
     if (!f) return;
     var hasPage = f.path === "raising" && f.public;
     var pageOn = !!(frSettings && frSettings.pageOn);
+    // TASK-497: a page holder approved while fundraising is off is sent nothing yet; the server
+    // emails them "Your page is live" when fundraising is switched on.
+    var waitsForSwitch = hasPage && !pageOn;
     var question = {
-      approve: "Approve " + f.title + "? We email " + f.name + " straight away: " +
-        (!hasPage ? "a short note to say they are on our list."
-          : pageOn ? "their page link, and the page goes on the website."
-          : "a note that their page will appear when fundraising is switched on."),
+      approve: "Approve " + f.title + "? " +
+        (waitsForSwitch
+          ? "Nothing is emailed yet: " + f.name + " gets “Your page is live” by email automatically when fundraising is switched on."
+          : "We email " + f.name + " straight away: " +
+            (!hasPage ? "a short note to say they are on our list." : "their page link, and the page goes on the website.")),
       decline: "Decline " + f.title + "?" + (f.status === "approved" ? " It comes off the website straight away." : "") +
         " They are not emailed, so tell them yourself if you need to.",
       finish: "Mark " + f.title + " as finished? It comes off the website. What it raised stays in the records.",
@@ -9664,11 +9676,14 @@
         }
         if (run.open()) frReasonDraft = "";
         // The server sends the email after the approval has saved, best effort, so this says it is
-        // on its way rather than that it arrived. While fundraising is off it carries no page link.
+        // on its way rather than that it arrived. A page holder approved while fundraising is off
+        // hears nothing until it is switched on.
         run.say({
-          approve: hasPage && pageOn
-            ? "Approved. An email with their page link is on its way to the organiser."
-            : "Approved. An email to the organiser is on its way.",
+          approve: waitsForSwitch
+            ? "Approved. The organiser is emailed “Your page is live” when fundraising is switched on."
+            : hasPage
+              ? "Approved. An email with their page link is on its way to the organiser."
+              : "Approved. An email to the organiser is on its way.",
           decline: "Declined.",
           finish: "Marked finished.",
         }[move], false);
@@ -9683,9 +9698,12 @@
     if (!f) return;
     var approve = btn.getAttribute("data-fredit") === "approve";
     var editId = btn.getAttribute("data-freditid");
+    // TASK-497: either way the organiser is emailed ("Your update is live" or "About your update").
+    var live = f.path === "raising" && f.public && f.status === "approved" && !!(frSettings && frSettings.pageOn);
     var question = approve
-      ? "Approve this change? It goes on the website straight away."
-      : "Reject this change? The page stays as it is, and the organiser is not emailed.";
+      ? (live ? "Approve this change? It goes on the website straight away" : "Approve this change? It is saved straight away") +
+        ", and the organiser is emailed to say so."
+      : "Reject this change? The page stays as it is, and the organiser is emailed a short, kind note to say we will be in touch.";
     if (!window.confirm(question)) return;
     frRun("detail", "Saving…", function (run) {
       return frSend("POST", "/api/admin/fundraisers/" + f.id + "/edits/" + encodeURIComponent(editId) + "/" + (approve ? "approve" : "reject"))

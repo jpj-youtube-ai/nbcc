@@ -105,8 +105,26 @@ describe("a safe first name, for the thank you", () => {
     ["O'Neill", "O'Neill"],
     ["Anne-Marie Example", "Anne-Marie"],
     ["Siân Example", "Siân"],
+    ["José Example", "José"],
+    // Typed with a separate combining accent: put together first, so it reads as José.
+    ["Jose\u0301 Example", "José"],
+    ["Zoë", "Zoë"],
   ])("takes %j as %j", (typed, first) => {
     expect(safeFirstName(typed)).toBe(first);
+  });
+
+  // Only Latin letters: a name in another script, or a letter that only LOOKS like a Latin one, is
+  // refused, so nothing can pass as a word it is not.
+  it.each([
+    ["the Hangul filler, which shows as a blank", "\u3164"],
+    ["a name padded with the Hangul filler", "Sam\u3164"],
+    ["maths bold letters", "\u{1D412}\u{1D41A}\u{1D426}"],
+    ["Cyrillic letters that look Latin", "\u0405\u0430\u043C"],
+    ["Cherokee letters that look Latin", "\u13DA\u13AA\u13B7"],
+    ["a mix of Latin and Cyrillic", "S\u0430m"],
+    ["stacked combining marks", "Sa\u0336\u0336m"],
+  ])("refuses %s", (_what, typed) => {
+    expect(safeFirstName(typed)).toBeNull();
   });
 
   it("keeps only the first word, so a link typed after a name never travels", () => {
@@ -283,11 +301,19 @@ describe("your update is live", () => {
     expect(mail.text).toContain(PAGE);
   });
 
-  it("leaves out the page link and the share when there is no page to see", () => {
+  // No live page (an event, a private sign up, declined, finished, or fundraising switched off):
+  // neutral words that do not claim anything is on a page.
+  it("says the changes are saved, with no page link or share, when there is no live page", () => {
     const noPage = buildEditApprovedEmail(who, { pageUrl: null });
+    expect(noPage.subject).toBe("Your update is saved: Sam's <Santa> Dash");
+    expect(noPage.html).toContain("Your update is saved!");
+    expect(noPage.html).toContain("Good news: we’ve checked your changes to <b>Sam&#39;s &lt;Santa&gt; Dash</b> and they’re all saved.");
+    expect(noPage.text).not.toContain("on your page");
     expect(noPage.text).not.toContain("/fundraise/");
     expect(noPage.html).not.toContain("See my page");
     expect(noPage.text).not.toContain("share it again");
+    expectSignedWithQuestions(noPage, "Thanks so much,");
+    expectPlainEnglish(noPage.text);
   });
 
   it("is signed, with the questions box", () => expectSignedWithQuestions(mail, "Thanks so much,"));
@@ -295,7 +321,17 @@ describe("your update is live", () => {
 });
 
 describe("about your update", () => {
-  const mail = buildEditRejectedEmail(who);
+  const mail = buildEditRejectedEmail(who, { pageLive: true });
+
+  it("says everything stays as it was, not that a page is live, when there is no live page", () => {
+    const noPage = buildEditRejectedEmail(who, { pageLive: false });
+    expect(noPage.html).toContain("Nothing to worry about: everything stays just as it was.");
+    expect(noPage.text).toContain("Nothing to worry about: everything stays just as it was.");
+    expect(noPage.text).not.toContain("still live");
+    expect(noPage.text).not.toContain("gifts are still coming in");
+    expectSignedWithQuestions(noPage, "Speak soon,");
+    expectPlainEnglish(noPage.text);
+  });
 
   it("says the words Jaimie signed off", () => {
     expect(mail.subject).toBe("About your update to Sam's <Santa> Dash");

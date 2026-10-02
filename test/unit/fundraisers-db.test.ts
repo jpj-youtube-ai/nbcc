@@ -84,7 +84,8 @@ import {
   decideEdit,
   createFundraiser,
   moveFundraiser,
-  claimWaitingLiveEmails,
+  claimNextWaitingLiveEmail,
+  countWaitingLiveEmails,
   markLiveEmailWaiting,
   FundraiserError,
 } from "../../src/db/fundraisers";
@@ -240,14 +241,32 @@ describe("approving while fundraising is switched off", () => {
 });
 
 describe("switching fundraising on, for the people waiting", () => {
-  it("claims every approved page holder still waiting, clearing the mark as it reads them", async () => {
-    (pool.query as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ rows: [fundraiserRow({ id: 9 }), fundraiserRow({ id: 10, slug: "b" })] });
-    const got = await claimWaitingLiveEmails();
-    expect(got.map((f) => f.id)).toEqual([9, 10]);
-    const sql = String((pool.query as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]);
+  const q = () => pool.query as unknown as ReturnType<typeof vi.fn>;
+
+  it("claims ONE approved page holder still waiting, clearing its mark, skipping any row another sender holds", async () => {
+    q().mockResolvedValueOnce({ rows: [fundraiserRow({ id: 9 })] });
+    const got = await claimNextWaitingLiveEmail(0);
+    expect(got?.id).toBe(9);
+    const [sql, params] = q().mock.calls.at(-1) as [string, unknown[]];
     expect(sql).toMatch(/UPDATE fundraisers f SET live_email_pending = false/);
-    expect(sql).toMatch(/WHERE f.live_email_pending AND f.status = 'approved' AND f.public AND f.path = 'raising'/);
+    expect(sql).toMatch(/WHERE f\.id = \(\s*SELECT id FROM fundraisers/);
+    expect(sql).toMatch(/live_email_pending AND status = 'approved' AND public AND path = 'raising' AND id > \$1/);
+    expect(sql).toMatch(/ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED/);
     expect(sql).toMatch(/RETURNING/);
+    expect(params).toEqual([0]);
+  });
+
+  // A failed send marks the row as waiting again; going past it by id means one run never loops on it.
+  it("looks only past the last one this run tried", async () => {
+    q().mockResolvedValueOnce({ rows: [] });
+    expect(await claimNextWaitingLiveEmail(9)).toBeNull();
+    expect((q().mock.calls.at(-1) as [string, unknown[]])[1]).toEqual([9]);
+  });
+
+  it("counts the page holders waiting", async () => {
+    q().mockResolvedValueOnce({ rows: [{ n: "3" }] });
+    expect(await countWaitingLiveEmails()).toBe(3);
+    expect(String(q().mock.calls.at(-1)?.[0])).toMatch(/count\(\*\).*live_email_pending AND status = 'approved' AND public AND path = 'raising'/s);
   });
 
   it("can mark one as waiting again, when its email did not go", async () => {

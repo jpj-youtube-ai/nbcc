@@ -7,7 +7,7 @@ import {
   sendFundraiseStaff,
   sendFundraiseThanks,
 } from "../clients/email";
-import { claimWaitingLiveEmails, markLiveEmailWaiting } from "../db/fundraisers";
+import { claimNextWaitingLiveEmail, fundraisingIsOn, markLiveEmailWaiting } from "../db/fundraisers";
 import {
   buildApprovedEmail,
   buildEditApprovedEmail,
@@ -77,41 +77,53 @@ export async function sendApprovedEmail(f: FundraiserRecord): Promise<boolean> {
 }
 
 /**
- * At the switch on: "Your page is live" to every approved page holder still waiting. Each is
- * claimed (its mark cleared) as it is read, so switching on twice emails nobody twice; one whose
- * email fails is marked as waiting again, for the next switch on. Never throws for a single send.
+ * At the switch on, in the background after the admin has their answer: "Your page is live" to every
+ * approved page holder still waiting. One at a time: each is claimed (its mark cleared) just before
+ * its email, so a restart part way loses at most the one in flight, and switching on twice emails
+ * nobody twice. The switch is read again before each one, and the run stops if fundraising has been
+ * switched off meanwhile. One whose email fails is marked as waiting again for the next switch on;
+ * the run goes on past it by id, so it never loops on it. Never throws: everything is logged.
  */
 export async function sendWaitingLiveEmails(): Promise<{ sent: number; failed: number }> {
-  const waiting = await claimWaitingLiveEmails();
   let sent = 0;
   let failed = 0;
-  for (const f of waiting) {
-    if (await sendApprovedEmail(f)) {
-      sent += 1;
-      continue;
+  let lastId = 0;
+  try {
+    while (await fundraisingIsOn()) {
+      const f = await claimNextWaitingLiveEmail(lastId);
+      if (!f) break;
+      lastId = f.id;
+      if (await sendApprovedEmail(f)) {
+        sent += 1;
+        continue;
+      }
+      failed += 1;
+      try {
+        await markLiveEmailWaiting(f.id);
+      } catch (err) {
+        logFailure("live (marking as waiting again)", err);
+      }
     }
-    failed += 1;
-    try {
-      await markLiveEmailWaiting(f.id);
-    } catch (err) {
-      logFailure("live (marking as waiting again)", err);
-    }
+  } catch (err) {
+    logFailure("live (the run stopped)", err);
   }
   return { sent, failed };
 }
 
 /**
- * After staff approve or reject a change the organiser asked for. The page link only while it
- * would open: the fundraiser has a page and fundraising is on. True when the email went.
+ * After staff approve or reject a change the organiser asked for. Their page counts as up only
+ * when they have one (raising money, public, approved) and fundraising is on; only then do the
+ * emails talk about the page and link it. True when the email went.
  */
 export async function sendEditDecisionEmail(f: FundraiserRecord, approved: boolean, pagesOpen: boolean): Promise<boolean> {
   try {
     const message = { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
+    const pageLive = hasPage(f) && pagesOpen;
     if (approved) {
-      const pageUrl = hasPage(f) && pagesOpen ? fundraiserPageUrl(f.slug) : null;
+      const pageUrl = pageLive ? fundraiserPageUrl(f.slug) : null;
       await sendFundraiseEditApproved(f.name, { ...message, ...buildEditApprovedEmail(f, { pageUrl }) });
     } else {
-      await sendFundraiseEditRejected(f.name, { ...message, ...buildEditRejectedEmail(f) });
+      await sendFundraiseEditRejected(f.name, { ...message, ...buildEditRejectedEmail(f, { pageLive }) });
     }
     return true;
   } catch (err) {

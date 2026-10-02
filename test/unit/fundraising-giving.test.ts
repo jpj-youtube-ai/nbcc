@@ -260,9 +260,11 @@ describe("what a giver sends to the wall", () => {
     expect(wallMessageSchema.parse({ sessionId: ok.sessionId }).message).toBe("");
   });
 
-  it("shows the name and the amount unless asked not to, as the give form did", () => {
+  // Jaimie, 2026-10-02: a name stays off the wall unless the giver chooses to show it (they never saw
+  // a name choice before paying). The amount still shows unless asked not to.
+  it("keeps the name off unless asked, and shows the amount unless asked not to", () => {
     const parsed = wallMessageSchema.parse({ sessionId: ok.sessionId, message: "Hi" });
-    expect(parsed.showName).toBe(true);
+    expect(parsed.showName).toBe(false);
     expect(parsed.showAmount).toBe(true);
   });
 

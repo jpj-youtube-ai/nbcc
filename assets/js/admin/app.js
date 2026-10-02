@@ -33,7 +33,7 @@
   // every permissions save fail with a 400 — not a cosmetic drift.
   var SECTIONS = [
     "overview", "search", "donations", "claims", "gasds", "subscriptions", "stories",
-    "ticker", "ball", "events", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
+    "ticker", "ball", "events", "fundraising", "contact", "newsletter", "thank-you", "audit", "email-audit", "site", "outreach",
     "business-supporters", "analytics", "team",
   ];
   // KEEP IN SYNC with OPERATIONAL_EDITOR_SECTIONS there as well. Not cosmetic either: Manage access
@@ -41,7 +41,7 @@
   // taken from editors on save (TASK-459). admin-sections-in-sync.test.ts checks every role.
   var OPERATIONAL_EDITOR_SECTIONS = [
     "donations", "claims", "gasds", "subscriptions", "stories", "ticker", "contact", "newsletter", "thank-you", "search",
-    "outreach", "events",
+    "outreach", "events", "fundraising",
   ];
   var LEVEL_RANK = { none: 0, view: 1, edit: 2 };
   // Mirrors can() in src/admin/permissions.ts: edit satisfies a view requirement; missing/none fails.

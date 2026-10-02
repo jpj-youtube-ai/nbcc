@@ -22,7 +22,7 @@ const OPERATIONAL_EDITOR_SECTIONS: Section[] = [
 ];
 
 describe("SECTIONS", () => {
-  it("lists exactly the 20 matrix sections", () => {
+  it("lists exactly the 21 matrix sections", () => {
     expect(SECTIONS).toEqual([
       "overview",
       "search",
@@ -34,6 +34,7 @@ describe("SECTIONS", () => {
       "ticker",
       "ball",
       "events",
+      "fundraising",
       "contact",
       "newsletter",
       "thank-you",
@@ -45,7 +46,18 @@ describe("SECTIONS", () => {
       "analytics",
       "team",
     ]);
-    expect(SECTIONS).toHaveLength(20);
+    expect(SECTIONS).toHaveLength(21);
+  });
+});
+
+// TASK-493: community fundraising is operational work like Events: admins and editors edit by
+// default, viewers may look. The on and off switch is admin only in the route, whatever this says.
+describe("fundraising defaults", () => {
+  it("admins and editors run fundraisers, viewers may look", () => {
+    expect(roleToPermissions("admin").fundraising).toBe("edit");
+    expect(roleToPermissions("editor").fundraising).toBe("edit");
+    expect(roleToPermissions("viewer").fundraising).toBe("view");
+    expect(can(roleToPermissions("viewer"), "fundraising", "edit")).toBe(false);
   });
 });
 

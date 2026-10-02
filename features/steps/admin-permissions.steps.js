@@ -25,6 +25,7 @@ const SECTIONS = [
   "ticker",
   "ball",
   "events",
+  "fundraising",
   "contact",
   "newsletter",
   "thank-you",

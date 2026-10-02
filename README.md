@@ -1327,6 +1327,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
 | `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless public, raising money, approved or (TASK-502) finished, and switched on) |
 | `POST /api/fundraisers/:slug/wall-message` | **implemented** | TASK-502 (the giver's message and wall choices, added from the thank you after paying, tied to the paid Stripe checkout session, once. Shapes: **Community fundraising, giving (TASK-502)**) |
+| `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ name, email }` to fill in, and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
 | `POST /api/fundraise/manage/request` | **implemented** | TASK-501 (emails an organiser a 6 digit sign in code for their private area; always the same answer, sent before looking; was TASK-493's 24 hour link) |
 | `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
 | `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details) |
@@ -7421,6 +7422,8 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseFinishedStaff` | `events@` (Reply-To the organiser) | the organiser presses "I've finished" (TASK-501), once | "A fundraiser says they've finished": who, what it has raised, next steps. Staff only, so never link tagged |
 | `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
 | `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
+| `fundraiseInvite` | the person invited | staff send or resend an invite from Admin > Fundraising (TASK-503, email 7) | "We'd love you to fundraise with us!", the personal note in a quote box, **Make my page** to the form filled in with their name and email, signed "Warmest wishes," with the first name chosen under Signed by, then "NBCC Team", and the questions box. Subject "We'd love you to fundraise with us" |
+| `fundraiseSummary` | each address on the Weekly summary list | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
 open" email is retired. A page holder approved while fundraising is off gets no email then: the
@@ -7839,6 +7842,121 @@ Tests: `fundraising-giving.test.ts` (the sums, the rules, the drawn page), `fund
 (the SQL), `fundraise-wall-message.test.ts` (the endpoint), `fundraising-giving-migration.test.ts`,
 `donate-checkout-pinned.test.ts`, and updates to the page, route, checkout and contract tests; BDD
 `features/fundraising-giving.feature`.
+
+## Community fundraising, the team's tools (TASK-503)
+
+Four tools for the staff who look after fundraisers, all in **Admin > Fundraising** (section 5 of
+`docs/superpowers/specs/2026-10-02-fundraising-stage-1b-part-1-design.md`). Nothing here adds a
+config value: who gets the Monday summary is chosen in the admin and kept in the database.
+
+**Invite someone** (editors and admins). A card under the switch: their name, their email, an
+optional personal note (up to 600 characters) and **Signed by**, which starts as the person signed
+in and lists everyone who can sign in to the admin, by first name. Send the invite asks first, then
+emails them (email 7, `fundraiseInvite`) from and replying to the events inbox, like every other
+fundraising email. Its button opens `/fundraise?invite=<token>`, and the form fills in their name
+and email, and nothing else (a box they have already typed in is left alone). Below the form,
+**Invites not taken up yet** lists each one with "Invited by <first name> on <date>", **Resend**
+(a new link, emailed again; the old link stops working) and **Remove** (the link stops working),
+each after a question. A viewer sees neither the card nor the list.
+
+How the invite link works:
+
+- the token is 32 random bytes (base64url, 43 characters), made fresh for every send and resend;
+- only its sha256 (with a `fundraiseinvite.v1:` prefix) is stored, in
+  `fundraiser_invites.token_hash`, so a copy of the table opens nothing. The token is never logged,
+  never sent back to the admin page, and never put in an address the server logs: the form asks
+  for the name and email with `POST /api/fundraise/invite { token }`;
+- it works for 60 days from when it was last sent, and once: the sign up made from it carries the
+  token back (`invite` on `POST /api/fundraise`), and that marks the invite used and linked to the
+  new sign up in one statement, so two sign ups at once cannot both take it. An unknown, used or
+  out of date token all get the same `404`, and the form still works without it;
+- each member of staff can send 50 invites and resends in a day (`429` after that), and the form's
+  lookup allows 30 tries in 15 minutes from one address.
+
+**Time to call.** Like the business supporters' call reminders: every approved fundraiser with a
+date gets a **Time to call** pill from a week before its date until somebody records the call, and
+again from a week after its date until somebody records that one (a call before that was never
+made gives way to the call after, so it only ever asks for one call at a time). Open the
+fundraiser, press **Mark as called**, add a note if you like (up to 500 characters) and confirm. Who called
+and when shows under it, and its History says "Called". A **Calls due** chip filters the list to
+those with a call due. Dates are UK calendar days, so the clocks changing never moves one.
+
+**Take off Get involved?** Four weeks after a fundraiser's date, or as soon as the organiser has
+pressed "I've finished" in their private area, an approved fundraiser still on Get involved shows a
+**Take off Get involved?** pill, and opening it explains why. **Take it off** (after a question)
+only removes it from the Get involved list: its page, its giving link and its QR code keep
+working, and it stays Approved. **Put it back on Get involved** undoes it. **Mark finished** works exactly as
+before.
+
+**The Monday summary** (admins choose who gets it). The **Weekly summary** card lists the addresses
+(up to 10, each checked as a whole email address and kept once), with Add to the list, Remove
+(after a question) and **Send a test now**, which sends this week's real summary marked as a test
+to the admin pressing it, and nobody else. Editors and viewers do not see the card. At 8am UK time
+on a Monday, the daily task (`npm run reminders`, the same scheduled run as the reminders) sends
+email 11 (`fundraiseSummary`), one email to each address, from and replying to the events inbox:
+
+- last week's money (Monday to Sunday): online gifts less refunds, what organisers paid in and the
+  cash staff recorded, the Gift Aid to claim on last week's gifts (never on money paid in), how many
+  are live, and what every fundraiser has raised in all;
+- the new sign ups;
+- **Waiting on us**: sign ups to approve, changes to check, posters, leaflets, buckets and tins to
+  send (the split requests and the old combined ones), shout outs, requests for someone to come
+  along, calls due, invites not taken up after a week (with who invited them), fundraisers four
+  weeks past their date still on Get involved, and those who say they have finished;
+- **Coming up**: approved fundraisers dated in the next four weeks.
+
+It goes on Mondays only, and never twice for the same Monday: the week is claimed under a row lock
+before anything is sent (`fundraising_settings.summary_last_week`), and given back if no email
+went, so a rerun can try again. With nobody on the list nothing happens. A failed email is logged
+and the rest still go; nothing in it can stop the passes after it in the daily task.
+
+### Routes
+
+Admin routes need a session and the `fundraising` section; every write is in `audit_log` with the
+actor `admin:<email>` (an invite against entity `fundraiser_invite`; a call or taking it off the
+list against entity `fundraiser`, so it shows in that fundraiser's History).
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/admin/fundraising/team` | view | | `{ today, me, calls: { <id>: { before, after, due, dueWhich } }, prompts: { <id>: "date" \| "finished" }, invites, signers: [{ id, firstName }] }` |
+| `POST /api/admin/fundraising/invites` | edit | `{ name, email, note?, signedBy: <user id> }` | `201 { invite, emailed }`; `400` with `fields`; `429` after 50 in a day |
+| `POST /api/admin/fundraising/invites/:id/resend` | edit | | `{ invite, emailed }`; `404` once taken up or removed |
+| `DELETE /api/admin/fundraising/invites/:id` | edit | | `{ removed }`; `404` once taken up or removed |
+| `POST /api/admin/fundraisers/:id/calls` | edit | `{ which: "before" \| "after", note? }` | `{ call }`; `404` with no date |
+| `POST /api/admin/fundraisers/:id/off-list` and `/on-list` | edit | | `{ offListAt }`; `409` unless approved |
+| `GET /api/admin/fundraising/summary` | admin | | `{ recipients, lastWeek }` |
+| `PUT /api/admin/fundraising/summary` | admin | `{ recipients: [emails] }` | `{ recipients, lastWeek }`; `400` naming the address that needs another look |
+| `POST /api/admin/fundraising/summary/test` | admin | | `{ sentTo }`, always the admin asking; `502` if it did not go |
+| `POST /api/fundraise/invite` | anyone | `{ token }` | `200 { name, email }`; `404` for any token that does not work |
+
+The admin's fundraiser now carries `offListAt` and `offListBy`.
+
+### Data (`migrations/1791200000070_fundraising-team.js`, additive only)
+
+`fundraiser_invites` (name, email, note, signed by, sent by, sent and resent, `token_hash`, used
+and by which sign up), `fundraiser_calls` (which call, when, who, note; cleared with its
+fundraiser), `fundraisers.off_list_at` and `off_list_by` (nullable),
+`fundraising_settings.summary_recipients` (a list, empty by default) and `summary_last_week`
+(nullable). Both new tables are in the nightly backup's table count.
+
+### Where it lives, and tests
+
+Rules (pure): `src/fundraising/invite.ts` (token, hash, 60 days, once, what is filled in),
+`src/fundraising/follow-up.ts` (the call dates and the finishing prompt), `src/fundraising/summary.ts`
+(the summary's counts and lines, Mondays only). Emails: `src/fundraising/team-emails.ts`, with
+`quoteBox` and `signOffAs` added to `src/email/brand.ts`. SQL: `src/db/fundraising-team.ts`.
+Sending the summary: `src/fundraising/summary-runner.ts`, from `src/scripts/send-reminders.ts`.
+Routes: `src/routes/admin-fundraising-team.ts` and `src/routes/fundraise-invite.ts`. Screen: the
+`frTeam` parts of `assets/js/admin/app.js`, `#frInvite` and `#frSummary` in `admin.html`, styles at
+the end of `assets/css/admin.css`; the form's lookup is in `assets/js/fundraise.js`. Unit tests:
+`fundraising-invite`, `fundraise-invite-routes`, `fundraise-invite-form`, `fundraising-follow-up`
+(including the clocks changing), `fundraising-summary` and `fundraising-summary-runner` (fixed
+clocks: Mondays only, once a week, nobody to send to, failures), `fundraising-team-emails` (emails 7
+and 11, html and text), `fundraising-team-db`, `admin-fundraising-team-routes` (admin, editor and
+viewer), `admin-fundraising-team-page` (the jsdom admin harness), `fundraising-team-migration` and
+`backup-plan`. BDD: `features/fundraising-team.feature` (an invite fills in the form and the sign up
+uses it up; taking a fundraiser off Get involved keeps its page; a viewer cannot record a call; only
+an admin chooses who gets the summary).
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

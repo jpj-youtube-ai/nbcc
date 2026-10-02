@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { pool } from "./pool";
 import { insertAudit, writeWithAudit } from "./donations";
 import { listAllFundraisers } from "./fundraisers";
+import { listRequestRows } from "./fundraising-requests";
 import { INVITE_TTL_DAYS, staffFirstName } from "../fundraising/invite";
 import { summaryRecipientsSchema, type SummaryInputs } from "../fundraising/summary";
 import type { CallRecord, CallWhich } from "../fundraising/follow-up";
@@ -358,7 +359,7 @@ export async function releaseSummaryWeek(week: string, previous: string | null):
  */
 export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
   const since = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
-  const [fundraisers, gifts, cash, calls, invites] = await Promise.all([
+  const [fundraisers, gifts, cash, calls, invites, requests] = await Promise.all([
     listAllFundraisers(),
     pool.query(
       `SELECT g.* FROM (
@@ -377,6 +378,8 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     ),
     listFundraiserCalls(),
     listOpenInvites(),
+    // TASK-505: the requests staff have acted on, so only what is still to do is counted.
+    listRequestRows(),
   ]);
   return {
     now,
@@ -392,5 +395,6 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
     cash: cash.rows.map((c) => ({ fundraiserId: Number(c.fundraiser_id), amountPence: Number(c.amount_pence), recordedAt: iso(c.created_at) as string })),
     calls,
     invites: invites.map((i) => ({ name: i.name, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
+    requests,
   };
 }

@@ -90,6 +90,8 @@ const fundraisers: SummaryFundraiser[] = [
     title: "Sam’s Santa Dash",
     town: "Perth",
     eventDate: "2026-12-12",
+    // TASK-505: a shout out counts only with their permission to post.
+    socialOk: true,
     wants: wants({ posterCount: 10, leafletCount: 50, shoutOut: true }),
     meter: meter({ onlinePence: 5000, cashPence: 1000, targetPence: 50000 }),
   }),
@@ -251,6 +253,11 @@ describe("waiting on us", () => {
     expect(c.attend).toEqual(["2026-12-20"]);
   });
 
+  it("leaves out a shout out they gave no permission for: there is nothing staff can do", () => {
+    const without = summaryCounts({ ...inputs, fundraisers: fundraisers.map((f) => (f.id === 1 ? { ...f, socialOk: false } : f)) });
+    expect(without.shoutOuts).toBe(0);
+  });
+
   it("counts the calls due today", () => {
     expect(c.callsDue).toBe(2);
   });
@@ -276,6 +283,87 @@ describe("waiting on us", () => {
 
   it("adds up the things waiting", () => {
     expect(c.waiting).toBe(2 + 1 + 5 + 1 + 1 + 2 + 1 + 1 + 1);
+  });
+});
+
+// TASK-505: requests tracked to done. Waiting on us counts only what is still to send or do, and
+// every bucket or tin not back yet, with how many are due back (two weeks after the date, or four
+// weeks after they went out when there is none).
+describe("requests tracked to done", () => {
+  const req = (fundraiserId: number, kind: string, status: string, over: Record<string, unknown> = {}) => ({
+    fundraiserId,
+    kind,
+    status,
+    quantity: null,
+    quantityBack: null,
+    how: null,
+    sentOn: null,
+    backOn: null,
+    doneOn: null,
+    handledBy: null,
+    going: null,
+    note: null,
+    backNote: null,
+    link: null,
+    updatedAt: null,
+    updatedBy: null,
+    ...over,
+  }) as NonNullable<SummaryInputs["requests"]>[number];
+  const tracked: SummaryInputs = {
+    ...inputs,
+    requests: [
+      req(1, "posters", "sent", { quantity: 10, how: "post", sentOn: "2026-12-03" }),
+      req(1, "shout_out", "done", { doneOn: "2026-12-02" }),
+      // Not due back until two weeks after 20 December.
+      req(2, "buckets", "with_them", { quantity: 2, sentOn: "2026-12-05" }),
+      req(2, "attend", "arranged", { going: "Rowan" }),
+      // Its date was 1 November: due back on 15 November.
+      req(3, "buckets_or_tins", "with_them", { quantity: 1, sentOn: "2026-10-25" }),
+    ],
+  };
+  const c = summaryCounts(tracked);
+
+  it("counts only what is still to send", () => {
+    expect(c.materials).toEqual({ posters: 0, leaflets: 50, buckets: 0, tins: 1, leafletsOrPosters: 3, bucketsOrTins: 1 });
+    expect(c.materialsFundraisers).toBe(4);
+  });
+
+  it("counts only shout outs still to do and someone to come along still to arrange", () => {
+    expect(c.shoutOuts).toBe(0);
+    expect(c.attend).toEqual([]);
+  });
+
+  it("counts every bucket or tin not back yet, and those due back", () => {
+    expect(c.notBack).toBe(3);
+    expect(c.notBackDue).toBe(1);
+  });
+
+  it("adds each one due back to the things waiting", () => {
+    expect(c.waiting).toBe(2 + 1 + 4 + 0 + 0 + 2 + 1 + 1 + 1 + 1);
+  });
+
+  it("says so in the summary's words", () => {
+    expect(summaryLines(c).waiting).toEqual([
+      "2 sign ups to approve",
+      "1 change to check",
+      "Leaflets (50) and leaflets or posters (3) to post",
+      "1 collection tin and 1 bucket or tin to send",
+      "Buckets or tins not back yet: 3 (1 due back)",
+      "2 calls due",
+      "1 invite not taken up after a week: Alex, invited by Fern",
+      "1 fundraiser 4 weeks past its date: take it off Get involved?",
+      "1 fundraiser says they’ve finished",
+    ]);
+  });
+
+  it("says how many are not back without a due count when none is due yet", () => {
+    const later = summaryCounts({ ...tracked, requests: tracked.requests!.filter((r) => r.kind !== "buckets_or_tins") });
+    expect(later.notBackDue).toBe(0);
+    expect(summaryLines(later).waiting).toContain("Buckets or tins not back yet: 2");
+  });
+
+  it("leaves the count as it was for sign ups nobody has acted on yet", () => {
+    expect(summaryCounts({ ...inputs, requests: [] })).toEqual(summaryCounts(inputs));
   });
 });
 

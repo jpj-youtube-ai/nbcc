@@ -4,6 +4,7 @@ import { giftAidPence, giftNetPence, type FundraiserRecord, type Meter } from ".
 import { addDays, callStates, offListPrompt, type CallRecord } from "./follow-up";
 import { INVITE_NOT_TAKEN_DAYS, inviteVerdict } from "./invite";
 import { pounds } from "./emails";
+import { requestTotals, type RequestRow } from "./requests";
 
 // TASK-503: the Monday summary (email 11), at 8am on Mondays to the people chosen in Admin >
 // Fundraising. Pure: the runner (./summary-runner.ts) reads the rows and the clock, and every count
@@ -20,9 +21,12 @@ import { pounds } from "./emails";
 //                  RECORDED it, so every pound is in exactly one Monday's summary, even one typed
 //                  in after the summary for the week it was paid in had gone
 //   new sign ups   every sign up that arrived last week
-//   waiting on us  sign ups to approve; changes to check; posters, leaflets, buckets and tins to send
-//                  (split and old combined requests, from sign ups still to come); shout outs and
-//                  requests for someone to come along (likewise); calls due today; invites not taken
+//   waiting on us  sign ups to approve; changes to check; posters, leaflets, buckets and tins still
+//                  to send (split and old combined requests, from sign ups still to come); shout outs
+//                  still to do (only with their permission to post) and someone to come along still
+//                  to arrange (likewise); TASK-505: only what staff have not yet marked sent or done
+//                  in the Requests part of the sign up, and every bucket or tin not back yet, with
+//                  how many are due back (each one due back is a thing waiting); calls due today; invites not taken
 //                  up a week after they were sent (not those whose link has expired); fundraisers
 //                  four weeks past their date still on
 //                  Get involved; and those who say they've finished
@@ -68,6 +72,8 @@ export interface SummaryInputs {
   cash: SummaryCash[];
   calls: SummaryCall[];
   invites: SummaryInvite[];
+  /** TASK-505: the requests staff have acted on. None means every request is at its first step. */
+  requests?: RequestRow[];
 }
 
 export interface Materials {
@@ -98,6 +104,11 @@ export interface SummaryCounts {
   shoutOuts: number;
   /** The date of each request for someone to come along (null when it has none). */
   attend: Array<string | null>;
+  /** TASK-505: buckets and tins with fundraisers now, and how many of them are due back. */
+  notBack: number;
+  notBackDue: number;
+  /** How many requests have buckets or tins due back: each is someone to chase. */
+  dueBackRequests: number;
   callsDue: number;
   invitesNotTaken: Array<{ name: string; signedBy: string }>;
   pastDate: number;
@@ -149,25 +160,16 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   for (const c of i.calls) callsBy.set(c.fundraiserId, [...(callsBy.get(c.fundraiserId) ?? []), c]);
 
   // What staff still have to send or do for a sign up still to come: new or approved, and not past
-  // its date. Something asked for by one long past is done, or no longer wanted.
-  const ahead = i.fundraisers.filter((f) => (f.status === "new" || f.status === "approved") && (!f.eventDate || f.eventDate >= today));
-  const materials: Materials = { posters: 0, leaflets: 0, buckets: 0, tins: 0, leafletsOrPosters: 0, bucketsOrTins: 0 };
-  let materialsFundraisers = 0;
-  for (const f of ahead) {
-    const w = f.wants;
-    materials.posters += w.posterCount;
-    materials.leaflets += w.leafletCount;
-    materials.buckets += w.bucketCount;
-    materials.tins += w.tinCount;
-    materials.leafletsOrPosters += w.leaflets;
-    materials.bucketsOrTins += w.buckets;
-    if (w.posterCount + w.leafletCount + w.bucketCount + w.tinCount + w.leaflets + w.buckets > 0) materialsFundraisers += 1;
-  }
-  const shoutOuts = ahead.filter((f) => f.wants.shoutOut).length;
-  const attend = ahead
-    .filter((f) => f.wants.attend)
-    .map((f) => f.eventDate)
-    .sort((a, b) => String(a ?? "9").localeCompare(String(b ?? "9")));
+  // its date. Something asked for by one long past is done, or no longer wanted. TASK-505: only what
+  // is still at its first step (src/fundraising/requests.ts), and every bucket or tin not back yet.
+  const rowsBy = new Map<number, RequestRow[]>();
+  for (const r of i.requests ?? []) rowsBy.set(r.fundraiserId, [...(rowsBy.get(r.fundraiserId) ?? []), r]);
+  const requests = requestTotals(
+    i.fundraisers.map((f) => ({ f, rows: rowsBy.get(f.id) ?? [] })),
+    today,
+  );
+  const materials: Materials = { ...requests.materials };
+  const { materialsFundraisers, shoutOuts, attend } = requests;
 
   const notTakenBy = addDays(today, -INVITE_NOT_TAKEN_DAYS);
   const invitesNotTaken = i.invites
@@ -204,6 +206,9 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     materialsFundraisers,
     shoutOuts,
     attend,
+    notBack: requests.notBack,
+    notBackDue: requests.notBackDue,
+    dueBackRequests: requests.dueBackRequests,
     callsDue,
     invitesNotTaken,
     pastDate,
@@ -213,7 +218,16 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
       .sort((a, b) => String(a.eventDate).localeCompare(String(b.eventDate)) || a.title.localeCompare(b.title))
       .map((f) => ({ date: f.eventDate as string, title: f.title, town: f.town })),
     waiting:
-      toApprove + changesToCheck + materialsFundraisers + shoutOuts + attend.length + callsDue + invitesNotTaken.length + pastDate + saysFinished,
+      toApprove +
+      changesToCheck +
+      materialsFundraisers +
+      shoutOuts +
+      attend.length +
+      requests.dueBackRequests +
+      callsDue +
+      invitesNotTaken.length +
+      pastDate +
+      saysFinished,
   };
 }
 
@@ -272,6 +286,8 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
     m.bucketsOrTins ? plural(m.bucketsOrTins, "bucket or tin", "buckets or tins") : "",
   ].filter(Boolean);
   if (sent.length) waiting.push(`${andList(sent)} to send`);
+  // TASK-505
+  if (c.notBack) waiting.push(`Buckets or tins not back yet: ${c.notBack}` + (c.notBackDue ? ` (${c.notBackDue} due back)` : ""));
   if (c.shoutOuts) waiting.push(plural(c.shoutOuts, "social media shout out", "social media shout outs"));
   if (c.attend.length) {
     const dates = c.attend.filter((d): d is string => !!d).map(dayMonth);

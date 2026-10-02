@@ -305,6 +305,50 @@ describe("signed in", () => {
     await load("", signedIn());
     expect($("[data-manage-none]").hidden).toBe(false);
   });
+
+  // TASK-505: what they asked us for, and where each is up to. Read only: words, no buttons.
+  it("shows where each thing they asked for is up to, with a shout out's link", async () => {
+    await load(
+      "",
+      signedIn(
+        raising({
+          requests: [
+            { label: "Posters", words: "sent on 3 Dec" },
+            { label: "Collection buckets", words: "with you, please bring them back by 26 Dec" },
+            { label: "Social media shout out", words: "posted on 2 Dec", link: "https://www.facebook.com/example/posts/1" },
+          ],
+        }),
+      ),
+    );
+    const part = $<HTMLElement>("[data-f-requests]", card(7));
+    expect(part.hidden).toBe(false);
+    const items = [...part.querySelectorAll("li")].map((li) => li.textContent!.replace(/\s+/g, " ").trim());
+    expect(items).toEqual([
+      "Posters: sent on 3 Dec",
+      "Collection buckets: with you, please bring them back by 26 Dec",
+      "Social media shout out: posted on 2 Dec. See the post",
+    ]);
+    const a = $<HTMLAnchorElement>("a", part);
+    expect(a.getAttribute("href")).toBe("https://www.facebook.com/example/posts/1");
+    expect(a.getAttribute("rel")).toContain("noopener");
+    expect(part.querySelector("button, input, form")).toBeNull();
+  });
+
+  it("has no requests part when they asked for nothing, or it could not be read", async () => {
+    await load("", signedIn(raising({ requests: [] }), event({ requests: null })));
+    expect($("[data-f-requests]", card(7)).hidden).toBe(true);
+    expect($("[data-f-requests]", card(8)).hidden).toBe(true);
+  });
+
+  it("never makes a link of anything but a web address, and never runs what it is given", async () => {
+    await load(
+      "",
+      signedIn(raising({ requests: [{ label: "<b>Posters</b>", words: "<img src=x onerror=alert(1)>", link: "javascript:alert(1)" }] })),
+    );
+    const part = $<HTMLElement>("[data-f-requests]", card(7));
+    expect(part.querySelector("a, b, img")).toBeNull();
+    expect(part.textContent).toContain("<b>Posters</b>: <img src=x onerror=alert(1)>");
+  });
 });
 
 describe("changing the details", () => {

@@ -1330,7 +1330,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraise/invite` | **implemented** | TASK-503 (the sign up form's invite lookup: `{ token }` from the invite link gives `{ name, email }` to fill in, and nothing else; any token that does not work is the same `404`. See **Community fundraising, the team's tools**) |
 | `POST /api/fundraise/manage/request` | **implemented** | TASK-501 (emails an organiser a 6 digit sign in code for their private area; always the same answer, sent before looking; was TASK-493's 24 hour link) |
 | `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
-| `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details) |
+| `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details; since TASK-505 also `requests`, where each thing they asked for is up to, in words) |
 | `POST /api/fundraise/manage/fundraisers/:id/edit`, `/finished`, `/pay-in` | **implemented** | TASK-501 (a change that waits for staff; "I've finished"; a Stripe checkout to pay in what they collected. Only their own: anyone else's is a 404) |
 | `POST /api/fundraise/manage/sign-out` | **implemented** | TASK-501 (ends the session) |
 | `GET` and `POST /api/fundraise/manage/:token` | **retired** | TASK-501 (`410`: the 24 hour links no longer open anything; ask for a sign in code) |
@@ -7919,7 +7919,9 @@ email 11 (`fundraiseSummary`), one email to each address, from and replying to t
 - the new sign ups;
 - **Waiting on us**: sign ups to approve, changes to check, posters, leaflets, buckets and tins to
   send (the split requests and the old combined ones), shout outs, requests for someone to come
-  along, calls due, invites not taken up after a week (with who invited them; not those whose link
+  along (since TASK-505 only those not yet marked sent, done or arranged, and a shout out only with
+  their permission to post; plus "Buckets or tins not back yet: N (M due back)", each one due back
+  counting as a thing waiting: see **Community fundraising, requests tracked to done**), calls due, invites not taken up after a week (with who invited them; not those whose link
   has expired), fundraisers four
   weeks past their date still on Get involved, and those who say they have finished;
 - **Coming up**: approved fundraisers dated in the next four weeks.
@@ -7977,6 +7979,88 @@ viewer), `admin-fundraising-team-page` (the jsdom admin harness), `fundraising-t
 uses it up; taking a fundraiser off Get involved keeps its page; a viewer cannot record a call; only
 an admin chooses who gets the summary).
 
+## Community fundraising, requests tracked to done (TASK-505)
+
+What an organiser asks for on the sign up form (`fundraisers.wants`: posters, leaflets, collection
+buckets and tins, each with a number, or the old combined "leaflets or posters" and "buckets or
+tins"; a social media shout out; someone from NBCC to come along) is tracked to done in **Admin >
+Fundraising**, in a **Requests** part of each sign up. Stage 4 of
+`docs/superpowers/specs/2026-10-02-community-fundraising-design.md`. No config value.
+
+Each request moves on one step at a time, and the only way back is **Undo**, one step, after a
+question (what was entered for that step is cleared, and History keeps it):
+
+| What | Steps | What staff enter |
+|---|---|---|
+| Posters, leaflets (and the old leaflets or posters) | To send, then Sent | the date, by post or dropped off, who, how many (starting at how many they asked for), a note. **Change the count** fixes how many actually went |
+| Collection buckets and tins (and the old buckets or tins) | To send, With them, then Back | out: the date, how many, who, a note; back: the date, how many came back (no more than went out, not before they went out), a note on the money inside or any missing |
+| A social media shout out | To do, then Done | the date, who, a link to the post (https only). Only with their permission (`socialOk`): without it the request says **No permission to post** and has nothing to do |
+| Someone to come along | To arrange, Arranged, then Done | who is going and a note; then the date they came along |
+
+Dates are UK calendar days and none may be still to come. Buckets and tins are **due back** two
+weeks after the fundraiser's date, or four weeks after they went out when it has no date; from that
+day the request and the list row show a **Due back** pill. Nothing asked for, nothing shown.
+
+A request has no row until staff first act on it: with none it is at its first step, so sign ups
+from before this need no backfill. Every change sends the step the person saw (`from`): if someone
+else has moved it on meanwhile, nothing changes and the answer is `409` with "Someone else changed
+this a moment ago. It now shows how it stands." The fundraiser's row is locked while a change is
+made, so two at once take turns.
+
+**The list.** A **Requests to do** pill on a sign up still to come (new or approved, not past its
+date, as the Monday summary has always counted) with anything still at its first step, and two
+filters: **Requests to do** and **Buckets not back** (every sign up with buckets or tins out, due
+or not, whatever its status). A viewer sees all of it, without the buttons.
+
+**The Monday summary** counts only what is still to send or do, and adds "Buckets or tins not back
+yet: N (M due back)" (N and M are buckets and tins, as many as went out). Each request with buckets
+or tins due back counts as one thing waiting.
+
+**The organiser's private area** (`/fundraise/manage`) shows **What you asked us for**, read only,
+a line each in words: "Posters: sent on 3 Dec", "Leaflets: dropped off on 4 Dec", "Collection
+buckets: with you, please bring them back by 26 Dec" (or "as soon as you can" once due), "back with
+us on 5 Dec. Thank you!", "Social media shout out: posted on 2 Dec" with a link to the post,
+"Someone from NBCC to come along: arranged, we look forward to seeing you". Never a staff note, who
+handled it or who is going. Only their own fundraisers' requests are read; if they cannot be read,
+the rest of the page still shows (`requests: null`).
+
+### Routes
+
+Admin routes need a session and the `fundraising` section: viewers look, editors and admins change.
+Every change writes `fundraiser.request_updated` to `audit_log` against the fundraiser, with the
+actor `admin:<email>` and the words for History ("Posters: sent (by post)").
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/admin/fundraising/requests` | view | | `{ today, requests: { <id>: [request] }, toDo: { <id>: true }, notBack: { <id>: true }, totals }`; each request has its `kind`, `label`, `asked`, `status`, `statusLabel`, what was entered, `dueOn`, `dueBack`, `outstanding`, `noPermission` and the `actions` that can be taken |
+| `POST /api/admin/fundraisers/:id/requests/:kind` | edit | `{ action, from, on?, how?, by?, quantity?, note?, link?, going? }`; `action` is `send`, `out`, `back`, `done`, `arrange`, `count` or `undo` | `{ row, words }`; `400` with `fields`; `404` for a kind they did not ask for or a fundraiser that is not there; `409` when it has moved on, or that step cannot be taken now |
+
+`GET /api/fundraise/manage/me` now gives each fundraiser `requests: [{ label, words, link? }]`.
+
+### Data (`migrations/1791200000080_fundraising-requests.js`, additive only)
+
+`fundraiser_requests`: one row per fundraiser and kind (unique), cleared with its fundraiser: the
+step, how many went and came back, posted or dropped off, the dates sent or out, back and done, who
+handled it, who is going, a note, a note on what came back, the link to the post, and when and by
+whom it was last changed. It is in the nightly backup's table count (65).
+
+### Where it lives, and tests
+
+Rules (pure): `src/fundraising/requests.ts` (the steps, due back, the totals, the organiser's
+words). SQL: `src/db/fundraising-requests.ts`. Routes: `src/routes/admin-fundraising-requests.ts`;
+the private area's part in `src/routes/fundraise.ts`; the summary's counts in
+`src/fundraising/summary.ts` (read by `src/db/fundraising-team.ts`). Screen: the `frReq` parts of
+`assets/js/admin/app.js`, the two filter chips in `admin.html`, styles beside `.fr-wants` in
+`assets/css/admin.css`; the private area's part in `fundraise-manage.html`,
+`assets/js/fundraise-manage.js` and `assets/css/fundraising.css`. Unit tests:
+`fundraising-requests` (every step, Undo, due back across the clocks changing, the totals, the
+organiser's words), `fundraising-requests-db`, `fundraising-requests-migration`,
+`admin-fundraising-requests-routes` (admin, editor and viewer), `admin-fundraising-requests-page`
+(the jsdom admin harness), `fundraising-summary`, `fundraising-team-db`, `fundraise-private-routes`
+(only their own), `fundraise-manage-page` and `backup-plan`. BDD:
+`features/fundraising-requests.feature` (posters sent and a bucket out then back take what is
+waiting down; a second press changes nothing; Undo goes back one step).
+
 ## A QR code encoder for fundraiser pages (TASK-493)
 
 `src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
@@ -8018,14 +8102,15 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 57 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 62 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
-four in TASK-479, the business supporter call log in TASK-491, and community fundraising five
-in TASK-493),
+four in TASK-479, the business supporter call log in TASK-491, community fundraising five
+in TASK-493, the private area's sign in codes and sessions two in TASK-501, the invites and
+calls two in TASK-503, and the requests one in TASK-505),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 57 of **60** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 62 of **65** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

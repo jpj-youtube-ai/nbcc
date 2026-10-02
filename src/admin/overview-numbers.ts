@@ -23,19 +23,21 @@ export interface NumberLine {
 }
 
 /** Whole pounds: at a glance £4,210 reads faster than £4,210.49. */
-const pounds = (pence: number) => "£" + Math.round(Math.max(0, pence) / 100).toLocaleString("en-GB");
+const wholePounds = (pence: number) => Math.round(Math.max(0, pence) / 100);
+const pounds = (pence: number) => "£" + wholePounds(pence).toLocaleString("en-GB");
 const n = (x: number) => x.toLocaleString("en-GB");
 const people = (x: number) => `${n(x)} ${x === 1 ? "person" : "people"}`;
 
-// As the Analytics screen names its channels.
+// As the Analytics screen names its channels. The top one may bring well under half the visits, so
+// it "brought the most", never "most came from".
 const CHANNEL_WORDS: Record<string, string> = {
-  newsletter: "Most came from the newsletter.",
-  email: "Most came from an email.",
-  qr: "Most came from a QR code.",
-  search: "Most came from Search.",
-  social: "Most came from social media.",
-  other_websites: "Most came from other websites.",
-  direct: "Most came straight to the site: typed in, a bookmark or an app.",
+  newsletter: "The newsletter brought the most visits.",
+  email: "Emails brought the most visits.",
+  qr: "QR codes brought the most visits.",
+  search: "Search brought the most visits.",
+  social: "Social media brought the most visits.",
+  other_websites: "Other websites brought the most visits.",
+  direct: "The most visits came straight to the site: typed in, a bookmark or an app.",
 };
 
 // Each part, its name, and its screen: the first part a person may see is where Money in opens.
@@ -47,7 +49,8 @@ const MONEY_PARTS = [
 
 function moneyLine(m: NonNullable<NumberCounts["money"]>): NumberLine {
   const parts = MONEY_PARTS.filter(([k]) => m[k]).map(([k, name, view, button]) => ({ name, view, button, ...(m[k] as NowAndBefore) }));
-  const now = parts.reduce((t, p) => t + p.now, 0);
+  // The headline is the sum of the rounded parts, so the parts people add up come to it.
+  const now = parts.reduce((t, p) => t + wholePounds(p.now), 0) * 100;
   const before = parts.reduce((t, p) => t + p.before, 0);
   const split = parts.length > 1 ? " " + parts.map((p) => `${p.name} ${pounds(p.now)}`).join(", ") + "." : "";
   return {
@@ -110,7 +113,8 @@ export function numbersLines(c: NumberCounts): NumberLine[] {
   const out: NumberLine[] = [];
   if (c.money && MONEY_PARTS.some(([k]) => c.money?.[k])) out.push(moneyLine(c.money));
   if (c.monthly) out.push(monthlyLine(c.monthly));
-  if (c.ball) out.push(ballLine(c.ball));
+  // Once the night has passed, the line has done its job.
+  if (c.ball && c.ball.daysToGo >= 0) out.push(ballLine(c.ball));
   if (c.website) out.push(websiteLine(c.website));
   return out;
 }

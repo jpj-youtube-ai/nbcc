@@ -239,6 +239,42 @@ describe("GET /api/admin/overview: the numbers (TASK-509)", () => {
     expect(numberKeys(res)).toEqual(["money", "monthly", "ball"]);
   });
 
+  // One source takes one of the 3 slots, so it may hold only one database connection at a time.
+  it("reads the fundraising sign ups, calls and requests one after another", async () => {
+    let running = 0;
+    let most = 0;
+    const slow = <T,>(value: T) => async () => {
+      running += 1;
+      most = Math.max(most, running);
+      await new Promise((r) => setTimeout(r, 5));
+      running -= 1;
+      return value;
+    };
+    m.listAllFundraisers.mockImplementation(slow([]));
+    m.listFundraiserCalls.mockImplementation(slow([]));
+    m.listRequestRows.mockImplementation(slow([]));
+    await call(tokenFor("admin"));
+    expect(m.listRequestRows).toHaveBeenCalledTimes(1);
+    expect(most).toBe(1);
+  });
+
+  // A total from the parts that answered would read as all the money in; it is left out instead, and
+  // "Could not check" names the part that failed.
+  it("leaves Money in out when part of it could not be read, rather than a total that is short", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.sumDonations.mockRejectedValue(new Error("down"));
+    const res = await call(tokenFor("admin"));
+    expect(numberKeys(res)).toEqual(["monthly", "ball", "website"]);
+    expect((res.body as Answer).failed).toContain("Donations");
+  });
+
+  it("still gives Money in when the only part that failed is one the person may not see anyway", async () => {
+    m.sumDonations.mockRejectedValue(new Error("never asked"));
+    const res = await call(tokenFor("editor", { ball: "view" }));
+    expect(numberKeys(res)).toEqual(["money", "ball"]);
+    expect((res.body as Answer).failed).toEqual([]);
+  });
+
   it("leaves the website out while counting is switched off", async () => {
     m.readWebsiteGlance.mockResolvedValue(null);
     const res = await call(tokenFor("admin"));

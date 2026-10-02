@@ -172,14 +172,17 @@ async function panels(p: Period): Promise<Panels> {
  * are partly yesterday's).
  */
 export async function readRightNow(now: Date = new Date()): Promise<RightNow> {
-  const collecting = await getCollecting();
+  return { collecting: await getCollecting(), people: await peopleNow(now) };
+}
+
+async function peopleNow(now: Date): Promise<number> {
   const yesterday = new Date(new Date(`${ukDay(now)}T12:00:00Z`).getTime() - 86_400_000).toISOString().slice(0, 10);
   const r = await pool.query<{ n: number }>(
     `SELECT count(DISTINCT visitor)::int AS n FROM analytics_views
       WHERE day >= $1 AND at > $2::timestamptz - interval '5 minutes'`,
     [yesterday, now.toISOString()],
   );
-  return { collecting, people: r.rows[0]?.n ?? 0 };
+  return r.rows[0]?.n ?? 0;
 }
 
 /**
@@ -190,13 +193,12 @@ export async function readRightNow(now: Date = new Date()): Promise<RightNow> {
 export async function readWebsiteGlance(
   now: Date = new Date(),
 ): Promise<{ visitors: number; visitorsBefore: number; onNow: number; topChannel: string | null } | null> {
-  const right = await readRightNow(now);
-  if (!right.collecting) return null;
+  if (!(await getCollecting())) return null;
   const { current, previous } = periodsFor(now, 7);
   const cur = headlineFrom(await headline(current));
   const before = headlineFrom(await headline(previous));
   const [top] = await visitsBy<{ channel: string; visits: number }>(current, "channel", "true");
-  return { visitors: cur.visitors, visitorsBefore: before.visitors, onNow: right.people, topChannel: top?.channel ?? null };
+  return { visitors: cur.visitors, visitorsBefore: before.visitors, onNow: await peopleNow(now), topChannel: top?.channel ?? null };
 }
 
 /** Every panel for the period, and the figures and line for the same days before it. */

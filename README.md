@@ -6113,14 +6113,18 @@ by `numbersLines` in `src/admin/overview-numbers.ts`:
   (Fundraising: view). Each part is read on its own (`src/db/overview-numbers.ts`) and counted as
   its screen counts it: paid gifts less refunds; paid Ball bookings by when they were paid; cash by
   the day it was paid in. Someone who sees only some parts gets only those, and the button opens the
-  first of their screens.
+  first of their screens. The parts are rounded and the headline is their sum, so they add up. If a
+  part they may see cannot be read, Money in is left out (a short total would read as all of it) and
+  "Could not check" names that part.
 - **Monthly givers** (Donations: view): how many give and what they give a month, as the Monthly
   givers screen counts them, and who joined and stopped this month. One read serves this and the
   Needs you line for failing gifts.
 - **Festive Ball** (Ball: view): seats sold of the room (the ticket report's own count), money taken
-  (the Festive Ball dashboard's), seats held for bank transfers, and days to go.
+  (the Festive Ball dashboard's), seats held for bank transfers, and days to go. Gone once the night
+  has passed.
 - **Website** (Analytics: view): visitors in the last 7 days against the 7 before, people on the site
-  now, and where most came from (`readWebsiteGlance`: four of the Analytics screen's own queries).
+  now, and which channel brought the most visits (`readWebsiteGlance`: four of the Analytics
+  screen's own queries).
   Left out while counting is switched off.
 
 The numbers share the Needs you pass (`gather`), so the 3 at a time limit covers both, and a number

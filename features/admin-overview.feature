@@ -31,6 +31,20 @@ Feature: The admin Overview says what needs us (TASK-508)
     And this month's money from fundraising pages is at least £123
     And it says how the Festive Ball and the monthly givers are doing
 
+  # Counted as the screens count them: a refund comes off, a page's gift is the page's and not a
+  # donation, and the start of last month is last month. Measured as a change, so other money in the
+  # test database cannot get in the way.
+  Scenario: money in counts refunds, keeps page gifts apart, and compares with last month
+    Given a new fundraising sign up "Overview sponsored walk" waiting for approval
+    And "ann.overview.admin.bdd@example.com" has noted the overview's money
+    And a £50 gift was made on its page today, with £20 of it refunded
+    And a £40 donation was made at the very start of last month
+    When "ann.overview.admin.bdd@example.com" reads the overview
+    Then every number could be checked
+    And this month's money from fundraising pages has gone up by £30
+    And this month's donations have not changed
+    And last month's money has gone up by £40
+
   Scenario: someone who can see only the contact form sees none of the numbers
     When "cal.overview.admin.bdd@example.com" reads the overview
     Then the overview answer is 200

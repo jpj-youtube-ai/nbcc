@@ -82,6 +82,15 @@ describe("the words for each number", () => {
     expect(line.detail).toBe("£3,900 by this time last month. Donations £2,100, Festive Ball £1,800, fundraising pages £310.");
   });
 
+  // The parts are what people add up, so the headline is the sum of the rounded parts.
+  it("makes the parts add up to the headline", () => {
+    const [line] = numbersLines({
+      money: { donations: { now: 150, before: 0 }, ball: { now: 150, before: 0 }, fundraising: { now: 150, before: 0 } },
+    });
+    expect(line.headline).toBe("£6 this month so far");
+    expect(line.detail).toBe("£0 by this time last month. Donations £2, Festive Ball £2, fundraising pages £2.");
+  });
+
   it("names only the parts of the money a person may see", () => {
     const [line] = numbersLines({ money: { donations: { now: 5_000, before: 2_000 } } });
     expect(line.headline).toBe("£50 this month so far");
@@ -112,15 +121,15 @@ describe("the words for each number", () => {
     expect(line.detail).toBe("£18,400 taken. 16 seats held for bank transfers. 36 days to go.");
     const today = numbersLines({ ball: { seatsSold: 1, totalSeats: 300, takenPence: 0, transferSeats: 1, daysToGo: 0 } })[0];
     expect(today.detail).toBe("£0 taken. 1 seat held for a bank transfer. The Ball is tonight.");
-    const past = numbersLines({ ball: { seatsSold: 1, totalSeats: 300, takenPence: 0, transferSeats: 0, daysToGo: -3 } })[0];
-    expect(past.detail).toBe("£0 taken.");
+    // Once the night has passed the line has done its job.
+    expect(numbersLines({ ball: { seatsSold: 1, totalSeats: 300, takenPence: 0, transferSeats: 0, daysToGo: -1 } })).toEqual([]);
   });
 
   it("says how the website did in the last 7 days", () => {
     const [line] = numbersLines({ website: { visitors: 1_240, visitorsBefore: 1_100, onNow: 3, topChannel: "search" } });
     expect(line).toMatchObject({ key: "website", title: "Website", view: "analytics", button: "Analytics" });
     expect(line.headline).toBe("1,240 visitors in the last 7 days");
-    expect(line.detail).toBe("1,100 in the 7 days before. 3 people on the site now. Most came from Search.");
+    expect(line.detail).toBe("1,100 in the 7 days before. 3 people on the site now. Search brought the most visits.");
     expect(numbersLines({ website: { visitors: 1, visitorsBefore: 0, onNow: 1, topChannel: null } })[0]).toMatchObject({
       headline: "1 visitor in the last 7 days",
       detail: "0 in the 7 days before. 1 person on the site now.",

@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { authorizeAny, loadEffectivePermissions } from "./admin-authz";
 import { needsLines, type NeedCounts } from "../admin/overview";
+import { can } from "../admin/permissions";
 import { gather, type Source } from "../admin/overview-sources";
 import { giversFrom, monthSoFar, numbersLines, type NowAndBefore, type NumberCounts } from "../admin/overview-numbers";
 import { listAwaitingTransfers } from "../db/ball-transfer";
@@ -77,9 +78,13 @@ function sources(email: string, now: Date): Source<OverviewCounts>[] {
     rows: RequestRow[];
   }> | null = null;
   const fundraisingData = () =>
-    (fundraising ??= Promise.all([listAllFundraisers(), listFundraiserCalls(), listRequestRows()]).then(
-      ([fundraisers, calls, rows]) => ({ fundraisers, calls, rows }),
-    ));
+    // One after another: a source takes one of the 3 slots, so it must hold one connection, not three.
+    (fundraising ??= (async () => {
+      const fundraisers = await listAllFundraisers();
+      const calls = await listFundraiserCalls();
+      const rows = await listRequestRows();
+      return { fundraisers, calls, rows };
+    })());
 
   return [
     {
@@ -247,8 +252,14 @@ export async function getAdminOverview(req: Request, res: Response): Promise<Res
     if (!perms) return res.status(401).json({ error: "Invalid or expired admin session" });
     const now = new Date();
     const { counts: c, failed } = await gather(perms, sources(claims.email, now));
+    // Money in only when every part this person may see was read: a total from the parts that
+    // answered would read as all the money in. "Could not check" names the part that failed.
+    const moneyWhole =
+      (!can(perms, "donations", "view") || c.moneyDonations) &&
+      (!can(perms, "ball", "view") || c.moneyBall) &&
+      (!can(perms, "fundraising", "view") || c.moneyFundraising);
     const numbers = numbersLines({
-      money: { donations: c.moneyDonations, ball: c.moneyBall, fundraising: c.moneyFundraising },
+      money: moneyWhole ? { donations: c.moneyDonations, ball: c.moneyBall, fundraising: c.moneyFundraising } : undefined,
       monthly: c.givers,
       ball: c.ballSales,
       website: c.website,

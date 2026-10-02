@@ -107,7 +107,8 @@ const RECORD_COLUMNS = `f.id, f.slug, f.path, f.kind, f.title, f.description,
          f.post_line1, f.post_line2, f.post_town, f.post_postcode, f.card_line,
          to_char(f.end_time, 'HH24:MI') AS end_time,
          f.time_tbc, f.venue_address, f.venue_postcode, f.access, f.price, f.booking, f.ticket_url,
-         f.age_limit, f.dress_code, f.included, f.credit_name, f.finished_requested_at`;
+         f.age_limit, f.dress_code, f.included, f.credit_name, f.finished_requested_at,
+         f.off_list_at, f.off_list_by`;
 const SELECT = `
   SELECT ${RECORD_COLUMNS}
     FROM fundraisers f`;
@@ -190,6 +191,9 @@ export function toRecord(r: Row): FundraiserRecord {
     included: textOrNull(r.included),
     creditName: textOrNull(r.credit_name),
     finishedRequestedAt: iso(r.finished_requested_at),
+    // TASK-503: taken off the Get involved list by staff (its page still works).
+    offListAt: iso(r.off_list_at),
+    offListBy: textOrNull(r.off_list_by),
   };
 }
 

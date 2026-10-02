@@ -47,9 +47,10 @@ describe("knowing how many tables to expect", () => {
   // ball_report_sends; 49 since TASK-475 added erased_stories to the stories database; 50 since
   // TASK-478 added admin_seen; 54 since TASK-479 added the four site analytics tables; 55 since
   // TASK-491 added business_supporter_calls; 60 since TASK-493 added the five community fundraising
-  // tables; 62 since TASK-501 added the private area's sign in codes and sessions.
-  it("counts 62 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(62);
+  // tables; 62 since TASK-501 added the private area's sign in codes and sessions; 64 since TASK-503
+  // added the fundraising invites and the calls made to fundraisers.
+  it("counts 64 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(64);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -88,7 +89,10 @@ describe("knowing how many tables to expect", () => {
     // TASK-501: the private area's emailed sign in codes and signed in sessions (hashes only).
     expect(main).toContain("fundraiser_sign_in_codes");
     expect(main).toContain("fundraiser_sessions");
-    expect(main.length).toBe(59);
+    // TASK-503: the invites staff send (token hashes only) and the calls made to fundraisers.
+    expect(main).toContain("fundraiser_invites");
+    expect(main).toContain("fundraiser_calls");
+    expect(main.length).toBe(61);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

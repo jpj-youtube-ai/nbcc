@@ -54,3 +54,11 @@ describe("the fundraising change email kinds", () => {
     expect(labelled).toContain(kind);
   });
 });
+
+// TASK-503: the invite staff send, and the Monday summary.
+describe("the fundraising team email kinds", () => {
+  it.each(["fundraiseInvite", "fundraiseSummary"])("sends and names %s", (kind) => {
+    expect(sent).toContain(kind);
+    expect(labelled).toContain(kind);
+  });
+});

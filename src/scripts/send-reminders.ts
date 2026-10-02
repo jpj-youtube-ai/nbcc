@@ -121,6 +121,20 @@ if (require.main === module) {
       } catch (err) {
         console.error("weekly digest failed:", err instanceof Error ? err.message : err);
       }
+      // TASK-503: the Monday fundraising summary, to the people chosen in Admin > Fundraising. It
+      // checks the day itself (Mondays only, once a week) and does nothing without anyone to send
+      // to. It never throws, and it has its own try/catch anyway, like every pass here.
+      try {
+        const { runFundraisingSummary } = await import("../fundraising/summary-runner");
+        const summary = await runFundraisingSummary();
+        console.error(
+          summary.skipped
+            ? `fundraising summary: ${summary.skipped}`
+            : `fundraising summary: sent=${summary.sent} failed=${summary.failed}`,
+        );
+      } catch (err) {
+        console.error("fundraising summary failed:", err instanceof Error ? err.message : err);
+      }
       // Email-audit retention: prune email_log rows past their six-tax-years window
       // (src/email/log-retention.ts). Rides this existing daily task for the same reason the
       // ball run-up does — one more statement on a schedule that already exists — and in its

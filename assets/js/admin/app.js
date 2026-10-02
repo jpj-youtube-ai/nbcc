@@ -2585,6 +2585,9 @@
     // TASK-487: every kind the server sends has a name here (test/unit/admin-email-kinds.test.ts).
     ["ballTransfer", "Ball bank transfer"], ["ballTransferStaff", "Ball bank transfer (to events@)"],
     ["outreach", "Business outreach"], ["backupAlert", "Backup alert"],
+    // TASK-493: community fundraising.
+    ["fundraiseThanks", "Fundraiser sign up thanks"], ["fundraiseStaff", "Fundraiser sign up (to events@)"],
+    ["fundraiseApproved", "Fundraiser approved"], ["fundraiseManage", "Fundraiser manage link"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];

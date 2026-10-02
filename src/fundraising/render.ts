@@ -426,8 +426,9 @@ function renderGiveForm(p: PublicPage): string {
     '<textarea class="give-field-input fr-message" id="frMessage" name="frMessage" rows="3" maxlength="200" aria-describedby="frMessageCount"></textarea>' +
     '<p class="give-field-help" id="frMessageCount" data-message-count>Up to 200 characters.</p></div>' +
     '<div class="give-donor-options fr-choice" role="radiogroup" aria-label="Your name on the page">' +
-    '<span class="give-donor-option"><input id="frShowNameYes" name="frShowName" type="radio" value="yes" checked /><label for="frShowNameYes">Show my name</label></span>' +
-    '<span class="give-donor-option"><input id="frShowNameNo" name="frShowName" type="radio" value="no" /><label for="frShowNameNo">Stay anonymous</label></span>' +
+    // The whole pill is the label, so a tap anywhere on it chooses (the donate page's look).
+    '<label class="give-donor-option" for="frShowNameYes"><input id="frShowNameYes" name="frShowName" type="radio" value="yes" checked />Show my name</label>' +
+    '<label class="give-donor-option" for="frShowNameNo"><input id="frShowNameNo" name="frShowName" type="radio" value="no" />Stay anonymous</label>' +
     "</div>" +
     '<p class="give-field-help">We show your first name and the first letter of your surname, like Robin T.</p>' +
     '<label class="give-check" for="frShowAmount"><input class="give-check-box" id="frShowAmount" name="frShowAmount" type="checkbox" checked />' +

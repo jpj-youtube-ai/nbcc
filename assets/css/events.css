@@ -620,7 +620,7 @@
 @media (min-width: 900px) { .gi-panel__actions { justify-items: center; text-align: center; } }
 .gi-panel .btn { --bg: var(--cream); --fg: var(--maroon); font-size: 1.08rem; padding: 16px 32px; }
 .gi-panel .btn:hover { --bg: var(--white); }
-.gi-panel__link { color: var(--cream); font-weight: 600; text-underline-offset: 3px; }
+.gi-panel__link { display: inline-flex; align-items: center; min-height: 44px; color: var(--cream); font-weight: 600; text-underline-offset: 3px; }
 .gi-panel__link:hover { color: var(--white); }
 .gi-panel :focus-visible { outline-color: var(--cream); }
 @media (prefers-reduced-motion: reduce) {

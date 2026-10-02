@@ -235,7 +235,11 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-own { margin: 0; }
 .fr-own .give-custom-field { max-width: 360px; }
 .fr-choice { margin-top: 6px; }
-.fr-choice .give-donor-option { min-height: 48px; }
+.fr-choice .give-donor-option { min-height: 48px; margin: 0; font-size: 1rem; color: var(--slate); }
+.fr-choice .give-donor-option:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }
+.fr-choice .give-donor-option:has(input:focus-visible) { outline: 3px solid var(--holly); outline-offset: 3px; }
+/* Tick box rows: at least 44px to tap, the whole row being the label. */
+.fr-form .give-check, .fr-give-form .give-check { min-height: 44px; align-items: flex-start; margin: 2px 0; padding: 11px 0; }
 .fr-message { resize: vertical; }
 .fr-declaration { margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 

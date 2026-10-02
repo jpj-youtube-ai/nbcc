@@ -341,7 +341,9 @@ describe("GET /api/admin/overview: Coming up (TASK-510)", () => {
     expect(m.getReportSettings).not.toHaveBeenCalled();
     const res = await call(tokenFor("editor", { ball: "view", events: "view" }));
     expect(m.getReportSettings).toHaveBeenCalled();
-    expect(texts(res)).toContain("The Festive Ball ticket report goes out");
+    // The ticket report lives on the Events screen.
+    const report = coming(res).flatMap((d) => d.items).find((i) => i.text === "The Festive Ball ticket report goes out");
+    expect(report).toMatchObject({ view: "events", button: "Events", when: "8am" });
   });
 
   it("leaves the ticket report out while it is switched off", async () => {
@@ -353,6 +355,18 @@ describe("GET /api/admin/overview: Coming up (TASK-510)", () => {
     m.getSettings.mockResolvedValue({ guestDetailsLockAt: new Date(Date.now() + 4 * 86_400_000), salesCloseAt: null, gateOpensAt: null });
     const res = await call(tokenFor("admin"));
     expect(texts(res)).toContain("Festive Ball guest details and menu choices close");
+  });
+
+  it("gives the Ball's dates to someone who may see the Festive Ball but not Events", async () => {
+    m.getSettings.mockResolvedValue({ guestDetailsLockAt: new Date(Date.now() + 4 * 86_400_000), salesCloseAt: null, gateOpensAt: null });
+    const res = await call(tokenFor("editor", { ball: "view" }));
+    expect(texts(res)).toEqual(["Festive Ball guest details and menu choices close"]);
+  });
+
+  it("leaves out ticket sales closing once staff have closed them by hand", async () => {
+    m.getSettings.mockResolvedValue({ guestDetailsLockAt: null, salesCloseAt: new Date(Date.now() + 4 * 86_400_000), gateOpensAt: null, salesClosed: true });
+    const res = await call(tokenFor("admin"));
+    expect(texts(res)).not.toContain("Festive Ball ticket sales close");
   });
 
   it("names a part it could not check, and still shows the rest", async () => {

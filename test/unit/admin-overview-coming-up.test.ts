@@ -6,6 +6,7 @@ import {
   fundraiserItems,
   newsletterItems,
   ukDayAndTime,
+  withoutListedNight,
   type Upcoming,
 } from "../../src/admin/overview-coming-up";
 
@@ -136,5 +137,35 @@ describe("turning each screen's rows into dated lines", () => {
       ["2026-11-07", "19:00", "The Festive Ball"],
     ]);
     expect(items.every((i) => i.view === "ball" && i.button === "Festive Ball")).toBe(true);
+  });
+
+  const dates = {
+    gateOpensAt: new Date("2026-10-10T09:00:00Z"),
+    salesCloseAt: new Date("2026-10-31T23:59:00Z"),
+    guestDetailsLockAt: null,
+    night: new Date("2026-11-07T19:00:00Z"),
+  };
+  const texts = (items: Upcoming[]) => items.map((i) => i.text);
+
+  it("leaves out a Ball date already done by hand: sales opened or closed early", () => {
+    expect(texts(ballDateItems({ ...dates, gateOpen: true }))).not.toContain("Festive Ball ticket sales open");
+    expect(texts(ballDateItems({ ...dates, salesClosed: true }))).not.toContain("Festive Ball ticket sales close");
+    expect(texts(ballDateItems(dates))).toContain("Festive Ball ticket sales open");
+  });
+
+  it("leaves out a Ball date that has already passed today", () => {
+    const later = ballDateItems({ ...dates, now: new Date("2026-10-10T14:00:00Z") });
+    expect(texts(later)).not.toContain("Festive Ball ticket sales open");
+    expect(texts(later)).toContain("Festive Ball ticket sales close");
+  });
+
+  // The Events screen has its own row for the night; one line is enough.
+  it("leaves out the night when the Events screen already lists the Festive Ball that day", () => {
+    const ball = ballDateItems(dates);
+    const events = eventItems([{ name: "Festive Ball 2026", date: "2026-11-07", start: null, timeTbc: true, status: "live" }]);
+    expect(texts(withoutListedNight(ball, events))).toEqual(["Festive Ball ticket sales open", "Festive Ball ticket sales close"]);
+    const other = eventItems([{ name: "Quiz night", date: "2026-11-07", start: "19:00", timeTbc: false, status: "live" }]);
+    expect(texts(withoutListedNight(ball, other))).toContain("The Festive Ball");
+    expect(texts(withoutListedNight(ball, []))).toContain("The Festive Ball");
   });
 });

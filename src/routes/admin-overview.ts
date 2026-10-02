@@ -13,6 +13,7 @@ import {
   eventItems,
   fundraiserItems,
   newsletterItems,
+  withoutListedNight,
   type Upcoming,
 } from "../admin/overview-coming-up";
 import { listAllEvents } from "../db/events";
@@ -301,7 +302,8 @@ function sources(email: string, now: Date): Source<OverviewCounts>[] {
         const day = nextSendDay({ now, eventDate: londonDate(BALL_EVENT_DATE), sentToday: await scheduledSendExists(londonDate(now)) });
         if (!day) return {};
         const time = `${String(REPORT_HOUR).padStart(2, "0")}:00`;
-        return { upReport: [{ day, time, text: "The Festive Ball ticket report goes out", view: "ball", button: "Festive Ball" }] };
+        // The report's own panel is on the Events screen.
+        return { upReport: [{ day, time, text: "The Festive Ball ticket report goes out", view: "events", button: "Events" }] };
       },
     },
     {
@@ -316,6 +318,9 @@ function sources(email: string, now: Date): Source<OverviewCounts>[] {
             salesCloseAt: s.salesCloseAt ?? null,
             guestDetailsLockAt: s.guestDetailsLockAt ?? null,
             night: BALL_EVENT_DATE,
+            gateOpen: s.gateOpen,
+            salesClosed: s.salesClosed,
+            now,
           }),
         };
       },
@@ -345,7 +350,14 @@ export async function getAdminOverview(req: Request, res: Response): Promise<Res
       website: c.website,
     });
     const coming = comingUp(
-      [...(c.upEvents ?? []), ...(c.upFundraisers ?? []), ...(c.upNewsletters ?? []), ...(c.upReport ?? []), ...(c.upBall ?? [])],
+      [
+        ...(c.upEvents ?? []),
+        ...(c.upFundraisers ?? []),
+        ...(c.upNewsletters ?? []),
+        ...(c.upReport ?? []),
+        // The night once, when the Events screen already has its own row for it.
+        ...withoutListedNight(c.upBall ?? [], c.upEvents ?? []),
+      ],
       londonToday(now),
     );
     return res.status(200).json({ updatedAt: now.toISOString(), needs: needsLines(c), numbers, comingUp: coming, failed });

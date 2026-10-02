@@ -103,20 +103,33 @@ export function newsletterItems(rows: ReadonlyArray<{ status: string; scheduledA
     .map((j) => ({ ...ukDayAndTime(j.scheduledAt as Date | string), text: `The newsletter goes out: ${j.subject}`, view: "newsletter", button: "Newsletter" }));
 }
 
-/** The Festive Ball's dates that are set, and the night itself. */
+/**
+ * The Festive Ball's dates that are set and still to come, and the night itself. A date already done
+ * by hand (sales opened, or closed, early) is left out, and so is one earlier today.
+ */
 export function ballDateItems(d: {
   gateOpensAt: Date | string | null;
   salesCloseAt: Date | string | null;
   guestDetailsLockAt: Date | string | null;
   night: Date;
+  gateOpen?: boolean;
+  salesClosed?: boolean;
+  now?: Date;
 }): Upcoming[] {
   const dates: Array<[Date | string | null, string]> = [
-    [d.gateOpensAt, "Festive Ball ticket sales open"],
-    [d.salesCloseAt, "Festive Ball ticket sales close"],
+    [d.gateOpen ? null : d.gateOpensAt, "Festive Ball ticket sales open"],
+    [d.salesClosed ? null : d.salesCloseAt, "Festive Ball ticket sales close"],
     [d.guestDetailsLockAt, "Festive Ball guest details and menu choices close"],
-    [d.night, "The Festive Ball"],
+    [d.night, BALL_NIGHT],
   ];
   return dates
-    .filter(([at]) => at)
+    .filter(([at]) => at && (!d.now || new Date(at).getTime() >= d.now.getTime()))
     .map(([at, text]) => ({ ...ukDayAndTime(at as Date | string), text, view: "ball", button: "Festive Ball" }));
+}
+
+const BALL_NIGHT = "The Festive Ball";
+
+/** The Ball dates without the night when the Events screen already lists the Festive Ball that day. */
+export function withoutListedNight(ball: readonly Upcoming[], events: readonly Upcoming[]): Upcoming[] {
+  return ball.filter((b) => b.text !== BALL_NIGHT || !events.some((e) => e.day === b.day && /festive ball/i.test(e.text)));
 }

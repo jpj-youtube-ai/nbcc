@@ -6150,9 +6150,11 @@ its screen (`comingUp` in `src/admin/overview-coming-up.ts`). Each source carrie
 - **Newsletters going out at a set time** (Newsletter: view): queued sends with a time, in UK time.
 - **The next Festive Ball ticket report** (Events and Festive Ball: view, as its own screen needs;
   a source's `also` gate): worked out with the screen's own `nextSendDay`, and only while the report
-  is switched on with someone to send to.
+  is switched on with someone to send to. Its button opens Events, where the report's panel is.
 - **The Festive Ball's dates** (Festive Ball: view): ticket sales open and close, guest details and
-  menu choices close, and the night itself, when they are set.
+  menu choices close, and the night itself, when they are set. A date already done by hand (sales
+  opened or closed early) or already past is left out, and the night is shown once when the Events
+  screen already lists the Festive Ball that day (`withoutListedNight`).
 
 The card is hidden when nothing this person may see is coming up, and a source that fails is named
 in "Could not check" like the rest.

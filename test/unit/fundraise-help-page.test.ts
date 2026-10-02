@@ -54,7 +54,7 @@ describe("the fundraising help page", () => {
   });
 
   it("has a contents list whose every link lands on a section", () => {
-    const links = $$('nav[aria-label="On this page"] a');
+    const links = $$('nav[aria-labelledby="help-contents-title"] a');
     expect(links.map((a) => a.getAttribute("href"))).toEqual([
       "#ideas",
       "#paying-in",

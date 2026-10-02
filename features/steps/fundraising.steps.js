@@ -436,6 +436,81 @@ Then("the donation paid as {string} belongs to no fundraiser and carries no mess
   assert.equal(r.rows[0].supporter_message, null);
 });
 
+// ---- TASK-502: giving on a fundraiser's page (fundraising-giving.feature) ----
+
+// A gift as the give form sends it now: the donate page's one off gift plus the fundraiser, with no
+// message and no wall choices. With Gift Aid it carries the declaration, as the form does. The
+// checkout's own (stub echoed) session is replayed as Stripe's signed webhook, and its id kept for
+// the thank you's optional step.
+async function giveOnPage(world, amount, title, paymentIntent, giftAid) {
+  const f = await fundraiser(title);
+  const body = {
+    mode: "once",
+    plan: null,
+    amount,
+    giftAid,
+    donorType: "individual",
+    fullName: "Alex Example",
+    email: "alex.fr.bdd@example.com",
+    fundraiserId: f.id,
+  };
+  if (giftAid) {
+    body.declaration = {
+      firstName: "Alex",
+      lastName: "Example",
+      houseNameNumber: "12",
+      address: "Example Road, Exampleton",
+      postcode: "KA1 1AA",
+      nonUk: false,
+      scope: "this_donation",
+    };
+  }
+  const checkout = await call(world, "POST", "/api/checkout-session", body);
+  assert.equal(world.frStatus, 200, JSON.stringify(checkout));
+  assert.ok(checkout.session, "no session echoed from checkout: is the Stripe stub active?");
+  world.frSessionId = checkout.session.id;
+  const res = await postSignedWebhook("checkout.session.completed", {
+    id: checkout.session.id,
+    object: "checkout.session",
+    metadata: checkout.session.metadata,
+    mode: checkout.session.mode,
+    amount_total: amount,
+    currency: "gbp",
+    payment_status: "paid",
+    payment_intent: paymentIntent,
+    subscription: null,
+    customer_details: { name: "Alex Example", email: "alex.fr.bdd@example.com" },
+    created: Math.floor(Date.now() / 1000),
+  });
+  world.frStatus = res.status;
+  world.frBody = await res.text();
+}
+
+When("a supporter gives {int} pence on the page for {string}, paid as {string}", async function (amount, title, paymentIntent) {
+  await giveOnPage(this, amount, title, paymentIntent, false);
+});
+
+When("a supporter gives {int} pence with Gift Aid on the page for {string}, paid as {string}", async function (amount, title, paymentIntent) {
+  await giveOnPage(this, amount, title, paymentIntent, true);
+});
+
+// The thank you's optional step, as the page sends it: JSON from our own origin, with the paid
+// checkout session's id.
+When(
+  "the giver adds the message {string} to the wall of {string}, showing their name",
+  async function (message, title) {
+    const f = await fundraiser(title);
+    assert.ok(this.frSessionId, "no gift given in this scenario");
+    const res = await fetch(`${BASE_URL}/api/fundraisers/${f.slug}/wall-message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: new URL(BASE_URL).origin },
+      body: JSON.stringify({ sessionId: this.frSessionId, message, showName: true, showAmount: true }),
+    });
+    this.frStatus = res.status;
+    this.frBody = await res.json().catch(() => ({}));
+  },
+);
+
 // The private area's steps (TASK-501) are in fundraising-private.steps.js.
 
 // ---- the admin side ----

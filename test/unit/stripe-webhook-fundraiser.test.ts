@@ -67,3 +67,19 @@ describe("a supporter's newsletter tick", () => {
     expect(onPage.donor.emailConsent).toBe(consent === "true");
   });
 });
+
+// TASK-502: the give form no longer sends a message or the wall choices, so the checkout stamps the
+// name off the wall and the amount on, with no message. The webhook reads that as it reads any
+// session: the gift goes on the wall as Anonymous with its amount until the giver chooses otherwise
+// on the thank you after paying.
+describe("a gift from the give form as it is now", () => {
+  it("is read with no message, the name off the wall and the amount on", () => {
+    expect(
+      fundraiserGiftFromCheckoutSession(session({ fundraiserId: "7", supporterMessage: "", showName: "false", showAmount: "true", giftAid: "true" })),
+    ).toEqual({ fundraiserId: 7, message: null, showName: false, showAmount: true });
+  });
+
+  it("keeps its Gift Aid on the donation, for the wall and the meter to show", () => {
+    expect(donationFromCheckoutSession(session({ fundraiserId: "7", giftAid: "true" })).donation.giftAid).toBe(true);
+  });
+});

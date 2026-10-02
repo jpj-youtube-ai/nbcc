@@ -104,7 +104,8 @@ const checkoutBodySchema = z
     // partnership and no-JS base contracts are unchanged.
     company: companyFieldsSchema.optional(),
     // TASK-493: a gift made on a community fundraiser's page (/fundraise/<slug>). The webhook links
-    // it to the fundraiser only if this names an APPROVED one; otherwise it is an ordinary donation.
+    // it to the fundraiser only if this names an APPROVED (or, TASK-502, FINISHED) one; otherwise it is
+    // an ordinary donation.
     // The message and the two wall choices mean nothing without it, so they are only stamped with it
     // (buildSessionParams), which keeps every donate page session exactly as it was.
     fundraiserId: z.number().int().positive().optional(),
@@ -316,7 +317,9 @@ export function buildSessionParams(
   if (body.fundraiserId !== undefined) {
     metadata.fundraiserId = String(body.fundraiserId);
     metadata.supporterMessage = body.supporterMessage ?? "";
-    metadata.showName = String(body.showName ?? true);
+    // TASK-502: the give form no longer asks, so the name stays off the wall until the giver chooses
+    // to show it on the thank you after paying. A page opened before then may still send a choice.
+    metadata.showName = String(body.showName ?? false);
     metadata.showAmount = String(body.showAmount ?? true);
   }
 
@@ -470,21 +473,24 @@ export function buildSessionParams(
 }
 
 // TASK-494: where a gift made on a fundraiser's page comes back to. The thank you is that page with
-// ?thanks=1 (and &message=1 when they left a message, so it can say the wall will show it); a
+// ?thanks=1 (and &message=1 when a page opened before TASK-502 sent a message with the gift); a
 // cancel on Stripe's own page goes back to the page itself.
+// TASK-502: and Stripe's {CHECKOUT_SESSION_ID} template, which Stripe fills in with the paid
+// session's id (so the braces must NOT be encoded), so the thank you can offer the optional step to
+// add a message to the wall, tied to that payment (POST /api/fundraisers/:slug/wall-message).
 function fundraiserReturnUrls(
   page: string,
   leftMessage: boolean,
   embedded: boolean,
 ): Pick<StripeNS.Checkout.SessionCreateParams, "ui_mode" | "return_url" | "success_url" | "cancel_url"> {
-  const thanks = `${page}?thanks=1${leftMessage ? "&message=1" : ""}`;
+  const thanks = `${page}?thanks=1${leftMessage ? "&message=1" : ""}&session_id={CHECKOUT_SESSION_ID}`;
   return embedded ? { ui_mode: "embedded_page", return_url: thanks } : { success_url: thanks, cancel_url: page };
 }
 
 /**
  * TASK-494: the page a fundraiser gift should come back to, from the fundraiser the gift names, or
- * null for anything without a public page right now: switched off, or not approved, public and
- * raising money. A failed read is null too: the gift still goes ahead, and comes back the donate
+ * null for anything without a public page right now: switched off, or not public and raising money,
+ * approved or (TASK-502) finished. A failed read is null too: the gift still goes ahead, and comes back the donate
  * page's way, rather than failing over where the giver lands.
  */
 export async function fundraiserReturnPage(fundraiserId: number | undefined): Promise<string | null> {

@@ -52,6 +52,8 @@
 }
 .fr-meter.is-over .fr-meter__fill { background: var(--holly); }
 .fr-meter__percent { margin: 0; font-size: 0.92rem; font-weight: 600; color: var(--holly); }
+/* TASK-502: the Gift Aid under the total, shown but never counted. Quieter than the total itself. */
+.fr-meter__giftaid { margin: -4px 0 0; font-size: 0.95rem; font-weight: 600; color: var(--holly-dark); font-variant-numeric: lining-nums tabular-nums; }
 .fr-meter--large .fr-meter__raised { font-size: clamp(2.2rem, 1.8rem + 1.6vw, 2.9rem); }
 .fr-meter--large .fr-meter__figures { font-size: 1.08rem; }
 .fr-meter--large .fr-meter__bar { height: 20px; }
@@ -93,10 +95,10 @@
 /* A text box grows with what is typed, never scrolls inside itself (Jaimie's rule). field-sizing
    does it where the browser can; the page scripts grow the box everywhere else. */
 textarea.give-field-input { min-height: 0; }
-.fr-form textarea, .fr-give-form textarea { field-sizing: content; min-height: 6.5em; resize: none; }
+.fr-form textarea, .fr-give-form textarea, .fr-after__form textarea { field-sizing: content; min-height: 6.5em; resize: none; }
 
 /* Forms that sit inside a card already: no second card around them. */
-.fr-give-form, .fr-form--plain { background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
+.fr-give-form, .fr-form--plain, .fr-after__form { background: none; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
 .fr-form, .fr-give-form { counter-reset: gq; }
 .fr-form .form-error-summary + .give-question, .fr-give-form .form-error-summary + .give-question { border-top: 0; padding-top: 6px; }
 .fr-form .form-error-summary + .give-question::before, .fr-give-form .form-error-summary + .give-question::before { top: 2px; }
@@ -252,7 +254,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-choice .give-donor-option:has(input:checked) { border-color: var(--holly); background: var(--holly-soft); }
 .fr-choice .give-donor-option:has(input:focus-visible) { outline: 3px solid var(--holly); outline-offset: 3px; }
 /* Tick box rows: at least 44px to tap, the whole row being the label. */
-.fr-form .give-check, .fr-give-form .give-check { min-height: 44px; align-items: flex-start; margin: 2px 0; padding: 11px 0; }
+.fr-form .give-check, .fr-give-form .give-check, .fr-after__form .give-check { min-height: 44px; align-items: flex-start; margin: 2px 0; padding: 11px 0; }
 .fr-message { resize: vertical; }
 .fr-declaration { margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); }
 
@@ -271,6 +273,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-wall__head { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 14px; }
 .fr-wall__who { font-weight: 600; font-size: 1.05rem; color: var(--maroon); overflow-wrap: anywhere; }
 .fr-wall__amount { font-family: var(--font-head); font-weight: 800; font-size: 1.15rem; color: var(--holly); font-variant-numeric: lining-nums tabular-nums; }
+.fr-wall__giftaid { font-family: var(--font-body, inherit); font-weight: 600; font-size: 0.92rem; color: var(--holly-dark); white-space: nowrap; }
 .fr-wall__msg { margin: 6px 0 0; font-size: 1rem; line-height: 1.6; overflow-wrap: anywhere; text-wrap: pretty; }
 .fr-wall__when { margin: 6px 0 0; font-size: 0.9rem; color: var(--slate-soft); }
 .fr-wall__empty { padding: 18px 20px; border: 1.6px dashed var(--line); border-radius: var(--radius); text-align: center; color: var(--slate-soft); }
@@ -328,7 +331,7 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-owner a { color: inherit; text-underline-offset: 3px; }
 
 /* A button that is busy sending says so in words; this makes it look it too. */
-.fr-form .btn:disabled, .fr-give-form .btn:disabled { opacity: 0.75; cursor: progress; transform: none; }
+.fr-form .btn:disabled, .fr-give-form .btn:disabled, .fr-after__form .btn:disabled { opacity: 0.75; cursor: progress; transform: none; }
 
 /* ---------- the thank you after paying ---------- */
 .fr-thanks-panel {
@@ -345,6 +348,38 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-thanks-panel h2 { font-size: clamp(1.4rem, 1.2rem + 0.9vw, 1.8rem); color: var(--holly-dark); text-wrap: balance; overflow-wrap: anywhere; }
 .fr-thanks-panel p { margin: 10px 0 0; color: var(--slate); }
 .fr-thanks-panel .fr-share__links { margin-top: 16px; }
+
+/* TASK-502: the optional step after paying, inside the thank you: a message for the wall and the
+   name and amount choices. The box grows with what is typed; nothing scrolls inside it. */
+.fr-after {
+  margin: 18px 0 4px;
+  padding: clamp(16px, 3vw, 22px);
+  border: 1.6px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--cream, #fff);
+}
+.fr-after__title { margin: 0; font-size: clamp(1.15rem, 1.05rem + 0.5vw, 1.35rem); color: var(--maroon); overflow-wrap: anywhere; text-wrap: balance; }
+.fr-after__title .give-optional { font-family: var(--font-body, inherit); font-size: 0.95rem; font-weight: 600; color: var(--slate-soft); }
+.fr-after > p { margin: 6px 0 14px; }
+.fr-after__form { display: grid; gap: 12px; }
+.fr-after__form .give-field-help { margin: 0; }
+.fr-after__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.fr-after__actions .btn { flex: 1 1 160px; justify-content: center; }
+.fr-after__skip::after { content: none; } /* closing, not going anywhere: no arrow */
+
+/* TASK-502: a finished fundraiser's page says so, and still takes gifts. */
+.fr-finished {
+  margin: 24px auto 0;
+  max-width: 640px;
+  padding: clamp(18px, 3vw, 24px);
+  border: 1.6px solid var(--holly);
+  border-radius: var(--radius-lg);
+  background: var(--holly-soft);
+  text-align: left;
+}
+.fr-finished__title { margin: 0; font-size: clamp(1.3rem, 1.15rem + 0.7vw, 1.6rem); color: var(--holly-dark); }
+.fr-finished p { margin: 8px 0 0; color: var(--slate); }
+.fr-finished a { font-weight: 600; }
 
 /* ---------- the manage page ---------- */
 .fr-waiting {

@@ -607,6 +607,30 @@ describe("approving, declining and finishing", () => {
     expect(q('[data-fraction="finish"]')).toBeNull();
   });
 
+  // TASK-502: a finished fundraiser's page stays up and still takes gifts, so the admin must not say
+  // finishing takes it off the website (staff would rely on that to take a page down).
+  it("says finishing takes it off the list, not off the website", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    await openFundraising();
+    await openRow(1);
+    confirmAnswer = false;
+    (q('[data-fraction="finish"]') as HTMLElement).click();
+    await settle();
+    expect(confirmed[0]).toContain("It comes off the Get involved list.");
+    expect(confirmed[0]).toContain("Its page stays up with a thank you banner and can still take gifts.");
+    expect(confirmed[0]).not.toContain("It comes off the website");
+  });
+
+  it("explains a finished fundraiser's page is still up, and how to take it down", async () => {
+    records = [fundraiser(1, { status: "finished" })];
+    await openFundraising();
+    await openRow(1);
+    const words = text(q(".fx-letter .fx-state"));
+    expect(words).toContain("its page stays up with a thank you banner and can still take gifts");
+    expect(words).toContain("To take the page down, make it not public.");
+    expect(words).not.toContain("no longer on the website");
+  });
+
   it("approves after asking, then shows it approved", async () => {
     records = [fundraiser(1)];
     await openFundraising();

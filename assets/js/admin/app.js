@@ -9360,7 +9360,7 @@
   function frStateWords(f) {
     if (f.status === "new") return "New: waiting for you to approve or decline it. Nothing about it is public until it is approved.";
     if (f.status === "declined") return "Declined. Nothing about it is public.";
-    if (f.status === "finished") return "Finished. It is no longer on the website, and what it raised stays in the records.";
+    if (f.status === "finished") return "Finished. It is off the Get involved list, but its page stays up with a thank you banner and can still take gifts. To take the page down, make it not public.";
     if (!f.public) return "Approved. They only wanted to let us know, or wanted materials, so it is not on the website.";
     if (f.path === "event") return "Approved. It is listed on Get involved as an event while fundraising is switched on.";
     return "Approved. Its page is on the website while fundraising is switched on.";
@@ -9825,6 +9825,7 @@
     "fundraiser.approved": "Approved",
     "fundraiser.declined": "Declined",
     "fundraiser.finished": "Marked finished",
+    "fundraiser.wall_message_added": "A giver added to the wall",
     "fundraiser.updated": "Details changed",
     "fundraiser.edit_requested": "The organiser asked for a change",
     "fundraiser.edit_approved": "Change approved",
@@ -9955,7 +9956,7 @@
             (!hasPage ? "a short note to say they are on our list." : "their page link, and the page goes on the website.")),
       decline: "Decline " + f.title + "?" + (f.status === "approved" ? " It comes off the website straight away." : "") +
         " They are not emailed, so tell them yourself if you need to.",
-      finish: "Mark " + f.title + " as finished? It comes off the website. What it raised stays in the records.",
+      finish: "Mark " + f.title + " as finished? It comes off the Get involved list. Its page stays up with a thank you banner and can still take gifts. What it raised stays in the records.",
     }[move];
     if (!window.confirm(question)) return;
     var body = {};

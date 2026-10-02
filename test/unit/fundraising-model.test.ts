@@ -215,6 +215,7 @@ describe("the meter", () => {
       raisedPence: 15000,
       onlinePence: 12000,
       cashPence: 3000,
+      giftAidPence: 0,
       targetPence: 50000,
       percent: 30,
       barPercent: 30,
@@ -275,8 +276,8 @@ describe("the supporter wall", () => {
       row({ donationId: 2, createdAt: "2026-10-02T10:00:00.000Z", fullName: "Sam Sample" }),
     ]);
     expect(wall).toEqual([
-      { name: "Sam S.", amountPence: 2000, message: "Go Robin!", createdAt: "2026-10-02T10:00:00.000Z" },
-      { name: "Alex E.", amountPence: 2000, message: "Go Robin!", createdAt: "2026-10-01T10:00:00.000Z" },
+      { name: "Sam S.", amountPence: 2000, giftAidPence: null, message: "Go Robin!", createdAt: "2026-10-02T10:00:00.000Z" },
+      { name: "Alex E.", amountPence: 2000, giftAidPence: null, message: "Go Robin!", createdAt: "2026-10-01T10:00:00.000Z" },
     ]);
   });
 
@@ -292,7 +293,7 @@ describe("the supporter wall", () => {
   // Staff hide the MESSAGE; the gift itself, with its name and amount rules, stays on the wall.
   it("never shows a hidden message, but keeps the gift on the wall", () => {
     expect(wallEntries([row({ hidden: true })])).toEqual([
-      { name: "Alex E.", amountPence: 2000, message: null, createdAt: "2026-10-02T10:00:00.000Z" },
+      { name: "Alex E.", amountPence: 2000, giftAidPence: null, message: null, createdAt: "2026-10-02T10:00:00.000Z" },
     ]);
   });
 

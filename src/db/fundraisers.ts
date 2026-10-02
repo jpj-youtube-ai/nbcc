@@ -9,12 +9,18 @@ import {
   meter,
   slugify,
   RESERVED_SLUGS,
+  wallEntries,
+  wallStepVerdict,
   type AdminPatch,
   type FundraiserEdit,
   type FundraiserRecord,
+  type GiftForSession,
   type Meter,
   type SignUp,
+  type WallEntry,
+  type WallMessage,
   type WallSourceRow,
+  type WallStepVerdict,
 } from "../fundraising/model";
 
 // TASK-493: the SQL behind community fundraising. The rules live in src/fundraising/model.ts; this
@@ -111,6 +117,12 @@ const ONLINE_SQL = `(SELECT COALESCE(SUM(GREATEST(d.amount_pence - d.refunded_am
                        FILTER (WHERE d.payment_status = 'paid'), 0)
                        FROM donations d WHERE d.fundraiser_id = f.id)`;
 const CASH_SQL = `(SELECT COALESCE(SUM(c.amount_pence), 0) FROM fundraiser_cash c WHERE c.fundraiser_id = f.id)`;
+// TASK-502: the Gift Aid shown under the meter, never added to it: a quarter of each paid gift that
+// claimed it, on what is left after any refund, rounded down per gift (integer division), never on
+// money the organiser paid in. The same sum as giftAidOnGifts in src/fundraising/model.ts.
+const GIFT_AID_SQL = `(SELECT COALESCE(SUM(GREATEST(d.amount_pence - d.refunded_amount_pence, 0) / 4)
+                       FILTER (WHERE d.payment_status = 'paid' AND d.gift_aid AND NOT d.paid_in_by_organiser), 0)
+                       FROM donations d WHERE d.fundraiser_id = f.id)`;
 const WAITING_SQL = `EXISTS (SELECT 1 FROM fundraiser_edits e WHERE e.fundraiser_id = f.id AND e.status = 'waiting')`;
 
 type Row = Record<string, unknown>;
@@ -182,7 +194,12 @@ export function toRecord(r: Row): FundraiserRecord {
 }
 
 const meterOf = (r: Row): Meter =>
-  meter({ onlinePence: Number(r.online_pence ?? 0), cashPence: Number(r.cash_pence ?? 0), targetPence: r.target_pence == null ? null : Number(r.target_pence) });
+  meter({
+    onlinePence: Number(r.online_pence ?? 0),
+    cashPence: Number(r.cash_pence ?? 0),
+    targetPence: r.target_pence == null ? null : Number(r.target_pence),
+    giftAidPence: Number(r.gift_aid_pence ?? 0),
+  });
 
 async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -354,7 +371,7 @@ async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promis
 
 const WITH_SUMS = SELECT.replace(
   "FROM fundraisers f",
-  `, ${ONLINE_SQL} AS online_pence, ${CASH_SQL} AS cash_pence, ${WAITING_SQL} AS edit_waiting FROM fundraisers f`,
+  `, ${ONLINE_SQL} AS online_pence, ${CASH_SQL} AS cash_pence, ${GIFT_AID_SQL} AS gift_aid_pence, ${WAITING_SQL} AS edit_waiting FROM fundraisers f`,
 );
 
 export async function getFundraiser(id: number): Promise<(FundraiserRecord & { meter: Meter; editWaiting: boolean }) | null> {
@@ -392,7 +409,8 @@ export async function getBySlug(slug: string): Promise<(FundraiserRecord & { met
 export async function wallRows(fundraiserId: number): Promise<WallSourceRow[]> {
   const r = await pool.query(
     `SELECT d.id, dn.full_name, dn.anonymous, d.show_name, d.show_amount, d.amount_pence,
-            d.refunded_amount_pence, d.supporter_message, d.message_hidden, d.created_at, d.paid_in_by_organiser
+            d.refunded_amount_pence, d.supporter_message, d.message_hidden, d.created_at, d.paid_in_by_organiser,
+            d.gift_aid
        FROM donations d JOIN donors dn ON dn.id = d.donor_id
       WHERE d.fundraiser_id = $1 AND d.payment_status = 'paid'
       ORDER BY d.created_at DESC, d.id DESC
@@ -411,6 +429,7 @@ export async function wallRows(fundraiserId: number): Promise<WallSourceRow[]> {
     hidden: Boolean(row.message_hidden),
     createdAt: iso(row.created_at) as string,
     paidIn: Boolean(row.paid_in_by_organiser),
+    giftAid: Boolean(row.gift_aid),
   }));
 }
 
@@ -825,12 +844,14 @@ export interface FundraiserGift {
 
 /**
  * Inside the webhook's transaction: put a gift on its fundraiser's page, but only when the id names
- * an APPROVED fundraiser. Anything else stays an ordinary donation (no link, no message), and the
- * audit row says so. Returns whether it was linked.
+ * an APPROVED or FINISHED fundraiser. Anything else (new, declined, or not there) stays an ordinary
+ * donation (no link, no message), and the audit row says so. Returns whether it was linked.
  *
  * TASK-501 review: money an organiser pays in is linked to an approved OR finished fundraiser, so
  * late money still reaches the meter (Jaimie's decision). And it keeps its paid in mark whatever
  * happens to the link, so it can never pass as a gift of the organiser's own.
+ * TASK-502: a supporter's gift too, as a finished fundraiser keeps its page and its give form for
+ * good ("the link for giving works indefinitely").
  */
 export async function linkFundraiserGift(
   client: PoolClient,
@@ -842,7 +863,7 @@ export async function linkFundraiserGift(
     gift.fundraiserId,
   ]);
   const status = found.rows[0]?.status;
-  const linkable = status === "approved" || (gift.paidIn === true && status === "finished");
+  const linkable = status === "approved" || status === "finished";
   if (!linkable) {
     if (gift.paidIn) await client.query("UPDATE donations SET paid_in_by_organiser = true WHERE id = $1", [donationId]);
     await insertAudit(client, {
@@ -874,4 +895,89 @@ export async function linkFundraiserGift(
     data: { eventId, donationId },
   });
   return true;
+}
+
+// --- the message after paying (TASK-502) ---------------------------------------------------------
+
+const GIFT_FOR_SESSION = `SELECT id, fundraiser_id, paid_in_by_organiser, payment_status, supporter_message, wall_added_at
+  FROM donations WHERE stripe_session_id = $1 ORDER BY id DESC LIMIT 1`;
+
+function toGiftForSession(row: Row): GiftForSession {
+  return {
+    donationId: Number(row.id),
+    fundraiserId: row.fundraiser_id == null ? null : Number(row.fundraiser_id),
+    paidIn: Boolean(row.paid_in_by_organiser),
+    paymentStatus: String(row.payment_status ?? ""),
+    message: textOrNull(row.supporter_message),
+    wallAddedAt: iso(row.wall_added_at),
+  };
+}
+
+/**
+ * The gift a Stripe checkout session paid for, as the thank you's wall step needs to judge it, or
+ * null while the webhook has not recorded it. Nothing about the giver is read.
+ */
+export async function giftForSession(sessionId: string): Promise<GiftForSession | null> {
+  const r = await pool.query(GIFT_FOR_SESSION, [sessionId]);
+  return r.rows[0] ? toGiftForSession(r.rows[0]) : null;
+}
+
+/**
+ * The giver's message and wall choices, added from the thank you after paying. Under the gift's row
+ * lock it must be a gift on THIS fundraiser that has gone through (or a Direct Debit settling), not
+ * money paid in, and never added to before (wallStepVerdict). Saved once: wall_added_at marks it, and
+ * the update is held to rows not yet marked as well, so two sends at once save one. Staff can still
+ * hide the message as before. Returns the verdict and, once saved and paid, what the wall now shows.
+ */
+export async function addWallMessage(
+  sessionId: string,
+  fundraiserId: number,
+  input: Pick<WallMessage, "message" | "showName" | "showAmount">,
+): Promise<{ verdict: WallStepVerdict; entry: WallEntry | null }> {
+  return inTransaction(async (client) => {
+    const r = await client.query(
+      `SELECT d.id, d.fundraiser_id, d.paid_in_by_organiser, d.payment_status, d.supporter_message, d.wall_added_at,
+              dn.full_name, dn.anonymous, d.amount_pence, d.refunded_amount_pence, d.gift_aid, d.created_at
+         FROM donations d JOIN donors dn ON dn.id = d.donor_id
+        WHERE d.stripe_session_id = $1
+        ORDER BY d.id DESC LIMIT 1
+          FOR UPDATE OF d`,
+      [sessionId],
+    );
+    const row = r.rows[0];
+    const verdict = wallStepVerdict(row ? toGiftForSession(row) : null, fundraiserId);
+    if (verdict !== "ok") return { verdict, entry: null };
+    const message = input.message.trim() === "" ? null : input.message.trim();
+    await client.query(
+      `UPDATE donations SET supporter_message = $1, show_name = $2, show_amount = $3, wall_added_at = now()
+        WHERE id = $4 AND wall_added_at IS NULL`,
+      [message, input.showName, input.showAmount, Number(row.id)],
+    );
+    await insertAudit(client, {
+      actor: "giver",
+      action: "fundraiser.wall_message_added",
+      entity: "fundraiser",
+      entityId: fundraiserId,
+      data: { donationId: Number(row.id), withMessage: message !== null, showName: input.showName, showAmount: input.showAmount },
+    });
+    const [entry] =
+      row.payment_status === "paid"
+        ? wallEntries([
+            {
+              donationId: Number(row.id),
+              fullName: String(row.full_name ?? ""),
+              anonymous: Boolean(row.anonymous),
+              showName: input.showName,
+              showAmount: input.showAmount,
+              amountPence: Number(row.amount_pence),
+              refundedPence: Number(row.refunded_amount_pence ?? 0),
+              message,
+              hidden: false,
+              createdAt: iso(row.created_at) as string,
+              giftAid: Boolean(row.gift_aid),
+            },
+          ])
+        : [];
+    return { verdict, entry: entry ?? null };
+  });
 }

@@ -147,16 +147,18 @@ describe("tap targets on the fundraising forms", () => {
   const css = readFileSync(resolve(ROOT, "assets/css/fundraising.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
 
   it("make every tick box row at least 44px tall", () => {
-    expect(css).toMatch(/\.fr-form \.give-check,\s*\.fr-give-form \.give-check\s*\{[^}]*min-height:\s*44px/);
+    expect(css).toMatch(/\.fr-form \.give-check,\s*\.fr-give-form \.give-check,\s*\.fr-after__form \.give-check\s*\{[^}]*min-height:\s*44px/);
   });
 
+  // TASK-502: the name choice moved to the thank you after paying.
   it("make the whole of each name choice a tap target (the label is the pill)", async () => {
     const { renderFundraiserPage } = await import("../../src/fundraising/render");
     const html = renderFundraiserPage(readFileSync(resolve(ROOT, "fundraiser.html"), "utf8"), {
       ...fundraiser("x", "X"), wall: [], giving: { fundraiserId: 1, minimumPence: 200 },
-    }, { pageUrl: "https://nbcc.test/fundraise/x", now: new Date() });
+    }, { pageUrl: "https://nbcc.test/fundraise/x", now: new Date(), thanks: { message: false, sessionId: "cs_test_tap1" } });
     const d = new DOMParser().parseFromString(html, "text/html");
     for (const id of ["frShowNameYes", "frShowNameNo"]) {
+      expect(d.getElementById(id), id).not.toBeNull();
       expect(d.getElementById(id)?.closest("label.give-donor-option"), id).not.toBeNull();
     }
   });

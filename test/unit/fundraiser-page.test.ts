@@ -7,14 +7,15 @@ import { renderFundraiserPage } from "../../src/fundraising/render";
 import { meter, type PublicPage, type WallEntry } from "../../src/fundraising/model";
 
 // TASK-494: a fundraiser's page in the browser. The give form builds the donate page's checkout
-// body plus the fundraiser's four fields and opens Stripe the way the donate page does (on the page
-// first, Stripe's own page if that cannot work); the wall shows ten then Show all; the share button
-// copies the link. Every name, address and number here is invented.
+// body plus the fundraiser and opens Stripe the way the donate page does (on the page first,
+// Stripe's own page if that cannot work); the wall shows ten then Show all; the share button copies
+// the link. TASK-502: the message and the wall choices moved from the give form to an optional step
+// on the thank you after paying. Every name, address and number here is invented.
 
 const ROOT = resolve(__dirname, "../..");
 const require = createRequire(import.meta.url);
 const shared = require(resolve(ROOT, "assets/js/main.js"));
-const { initGiveForm, initWall, initShare } = require(resolve(ROOT, "assets/js/fundraiser.js"));
+const { initGiveForm, initWall, initShare, initThanks, initWallStep } = require(resolve(ROOT, "assets/js/fundraiser.js"));
 const template = readFileSync(resolve(ROOT, "fundraiser.html"), "utf8");
 
 const wallEntry = (i: number): WallEntry => ({
@@ -42,6 +43,7 @@ const page = (wall: WallEntry[] = []): PublicPage => ({
   meter: meter({ onlinePence: 0, cashPence: 0, targetPence: 25000 }),
   wall,
   giving: { fundraiserId: 41, minimumPence: 200 },
+  finished: false,
 });
 
 let calls: Array<{ url: string; body: Record<string, unknown> }>;
@@ -153,23 +155,12 @@ describe("Gift Aid", () => {
   });
 });
 
-describe("the message", () => {
-  it("counts down from 200", () => {
-    load();
-    type("frMessage", "Go Robin");
-    expect($("[data-message-count]").textContent).toBe("192 characters left.");
-  });
-});
-
 describe("the checkout body", () => {
-  it("is the donate page's one off gift, plus the fundraiser, the message and the two wall choices", async () => {
+  it("is the donate page's one off gift, plus the fundraiser, and nothing for the wall", async () => {
     load();
     choose(2000);
     fillDetails();
     tick("frEmailConsent");
-    type("frMessage", "  Go Robin  ");
-    tick("frShowNameNo");
-    tick("frShowAmount", false);
     tick("frCoverFee");
     await submit();
     expect(calls).toHaveLength(1);
@@ -185,9 +176,6 @@ describe("the checkout body", () => {
       email: "alex@example.com",
       emailConsent: true,
       fundraiserId: 41,
-      supporterMessage: "Go Robin",
-      showName: false,
-      showAmount: false,
     });
     expect(assigned).toBe("https://checkout.stripe.test/session");
   });
@@ -224,14 +212,11 @@ describe("the checkout body", () => {
     expect($("#frHouse").getAttribute("aria-invalid")).toBe("true");
   });
 
-  it("leaves out an empty message", async () => {
+  it("has no message box, and no name or amount choices", () => {
     load();
-    choose(1000);
-    fillDetails();
-    await submit();
-    expect(calls[0].body).not.toHaveProperty("supporterMessage");
-    expect(calls[0].body.showName).toBe(true);
-    expect(calls[0].body.showAmount).toBe(true);
+    expect(document.getElementById("frMessage")).toBeNull();
+    expect(document.getElementById("frShowNameYes")).toBeNull();
+    expect(document.getElementById("frShowAmount")).toBeNull();
   });
 
   it("opens Stripe on the page when it can, exactly as the donate page does", async () => {
@@ -268,32 +253,16 @@ describe("the checkout body", () => {
     expect(assigned).toBe("https://checkout.stripe.test/session");
   });
 
-  it("puts the server's message about the supporter's message next to the message box", async () => {
+  it("says plainly when the server refuses the form, and lets them try again", async () => {
     load();
     choose(1000);
     fillDetails();
-    type("frMessage", "something rude");
-    answer = {
-      status: 400,
-      body: {
-        error: "Invalid checkout request",
-        details: { fieldErrors: { supporterMessage: ["Please choose different words for your message."] } },
-      },
-    };
+    answer = { status: 400, body: { error: "Invalid checkout request", details: { fieldErrors: { email: ["a valid email is required"] } } } };
     await submit();
-    expect($("#frMessage").getAttribute("aria-invalid")).toBe("true");
-    expect(document.getElementById("frMessage-error")?.textContent).toBe("Please choose different words for your message.");
+    expect($("[data-give-error]").hidden).toBe(false);
+    expect($("[data-give-error]").textContent).toMatch(/needs another look/);
     expect(assigned).toBeNull();
     expect($<HTMLButtonElement>("[data-give-submit]").disabled).toBe(false);
-  });
-
-  it("also understands a plain fields answer for the message", async () => {
-    load();
-    choose(1000);
-    fillDetails();
-    answer = { status: 400, body: { error: "Please choose different words.", fields: { supporterMessage: "Please choose different words." } } };
-    await submit();
-    expect(document.getElementById("frMessage-error")?.textContent).toBe("Please choose different words.");
   });
 
   it("says plainly when payment is not available, and keeps what they typed", async () => {
@@ -356,3 +325,142 @@ describe("once the script runs", () => {
     expect($("[data-nojs]").hidden).toBe(true);
   });
 });
+
+// --- the thank you after paying (TASK-502) ---------------------------------------------------------
+
+const SESSION = "cs_test_a1B2c3D4e5";
+let replaced: string[];
+
+function loadThanks(opts: { sessionId?: string | null; finished?: boolean } = { sessionId: SESSION }) {
+  const html = renderFundraiserPage(template, { ...page(), finished: Boolean(opts.finished) }, {
+    pageUrl: "https://nbcc.test/fundraise/robins-santa-dash",
+    now: new Date(Date.UTC(2026, 9, 2)),
+    thanks: { message: false, sessionId: opts.sessionId ?? null },
+  });
+  document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
+  calls = [];
+  assigned = null;
+  replaced = [];
+  answer = { status: 200, body: { status: "added", entry: null } };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w = window as any;
+  w.fetch = vi.fn((url: string, init: RequestInit) => {
+    calls.push({ url, body: JSON.parse(String(init.body)) });
+    return Promise.resolve({ ok: answer.status === 200, status: answer.status, json: () => Promise.resolve(answer.body) });
+  });
+  const win = {
+    fetch: w.fetch,
+    location: { pathname: "/fundraise/robins-santa-dash", search: `?thanks=1&session_id=${SESSION}` },
+    history: { replaceState: (_s: unknown, _t: string, url: string) => replaced.push(url) },
+    NBCCFormValidation: { validateForm: shared.validateForm, clearValidation: shared.clearValidation },
+  };
+  const nav = { assign: (u: string) => (assigned = u) };
+  initThanks(document, win);
+  return initWallStep(document, win, nav);
+}
+
+const sendStep = async () => {
+  $("#frWallForm").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  await flush();
+};
+
+describe("the thank you after paying", () => {
+  it("takes the payment's id out of the address bar, keeping the thank you", () => {
+    loadThanks();
+    expect(replaced).toEqual(["/fundraise/robins-santa-dash?thanks=1"]);
+  });
+
+  it("shows the optional step once the script can send it", () => {
+    loadThanks();
+    const step = $<HTMLElement>("[data-wall-step]");
+    expect(step.hidden).toBe(false);
+    expect(step.textContent).toContain("Add a message to Robin's wall");
+    expect(step.textContent).toContain("(optional)");
+  });
+
+  it("counts the message down from 200", () => {
+    loadThanks();
+    type("frMessage", "Go Robin");
+    expect($("[data-message-count]").textContent).toBe("192 characters left.");
+  });
+
+  it("sends the words and the two choices with the payment's id, to this page's wall", async () => {
+    loadThanks();
+    type("frMessage", "  Go Robin  ");
+    tick("frShowNameNo");
+    tick("frShowAmount", false);
+    await sendStep();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/fundraisers/robins-santa-dash/wall-message");
+    expect(calls[0].body).toEqual({ sessionId: SESSION, message: "Go Robin", showName: false, showAmount: false });
+  });
+
+  it("shows the name and the amount unless they choose otherwise", async () => {
+    loadThanks();
+    await sendStep();
+    expect(calls[0].body).toEqual({ sessionId: SESSION, message: "", showName: true, showAmount: true });
+  });
+
+  it("once saved, opens the page again with the thank you and the wall as it now is", async () => {
+    loadThanks();
+    type("frMessage", "Go Robin");
+    await sendStep();
+    expect(assigned).toBe("/fundraise/robins-santa-dash?thanks=1&added=1");
+  });
+
+  it("says what the server says when it is too early, and lets them try again", async () => {
+    loadThanks();
+    answer = { status: 409, body: { error: "Your payment is still being confirmed. Please try again in a moment.", code: "confirming" } };
+    await sendStep();
+    expect($("[data-wall-error]").hidden).toBe(false);
+    expect($("[data-wall-error]").textContent).toBe("Your payment is still being confirmed. Please try again in a moment.");
+    expect($<HTMLButtonElement>("[data-wall-submit]").disabled).toBe(false);
+    expect(assigned).toBeNull();
+  });
+
+  it("puts a refusal of the words beside the message box", async () => {
+    loadThanks();
+    type("frMessage", "something rude");
+    answer = { status: 400, body: { error: "Please check your message and try again", fields: { message: "Please choose different words for your message on the supporter wall." } } };
+    await sendStep();
+    expect($("#frMessage").getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById("frMessage-error")?.textContent).toBe("Please choose different words for your message on the supporter wall.");
+  });
+
+  it("says plainly when it cannot reach us", async () => {
+    const step = loadThanksWithFetch(vi.fn(() => Promise.reject(new Error("offline"))));
+    expect(step).not.toBeNull();
+    await sendStep();
+    expect($("[data-wall-error]").textContent).toMatch(/try again/);
+  });
+
+  it("No thanks simply closes it", () => {
+    loadThanks();
+    $<HTMLButtonElement>("[data-wall-skip]").click();
+    expect($<HTMLElement>("[data-wall-step]").hidden).toBe(true);
+    expect(calls).toHaveLength(0);
+    expect(document.activeElement).toBe($("[data-thanks-panel]"));
+  });
+
+  it("is not there without the payment's id", () => {
+    expect(loadThanks({ sessionId: null })).toBeNull();
+    expect(document.querySelector("[data-wall-step]")).toBeNull();
+  });
+
+  it("works the same on a finished fundraiser's page", async () => {
+    loadThanks({ sessionId: SESSION, finished: true });
+    await sendStep();
+    expect(calls[0].url).toBe("/api/fundraisers/robins-santa-dash/wall-message");
+  });
+});
+
+function loadThanksWithFetch(fetchImpl: ReturnType<typeof vi.fn>) {
+  const html = renderFundraiserPage(template, page(), {
+    pageUrl: "https://nbcc.test/fundraise/robins-santa-dash",
+    now: new Date(Date.UTC(2026, 9, 2)),
+    thanks: { message: false, sessionId: SESSION },
+  });
+  document.documentElement.innerHTML = new DOMParser().parseFromString(html, "text/html").documentElement.innerHTML;
+  const win = { fetch: fetchImpl, location: { pathname: "/fundraise/robins-santa-dash", search: "" }, history: { replaceState: () => {} } };
+  return initWallStep(document, win, { assign: () => {} });
+}

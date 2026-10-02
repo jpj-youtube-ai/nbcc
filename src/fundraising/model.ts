@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ACCESS, isSafeImageSrc, isWebAddress } from "../events/model";
 import { isValidUkPostcode } from "../declarations/fields";
+import { containsBlockedWord } from "../donors/display-name-filter";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -553,10 +554,33 @@ export function giftNetPence(amountPence: number, refundedPence: number): number
   return Math.max(0, amountPence - Math.max(0, refundedPence));
 }
 
+/**
+ * TASK-502: the Gift Aid on one gift, shown beside it and under the meter: a quarter of the gift (the
+ * basic rate value HMRC adds to every pound), rounded DOWN to whole pence so it is never overstated.
+ * Shown only: Gift Aid never counts towards the raised figure, the target or the percentage.
+ */
+export function giftAidPence(netPence: number): number {
+  return Math.floor(Math.max(0, netPence) / 4);
+}
+
+/**
+ * TASK-502: the Gift Aid under the meter: every paid online gift that claimed it, each on what is
+ * left after any refund, rounded per gift. Money the organiser paid in never counts (it is not their
+ * own gift, and never claims it). A gift whose amount is hidden on the wall still counts, as it does
+ * in the raised figure. src/db/fundraisers.ts (GIFT_AID_SQL) sums exactly this in SQL.
+ */
+export function giftAidOnGifts(rows: Array<Pick<WallSourceRow, "amountPence" | "refundedPence" | "giftAid" | "paidIn">>): number {
+  return rows
+    .filter((r) => r.giftAid && !r.paidIn)
+    .reduce((sum, r) => sum + giftAidPence(giftNetPence(r.amountPence, r.refundedPence)), 0);
+}
+
 export interface Meter {
   raisedPence: number;
   onlinePence: number;
   cashPence: number;
+  /** TASK-502: the Gift Aid on the gifts, shown under the total. Never part of raisedPence. */
+  giftAidPence: number;
   targetPence: number | null;
   /** Whole percent of the target, rounded down; can pass 100. Null when there is no target. */
   percent: number | null;
@@ -565,7 +589,7 @@ export interface Meter {
   overTarget: boolean;
 }
 
-export function meter(input: { onlinePence: number; cashPence: number; targetPence: number | null }): Meter {
+export function meter(input: { onlinePence: number; cashPence: number; targetPence: number | null; giftAidPence?: number }): Meter {
   const onlinePence = Math.max(0, input.onlinePence);
   const cashPence = Math.max(0, input.cashPence);
   const raisedPence = onlinePence + cashPence;
@@ -575,6 +599,7 @@ export function meter(input: { onlinePence: number; cashPence: number; targetPen
     raisedPence,
     onlinePence,
     cashPence,
+    giftAidPence: Math.max(0, Math.floor(input.giftAidPence ?? 0)),
     targetPence: target,
     percent,
     barPercent: percent === null ? null : Math.min(100, percent),
@@ -610,11 +635,15 @@ export interface WallSourceRow {
   createdAt: string;
   /** TASK-501: money the organiser collected and paid in. On the meter, never on the wall. */
   paidIn?: boolean;
+  /** TASK-502: the gift claimed Gift Aid. */
+  giftAid?: boolean;
 }
 
 export interface WallEntry {
   name: string;
   amountPence: number | null;
+  /** TASK-502: the Gift Aid on it, only when the amount shows and it claimed Gift Aid. */
+  giftAidPence?: number | null;
   message: string | null;
   createdAt: string;
 }
@@ -632,13 +661,72 @@ export function wallEntries(rows: WallSourceRow[]): WallEntry[] {
   return rows
     .filter((r) => !r.paidIn && giftNetPence(r.amountPence, r.refundedPence) > 0)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.donationId - a.donationId))
-    .map((r) => ({
-      name: r.showName && !r.anonymous && r.fullName.trim().toLowerCase() !== REDACTED_NAME ? shortName(r.fullName) : "Anonymous",
-      amountPence: r.showAmount ? giftNetPence(r.amountPence, r.refundedPence) : null,
-      message: !r.hidden && r.message && r.message.trim() !== "" ? r.message.trim() : null,
-      createdAt: r.createdAt,
-    }));
+    .map((r) => {
+      const net = giftNetPence(r.amountPence, r.refundedPence);
+      const aid = r.showAmount && r.giftAid ? giftAidPence(net) : 0;
+      return {
+        name: r.showName && !r.anonymous && r.fullName.trim().toLowerCase() !== REDACTED_NAME ? shortName(r.fullName) : "Anonymous",
+        amountPence: r.showAmount ? net : null,
+        giftAidPence: aid > 0 ? aid : null,
+        message: !r.hidden && r.message && r.message.trim() !== "" ? r.message.trim() : null,
+        createdAt: r.createdAt,
+      };
+    });
 }
+
+// --- the message after paying (TASK-502) ---------------------------------------------------------
+
+/**
+ * A Stripe Checkout Session id, as Stripe puts it in the address it sends a giver back to:
+ * cs_test_..., cs_live_..., or the offline stub's cs_preview_N. Letters, digits and underscores only,
+ * so it is safe in an attribute, and never Stripe's unfilled placeholder.
+ */
+export function isCheckoutSessionId(value: unknown): value is string {
+  return typeof value === "string" && /^cs_[A-Za-z0-9_]{1,250}$/.test(value);
+}
+
+/** The gift a checkout session paid for, as the wall step needs to judge it. */
+export interface GiftForSession {
+  donationId: number;
+  fundraiserId: number | null;
+  paidIn: boolean;
+  paymentStatus: string;
+  message: string | null;
+  wallAddedAt: string | null;
+}
+
+export type WallStepVerdict = "ok" | "not_recorded" | "not_found" | "paid_in" | "unpaid" | "already";
+
+/**
+ * May the giver behind this checkout session add a message and their choices to this fundraiser's
+ * wall? Only for a gift on THIS fundraiser, never money the organiser paid in, only once the payment
+ * has gone through (or while a Direct Debit is settling: the wall shows a gift only once it is paid),
+ * and only once: never a second time, and never over a message left on the give form before TASK-502.
+ * Null (the webhook has not recorded the payment yet) is "not_recorded": the caller asks Stripe.
+ */
+export function wallStepVerdict(gift: GiftForSession | null, fundraiserId: number): WallStepVerdict {
+  if (!gift) return "not_recorded";
+  if (gift.fundraiserId !== fundraiserId) return "not_found";
+  if (gift.paidIn) return "paid_in";
+  if (gift.paymentStatus !== "paid" && gift.paymentStatus !== "pending") return "unpaid";
+  if (gift.wallAddedAt || (gift.message !== null && gift.message.trim() !== "")) return "already";
+  return "ok";
+}
+
+export const WALL_MESSAGE_REFUSED = "Please choose different words for your message on the supporter wall.";
+
+/** What the thank you's optional step sends: the session, the words, and the two wall choices. */
+export const wallMessageSchema = z.object({
+  sessionId: z.string({ required_error: "We could not find your payment." }).refine(isCheckoutSessionId, "We could not find your payment."),
+  message: z
+    .preprocess(blankable, z.string().max(MESSAGE_MAX, `Keep your message to ${MESSAGE_MAX} characters or fewer.`))
+    .refine((v) => !containsBlockedWord(v), WALL_MESSAGE_REFUSED),
+  // Matches checkout: a giver's name stays off the wall unless they choose to show it (Jaimie, 2026-10-02).
+  showName: z.boolean().default(false),
+  showAmount: z.boolean().default(true),
+});
+
+export type WallMessage = z.infer<typeof wallMessageSchema>;
 
 // --- the record, and what the public sees of it --------------------------------------------------
 
@@ -733,6 +821,8 @@ export interface PublicCard extends Partial<PublicEventAnswers> {
 export interface PublicPage extends PublicCard {
   wall: WallEntry[];
   giving: { fundraiserId: number; minimumPence: number };
+  /** TASK-502: finished, so the page says so and still takes gifts under "You can still give". */
+  finished?: boolean;
 }
 
 /** Built field by field, so nothing private (email, phone, address, notes) can reach the public. */
@@ -770,7 +860,12 @@ export function publicCard(f: FundraiserRecord, m: Meter): PublicCard {
 }
 
 export function publicPage(f: FundraiserRecord, m: Meter, wall: WallEntry[]): PublicPage {
-  return { ...publicCard(f, m), wall, giving: { fundraiserId: f.id, minimumPence: GIFT_MIN_PENCE } };
+  return {
+    ...publicCard(f, m),
+    wall,
+    giving: { fundraiserId: f.id, minimumPence: GIFT_MIN_PENCE },
+    finished: f.status === "finished",
+  };
 }
 
 /** Is it on the public side at all? Approved and public; an event drops off after its day. */
@@ -780,7 +875,11 @@ export function isListed(f: Pick<FundraiserRecord, "status" | "public" | "path" 
   return true;
 }
 
-/** Does it have a page of its own? Approved, public and raising money. */
+/**
+ * Does it have a page of its own? Public and raising money, and approved, or finished: TASK-502 keeps
+ * a finished fundraiser's page at the same address for good, so the giving link on a poster or a
+ * social media post still works. A finished one is no longer listed on Get involved (isListed).
+ */
 export function hasPage(f: Pick<FundraiserRecord, "status" | "public" | "path">): boolean {
-  return f.status === "approved" && f.public && f.path === "raising";
+  return (f.status === "approved" || f.status === "finished") && f.public && f.path === "raising";
 }

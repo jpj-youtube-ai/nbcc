@@ -363,8 +363,8 @@ describe("the private area", () => {
     const res = await run(getManageSession, { cookie: SAM });
     const gifts = (res.body as { fundraisers: Array<{ gifts: unknown[] }> }).fundraisers[0].gifts;
     expect(gifts).toEqual([
-      { name: "Anonymous", amountPence: null, message: null, createdAt: "2026-10-02T13:00:00.000Z" },
-      { name: "Alex E.", amountPence: 2500, message: "Go Sam", createdAt: "2026-10-02T12:00:00.000Z" },
+      { name: "Anonymous", amountPence: null, giftAidPence: null, message: null, createdAt: "2026-10-02T13:00:00.000Z" },
+      { name: "Alex E.", amountPence: 2500, giftAidPence: null, message: "Go Sam", createdAt: "2026-10-02T12:00:00.000Z" },
     ]);
     const all = JSON.stringify(res.body);
     expect(all).not.toContain("Alex Example");

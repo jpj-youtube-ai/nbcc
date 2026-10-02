@@ -43,23 +43,38 @@ describe("a gift on a fundraiser's page comes back to that page", () => {
   it("on the page (embedded), with a thank you", async () => {
     await run({ ...gift, uiMode: "embedded", fundraiserId: 7 });
     expect(getFundraiser).toHaveBeenCalledWith(7);
-    expect(params().return_url).toBe(`${PAGE}?thanks=1`);
+    expect(params().return_url).toBe(`${PAGE}?thanks=1&session_id={CHECKOUT_SESSION_ID}`);
     expect(params().success_url).toBeUndefined();
   });
 
+  // A page opened before TASK-502 may still send a message with the gift.
   it("says when they left a message, so the thank you can mention the wall", async () => {
     await run({ ...gift, uiMode: "embedded", fundraiserId: 7, supporterMessage: "Go Robin" });
-    expect(params().return_url).toBe(`${PAGE}?thanks=1&message=1`);
+    expect(params().return_url).toBe(`${PAGE}?thanks=1&message=1&session_id={CHECKOUT_SESSION_ID}`);
+  });
+
+  // TASK-502: Stripe fills in the paid session's id, so the thank you can offer the wall step.
+  it("carries Stripe's session id placeholder, unencoded, for Stripe to fill in", async () => {
+    await run({ ...gift, fundraiserId: 7 });
+    expect(params().success_url).toContain("session_id={CHECKOUT_SESSION_ID}");
+    expect(params().success_url).not.toContain("%7B");
+  });
+
+  // TASK-502: a finished fundraiser keeps its page and still takes gifts.
+  it("comes back to a finished fundraiser's page too", async () => {
+    getFundraiser.mockResolvedValueOnce({ ...approved, status: "finished" });
+    await run({ ...gift, uiMode: "embedded", fundraiserId: 7 });
+    expect(params().return_url).toBe(`${PAGE}?thanks=1&session_id={CHECKOUT_SESSION_ID}`);
   });
 
   it("on Stripe's own page (hosted): success to the thank you, cancel back to the page", async () => {
     await run({ ...gift, fundraiserId: 7 });
-    expect(params().success_url).toBe(`${PAGE}?thanks=1`);
+    expect(params().success_url).toBe(`${PAGE}?thanks=1&session_id={CHECKOUT_SESSION_ID}`);
     expect(params().cancel_url).toBe(PAGE);
   });
 
   it("goes back to the donate page's thank you for a fundraiser with no public page", async () => {
-    for (const f of [null, { ...approved, status: "new" }, { ...approved, public: false }, { ...approved, path: "event" }]) {
+    for (const f of [null, { ...approved, status: "new" }, { ...approved, status: "declined" }, { ...approved, public: false }, { ...approved, path: "event" }]) {
       getFundraiser.mockResolvedValueOnce(f);
       await run({ ...gift, uiMode: "embedded", fundraiserId: 7 });
       expect(params().return_url).toBe(thankYouReturnUrl("once", "individual"));

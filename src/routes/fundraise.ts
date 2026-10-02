@@ -13,6 +13,7 @@ import {
   publicPage,
   signUpSchema,
   wallEntries,
+  wallMessageSchema,
   type FundraiserRecord,
   type Meter,
 } from "../fundraising/model";
@@ -31,6 +32,7 @@ import {
   sessionCookieOptions,
 } from "../fundraising/sign-in";
 import {
+  addWallMessage,
   createFundraiser,
   fundraisingIsOn,
   getBySlug,
@@ -56,6 +58,9 @@ import { config } from "../config";
 //   GET  /api/fundraise/captcha             the Turnstile site key for the form, or null
 //   GET  /api/fundraisers                   approved public fundraisers for Get involved, with meters
 //   GET  /api/fundraisers/:slug             one fundraiser's page: meter, wall, what giving needs
+//   POST /api/fundraisers/:slug/wall-message  TASK-502: the giver's message and wall choices, added
+//                                           from the thank you after paying, tied to the paid
+//                                           Stripe checkout session, once
 //
 // TASK-501, the private area at /fundraise/manage, signed in with an emailed code:
 //   POST /api/fundraise/manage/request      { email }: always the same answer; emails a 6 digit code
@@ -157,6 +162,94 @@ export async function getFundraiserPage(req: Request, res: Response): Promise<Re
   } catch (err) {
     console.error("fundraiser page failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "This page is temporarily unavailable" });
+  }
+}
+
+// --- the message after paying (TASK-502) ---------------------------------------------------------
+//
+// The give form no longer asks for a message or the wall choices. After paying, the giver comes back
+// to the page with Stripe's checkout session id in the address (?session_id=, which Stripe fills in;
+// src/routes/api.ts), and the thank you offers an optional step. What makes it safe:
+//   - the session id is the only key. It is opaque (Stripe's own), and only the giver's browser has
+//     it: the page takes it out of the address bar as soon as it loads;
+//   - the gift the webhook recorded for that session must be on THIS fundraiser, gone through (or a
+//     Direct Debit settling), not money the organiser paid in, and never added to before
+//     (wallStepVerdict, under the row's lock in addWallMessage). One message per gift: it cannot be
+//     changed afterwards by the giver, and staff can still hide it as before;
+//   - before the webhook lands Stripe is asked, so a real giver hears "try again in a moment", and a
+//     session that is unpaid, for another fundraiser, or a pay in is refused like an unknown one;
+//   - the words go through the same rude words check as the give form's did;
+//   - limited per address and per session, and refused when another website's page sends it.
+// Nothing about the giver is ever returned except what the wall itself now shows for their gift.
+
+// Adding to the wall: 10 in 15 minutes from one address, 10 for one session (room to retry while a
+// slow payment is still being confirmed).
+const wallIpLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60_000 });
+const wallSessionLimiter = createRateLimiter({ max: 10, windowMs: 15 * 60_000 });
+
+const GIFT_NOT_FOUND = { error: "We could not find that gift. If you have just paid, please try again in a moment." };
+const CONFIRMING = { error: "Your payment is still being confirmed. Please try again in a moment.", code: "confirming" };
+const ALREADY = { error: "You have already added to the wall for this gift. Thank you!", code: "already" };
+const UNPAID = { error: "That payment has not gone through, so there is nothing to add to the wall.", code: "unpaid" };
+const WALL_TRY_LATER = { error: "We could not save that just now. Please try again in a moment." };
+
+/**
+ * The webhook has not recorded this session's gift yet. Stripe's word on it decides the answer: a
+ * completed session for this fundraiser's page (not a pay in) is a real giver who is a moment early;
+ * anything else reads as not found. Stripe out of reach: try again.
+ */
+async function answerForUnrecorded(res: Response, sessionId: string, fundraiserId: number): Promise<Response> {
+  try {
+    const { stripe } = await import("../clients/stripe");
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const md = session.metadata ?? {};
+    const ours = md.fundraiserId === String(fundraiserId) && md.paidInByOrganiser !== "true";
+    if (ours && session.status === "complete") return res.status(409).json(CONFIRMING);
+    return res.status(404).json(GIFT_NOT_FOUND);
+  } catch (err) {
+    const missing = typeof err === "object" && err !== null && (err as { code?: string }).code === "resource_missing";
+    if (missing) return res.status(404).json(GIFT_NOT_FOUND);
+    console.error("fundraiser wall message stripe check failed:", err instanceof Error ? err.message : err);
+    return res.status(503).json(WALL_TRY_LATER);
+  }
+}
+
+export async function postWallMessage(req: Request, res: Response): Promise<Response | void> {
+  if (!fromOurOwnPage(req, res)) return;
+  res.setHeader("Cache-Control", "no-store");
+  const now = Date.now();
+  const sessionKey = typeof req.body?.sessionId === "string" ? req.body.sessionId.slice(0, 260) : "";
+  if (!isLoopbackRequest(req)) {
+    const ipOk = wallIpLimiter.allow(req.ip ?? "unknown", now);
+    const sessionOk = !sessionKey || wallSessionLimiter.allow(sessionKey, now);
+    if (!ipOk || !sessionOk) return res.status(429).json(TOO_MANY);
+  }
+  const parsed = wallMessageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Please check your message and try again", fields: fieldErrors(parsed.error.issues) });
+  }
+  try {
+    if (!(await fundraisingIsOn())) return res.status(404).json(NOT_FOUND);
+    const f = await getBySlug(String(req.params.slug ?? ""));
+    if (!f || !hasPage(f)) return res.status(404).json(NOT_FOUND);
+    const { sessionId, message, showName, showAmount } = parsed.data;
+    const { verdict, entry } = await addWallMessage(sessionId, f.id, { message, showName, showAmount });
+    switch (verdict) {
+      case "ok":
+        return res.status(200).json({ status: "added", entry });
+      case "already":
+        return res.status(409).json(ALREADY);
+      case "unpaid":
+        return res.status(409).json(UNPAID);
+      case "not_recorded":
+        return answerForUnrecorded(res, sessionId, f.id);
+      default:
+        // Another fundraiser's gift, or money paid in: the answer never says which, or whose.
+        return res.status(404).json(GIFT_NOT_FOUND);
+    }
+  } catch (err) {
+    console.error("fundraiser wall message failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json(WALL_TRY_LATER);
   }
 }
 
@@ -347,9 +440,8 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
     const fundraisers = await Promise.all(
       mine.map(async (f) => {
         const [waiting, rows] = await Promise.all([waitingEditFor(f.id), wallRows(f.id)]);
+        // TASK-502: a finished one keeps its public page (and so its QR code) for good.
         const page = hasPage(f);
-        // A finished one has no public page any more (stage 1), but its organiser keeps its code.
-        const coded = page || (f.status === "finished" && f.public && f.path === "raising");
         return {
           id: f.id,
           slug: f.slug,
@@ -359,7 +451,7 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           public: f.public,
           pageUrl: page ? fundraiserPageUrl(f.slug) : null,
           // The QR code is the page's, so only a page has one (it is no longer on the page itself).
-          qrUrl: coded ? `/fundraise/${f.slug}/qr.svg` : null,
+          qrUrl: page ? `/fundraise/${f.slug}/qr.svg` : null,
           meter: f.meter,
           editable: editableOf(f),
           waitingEdit: waiting ? { id: waiting.id, changes: waiting.changes, createdAt: waiting.createdAt } : null,
@@ -491,6 +583,7 @@ fundraiseRouter.post("/api/fundraise", postFundraise);
 fundraiseRouter.get("/api/fundraise/captcha", getFundraiseCaptcha);
 fundraiseRouter.get("/api/fundraisers", getFundraisers);
 fundraiseRouter.get("/api/fundraisers/:slug", getFundraiserPage);
+fundraiseRouter.post("/api/fundraisers/:slug/wall-message", postWallMessage);
 // The named routes go before /:token, so "request", "me" and the rest are never read as a link.
 fundraiseRouter.post("/api/fundraise/manage/request", postManageRequest);
 fundraiseRouter.post("/api/fundraise/manage/sign-in", postManageSignIn);

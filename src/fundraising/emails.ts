@@ -356,7 +356,7 @@ export function buildFinishedStaffEmail(
     eyebrow("For the team") +
     heading("A fundraiser says they’ve finished") +
     bodyP(`<b>${escapeHtml(f.name)}</b> says <b>${escapeHtml(f.title)}</b> has finished. It has raised <b>${escapeHtml(raised)}</b> so far.`) +
-    bodyP("Nothing has changed on the website: it stays as it is until someone marks it finished.") +
+    bodyP("Nothing has changed on the website yet. Marking it finished takes it off the Get involved list; its page stays up with a thank you banner and can still take gifts.") +
     subheading("Next steps") +
     bodyList(steps.map(escapeHtml)) +
     button(o.adminUrl, "Open the admin") +
@@ -366,7 +366,7 @@ export function buildFinishedStaffEmail(
     "",
     `${f.name} says ${f.title} has finished. It has raised ${raised} so far.`,
     "",
-    "Nothing has changed on the website: it stays as it is until someone marks it finished.",
+    "Nothing has changed on the website yet. Marking it finished takes it off the Get involved list; its page stays up with a thank you banner and can still take gifts.",
     "",
     "NEXT STEPS",
     ...bulleted(steps),

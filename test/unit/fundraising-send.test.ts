@@ -165,13 +165,13 @@ describe("after staff decide a change", () => {
   });
 
   // Only a page that is up says "on your page" or "still live": an event, a private sign up, one
-  // declined or finished, or any while fundraising is switched off, gets the neutral words.
+  // declined, or any while fundraising is switched off, gets the neutral words. (TASK-502: a
+  // finished one keeps its page and still takes gifts, so it is up: see the next test.)
   it.each([
     ["fundraising is switched off", {}, false],
     ["it is an event", { path: "event" as const }, true],
     ["it is private", { public: false }, true],
     ["it was declined", { status: "declined" as const }, true],
-    ["it is finished", { status: "finished" as const }, true],
   ])("says the change is saved, with no page link, when %s", async (_what, over, on) => {
     await sendEditDecisionEmail(record({ title: "Sam's Walk", ...over }), true, on);
     const sent = mail.sendFundraiseEditApproved.mock.calls[0][1];
@@ -184,6 +184,13 @@ describe("after staff decide a change", () => {
     const held = mail.sendFundraiseEditRejected.mock.calls[0][1];
     expect(held.text).toContain("Nothing to worry about: everything stays just as it was.");
     expect(held.text).not.toContain("still live");
+  });
+
+  it("says a change to a finished fundraiser is on its page, as the page stays up (TASK-502)", async () => {
+    await sendEditDecisionEmail(record({ title: "Sam's Walk", status: "finished" }), true, true);
+    const sent = mail.sendFundraiseEditApproved.mock.calls[0][1];
+    expect(sent.subject).toBe("Your update is live: Sam's Walk");
+    expect(sent.text).toContain("https://nbcc.test/fundraise/sams-walk");
   });
 
   it("tells them about their update when it is rejected, their page still live", async () => {

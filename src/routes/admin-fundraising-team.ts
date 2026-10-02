@@ -21,7 +21,7 @@ import {
   type InviteRow,
 } from "../db/fundraising-team";
 import { sendFundraiseInvite } from "../clients/email";
-import { INVITES_PER_DAY, hashInviteToken, inviteSchema, inviteUrl, newInviteToken } from "../fundraising/invite";
+import { INVITES_PER_DAY, hashInviteToken, inviteSchema, inviteUrl, inviteVerdict, newInviteToken } from "../fundraising/invite";
 import { CALL_WHICH, callStates, followUpToday, offListPrompt, type CallRecord, type CallStates } from "../fundraising/follow-up";
 import { summaryRecipientsSchema } from "../fundraising/summary";
 import { buildInviteEmail } from "../fundraising/team-emails";
@@ -100,7 +100,8 @@ export async function getFundraisingTeam(req: Request, res: Response): Promise<R
   const claims = await authorizeSection(req, res, "fundraising", "view");
   if (!claims) return;
   try {
-    const today = followUpToday(new Date());
+    const now = new Date();
+    const today = followUpToday(now);
     const [fundraisers, allCalls, invites, signers] = await Promise.all([
       listAllFundraisers(),
       listFundraiserCalls(),
@@ -116,7 +117,12 @@ export async function getFundraisingTeam(req: Request, res: Response): Promise<R
       const prompt = offListPrompt(f, today);
       if (prompt) prompts[String(f.id)] = prompt;
     }
-    return res.status(200).json({ today, me: claims.sub, calls, prompts, invites, signers });
+    // An invite whose link is past its 60 days is still listed, marked expired, so it can be resent.
+    const listed = invites.map((i) => ({
+      ...i,
+      expired: inviteVerdict({ createdAt: new Date(i.createdAt), resentAt: i.resentAt ? new Date(i.resentAt) : null, usedAt: null }, now) === "expired",
+    }));
+    return res.status(200).json({ today, me: claims.sub, calls, prompts, invites: listed, signers });
   } catch (err) {
     return failed(res, "team read", err);
   }

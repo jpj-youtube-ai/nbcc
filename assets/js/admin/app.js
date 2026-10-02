@@ -10547,9 +10547,13 @@
     }
     ul.innerHTML = list.map(function (i) {
       var id = Number(i.id);
+      // An invite past its 60 days: its link no longer works, so say so, and Resend sends a new one.
+      var expired = i.expired === true;
       return '<li data-frinvite="' + id + '"><span class="fr-people-who"><b>' + H.escapeHtml(i.name) + "</b> <span>" + H.escapeHtml(i.email) + "</span>" +
+        (expired ? ' <span class="admin-pill fr-invite-expired">Expired</span>' : "") +
         '<span class="fr-people-when">Invited by ' + H.escapeHtml(i.signedBy) + " on " + H.escapeHtml(H.fmtDate(i.createdAt)) +
-        (i.resentAt ? ", sent again on " + H.escapeHtml(H.fmtDate(i.resentAt)) : "") + "</span></span>" +
+        (i.resentAt ? ", sent again on " + H.escapeHtml(H.fmtDate(i.resentAt)) : "") +
+        (expired ? ". The link has expired. Resend to send a new one." : "") + "</span></span>" +
         '<span class="fr-people-actions">' +
           '<button class="fr-link-btn" type="button" data-frinviteresend="' + id + '" aria-label="' + H.escapeHtml("Resend the invite to " + i.name) + '">Resend</button>' +
           '<button class="fr-link-btn" type="button" data-frinviteremove="' + id + '" aria-label="' + H.escapeHtml("Remove the invite to " + i.name) + '">Remove</button>' +

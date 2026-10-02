@@ -2737,5 +2737,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-summary-add .admin-btn { min-height: 44px; }
 /* On a fundraiser: the finishing prompt and the calls. */
 #view-fundraising .fr-offlist-done { background: var(--cream); color: var(--slate-soft); box-shadow: inset 0 0 0 1px var(--line); }
+/* An invite whose link has expired (60 days after it was last sent): Resend sends a new one. */
+#view-fundraising .fr-people-who > .fr-invite-expired { margin-left: 6px; background: var(--cream); color: var(--maroon); box-shadow: inset 0 0 0 1px var(--line); }
 #view-fundraising .fr-offlist-panel { background: color-mix(in srgb, var(--tan) 12%, var(--card)); }
 #view-fundraising .fr-call-form { margin-top: 12px; max-width: 560px; }

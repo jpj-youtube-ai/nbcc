@@ -189,7 +189,7 @@ describe("the team's tools", () => {
         fundraiser({ id: 11, eventDate: "2026-10-01" }),
         fundraiser({ id: 12, eventDate: null, finishedRequestedAt: "2026-11-30T10:00:00.000Z" }),
       ]);
-      team.listOpenInvites.mockResolvedValue([invite()]);
+      team.listOpenInvites.mockResolvedValue([invite(), invite({ id: 5, createdAt: "2026-11-20T09:00:00.000Z" })]);
       const res = await run(routes.getFundraisingTeam, { token: tokenFor("editor") });
       const body = res.body as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
       expect(body.today).toBe("2026-12-01");
@@ -197,7 +197,11 @@ describe("the team's tools", () => {
       expect(body.calls["9"]).toMatchObject({ due: true, dueWhich: "before", before: { dueOn: "2026-11-29" }, after: { dueOn: "2026-12-13" } });
       expect(body.calls["10"]).toBeUndefined();
       expect(body.prompts).toEqual({ "11": "date", "12": "finished" });
-      expect(body.invites).toEqual([invite()]);
+      // Sent 61 days ago: its link has expired, so the admin marks it, with Resend still there.
+      expect(body.invites).toEqual([
+        { ...invite(), expired: true },
+        { ...invite({ id: 5, createdAt: "2026-11-20T09:00:00.000Z" }), expired: false },
+      ]);
       expect(body.signers).toEqual([{ id: 3, firstName: "Fern" }, { id: 5, firstName: "Rowan" }]);
     } finally {
       vi.useRealTimers();

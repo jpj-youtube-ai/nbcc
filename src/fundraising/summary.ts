@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { londonToday } from "../events/model";
-import { giftNetPence, type FundraiserRecord, type Meter } from "./model";
+import { giftAidPence, giftNetPence, type FundraiserRecord, type Meter } from "./model";
 import { addDays, callStates, offListPrompt, type CallRecord } from "./follow-up";
-import { INVITE_NOT_TAKEN_DAYS } from "./invite";
+import { INVITE_NOT_TAKEN_DAYS, inviteVerdict } from "./invite";
 import { pounds } from "./emails";
 
 // TASK-503: the Monday summary (email 11), at 8am on Mondays to the people chosen in Admin >
@@ -13,13 +13,18 @@ import { pounds } from "./emails";
 // the same full week, so what staff check is what goes out.
 //
 //   money          online gifts (less refunds), what organisers paid in, the cash staff recorded,
-//                  and the Gift Aid to claim on last week's gifts (25%; never on money paid in);
-//                  then how many are live and what every fundraiser has raised in all
+//                  and the Gift Aid to claim on last week's gifts (a quarter of each gift, rounded
+//                  down per gift as the meter does; never on money paid in); then how many are live
+//                  and what every fundraiser has raised in all. A gift counts in the week it was
+//                  PAID (a Direct Debit settles days after it is made) and cash in the week staff
+//                  RECORDED it, so every pound is in exactly one Monday's summary, even one typed
+//                  in after the summary for the week it was paid in had gone
 //   new sign ups   every sign up that arrived last week
 //   waiting on us  sign ups to approve; changes to check; posters, leaflets, buckets and tins to send
 //                  (split and old combined requests, from sign ups still to come); shout outs and
 //                  requests for someone to come along (likewise); calls due today; invites not taken
-//                  up a week after they were sent; fundraisers four weeks past their date still on
+//                  up a week after they were sent (not those whose link has expired); fundraisers
+//                  four weeks past their date still on
 //                  Get involved; and those who say they've finished
 //   coming up      approved fundraisers dated in the next four weeks
 
@@ -35,15 +40,15 @@ export interface SummaryGift {
   giftAid: boolean;
   /** Money the organiser collected and paid in from their private area. */
   paidIn: boolean;
-  /** ISO time. */
-  createdAt: string;
+  /** ISO time it became paid: when it was made for a card, when Stripe settled it for a Direct Debit. */
+  paidAt: string;
 }
 
 export interface SummaryCash {
   fundraiserId: number;
   amountPence: number;
-  /** YYYY-MM-DD */
-  paidInOn: string;
+  /** ISO time staff recorded it in the admin (not the day it was paid in). */
+  recordedAt: string;
 }
 
 export type SummaryCall = CallRecord & { fundraiserId: number };
@@ -127,17 +132,18 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
 
   let onlinePence = 0;
   let paidInPence = 0;
-  let giftAidBase = 0;
+  let giftAid = 0;
   for (const g of i.gifts) {
-    if (!inRange(ukDay(g.createdAt), week)) continue;
+    if (!inRange(ukDay(g.paidAt), week)) continue;
     const net = giftNetPence(g.amountPence, g.refundedPence);
     if (g.paidIn) paidInPence += net;
     else {
       onlinePence += net;
-      if (g.giftAid) giftAidBase += net;
+      // Rounded down on each gift, as the meter's Gift Aid is (giftAidOnGifts, GIFT_AID_SQL).
+      if (g.giftAid) giftAid += giftAidPence(net);
     }
   }
-  const cashPence = i.cash.filter((c) => inRange(c.paidInOn, week)).reduce((s, c) => s + c.amountPence, 0);
+  const cashPence = i.cash.filter((c) => inRange(ukDay(c.recordedAt), week)).reduce((s, c) => s + c.amountPence, 0);
 
   const callsBy = new Map<number, CallRecord[]>();
   for (const c of i.calls) callsBy.set(c.fundraiserId, [...(callsBy.get(c.fundraiserId) ?? []), c]);
@@ -166,6 +172,8 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   const notTakenBy = addDays(today, -INVITE_NOT_TAKEN_DAYS);
   const invitesNotTaken = i.invites
     .filter((inv) => ukDay(inv.resentAt ?? inv.createdAt) <= notTakenBy)
+    // An expired link can no longer be taken up: Admin > Fundraising marks it Expired, to resend.
+    .filter((inv) => inviteVerdict({ createdAt: new Date(inv.createdAt), resentAt: inv.resentAt ? new Date(inv.resentAt) : null, usedAt: null }, i.now) === "ok")
     .sort((a, b) => ((a.resentAt ?? a.createdAt) < (b.resentAt ?? b.createdAt) ? -1 : 1))
     .map((inv) => ({ name: firstWord(inv.name), signedBy: inv.signedBy }));
 
@@ -182,7 +190,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     onlinePence,
     paidInPence,
     cashPence,
-    giftAidPence: Math.floor(giftAidBase / 4),
+    giftAidPence: giftAid,
     raisedPence: onlinePence + paidInPence + cashPence,
     liveCount: i.fundraisers.filter((f) => f.status === "approved").length,
     totalRaisedPence: i.fundraisers.reduce((s, f) => s + (f.meter?.raisedPence ?? 0), 0),

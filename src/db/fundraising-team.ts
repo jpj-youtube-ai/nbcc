@@ -346,21 +346,34 @@ export async function releaseSummaryWeek(week: string, previous: string | null):
   ]);
 }
 
-/** Everything the summary counts, as at `now`. Gifts and cash from a fortnight back is plenty. */
+/**
+ * Everything the summary counts, as at `now`. Gifts and cash from a fortnight back is plenty.
+ *
+ * When a gift was paid: donations has no paid time of its own. A card gift is paid when it is made
+ * (created_at). A Direct Debit (BACS) gift is made pending and becomes paid days later, when Stripe
+ * sends checkout.session.async_payment_succeeded; the webhook then writes an audit_log row,
+ * "donation.payment_succeeded", against the donation, in the same transaction as the change. So
+ * the paid time is that row's time when there is one, and created_at otherwise. Cash counts by when
+ * staff recorded it (created_at), not the day it was paid in, so cash typed in late still appears.
+ */
 export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
   const since = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
   const [fundraisers, gifts, cash, calls, invites] = await Promise.all([
     listAllFundraisers(),
     pool.query(
-      `SELECT d.fundraiser_id, d.amount_pence, d.refunded_amount_pence, d.gift_aid, d.paid_in_by_organiser, d.created_at
-         FROM donations d
-        WHERE d.fundraiser_id IS NOT NULL AND d.payment_status = 'paid' AND d.created_at >= $1`,
+      `SELECT g.* FROM (
+         SELECT d.fundraiser_id, d.amount_pence, d.refunded_amount_pence, d.gift_aid, d.paid_in_by_organiser,
+                COALESCE((SELECT max(a.created_at) FROM audit_log a
+                           WHERE a.entity = 'donation' AND a.entity_id = d.id AND a.action = 'donation.payment_succeeded'),
+                         d.created_at) AS paid_at
+           FROM donations d
+          WHERE d.fundraiser_id IS NOT NULL AND d.payment_status = 'paid'
+       ) g WHERE g.paid_at >= $1`,
       [since],
     ),
     pool.query(
-      `SELECT fundraiser_id, amount_pence, to_char(paid_in_on, 'YYYY-MM-DD') AS paid_in_on
-         FROM fundraiser_cash WHERE paid_in_on >= $1::date`,
-      [since.toISOString().slice(0, 10)],
+      `SELECT fundraiser_id, amount_pence, created_at FROM fundraiser_cash WHERE created_at >= $1`,
+      [since],
     ),
     listFundraiserCalls(),
     listOpenInvites(),
@@ -374,9 +387,9 @@ export async function readSummaryInputs(now: Date): Promise<SummaryInputs> {
       refundedPence: Number(g.refunded_amount_pence ?? 0),
       giftAid: Boolean(g.gift_aid),
       paidIn: Boolean(g.paid_in_by_organiser),
-      createdAt: iso(g.created_at) as string,
+      paidAt: iso(g.paid_at) as string,
     })),
-    cash: cash.rows.map((c) => ({ fundraiserId: Number(c.fundraiser_id), amountPence: Number(c.amount_pence), paidInOn: String(c.paid_in_on) })),
+    cash: cash.rows.map((c) => ({ fundraiserId: Number(c.fundraiser_id), amountPence: Number(c.amount_pence), recordedAt: iso(c.created_at) as string })),
     calls,
     invites: invites.map((i) => ({ name: i.name, signedBy: i.signedBy, createdAt: i.createdAt, resentAt: i.resentAt })),
   };

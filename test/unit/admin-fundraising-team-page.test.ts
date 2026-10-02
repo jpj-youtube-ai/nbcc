@@ -59,7 +59,7 @@ function fundraiser(id: number, over: Record<string, unknown> = {}): Rec {
 }
 const meter = { raisedPence: 0, onlinePence: 0, cashPence: 0, targetPence: 25000, percent: 0, barPercent: 0, overTarget: false };
 
-type Invite = { id: number; name: string; email: string; note: string | null; signedBy: string; sentBy: string; createdAt: string; resentAt: string | null };
+type Invite = { id: number; name: string; email: string; note: string | null; signedBy: string; sentBy: string; createdAt: string; resentAt: string | null; expired?: boolean };
 const callState = (over: Record<string, unknown> = {}) => ({
   before: { which: "before", dueOn: "2026-11-29", due: true, called: null },
   after: { which: "after", dueOn: "2026-12-13", due: false, called: null },
@@ -333,6 +333,16 @@ describe("invites not taken up", () => {
     expect(text(item)).toContain("Invited by Fern on 01/10/2026");
     expect(item.querySelector('[data-frinviteresend="7"]')).not.toBeNull();
     expect(item.querySelector('[data-frinviteremove="7"]')).not.toBeNull();
+    expect(text(item)).not.toContain("Expired");
+  });
+
+  it("marks an invite whose link has expired, and still offers Resend", async () => {
+    team.invites = [{ ...team.invites[0], expired: true }];
+    await openFundraising();
+    const item = q('#frInvites [data-frinvite="7"]')!;
+    expect(item.querySelector(".fr-invite-expired")!.textContent).toBe("Expired");
+    expect(text(item)).toContain("The link has expired. Resend to send a new one.");
+    expect(item.querySelector('[data-frinviteresend="7"]')).not.toBeNull();
   });
 
   it("resends, after asking", async () => {

@@ -301,12 +301,26 @@
     var inviteToken = null;
     var inviteMatch = /[?&]invite=([A-Za-z0-9_-]{43})(?:&|$)/.exec((win.location && win.location.search) || "");
     if (inviteMatch && typeof win.fetch === "function") {
-      win
-        .fetch("/api/fundraise/invite", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: inviteMatch[1] }),
-        })
+      var asked = win.fetch("/api/fundraise/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: inviteMatch[1] }),
+      });
+      // Asked: now take the token out of the address bar and the history (as the private area
+      // does), keeping anything else in the address. The sign up still carries it back.
+      if (win.history && typeof win.history.replaceState === "function") {
+        try {
+          var rest = String(win.location.search || "")
+            .replace(/^\?/, "")
+            .split("&")
+            .filter(function (part) { return part && !/^invite=/.test(part); })
+            .join("&");
+          win.history.replaceState(win.history.state, "", (win.location.pathname || "/fundraise") + (rest ? "?" + rest : "") + (win.location.hash || ""));
+        } catch (e) {
+          /* The address stays as it was; nothing else changes. */
+        }
+      }
+      asked
         .then(function (res) {
           return res && res.ok ? res.json() : null;
         })

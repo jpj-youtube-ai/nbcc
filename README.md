@@ -7857,7 +7857,9 @@ fundraising email. Its button opens `/fundraise?invite=<token>`, and the form fi
 and email, and nothing else (a box they have already typed in is left alone). Below the form,
 **Invites not taken up yet** lists each one with "Invited by <first name> on <date>", **Resend**
 (a new link, emailed again; the old link stops working) and **Remove** (the link stops working),
-each after a question. A viewer sees neither the card nor the list.
+each after a question. One whose link has run out (60 days after it was last sent) is marked
+**Expired**, with Resend still there to send a new link. A viewer sees neither the card nor the
+list.
 
 How the invite link works:
 
@@ -7865,13 +7867,23 @@ How the invite link works:
 - only its sha256 (with a `fundraiseinvite.v1:` prefix) is stored, in
   `fundraiser_invites.token_hash`, so a copy of the table opens nothing. The token is never logged,
   never sent back to the admin page, and never put in an address the server logs: the form asks
-  for the name and email with `POST /api/fundraise/invite { token }`;
+  for the name and email with `POST /api/fundraise/invite { token }`, and straight after asking
+  takes the token out of the address bar and the history (`history.replaceState`, keeping anything
+  else in the address), as the private area does. While the token is in the address, `/fundraise`
+  is served with `Referrer-Policy: strict-origin`, `Cache-Control: no-store` and `noindex`, so only
+  ever our origin leaves as a referrer, never the address with its token, to anyone, our own pages
+  included. (`same-origin` would still send it in full to our own server; `strict-origin` also keeps
+  the origin the spam check may look at.) A plain visit to `/fundraise` keeps its headers as they
+  were;
 - it works for 60 days from when it was last sent, and once: the sign up made from it carries the
   token back (`invite` on `POST /api/fundraise`), and that marks the invite used and linked to the
   new sign up in one statement, so two sign ups at once cannot both take it. An unknown, used or
   out of date token all get the same `404`, and the form still works without it;
 - each member of staff can send 50 invites and resends in a day (`429` after that), and the form's
-  lookup allows 30 tries in 15 minutes from one address.
+  lookup allows 30 tries in 15 minutes from one address. The sign up form's own limit (5 in 10
+  minutes from one address) does not apply to requests made on the machine itself (127.0.0.1, ::1),
+  exactly as for the admin sign in: behind the load balancer the address is always the real
+  visitor's, so only the CI suite and local development arrive that way.
 
 **Time to call.** Like the business supporters' call reminders: every approved fundraiser with a
 date gets a **Time to call** pill from a week before its date until somebody records the call, and
@@ -7896,12 +7908,19 @@ on a Monday, the daily task (`npm run reminders`, the same scheduled run as the 
 email 11 (`fundraiseSummary`), one email to each address, from and replying to the events inbox:
 
 - last week's money (Monday to Sunday): online gifts less refunds, what organisers paid in and the
-  cash staff recorded, the Gift Aid to claim on last week's gifts (never on money paid in), how many
-  are live, and what every fundraiser has raised in all;
+  cash staff recorded, the Gift Aid to claim on last week's gifts (a quarter of each gift after any
+  refund, rounded down per gift as the meter's is; never on money paid in), how many are live, and
+  what every fundraiser has raised in all. Every pound is in exactly one Monday's summary: a gift
+  counts in the week it was **paid** and staff cash in the week it was **recorded**. donations has no
+  paid time of its own, so a gift's is the time of its `donation.payment_succeeded` audit row (the
+  webhook writes it when a Direct Debit settles, days after the gift was made), or else when it was
+  made (a card gift is paid there and then). Cash counts by `fundraiser_cash.created_at`, not the
+  day it was paid in, so cash typed in after Monday's summary went appears in the next one;
 - the new sign ups;
 - **Waiting on us**: sign ups to approve, changes to check, posters, leaflets, buckets and tins to
   send (the split requests and the old combined ones), shout outs, requests for someone to come
-  along, calls due, invites not taken up after a week (with who invited them), fundraisers four
+  along, calls due, invites not taken up after a week (with who invited them; not those whose link
+  has expired), fundraisers four
   weeks past their date still on Get involved, and those who say they have finished;
 - **Coming up**: approved fundraisers dated in the next four weeks.
 

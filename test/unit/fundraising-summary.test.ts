@@ -122,24 +122,26 @@ const inputs: SummaryInputs = {
   now: NOW,
   fundraisers,
   gifts: [
-    { fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: true, paidIn: false, createdAt: "2026-12-01T10:00:00.000Z" },
-    { fundraiserId: 1, amountPence: 1000, refundedPence: 500, giftAid: false, paidIn: false, createdAt: "2026-12-06T23:59:00.000Z" },
-    { fundraiserId: 1, amountPence: 3000, refundedPence: 0, giftAid: false, paidIn: true, createdAt: "2026-12-03T10:00:00.000Z" },
+    { fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-01T10:00:00.000Z" },
+    { fundraiserId: 1, amountPence: 1000, refundedPence: 500, giftAid: false, paidIn: false, paidAt: "2026-12-06T23:59:00.000Z" },
+    { fundraiserId: 1, amountPence: 3000, refundedPence: 0, giftAid: false, paidIn: true, paidAt: "2026-12-03T10:00:00.000Z" },
     // The Sunday before last week, and this Monday: neither counts.
-    { fundraiserId: 1, amountPence: 4000, refundedPence: 0, giftAid: true, paidIn: false, createdAt: "2026-11-29T23:30:00.000Z" },
-    { fundraiserId: 1, amountPence: 1000, refundedPence: 0, giftAid: true, paidIn: false, createdAt: "2026-12-07T00:30:00.000Z" },
-    { fundraiserId: 3, amountPence: 800, refundedPence: 0, giftAid: true, paidIn: false, createdAt: "2026-11-30T00:00:00.000Z" },
+    { fundraiserId: 1, amountPence: 4000, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-11-29T23:30:00.000Z" },
+    { fundraiserId: 1, amountPence: 1000, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-07T00:30:00.000Z" },
+    { fundraiserId: 3, amountPence: 800, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-11-30T00:00:00.000Z" },
   ],
   cash: [
-    { fundraiserId: 1, amountPence: 1000, paidInOn: "2026-12-02" },
-    { fundraiserId: 10, amountPence: 2000, paidInOn: "2026-11-29" },
-    { fundraiserId: 3, amountPence: 250, paidInOn: "2026-12-06" },
+    { fundraiserId: 1, amountPence: 1000, recordedAt: "2026-12-02T15:00:00.000Z" },
+    { fundraiserId: 10, amountPence: 2000, recordedAt: "2026-11-29T15:00:00.000Z" },
+    { fundraiserId: 3, amountPence: 250, recordedAt: "2026-12-06T15:00:00.000Z" },
   ],
   calls: [{ fundraiserId: 9, which: "after", calledAt: "2026-10-09T10:00:00.000Z", calledBy: "fern@example.com", note: null }],
   invites: [
     { name: "Alex Example", signedBy: "Fern", createdAt: "2026-11-29T10:00:00.000Z", resentAt: null },
     { name: "Robin Test", signedBy: "Rowan", createdAt: "2026-12-01T10:00:00.000Z", resentAt: null },
     { name: "Sky Sample", signedBy: "Fern", createdAt: "2026-11-01T10:00:00.000Z", resentAt: "2026-12-03T10:00:00.000Z" },
+    // Sent more than 60 days ago and never resent: its link no longer works, so it is not counted.
+    { name: "Jo Oldfriend", signedBy: "Rowan", createdAt: "2026-10-01T10:00:00.000Z", resentAt: null },
   ],
 };
 
@@ -164,12 +166,55 @@ describe("the money", () => {
     expect(c.paidInPence).toBe(3000);
   });
 
-  it("counts the cash staff recorded as paid in last week", () => {
+  it("counts the cash staff recorded last week, by when they recorded it", () => {
     expect(c.cashPence).toBe(1250);
   });
 
   it("works out the Gift Aid to claim on last week's gifts, never on money paid in", () => {
-    expect(c.giftAidPence).toBe(Math.floor((2000 + 800) / 4));
+    expect(c.giftAidPence).toBe(Math.floor(2000 / 4) + Math.floor(800 / 4));
+  });
+
+  it("rounds the Gift Aid down on each gift, as the meter does, not on the week's total", () => {
+    const odd = summaryCounts({
+      ...inputs,
+      gifts: [
+        { fundraiserId: 1, amountPence: 2001, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-01T10:00:00.000Z" },
+        { fundraiserId: 1, amountPence: 2104, refundedPence: 101, giftAid: true, paidIn: false, paidAt: "2026-12-02T10:00:00.000Z" },
+      ],
+    });
+    // 500 + 500, where a quarter of the total (4004) would be 1001.
+    expect(odd.giftAidPence).toBe(1000);
+  });
+
+  it("counts a Direct Debit gift in the week it was paid, not the week it was made", () => {
+    // Made on a Friday, paid the next Tuesday, across the Monday the summary goes.
+    const dd = { fundraiserId: 1, amountPence: 1500, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-08T09:00:00.000Z" };
+    const thisMonday = summaryCounts({ ...inputs, gifts: [dd] });
+    const nextMonday = summaryCounts({ ...inputs, now: new Date("2026-12-14T08:00:00Z"), gifts: [dd] });
+    expect(thisMonday.onlinePence).toBe(0);
+    expect(nextMonday.onlinePence).toBe(1500);
+    expect(nextMonday.giftAidPence).toBe(375);
+  });
+
+  it("counts cash staff entered after Monday's summary went in the next one, whatever day it was paid in", () => {
+    // Paid in on the Saturday, but only typed in at 10am on Monday, after the 8am summary.
+    const late = { fundraiserId: 1, amountPence: 900, recordedAt: "2026-12-07T10:00:00.000Z" };
+    expect(summaryCounts({ ...inputs, cash: [late] }).cashPence).toBe(0);
+    expect(summaryCounts({ ...inputs, now: new Date("2026-12-14T08:00:00Z"), cash: [late] }).cashPence).toBe(900);
+  });
+
+  it("counts every pound in exactly one Monday's summary", () => {
+    const gifts = [
+      { fundraiserId: 1, amountPence: 1000, refundedPence: 0, giftAid: false, paidIn: false, paidAt: "2026-12-06T23:59:59.000Z" },
+      { fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: false, paidIn: false, paidAt: "2026-12-07T00:00:01.000Z" },
+      { fundraiserId: 1, amountPence: 4000, refundedPence: 0, giftAid: false, paidIn: false, paidAt: "2026-12-07T07:59:00.000Z" },
+    ];
+    const cash = [{ fundraiserId: 1, amountPence: 300, recordedAt: "2026-12-07T08:30:00.000Z" }];
+    const mondays = ["2026-12-07T08:00:00Z", "2026-12-14T08:00:00Z", "2026-12-21T08:00:00Z"];
+    const total = mondays
+      .map((m) => summaryCounts({ ...inputs, now: new Date(m), gifts, cash }))
+      .reduce((s, c) => s + c.onlinePence + c.cashPence, 0);
+    expect(total).toBe(1000 + 2000 + 4000 + 300);
   });
 
   it("adds them up, without the Gift Aid", () => {
@@ -212,6 +257,16 @@ describe("waiting on us", () => {
 
   it("lists invites not taken up a week after they were sent, with who invited them", () => {
     expect(c.invitesNotTaken).toEqual([{ name: "Alex", signedBy: "Fern" }]);
+  });
+
+  it("leaves out an invite whose link has expired, 60 days after it was last sent", () => {
+    const only = (resentAt: string | null, createdAt: string) =>
+      summaryCounts({ ...inputs, invites: [{ name: "Jo Oldfriend", signedBy: "Rowan", createdAt, resentAt }] }).invitesNotTaken;
+    expect(only(null, "2026-10-01T10:00:00.000Z")).toEqual([]);
+    // 59 days: still works, still waiting.
+    expect(only(null, "2026-10-09T10:00:00.000Z")).toEqual([{ name: "Jo", signedBy: "Rowan" }]);
+    // Resent since: a new link, counted again.
+    expect(only("2026-11-20T10:00:00.000Z", "2026-09-01T10:00:00.000Z")).toEqual([{ name: "Jo", signedBy: "Rowan" }]);
   });
 
   it("counts fundraisers four weeks past their date still on Get involved, and those who say they've finished", () => {

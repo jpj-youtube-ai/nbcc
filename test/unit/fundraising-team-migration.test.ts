@@ -49,7 +49,7 @@ describe("the team's tools migration", () => {
   it("sorts last: after the private area (050) and the wall after paying (060)", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
     expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000050_fundraising-private-area.js"));
-    expect(NAME > "1791200000060").toBe(true);
+    expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000060_fundraising-wall-after-paying.js"));
     expect(all[all.length - 1]).toBe(NAME);
   });
 

@@ -290,23 +290,30 @@ describe("the Monday summary's settings", () => {
 });
 
 describe("what the summary reads", () => {
-  it("reads gifts, cash, calls and open invites from a fortnight back", async () => {
+  it("reads gifts by when they were paid, cash by when it was recorded, calls and open invites, from a fortnight back", async () => {
     query.mockImplementation(async (sql: string) => {
-      if (/d.paid_in_by_organiser, d.created_at/.test(sql)) {
-        return { rows: [{ fundraiser_id: 1, amount_pence: 2000, refunded_amount_pence: 0, gift_aid: true, paid_in_by_organiser: false, created_at: new Date("2026-12-01T10:00:00Z") }] };
+      if (/AS paid_at/.test(sql)) {
+        return { rows: [{ fundraiser_id: 1, amount_pence: 2000, refunded_amount_pence: 0, gift_aid: true, paid_in_by_organiser: false, paid_at: new Date("2026-12-01T10:00:00Z") }] };
       }
-      if (/FROM fundraiser_cash/.test(sql)) return { rows: [{ fundraiser_id: 1, amount_pence: 1000, paid_in_on: "2026-12-02" }] };
+      if (/amount_pence, created_at FROM fundraiser_cash/.test(sql)) return { rows: [{ fundraiser_id: 1, amount_pence: 1000, created_at: new Date("2026-12-02T15:00:00Z") }] };
       if (/FROM fundraiser_invites/.test(sql)) return { rows: [inviteRow()] };
       return { rows: [] };
     });
     const now = new Date("2026-12-07T08:00:00Z");
     const i = await readSummaryInputs(now);
     expect(i.now).toBe(now);
-    expect(i.gifts).toEqual([{ fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: true, paidIn: false, createdAt: "2026-12-01T10:00:00.000Z" }]);
-    expect(i.cash).toEqual([{ fundraiserId: 1, amountPence: 1000, paidInOn: "2026-12-02" }]);
+    expect(i.gifts).toEqual([{ fundraiserId: 1, amountPence: 2000, refundedPence: 0, giftAid: true, paidIn: false, paidAt: "2026-12-01T10:00:00.000Z" }]);
+    expect(i.cash).toEqual([{ fundraiserId: 1, amountPence: 1000, recordedAt: "2026-12-02T15:00:00.000Z" }]);
     expect(i.invites).toEqual([{ name: "Alex Example", signedBy: "Fern", createdAt: "2026-10-01T09:00:00.000Z", resentAt: null }]);
-    const giftSql = query.mock.calls.map((c) => String(c[0])).find((s) => /d.paid_in_by_organiser, d.created_at/.test(s))!;
+    const giftSql = query.mock.calls.map((c) => String(c[0])).find((s) => /AS paid_at/.test(s))!;
     expect(giftSql).toMatch(/d\.payment_status = 'paid'/);
     expect(giftSql).toMatch(/d\.fundraiser_id IS NOT NULL/);
+    // A Direct Debit gift is paid when Stripe says so: the audit row the webhook writes then. A card
+    // gift has none, and was paid when it was made.
+    expect(giftSql).toMatch(/action = 'donation\.payment_succeeded'/);
+    expect(giftSql).toMatch(/COALESCE\(/);
+    const cashSql = query.mock.calls.map((c) => String(c[0])).find((s) => /amount_pence, created_at FROM fundraiser_cash/.test(s))!;
+    expect(cashSql).toMatch(/created_at >= \$1/);
+    expect(cashSql).not.toMatch(/paid_in_on >=/);
   });
 });

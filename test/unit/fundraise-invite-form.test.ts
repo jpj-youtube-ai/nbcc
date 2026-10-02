@@ -58,6 +58,23 @@ describe("a form opened from an invite", () => {
     expect(form.payload().invite).toBe(TOKEN);
   });
 
+  it("takes the invite out of the address as soon as it has asked, keeping the rest", async () => {
+    const form = load(`?ref=qr&invite=${TOKEN}`);
+    // At once, before the answer: the token never stays in the address bar or the history.
+    expect(inviteCalls()).toHaveLength(1);
+    expect(window.location.pathname).toBe("/fundraise");
+    expect(window.location.search).toBe("?ref=qr");
+    expect(window.location.href).not.toContain(TOKEN);
+    await settle();
+    // The sign up still carries it back.
+    expect(form.payload().invite).toBe(TOKEN);
+  });
+
+  it("leaves an address with no invite in it alone", async () => {
+    load("?ref=qr");
+    expect(window.location.search).toBe("?ref=qr");
+  });
+
   it("never fills in more, whatever comes back", async () => {
     inviteAnswer = { status: 200, body: { name: "Alex Example", email: "alex@example.com", title: "Sneaky", phone: "07700 900999" } };
     load(`?invite=${TOKEN}`);

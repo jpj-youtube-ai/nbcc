@@ -46,7 +46,7 @@ describe("the team's tools migration", () => {
   const adds = calls.filter((c) => c.op === "addColumns");
   const added = (table: string) => (adds.find((a) => a.args[0] === table)?.args[1] ?? {}) as Record<string, Col>;
 
-  // It sorted last when it shipped; later migrations (TASK-505's 080 onwards) now sort after it.
+  // It sorted last when it shipped; later migrations (TASK-505's 080, TASK-506's 100) now sort after it.
   it("sorts after the private area (050) and the wall after paying (060)", () => {
     const all = readdirSync(resolve(ROOT, "migrations")).filter((f) => f.endsWith(".js")).sort();
     expect(all.indexOf(NAME)).toBeGreaterThan(all.indexOf("1791200000050_fundraising-private-area.js"));

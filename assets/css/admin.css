@@ -2784,3 +2784,19 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   #view-overview .ov-dot{margin-top:7px}
   #view-overview .ov-go{margin-left:24px;align-self:flex-start}
 }
+/* ---- TASK-506: news updates in an open sign up. A photo shows small and cropped to one shape, as it
+   does on the page; the list grows the page, nothing scrolls inside. ---- */
+#view-fundraising .fr-news-panel { background: color-mix(in srgb, var(--holly) 5%, var(--card)); }
+#view-fundraising .fr-news-photo {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  margin: 10px 0 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--tint);
+}
+#view-fundraising .fr-news-list textarea.fr-input { max-width: 560px; }
+#view-fundraising .fr-news-list .fx-call-label { display: block; margin-top: 12px; }

@@ -401,6 +401,31 @@
     return { more: more };
   }
 
+  // --- the news updates (TASK-506): the newest few, then Show all -------------------------------
+  // The server marks those after the first few; without this script they all show, and the page is
+  // simply longer. Nothing scrolls inside a box: Show all grows the page.
+  function initNews(doc) {
+    var more = doc.querySelector("[data-news-show-all]");
+    var extra = Array.prototype.slice.call(doc.querySelectorAll(".fr-news__item[data-news-more]"));
+    if (!more || !extra.length) return null;
+    extra.forEach(function (li) {
+      li.hidden = true;
+    });
+    more.hidden = false;
+    more.addEventListener("click", function () {
+      extra.forEach(function (li) {
+        li.hidden = false;
+      });
+      more.hidden = true;
+      try {
+        extra[0].focus();
+      } catch (e) {
+        /* focus unavailable */
+      }
+    });
+    return { more: more };
+  }
+
   // --- copy the link ----------------------------------------------------------------------------
   // Every copy button on the page (the share card's, and the thank you's after paying), each saying
   // so in the status line beside it.
@@ -586,10 +611,18 @@
   }
 
   if (typeof module !== "undefined" && module.exports) {
-    module.exports = { initGiveForm: initGiveForm, initWall: initWall, initShare: initShare, initThanks: initThanks, initWallStep: initWallStep };
+    module.exports = {
+      initGiveForm: initGiveForm,
+      initWall: initWall,
+      initNews: initNews,
+      initShare: initShare,
+      initThanks: initThanks,
+      initWallStep: initWallStep,
+    };
   } else {
     initGiveForm(document, window);
     initWall(document);
+    initNews(document);
     initShare(document, window);
     initThanks(document, window);
     initWallStep(document, window);

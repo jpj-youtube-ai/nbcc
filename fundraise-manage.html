@@ -17,6 +17,7 @@
     <link rel="preload" href="/assets/fonts/poppins-400.woff2" as="font" type="font/woff2" crossorigin />
     <script defer src="/assets/js/main.js"></script>
     <script defer src="/assets/js/fundraise-manage.js"></script>
+    <script defer src="/assets/js/fundraise-news.js"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -285,6 +286,40 @@
               </section>
             </article>
           </div>
+
+          <!-- TASK-506: News updates, for a fundraiser running with its own page. fundraise-news.js
+               copies this into each such card (before All done?), giving every id its own ending.
+               Each update waits for staff before it goes on the page. -->
+          <template data-news-pattern>
+            <section class="fr-mine__part" data-news-part aria-labelledby="mineNewsHeading">
+              <h3 id="mineNewsHeading">News updates</h3>
+              <p>Tell your supporters how it is going: a few words, and a photo if you like. We check every update before it goes on your page, where the newest shows first.</p>
+              <form class="fr-form fr-form--plain fr-newspost" novalidate data-news-form>
+                <p class="form-error-summary" role="alert" data-news-error hidden></p>
+                <div class="give-field">
+                  <label for="newsText">Your update <span class="give-req" aria-hidden="true">*</span></label>
+                  <textarea class="give-field-input" id="newsText" name="text" rows="4" maxlength="500" required aria-required="true" aria-describedby="newsCount" data-invalid-message="Write a few words for your update"></textarea>
+                  <p class="give-field-help fr-newspost__count" id="newsCount" data-news-count>Up to 500 characters.</p>
+                </div>
+                <div class="give-field">
+                  <label for="newsPhoto">A photo <span class="give-optional">(optional)</span></label>
+                  <input class="fr-newspost__file" id="newsPhoto" name="photo" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="newsPhotoHelp" />
+                  <p class="give-field-help" id="newsPhotoHelp">A JPG, PNG or WebP. A photo of you or your day works best, rather than a poster: it shows in a small frame beside your words.</p>
+                  <div class="fr-newspost__preview" data-news-preview hidden>
+                    <figure class="fr-news__photo"><img data-news-preview-img src="data:," alt="The photo you chose" /></figure>
+                    <button class="fr-link-btn" type="button" data-news-photo-clear>Remove the photo</button>
+                  </div>
+                </div>
+                <div class="give-cta-row">
+                  <button class="btn btn-primary give-cta" type="submit" data-news-submit>Send my update</button>
+                </div>
+                <p class="form-status" role="status" aria-live="polite" data-news-status></p>
+              </form>
+              <p class="fr-mine__done" data-news-closed hidden>Your fundraiser is finished, so there are no more updates to send. Thank you!</p>
+              <ol class="fr-mynews" role="list" data-news-list></ol>
+              <button class="fr-wall__more" type="button" data-news-more hidden>Show all</button>
+            </section>
+          </template>
         </div>
       </div>
     </main>

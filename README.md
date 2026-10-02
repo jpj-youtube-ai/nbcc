@@ -7074,7 +7074,7 @@ page by an emailed link, and every change waits for staff. Design:
 `docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
 
 This is **stage 1, the backend core**. The public pages (`/fundraise`, `/fundraise/<slug>`,
-`/fundraise/manage`, Get involved) and the admin screen are built against the API below. Stages 2 to
+`/fundraise/manage`, Get involved) are built against the API below, and so is the admin screen (TASK-495, below). Stages 2 to
 4 (materials, keeping in touch, requests) follow.
 
 **It ships switched off.** `fundraising_settings.page_on` is false: sign ups are refused, nothing
@@ -7243,6 +7243,42 @@ showAmount, amountPence, refundedPence, message, hidden, createdAt }`. Refusals 
 
 Admin > Fundraising has a **New pill** (area `fundraising`, lit by each new sign up) and a line in
 the admin's new features list.
+
+### The admin screen: Admin > Fundraising (TASK-495)
+
+In Content, after Events. The menu link shows to anyone with `fundraising` view; changing anything
+needs edit; the switch needs an admin as well. Markup `#view-fundraising` in `admin.html`, code the
+`fr` block in `assets/js/admin/app.js` (`loadFundraising`), styles at the end of
+`assets/css/admin.css`. It is built from the admin's own parts: the Events switch card, the Events
+status chips and Business supporters' rows that open in place.
+
+- **The switch**, as on Events: an admin can switch fundraising on or off after a question; everyone
+  else sees it read only, with "Only an admin can switch fundraising on or off."
+- **The list**: every sign up with its name, organiser, raising money or holding an event, date,
+  status pill (New, Approved, Declined, Finished) and raised against target. Pills: the per person
+  **New** pill (TASK-478) and **Changes to check** when an organiser's change is waiting. Chips
+  filter by status, with counts. The first 25 show, then "Show all".
+- **One sign up** opens below its row: where it is up to, Approve (from New or Declined), Decline
+  (from New or Approved, with an optional reason kept inside NBCC) and Mark finished (from
+  Approved), each after a question; its page link and a "Download its QR code" link to
+  `/fundraise/<slug>/qr.svg` once it is approved and public (that address is served by the public
+  pages, built separately; the core has no admin QR route); the waiting change beside the live
+  values with Approve change and Reject change (a `409`, such as a change replaced by a newer one,
+  reads the sign up again and shows the server's words); everything from the form, with the phone
+  as a `tel:` link, the email as a `mailto:` link and the Facebook or Instagram link opened only if
+  it is a web address; their requests and consents; a photo uploaded through
+  `POST /api/admin/fundraiser-images` and saved as `imageSrc`; the meter (raised, online, cash, an
+  accessible progress bar held at 100); cash paid in (add in pounds, with the date and a note;
+  remove after a question); every field staff may change, sending only what changed, with each
+  message from the server under its own box; the supporter wall with the giver's full name, how it
+  shows, Hide and Show (10, then "Show all"); and History in plain words (10, then "Show all").
+- **Safety**: every stored string is escaped; a `401` signs you out as everywhere else; anything
+  that fails to load says it could not load, never that there is nothing. A second press while a
+  change is on its way sends nothing; typing survives a redraw, and so does keyboard focus.
+- **Tests**: `test/unit/admin-fundraising-page.test.ts` (the jsdom admin harness, invented data):
+  the menu for each role, the switch, the list and its pills and chips, approve, decline and finish,
+  editing and its field messages, the photo, the waiting change, cash and the meter, the wall,
+  History, hostile stored text, the keyboard, failures, and no scrolling inside a box.
 
 ### Emails
 

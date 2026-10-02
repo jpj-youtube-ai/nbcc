@@ -2506,7 +2506,7 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 
 /* ---- the chips ---- */
 #view-fundraising .fr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 22px 0 14px; }
-#view-fundraising .fr-bar .admin-segmented { flex-wrap: wrap; max-width: 100%; }
+#view-fundraising .fr-bar .admin-segmented { flex-wrap: wrap; max-width: 100%; border-radius: 22px; }
 #view-fundraising .admin-seg { transition: background .2s, color .2s; font-variant-numeric: tabular-nums; }
 #view-fundraising .admin-seg:hover:not(.is-active) { color: var(--maroon); }
 #view-fundraising .admin-seg:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
@@ -2573,13 +2573,18 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-actions { margin-top: 14px; }
 #view-fundraising .fr-decline { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); max-width: 560px; }
 #view-fundraising .fr-status-line:empty { display: none; }
+/* While a change is on its way its buttons rest, so a second press is plainly not needed. */
+#view-fundraising[aria-busy="true"] .fr-detail button { opacity: 0.6; cursor: progress; }
+@media (prefers-reduced-motion: reduce) {
+  #view-fundraising .fr-meter-fill, #view-fundraising .admin-btn, #view-fundraising .fr-more, #view-fundraising .admin-seg { transition: none; }
+}
 /* The quieter of two buttons: Decline beside Approve, Reject beside Approve change. */
 #view-fundraising .fr-btn-quiet { background: var(--card); color: var(--maroon); box-shadow: inset 0 0 0 1.6px var(--line); }
 #view-fundraising .fr-btn-quiet:hover { background: var(--tan-soft); }
 #view-fundraising .admin-btn { transition: background .2s, transform .1s; }
 #view-fundraising .admin-btn:active { transform: translateY(1px); }
 #view-fundraising .admin-btn:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
-#view-fundraising .fr-qr-link { display: inline-block; margin-top: 6px; color: var(--maroon); font-weight: 600; font-size: 0.85rem; text-underline-offset: 2px; }
+#view-fundraising .fr-qr-link { display: block; width: fit-content; margin-top: 6px; color: var(--maroon); font-weight: 600; font-size: 0.85rem; text-underline-offset: 2px; }
 #view-fundraising .fx-row dd .fx-tel { display: inline-block; }
 
 /* What they asked for, as a short list. */
@@ -2641,7 +2646,8 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 /* A change the organiser asked for, beside what is live: three columns, or stacked when narrow. */
 #view-fundraising .fr-change-panel { background: color-mix(in srgb, var(--tan) 12%, var(--card)); }
 #view-fundraising .fr-change { width: 100%; table-layout: fixed; margin: 12px 0 0; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-#view-fundraising .fr-change th[scope="row"] { width: 9rem; font-size: 0.82rem; text-transform: none; letter-spacing: 0; color: var(--slate); }
+#view-fundraising .fr-change > thead > tr > th:first-child { width: 9rem; }
+#view-fundraising .fr-change th[scope="row"] { font-size: 0.82rem; text-transform: none; letter-spacing: 0; color: var(--slate); }
 @container frlist (max-width: 599px) {
   #view-fundraising .fr-change,
   #view-fundraising .fr-change tbody,

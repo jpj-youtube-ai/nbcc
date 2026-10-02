@@ -785,6 +785,23 @@ describe("a change waiting for staff", () => {
     expect(text(detail())).not.toContain("Now with reindeer.");
   });
 
+  // The organiser can send a newer change while this one is open; the server then answers 409 and
+  // the sign up is read again, so what is shown is what is waiting now.
+  it("reads the sign up again when the change was replaced by a newer one, and says so", async () => {
+    await openFundraising();
+    await openRow(1);
+    waiting = { 1: { id: 8, changes: { town: "Newtown" }, status: "waiting", createdAt: "2026-10-02T08:00:00.000Z" } };
+    failures["POST /api/admin/fundraisers/1/edits/7/reject"] = { status: 409, body: { error: "This change has been replaced; look again" } };
+    const reads = sent("GET", "/api/admin/fundraisers/1").length;
+    (q('[data-fredit="reject"]') as HTMLElement).click();
+    await settle();
+    expect(sent("GET", "/api/admin/fundraisers/1").length).toBe(reads + 1);
+    expect(text(el("frDetailStatus"))).toBe("This change has been replaced; look again");
+    expect(text(el("frChange"))).toContain("Newtown");
+    expect(text(el("frChange"))).not.toContain("Now with reindeer.");
+    expect(q('[data-fredit="approve"]')!.getAttribute("data-freditid")).toBe("8");
+  });
+
   it("says when the change was already dealt with", async () => {
     failures["POST /api/admin/fundraisers/1/edits/7/approve"] = { status: 409, body: { error: "That change has already been dealt with" } };
     await openFundraising();
@@ -848,6 +865,21 @@ describe("the meter and cash paid in", () => {
     expect(text(q("#frList .fr-meter"))).toContain("£72.50 raised");
     expect(text(row(1))).toContain("£72.50 of £250");
     expect(text(el("frCashStatus"))).toMatch(/added/i);
+  });
+
+  it("sends one cash row however quickly Add is pressed twice", async () => {
+    await openFundraising();
+    await openRow(1);
+    setValue('#frCashForm [name="amount"]', "5");
+    submit("#frCashForm");
+    submit("#frCashForm");
+    await settle();
+    expect(sent("POST", "/api/admin/fundraisers/1/cash")).toHaveLength(1);
+    // And the next one goes through once the first has finished.
+    setValue('#frCashForm [name="amount"]', "6");
+    submit("#frCashForm");
+    await settle();
+    expect(sent("POST", "/api/admin/fundraisers/1/cash")).toHaveLength(2);
   });
 
   it("catches an amount that is not money before sending", async () => {
@@ -972,6 +1004,40 @@ describe("History", () => {
     await openFundraising();
     await openRow(1);
     expect(text(el("frHistory"))).toMatch(/could not load/i);
+  });
+});
+
+// ---- the keyboard ----
+
+describe("keyboard focus survives a redraw", () => {
+  it("stays in the box you were typing in", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    await openRow(1);
+    (q("#frf-title") as HTMLInputElement).focus();
+    submit("#frEditForm");
+    await settle();
+    expect(document.activeElement?.id).toBe("frf-title");
+  });
+
+  it("goes back to the sign up's row when the button pressed has gone", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    wallRows = { 1: [gift(1)] };
+    await openFundraising();
+    await openRow(1);
+    const hide = q('[data-frhide="501"]') as HTMLButtonElement;
+    hide.focus();
+    hide.click();
+    await settle();
+    expect(document.activeElement).toBe(row(1));
+  });
+
+  it("opens and closes a sign up with Enter", async () => {
+    records = [fundraiser(1)];
+    await openFundraising();
+    row(1)!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await settle();
+    expect(detail()).not.toBeNull();
   });
 });
 

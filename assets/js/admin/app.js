@@ -2598,6 +2598,8 @@
     ["fundraiseInvite", "Fundraising invite"], ["fundraiseSummary", "Fundraising Monday summary"],
     // TASK-506: a news update the organiser posted, approved or not used by staff.
     ["fundraiseNewsApproved", "Fundraiser news update live"], ["fundraiseNewsRejected", "Fundraiser news update not used"],
+    // TASK-507: an organiser's thank you, passed on to a giver once staff have checked it.
+    ["fundraiseSupporterThanks", "Fundraiser thank you to a supporter"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -9056,6 +9058,7 @@
     req: "frReqStatus",
     // TASK-506
     news: "frNewsStatus",
+    thanks: "frThanksStatus", // TASK-507
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -9088,6 +9091,7 @@
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
     frLoadNewsCounts(); // TASK-506
+    frLoadThanksCounts(); // TASK-507
   }
 
   function frLoadSettings() {
@@ -9287,6 +9291,7 @@
       // TASK-505: something they asked for still to send or do; buckets or tins due back.
       (frReqToDo(f) ? '<span class="admin-pill admin-pill--pending fr-requests-pill">Requests to do</span>' : "") +
       (frReqDueBack(f) ? '<span class="admin-pill is-call-due fr-dueback-pill">Due back</span>' : "") +
+      frThanksPill(f) + // TASK-507
       rowNewPill("fundraising", f.createdAt);
     return (
       '<tr class="fx-summary' + (open ? " is-open" : "") + '" data-frtoggle="' + f.id +
@@ -9371,6 +9376,7 @@
       shown.map(frSummaryRow).join("") + "</tbody></table>" +
       (showAll ? "" : '<div class="fr-more-row">' + frMoreButton("list", FR_LIST_FIRST, rows.length) + "</div>");
     nlFitBoxes(Array.prototype.slice.call(wrap.querySelectorAll("textarea.fr-input")));
+    frPaintThanks(); // TASK-507
     frPaintHistory();
     frPaintNews(); // TASK-506
     frRestDetail();
@@ -9415,6 +9421,7 @@
         (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         frRequestsSection(f, write) +
         frNewsSection() + // TASK-506
+        frThanksSection() + // TASK-507
         '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
@@ -9948,6 +9955,7 @@
       '<ul class="fx-history-list">' + shown.map(function (h) {
         var data = h.data || {};
         var what = FR_HISTORY_WORDS[h.action] || String(h.action || "");
+        if (String(h.action).indexOf("fundraiser.thanks_") === 0) what = frThanksHistoryWhat(h.action, data); // TASK-507
         if (h.action === "fundraiser.cash_added") what = "Cash added: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.cash_removed" && data.amountPence) what = "Cash removed: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.called") what = data.which === "after" ? "Called, a week after its date" : "Called, a week before its date";
@@ -10400,6 +10408,7 @@
       e.preventDefault();
       frToggle(toggle.getAttribute("data-frtoggle"));
     });
+    frThanksWire(view); // TASK-507
   }
 
   // ---- news updates (TASK-506) ----
@@ -11089,6 +11098,202 @@
         run.say(frRefusal(r, "That was not saved. Please try again."), true);
         return frReload();
       });
+    });
+  }
+
+  // ---- Thank yous to supporters (TASK-507) ----
+  // The thank yous organisers send from their private area (src/routes/fundraiser-thanks.ts). Every
+  // one waits for staff. The list shows "Thank yous to check" on a sign up with any waiting, and the
+  // open sign up has a Thank yous panel: the organiser's words, the gifts it picked, Approve and
+  // send, and Don't send (with an optional reason that stays here, for staff only). Approving makes
+  // the server email each giver who can be emailed, in the background, from the events inbox; the
+  // panel then shows what happened to each gift. The organiser only ever sees how many it reached.
+  // Every stored string is escaped. Kept here, in one block, apart from the rest of the screen,
+  // reached from it by one line hooks marked TASK-507.
+  var FR_THANKS_GIFTS_FIRST = 10;
+  var frThanksCounts = {}; // fundraiser id -> how many wait
+  var frThanksRows = null; // { id, rows } or { id, failed } or { id, loading } for the open sign up
+  var frThanksReasons = {}; // thank you id -> the reason typed for not sending it
+
+  function frThanksPill(f) {
+    return frThanksCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-thanksto-pill">Thank yous to check</span>' : "";
+  }
+
+  function frThanksSection() {
+    return '<section class="fx-panel fx-panel--wide fr-thanksto-panel" data-frthanks-panel><h4>Thank yous to supporters</h4><div id="frThanks"></div></section>';
+  }
+
+  function frLoadThanksCounts() {
+    return authFetch("/api/admin/fundraising/thanks-waiting")
+      .then(okJson)
+      .then(function (d) {
+        frThanksCounts = d && d.counts && typeof d.counts === "object" ? d.counts : {};
+        frRenderList();
+      })
+      .catch(function () {
+        /* only a pill: the list works without it */
+      });
+  }
+
+  function frLoadThanks(id) {
+    frThanksRows = { id: id, loading: true };
+    return authFetch("/api/admin/fundraisers/" + encodeURIComponent(id) + "/thanks")
+      .then(okJson)
+      .then(function (d) {
+        if (frOpenId !== id) return;
+        frThanksRows = { id: id, rows: d && Array.isArray(d.thanks) ? d.thanks : [] };
+        frPaintThanks();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (frOpenId !== id) return;
+        frThanksRows = { id: id, failed: true };
+        frPaintThanks();
+      });
+  }
+
+  // Staff's own words for where it is up to (the organiser's are "Waiting for us to check" and so on).
+  function frThanksState(t) {
+    if (t.status === "pending") return { label: "Waiting for you to check", cls: "admin-pill--pending" };
+    if (t.status === "rejected") return { label: "Not sent", cls: "admin-pill--cancelled" };
+    if (Number(t.waiting) > 0 || !t.deliveredAt) return { label: "Sending now", cls: "admin-pill--active" };
+    return { label: "Sent to " + Number(t.sent) + " of " + Number(t.gifts), cls: "admin-pill--active" };
+  }
+
+  function frThanksItem(t, write) {
+    var id = Number(t.id);
+    var st = frThanksState(t);
+    var n = Number(t.gifts) || 0;
+    var when = "Sent for checking " + H.fmtDate(t.createdAt) + ", for " + n + (n === 1 ? " gift" : " gifts") +
+      (t.decidedBy ? ", decided by " + frWho(t.decidedBy) : "");
+    var people = Array.isArray(t.recipients) ? t.recipients : [];
+    var key = "thanks" + id;
+    var shown = frMore[key] ? people : people.slice(0, FR_THANKS_GIFTS_FIRST);
+    var list = people.length
+      ? '<ul class="fr-thanksto-people">' + shown.map(function (g) {
+          return "<li><span class=\"fr-thanksto-who\">" + H.escapeHtml(g.name || "") + "</span> · " + H.escapeHtml(frMoney(g.amountPence)) +
+            ' · <span class="fr-thanksto-outcome">' + H.escapeHtml(g.outcomeWords || g.outcome || "") + "</span></li>";
+        }).join("") + "</ul>" + frMoreButton(key, shown.length, people.length)
+      : "";
+    var actions = "";
+    if (write && t.status === "pending") {
+      actions =
+        '<p class="fx-help">Approve it and we email it to each of these givers who can be emailed, from the events inbox, one at a time. ' +
+          "The organiser never sees their addresses, and replies come to us.</p>" +
+        '<label class="fx-call-label" for="frThanksReason' + id + '">Why not send it (optional, for staff only)</label>' +
+        '<textarea class="fx-call-input fr-input" id="frThanksReason' + id + '" rows="1" maxlength="500" data-frthanksreason="' + id + '">' +
+          H.escapeHtml(frThanksReasons[id] || "") + "</textarea>" +
+        '<div class="fx-call-row fr-actions">' +
+          '<button class="admin-btn admin-btn--small" type="button" data-frthanks="approve" data-frthanksid="' + id + '">Approve and send</button>' +
+          '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frthanks="reject" data-frthanksid="' + id + '">Don\'t send</button>' +
+        "</div>";
+    }
+    return (
+      '<li data-frthanksitem="' + id + '"' + (t.status === "rejected" ? ' class="is-hidden"' : "") + ">" +
+        '<div class="fr-wall-head"><span class="admin-pill ' + st.cls + '">' + H.escapeHtml(st.label) + "</span>" +
+          '<span class="fx-hist-who">' + H.escapeHtml(when) + "</span></div>" +
+        '<p class="fr-wall-msg fr-thanksto-msg">' + H.escapeHtml(t.message || "") + "</p>" +
+        (t.status === "rejected" && t.rejectReason ? '<p class="fx-help">Our reason, for staff only: ' + H.escapeHtml(t.rejectReason) + "</p>" : "") +
+        list +
+        actions +
+      "</li>"
+    );
+  }
+
+  function frPaintThanks() {
+    // Closed: forget them, so opening it again reads them afresh (how many went, say).
+    if (frOpenId == null) {
+      frThanksRows = null;
+      return;
+    }
+    var box = el("frThanks");
+    if (!box) return;
+    var s = frThanksRows && frThanksRows.id === frOpenId ? frThanksRows : null;
+    if (!s) {
+      frLoadThanks(frOpenId);
+      s = frThanksRows;
+    }
+    if (s.loading) {
+      box.innerHTML = '<p class="admin-loading">Loading…</p>';
+      return;
+    }
+    if (s.failed) {
+      box.innerHTML = '<div role="alert">' +
+        unavailableHtml("The thank yous could not load just now. Close this sign up and open it again in a moment.") + "</div>";
+      return;
+    }
+    var status = frNoticeHtml("thanks", "frThanksStatus");
+    if (!s.rows.length) {
+      box.innerHTML = '<p class="fx-empty">No thank yous yet. The organiser can send one to their supporters from their private area, and it waits here for you to check.</p>' + status;
+      return;
+    }
+    var write = frCanWrite();
+    var rows = s.rows.filter(function (t) { return t.status === "pending"; })
+      .concat(s.rows.filter(function (t) { return t.status !== "pending"; }));
+    box.innerHTML =
+      '<p class="fx-help">The organiser picked these gifts and wrote this. Check the words: once approved, each giver gets it by email from us.</p>' +
+      '<ul class="fr-wall fr-thanksto-list">' + rows.map(function (t) { return frThanksItem(t, write); }).join("") + "</ul>" + status;
+    nlFitBoxes(Array.prototype.slice.call(box.querySelectorAll("textarea.fr-input")));
+    frRestDetail();
+  }
+
+  function frThanksDecide(btn) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var which = btn.getAttribute("data-frthanks");
+    var tid = btn.getAttribute("data-frthanksid");
+    var question = {
+      approve: "Approve and send this thank you? We email it straight away to each giver it picked who can be emailed. It cannot be taken back.",
+      reject: "Not send this thank you? Nobody is emailed, and its gifts can be thanked again in a new one. Your reason stays here, for staff only.",
+    }[which];
+    if (!question || !window.confirm(question)) return;
+    var body = {};
+    if (which === "reject") {
+      var reason = String(frThanksReasons[tid] || "").trim();
+      if (reason) body.reason = reason;
+    }
+    frRun("thanks", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/thanks/" + encodeURIComponent(tid) + "/" + which, body).then(function (r) {
+        if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+        else {
+          if (which === "reject") delete frThanksReasons[tid];
+          run.say(which === "approve"
+            ? "Approved. The emails are going now, one at a time. Open this sign up again later to see how many went."
+            : "Not sent. Nobody is emailed, and the organiser sees it was not sent.", false);
+        }
+        return Promise.all([frLoadThanks(f.id), frLoadThanksCounts(), frLoadHistory(f.id)]);
+      });
+    });
+  }
+
+  // The History line for each thank you action, with its numbers or reason.
+  function frThanksHistoryWhat(action, data) {
+    var n = Number(data.gifts) || 0;
+    if (action === "fundraiser.thanks_posted") return "The organiser sent a thank you to check, for " + n + (n === 1 ? " gift" : " gifts");
+    if (action === "fundraiser.thanks_approved") return "Thank you approved and sent";
+    if (action === "fundraiser.thanks_rejected") return "Thank you not sent" + (data.reason ? ": " + String(data.reason) : "");
+    if (action === "fundraiser.thanks_delivered") {
+      var not = (Number(data.skipped) || 0) + (Number(data.failed) || 0);
+      return "Thank you emails done: " + (Number(data.sent) || 0) + " sent, " + not + " not sent";
+    }
+    return String(action || "");
+  }
+
+  function frThanksWire(view) {
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var b = t.closest("[data-frthanks]");
+      if (b) frThanksDecide(b);
+    });
+    view.addEventListener("input", function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute) return;
+      var tid = t.getAttribute("data-frthanksreason");
+      if (tid === null) return;
+      frThanksReasons[tid] = t.value;
+      nlFitBox(t);
     });
   }
 

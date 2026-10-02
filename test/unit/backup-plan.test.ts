@@ -50,9 +50,10 @@ describe("knowing how many tables to expect", () => {
   // tables; 62 since TASK-501 added the private area's sign in codes and sessions; 64 since TASK-503
   // added the fundraising invites and the calls made to fundraisers; 65 since TASK-505 added the
   // fundraising requests (posters, leaflets, buckets and tins, shout outs, someone to come along);
-  // 66 since TASK-506 added the news updates organisers post to their pages.
-  it("counts 66 across the three databases", () => {
-    expect(expectedTableCount(ROOT)).toBe(66);
+  // 66 since TASK-506 added the news updates organisers post to their pages; 68 since TASK-507
+  // added the thank yous organisers send to their supporters, and their gifts.
+  it("counts 68 across the three databases", () => {
+    expect(expectedTableCount(ROOT)).toBe(68);
   });
 
   it("finds the three tables that live outside the main database", () => {
@@ -98,7 +99,10 @@ describe("knowing how many tables to expect", () => {
     expect(main).toContain("fundraiser_requests");
     // TASK-506: the news updates organisers post, with their photos, which wait for staff.
     expect(main).toContain("fundraiser_updates");
-    expect(main.length).toBe(63);
+    // TASK-507: the thank yous organisers send their supporters, and what happened to each email.
+    expect(main).toContain("fundraiser_thanks");
+    expect(main).toContain("fundraiser_thank_gifts");
+    expect(main.length).toBe(65);
   });
 
   it("returns nothing for a directory that does not exist, rather than throwing", () => {

@@ -1332,6 +1332,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraise/manage/sign-in` | **implemented** | TASK-501 (a right code starts a 2 hour http only session cookie; every refusal the same `401`) |
 | `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details; since TASK-505 also `requests`, where each thing they asked for is up to, in words) |
 | `POST /api/fundraise/manage/fundraisers/:id/edit`, `/finished`, `/pay-in` | **implemented** | TASK-501 (a change that waits for staff; "I've finished"; a Stripe checkout to pay in what they collected. Only their own: anyone else's is a 404) |
+| `GET /api/fundraise/manage/thanks` | **implemented** | TASK-507 (the gifts an organiser can thank, as the gifts list shows them, and their thank yous with where each is up to; never an address. See **Thank your supporters (TASK-507)**) |
+| `POST /api/fundraise/manage/fundraisers/:id/thanks` | **implemented** | TASK-507 (a thank you for gifts on their own fundraiser; waits for staff, who approve it before NBCC emails each giver) |
 | `POST /api/fundraise/manage/sign-out` | **implemented** | TASK-501 (ends the session) |
 | `GET /api/fundraise/manage/news`, `POST /api/fundraise/manage/fundraisers/:id/news`, `GET /api/fundraise/manage/news/:updateId/photo` | **implemented** | TASK-506 (the organiser's news updates: theirs listed with where each is up to; a new one, with an optional photo, waits for staff, five a day; their own photo. See **Fundraiser pages: countdown, on the day, and news updates (TASK-506)**) |
 | `GET /api/admin/fundraising/news-waiting`, `GET /api/admin/fundraisers/:id/news`, `.../news/:updateId/photo`, `POST .../news/:updateId/approve` \| `reject` \| `hide` \| `show` | **implemented** | TASK-506 (staff check news updates: fundraising view to look, edit to decide; audited) |
@@ -7429,6 +7431,7 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
 | `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
 | `fundraiseSummary` | each address on the Weekly summary list | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
+| `fundraiseSupporterThanks` | a giver the organiser picked, who can be emailed | staff approve the organiser's thank you (TASK-507, email 20), in the background, one at a time | "A thank you from Sam": the organiser's message in a quote box, "And from all of us: thank you too.", "Thanks so much,", the questions box. From and Reply-To the events inbox. See **Thank your supporters (TASK-507)** |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
 open" email is retired. A page holder approved while fundraising is off gets no email then: the
@@ -7922,7 +7925,7 @@ email 11 (`fundraiseSummary`), one email to each address, from and replying to t
   made (a card gift is paid there and then). Cash counts by `fundraiser_cash.created_at`, not the
   day it was paid in, so cash typed in after Monday's summary went appears in the next one;
 - the new sign ups;
-- **Waiting on us**: sign ups to approve, changes to check, posters, leaflets, buckets and tins to
+- **Waiting on us**: sign ups to approve, changes to check, thank yous to check (TASK-507), posters, leaflets, buckets and tins to
   send (the split requests and the old combined ones), shout outs, requests for someone to come
   along (since TASK-505 only those not yet marked sent, done or arranged, and a shout out only with
   their permission to post; plus "N buckets or tins still out (M due back)", or "..., none due back yet", each one due back
@@ -8164,6 +8167,118 @@ jsdom), `admin-fundraising-news-panel` (the admin in jsdom), `admin-email-kinds`
 BDD: `features/fundraising-news.feature` (post, approve, on the page; a waiting photo is not public;
 the sixth in a day; the countdown and the day itself).
 
+## Thank your supporters (TASK-507)
+
+An organiser can thank the people who gave on their fundraiser, without ever seeing their email
+addresses. Jaimie's decision: the organiser picks gifts and writes a short thank you in their
+private area; staff check every one first; NBCC then emails it to each chosen giver (email 20 of the
+approved fundraising emails), from and replying to the events inbox, so a reply comes to NBCC and
+never to the organiser. No config value.
+
+**The private area** (`/fundraise/manage`). Each fundraiser (approved or finished) with gifts to
+thank, or thank yous to look back on, has a **Thank your supporters** part just after its latest
+gifts: its gifts with a tick box each, showing only what the gifts list shows (a name or Anonymous,
+the amount unless the giver hid it, the message unless staff hid it, the date), ten and then
+**Show all**; **Select all not yet thanked** (which ticks the hidden ones too); a message box (600
+characters at most, with the rude words check the wall uses); and **Send for checking**. Money the
+organiser paid in, and gifts refunded in full, are never listed. A gift is thanked at most once: one
+already in a thank you (waiting, sent, or skipped) is marked **Thanked** and cannot be ticked, and a
+later thank you that picks it skips it ("Some you picked had been thanked already, so we left those
+out."). Only a thank you staff chose not to send frees its gifts. At most three thank yous a day for
+one fundraiser. Below the form, **Your thank yous**, each with where it is up to: **Waiting for us to
+check**, **Sending now**, **Sent to N supporters** (counts only, never who), or **Not sent**.
+Added by its own script, `assets/js/fundraise-thanks.js`, from a `<template data-thanks-pattern>`.
+
+**Admin > Fundraising.** A **Thank yous to check** pill on a sign up with any waiting, and a
+**Thank yous to supporters** panel in the open sign up: the organiser's words, the gifts it picked
+(each giver's name and amount, and later what happened to each), **Approve and send** and **Don't
+send** (with an optional reason that stays with staff), each after a question. A viewer sees it all
+without the buttons. History names each step: sent for checking, approved and sent, not sent (with
+the reason), and "Thank you emails done: N sent, M not sent".
+
+**Sending.** Approving answers staff straight away, then sends in the background
+(`src/fundraising/thanks-send.ts`), one gift at a time: each is claimed (`FOR UPDATE SKIP LOCKED`)
+before its email, so two runs never take the same one. Before each email the giver is checked at
+that moment, and skipped (with the reason kept for staff) when they have no address, when the
+address is on the suppression list (a hard bounce, a spam complaint, or stopped by staff; the same
+`suppressedAmong` the newsletter uses; a list that cannot be read means no email), or when their
+thank you consent is off (`donors.thankyou_consent`, exactly as NBCC's own thank you letters). One person whose
+several gifts were picked gets the thank you once. A failed send is recorded and the run goes on;
+nothing throws. A gift left "sending" for 15 minutes (a restart part way) is marked failed rather
+than sent twice; gifts left queued (or sending, or a thank you left unmarked) are picked up the next
+time anyone opens Admin > Fundraising. When the last gift of a thank you is dealt with, it is marked
+delivered and the counts are written to `audit_log` once; every run also ends by marking any
+approved thank you with nothing left to send (its mark failed, or its gifts all went with their
+donations), so none says "Sending now" for good.
+
+**The email** (kind `fundraiseSupporterThanks`, "Fundraiser thank you to a supporter" on the Email
+audit), in the approved words: "A thank you from Sam" (the organiser's first name only, and only if
+it is one plain word of letters; otherwise "A thank you for your gift"), "Hello,", "Sam asked us to
+pass this on to you, for your gift to **title**:", the message in a quote box, "And from all of us:
+thank you too. Your gift helps the families we support, all year round.", "Thanks so much, NBCC
+Team", and the "Got any questions?" box with the events inbox. Nothing about any other giver, and
+never the organiser's address.
+
+**The Monday summary** adds "N thank yous to check" to Waiting on us (one thing waiting each). If
+they cannot be counted, the summary still goes, without that line.
+
+### Routes
+
+The organiser's routes reuse the private area's session, ownership and same origin checks
+(`signedIn`, `ownFundraiser` and `fromOurOwnPage`, exported from `src/routes/fundraise.ts`). Staff's
+need a session and the `fundraising` section: viewers look, editors and admins decide.
+
+| Route | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/fundraise/manage/thanks` | the organiser | | `{ fundraisers: [{ id, canThank, gifts: [{ donationId, name, amountPence, giftAidPence, message, createdAt, thanked }], thanks: [{ id, message, status, statusWords, createdAt, gifts }] }] }`, `no-store` |
+| `POST /api/fundraise/manage/fundraisers/:id/thanks` | the organiser | `{ message, donationIds }` | `202 { status: "waiting", alreadyThanked, thanks }`; `400` with `fields` (the words, no gift ticked) or when any gift is not one on this fundraiser that can be thanked (nothing stored); `409` when every gift picked is thanked already; `429` after three in a day; `404` for anyone else's; `410` for one not approved or finished |
+| `GET /api/admin/fundraising/thanks-waiting` | view | | `{ counts: { <id>: n } }` |
+| `GET /api/admin/fundraisers/:id/thanks` | view | | `{ thanks: [{ ...thank you, statusWords, recipients: [{ donationId, name, amountPence, outcome, outcomeWords, sentAt }] }] }` (never an address) |
+| `POST /api/admin/fundraisers/:id/thanks/:thanksId/approve` | edit | | `{ thanks }`, then the emails go in the background; `404` not this sign up's; `409` already decided |
+| `POST /api/admin/fundraisers/:id/thanks/:thanksId/reject` | edit | `{ reason? }` (500 at most) | `{ thanks }`; emails nobody |
+
+Every step writes `audit_log` against the fundraiser: `fundraiser.thanks_posted` (actor
+`organiser`, `{ thanksId, gifts, alreadyThanked }`), `fundraiser.thanks_approved` and
+`fundraiser.thanks_rejected` (actor `admin:<email>`, the reason with a reject), and
+`fundraiser.thanks_delivered` (actor `system`, `{ thanksId, sent, skipped, failed }`).
+
+### Data (`migrations/1791200000110_fundraiser-thanks.js`, additive only)
+
+`fundraiser_thanks`: one thank you, cleared with its fundraiser: the words (1 to 600 characters),
+`pending`, `approved` or `rejected`, who decided and when, a reason kept for staff, and when the last
+of its emails was dealt with. `fundraiser_thank_gifts`: one row per gift it picked, cleared with the
+thank you or the gift: `waiting`, `queued`, `sending`, `sent`, `skipped` (with `no_email`,
+`suppressed`, `opted_out` or `duplicate`), `failed` or `cancelled`, and when it was sent. A unique
+index on the gift (except where cancelled) holds "thanked at most once". No email address is ever
+stored: it is read from the giver's donor row at the moment of sending. Numbered 110, above main's
+080 and the 100 another open task uses. Both are in the nightly backup's table count (67).
+
+### Where it lives, and tests
+
+Rules (pure): `src/fundraising/thanks.ts` (what may be sent, the gifts to pick, the organiser's words,
+who may be emailed). The email: `src/fundraising/thanks-email.ts`. SQL:
+`src/db/fundraiser-thanks.ts`. Sending: `src/fundraising/thanks-send.ts`. Routes:
+`src/routes/fundraiser-thanks.ts`, mounted before the private area's router (whose retired link
+route would read "thanks" as a link). Screens: the `frThanks` block of `assets/js/admin/app.js`
+(reached by one line hooks marked TASK-507), styles beside `.fr-req-form` in `assets/css/admin.css`;
+`assets/js/fundraise-thanks.js` and the `<template data-thanks-pattern>` in `fundraise-manage.html`,
+styles beside `.fr-form__lead` in `assets/css/fundraising.css`. Unit tests: `fundraising-thanks`,
+`fundraising-thanks-email` (email 20, exactly), `fundraiser-thanks-db`, `fundraiser-thanks-migration`,
+`fundraising-thanks-send` (one at a time, suppression, consent, never throws), `fundraiser-thanks-routes` (only
+the owner, only their own gifts, the limits, staff permissions, sending after the answer),
+`fundraising-summary-thanks`, `fundraise-thanks-page` and `admin-fundraising-thanks-panel` (jsdom),
+`admin-email-kinds` and `backup-plan`. BDD: `features/fundraising-thanks.feature` (an organiser
+thanks two givers, staff approve, the giver who ticked the newsletter box is emailed and the one who
+did not is not, the organiser sees "Sent to 1 supporter" and never either address; a gift on someone
+else's fundraiser cannot be picked).
+
+**Who is emailed, and why so few may be.** The donor's thank you consent is written from the give
+form's newsletter tick box (unticked by default), and "Stop all emails" in the preference centre
+turns it off; nothing stored tells those two apart. So, as NBCC's own thank you letters do, only a
+giver whose thank you consent is on is emailed: a giver who did not tick the newsletter box is
+skipped (staff see "Thank you emails are off for them"; the organiser only sees the count). Emailing
+those givers too would need an explicit record of who chose to stop, which is a decision for later.
+
 ## A QR code encoder for fundraiser pages (TASK-493)
 
 `src/fundraising/qr.ts` draws QR codes with no dependencies, written from the QR standard
@@ -8205,15 +8320,16 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 62 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 64 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
 in TASK-493, the private area's sign in codes and sessions two in TASK-501, the invites and
-calls two in TASK-503, and the requests one in TASK-505),
+calls two in TASK-503, the requests one in TASK-505, and the thank yous to supporters two in
+TASK-507),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 62 of **65** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 64 of **67** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

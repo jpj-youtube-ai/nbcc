@@ -9,6 +9,7 @@ import { adminEventsRouter } from "./routes/admin-events";
 import { adminFundraisingRouter } from "./routes/admin-fundraising";
 import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
+import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseRouter } from "./routes/fundraise";
 import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
@@ -93,6 +94,9 @@ export function createApp() {
   app.use(adminUsersRouter);
   // The admin's Events section (TASK-453): events, the page switch, previews, picture uploads.
   app.use(adminEventsRouter);
+  // TASK-507: "Thank your supporters" (the organiser's, and staff's checks). Before fundraiseRouter,
+  // whose retired link route (GET /api/fundraise/manage/:token) would otherwise take "thanks".
+  app.use(fundraiserThanksRouter);
   // Community fundraising (TASK-493): the public sign up, Get involved's list, each fundraiser's page,
   // the emailed manage links, and Admin > Fundraising. All of it off until an admin switches it on.
   // TASK-506: news updates (the organiser's, staff's and the public photo). Before fundraiseRouter,

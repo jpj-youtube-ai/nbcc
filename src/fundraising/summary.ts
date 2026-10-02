@@ -21,7 +21,7 @@ import { requestTotals, type RequestRow } from "./requests";
 //                  RECORDED it, so every pound is in exactly one Monday's summary, even one typed
 //                  in after the summary for the week it was paid in had gone
 //   new sign ups   every sign up that arrived last week
-//   waiting on us  sign ups to approve; changes to check; news updates to check (TASK-506); posters, leaflets, buckets and tins still
+//   waiting on us  sign ups to approve; changes to check; news updates to check (TASK-506); thank yous to check (TASK-507); posters, leaflets, buckets and tins still
 //                  to send (split and old combined requests, from sign ups still to come); shout outs
 //                  still to do (only with their permission to post) and someone to come along still
 //                  to arrange (likewise); TASK-505: only what staff have not yet marked sent or done
@@ -76,6 +76,8 @@ export interface SummaryInputs {
   requests?: RequestRow[];
   /** TASK-506: news updates organisers posted that staff have still to check. */
   newsToCheck?: number;
+  /** TASK-507: thank yous organisers sent to their supporters that staff have still to check. */
+  thanksToCheck?: number;
 }
 
 export interface Materials {
@@ -102,6 +104,8 @@ export interface SummaryCounts {
   changesToCheck: number;
   /** TASK-506 */
   newsToCheck: number;
+  /** TASK-507 */
+  thanksToCheck: number;
   materials: Materials;
   /** How many fundraisers have something to be sent. */
   materialsFundraisers: number;
@@ -186,6 +190,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
   const toApprove = i.fundraisers.filter((f) => f.status === "new").length;
   const changesToCheck = i.fundraisers.filter((f) => f.editWaiting).length;
   const newsToCheck = Math.max(0, Math.floor(i.newsToCheck ?? 0));
+  const thanksToCheck = Math.max(0, Math.floor(Number(i.thanksToCheck ?? 0) || 0));
   const callsDue = i.fundraisers.filter((f) => callStates(f, callsBy.get(f.id) ?? [], today).due).length;
   const pastDate = i.fundraisers.filter((f) => offListPrompt(f, today) === "date").length;
   const saysFinished = i.fundraisers.filter((f) => f.status === "approved" && f.finishedRequestedAt).length;
@@ -208,6 +213,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
     toApprove,
     changesToCheck,
     newsToCheck,
+    thanksToCheck,
     materials,
     materialsFundraisers,
     shoutOuts,
@@ -227,6 +233,7 @@ export function summaryCounts(i: SummaryInputs): SummaryCounts {
       toApprove +
       changesToCheck +
       newsToCheck +
+      thanksToCheck +
       materialsFundraisers +
       shoutOuts +
       attend.length +
@@ -281,6 +288,7 @@ export function summaryLines(c: SummaryCounts): SummaryLines {
   if (c.toApprove) waiting.push(plural(c.toApprove, "sign up to approve", "sign ups to approve"));
   if (c.changesToCheck) waiting.push(plural(c.changesToCheck, "change to check", "changes to check"));
   if (c.newsToCheck) waiting.push(plural(c.newsToCheck, "news update to check", "news updates to check"));
+  if (c.thanksToCheck) waiting.push(plural(c.thanksToCheck, "thank you to check", "thank yous to check"));
   const m = c.materials;
   const posted = [
     m.posters ? `posters (${m.posters})` : "",

@@ -70,3 +70,11 @@ describe("the fundraising news update email kinds", () => {
     expect(labelled).toContain(kind);
   });
 });
+
+// TASK-507: email 20, an organiser's thank you passed on to a giver.
+describe("the fundraising supporter thank you email kind", () => {
+  it("sends and names fundraiseSupporterThanks", () => {
+    expect(sent).toContain("fundraiseSupporterThanks");
+    expect(labelled).toContain("fundraiseSupporterThanks");
+  });
+});

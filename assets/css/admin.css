@@ -2618,6 +2618,13 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .fr-req-note { white-space: pre-line; }
 #view-fundraising .fr-req-actions { margin-top: 10px; }
 #view-fundraising .fr-req-form { margin-top: 10px; }
+/* TASK-507: thank yous to supporters. The organiser's words in the wall's style, then a line a
+   gift (who, how much, what happened), wrapping; nothing scrolls inside the panel. */
+#view-fundraising .fr-thanksto-msg { font-family: var(--font-head, Georgia, serif); font-style: italic; }
+#view-fundraising .fr-thanksto-people { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 0.86rem; color: var(--slate); overflow-wrap: anywhere; }
+#view-fundraising .fr-wall .fr-thanksto-people li { padding: 0; border-bottom: 0; }
+#view-fundraising .fr-thanksto-who { font-weight: 600; }
+#view-fundraising .fr-thanksto-outcome { color: var(--slate-soft); }
 
 /* The photo, never wider than its panel. */
 #view-fundraising .fr-photo { display: block; max-width: 100%; height: auto; max-height: 260px; border-radius: 12px; border: 1px solid var(--line); }

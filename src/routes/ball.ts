@@ -13,9 +13,9 @@ import { publicTransferOpen } from "../ball/transfer";
 import { retireReplacedCheckout } from "../ball/replace-checkout";
 import { cancelReplacedCheckout, getTransferSettings, pendingCardSession } from "../db/ball-transfer";
 import { holdsPreviewCookie, previewSecret } from "../ball/preview-access";
-import { addBallNavLink } from "../ball/nav-link";
-import { addEventsNavLink } from "../events/nav-link";
+import { decorateBallPage } from "../ball/page-decor";
 import { eventsPageIsOn } from "../db/events";
+import { fundraisingIsOn } from "../db/fundraisers";
 import { buildBallCalendar } from "../ball/calendar";
 import { buildGuestSummaryEmail } from "../ball/run-up-email";
 import { parseMenu } from "../ball/menu";
@@ -241,7 +241,7 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   arrivalTime: string | null;
   includedNote: string | null;
   lineUpNote: string | null;
-}, eventsOn = false): void {
+}, eventsOn = false, fundraisingOn = false): void {
   const file = join(SITE_ROOT, "ball.html");
   if (!existsSync(file)) {
     res.status(404).send("Not found");
@@ -274,8 +274,9 @@ function servePage(res: express.Response, gateOpen: boolean, settings: {
   // request by definition. Re-testing it could only ever disagree with the page being sent.
   // TASK-453: and the Events item while that page is switched on, like every other page. The two
   // insertions are independent (one goes after About, the other at the end), so order is free.
+  // TASK-494: and the footer's "Fundraise for us" to the sign up while fundraising is on.
   const page = renderBallPage(template, { settings, gateOpen });
-  res.type("html").send(addBallNavLink(eventsOn ? addEventsNavLink(page) : page));
+  res.type("html").send(decorateBallPage(page, { ballItem: true, eventsOn, fundraisingOn }));
 }
 
 // TASK-337: the add-to-calendar file.
@@ -327,7 +328,8 @@ ballRouter.get("/ball", async (req, res, next) => {
         return;
       }
     }
-    servePage(res, gateOpen, settings, await eventsPageIsOn());
+    const [eventsOn, fundraisingOn] = await Promise.all([eventsPageIsOn(), fundraisingIsOn()]);
+    servePage(res, gateOpen, settings, eventsOn, fundraisingOn);
   } catch (err) {
     next(err);
   }
@@ -372,7 +374,13 @@ ballRouter.get("/ball/terms", async (req, res, next) => {
       res.status(404).send("Not found");
       return;
     }
-    res.sendFile(file);
+    // TASK-494: while fundraising is on, the footer's "Fundraise for us" goes to the sign up, as on
+    // every other page. Off, the file goes out exactly as before.
+    if (!(await fundraisingIsOn())) {
+      res.sendFile(file);
+      return;
+    }
+    res.type("html").send(decorateBallPage(readFileSync(file, "utf8"), { ballItem: false, eventsOn: false, fundraisingOn: true }));
   } catch (err) {
     next(err);
   }

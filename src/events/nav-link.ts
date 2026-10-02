@@ -1,20 +1,23 @@
-// TASK-453: the "Events" item in the main menu, added to every page while an admin has the Events
-// page switched on. Switched off, pages are served exactly as they are on disk.
+// TASK-453: the Events item in the main menu, added to every page while an admin has the Events
+// page switched on. Switched off, pages are served exactly as they are on disk. TASK-494 renamed the
+// page "Get involved" (events and community fundraisers on one page), at /get-involved; /events
+// redirects there.
 //
-// It goes straight after About, so the menu reads Home, About, Events, Donate... The anchor is the
+// It goes straight after About, so the menu reads Home, About, Get involved, Donate... The anchor is the
 // nav LIST, never a link on its own: the Festive Ball item (src/ball/nav-link.ts) found out that
 // the first `href="/about-us"` in a file can be the FOOTER's, because the nav's own copy carries
 // class="active" on the About page and a plain match skips it.
 
-export const EVENTS_NAV_ITEM = '<li><a href="/events">Events</a></li>';
+export const EVENTS_NAV_ITEM = '<li><a href="/get-involved">Get involved</a></li>';
 
 const NAV_LIST = 'class="nav-links"';
 const ABOUT = 'href="/about-us"';
 
 /**
  * Add the item after About in the main nav. Returns the page UNCHANGED when there is no nav
- * (hub.html, set-password.html) or when the nav already offers /events (events.html itself), so
- * it is safe to run over any page and safe to run twice. With no About item it goes last.
+ * (hub.html, set-password.html) or when the nav already offers the page (events.html, the Get involved
+ * template, itself; or an old copy still pointing at /events), so it is safe to run over any page and
+ * safe to run twice. With no About item it goes last.
  */
 export function addEventsNavLink(html: string): string {
   const listStart = html.indexOf(NAV_LIST);
@@ -23,7 +26,7 @@ export function addEventsNavLink(html: string): string {
   if (listEnd === -1) return html;
 
   const list = html.slice(listStart, listEnd);
-  if (list.includes('href="/events"')) return html;
+  if (list.includes('href="/get-involved"') || list.includes('href="/events"')) return html;
 
   const aboutAt = list.indexOf(ABOUT);
   const aboutItemEnd = aboutAt === -1 ? -1 : list.indexOf("</li>", aboutAt);

@@ -7324,7 +7324,7 @@ its card's corner only while it is still to come.
 
 **The footer.** Every page's footer sends "Fundraise for us" to `/contact`. While fundraising is
 switched on the server points it at `/fundraise` instead (`src/fundraising/footer-link.ts`, added
-wherever the menu items are); off, pages go out as they are on disk.
+wherever the menu items are, the Festive Ball pages included through `src/ball/page-decor.ts`); off, pages go out as they are on disk.
 
 **Search listing.** `1791200000010_site-seo-get-involved.js` copies an admin's saved listing choice
 for `/events` (`site_page_seo`) to `/get-involved`, once, never over a choice already saved there.
@@ -7360,7 +7360,7 @@ place, organised by, the photo, the story, the meter with a Give button, the **g
   `test/unit/fundraiser-checkout-contract.test.ts` feeds the browser's body through the real route.
 - **After paying** the giver comes back to the fundraiser's own page, not the donate page's thank
   you. `POST /api/checkout-session` looks the fundraiser up itself (`fundraiserReturnPage`, never an
-  address from the browser) and, only for one with a public page, sets Stripe's return address to
+  address from the browser) and, only while fundraising is on and for one with a public page, sets Stripe's return address to
   `<page>?thanks=1` (`&message=1` if they left a message) and, on Stripe's own page, the cancel
   address to the page itself. The page then shows "Thank you for supporting ..." with the share
   links, saying the message will appear on the wall shortly when there is one; the meter and wall

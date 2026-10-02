@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // page; anything else, and every donate page gift, goes back exactly where it always did. Every name
 // and address here is invented.
 
-const { create, getFundraiser } = vi.hoisted(() => ({ create: vi.fn(), getFundraiser: vi.fn() }));
+const { create, getFundraiser, fundraisingOn } = vi.hoisted(() => ({ create: vi.fn(), getFundraiser: vi.fn(), fundraisingOn: { value: true } }));
 const cfg = vi.hoisted(() => ({
   STRIPE_SUCCESS_URL: "https://nbcc.test/donate/thank-you",
   STRIPE_CANCEL_URL: "https://nbcc.test/donate",
@@ -16,7 +16,7 @@ const cfg = vi.hoisted(() => ({
 }));
 vi.mock("../../src/clients/stripe", () => ({ stripe: { checkout: { sessions: { create } } }, stripeConfigured: true }));
 vi.mock("../../src/config", () => ({ config: cfg }));
-vi.mock("../../src/db/fundraisers", () => ({ getFundraiser }));
+vi.mock("../../src/db/fundraisers", () => ({ getFundraiser, fundraisingIsOn: async () => fundraisingOn.value }));
 vi.mock("../../src/fundraising/send", () => ({ fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}` }));
 
 import { postCheckoutSession, thankYouReturnUrl } from "../../src/routes/api";
@@ -83,5 +83,14 @@ describe("a donate page gift", () => {
     expect(params().success_url).toBe("https://nbcc.test/donate/thank-you?mode=once&donor=individual&session_id={CHECKOUT_SESSION_ID}");
     expect(params().cancel_url).toBe("https://nbcc.test/donate");
     expect(getFundraiser).not.toHaveBeenCalled();
+  });
+});
+
+describe("while fundraising is switched off", () => {
+  it("a gift naming a fundraiser goes back the donate page's way", async () => {
+    fundraisingOn.value = false;
+    await run({ ...gift, uiMode: "embedded", fundraiserId: 7 });
+    expect(params().return_url).toBe(thankYouReturnUrl("once", "individual"));
+    fundraisingOn.value = true;
   });
 });

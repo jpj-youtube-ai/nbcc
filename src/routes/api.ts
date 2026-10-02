@@ -483,17 +483,20 @@ function fundraiserReturnUrls(
 
 /**
  * TASK-494: the page a fundraiser gift should come back to, from the fundraiser the gift names, or
- * null for anything without a public page. A failed read is null too: the gift still goes ahead,
- * and comes back the donate page's way, rather than failing over where the giver lands.
+ * null for anything without a public page right now: switched off, or not approved, public and
+ * raising money. A failed read is null too: the gift still goes ahead, and comes back the donate
+ * page's way, rather than failing over where the giver lands.
  */
 export async function fundraiserReturnPage(fundraiserId: number | undefined): Promise<string | null> {
   if (fundraiserId === undefined) return null;
   try {
-    const [{ getFundraiser }, { hasPage }, { fundraiserPageUrl }] = await Promise.all([
+    const [{ getFundraiser, fundraisingIsOn }, { hasPage }, { fundraiserPageUrl }] = await Promise.all([
       import("../db/fundraisers"),
       import("../fundraising/model"),
       import("../fundraising/send"),
     ]);
+    // Switched off, the fundraiser's page is a 404: coming back there would be a dead end.
+    if (!(await fundraisingIsOn())) return null;
     const f = await getFundraiser(fundraiserId);
     return f && hasPage(f) ? fundraiserPageUrl(f.slug) : null;
   } catch (err) {

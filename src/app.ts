@@ -33,6 +33,7 @@ import { ballRouter } from "./routes/ball";
 import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
+import { adminOverviewRouter } from "./routes/admin-overview";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -119,6 +120,8 @@ export function createApp() {
   app.use(adminWhatsNewRouter);
   // QR codes for every page of the site, in the admin (TASK-492).
   app.use(adminQrRouter);
+  // The admin Overview's "Needs you" (TASK-508).
+  app.use(adminOverviewRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

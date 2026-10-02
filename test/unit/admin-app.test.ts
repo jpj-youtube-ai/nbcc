@@ -125,6 +125,8 @@ let addTransferAnswer: { status: number; body: unknown } = { status: 201, body: 
 // TASK-492: the QR codes screen's list, and every code image asked for.
 const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29"><path d="M0 0h1v1H0z"/></svg>';
 let qrPages: unknown[] = [];
+// TASK-508: what the Overview's "Needs you" answers, or that it fails.
+let overviewAnswer: { status: number; body: unknown } = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: [] } };
 let qrImageUrls: string[] = [];
 
 function respond(url: string, init?: { method?: string; body?: string; headers?: Record<string, string> }) {
@@ -220,6 +222,7 @@ function respond(url: string, init?: { method?: string; body?: string; headers?:
     return { ...j({}), text: () => Promise.resolve(QR_SVG), blob: () => Promise.resolve(new Blob([QR_SVG])) };
   }
   if (url.includes("/api/admin/qr-codes")) return j({ pages: qrPages });
+  if (url.includes("/api/admin/overview")) return j(overviewAnswer.body, overviewAnswer.status);
   if (url.includes("/api/admin/ball/transfers")) return j({ results: awaitingTransfers });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/mark-paid$/.test(url)) return j({ reference: "BALL-7KQ2MZ", reinstated: false });
   if (/\/api\/admin\/ball\/bookings\/[^/]+\/pay-by$/.test(url)) return j({ reference: "BALL-7KQ2MZ", payBy: "2026-10-20" });
@@ -265,6 +268,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     ballBookings = [];
     addTransferAnswer = { status: 201, body: {} };
     qrPages = [];
+    overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: [] } };
     qrImageUrls = [];
     window.sessionStorage.clear();
     document.body.innerHTML = bodyHtml;
@@ -287,7 +291,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
     expect(el("appView").hidden).toBe(false);
     expect(el("userEmail").textContent).toBe("editor@nbcc");
     expect(el("userRole").textContent).toBe("editor");
-    expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(5);
+    expect(el("overviewNeeds").textContent).toContain("Nothing needs you right now");
     await flush();
     expect(document.querySelector("#overviewRecent table")).not.toBeNull();
 
@@ -1182,6 +1186,95 @@ describe("admin app integration (jsdom, TASK-118)", () => {
 
   // TASK-478: a New pill on each section holding something this person has not seen. Opening the
   // section clears it for them; the server keeps everyone else's.
+  // TASK-508: the Overview opens with "Needs you": what is waiting on someone, most urgent first,
+  // each one click from the screen that deals with it. The server decides what each person may see.
+  describe("Needs you on the Overview (TASK-508)", () => {
+    const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
+    const NEEDS = [
+      { key: "transfersOverdue", level: 1, text: "1 bank transfer is overdue", view: "ball", button: "Festive Ball" },
+      { key: "contactWaiting", level: 2, text: "3 contact messages are waiting for a reply", view: "contact", button: "Contact form" },
+      { key: "declarationsAwaiting", level: 3, text: "12 Gift Aid declarations have not come back yet", view: "claims", button: "Claims" },
+    ];
+    const lines = () => Array.from(document.querySelectorAll("#overviewNeeds .ov-need")) as HTMLElement[];
+
+    it("lists what is waiting, most urgent first, with a button to each screen", async () => {
+      overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: NEEDS, failed: [] } };
+      await signIn();
+      await settle();
+      expect(lines().map((l) => l.textContent)).toEqual([
+        expect.stringContaining("1 bank transfer is overdue"),
+        expect.stringContaining("3 contact messages are waiting for a reply"),
+        expect.stringContaining("12 Gift Aid declarations have not come back yet"),
+      ]);
+      expect(lines().map((l) => l.getAttribute("data-level"))).toEqual(["1", "2", "3"]);
+      expect(lines().map((l) => (l.querySelector("button") as HTMLElement).textContent)).toEqual(["Festive Ball", "Contact form", "Claims"]);
+      expect(el("overviewUpdated").textContent).toMatch(/^Updated \d{1,2}:\d{2}/);
+    });
+
+    it("opens the screen that deals with an item", async () => {
+      overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: NEEDS, failed: [] } };
+      await signIn();
+      await settle();
+      (lines()[1].querySelector("button") as HTMLElement).click();
+      await settle();
+      expect(el("view-contact").hidden).toBe(false);
+      expect(el("view-overview").hidden).toBe(true);
+    });
+
+    it("says so on a quiet day", async () => {
+      await signIn();
+      await settle();
+      expect(lines()).toHaveLength(0);
+      expect(el("overviewNeeds").textContent).toContain("Nothing needs you right now");
+    });
+
+    it("says which parts it could not check, and never calls a day quiet when it could not tell", async () => {
+      overviewAnswer = { status: 200, body: { updatedAt: "2026-10-03T08:41:00.000Z", needs: [], failed: ["Festive Ball", "Claims"] } };
+      await signIn();
+      await settle();
+      expect(el("overviewNeeds").textContent).toContain("Could not check: Festive Ball, Claims");
+      expect(el("overviewNeeds").textContent).not.toContain("Nothing needs you right now");
+    });
+
+    it("says when the whole thing could not load", async () => {
+      overviewAnswer = { status: 500, body: { error: "The overview could not load. Try again." } };
+      await signIn();
+      await settle();
+      expect(el("overviewNeeds").textContent).toMatch(/could not load/i);
+      expect(el("overviewNeeds").textContent).not.toContain("Nothing needs you right now");
+    });
+
+    it("keeps the latest five donations underneath", async () => {
+      await signIn();
+      await settle();
+      const asked = (globalThis.fetch as unknown as { mock: { calls: Array<[unknown]> } }).mock.calls.map(([u]) => String(u));
+      expect(asked).toContain("/api/admin/donations?limit=5");
+      expect(document.querySelector("#overviewRecent table")).not.toBeNull();
+    });
+
+    it("asks once when you sign in, not twice", async () => {
+      await signIn();
+      await settle();
+      const asked = (globalThis.fetch as unknown as { mock: { calls: Array<[unknown]> } }).mock.calls.filter(
+        ([u]) => String(u) === "/api/admin/overview",
+      ).length;
+      expect(asked).toBe(1);
+    });
+
+    it("asks again each time the Overview is opened", async () => {
+      await signIn();
+      await settle();
+      const count = () =>
+        (globalThis.fetch as unknown as { mock: { calls: Array<[unknown]> } }).mock.calls.filter(([u]) => String(u) === "/api/admin/overview").length;
+      const before = count();
+      (document.querySelector('.admin-nav-link[data-view="donations"]') as HTMLElement).click();
+      await settle();
+      (document.querySelector('.admin-nav-link[data-view="overview"]') as HTMLElement).click();
+      await settle();
+      expect(count()).toBeGreaterThan(before);
+    });
+  });
+
   // TASK-492: QR codes for every page, to print or share. Anyone who can view Site pages.
   describe("QR codes (TASK-492)", () => {
     const settle = async () => { for (let i = 0; i < 8; i++) await flush(); };
@@ -1426,7 +1519,7 @@ describe("admin app integration (jsdom, TASK-118)", () => {
       await signIn();
       await settle();
       expect(document.querySelectorAll(".admin-new-pill").length).toBe(0);
-      expect(document.querySelectorAll("#overviewStats .admin-stat").length).toBe(5);
+      expect(el("overviewNeeds").textContent).toContain("Nothing needs you right now");
       link("donations").click();
       await settle();
       expect(document.querySelector("#donationsTable table")).not.toBeNull();

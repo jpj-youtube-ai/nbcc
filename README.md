@@ -5914,7 +5914,7 @@ a 401 still signs you out. A list that did come back empty still says so, becaus
 
 | Panel | On a failure it used to show | Now |
 |---|---|---|
-| Overview figures (each one on its own) | 0 | Could not load (the other figures still show). A figure from a section your access leaves out (a 403) is left out rather than reported every sign in. |
+| Overview figures (each one on its own) | 0 | Could not load (the other figures still show). A figure from a section your access leaves out (a 403) is left out rather than reported every sign in. Since TASK-508 these are lines in Needs you, which names a part it could not check ("Could not check: Claims"). |
 | Overview recent donations | nothing | Recent donations are unavailable. (On a 403: Recent donations are not part of your access.) |
 | Donations | No donations yet. | Donations are unavailable. |
 | GASDS deadline | No GASDS donations are approaching the claim deadline. | GASDS donations are unavailable. |
@@ -6057,6 +6057,51 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - the "New pills" block in `test/unit/admin-app.test.ts` covers the screen;
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
+
+## The admin Overview: Needs you (TASK-508)
+
+The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent
+first, each with a button to the screen that deals with it. The design, and the two stages still to
+come (the numbers, then Coming up), are in `docs/superpowers/specs/2026-10-03-admin-overview-design.md`.
+
+- **Three levels**, marked by a dot (and said in words to a screen reader), in this order:
+  1. **Money or overdue** (crimson):
+     - bank transfers overdue;
+     - monthly gifts failing to take;
+     - Gift Aid ready to claim, with the amount;
+     - emails that failed or bounced in 2 weeks;
+     - fundraisers with buckets or tins due back.
+  2. **Waiting on a reply** (gold):
+     - contact messages;
+     - fundraising sign ups, changes to check, fundraisers who say they've finished, requests to do,
+       and fundraisers due a call;
+     - new stories;
+     - businesses due a thank you call;
+     - your own business outreach to-dos;
+     - generous donors not yet thanked who can be emailed (as the Thank you screen counts them);
+     - bank transfers still waiting.
+  3. **Slower deadlines** (grey):
+     - Gift Aid adjustments, declarations not back, declarations due a review, and records near the
+       end of their keep date;
+     - GASDS deadlines;
+     - Festive Ball guest details still missing, in the 3 weeks before they close.
+
+  Anything at zero is left out. A quiet day says "Nothing needs you right now."
+- **One request**, `GET /api/admin/overview` (any session), answers
+  `{ updatedAt, needs: [{ key, level, text, view, button }], failed: [screen names] }`
+  (`src/routes/admin-overview.ts`). Each item has the same gate as its own screen. A section the
+  person cannot open is never asked for (`gatherNeeds`, `src/admin/overview-sources.ts`). Each count
+  uses the same database function and rule as that screen, so the two cannot disagree.
+- **One that fails is named**: "Could not check: Festive Ball". The rest still show, and the list
+  never says "Nothing needs you" when it could not tell.
+- **The words and order** are one pure list, `NEEDS` in `src/admin/overview.ts`. A new kind of
+  waiting item is a line there, plus a reader in the route.
+- **Light on the database.** Its sources run at most 3 at a time (`MAX_AT_ONCE`), because the main
+  database pool takes 5 and a donor's checkout must not wait behind an Overview. It is read once on
+  sign in, and only when the Overview is the screen being shown.
+- It is read afresh each time the Overview is opened, and says when ("Updated 9:41"). The five Gift
+  Aid figures that used to stand here are lines in level 3. Recent donations, underneath, shows the
+  latest 5.
 
 ## QR codes for every page (TASK-492)
 

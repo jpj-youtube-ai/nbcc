@@ -6036,6 +6036,36 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
+## QR codes for every page (TASK-492)
+
+**Admin → QR codes** makes a QR code for any page of nbcc.scot, for posters, leaflets, table cards,
+slides and social posts. The design is in `docs/superpowers/specs/2026-10-02-admin-qr-codes-design.md`.
+
+- **Every page, automatically.** The list comes from the site's one page list (`SITE_PAGES` in
+  `src/site/pages.ts`), which also feeds /sitemap, sitemap.xml and Admin → Site pages. A page
+  added there gets its QR code with no more work. The Festive Ball and Events pages are listed
+  even while switched off, marked "Not live yet", so posters can be made before launch.
+- **Two downloads per code**, named after the page (`nbcc-qr-donate.svg`):
+  - **SVG** for printers and designers: it stays sharp at any size;
+  - **PNG**, 1200 pixels square, for slides, social posts and documents.
+
+  Codes are black on white with the standard margin and error correction M, the most reliable to
+  scan in print. They are drawn by the server with the `qrcode` package (`drawQr` in
+  `src/site/qr.ts`).
+- **Any other nbcc.scot address** (a spare address from Site pages, say) gets a code from the box
+  under the list. Only paths on nbcc.scot are allowed (`qrPath`): a code for somebody else's
+  website is refused.
+- **Who:** anyone who can view Site pages (`GET /api/admin/qr-codes` and
+  `GET /api/admin/qr-codes/image?path=/donate&format=svg|png`, `src/routes/admin-qr.ts`). Codes
+  only point at public pages, so there is nothing private here. The menu item has a New pill the
+  first time.
+- **Scans are counted.** Each code's link is tagged:
+  `https://nbcc.scot/donate?utm_medium=qr&utm_campaign=donate` (`qrLink`).
+  - Admin → Analytics files these under a **QR code** channel (`src/analytics/channel.ts`).
+  - Its "QR codes scanned" list names the page whose code was scanned (`labelQrScans`).
+  - Migration `1791200000000_analytics-qr-channel.js` only widens the `analytics_views` channel
+    check to allow `qr`.
+
 ## Monthly or one off, on the donations list (TASK-446)
 
 The list could already be narrowed by payment status, which answers *what failed*. It could not

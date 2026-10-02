@@ -59,3 +59,10 @@ Feature: Counting visits without cookies (TASK-479)
     When a browser sends 5000 bytes of nonsense to the pulse
     Then the pulse answer is 204 with nothing in it
     And no page view was kept
+
+  # TASK-492: a scan of a code made under Admin > QR codes, which tags its link utm_medium=qr.
+  Scenario: a QR code scan is counted as a QR code, with the page whose code it was
+    Given site analytics collecting is switched on
+    When a visitor scans the QR code for the page "/ball"
+    Then the page view was kept with the path "/ball"
+    And the kept page view came from a QR code for "ball"

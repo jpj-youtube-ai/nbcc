@@ -82,6 +82,12 @@ When("a visitor's browser sends a page view of {string} from {string}", async fu
   await pulse(this, { t: "view", v: this.viewId, p: path, r: referrer, u: {}, w: 1280 });
 });
 
+// TASK-492: as pulse.js sends it for a link tagged utm_medium=qr&utm_campaign=<the page's slug>.
+When("a visitor scans the QR code for the page {string}", async function (path) {
+  const slug = path.replace(/^\/+|\/+$/g, "").replace(/\//g, "-") || "home";
+  await pulse(this, { t: "view", v: this.viewId, p: path, r: "", u: { m: "qr", c: slug }, w: 390 });
+});
+
 When("a bot sends a page view of {string}", async function (path) {
   await pulse(this, { t: "view", v: this.viewId, p: path, r: "", u: {}, w: 1280 }, BOT);
 });
@@ -127,6 +133,14 @@ Then("the kept page view came from {string} via {string}", async function (chann
   const view = await keptView(this);
   assert.equal(view.channel, channel);
   assert.equal(view.source, source);
+});
+
+// The channel check on analytics_views had to be widened for this (migration 1791200000000).
+Then("the kept page view came from a QR code for {string}", async function (campaign) {
+  const view = await keptView(this);
+  assert.ok(view, "no page view was kept");
+  assert.equal(view.channel, "qr");
+  assert.equal(view.campaign, campaign);
 });
 
 Then("nothing kept holds the visitor's IP address or browser", async function () {

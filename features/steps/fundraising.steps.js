@@ -108,6 +108,7 @@ async function clean() {
   // Edits, manage links and cash go with their fundraiser (ON DELETE CASCADE).
   await pool.query("DELETE FROM fundraisers WHERE title LIKE $1", [MARK]);
   await pool.query("DELETE FROM users WHERE email LIKE $1", [STAFF]);
+  await pool.query("DELETE FROM list_subscribers WHERE email LIKE $1", [STAFF]);
   await setSwitch(false);
 }
 
@@ -173,7 +174,36 @@ Given("the organiser of {string} holds a manage link", async function (title) {
 When(
   "someone signs up {string} to raise {int} pence, to be shown on the website",
   async function (title, target) {
-    await call(this, "POST", "/api/fundraise", {
+    await signUp(this, title, target, { email: "robin.fr.bdd@example.com", newsletterOk: false });
+  },
+);
+
+When(
+  "someone signs up {string} to raise {int} pence, ticking the newsletter box",
+  async function (title, target) {
+    await signUp(this, title, target, { name: "Jo Sample", email: "jo.fr.bdd@example.com", newsletterOk: true });
+  },
+);
+
+Then("{string} is on the newsletter list as a self signup", async function (email) {
+  const r = await pool.query(
+    `SELECT s.consent_source, s.unsubscribed_at, s.added_by FROM list_subscribers s JOIN subscriber_lists l ON l.id = s.list_id
+      WHERE l.slug = 'newsletter' AND lower(s.email) = lower($1)`,
+    [email],
+  );
+  assert.equal(r.rows.length, 1, `${email} is not on the newsletter list`);
+  assert.equal(r.rows[0].consent_source, "footer");
+  assert.equal(r.rows[0].unsubscribed_at, null);
+  assert.equal(r.rows[0].added_by, null);
+});
+
+Then("{string} is not on the newsletter list", async function (email) {
+  const r = await pool.query("SELECT 1 FROM list_subscribers WHERE lower(email) = lower($1)", [email]);
+  assert.equal(r.rows.length, 0);
+});
+
+async function signUp(world, title, target, who) {
+    await call(world, "POST", "/api/fundraise", {
       path: "raising",
       kind: "santa_dash",
       title,
@@ -184,18 +214,17 @@ When(
       town: "Exampleton",
       targetPence: target,
       public: true,
-      name: "Robin Testperson",
-      email: "robin.fr.bdd@example.com",
+      name: who.name || "Robin Testperson",
+      email: who.email,
       phone: "07700 900123",
       socialLink: "",
       socialOk: false,
       wants: { leaflets: 0, buckets: 0, shoutOut: false, attend: false },
       postAddress: "",
-      newsletterOk: false,
+      newsletterOk: who.newsletterOk,
       company: "",
     });
-  },
-);
+}
 
 Then("the fundraising answer is {int}", function (status) {
   assert.equal(this.frStatus, status, `expected ${status}, got ${this.frStatus}: ${JSON.stringify(this.frBody)}`);

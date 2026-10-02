@@ -167,6 +167,7 @@ describe("the senders pass the right tags", () => {
   });
 
   it("the footer signup welcome names itself as the welcome email", () => {
-    expect(read("src/routes/subscribe.ts")).toContain('links: emailLinkTags("welcome")');
+    // TASK-493 moved the welcome send, unchanged, into the self signup shared with fundraising.
+    expect(read("src/newsletter/self-signup.ts")).toContain('links: emailLinkTags("welcome")');
   });
 });

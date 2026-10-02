@@ -11462,6 +11462,12 @@
         var url = String(reader.result);
         send(file.type, url.slice(url.indexOf(",") + 1));
       };
+      // A file the browser cannot read must not leave the screen waiting for an upload forever.
+      reader.onerror = function () {
+        statusEl.className = "ty-status is-error";
+        statusEl.textContent = "That picture could not be read. Please try another.";
+        if (failed) failed(statusEl.textContent);
+      };
       reader.readAsDataURL(file);
     });
   }

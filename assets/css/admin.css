@@ -2601,6 +2601,8 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
 #view-fundraising .admin-btn:focus-visible { outline: 3px solid var(--crimson); outline-offset: 2px; }
 #view-fundraising .fr-qr-preview { display: block; width: 120px; height: 120px; margin-top: 8px; padding: 6px; border: 1px solid var(--line, #e6ddd3); border-radius: 8px; background: #fff; }
 #view-fundraising .fr-qr-link { display: block; width: fit-content; margin-top: 6px; color: var(--maroon); font-weight: 600; font-size: 0.85rem; text-underline-offset: 2px; }
+/* TASK-504: the materials buttons, wrapping on a phone. */
+#view-fundraising .fr-materials-admin { display: flex; flex-wrap: wrap; gap: 8px; }
 #view-fundraising .fx-row dd .fx-tel { display: inline-block; }
 
 /* What they asked for, as a short list. */

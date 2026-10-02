@@ -487,6 +487,15 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           // TASK-505: where each thing they asked for is up to, in words only (never a staff note
           // or name); null when it could not be read, so the rest still shows.
           requests,
+          // TASK-504: "Your materials" (src/routes/fundraise-materials.ts). The certificate once it
+          // is finished; the print size QR code only where there is a page, like the SVG.
+          materials: {
+            poster: `/api/fundraise/manage/fundraisers/${f.id}/materials/poster`,
+            social: `/api/fundraise/manage/fundraisers/${f.id}/materials/social`,
+            sponsorForm: `/api/fundraise/manage/fundraisers/${f.id}/materials/sponsor-form`,
+            certificate: f.status === "finished" ? `/api/fundraise/manage/fundraisers/${f.id}/materials/certificate` : null,
+            qrPng: page ? `/fundraise/${f.slug}/qr.png` : null,
+          },
         };
       }),
     );

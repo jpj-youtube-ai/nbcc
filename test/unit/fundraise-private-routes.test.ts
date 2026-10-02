@@ -650,3 +650,35 @@ describe("the limits, for the box itself", () => {
     }
   });
 });
+
+// TASK-504: "Your materials". The private area's answer carries each fundraiser's links: the poster,
+// the pictures to share, the sponsor form, the print size QR code beside the SVG (only for a page),
+// and the certificate once finished.
+describe("your materials", () => {
+  const at = (id: number, piece: string) => `/api/fundraise/manage/fundraisers/${id}/materials/${piece}`;
+
+  it("links an approved page's poster, pictures, sponsor form and print size QR code, but no certificate yet", async () => {
+    db.listForOrganiser.mockResolvedValue([record()]);
+    const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<Record<string, unknown>> }).fundraisers[0];
+    expect(f.materials).toEqual({
+      poster: at(9, "poster"),
+      social: at(9, "social"),
+      sponsorForm: at(9, "sponsor-form"),
+      certificate: null,
+      qrPng: "/fundraise/sams-walk/qr.png",
+    });
+  });
+
+  it("adds the certificate once finished", async () => {
+    db.listForOrganiser.mockResolvedValue([record({ status: "finished" })]);
+    const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<{ materials: Record<string, unknown> }> }).fundraisers[0];
+    expect(f.materials.certificate).toBe(at(9, "certificate"));
+  });
+
+  it("gives one with no page its poster and sponsor form, but no QR code to download", async () => {
+    db.listForOrganiser.mockResolvedValue([record({ public: false })]);
+    const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<{ materials: Record<string, unknown> }> }).fundraisers[0];
+    expect(f.materials.poster).toBe(at(9, "poster"));
+    expect(f.materials.qrPng).toBeNull();
+  });
+});

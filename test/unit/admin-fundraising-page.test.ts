@@ -179,6 +179,11 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     return j({ fundraiser: f });
   }
   if (rest === "/history") return j({ history: historyRows[id] || [] });
+  // TASK-504: a piece of its materials, a whole HTML page.
+  const mat = rest.match(/^\/materials\/([a-z-]+)$/);
+  if (mat && method === "GET") {
+    return { status: 200, ok: true, json: () => Promise.reject(new Error("html")), text: () => Promise.resolve("<!doctype html><title>" + mat[1] + "</title>"), headers: { get: () => "text/html" } };
+  }
   if (rest === "/approve") {
     Object.assign(f, { status: "approved", approvedAt: "2026-10-02T09:00:00.000Z", pageUrl: f.path === "raising" && f.public ? "https://nbcc.scot/fundraise/" + f.slug : null });
     return j({ fundraiser: f });
@@ -1749,5 +1754,84 @@ describe("what the organiser's private area adds", () => {
     const h = text(el("frHistory"));
     expect(h).toContain("The organiser said they have finished");
     expect(h).toContain("The organiser paid in money they collected");
+  });
+});
+
+
+// TASK-504: the materials, from one sign up. They open in their own tab, fetched with the staff
+// member's session (a plain link would carry none), and the print size QR code sits beside the SVG.
+describe("its materials", () => {
+  type Tab = { closed: boolean; location: { href: string }; document: { title: string; body: { textContent: string } }; close: () => void };
+  let tabs: Tab[];
+  let blobs: string[];
+  beforeEach(() => {
+    tabs = [];
+    blobs = [];
+    window.open = (() => {
+      const tab: Tab = { closed: false, location: { href: "" }, document: { title: "", body: { textContent: "" } }, close: () => (tab.closed = true) };
+      tabs.push(tab);
+      return tab;
+    }) as unknown as typeof window.open;
+    URL.createObjectURL = ((b: Blob) => {
+      blobs.push(b.type);
+      return "blob:nbcc.test/material-" + blobs.length;
+    }) as typeof URL.createObjectURL;
+    URL.revokeObjectURL = () => undefined;
+  });
+
+  const buttons = () => qa("#frList [data-frmaterial]").map((b) => b.getAttribute("data-frmaterial"));
+
+  it("offers the poster, pictures, sponsor form and a certificate preview for an approved one", async () => {
+    records = [fundraiser(1, { status: "approved", pageUrl: "https://nbcc.scot/fundraise/test-dash-1" })];
+    await openFundraising();
+    await openRow(1);
+    expect(buttons()).toEqual(["poster", "social", "sponsor-form", "certificate"]);
+    expect(text(q('#frList [data-frmaterial="certificate"]'))).toContain("preview");
+  });
+
+  it("offers the certificate itself once finished", async () => {
+    records = [fundraiser(1, { status: "finished" })];
+    await openFundraising();
+    await openRow(1);
+    expect(text(q('#frList [data-frmaterial="certificate"]'))).not.toContain("preview");
+  });
+
+  it("offers nothing for a sign up that is not approved", async () => {
+    records = [fundraiser(1, { status: "new" }), fundraiser(2, { status: "declined" })];
+    await openFundraising();
+    await openRow(1);
+    expect(buttons()).toEqual([]);
+  });
+
+  it("opens a piece in its own tab, fetched with the session", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    await openFundraising();
+    await openRow(1);
+    (q('#frList [data-frmaterial="poster"]') as HTMLButtonElement).click();
+    await settle();
+    expect(sent("GET", "/api/admin/fundraisers/1/materials/poster").length).toBe(1);
+    expect(tabs.length).toBe(1);
+    expect(blobs).toEqual(["text/html"]);
+    expect(tabs[0].location.href).toBe("blob:nbcc.test/material-1");
+  });
+
+  it("closes the waiting tab and says so when it cannot be made", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    failures["GET /api/admin/fundraisers/1/materials/social"] = { status: 500, body: { error: "no" } };
+    await openFundraising();
+    await openRow(1);
+    (q('#frList [data-frmaterial="social"]') as HTMLButtonElement).click();
+    await settle();
+    expect(tabs[0].closed).toBe(true);
+    expect(text(el("frDetailStatus"))).toMatch(/could not open/i);
+  });
+
+  it("puts the print size PNG of the QR code beside the SVG", async () => {
+    records = [fundraiser(1, { status: "approved", pageUrl: "https://nbcc.scot/fundraise/test-dash-1" })];
+    await openFundraising();
+    await openRow(1);
+    const png = el("frQrPngLink") as HTMLAnchorElement;
+    expect(png.getAttribute("href")).toBe("/fundraise/test-dash-1/qr.png");
+    expect(png.getAttribute("download")).toBe("qr-test-dash-1.png");
   });
 });

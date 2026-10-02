@@ -348,7 +348,7 @@ describe("the help page", () => {
 
 describe("the raw files", () => {
   it("are never served at their own addresses", async () => {
-    for (const f of ["/fundraiser.html", "/fundraise.html", "/fundraise-manage.html", "/fundraise-help.html"]) {
+    for (const f of ["/fundraiser.html", "/fundraise.html", "/fundraise-manage.html", "/fundraise-help.html", "/fundraise-logos.html"]) {
       expect((await get(f)).status, f).not.toBe(200);
     }
   });
@@ -361,7 +361,7 @@ describe("the image", () => {
     const { readFileSync } = await import("node:fs");
     const docker = readFileSync(resolve(ROOT, "Dockerfile"), "utf8");
     const copy = docker.split(/\r?\n/).find((l) => l.startsWith("COPY index.html")) ?? "";
-    for (const f of ["events.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html", "fundraise-help.html"]) expect(copy.split(/\s+/), f).toContain(f);
+    for (const f of ["events.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html", "fundraise-help.html", "fundraise-logos.html"]) expect(copy.split(/\s+/), f).toContain(f);
   });
 });
 

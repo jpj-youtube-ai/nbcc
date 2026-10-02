@@ -10,7 +10,10 @@ import { join } from "node:path";
 //   GET /fundraise                 the sign up form, or "not open yet" while switched off
 //   GET /fundraise/manage          change your page, by the emailed link (?token=); never indexed
 //   GET /fundraise/help            ideas, paying in, Gift Aid and staying safe (TASK-498); indexed
+//   GET /fundraise/logos           the logo pack: the official logos and simple rules (TASK-504)
+//   GET /fundraise/sponsor-form    a blank sponsor form to print, with HMRC's Gift Aid columns (TASK-504)
 //   GET /fundraise/:slug/qr.svg    the page's QR code, to download
+//   GET /fundraise/:slug/qr.png    the same code as a print size PNG, about 2000px square (TASK-504)
 //   GET /fundraise/:slug           one fundraiser's page (TASK-502: a finished one keeps it, saying
 //                                  so, and still takes gifts; ?thanks=1&session_id= is the thank you
 //                                  after paying, with the optional step to add to the wall;
@@ -39,6 +42,12 @@ async function fundraisingOn(): Promise<boolean> {
 // A page that changes as soon as staff act: revalidate on every view (TASK-341's reasoning).
 function fresh(res: Response): void {
   res.setHeader("Cache-Control", "public, max-age=0");
+}
+
+// TASK-504 review: a QR code depends only on the address it carries, so a browser may keep it for a
+// day, and the server draws each one once (src/fundraising/qr-cache.ts).
+function keepADay(res: Response): void {
+  res.setHeader("Cache-Control", "public, max-age=86400");
 }
 
 /** The fundraiser behind /fundraise/:slug, only if it has a public page right now. */
@@ -98,6 +107,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
   const manageFile = join(siteRoot, "fundraise-manage.html");
   const pageFile = join(siteRoot, "fundraiser.html");
   const helpFile = join(siteRoot, "fundraise-help.html");
+  const logosFile = join(siteRoot, "fundraise-logos.html");
 
   // The page was /events until TASK-494. Links in old newsletters and on Facebook still point there,
   // so it is a permanent redirect whether or not the page is on (switched off, /get-involved is the
@@ -202,17 +212,75 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     }
   });
 
+  // TASK-504: the logo pack, public like the help page and only while fundraising is on. Before
+  // /fundraise/:slug, and "logos" is a reserved slug too.
+  router.get("/fundraise/logos", async (req, res, next) => {
+    try {
+      if (!(await fundraisingOn())) return next();
+      fresh(res);
+      res.type("html").send(await deps.decorate(readFileSync(logosFile, "utf8"), req.headers.cookie));
+    } catch (err) {
+      console.error("fundraise logos page failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
+
+  // TASK-504: a blank sponsor form, the same print page an organiser gets from their private area
+  // but with no fundraiser on it, for anyone (linked from the help page). Nobody's details, so it
+  // may be kept like any page; it is a print page, so it is not indexed.
+  router.get("/fundraise/sponsor-form", async (_req, res, next) => {
+    try {
+      if (!(await fundraisingOn())) return next();
+      const { materialAssets, renderSponsorForm } = await import("../fundraising/materials");
+      fresh(res);
+      res.setHeader("X-Robots-Tag", "noindex, nofollow");
+      res.type("html").send(renderSponsorForm(null, materialAssets()));
+    } catch (err) {
+      console.error("fundraise sponsor form failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
+
+  // TASK-504: the page's QR code as a print size PNG, beside the SVG below: the same code, drawn by
+  // the same encoder. Wherever the SVG answers, so does this.
+  router.get("/fundraise/:slug/qr.png", async (req, res, next) => {
+    try {
+      const f = await publicFundraiser(String(req.params.slug));
+      if (!f) return next();
+      const [{ qrPng }, { fundraiserPageUrl }, { qrPngCache }] = await Promise.all([
+        import("../fundraising/qr-png"),
+        import("../fundraising/send"),
+        import("../fundraising/qr-cache"),
+      ]);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader("Content-Disposition", `attachment; filename="nbcc-${f.slug}-qr-code.png"`);
+      keepADay(res);
+      res.type("image/png").send(qrPngCache.get(fundraiserPageUrl(f.slug), qrPng));
+    } catch (err) {
+      console.error("fundraiser qr png failed:", err instanceof Error ? err.message : err);
+      next();
+    }
+  });
+
   // TASK-501 review: the code also answers for a finished fundraiser that had a page, so its
   // organiser keeps it in their private area. TASK-502: wherever the page is, as a finished one keeps it.
   router.get("/fundraise/:slug/qr.svg", async (req, res, next) => {
     try {
       const f = await publicFundraiser(String(req.params.slug));
       if (!f) return next();
-      const [{ qrSvg }, { fundraiserPageUrl }] = await Promise.all([import("../fundraising/qr"), import("../fundraising/send")]);
+      const [{ qrSvg }, { fundraiserPageUrl }, { qrSvgCache }] = await Promise.all([
+        import("../fundraising/qr"),
+        import("../fundraising/send"),
+        import("../fundraising/qr-cache"),
+      ]);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Disposition", `inline; filename="nbcc-${f.slug}-qr-code.svg"`);
-      fresh(res);
-      res.type("image/svg+xml").send(qrSvg(fundraiserPageUrl(f.slug), { title: `QR code for ${f.title}`, size: 1024 }));
+      keepADay(res);
+      // TASK-504 review: kept by the address and the title it is labelled with, since both go in it.
+      const url = fundraiserPageUrl(f.slug);
+      const title = `QR code for ${f.title}`;
+      res.type("image/svg+xml").send(qrSvgCache.get(`${url}
+${title}`, () => qrSvg(url, { title, size: 1024 })));
     } catch (err) {
       console.error("fundraiser qr failed:", err instanceof Error ? err.message : err);
       next();

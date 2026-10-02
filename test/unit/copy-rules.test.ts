@@ -39,6 +39,8 @@ const PAGES = [
   "fundraise-manage.html",
   // TASK-498: the fundraising help page.
   "fundraise-help.html",
+  // TASK-504: the logo pack.
+  "fundraise-logos.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 const VISIBLE_ATTRS = ["alt", "title", "aria-label", "placeholder"];

@@ -204,7 +204,8 @@ describe("slugs", () => {
   // (freeSlug in src/db/fundraisers.ts treats every reserved slug as taken), so neither page is ever
   // hidden behind a fundraiser.
   it("never take the addresses of the site's own fundraising pages", () => {
-    expect([...RESERVED_SLUGS].sort()).toEqual(["help", "manage"]);
+    // TASK-504: the logo pack and the blank sponsor form too.
+    expect([...RESERVED_SLUGS].sort()).toEqual(["help", "logos", "manage", "sponsor-form"]);
     for (const reserved of RESERVED_SLUGS) expect(slugify(reserved)).toBe(reserved);
   });
 });

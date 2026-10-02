@@ -508,3 +508,51 @@ describe("a finished fundraiser", () => {
     expect(posts()[0]).toEqual({ url: "/api/fundraise/manage/fundraisers/7/pay-in", method: "POST", body: { amountPence: 4000, coverFee: false } });
   });
 });
+
+// TASK-504: "Your materials", for each fundraiser: the poster, pictures to share, the sponsor form,
+// the logo pack, the certificate once finished, and the print size QR code beside the SVG.
+describe("your materials", () => {
+  const at = (id: number, piece: string) => `/api/fundraise/manage/fundraisers/${id}/materials/${piece}`;
+  const materials = (id: number, over: Record<string, unknown> = {}) => ({
+    poster: at(id, "poster"),
+    social: at(id, "social"),
+    sponsorForm: at(id, "sponsor-form"),
+    certificate: null,
+    qrPng: "/fundraise/robins-santa-dash/qr.png",
+    ...over,
+  });
+  const link = (id: number, which: string) => $<HTMLAnchorElement>(`[data-f-mat="${which}"] a`, card(id));
+
+  it("links the poster, pictures and sponsor form, each in a new tab, and the logo pack", async () => {
+    await load("", signedIn(raising({ materials: materials(7) })));
+    expect(link(7, "poster").getAttribute("href")).toBe(at(7, "poster"));
+    expect(link(7, "social").getAttribute("href")).toBe(at(7, "social"));
+    expect(link(7, "sponsorForm").getAttribute("href")).toBe(at(7, "sponsor-form"));
+    expect(link(7, "poster").getAttribute("target")).toBe("_blank");
+    expect(link(7, "logos").getAttribute("href")).toBe("/fundraise/logos");
+    expect($("[data-f-materials]", card(7)).hidden).toBe(false);
+  });
+
+  it("keeps the certificate back until the fundraiser is finished", async () => {
+    await load("", signedIn(raising({ materials: materials(7) })));
+    expect($(`[data-f-mat="certificate"]`, card(7)).hidden).toBe(true);
+  });
+
+  it("shows the certificate once finished", async () => {
+    await load("", signedIn(raising({ status: "finished", materials: materials(7, { certificate: at(7, "certificate") }) })));
+    expect($(`[data-f-mat="certificate"]`, card(7)).hidden).toBe(false);
+    expect(link(7, "certificate").getAttribute("href")).toBe(at(7, "certificate"));
+  });
+
+  it("offers the print size QR code beside the SVG", async () => {
+    await load("", signedIn(raising({ materials: materials(7) })));
+    const png = $<HTMLAnchorElement>("a[data-f-qr-png]", card(7));
+    expect(png.getAttribute("href")).toBe("/fundraise/robins-santa-dash/qr.png");
+    expect(png.getAttribute("download")).toBe("nbcc-robins-santa-dash-qr-code.png");
+  });
+
+  it("hides the section for an answer from before materials", async () => {
+    await load("", signedIn(raising()));
+    expect($("[data-f-materials]", card(7)).hidden).toBe(true);
+  });
+});

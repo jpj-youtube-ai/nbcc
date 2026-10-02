@@ -39,6 +39,8 @@ const PAGES = [
   "fundraise-manage.html",
   // TASK-498
   "fundraise-help.html",
+  // TASK-504: the logo pack.
+  "fundraise-logos.html",
 ].filter((f) => existsSync(resolve(ROOT, f)));
 
 // Tabbable = what the first Tab from page load can reach, in DOM order. A

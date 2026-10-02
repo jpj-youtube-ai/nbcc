@@ -46,8 +46,8 @@ export const MAX_BUCKETS = 20;
 export const CARD_LINE_MAX = 140;
 
 // Addresses under /fundraise/ that are pages of their own, so no fundraiser may take them: the manage
-// page (TASK-494) and the help page (TASK-498).
-export const RESERVED_SLUGS: ReadonlySet<string> = new Set(["manage", "help"]);
+// page (TASK-494), the help page (TASK-498), and the logo pack and blank sponsor form (TASK-504).
+export const RESERVED_SLUGS: ReadonlySet<string> = new Set(["manage", "help", "logos", "sponsor-form"]);
 
 /**
  * What they would like from us, stored as the fundraisers.wants jsonb.

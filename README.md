@@ -1407,7 +1407,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fundraise/logos` | **implemented** | TASK-504 (the logo pack: the three official logos to download, simple rules and an example; in the site maps under `/fundraise`; 404 while fundraising is switched off; `logos` is a reserved slug) |
 | `GET /fundraise/sponsor-form` | **implemented** | TASK-504 (a blank sponsor form to print, with HMRC's sponsorship and Gift Aid columns and declaration; `noindex`; 404 while fundraising is switched off; `sponsor-form` is a reserved slug) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
-| `GET /fundraise/:slug/qr.png` | **implemented** | TASK-504 (the same code as a print size PNG, about 2000px square, as a download; answers wherever the SVG does) |
+| `GET /fundraise/:slug/qr.png` | **implemented** | TASK-504 (the same code as a print size PNG, about 2000px square, as a download; answers wherever the SVG does. Both are drawn once per address and kept in memory, at most 500 of each, oldest out first (`src/fundraising/qr-cache.ts`), and sent with `Cache-Control: public, max-age=86400`) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
 | `GET /media/fundraiser-news/:photoId` | **implemented** | TASK-506 (public; a news update's photo by uuid, only once its update is approved on a page that is up, `nosniff`, `max-age=300`; a waiting or hidden one is a 404) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |

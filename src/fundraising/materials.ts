@@ -35,11 +35,11 @@ export const SEND_IT_BACK = "Please send this form back to us with the money so 
 /**
  * HMRC's model sponsorship declaration, word for word, from its "Sponsorship and Gift Aid declaration
  * form" (gov.uk, publication "charities-sponsorship-and-gift-aid-declaration-form", the November 2015
- * PDF), with the charity named on the form above it. Kept exactly as HMRC words it, their spelling
- * and slash included, so nobody has to wonder whether a change still counts.
+ * PDF), with the charity named on the form above it. Kept exactly as HMRC words it, their spelling,
+ * slash, curly quotes and √ sign included, so nobody has to wonder whether a change still counts.
  */
 export const SPONSOR_DECLARATION =
-  "If I have ticked the box headed 'Gift Aid? ✓', I confirm that I am a UK Income or Capital Gains taxpayer. " +
+  "If I have ticked the box headed ‘Gift Aid? √’, I confirm that I am a UK Income or Capital Gains taxpayer. " +
   "I have read this statement and want the charity or Community Amateur Sports Club (CASC) named above to reclaim tax " +
   "on the donation detailed below, given on the date shown. I understand that if I pay less Income Tax / or Capital " +
   "Gains tax in the current tax year than the amount of Gift Aid claimed on all of my donations it is my responsibility " +
@@ -360,7 +360,7 @@ export function renderSocial(d: MaterialFacts, a: MaterialAssets, script: string
     linkKind: d.linkKind,
     raisedPence: d.raisedPence,
     targetPence: d.targetPence,
-    logo: a.logo,
+    // Only the logo with white lettering is drawn on the maroon pictures.
     logoOnDark: a.logoOnDark,
   };
   const showMeter = d.raisedPence > 0;

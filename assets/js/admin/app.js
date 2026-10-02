@@ -10301,6 +10301,8 @@
   // TASK-504: open one of a fundraiser's materials in its own tab. The admin API needs the session,
   // which a plain link would not carry, so the page is fetched with it and shown from memory. The
   // tab is opened at once, while the click still counts, so no pop up blocker stops it.
+  // Mind: a blob: page made here runs in the ADMIN's origin, beside the staff session, so every
+  // stored field the server draws into it (src/fundraising/materials.ts) must stay escaped.
   function frOpenMaterial(piece) {
     var f = frDetail && frDetail.fundraiser;
     if (!f) return;

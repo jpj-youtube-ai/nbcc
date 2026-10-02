@@ -222,9 +222,10 @@ describe("the social images page", () => {
       raisedPence: 54000,
       targetPence: 50000,
       slug: "sams-santa-dash",
-      logo: ASSETS.logo,
       logoOnDark: ASSETS.logoOnDark,
     });
+    // Only the logo with white lettering is drawn; the colour one would be dead weight.
+    expect(data).not.toHaveProperty("logo");
     expect(data).not.toHaveProperty("email");
     expect(data).not.toHaveProperty("phone");
   });
@@ -240,7 +241,7 @@ describe("the sponsor form", () => {
   });
 
   it("carries HMRC's sponsorship declaration word for word at the head of each page", () => {
-    expect(SPONSOR_DECLARATION).toContain("I confirm that I am a UK Income or Capital Gains taxpayer");
+    expect(SPONSOR_DECLARATION).toContain("If I have ticked the box headed ‘Gift Aid? √’, I confirm that I am a UK Income or Capital Gains taxpayer");
     expect(SPONSOR_DECLARATION).toContain(
       "I understand that if I pay less Income Tax / or Capital Gains tax in the current tax year than the amount of Gift Aid claimed on all of my donations it is my responsibility to pay any difference.",
     );

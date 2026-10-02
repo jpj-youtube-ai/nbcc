@@ -44,6 +44,12 @@ function fresh(res: Response): void {
   res.setHeader("Cache-Control", "public, max-age=0");
 }
 
+// TASK-504 review: a QR code depends only on the address it carries, so a browser may keep it for a
+// day, and the server draws each one once (src/fundraising/qr-cache.ts).
+function keepADay(res: Response): void {
+  res.setHeader("Cache-Control", "public, max-age=86400");
+}
+
 /** The fundraiser behind /fundraise/:slug, only if it has a public page right now. */
 async function publicFundraiser(slug: string) {
   if (!(await fundraisingOn())) return null;
@@ -241,11 +247,15 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     try {
       const f = await publicFundraiser(String(req.params.slug));
       if (!f) return next();
-      const [{ qrPng }, { fundraiserPageUrl }] = await Promise.all([import("../fundraising/qr-png"), import("../fundraising/send")]);
+      const [{ qrPng }, { fundraiserPageUrl }, { qrPngCache }] = await Promise.all([
+        import("../fundraising/qr-png"),
+        import("../fundraising/send"),
+        import("../fundraising/qr-cache"),
+      ]);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Disposition", `attachment; filename="nbcc-${f.slug}-qr-code.png"`);
-      fresh(res);
-      res.type("image/png").send(qrPng(fundraiserPageUrl(f.slug)));
+      keepADay(res);
+      res.type("image/png").send(qrPngCache.get(fundraiserPageUrl(f.slug), qrPng));
     } catch (err) {
       console.error("fundraiser qr png failed:", err instanceof Error ? err.message : err);
       next();
@@ -258,11 +268,19 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
     try {
       const f = await publicFundraiser(String(req.params.slug));
       if (!f) return next();
-      const [{ qrSvg }, { fundraiserPageUrl }] = await Promise.all([import("../fundraising/qr"), import("../fundraising/send")]);
+      const [{ qrSvg }, { fundraiserPageUrl }, { qrSvgCache }] = await Promise.all([
+        import("../fundraising/qr"),
+        import("../fundraising/send"),
+        import("../fundraising/qr-cache"),
+      ]);
       res.setHeader("X-Content-Type-Options", "nosniff");
       res.setHeader("Content-Disposition", `inline; filename="nbcc-${f.slug}-qr-code.svg"`);
-      fresh(res);
-      res.type("image/svg+xml").send(qrSvg(fundraiserPageUrl(f.slug), { title: `QR code for ${f.title}`, size: 1024 }));
+      keepADay(res);
+      // TASK-504 review: kept by the address and the title it is labelled with, since both go in it.
+      const url = fundraiserPageUrl(f.slug);
+      const title = `QR code for ${f.title}`;
+      res.type("image/svg+xml").send(qrSvgCache.get(`${url}
+${title}`, () => qrSvg(url, { title, size: 1024 })));
     } catch (err) {
       console.error("fundraiser qr failed:", err instanceof Error ? err.message : err);
       next();

@@ -29,6 +29,16 @@ vi.mock("../../src/db/fundraisers", () => ({
   wallRows: async () => [],
 }));
 vi.mock("../../src/fundraising/send", () => ({ fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}` }));
+// The real encoders, watched: the cache must spare them a second run for the same address.
+const drawn = vi.hoisted(() => ({ png: 0, svg: 0 }));
+vi.mock("../../src/fundraising/qr-png", async (orig) => {
+  const real = (await orig()) as typeof import("../../src/fundraising/qr-png");
+  return { ...real, qrPng: (text: string) => (drawn.png++, real.qrPng(text)) };
+});
+vi.mock("../../src/fundraising/qr", async (orig) => {
+  const real = (await orig()) as typeof import("../../src/fundraising/qr");
+  return { ...real, qrSvg: (text: string, opts?: Parameters<typeof real.qrSvg>[1]) => (drawn.svg++, real.qrSvg(text, opts)) };
+});
 
 import { createSiteRouter } from "../../src/routes/site";
 
@@ -138,6 +148,26 @@ describe("a page's print size QR code", () => {
     const buf = Buffer.from(await res.arrayBuffer());
     expect(buf.subarray(1, 4).toString("latin1")).toBe("PNG");
     expect(buf.readUInt32BE(16)).toBeGreaterThanOrEqual(2000);
+  });
+
+  it("is drawn once and then served from memory, kept by browsers for a day", async () => {
+    state.fundraisers = [record({ slug: "cache-check-walk" })];
+    const before = drawn.png;
+    const first = await get("/fundraise/cache-check-walk/qr.png");
+    const second = await get("/fundraise/cache-check-walk/qr.png");
+    expect(drawn.png - before).toBe(1);
+    expect(Buffer.from(await second.arrayBuffer())).toEqual(Buffer.from(await first.arrayBuffer()));
+    expect(second.headers.get("cache-control")).toBe("public, max-age=86400");
+  });
+
+  it("serves the SVG from memory too", async () => {
+    state.fundraisers = [record({ slug: "cache-check-svg" })];
+    const before = drawn.svg;
+    await get("/fundraise/cache-check-svg/qr.svg");
+    const again = await get("/fundraise/cache-check-svg/qr.svg");
+    expect(drawn.svg - before).toBe(1);
+    expect(again.headers.get("cache-control")).toBe("public, max-age=86400");
+    expect(await again.text()).toContain("<svg");
   });
 
   it("is not there for a fundraiser with no page, or while switched off", async () => {

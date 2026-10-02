@@ -1337,6 +1337,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/fundraise/manage/sign-out` | **implemented** | TASK-501 (ends the session) |
 | `GET /api/fundraise/manage/news`, `POST /api/fundraise/manage/fundraisers/:id/news`, `GET /api/fundraise/manage/news/:updateId/photo` | **implemented** | TASK-506 (the organiser's news updates: theirs listed with where each is up to; a new one, with an optional photo, waits for staff, five a day; their own photo. See **Fundraiser pages: countdown, on the day, and news updates (TASK-506)**) |
 | `GET /api/admin/fundraising/news-waiting`, `GET /api/admin/fundraisers/:id/news`, `.../news/:updateId/photo`, `POST .../news/:updateId/approve` \| `reject` \| `hide` \| `show` | **implemented** | TASK-506 (staff check news updates: fundraising view to look, edit to decide; audited) |
+| `GET /api/fundraise/manage/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the signed in organiser's poster, pictures to share, sponsor form or certificate, as a whole print page; only their own, approved or finished, and the certificate once finished; anyone else's is a 404, no session a `401` page, and a 404 while fundraising is off. See **Community fundraising, materials**) |
+| `GET /api/admin/fundraisers/:id/materials/:piece` | **implemented** | TASK-504 (the same pages for staff with fundraising: view, for any approved or finished fundraiser whether or not fundraising is on; the certificate as a marked preview before it is finished) |
 | `GET` and `POST /api/fundraise/manage/:token` | **retired** | TASK-501 (`410`: the 24 hour links no longer open anything; ask for a sign in code) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
@@ -1404,7 +1406,10 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fundraise/manage` | **implemented** | TASK-501 (the organiser's private area, signed in with an emailed code; was TASK-494's `?token=` link page; `noindex`, `no-store`, `Referrer-Policy: no-referrer`; 404 while fundraising is switched off) |
 | `GET /fundraise/help` | **implemented** | TASK-498 (Fundraising help, a draft for sign off: ideas from A to Z, paying in, Gift Aid, staying safe and legal in Scotland, using our logo; indexed and in the site maps like `/fundraise`; 404 while fundraising is switched off; registered before `/fundraise/:slug`, and `help` is a reserved slug) |
 | `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless public, raising money, approved or (TASK-502) finished, and switched on. `?thanks=1` shows the thank you a giver comes back to after paying; TASK-502: with `&session_id=` it offers the optional step to add to the wall, served `no-store`, `noindex` and `Referrer-Policy: same-origin`; `&added=1` thanks them for it) |
+| `GET /fundraise/logos` | **implemented** | TASK-504 (the logo pack: the three official logos to download, simple rules and an example; in the site maps under `/fundraise`; 404 while fundraising is switched off; `logos` is a reserved slug) |
+| `GET /fundraise/sponsor-form` | **implemented** | TASK-504 (a blank sponsor form to print, with HMRC's sponsorship and Gift Aid columns and declaration; `noindex`; 404 while fundraising is switched off; `sponsor-form` is a reserved slug) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
+| `GET /fundraise/:slug/qr.png` | **implemented** | TASK-504 (the same code as a print size PNG, about 2000px square, as a download; answers wherever the SVG does. Both are drawn once per address and kept in memory, at most 500 of each, oldest out first (`src/fundraising/qr-cache.ts`), and sent with `Cache-Control: public, max-age=86400`) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
 | `GET /media/fundraiser-news/:photoId` | **implemented** | TASK-506 (public; a news update's photo by uuid, only once its update is approved on a page that is up, `nosniff`, `max-age=300`; a waiting or hidden one is a 404) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
@@ -5916,7 +5921,7 @@ a 401 still signs you out. A list that did come back empty still says so, becaus
 
 | Panel | On a failure it used to show | Now |
 |---|---|---|
-| Overview figures (each one on its own) | 0 | Could not load (the other figures still show). A figure from a section your access leaves out (a 403) is left out rather than reported every sign in. |
+| Overview figures (each one on its own) | 0 | Could not load (the other figures still show). A figure from a section your access leaves out (a 403) is left out rather than reported every sign in. Since TASK-508 these are lines in Needs you, which names a part it could not check ("Could not check: Claims"). |
 | Overview recent donations | nothing | Recent donations are unavailable. (On a 403: Recent donations are not part of your access.) |
 | Donations | No donations yet. | Donations are unavailable. |
 | GASDS deadline | No GASDS donations are approaching the claim deadline. | GASDS donations are unavailable. |
@@ -6059,6 +6064,51 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - the "New pills" block in `test/unit/admin-app.test.ts` covers the screen;
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
+
+## The admin Overview: Needs you (TASK-508)
+
+The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent
+first, each with a button to the screen that deals with it. The design, and the two stages still to
+come (the numbers, then Coming up), are in `docs/superpowers/specs/2026-10-03-admin-overview-design.md`.
+
+- **Three levels**, marked by a dot (and said in words to a screen reader), in this order:
+  1. **Money or overdue** (crimson):
+     - bank transfers overdue;
+     - monthly gifts failing to take;
+     - Gift Aid ready to claim, with the amount;
+     - emails that failed or bounced in 2 weeks;
+     - fundraisers with buckets or tins due back.
+  2. **Waiting on a reply** (gold):
+     - contact messages;
+     - fundraising sign ups, changes to check, fundraisers who say they've finished, requests to do,
+       and fundraisers due a call;
+     - new stories;
+     - businesses due a thank you call;
+     - your own business outreach to-dos;
+     - generous donors not yet thanked who can be emailed (as the Thank you screen counts them);
+     - bank transfers still waiting.
+  3. **Slower deadlines** (grey):
+     - Gift Aid adjustments, declarations not back, declarations due a review, and records near the
+       end of their keep date;
+     - GASDS deadlines;
+     - Festive Ball guest details still missing, in the 3 weeks before they close.
+
+  Anything at zero is left out. A quiet day says "Nothing needs you right now."
+- **One request**, `GET /api/admin/overview` (any session), answers
+  `{ updatedAt, needs: [{ key, level, text, view, button }], failed: [screen names] }`
+  (`src/routes/admin-overview.ts`). Each item has the same gate as its own screen. A section the
+  person cannot open is never asked for (`gatherNeeds`, `src/admin/overview-sources.ts`). Each count
+  uses the same database function and rule as that screen, so the two cannot disagree.
+- **One that fails is named**: "Could not check: Festive Ball". The rest still show, and the list
+  never says "Nothing needs you" when it could not tell.
+- **The words and order** are one pure list, `NEEDS` in `src/admin/overview.ts`. A new kind of
+  waiting item is a line there, plus a reader in the route.
+- **Light on the database.** Its sources run at most 3 at a time (`MAX_AT_ONCE`), because the main
+  database pool takes 5 and a donor's checkout must not wait behind an Overview. It is read once on
+  sign in, and only when the Overview is the screen being shown.
+- It is read afresh each time the Overview is opened, and says when ("Updated 9:41"). The five Gift
+  Aid figures that used to stand here are lines in level 3. Recent donations, underneath, shows the
+  latest 5.
 
 ## QR codes for every page (TASK-492)
 
@@ -8166,6 +8216,47 @@ how the app mounts it), `fundraiser-updates-db`, `fundraiser-updates-migration`,
 jsdom), `admin-fundraising-news-panel` (the admin in jsdom), `admin-email-kinds` and `backup-plan`.
 BDD: `features/fundraising-news.feature` (post, approve, on the page; a waiting photo is not public;
 the sixth in a day; the countdown and the day itself).
+## Community fundraising, materials (TASK-504)
+
+Stage 2 of community fundraising: everything an organiser prints and shares, each built from the
+fundraiser's **approved** details only (the stored record; a change waiting for staff is never read),
+the way the business supporters' certificate and the thank you letters are: one self contained HTML
+page with the brand fonts and logos inlined, A4 `@page` rules, a print button, and a little script
+that shrinks the page to fit a phone screen (printing ignores it). No server side PDF or image
+library.
+
+| Piece | What it is |
+|---|---|
+| `poster` | A4 portrait: the logo, "Fundraising for NBCC", the title, date, time and place, a short line (the card line, or the description's first sentence, trimmed), the target, a big QR code and the address in words, and "Every pound helps the families we support, all year round." The code is the public page's (`src/fundraising/qr.ts`, the same encoder as the SVG download); a public event's points at Get involved; one not on the website has no code and says nbcc.scot |
+| `social` | Pictures to share: a square (1080 x 1080) and a story (1080 x 1920), drawn in the browser on a canvas by `assets/js/fundraise-social.js` (inlined into the page) and saved as PNGs by a Download button each. Title, "Fundraising for NBCC", the meter (optional, a tick box), the page address and the logo with white lettering |
+| `sponsor-form` | A4 landscape, two pages (12 rows, then 11 more and the totals): HMRC's sponsorship and Gift Aid declaration word for word at the head of each page (from HMRC's model "Sponsorship and Gift Aid declaration form", gov.uk), the charity name and number, the fundraiser's title, the columns HMRC asks for (full name, home address, postcode, amount, date paid, Gift Aid tick), totals, and "Please send this form back to us with the money so we can claim Gift Aid." A blank one for anyone is at `/fundraise/sponsor-form` |
+| `certificate` | A4 landscape certificate of thanks: the organiser's name as they gave it, the title, the final total raised (Gift Aid apart, "+ £X Gift Aid" when there is some), today's date and "NBCC Team". The organiser's once the fundraiser is finished; staff can preview it at any time once approved |
+
+Also: the print size QR code PNG (`/fundraise/<slug>/qr.png`, `src/fundraising/qr-png.ts`, a one bit
+PNG written with Node's zlib, every module a whole number of pixels) beside the SVG, and the logo
+pack at `/fundraise/logos` (`fundraise-logos.html`: the colour PNG, the white SVG and the white PNG
+that already ship in `assets/img`, with the rules), linked from the help page's "Using our logo",
+which also links the blank sponsor form.
+
+**Where to find them.** The organiser's private area (`/fundraise/manage`) has a "Your materials"
+section on each fundraiser (the links come in `GET /api/fundraise/manage/me` as `materials:
+{ poster, social, sponsorForm, certificate, qrPng }`, with `certificate` null until finished and
+`qrPng` null without a page), and a "Download a print size PNG" link beside the QR code. Admin >
+Fundraising shows "Materials" buttons on an approved or finished sign up: the admin fetches the page
+with the staff session and opens it in its own tab from memory (a plain link would carry no
+session). Every materials page is `no-store`, `noindex` and `Referrer-Policy: no-referrer`. No email
+changes here: the certificate is wired into the finishing email by a later task.
+
+| Where it lives | File |
+|---|---|
+| The pages (pure renders), what each may show, the HMRC wording | `src/fundraising/materials.ts` |
+| The print size QR code | `src/fundraising/qr-png.ts` |
+| Who may open them | `src/routes/fundraise-materials.ts` |
+| The blank sponsor form, the logo pack, the PNG | `src/routes/fundraise-pages.ts`, `fundraise-logos.html` |
+| Drawing the social pictures | `assets/js/fundraise-social.js` |
+| Tests | `test/unit/fundraising-materials.test.ts`, `fundraise-materials-routes.test.ts`, `fundraise-materials-pages.test.ts`, `fundraise-social-images.test.ts`, `fundraising-qr-png.test.ts`, and the private area and admin page tests; BDD `features/fundraising-materials.feature` |
+
+No migration: everything comes from tables that already exist.
 
 ## Thank your supporters (TASK-507)
 

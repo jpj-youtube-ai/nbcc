@@ -384,6 +384,30 @@
         dl.setAttribute("download", "nbcc-" + f.slug + "-qr-code.svg");
       }
 
+      // TASK-504: "Your materials", and the print size QR code beside the SVG. The certificate
+      // comes once the fundraiser is finished (the server sends its link only then).
+      var mats = f.materials || null;
+      var png = q("[data-f-qr-png]");
+      if (png) {
+        png.hidden = !(mats && mats.qrPng);
+        if (mats && mats.qrPng) {
+          png.setAttribute("href", mats.qrPng);
+          png.setAttribute("download", "nbcc-" + f.slug + "-qr-code.png");
+        }
+      }
+      var matsPart = q("[data-f-materials]");
+      if (matsPart) {
+        matsPart.hidden = !mats;
+        if (mats) {
+          ["poster", "social", "sponsorForm", "certificate"].forEach(function (key) {
+            var item = q('[data-f-mat="' + key + '"]');
+            if (!item) return;
+            item.hidden = !mats[key];
+            if (mats[key]) item.querySelector("a").setAttribute("href", mats[key]);
+          });
+        }
+      }
+
       var m = f.meter || {};
       q("[data-f-raised]").textContent =
         m.targetPence ? money(m.raisedPence) + " raised of your " + money(m.targetPence) + " target" : money(m.raisedPence) + " raised so far";

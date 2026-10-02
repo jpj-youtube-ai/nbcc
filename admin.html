@@ -136,10 +136,15 @@
             </div>
             <!-- Overview: the three operational queues at a glance + recent donations. -->
             <section class="admin-view" id="view-overview" aria-labelledby="overview-heading">
-              <h2 id="overview-heading">Overview</h2>
-              <div class="admin-stats" id="overviewStats" aria-live="polite">
-                <p class="admin-loading">Loading…</p>
+              <div class="ov-head">
+                <h2 id="overview-heading">Overview</h2>
+                <p class="ov-updated" id="overviewUpdated"></p>
               </div>
+              <!-- TASK-508: what is waiting on someone, most urgent first, from GET /api/admin/overview. -->
+              <section class="ov-card" aria-labelledby="ovNeedsHead">
+                <h3 class="ov-card-head" id="ovNeedsHead">Needs you</h3>
+                <div id="overviewNeeds" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+              </section>
               <h3 class="admin-subhead">Recent donations</h3>
               <div class="admin-table-wrap" id="overviewRecent"><p class="admin-loading">Loading…</p></div>
             </section>

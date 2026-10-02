@@ -13,6 +13,7 @@ import { fundraiserThanksRouter } from "./routes/fundraiser-thanks";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseRouter } from "./routes/fundraise";
 import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
+import { fundraiseMaterialsRouter } from "./routes/fundraise-materials";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
@@ -34,6 +35,7 @@ import { ballRouter } from "./routes/ball";
 import { ballTransferRouter } from "./routes/ball-transfer";
 import { adminBallTransferRouter } from "./routes/admin-ball-transfer";
 import { adminQrRouter } from "./routes/admin-qr";
+import { adminOverviewRouter } from "./routes/admin-overview";
 import { createSiteRouter } from "./routes/site";
 
 export function createApp() {
@@ -111,6 +113,9 @@ export function createApp() {
   // TASK-505: what organisers asked us for (posters, leaflets, buckets and tins, shout outs, someone
   // to come along), tracked to done.
   app.use(adminFundraisingRequestsRouter);
+  // TASK-504: a fundraiser's poster, pictures, sponsor form and certificate, for its organiser
+  // (signed in) and for staff.
+  app.use(fundraiseMaterialsRouter);
   // The Festive Ball ticket report, set up from the Events page (TASK-464).
   app.use(adminBallReportRouter);
   // Admin > Analytics (TASK-482): the numbers and the collecting switch.
@@ -123,6 +128,8 @@ export function createApp() {
   app.use(adminWhatsNewRouter);
   // QR codes for every page of the site, in the admin (TASK-492).
   app.use(adminQrRouter);
+  // The admin Overview's "Needs you" (TASK-508).
+  app.use(adminOverviewRouter);
   app.use(healthRouter);
   // Public newsletter unsubscribe (TASK-161/REQ-069). Must be mounted before the site
   // catch-all router below, otherwise its wildcard route would shadow /unsubscribe/:token.

@@ -179,12 +179,10 @@
       // draft is exactly when you most want to start from a template.
       nlRefreshTemplates();
       nlRefreshAudiences(); // TASK-259: fill the audience pickers once permissions are known
-      // Back to where they were, or the overview on a fresh sign-in. loadOverview() runs either
-      // way: the overview's own figures are cheap, and the notice bar at the top of every screen
-      // reads from them.
+      // Back to where they were, or the overview on a fresh sign-in. TASK-508: opening the overview
+      // loads it (selectView), so it is read once, and only when it is the screen being shown.
       var resume = restorableView();
       selectView(resume || "overview");
-      loadOverview();
     }
     authFetch("/api/admin/me")
       .then(j)
@@ -549,7 +547,10 @@
     refreshWhatsNew();
     beginVisit(name);
     renderNewPills();
-    if (name === "search") {
+    if (name === "overview") {
+      // TASK-508: "Needs you" is read afresh every time, so coming back to it is how you refresh it.
+      loadOverview();
+    } else if (name === "search") {
       var q = el("searchQuery");
       if (q && q.focus) q.focus();
     } else if (name === "donations") {
@@ -714,48 +715,63 @@
       body + "</tbody></table></div>"
     );
   }
-  // TASK-476: a figure that could not be counted. It keeps its place and its label, so the other
-  // four still read as they always have; only the one that failed says so.
-  function unavailableCard(label) {
-    return (
-      '<div class="admin-stat is-unavailable"><div class="n">Could not load</div><div class="l">' +
-      H.escapeHtml(label) + "</div></div>"
-    );
+  // TASK-508: "Needs you". GET /api/admin/overview counts what is waiting, within this person's access,
+  // and words it (src/admin/overview.ts); this only draws it. The five Gift Aid figures that used to
+  // sit here are lines in it now, in the slowest of the three groups.
+  var NEED_LEVEL_WORDS = { 1: "Urgent: ", 2: "Waiting: ", 3: "Coming due: " };
+  function needsHtml(d) {
+    var esc = H.escapeHtml;
+    var needs = d.needs || [];
+    var failed = d.failed || [];
+    var list = needs.length
+      ? '<ul class="ov-needs">' +
+        needs
+          .map(function (n) {
+            return (
+              '<li class="ov-need" data-level="' + Number(n.level) + '">' +
+              '<span class="ov-dot" aria-hidden="true"></span>' +
+              '<span class="ov-text"><span class="sr-only">' + (NEED_LEVEL_WORDS[n.level] || "") + "</span>" + esc(n.text) + "</span>" +
+              '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(n.view) + '">' + esc(n.button) + "</button>" +
+              "</li>"
+            );
+          })
+          .join("") +
+        "</ul>"
+      : "";
+    // Never "nothing needs you" when part of it could not be checked: that would be a guess.
+    var quiet = !needs.length && !failed.length ? '<p class="ov-clear">Nothing needs you right now.</p>' : "";
+    var gaps = failed.length
+      ? '<p class="ov-failed">Could not check: ' + esc(failed.join(", ")) + ". Open Overview again in a moment.</p>"
+      : "";
+    return list + quiet + gaps;
   }
-  var OVERVIEW_CARDS = [
-    ["/api/admin/claims/adjustment-due", "Adjustments due", true],
-    ["/api/admin/queues/retention-expiry", "Retention expiring", true],
-    ["/api/admin/queues/awaiting-declaration", "Awaiting declaration", false],
-    ["/api/admin/queues/gasds-deadline", "GASDS deadline near", true],
-    ["/api/admin/queues/declaration-review", "Declaration review due", false],
-  ];
+  function overviewTime(iso) {
+    var t = new Date(iso);
+    if (isNaN(t.getTime())) return "";
+    return "Updated " + t.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit" });
+  }
+  var overviewWired = false;
   function loadOverview() {
-    var stats = el("overviewStats");
-    // Each figure on its own (TASK-476). They used to be read together, and a failed one came back
-    // as a count of 0, so "0 Adjustments due" could mean either that none were due or that nobody
-    // could tell.
-    Promise.all(
-      OVERVIEW_CARDS.map(function (c) {
-        return authFetch(c[0])
-          .then(okJson)
-          .then(
-            function (d) { return statCard((d.results || []).length, c[1], c[2]); },
-            function (err) {
-              // A 401 has already gone back to the sign-in screen; nothing to draw.
-              if (err && err.message === "unauthorized") throw err;
-              // A 403 is not a failure: the figure belongs to a section this person's access leaves
-              // out, and saying "Could not load" on every sign in would cry wolf. Leave it out.
-              if (err && err.status === 403) return "";
-              return unavailableCard(c[1]);
-            },
-          );
-      }),
-    )
-      .then(function (cards) {
-        stats.innerHTML = cards.join("");
+    if (!overviewWired) {
+      overviewWired = true;
+      // Delegated, and attached once: the list is drawn again on every visit.
+      el("overviewNeeds").addEventListener("click", function (e) {
+        var btn = e.target.closest && e.target.closest("[data-ov-view]");
+        if (btn) selectView(btn.getAttribute("data-ov-view"));
+      });
+    }
+    authFetch("/api/admin/overview")
+      .then(okJson)
+      .then(function (d) {
+        el("overviewNeeds").innerHTML = needsHtml(d);
+        el("overviewUpdated").textContent = overviewTime(d.updatedAt);
       })
-      .catch(function () {});
-    authFetch("/api/admin/donations?limit=10")
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        el("overviewNeeds").innerHTML = unavailableHtml("The overview could not load. Open it again in a moment.");
+        el("overviewUpdated").textContent = "";
+      });
+    authFetch("/api/admin/donations?limit=5")
       .then(okJson)
       .then(function (d) {
         el("overviewRecent").innerHTML = donationsTable(d.results || []);
@@ -9468,13 +9484,26 @@
         '<img class="fr-qr-preview" src="/fundraise/' + encodeURIComponent(f.slug) + '/qr.svg" alt="' +
         H.escapeHtml("QR code for " + f.title) + '" width="120" height="120" loading="lazy" />' +
         '<a class="fr-qr-link" id="frQrLink" href="/fundraise/' + encodeURIComponent(f.slug) + '/qr.svg" download="' +
-        H.escapeHtml("qr-" + f.slug + ".svg") + '">Download its QR code</a>';
+        H.escapeHtml("qr-" + f.slug + ".svg") + '">Download its QR code</a>' +
+        // TASK-504: the same code as a print size PNG.
+        '<a class="fr-qr-link" id="frQrPngLink" href="/fundraise/' + encodeURIComponent(f.slug) + '/qr.png" download="' +
+        H.escapeHtml("qr-" + f.slug + ".png") + '">Print size PNG</a>';
     } else {
       page = frNone(f.path === "event" && f.status === "approved" && f.public
         ? "No page on the website: an event is listed on Get involved instead."
         : "No page on the website.");
     }
     rows += fulfilRow("Its page", page);
+    // TASK-504: its materials, made from the approved details, once it is approved. Each opens in
+    // its own tab (frOpenMaterial). The certificate is the organiser's once finished; before then
+    // staff can preview it.
+    if (f.status === "approved" || f.status === "finished") {
+      var mats = [["poster", "Poster"], ["social", "Pictures to share"], ["sponsor-form", "Sponsor form"],
+        ["certificate", f.status === "finished" ? "Certificate of thanks" : "Certificate (preview)"]];
+      rows += fulfilRow("Materials", '<span class="fr-materials-admin">' + mats.map(function (m) {
+        return '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frmaterial="' + m[0] + '">' + H.escapeHtml(m[1]) + "</button>";
+      }).join("") + "</span>" + '<span class="fr-field-hint">Made from the approved details. Each opens in a new tab, ready to print.</span>');
+    }
     var actions = "";
     if (write) {
       var buttons = "";
@@ -10293,6 +10322,37 @@
     });
   }
 
+  // TASK-504: open one of a fundraiser's materials in its own tab. The admin API needs the session,
+  // which a plain link would not carry, so the page is fetched with it and shown from memory. The
+  // tab is opened at once, while the click still counts, so no pop up blocker stops it.
+  // Mind: a blob: page made here runs in the ADMIN's origin, beside the staff session, so every
+  // stored field the server draws into it (src/fundraising/materials.ts) must stay escaped.
+  function frOpenMaterial(piece) {
+    var f = frDetail && frDetail.fundraiser;
+    if (!f) return;
+    var id = f.id;
+    var tab = window.open("", "_blank");
+    try {
+      if (tab) {
+        tab.document.title = "Opening";
+        tab.document.body.textContent = "Opening, one moment.";
+      }
+    } catch (e) { /* a tab we cannot write to still navigates */ }
+    authFetch("/api/admin/fundraisers/" + id + "/materials/" + encodeURIComponent(piece))
+      .then(function (res) { return res.ok ? res.text() : Promise.reject(new Error("failed")); })
+      .then(function (page) {
+        var url = URL.createObjectURL(new Blob([page], { type: "text/html" }));
+        if (tab && !tab.closed) tab.location.href = url;
+        else window.open(url, "_blank");
+        setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+      })
+      .catch(function () {
+        if (tab && !tab.closed) tab.close();
+        frSay("detail", "Could not open that. Try again.", true, id);
+        frPaintNotice("detail");
+      });
+  }
+
   function frWire() {
     if (frWired) return;
     frWired = true;
@@ -10318,6 +10378,8 @@
       }
       var action = t.closest("[data-fraction]");
       if (action) return frMove(action.getAttribute("data-fraction"));
+      var material = t.closest("[data-frmaterial]");
+      if (material) return frOpenMaterial(material.getAttribute("data-frmaterial"));
       var decide = t.closest("[data-fredit]");
       if (decide) return frDecideEdit(decide);
       var remove = t.closest("[data-frcashremove]");

@@ -647,3 +647,37 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
 .fr-mynews__status.is-pending { background: var(--tan-soft); color: var(--maroon); }
 .fr-mynews__status.is-approved { background: var(--holly-soft); color: var(--holly-dark); }
 .fr-today .fr-share__status:empty { min-height: 0; margin: 0; }
+/* ---------- the logo pack (TASK-504) ----------
+   /fundraise/logos: the three official logos to download, the rules and an example. Each logo is
+   shown on the kind of background it is made for. */
+.page-prose .logo-cards { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 16px; }
+@media (min-width: 640px) { .page-prose .logo-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.page-prose .logo-cards li { margin: 0; }
+.logo-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+.logo-card__show { border-radius: 12px; aspect-ratio: 1; display: grid; place-items: center; padding: 18px; }
+.logo-card__show--light { background: var(--white); box-shadow: inset 0 0 0 1px var(--line); }
+.logo-card__show--dark { background: var(--maroon); }
+.logo-card__show img { width: 100%; height: auto; max-width: 180px; }
+.page-prose .logo-card h3 { margin: 6px 0 0; }
+.page-prose .logo-card p { margin: 0; font-size: 0.95rem; }
+.logo-card__get { margin-top: auto; align-self: flex-start; }
+.logo-example { margin: 18px 0; }
+.logo-example__poster { max-width: 300px; margin: 0 auto; aspect-ratio: 210 / 297; background: var(--cream); border: 8px solid var(--maroon); border-radius: 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 22px; text-align: center; box-shadow: 0 12px 30px -18px rgba(60, 20, 20, 0.6); }
+.logo-example__poster img { width: 42%; height: auto; margin-bottom: 14px; }
+.logo-example__for { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--crimson); }
+.logo-example__title { font-family: var(--font-head); font-weight: 800; font-size: 1.6rem; line-height: 1.1; color: var(--maroon); }
+.logo-example__when { font-size: 0.8rem; color: var(--slate); }
+.logo-example figcaption { margin-top: 10px; text-align: center; font-size: 0.85rem; color: var(--slate-soft); }
+
+/* ---------- "Your materials" in the private area (TASK-504) ---------- */
+.fr-materials { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+@media (min-width: 560px) { .fr-materials { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+.fr-materials li { margin: 0; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--white); display: flex; flex-direction: column; justify-content: center; min-height: 44px; }
+.fr-materials li[hidden] { display: none; }
+.fr-materials a { font-weight: 600; text-underline-offset: 3px; }
+.fr-materials span { font-size: 0.85rem; color: var(--slate-soft); }
+.fr-qr__download[hidden] { display: none; }
+.logo-example__poster { position: relative; overflow: hidden; padding-bottom: 54px; }
+.logo-example__foot { position: absolute; left: 0; right: 0; bottom: 0; background: var(--maroon); color: var(--cream); font-family: var(--font-head); font-style: italic; font-size: 0.78rem; line-height: 1.3; padding: 10px 14px; }
+.fr-qr__download + .fr-qr__download { margin-left: 18px; }

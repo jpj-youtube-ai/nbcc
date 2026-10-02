@@ -44,7 +44,11 @@ export const SITE_PAGES: SitePage[] = [
     listedByDefault: true,
     fundraisingGated: true,
     // TASK-498: gated itself too, since sitemap.xml lists every page flat, children included.
-    children: [{ path: "/fundraise/help", title: "Fundraising help", listedByDefault: true, fundraisingGated: true }],
+    children: [
+      { path: "/fundraise/help", title: "Fundraising help", listedByDefault: true, fundraisingGated: true },
+      // TASK-504: the logo pack, gated like the help page.
+      { path: "/fundraise/logos", title: "Our logo, for fundraisers", listedByDefault: true, fundraisingGated: true },
+    ],
   },
   { path: "/contact", title: "Contact", listedByDefault: true },
   { path: "/privacy", title: "Privacy notice", listedByDefault: true },

@@ -43,6 +43,11 @@ export function fundraiserPageUrl(slug: string): string {
   return `${base()}/fundraise/${slug}`;
 }
 
+/** Any address on the public site, from its path (TASK-504: Get involved, for an event's poster). */
+export function siteUrl(path: string): string {
+  return `${base()}${path}`;
+}
+
 /** The private area (TASK-501), where an organiser signs in with a code. */
 export function manageUrl(): string {
   return `${base()}/fundraise/manage`;

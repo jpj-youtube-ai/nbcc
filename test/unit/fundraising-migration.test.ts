@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 // TASK-493: the community fundraising tables. Additive only (golden rule 2): five new tables and
@@ -33,8 +33,7 @@ function fakePgm() {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const migration = require(FILE) as { up: (pgm: unknown) => void; down: (pgm: unknown) => void };
+const migration = createRequire(import.meta.url)(FILE) as { up: (pgm: unknown) => void; down: (pgm: unknown) => void };
 
 describe("the fundraising migration", () => {
   const { calls, pgm } = fakePgm();

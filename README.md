@@ -1322,6 +1322,12 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `POST /api/checkout-session` | **implemented** | REQ-029 (payment) |
 | `POST /api/contact` | **implemented** | REQ-030 (contact form — stores to the separate `contact` DB, 2026-07-10 spec; checks a Cloudflare Turnstile pass first whenever the spam check is on, TASK-490) |
 | `GET /api/contact/captcha` | **implemented** | TASK-490 (the contact form's spam check: `{ siteKey }`, the public Turnstile site key, or `null` while the check is off; see **A spam check on the contact form (TASK-490)**) |
+| `POST /api/fundraise` | **implemented** | TASK-493 (community fundraising sign up; honeypot, per IP limit and Turnstile like the contact form; refused while fundraising is switched off. Shapes: **Community fundraising (TASK-493)**) |
+| `GET /api/fundraise/captcha` | **implemented** | TASK-493 (the sign up form's Turnstile site key, or `null`) |
+| `GET /api/fundraisers` | **implemented** | TASK-493 (Get involved: approved public fundraisers with their meters; empty while switched off) |
+| `GET /api/fundraisers/:slug` | **implemented** | TASK-493 (one fundraiser's page: meter, supporter wall, what giving needs; 404 unless approved, public, raising money and switched on) |
+| `POST /api/fundraise/manage/request` | **implemented** | TASK-493 (emails an organiser a 24 hour link to change their page; always the same answer) |
+| `GET` and `POST /api/fundraise/manage/:token` | **implemented** | TASK-493 (what an organiser may change; a change waits for staff) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
 | `GET /api/portal/:token` | **implemented** | REQ-061 (donor portal read) |
@@ -7058,6 +7064,219 @@ analytics area). BDD: `features/analytics-admin.feature` against Postgres (the p
 audited switch, and the figures from seeded page views, including a gap of over 30 minutes that
 splits a visit and one of exactly 30 that does not).
 
+## Community fundraising (TASK-493)
+
+People sign up at `/fundraise` to raise money for NBCC or to hold an event (a bake sale, a quiz).
+Staff approve every one in **Admin > Fundraising** before anything about it is public. An approved,
+public, raising money fundraiser gets its own page at `/fundraise/<slug>` with a meter and a
+supporter wall, and giving on it goes through the donate page's checkout. Organisers change their
+page by an emailed link, and every change waits for staff. Design:
+`docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
+
+This is **stage 1, the backend core**. The public pages (`/fundraise`, `/fundraise/<slug>`,
+`/fundraise/manage`, Get involved) and the admin screen are built against the API below. Stages 2 to
+4 (materials, keeping in touch, requests) follow.
+
+**It ships switched off.** `fundraising_settings.page_on` is false: sign ups are refused, nothing
+is listed, every page is a 404, and manage links do nothing, until an admin switches it on with
+`PATCH /api/admin/fundraising/settings`.
+
+### Where it lives
+
+| Piece | File |
+|---|---|
+| The rules: form and edit schemas, slugs, the meter, the wall, what the public sees | `src/fundraising/model.ts` |
+| The manage link: random token, sha256 at rest, 24 hours, clock passed in | `src/fundraising/manage-token.ts` |
+| The four emails (pure) and sending them (best effort, after the write) | `src/fundraising/emails.ts`, `src/fundraising/send.ts` |
+| The SQL, every write audited in the same transaction (entity `fundraiser`) | `src/db/fundraisers.ts` |
+| Public API | `src/routes/fundraise.ts` |
+| Admin API | `src/routes/admin-fundraising.ts` |
+| Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js` |
+
+### Data
+
+`fundraising_settings` (the switch), `fundraisers`, `fundraiser_edits` (changes waiting for staff),
+`fundraiser_manage_tokens` (only `token_hash`, the sha256 of the emailed token), `fundraiser_cash`
+(paid in by hand). On `donations`: `fundraiser_id`, `supporter_message`, `show_name`,
+`show_amount` and `message_hidden`, all nullable or defaulted, so existing gifts are untouched.
+
+**Raised** = paid online gifts on the page, less any refund, plus cash staff recorded. The
+percentage is rounded down and can pass 100; the bar is held at 100.
+
+### Permissions
+
+A new admin section, `fundraising`: admins **edit**, editors **edit**, viewers **view** by default,
+and the migration writes those into every access matrix already saved (the TASK-479 pattern).
+Switching fundraising on or off needs edit **and** the admin role, read live from the database.
+
+### Public API
+
+All JSON. Money is always in **pence**. Dates are `YYYY-MM-DD`, times `HH:MM`.
+
+**`POST /api/fundraise`**: sign up. Body:
+
+```json
+{
+  "path": "raising | event",
+  "kind": "run_walk | santa_dash | bake_sale | quiz_party | collection | birthday | other",
+  "title": "Sam's Santa Dash",            // 1 to 100
+  "description": "...",                    // 1 to 1,000
+  "eventDate": "2026-12-05 or empty",      // required when path is event
+  "startTime": "10:30 or empty",
+  "venue": "", "town": "",
+  "targetPence": 50000,                    // optional, 1000 to 10000000; ignored for an event
+  "public": true,                          // show it on the website, or only to let us know
+  "name": "...", "email": "...", "phone": "...",   // all required
+  "socialLink": "https://... or empty",
+  "socialOk": false,                       // we may post about it on NBCC's social media
+  "wants": { "leaflets": 0, "buckets": 0, "shoutOut": false, "attend": false },
+  "postAddress": "...",                    // required when leaflets or buckets are above 0
+  "newsletterOk": false,
+  "company": "",                           // the honeypot: leave empty and hidden
+  "captchaToken": "..."                    // the Turnstile pass, when GET /api/fundraise/captcha gave a site key
+}
+```
+
+Answers: `200 { "status": "received" }` (also for a filled honeypot, which stores nothing);
+`400 { "error": "...", "fields": { "phone": "Please give us a phone number, so we can call you." } }`
+with a plain English message per field; `400 { "error": "captcha" }`; `404` while switched off;
+`429` after 5 sign ups from one address in 10 minutes. On success the organiser is emailed a thank
+you and `events@` a summary.
+
+**`GET /api/fundraise/captcha`**: `{ "siteKey": "..." | null }`, the same key as the contact form.
+
+**`GET /api/fundraisers`**: for Get involved. `{ "fundraisingOn": false, "fundraisers": [] }` while
+off. Otherwise `{ "fundraisingOn": true, "fundraisers": [Card, ...] }`: approved and public, both
+paths, an event dropping off the day after its date. A **Card** is:
+
+```json
+{
+  "id": 9, "slug": "sams-santa-dash", "path": "raising", "kind": "santa_dash",
+  "kindLabel": "A Santa dash", "title": "...", "description": "...",
+  "eventDate": "2026-12-05" | null, "startTime": "10:30" | null, "venue": "", "town": "",
+  "imageSrc": "/media/events/<uuid>" | null,
+  "organisedBy": "Sam S.",                 // first name and last initial
+  "url": "/fundraise/sams-santa-dash" | null,   // null for an event: it has no page
+  "meter": { "raisedPence": 6000, "onlinePence": 5000, "cashPence": 1000, "targetPence": 25000 | null,
+             "percent": 24 | null, "barPercent": 24 | null, "overTarget": false }
+}
+```
+
+No email, phone, address or social link is ever in a public answer.
+
+**`GET /api/fundraisers/:slug`**: a Card plus
+`"wall": [{ "name": "Alex E." | "Anonymous", "amountPence": 2500 | null, "message": "..." | null, "createdAt": "ISO" }]`
+(newest first, every entry; the page shows the top 10 then Show all; hidden messages and gifts
+refunded in full never appear) and `"giving": { "fundraiserId": 9, "minimumPence": 200 }`. `404`
+unless approved, public, raising money and switched on.
+
+**`POST /api/fundraise/manage/request`** `{ "email": "..." }`: always
+`200 { "message": "If that email belongs to an approved fundraiser, ..." }`. For each approved
+fundraiser with that email (up to 5) it emails a link
+`<PORTAL_BASE_URL>/fundraise/manage?token=<token>`, good for 24 hours. Limits: 3 a quarter hour per
+email, 20 per address. `400` only for an address that is not one.
+
+**`GET /api/fundraise/manage/:token`**: the page reads `?token=` and calls this.
+`200 { "fundraiser": { "id", "slug", "title", "path", "pageUrl": "https://..." | null,
+"editable": { "description", "targetPence", "eventDate", "startTime", "venue", "town", "socialLink" } },
+"waitingEdit": { "id", "changes": {...}, "createdAt" } | null }`. `404` for a link that matches
+nothing (or while switched off), `410` for one that has run out or a fundraiser no longer approved.
+
+**`POST /api/fundraise/manage/:token`**: any of the seven editable fields (send only what changed;
+an empty string or `null` clears a date, time, target or link). `202 { "status": "waiting", "edit":
+{ "id", "changes", "createdAt" } }`. A change already waiting is replaced, so there is only ever one.
+The live page keeps the approved version until staff approve it. `400` with `fields` for anything
+else (title, slug and status cannot be changed this way), `404` and `410` as above.
+
+### Giving on a fundraiser's page
+
+`POST /api/checkout-session` takes four more optional fields: `fundraiserId` (positive integer),
+`supporterMessage` (up to 200), `showName` and `showAmount` (both default true). With
+`fundraiserId` the gift must be one off (`mode: "once"`) and at least 200 pence, and the four are
+stamped on the Stripe metadata. **Without `fundraiserId` nothing changes**: the other three are
+dropped and the session is exactly what the donate page always got (tested). Everything else
+(Gift Aid, the card fee, the newsletter tick box, email, name) is the donate page's.
+
+The webhook links the gift (`donations.fundraiser_id`, message, choices) **only if the id names an
+approved fundraiser**, in the same transaction as the donation, and audits
+`fundraiser.gift_received`. Anything else is an ordinary donation with no message, audited as
+`fundraiser.gift_not_linked`.
+
+### Admin API
+
+Every route needs a session and the `fundraising` section: **view** to read, **edit** to change.
+Every write is recorded in `audit_log` (entity `fundraiser`, the fundraiser's id) in the same
+transaction, with the actor `admin:<email>`.
+
+| Route | Body | Answer |
+|---|---|---|
+| `GET /api/admin/fundraising/settings` | | `{ pageOn, updatedAt, updatedBy }` |
+| `PATCH /api/admin/fundraising/settings` (admins only) | `{ pageOn: boolean }` | the same |
+| `GET /api/admin/fundraisers` | | `{ pageOn, fundraisers: [Fundraiser + meter + editWaiting] }`, newest first |
+| `GET /api/admin/fundraisers/:id` | | `{ fundraiser, meter, waitingEdit, editWaiting, edits, cash, wall }` |
+| `PATCH /api/admin/fundraisers/:id` | any of the sign up fields, plus `slug` and `imageSrc` | `{ fundraiser }`; `409` if the slug is taken |
+| `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser (see below); from New or Declined |
+| `POST /api/admin/fundraisers/:id/decline` | `{ reason? }` (internal, up to 500) | `{ fundraiser }`; from New or Approved; no email |
+| `POST /api/admin/fundraisers/:id/finish` | | `{ fundraiser }`; from Approved |
+| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied |
+| `POST /api/admin/fundraisers/:id/edits/:editId/reject` | | `{ fundraiser }`; `409` if already dealt with |
+| `POST /api/admin/fundraisers/:id/cash` | `{ amountPence, paidInOn, note? }` | `201 { cash }` |
+| `DELETE /api/admin/fundraisers/:id/cash/:cashId` | | `{ removed }` |
+| `POST /api/admin/fundraisers/:id/wall/:donationId/hide` and `/show` | | `{ donationId, hidden }` |
+| `GET /api/admin/fundraisers/:id/history` | | `{ history: [{ id, actor, action, data, createdAt }] }`, newest first |
+| `POST /api/admin/fundraiser-images` | `{ mime, dataBase64 }` | `201 { id, src: "/media/events/<id>" }`, stored and served like an event picture |
+
+A **Fundraiser** (admin) is every column: `id, slug, path, kind, kindLabel, title, description,
+eventDate, startTime, venue, town, targetPence, public, status (new | approved | declined |
+finished), name, email, phone, socialLink, socialOk, wants, postAddress, newsletterOk, imageSrc,
+declinedReason, createdAt, approvedAt, approvedBy, updatedAt, updatedBy, pageUrl`. `edits` are
+`{ id, changes, status (waiting | approved | rejected), createdAt, decidedAt, decidedBy }`, the
+waiting one first. `cash` rows are `{ id, amountPence, paidInOn, note, createdBy, createdAt }`.
+`wall` rows (hidden ones included) are `{ donationId, fullName, shortName, anonymous, showName,
+showAmount, amountPence, refundedPence, message, hidden, createdAt }`. Refusals are
+`{ error }` in plain English: `400` (with `fields`), `403`, `404`, `409`.
+
+Admin > Fundraising has a **New pill** (area `fundraising`, lit by each new sign up) and a line in
+the admin's new features list.
+
+### Emails
+
+All from and replying to `events@nbcc.scot` (`BALL_FROM_EMAIL`), in NBCC's usual shell, each its own
+kind on the Email audit:
+
+| Kind | To | When |
+|---|---|---|
+| `fundraiseThanks` | the organiser | they sign up: thank you, we'll be in touch |
+| `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up: everything they told us and asked for. Staff only, so its links are never tagged |
+| `fundraiseApproved` | the organiser | approved: their page link (raising money and public), or "you're on our list" |
+| `fundraiseManage` | the organiser | they ask for a manage link |
+
+### For the page builders
+
+- Reserve nothing in `src/site/pages.ts` for the API: it is all under `/api`. The pages
+  `/fundraise`, `/fundraise/<slug>`, `/fundraise/manage` and `/get-involved` are yours to add; the
+  slug `manage` can never be a fundraiser's (`RESERVED_SLUGS`).
+- The give form posts the donate page's body to `POST /api/checkout-session` with
+  `fundraiserId: giving.fundraiserId`, `mode: "once"`, and the message and choices.
+- The QR code is `src/fundraising/qr.ts`, built separately.
+
+### Not yet (stage 1)
+
+The newsletter tick box is **stored** (`fundraisers.newsletter_ok`) but does not yet add anyone to a
+list. Approval emails point to the page, which carries the QR code; the code is not attached to the
+email. Monthly gifts on fundraiser pages, materials, automatic emails and the requests' tracking are
+later stages.
+
+### Tests
+
+Unit: `fundraising-model`, `fundraising-manage-token`, `fundraising-emails`, `fundraisers-db`,
+`fundraise-routes`, `admin-fundraising-routes`, `checkout-fundraiser`, `stripe-webhook-fundraiser`,
+`fundraising-migration`, `whats-new-fundraising`, plus the permission, backfill, backup, email kind
+and tracked link tests. BDD: `features/fundraising.feature` (approval and the switch, a gift raising
+the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
+manage change waiting for staff, who may do what).
+
 ## Backups (TASK-423)
 
 Every night at 02:00 UK, an EventBridge schedule runs `npm run backup` as a
@@ -7074,13 +7293,14 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 52 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 57 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
-four in TASK-479, and the business supporter call log in TASK-491),
+four in TASK-479, the business supporter call log in TASK-491, and community fundraising five
+in TASK-493),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 52 of **55** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 57 of **60** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

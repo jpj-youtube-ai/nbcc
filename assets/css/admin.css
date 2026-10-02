@@ -2471,3 +2471,19 @@ textarea.fx-call-input{min-height:88px;line-height:1.5;resize:vertical;field-siz
   #view-analytics .an-pages td.an-page::before { content: none; }
   #view-analytics .an-y, #view-analytics .an-plot { height: 150px; }
 }
+
+/* TASK-492: QR codes. One card a page: the code on white (a code needs a light ground to scan),
+   the page's name and address, and the two downloads. Cards fill the width two or three across,
+   one across on a phone; on a narrow card the buttons wrap under the code. */
+#view-qr .qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:14px;margin:6px 0 22px}
+#view-qr .qr-grid:empty{margin:0}
+#view-qr .qr-card{display:flex;flex-wrap:wrap;align-items:center;gap:14px 18px;background:var(--white);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+#view-qr .qr-img{flex:none;width:132px;height:132px;background:var(--white);border-radius:6px}
+#view-qr .qr-body{flex:1 1 150px;min-width:0;display:flex;flex-direction:column;gap:6px}
+#view-qr .qr-title{margin:0;font-family:var(--font-head);font-size:1.05rem;color:var(--maroon)}
+#view-qr .qr-path{margin:0;font-size:.85rem;color:var(--slate-soft);overflow-wrap:anywhere}
+#view-qr .qr-note{margin:0;font-size:.8rem;color:var(--maroon);background:var(--tan-soft);border-radius:8px;padding:4px 8px;align-self:flex-start}
+#view-qr .qr-actions{margin:4px 0 0;display:flex;flex-wrap:wrap;gap:8px}
+/* Two equal choices, so neither is the loud one: the admin's small button, outlined. */
+#view-qr .qr-actions .admin-btn{background:transparent;color:var(--maroon);border:1.6px solid var(--line)}
+#view-qr .qr-actions .admin-btn:hover{background:var(--tan-soft);border-color:var(--maroon)}

@@ -13,7 +13,8 @@ export type Area =
   | "ball"
   | "newsletter"
   | "events"
-  | "analytics";
+  | "analytics"
+  | "qr";
 
 // Each is the menu section (its data-view) and the gate its menu link uses in admin.html, so a pill
 // never sits on a section the person cannot open. Every one except events and analytics also has
@@ -29,6 +30,8 @@ export const AREAS: ReadonlyArray<{ area: Area; section: Section; level: "view" 
   { area: "events", section: "events", level: "view" },
   // TASK-482: Admin > Analytics. New as a screen only: page views are not news to tell staff about.
   { area: "analytics", section: "analytics", level: "view" },
+  // TASK-492: QR codes. No permission of its own: its menu link gates on Site pages.
+  { area: "qr", section: "site", level: "view" },
 ];
 
 export function isArea(value: unknown): value is Area {
@@ -42,6 +45,7 @@ export const FEATURES: ReadonlyArray<{ area: Area; added: Date; what: string }> 
   { area: "monthly", added: new Date("2026-09-30T12:00:00Z"), what: "Monthly givers (TASK-447)" },
   { area: "stories", added: new Date("2026-09-30T12:00:00Z"), what: "Stories brought in from the old website (TASK-461)" },
   { area: "analytics", added: new Date("2026-10-01T12:00:00Z"), what: "Admin > Analytics: where visitors come from and what they look at (TASK-482)" },
+  { area: "qr", added: new Date("2026-10-02T12:00:00Z"), what: "QR codes for every page, to print or share (TASK-492)" },
 ];
 
 // When the pills went live. Someone who has never opened a section is counted as having seen it

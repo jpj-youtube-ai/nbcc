@@ -114,6 +114,8 @@
               <li class="admin-nav-group" id="teamNavGroup" aria-hidden="true">Admin</li>
               <li><button class="admin-nav-link" type="button" data-view="analytics">Analytics</button></li>
               <li><button class="admin-nav-link" type="button" data-view="site">Site pages</button></li>
+              <!-- TASK-492: QR codes for every page. Anyone who can view Site pages. -->
+              <li><button class="admin-nav-link" type="button" data-view="qr" data-view-gate="site">QR codes</button></li>
               <li><button class="admin-nav-link" type="button" data-view="team">Team</button></li>
             </ul>
           </nav>
@@ -2062,6 +2064,25 @@
               <div class="admin-table-wrap" id="siteAliasTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
               <h3 class="admin-subhead">Search engines</h3>
               <div class="admin-table-wrap" id="siteSeoTable" aria-live="polite"><p class="admin-loading">Loading…</p></div>
+            </section>
+
+            <!-- TASK-492: a QR code for every page, from the site's one page list (src/site/pages.ts),
+                 so a new page appears here by itself. Drawn by the server (src/routes/admin-qr.ts). -->
+            <section class="admin-view" id="view-qr" aria-labelledby="qr-heading" hidden>
+              <h2 id="qr-heading">QR codes</h2>
+              <p class="admin-view-intro">A QR code for every page of the website. Use the <b>SVG</b> for posters, leaflets and anything a printer or designer makes: it stays sharp at any size. Use the <b>PNG</b> for slides, social posts and documents. A new page appears here by itself, and scans show in Analytics under <b>QR code</b>.</p>
+              <div id="qrList" class="qr-grid" aria-live="polite"><p class="admin-loading">Loading&hellip;</p></div>
+
+              <h3 class="admin-subhead">Any other nbcc.scot address</h3>
+              <p class="admin-help">For a spare address from Site pages, or a page not listed above.</p>
+              <form id="qrOtherForm" class="ty-controls" autocomplete="off">
+                <label class="ty-inline">nbcc.scot
+                  <input id="qrOtherPath" type="text" placeholder="/give" maxlength="200" style="width:200px" />
+                </label>
+                <button class="btn btn-primary" type="submit">Make the code</button>
+              </form>
+              <p class="ty-status" id="qrStatus" role="status" aria-live="polite"></p>
+              <div id="qrOther" class="qr-grid"></div>
             </section>
 
             <section class="admin-view" id="view-team" aria-labelledby="team-heading" hidden>

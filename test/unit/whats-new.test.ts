@@ -10,7 +10,7 @@ const at = (iso: string) => new Date(iso);
 describe("the sections that can carry a New pill", () => {
   it("covers every kind of arrival the client asked for, and the Events page", () => {
     expect(AREAS.map((a) => a.area)).toEqual([
-      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics",
+      "contact", "stories", "donations", "monthly", "fulfilments", "ball", "newsletter", "events", "analytics", "qr",
     ]);
   });
 
@@ -21,6 +21,8 @@ describe("the sections that can carry a New pill", () => {
       contact: "contact:view", stories: "stories:view", donations: "donations:view",
       monthly: "donations:view", fulfilments: "business-supporters:edit", ball: "ball:view",
       newsletter: "newsletter:view", events: "events:view", analytics: "analytics:view",
+      // TASK-492: QR codes has no permission of its own; its menu link gates on Site pages.
+      qr: "site:view",
     });
     for (const a of AREAS) expect(SECTIONS).toContain(a.section);
   });

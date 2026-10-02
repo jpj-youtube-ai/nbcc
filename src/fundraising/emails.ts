@@ -30,6 +30,8 @@ import { ACCESS_LABELS, BOOKING_LABELS, KIND_LABELS, shortName, type SignUp } fr
 //   finished staff  to the events inbox: the organiser pressed "I've finished" (TASK-501)
 //   edit approved   to the organiser: "your update is live" (or "saved", with no live page)
 //   edit rejected   to the organiser: "about your update", we'll give you a ring
+//   news approved   to the organiser: "your news update is live" (TASK-506)
+//   news rejected   to the organiser: "about your news update", we'll give you a ring (TASK-506)
 //
 // They wear NBCC's usual shell with the events inbox as the contact, because a fundraiser's
 // questions belong with the events team, not the giving queue. Every email to an organiser ends
@@ -423,4 +425,48 @@ export function buildEditRejectedEmail(f: { name: string; title: string }, o: { 
     bodyP(calm);
   const text = [hi, "", `Thank you for updating ${f.title}. ${held}`, "", calm];
   return toOrganiser(`About your update to ${f.title}`, body, text, "Speak soon,");
+}
+
+// --- a news update, approved or not used (TASK-506) ---------------------------------------------
+//
+// The same shape and words as the two emails about a change (above), for a news update the
+// organiser posted from their private area. A reason staff give for not using one is internal and
+// never goes in the email.
+
+/** Staff approved a news update. `pageUrl` only while their page is up, as for a change. */
+export function buildNewsApprovedEmail(f: { name: string; title: string }, o: { pageUrl: string | null }): BuiltEmail {
+  const hi = `Hi ${firstName(f.name)},`;
+  const share = "Why not share your page again so everyone sees your news? A fresh share often brings in a few more gifts.";
+  const where = o.pageUrl ? "it’s now on your page" : "it’s all saved";
+  const body =
+    EYEBROW +
+    heading(o.pageUrl ? "Your news update is live!" : "Your news update is saved!") +
+    bodyP(escapeHtml(hi)) +
+    bodyP(`Good news: we’ve checked your news update for <b>${escapeHtml(f.title)}</b> and ${where}.`) +
+    (o.pageUrl ? bodyP(share) + button(o.pageUrl, "See my page") : "");
+  const text = [
+    hi,
+    "",
+    `Good news: we’ve checked your news update for ${f.title} and ${where}.`,
+    ...(o.pageUrl ? ["", share, "", `See my page: ${o.pageUrl}`] : []),
+  ];
+  const subject = o.pageUrl ? `Your news update is live: ${f.title}` : `Your news update is saved: ${f.title}`;
+  return toOrganiser(subject, body, text, "Thanks so much,");
+}
+
+/** Staff did not use a news update: nothing to worry about, we'll ring. */
+export function buildNewsRejectedEmail(f: { name: string; title: string }, o: { pageLive: boolean }): BuiltEmail {
+  const hi = `Hi ${firstName(f.name)},`;
+  const held = "We haven’t put this one on your page, and someone from our team will give you a quick ring to talk it through.";
+  const calm = o.pageLive
+    ? "Nothing to worry about: your page is still live, just as it was, and gifts are still coming in."
+    : "Nothing to worry about: everything stays just as it was.";
+  const body =
+    EYEBROW +
+    heading("About your news update") +
+    bodyP(escapeHtml(hi)) +
+    bodyP(`Thank you for sending a news update for <b>${escapeHtml(f.title)}</b>. ${held}`) +
+    bodyP(calm);
+  const text = [hi, "", `Thank you for sending a news update for ${f.title}. ${held}`, "", calm];
+  return toOrganiser(`About your news update for ${f.title}`, body, text, "Speak soon,");
 }

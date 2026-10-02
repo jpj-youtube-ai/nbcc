@@ -320,7 +320,7 @@ function isLoopbackRequest(req: Request): boolean {
 }
 
 /** Refuse a POST that another website's page sent (the second lock after SameSite). */
-function fromOurOwnPage(req: Request, res: Response): boolean {
+export function fromOurOwnPage(req: Request, res: Response): boolean {
   const ok = sentFromOurOwnPage({ secFetchSite: header(req, "sec-fetch-site"), origin: header(req, "origin") }, header(req, "host") ?? "");
   if (!ok) res.status(403).json(NOT_OURS);
   return ok;
@@ -332,10 +332,10 @@ function sessionIdOf(req: Request): string | null {
   return id && id.length <= 100 && /^[A-Za-z0-9_-]+$/.test(id) ? id : null;
 }
 
-type Session = { email: string; sessionHash: string };
+export type Session = { email: string; sessionHash: string };
 
 /** The signed in organiser, or an answer for why not (404 while fundraising is off, 401). */
-async function signedIn(req: Request, res: Response): Promise<Session | null> {
+export async function signedIn(req: Request, res: Response): Promise<Session | null> {
   if (!(await fundraisingIsOn())) {
     res.status(404).json(NOT_FOUND);
     return null;
@@ -356,7 +356,7 @@ type Owned = FundraiserRecord & { meter: Meter };
  * The organiser's own fundraiser, approved or finished (a finished one stays theirs: TASK-501
  * review), or an answer: someone else's reads as not there, and one new or declined is a 410.
  */
-async function ownFundraiser(req: Request, res: Response, s: Session): Promise<Owned | null> {
+export async function ownFundraiser(req: Request, res: Response, s: Session): Promise<Owned | null> {
   const raw = String(req.params.id ?? "");
   const id = /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : NaN;
   const f = Number.isSafeInteger(id) && id <= 2147483647 ? await getFundraiser(id) : null;

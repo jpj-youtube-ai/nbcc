@@ -2596,6 +2596,8 @@
     ["fundraiseCode", "Fundraiser sign in code"], ["fundraiseFinishedStaff", "Fundraiser finished (to events@)"],
     // TASK-503: the invite staff send, and the Monday summary.
     ["fundraiseInvite", "Fundraising invite"], ["fundraiseSummary", "Fundraising Monday summary"],
+    // TASK-506: a news update the organiser posted, approved or not used by staff.
+    ["fundraiseNewsApproved", "Fundraiser news update live"], ["fundraiseNewsRejected", "Fundraiser news update not used"],
   ];
   function emailKindLabel(kind) {
     for (var i = 0; i < EMAIL_KINDS.length; i++) if (EMAIL_KINDS[i][0] === kind) return EMAIL_KINDS[i][1];
@@ -9052,6 +9054,8 @@
     call: "frCallStatus", list: "frListStatus",
     // TASK-505
     req: "frReqStatus",
+    // TASK-506
+    news: "frNewsStatus",
   };
   // Says it now, in place, without a redraw: "Adding…" has to show while the request is out.
   function frPaintNotice(key) {
@@ -9083,6 +9087,7 @@
     frLoadSummary();
     // TASK-505: the requests, likewise on their own.
     frLoadRequests();
+    frLoadNewsCounts(); // TASK-506
   }
 
   function frLoadSettings() {
@@ -9128,6 +9133,7 @@
         frDetailFailed = false;
         frRenderList();
         frLoadHistory(id);
+        frLoadNews(id); // TASK-506
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
@@ -9158,7 +9164,7 @@
   // TASK-503: and the team's tools, whose calls and prompts the list shows.
   function frReload() {
     var id = frOpenId;
-    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam(), frLoadRequests()]);
+    return Promise.all([frLoadList(), id != null ? frLoadDetail(id) : null, frLoadTeam(), frLoadNewsCounts(), frLoadRequests()]);
   }
 
   // ---- the switch ----
@@ -9270,6 +9276,8 @@
     var open = frOpenId === f.id;
     var sub = [f.name, frPathWords(f.path), f.eventDate ? H.fmtDate(f.eventDate) : "No date"];
     var pills = (f.editWaiting ? '<span class="admin-pill admin-pill--pending fr-changes-pill">Changes to check</span>' : "") +
+      // TASK-506: news updates the organiser posted, waiting for staff.
+      frNewsPill(f) +
       // TASK-501: the organiser pressed "I've finished" in their private area (it finishes nothing).
       (f.finishedRequestedAt && f.status === "approved" ? '<span class="admin-pill admin-pill--pending fr-finished-pill">Says they\'ve finished</span>' : "") +
       // TASK-503: a call due, as Business supporters show it; and the finishing prompt.
@@ -9364,6 +9372,7 @@
       (showAll ? "" : '<div class="fr-more-row">' + frMoreButton("list", FR_LIST_FIRST, rows.length) + "</div>");
     nlFitBoxes(Array.prototype.slice.call(wrap.querySelectorAll("textarea.fr-input")));
     frPaintHistory();
+    frPaintNews(); // TASK-506
     frRestDetail();
     frRestoreFocus(wrap);
   }
@@ -9405,6 +9414,7 @@
         frCallsSection(f, write) +
         (frDetail.waitingEdit ? '<section class="fx-panel fx-panel--wide fr-change-panel"><h4>Changes to check</h4>' + frChangePanel(f, frDetail.waitingEdit, write) + "</section>" : "") +
         frRequestsSection(f, write) +
+        frNewsSection() + // TASK-506
         '<section class="fx-panel"><h4>What they told us</h4>' + frAboutPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>The organiser</h4>' + frContactPanel(f) + "</section>" +
         '<section class="fx-panel"><h4>What they would like</h4>' + frWantsPanel(f) + "</section>" +
@@ -9910,6 +9920,12 @@
     "fundraiser.put_back_on_list": "Put back on Get involved",
     // TASK-505: the requests.
     "fundraiser.request_updated": "A request updated",
+    // TASK-506
+    "fundraiser.news_posted": "The organiser posted a news update",
+    "fundraiser.news_approved": "News update approved",
+    "fundraiser.news_rejected": "News update not used",
+    "fundraiser.news_hidden": "News update hidden from the page",
+    "fundraiser.news_shown": "News update shown on the page again",
   };
 
   function frPaintHistory() {
@@ -9936,7 +9952,7 @@
         if (h.action === "fundraiser.cash_removed" && data.amountPence) what = "Cash removed: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.called") what = data.which === "after" ? "Called, a week after its date" : "Called, a week before its date";
         if (h.action === "fundraiser.request_updated" && typeof data.words === "string" && data.words) what = data.words;
-        var said = h.action === "fundraiser.declined" ? data.reason : h.action === "fundraiser.called" ? data.note : "";
+        var said = h.action === "fundraiser.declined" || h.action === "fundraiser.news_rejected" ? data.reason : h.action === "fundraiser.called" ? data.note : "";
         var note = said ? '<span class="fx-hist-note">' + H.escapeHtml(said) + "</span>" : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +
           '<span class="fx-hist-who">' + H.escapeHtml(H.fmtDate(h.createdAt) + " · " + frWho(h.actor)) + "</span>" + note + "</li>";
@@ -10274,6 +10290,7 @@
     frWired = true;
     el("frSwitchBtn").addEventListener("click", frFlipSwitch);
     var view = el("view-fundraising");
+    frNewsWire(view); // TASK-506
     view.addEventListener("click", function (e) {
       var t = e.target;
       if (!t || !t.closest) return;
@@ -10382,6 +10399,228 @@
       if (!toggle) return;
       e.preventDefault();
       frToggle(toggle.getAttribute("data-frtoggle"));
+    });
+  }
+
+  // ---- news updates (TASK-506) ----
+  // The news updates organisers post from their private area (src/routes/fundraiser-news.ts). Every
+  // one waits for staff. The list shows "Updates to check" on a sign up with any waiting, and the
+  // open sign up has a News updates panel: the words, the photo (fetched with this sign in, as a
+  // waiting photo has no public address, and shown small), Approve and Don't use (with an optional
+  // reason that stays here, for staff only), and Hide for one on the page. Approving or not using
+  // one emails the organiser: the server does that. Every stored string is escaped. Kept here, in
+  // one block, apart from the rest of the screen.
+  var FR_NEWS_FIRST = 10;
+  var frNewsCounts = {}; // fundraiser id -> how many wait
+  var frNewsRows = null; // { id, rows } or { id, failed } for the open sign up
+  var frNewsReasons = {}; // update id -> the reason typed for not using it
+  var frNewsPhotos = {}; // photo address -> its data: address, "loading" or "failed"
+  var FR_NEWS_STATUS = {
+    pending: { label: "Waiting for us to check", cls: "admin-pill--pending" },
+    approved: { label: "On the page", cls: "admin-pill--active" },
+    rejected: { label: "Not used", cls: "admin-pill--cancelled" },
+    hidden: { label: "Hidden from the page", cls: "admin-pill--cancelled" },
+  };
+
+  function frNewsPill(f) {
+    return frNewsCounts[f.id] ? '<span class="admin-pill admin-pill--pending fr-news-pill">Updates to check</span>' : "";
+  }
+
+  function frNewsSection() {
+    return '<section class="fx-panel fx-panel--wide fr-news-panel"><h4>News updates</h4><div id="frNews"></div></section>';
+  }
+
+  function frLoadNewsCounts() {
+    return authFetch("/api/admin/fundraising/news-waiting")
+      .then(okJson)
+      .then(function (d) {
+        frNewsCounts = d && d.counts && typeof d.counts === "object" ? d.counts : {};
+        frRenderList();
+      })
+      .catch(function () {
+        /* only a pill: the list works without it */
+      });
+  }
+
+  function frLoadNews(id) {
+    return authFetch("/api/admin/fundraisers/" + encodeURIComponent(id) + "/news")
+      .then(okJson)
+      .then(function (d) {
+        if (frOpenId !== id) return;
+        frNewsRows = { id: id, rows: d && Array.isArray(d.updates) ? d.updates : [] };
+        frPaintNews();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (frOpenId !== id) return;
+        frNewsRows = { id: id, failed: true };
+        frPaintNews();
+      });
+  }
+
+  function frNewsItem(u, write) {
+    var st = FR_NEWS_STATUS[u.status] || { label: String(u.status || ""), cls: "" };
+    var id = Number(u.id);
+    var when = "Posted " + H.fmtDate(u.createdAt) + (u.decidedBy ? ", decided by " + frWho(u.decidedBy) : "");
+    var photo = typeof u.photoUrl === "string" && /^\/api\/admin\/fundraisers\/\d+\/news\/\d+\/photo$/.test(u.photoUrl) ? u.photoUrl : "";
+    var actions = "";
+    if (write && u.status === "pending") {
+      actions =
+        '<label class="fx-call-label" for="frNewsReason' + id + '">Why not use it (optional, for staff only)</label>' +
+        '<textarea class="fx-call-input fr-input" id="frNewsReason' + id + '" rows="1" maxlength="500" data-frnewsreason="' + id + '">' +
+          H.escapeHtml(frNewsReasons[id] || "") + "</textarea>" +
+        '<div class="fx-call-row fr-actions">' +
+          '<button class="admin-btn admin-btn--small" type="button" data-frnews="approve" data-frnewsid="' + id + '">Approve update</button>' +
+          '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frnews="reject" data-frnewsid="' + id + '">Don\'t use it</button>' +
+        "</div>";
+    } else if (write && u.status === "approved") {
+      actions = '<button class="fr-link-btn" type="button" data-frnews="hide" data-frnewsid="' + id + '">Hide from the page</button>';
+    } else if (write && u.status === "hidden") {
+      actions = '<button class="fr-link-btn" type="button" data-frnews="show" data-frnewsid="' + id + '">Show on the page again</button>';
+    }
+    return (
+      '<li data-frnewsitem="' + id + '"' + (u.status === "hidden" || u.status === "rejected" ? ' class="is-hidden"' : "") + ">" +
+        '<div class="fr-wall-head"><span class="admin-pill ' + st.cls + '">' + H.escapeHtml(st.label) + "</span>" +
+          '<span class="fx-hist-who">' + H.escapeHtml(when) + "</span></div>" +
+        (photo ? '<img class="fr-news-photo" data-frnewsphoto="' + H.escapeHtml(photo) + '" alt="The photo with this update" hidden>' : "") +
+        '<p class="fr-wall-msg fr-news-text">' + H.escapeHtml(u.text || "") + "</p>" +
+        (u.status === "rejected" && u.rejectReason
+          ? '<p class="fx-help">Our reason, for staff only: ' + H.escapeHtml(u.rejectReason) + "</p>"
+          : "") +
+        actions +
+      "</li>"
+    );
+  }
+
+  function frPaintNews() {
+    var box = el("frNews");
+    if (!box || frOpenId == null) return;
+    var s = frNewsRows && frNewsRows.id === frOpenId ? frNewsRows : null;
+    var status = frNoticeHtml("news", "frNewsStatus");
+    if (!s) {
+      box.innerHTML = '<p class="admin-loading">Loading…</p>';
+      return;
+    }
+    if (s.failed) {
+      box.innerHTML = '<div role="alert">' +
+        unavailableHtml("The news updates could not load just now. Close this sign up and open it again in a moment.") + "</div>";
+      return;
+    }
+    if (!s.rows.length) {
+      box.innerHTML = '<p class="fx-empty">No news updates yet. The organiser can post them from their private area while their page is up.</p>' + status;
+      return;
+    }
+    var write = frCanWrite();
+    var waitingRows = s.rows.filter(function (u) { return u.status === "pending"; });
+    var rows = waitingRows.concat(s.rows.filter(function (u) { return u.status !== "pending"; }));
+    // Every waiting one always shows; the rest, ten and then Show all.
+    var shown = frMore.news ? rows : rows.slice(0, Math.max(FR_NEWS_FIRST, waitingRows.length));
+    box.innerHTML =
+      '<p class="fx-help">Each update waits for you, newest first. Approve it and it goes on their page; either way the organiser is emailed. ' +
+        "On the page a photo shows small, beside the words.</p>" +
+      '<ul class="fr-wall fr-news-list">' + shown.map(function (u) { return frNewsItem(u, write); }).join("") + "</ul>" +
+      frMoreButton("news", shown.length, rows.length) + status;
+    nlFitBoxes(Array.prototype.slice.call(box.querySelectorAll("textarea.fr-input")));
+    Array.prototype.forEach.call(box.querySelectorAll("img[data-frnewsphoto]"), function (img) {
+      frNewsPhoto(img.getAttribute("data-frnewsphoto"));
+    });
+    frRestDetail();
+  }
+
+  // A photo, with this sign in: a waiting one has no public address. Kept as a data: address, so a
+  // redraw shows it again at once.
+  function frNewsPhoto(url) {
+    var have = frNewsPhotos[url];
+    if (have === "loading") return;
+    if (have) return frShowNewsPhoto(url);
+    frNewsPhotos[url] = "loading";
+    authFetch(url)
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.blob();
+      })
+      .then(function (blob) {
+        return new Promise(function (done, fail) {
+          var reader = new window.FileReader();
+          reader.onload = function () { done(String(reader.result || "")); };
+          reader.onerror = fail;
+          reader.readAsDataURL(blob);
+        });
+      })
+      .then(function (dataUrl) {
+        frNewsPhotos[url] = /^data:image\/(jpeg|png|webp);base64,/.test(dataUrl) ? dataUrl : "failed";
+        frShowNewsPhoto(url);
+      })
+      .catch(function () {
+        frNewsPhotos[url] = "failed";
+        frShowNewsPhoto(url);
+      });
+  }
+  function frShowNewsPhoto(url) {
+    var v = frNewsPhotos[url];
+    Array.prototype.forEach.call(doc.querySelectorAll("#frNews img[data-frnewsphoto]"), function (img) {
+      if (img.getAttribute("data-frnewsphoto") !== url) return;
+      if (v && v.indexOf("data:") === 0) {
+        img.src = v;
+        img.hidden = false;
+      } else if (v === "failed") {
+        var p = doc.createElement("p");
+        p.className = "fx-empty";
+        p.textContent = "The photo could not load. Close this sign up and open it again to try once more.";
+        img.parentNode.replaceChild(p, img);
+      }
+    });
+  }
+
+  function frNewsDecide(btn) {
+    if (frBusy) return;
+    var f = frOpenRecord();
+    if (!f) return;
+    var which = btn.getAttribute("data-frnews");
+    var uid = btn.getAttribute("data-frnewsid");
+    var question = {
+      approve: "Approve this news update? It goes on the page straight away, and the organiser is emailed to say so.",
+      reject: "Not use this news update? It stays off the page, and the organiser is emailed a short, kind note to say we will be in touch. Your reason stays here, for staff only.",
+      hide: "Hide this news update? It comes off the page straight away. The organiser is not emailed.",
+      show: "Show this news update on the page again?",
+    }[which];
+    if (!question || !window.confirm(question)) return;
+    var body = {};
+    if (which === "reject") {
+      var reason = String(frNewsReasons[uid] || "").trim();
+      if (reason) body.reason = reason;
+    }
+    frRun("news", "Saving…", function (run) {
+      return frSend("POST", "/api/admin/fundraisers/" + f.id + "/news/" + encodeURIComponent(uid) + "/" + which, body).then(function (r) {
+        if (!r.ok) run.say(frRefusal(r, "That did not work. Please try again."), true);
+        else {
+          if (which === "reject") delete frNewsReasons[uid];
+          run.say({
+            approve: "Approved. It is on the page now, and the organiser is emailed to say so.",
+            reject: "Not used. It stays off the page, and the organiser is emailed a short, kind note.",
+            hide: "Hidden. It is off the page now.",
+            show: "It is back on the page.",
+          }[which], false);
+        }
+        return Promise.all([frLoadNews(f.id), frLoadNewsCounts(), frLoadHistory(f.id)]);
+      });
+    });
+  }
+
+  function frNewsWire(view) {
+    view.addEventListener("click", function (e) {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var b = t.closest("[data-frnews]");
+      if (b) frNewsDecide(b);
+    });
+    view.addEventListener("input", function (e) {
+      var t = e.target;
+      if (!t || !t.getAttribute) return;
+      var uid = t.getAttribute("data-frnewsreason");
+      if (uid === null) return;
+      frNewsReasons[uid] = t.value;
+      nlFitBox(t);
     });
   }
 

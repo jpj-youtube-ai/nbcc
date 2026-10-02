@@ -517,3 +517,108 @@ fieldset.is-invalid .fr-option { border-color: var(--crimson); }
   .fr-option, .fr-amount__face, .fr-share__btn, .fr-wall__more { transition: none; }
   .fr-amount:active .fr-amount__face, .fr-share__btn:active { transform: none; }
 }
+
+/* ---------- TASK-506: the countdown, the day itself, and the news updates ----------
+   The countdown sits under the date in the intro; on the day a festive banner takes its place, with
+   the page's own share links. News is a list that grows the page, never a box that scrolls, and a
+   photo with an update sits in a small frame of one shape (4 by 3, cropped to fill it): never across
+   the page, so a poster or flyer can never take it over. */
+.fr-countdown {
+  width: fit-content;
+  max-width: 100%;
+  margin: 20px auto 0;
+  padding: 8px 20px;
+  border: 1.6px solid var(--holly);
+  border-radius: var(--radius-pill);
+  background: var(--holly-soft);
+  color: var(--holly-dark);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+.fr-countdown__num {
+  font-family: var(--font-head);
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.fr-countdown--soon { border-color: var(--crimson); background: var(--tan-soft); color: var(--maroon); font-family: var(--font-head); font-size: 1.35rem; font-weight: 800; }
+
+.fr-today {
+  position: relative;
+  margin: 24px auto 0;
+  max-width: 640px;
+  padding: clamp(22px, 4vw, 32px) clamp(18px, 4vw, 30px);
+  border-radius: var(--radius-lg);
+  background: radial-gradient(120% 140% at 50% 0%, var(--crimson) 0%, var(--maroon) 100%);
+  color: var(--cream);
+  text-align: center;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.fr-today::before,
+.fr-today::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, rgba(248, 245, 238, 0.55) 1.2px, transparent 1.6px);
+  background-size: 34px 34px;
+  opacity: 0.35;
+}
+.fr-today::after { background-size: 52px 52px; background-position: 17px 11px; opacity: 0.25; }
+.fr-today > * { position: relative; z-index: 1; }
+.fr-today__star { display: block; margin: 0 auto 6px; color: var(--gold-ink); filter: drop-shadow(0 0 6px rgba(184, 134, 43, 0.6)); }
+.fr-today__title { margin: 0; font-size: clamp(1.45rem, 1.2rem + 1.2vw, 2rem); color: var(--cream); text-wrap: balance; overflow-wrap: anywhere; }
+.fr-today p { margin: 8px 0 0; color: var(--cream); }
+.fr-today .fr-share__links { justify-content: center; margin-top: 18px; }
+.fr-today .fr-share__btn { border-color: transparent; }
+.fr-today .fr-share__status { color: var(--cream); }
+@media (prefers-reduced-motion: no-preference) {
+  .fr-today__star { animation: fr-twinkle 2.8s ease-in-out infinite; }
+  @keyframes fr-twinkle { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.12); opacity: 0.85; } }
+}
+
+.fr-news h2 { font-size: clamp(1.5rem, 1.25rem + 1vw, 1.95rem); color: var(--maroon); margin-bottom: 14px; }
+.fr-news__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.fr-news__item {
+  display: grid;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.fr-news__item:focus { outline: none; }
+.fr-news__item:focus-visible { outline: 3px solid var(--holly); outline-offset: 3px; }
+.fr-news__photo { margin: 0; width: 100%; max-width: 280px; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; background: var(--tint); }
+.fr-news__photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+@media (min-width: 560px) {
+  .fr-news__item.has-photo { grid-template-columns: 180px minmax(0, 1fr); align-items: start; }
+}
+.fr-news__words { min-width: 0; }
+.fr-news__when { margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--slate-soft); }
+.fr-news__text { margin: 6px 0 0; font-size: 1.02rem; line-height: 1.65; overflow-wrap: anywhere; text-wrap: pretty; }
+
+/* The private area's "News updates" part (assets/js/fundraise-news.js). */
+.fr-newspost { display: grid; gap: 4px; }
+.fr-newspost__count { margin: 0; }
+.fr-newspost__preview { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 8px; }
+.fr-newspost__preview[hidden] { display: none; }
+.fr-newspost__preview .fr-news__photo { width: 160px; }
+.fr-newspost__file { font-size: 0.95rem; }
+.fr-mynews { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+.fr-mynews__status {
+  display: inline-block;
+  margin: 0 0 6px;
+  padding: 3px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--tint);
+  color: var(--slate);
+}
+.fr-mynews__status.is-pending { background: var(--tan-soft); color: var(--maroon); }
+.fr-mynews__status.is-approved { background: var(--holly-soft); color: var(--holly-dark); }
+.fr-today .fr-share__status:empty { min-height: 0; margin: 0; }

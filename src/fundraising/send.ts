@@ -5,6 +5,8 @@ import {
   sendFundraiseEditApproved,
   sendFundraiseEditRejected,
   sendFundraiseFinishedStaff,
+  sendFundraiseNewsApproved,
+  sendFundraiseNewsRejected,
   sendFundraiseStaff,
   sendFundraiseThanks,
 } from "../clients/email";
@@ -14,6 +16,8 @@ import {
   buildEditApprovedEmail,
   buildEditRejectedEmail,
   buildFinishedStaffEmail,
+  buildNewsApprovedEmail,
+  buildNewsRejectedEmail,
   buildSignInCodeEmail,
   buildSignUpStaffEmail,
   buildSignUpThanksEmail,
@@ -165,5 +169,27 @@ export async function sendFinishedStaffEmail(f: FundraiserRecord, raisedPence: n
     await sendFundraiseFinishedStaff(f.name, { email: config.BALL_FROM_EMAIL, from: config.BALL_FROM_EMAIL, replyTo: f.email, ...mail });
   } catch (err) {
     logFailure("finished (to the events inbox)", err);
+  }
+}
+
+/**
+ * TASK-506: after staff approve, or do not use, a news update the organiser posted. As for a change:
+ * their page counts as up only when they have one and fundraising is on, and only then do the emails
+ * talk about the page and link it. True when the email went. Never throws.
+ */
+export async function sendNewsDecisionEmail(f: FundraiserRecord, approved: boolean, pagesOpen: boolean): Promise<boolean> {
+  try {
+    const message = { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL };
+    const pageLive = hasPage(f) && pagesOpen;
+    if (approved) {
+      const pageUrl = pageLive ? fundraiserPageUrl(f.slug) : null;
+      await sendFundraiseNewsApproved(f.name, { ...message, ...buildNewsApprovedEmail(f, { pageUrl }) });
+    } else {
+      await sendFundraiseNewsRejected(f.name, { ...message, ...buildNewsRejectedEmail(f, { pageLive }) });
+    }
+    return true;
+  } catch (err) {
+    logFailure(approved ? "news update live" : "about your news update", err);
+    return false;
   }
 }

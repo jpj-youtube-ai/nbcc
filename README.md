@@ -143,8 +143,8 @@ Every page mounts the same sticky top nav in its `<header class="nav">` slot
 (REQ-002, ported from the NBCC design): the logo lockup (50px) linking to `/`,
 links to `/`, `/about-us`, `/donate`, `/contact`, `/supporters`, a persistent
 Donate button, and a mobile burger. Two items are added by the server rather than written into
-the files: "Festive Ball" while the ball is published (TASK-326) and "Events", after About, while
-the Events page is switched on (TASK-453).
+the files: "Festive Ball" while the ball is published (TASK-326) and "Get involved" (called Events
+until TASK-494), after About, while the Events page is switched on (TASK-453).
 Behaviour lives in the one shared `assets/js/main.js` (`initNav`): a passive +
 `requestAnimationFrame`-throttled scroll listener flips the bar from transparent
 to a cream/hairline/shadow state past 24px; the burger toggles the link panel
@@ -1387,7 +1387,12 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /ball` | **implemented** | TASK-313 (the ticket page; password-gated until staff open the gate, then public and indexable) |
 | `POST /ball/unlock` | **implemented** | TASK-313 (checks the preview password, sets a signed 14-day cookie) |
 | `GET /ball/terms` | **implemented** | TASK-313 (ticket terms; gated alongside the page) |
-| `GET /events` | **implemented** | TASK-453 (the Events page, rendered from the `events` table. Served only while an admin has the page switched on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /get-involved` | **implemented** | TASK-453, renamed in TASK-494 (Get involved: the events from the `events` table, and while fundraising is switched on every approved public fundraiser too. Served only while an admin has the Events page switched on; otherwise falls through to the 404 / spare-address catch-all) |
+| `GET /events` | **implemented** | TASK-494 (301 to `/get-involved`, query string kept, whether or not the page is on) |
+| `GET /fundraise` | **implemented** | TASK-494 (the fundraising sign up form; a gentle "not open yet" while fundraising is switched off) |
+| `GET /fundraise/manage` | **implemented** | TASK-494 (change your page by the emailed `?token=` link; `noindex`, `no-store`, `Referrer-Policy: no-referrer`) |
+| `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless approved, public, raising money and switched on) |
+| `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
 | `POST /api/admin/events`, `PUT/DELETE /api/admin/events/:id` | **implemented** | TASK-453 (events: edit; drafts may be half finished, live or scheduled events must pass `publishProblems`. Audited as `events.created` / `events.updated` / `events.deleted`) |
@@ -6859,6 +6864,10 @@ a name we supplied ourselves — and "no such table" is reported as exactly that
 
 ## The Events page (TASK-453)
 
+**Renamed Get involved in TASK-494**, at `/get-involved`, with community fundraisers alongside the
+events: see **Community fundraising, the public pages (TASK-494)**. `/events` is now a permanent
+redirect there. What follows describes the events part, which is unchanged.
+
 A public page at **`/events`**: every upcoming event as a card in a deck, soonest first, with a face
 down "more on the way" card last. The front of a card is the picture and the gist, with the date in
 the corner where a playing card keeps its index; the back holds everything else and the booking
@@ -7074,8 +7083,8 @@ page by an emailed link, and every change waits for staff. Design:
 `docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
 
 This is **stage 1, the backend core**. The public pages (`/fundraise`, `/fundraise/<slug>`,
-`/fundraise/manage`, Get involved) and the admin screen are built against the API below. Stages 2 to
-4 (materials, keeping in touch, requests) follow.
+`/fundraise/manage`, Get involved) are TASK-494, below; the admin screen is built against the API
+below. Stages 2 to 4 (materials, keeping in touch, requests) follow.
 
 **It ships switched off.** `fundraising_settings.page_on` is false: sign ups are refused, nothing
 is listed, every page is a 404, and manage links do nothing, until an admin switches it on with
@@ -7280,6 +7289,85 @@ Unit: `fundraising-model`, `fundraising-manage-token`, `fundraising-emails`, `fu
 and tracked link tests. BDD: `features/fundraising.feature` (approval and the switch, a gift raising
 the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
 manage change waiting for staff, who may do what).
+
+## Community fundraising, the public pages (TASK-494)
+
+What the public sees of community fundraising (stage 1), built on the API above. Design:
+`docs/superpowers/specs/2026-10-02-community-fundraising-design.md`.
+
+**Get involved (`/get-involved`).** The Events page, renamed and widened. The menu item reads "Get
+involved" everywhere it is added (`src/events/nav-link.ts`), and `/events` redirects for good,
+keeping its query string, so old links and newsletter utm tags still land. The Events switch still
+decides whether the page exists. While **fundraising** is also switched on, the page adds:
+
+- every approved, public fundraiser: a raising money one as its own card (photo or a holly cover,
+  "Fundraiser" in the corner, organised by, the gist, the **meter**, and a button that opens its
+  page; the whole card is a tap target); a "holding an event" one as an ordinary event card,
+  credited to its organiser, among NBCC's events by date;
+- the **chips** All, Events and Fundraisers, which filter the cards without reloading
+  (`assets/js/events.js` `initChips`). They ship hidden, so without JavaScript everything shows;
+- a **Fundraise for us** button in the intro and a panel under the cards, linking `/fundraise`
+  and `/fundraise/manage`; the face down card's invitation also goes to `/fundraise`.
+
+Switched off, the page is exactly the Events page it was: no chips, no fundraisers, no panel.
+
+**The meter** (`renderMeter`): raised so far, the target and the percentage, as a
+`role="progressbar"` bar with `aria-valuetext` and the same in words. Past the target the bar is
+held full and the words give the real percentage; with no target it is just "£X raised".
+
+**The sign up (`/fundraise`).** One page, numbered questions in the donate page's style: raising
+money or holding an event (a target only for raising money; a date required for an event), the
+name, kind, description (a characters left count), date, time and place, public or not, the
+organiser's details, the social media consent, what they would like (the address box appears only
+when leaflets or buckets are to be posted), and the newsletter tick box worded like the donate
+page's. Honeypot and Turnstile exactly as the contact form: `GET /api/fundraise/captcha`, and
+Cloudflare's script loads only once someone starts on the form. Each of the server's `400 { fields }`
+messages appears beside its own field; a `404` shows the gentle "not open yet" panel; success shows
+a thank you saying what happens next. While fundraising is switched off the server sends the page
+with that panel instead of the form.
+
+**A fundraiser's page (`/fundraise/<slug>`)**, drawn on the server so it is complete without
+JavaScript and a shared link shows the fundraiser's own title and description: kind, date and
+place, organised by, the photo, the story, the meter with a Give button, the **give form**, the
+**supporter wall**, **sharing** and the **QR code**.
+
+- The give form is the donate page's: presets (£5, £10, £20, £50) or your own amount (£2 at least,
+  from the API), name and email, the newsletter tick box, a message up to 200 characters, show my
+  name or stay anonymous, show the amount or not, Gift Aid with the donate page's one off
+  declaration word for word (from `src/declarations/wording.ts`) and the home address only once it
+  is ticked, and the card fee offer. It posts the donate page's one off body plus `fundraiserId`,
+  `supporterMessage`, `showName` and `showAmount` to `POST /api/checkout-session`, and opens Stripe
+  on the page when it can and on Stripe's own page otherwise, exactly as the donate page does.
+  A refused message (the core checks its words) appears beside the message box.
+  `test/unit/fundraiser-checkout-contract.test.ts` feeds the browser's body through the real route.
+- The wall shows the newest ten; Show all grows the page with the rest (no inner scrolling).
+- Sharing: copy the link (shown only where copying works), Facebook and WhatsApp as plain links.
+  No script from anyone else.
+- The QR code is inline SVG (`src/fundraising/qr.ts`), also served at `/fundraise/<slug>/qr.svg`
+  with a Download link.
+
+Anything that is not an approved, public, raising money fundraiser while fundraising is on is the
+site's own 404 page.
+
+**Managing a page (`/fundraise/manage`).** Without a token: an email box that asks for a link.
+With `?token=`: the editable fields (any change still waiting is shown in their place, with a
+note that it is waiting for staff), and saving sends only what differs from the approved page. A
+link that has run out or matches nothing leads back to asking for a new one. The page is
+`noindex`, never cached, sends no referrer, and does not load the visit counter.
+
+**Where it lives.** Drawing: `src/fundraising/render.ts` (pure, unit tested). Routes:
+`src/routes/fundraise-pages.ts`, added to the site router before its catch-all. Templates:
+`events.html` (Get involved), `fundraise.html`, `fundraiser.html`, `fundraise-manage.html` (all in
+the Dockerfile's page list). Scripts: `assets/js/fundraise.js`, `fundraiser.js`,
+`fundraise-manage.js`; styles: `assets/css/fundraising.css` and the Get involved part of
+`events.css`. None of it touches `main.js` or `styles.css`, so donate.html's page weight budget is
+unchanged. Text boxes grow with what is typed rather than scroll.
+
+**Tests.** `fundraising-render`, `fundraise-pages-routes`, `get-involved-page`,
+`fundraise-signup-page`, `fundraiser-page`, `fundraise-manage-page` and
+`fundraiser-checkout-contract` (unit, jsdom), and `features/fundraising-pages.feature` (the
+redirect, Get involved with fundraising on and off, a fundraiser's page and QR code, 404s, the sign
+up while off, the manage page's headers).
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

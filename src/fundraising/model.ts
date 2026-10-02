@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ACCESS, isSafeImageSrc, isWebAddress } from "../events/model";
 import { isValidUkPostcode } from "../declarations/fields";
 import { containsBlockedWord } from "../donors/display-name-filter";
+import type { NewsEntry } from "./news";
 
 // TASK-493: community fundraising, the rules. Pure: no pool, no config, no clock, so every rule is
 // unit tested without a database (test/unit/fundraising-model.test.ts). The SQL is in
@@ -829,6 +830,8 @@ export interface PublicPage extends PublicCard {
   giving: { fundraiserId: number; minimumPence: number };
   /** TASK-502: finished, so the page says so and still takes gifts under "You can still give". */
   finished?: boolean;
+  /** TASK-506: the news updates staff approved, newest first (src/fundraising/news.ts publicNews). */
+  news?: NewsEntry[];
 }
 
 /** Built field by field, so nothing private (email, phone, address, notes) can reach the public. */

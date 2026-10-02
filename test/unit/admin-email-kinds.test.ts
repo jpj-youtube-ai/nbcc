@@ -62,3 +62,11 @@ describe("the fundraising team email kinds", () => {
     expect(labelled).toContain(kind);
   });
 });
+
+// TASK-506: the two emails about a news update staff approved or did not use.
+describe("the fundraising news update email kinds", () => {
+  it.each(["fundraiseNewsApproved", "fundraiseNewsRejected"])("sends and names %s", (kind) => {
+    expect(sent).toContain(kind);
+    expect(labelled).toContain(kind);
+  });
+});

@@ -11,6 +11,7 @@ import { adminFundraisingTeamRouter } from "./routes/admin-fundraising-team";
 import { adminFundraisingRequestsRouter } from "./routes/admin-fundraising-requests";
 import { fundraiseInviteRouter } from "./routes/fundraise-invite";
 import { fundraiseRouter } from "./routes/fundraise";
+import { fundraiserNewsRouter, newsBodyGuard, NEWS_JSON_BODY_LIMIT, NEWS_POST_PATH } from "./routes/fundraiser-news";
 import { adminBallReportRouter } from "./routes/admin-ball-report";
 import { adminAnalyticsRouter } from "./routes/admin-analytics";
 import { adminStoriesImportRouter, STORIES_IMPORT_BODY_LIMIT, STORIES_IMPORT_PATH } from "./routes/admin-stories-import";
@@ -68,6 +69,9 @@ export function createApp() {
   app.use("/api/admin/event-images", express.json({ limit: IMAGE_JSON_BODY_LIMIT }));
   // TASK-493: a fundraiser's photo, stored like an event picture, so the same limit.
   app.use("/api/admin/fundraiser-images", express.json({ limit: IMAGE_JSON_BODY_LIMIT }));
+  // TASK-506: a news update from an organiser's private area may carry a photo (2 MB at most, shrunk
+  // in the browser first). Read only with a session cookie (newsBodyGuard), and only on that path.
+  app.use(NEWS_POST_PATH, newsBodyGuard, express.json({ limit: NEWS_JSON_BODY_LIMIT }));
   // Hosted-document uploads (TASK-265): same problem, bigger files — the 10 MB document cap is
   // ~13.7 MB base64-encoded, so without this the parser 413s a real certificate BEFORE auth runs
   // and the composer shows a bare "Upload failed". Scoped to exactly the attachments path (the
@@ -91,6 +95,9 @@ export function createApp() {
   app.use(adminEventsRouter);
   // Community fundraising (TASK-493): the public sign up, Get involved's list, each fundraiser's page,
   // the emailed manage links, and Admin > Fundraising. All of it off until an admin switches it on.
+  // TASK-506: news updates (the organiser's, staff's and the public photo). Before fundraiseRouter,
+  // whose retired link route (GET /api/fundraise/manage/:token) would otherwise take "news".
+  app.use(fundraiserNewsRouter);
   app.use(fundraiseRouter);
   app.use(adminFundraisingRouter);
   // TASK-503: the fundraising team's tools (invite, calls, Get involved, the Monday summary), and

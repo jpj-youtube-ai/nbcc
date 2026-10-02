@@ -46,6 +46,8 @@ vi.mock("../../src/db/fundraisers", () => ({
 vi.mock("../../src/fundraising/send", () => ({
   fundraiserPageUrl: (slug: string) => `https://nbcc.test/fundraise/${slug}`,
 }));
+// TASK-506: the page's news (tested in fundraiser-page-news-route.test.ts); none here.
+vi.mock("../../src/db/fundraiser-updates", () => ({ approvedForPage: async () => [] }));
 
 import { createSiteRouter } from "../../src/routes/site";
 

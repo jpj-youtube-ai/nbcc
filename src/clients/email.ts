@@ -575,6 +575,16 @@ export async function sendFundraiseEditRejected(name: string, message: Fundraise
   await sendVerbatim("fundraiseEditRejected", name, message);
 }
 
+// TASK-506: to the organiser when staff approve ("Your news update is live") or do not use ("About
+// your news update") a news update they posted.
+export async function sendFundraiseNewsApproved(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseNewsApproved", name, message);
+}
+
+export async function sendFundraiseNewsRejected(name: string, message: FundraiseEmailMessage): Promise<void> {
+  await sendVerbatim("fundraiseNewsRejected", name, message);
+}
+
 // TASK-503: the invite staff send from Admin > Fundraising (email 7), from and replying to the
 // events inbox. Its link carries the invite token, which the link tagging leaves alone.
 export async function sendFundraiseInvite(name: string, message: FundraiseEmailMessage): Promise<void> {

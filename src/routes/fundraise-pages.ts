@@ -13,7 +13,8 @@ import { join } from "node:path";
 //   GET /fundraise/:slug/qr.svg    the page's QR code, to download
 //   GET /fundraise/:slug           one fundraiser's page (TASK-502: a finished one keeps it, saying
 //                                  so, and still takes gifts; ?thanks=1&session_id= is the thank you
-//                                  after paying, with the optional step to add to the wall)
+//                                  after paying, with the optional step to add to the wall;
+//                                  TASK-506: its countdown, and the news staff approved)
 //
 // Added to the site router (src/routes/site.ts) before its catch-all, so "not here" is the site's own
 // 404 page: anything that is not a public, raising money fundraiser, approved or finished, while
@@ -74,6 +75,20 @@ async function thanksFor(
   } catch (err) {
     console.error("fundraiser thank you gift read failed:", err instanceof Error ? err.message : err);
     return base;
+  }
+}
+
+/**
+ * TASK-506: the news updates staff approved, newest first. Only a part of the page: if they cannot
+ * be read, the page goes out without them rather than not at all.
+ */
+async function newsFor(fundraiserId: number): Promise<import("../fundraising/news").NewsEntry[]> {
+  try {
+    const [{ approvedForPage }, { publicNews }] = await Promise.all([import("../db/fundraiser-updates"), import("../fundraising/news")]);
+    return publicNews(await approvedForPage(fundraiserId));
+  } catch (err) {
+    console.error("fundraiser page news failed:", err instanceof Error ? err.message : err);
+    return [];
   }
 }
 
@@ -214,7 +229,7 @@ export function addFundraisePageRoutes(router: Router, siteRoot: string, deps: F
         import("../fundraising/render"),
         import("../fundraising/send"),
       ]);
-      const page = publicPage(f, f.meter, wallEntries(await wallRows(f.id)));
+      const page = { ...publicPage(f, f.meter, wallEntries(await wallRows(f.id))), news: await newsFor(f.id) };
       // ?thanks=1 is where the server sends a giver back to after paying (src/routes/api.ts): a thank
       // you at the top. Anyone can add it to the address, and all it shows is a thank you.
       const thanks = req.query.thanks === "1" ? await thanksFor(req.query, f.id) : undefined;

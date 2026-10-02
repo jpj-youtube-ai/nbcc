@@ -12,6 +12,8 @@ import {
 } from "../events/render";
 import { SINGLE_DONATION_WORDING } from "../declarations/wording";
 import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
+import { countdownFor, type NewsEntry } from "./news";
+import { safeFirstName } from "./emails";
 
 // TASK-494: the public fundraising pages, drawn on the server.
 //
@@ -25,6 +27,9 @@ import type { Meter, PublicCard, PublicPage, WallEntry } from "./model";
 //     TASK-502: Gift Aid shown beside a gift and under the meter (never counted); the message and
 //     the wall choices moved from the give form to an optional step on the thank you after paying;
 //     and a finished fundraiser keeps its page, saying so, with "You can still give".
+//     TASK-506: a countdown under the date while it is still to come ("12 days to go", "Tomorrow!"),
+//     a banner wishing the organiser luck on the day with the share links, and a News section of
+//     the updates staff approved, newest first, each photo in a small cropped frame.
 //   - The sign up page (/fundraise): the form, or a gentle "not open yet" while switched off.
 //
 // Pure: no database, no config, no clock (the time is passed in). Everything a person typed is
@@ -619,6 +624,83 @@ function renderFinished(p: PublicPage): string {
   );
 }
 
+// --- the countdown and the day itself (TASK-506) ---------------------------------------------------
+
+const STAR = '<svg class="fr-today__star" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.6 6.3 6.8.6-5.2 4.5 1.6 6.6L12 16.6 6.2 20l1.6-6.6L2.6 8.9l6.8-.6z"/></svg>';
+
+/**
+ * Under the date while it is still to come: "12 days to go", or "Tomorrow!". On the day: a banner
+ * wishing the organiser luck, with the page's own share links, as the day is when a share helps
+ * most. Nothing after the date, or once finished. The first name is only ever one plain word of
+ * letters (safeFirstName, as the emails greet people); anything else and the banner has no name.
+ * Drawn on the server, so it is right as the page opens: the page is revalidated on every view.
+ */
+function renderCountdown(p: PublicPage, now: Date, pageUrl: string): string {
+  const c = countdownFor({ eventDate: p.eventDate, finished: p.finished }, now);
+  if (!c) return "";
+  if (c.kind === "days") {
+    return c.days === 1
+      ? '<p class="fr-countdown fr-countdown--soon">Tomorrow!</p>'
+      : `<p class="fr-countdown"><span class="fr-countdown__num">${c.days}</span> days to go</p>`;
+  }
+  const word = p.organisedBy.trim().split(/\s+/)[0] ?? "";
+  const first = word.toLowerCase() === "anonymous" ? null : safeFirstName(word);
+  return (
+    '<div class="fr-today" data-copy-scope>' +
+    STAR +
+    `<h2 class="fr-today__title">Today's the day! Good luck${first ? `, ${escapeHtml(first)}` : "!"}</h2>` +
+    `<p>Cheer ${first ? escapeHtml(first) : "them"} on: a share today goes a long way.</p>` +
+    shareLinks(p, pageUrl) +
+    '<p class="fr-share__status" role="status" aria-live="polite" data-copy-status></p>' +
+    "</div>"
+  );
+}
+
+// --- the news updates (TASK-506) ---------------------------------------------------------------------
+
+/** How many updates show before Show all. */
+export const NEWS_FIRST = 3;
+
+const NEWS_DATE = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "long", year: "numeric" });
+
+/**
+ * One update: its date, the organiser's words, and the photo if it has one. The photo sits in a
+ * small frame of one shape (4 by 3, cropped to fill it), never across the page: a whole poster or
+ * flyer there looked bad on a card live, so a picture here is only ever a modest one beside the
+ * words. Its alt is the start of the update, as that is what the picture is about.
+ */
+function renderNewsItem(n: NewsEntry, i: number): string {
+  const more = i >= NEWS_FIRST ? " data-news-more" : "";
+  const alt = `A photo with the update: ${shorten(n.text, 110)}`;
+  return (
+    `<li class="fr-news__item${n.photoSrc ? " has-photo" : ""}"${more}${i === NEWS_FIRST ? ' tabindex="-1"' : ""}>` +
+    (n.photoSrc
+      ? '<figure class="fr-news__photo">' +
+        `<img src="${escapeHtml(n.photoSrc)}" alt="${escapeHtml(alt)}" width="400" height="300" loading="lazy" decoding="async" />` +
+        "</figure>"
+      : "") +
+    '<div class="fr-news__words">' +
+    `<p class="fr-news__when"><time datetime="${escapeHtml(n.createdAt)}">${NEWS_DATE.format(new Date(n.createdAt))}</time></p>` +
+    `<p class="fr-news__text">${escapeHtml(n.text).replace(/\r?\n/g, "<br />")}</p>` +
+    "</div>" +
+    "</li>"
+  );
+}
+
+function renderNews(p: PublicPage): string {
+  const items = p.news ?? [];
+  if (!items.length) return "";
+  return (
+    '<section class="fr-news" aria-labelledby="fr-news-heading">' +
+    '<h2 id="fr-news-heading">News</h2>' +
+    `<ol class="fr-news__list" role="list" data-news>${items.map(renderNewsItem).join("")}</ol>` +
+    (items.length > NEWS_FIRST
+      ? `<button class="fr-wall__more" type="button" data-news-show-all hidden>Show all ${items.length} updates</button>`
+      : "") +
+    "</section>"
+  );
+}
+
 /** One fundraiser's page: the template's head filled in, and the page where its markers are. */
 export function renderFundraiserPage(template: string, p: PublicPage, opts: FundraiserPageOptions): string {
   const origin = (() => {
@@ -635,6 +717,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     `<h1 id="fr-title">${escapeHtml(p.title)}</h1>` +
     '<div class="rule"><i></i></div>' +
     renderFacts(p) +
+    renderCountdown(p, opts.now, opts.pageUrl) +
     (p.finished ? renderFinished(p) : "") +
     (opts.thanks ? renderThanks(p, opts.pageUrl, opts.thanks) : "");
   const body =
@@ -651,6 +734,7 @@ export function renderFundraiserPage(template: string, p: PublicPage, opts: Fund
     '<h2 id="fr-story-heading">About this fundraiser</h2>' +
     paragraphs(p.description) +
     "</section>" +
+    renderNews(p) +
     renderGiveForm(p) +
     renderWall(p, opts.now) +
     "</div>" +

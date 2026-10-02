@@ -1333,6 +1333,8 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /api/fundraise/manage/me` | **implemented** | TASK-501 (the signed in organiser's fundraisers: status, page, QR code, meter, gifts and messages, editable details; since TASK-505 also `requests`, where each thing they asked for is up to, in words) |
 | `POST /api/fundraise/manage/fundraisers/:id/edit`, `/finished`, `/pay-in` | **implemented** | TASK-501 (a change that waits for staff; "I've finished"; a Stripe checkout to pay in what they collected. Only their own: anyone else's is a 404) |
 | `POST /api/fundraise/manage/sign-out` | **implemented** | TASK-501 (ends the session) |
+| `GET /api/fundraise/manage/news`, `POST /api/fundraise/manage/fundraisers/:id/news`, `GET /api/fundraise/manage/news/:updateId/photo` | **implemented** | TASK-506 (the organiser's news updates: theirs listed with where each is up to; a new one, with an optional photo, waits for staff, five a day; their own photo. See **Fundraiser pages: countdown, on the day, and news updates (TASK-506)**) |
+| `GET /api/admin/fundraising/news-waiting`, `GET /api/admin/fundraisers/:id/news`, `.../news/:updateId/photo`, `POST .../news/:updateId/approve` \| `reject` \| `hide` \| `show` | **implemented** | TASK-506 (staff check news updates: fundraising view to look, edit to decide; audited) |
 | `GET` and `POST /api/fundraise/manage/:token` | **retired** | TASK-501 (`410`: the 24 hour links no longer open anything; ask for a sign in code) |
 | `POST /api/my-story` | **implemented** | Task B1 (My Story submission — persists to the separate `stories` DB) |
 | `POST /api/pulse` | **implemented** | TASK-479 (site analytics: a page view, leave or click from `assets/js/pulse.js`, JSON in a `text/plain` body, 2 KB at most; always `204` with an empty body; kept only while collecting is switched on; see **Site analytics (TASK-479)**) |
@@ -1402,6 +1404,7 @@ hosted-Checkout redirect stays the default fallback and no-JS safety net.
 | `GET /fundraise/:slug` | **implemented** | TASK-494 (a fundraiser's own page, drawn on the server; the site's 404 unless public, raising money, approved or (TASK-502) finished, and switched on. `?thanks=1` shows the thank you a giver comes back to after paying; TASK-502: with `&session_id=` it offers the optional step to add to the wall, served `no-store`, `noindex` and `Referrer-Policy: same-origin`; `&added=1` thanks them for it) |
 | `GET /fundraise/:slug/qr.svg` | **implemented** | TASK-494 (the page's QR code as an SVG to download; 404 wherever the page is) |
 | `GET /media/events/:id` | **implemented** | TASK-453 (public; an uploaded event picture or organiser logo by uuid, `nosniff`) |
+| `GET /media/fundraiser-news/:photoId` | **implemented** | TASK-506 (public; a news update's photo by uuid, only once its update is approved on a page that is up, `nosniff`, `max-age=300`; a waiting or hidden one is a 404) |
 | `GET /api/admin/events` | **implemented** | TASK-453 (events: view; the page switch and every event) |
 | `POST /api/admin/events`, `PUT/DELETE /api/admin/events/:id` | **implemented** | TASK-453 (events: edit; drafts may be half finished, live or scheduled events must pass `publishProblems`. Audited as `events.created` / `events.updated` / `events.deleted`) |
 | `PATCH /api/admin/events/settings` | **implemented** | TASK-453 (events: edit **and** the admin role; `{pageOn}` switches the whole page. Audited as `events.page_switched`) |
@@ -7145,7 +7148,7 @@ is listed, every page is a 404, and the private area is closed, until an admin s
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js`; the address boxes and event questions (TASK-499) `1791200000040_fundraiser-sign-up-details.js`; the private area (TASK-501) `1791200000050_fundraising-private-area.js`; the message after paying (TASK-502) `1791200000060_fundraising-wall-after-paying.js`; news updates (TASK-506) `1791200000100_fundraiser-updates.js` |
 
 ### Data
 
@@ -7423,6 +7426,8 @@ and email) and the sign off. Plain English, no dashes, every stored value escape
 | `fundraiseEditApproved` | the organiser | staff approve their waiting change | "Your update is live!" with the page link while their page is up (raising money, public, approved and fundraising on); otherwise "Your update is saved!", with no page link |
 | `fundraiseEditRejected` | the organiser | staff reject their waiting change | "About your update": not used yet, we'll give you a ring; "your page is still live" only while it is up, otherwise "everything stays just as it was" |
 | `fundraiseInvite` | the person invited | staff send or resend an invite from Admin > Fundraising (TASK-503, email 7) | "We'd love you to fundraise with us!", the personal note in a quote box, **Make my page** to the form filled in with their name and email, signed "Warmest wishes," with the first name chosen under Signed by, then "NBCC Team", and the questions box. Subject "We'd love you to fundraise with us" |
+| `fundraiseNewsApproved` | the organiser | staff approve a news update they posted (TASK-506) | "Your news update is live!" with the page link while their page is up; otherwise "Your news update is saved!". "Thanks so much," and the questions box |
+| `fundraiseNewsRejected` | the organiser | staff do not use a news update (TASK-506) | "About your news update": not on the page, we'll give you a ring; never the internal reason. "Speak soon," and the questions box |
 | `fundraiseSummary` | each address on the Weekly summary list | Mondays at 8am (TASK-503, email 11), or Send a test now (to the admin pressing it, marked as a test) | "Good morning, team!": last week's money, new sign ups, Waiting on us, Coming up, Open the admin, "Have a brilliant week,". Staff only: no questions box, never link tagged. Subject like "Fundraising this week: £1,240 raised, 10 things waiting" |
 
 **Approved while fundraising is off.** The old "you're approved, your page will appear when our pages
@@ -8065,6 +8070,99 @@ organiser's words), `fundraising-requests-db`, `fundraising-requests-migration`,
 (only their own), `fundraise-manage-page` and `backup-plan`. BDD:
 `features/fundraising-requests.feature` (posters sent and a bucket out then back take what is
 waiting down; a second press changes nothing; Undo goes back one step).
+## Fundraiser pages: countdown, on the day, and news updates (TASK-506)
+
+Two things for a raising money fundraiser's own page (`/fundraise/<slug>`), decided by Jaimie on
+the fundraising master list.
+
+**The countdown and the day itself.** While the fundraiser's date is still to come, a pill under the
+date in the intro says how many days to go: "12 days to go", or "Tomorrow!" the day before. On the
+date, a festive banner takes its place: "Today's the day! Good luck, Robin", with the page's own
+share links (Copy the link, Facebook, WhatsApp), as the day is when a share helps most. After the
+date there is nothing (the finished and thank you states already say what there is to say), and
+nothing once the fundraiser is finished. The days are UK days (`Europe/London`), counted on the
+calendar, so the clocks changing never makes it a day out. The first name is the organiser's, only
+when it is one plain word of letters (`safeFirstName`, as the emails greet people); otherwise the
+banner says "Good luck!" with no name. It is drawn on the server, so nothing flashes in after the
+page opens, and the page is already revalidated on every view (`Cache-Control: public, max-age=0`,
+with a fresh ETag when the words change), so a cached copy is never a day out.
+
+**News updates.** In their private area, for each fundraiser running with its own page (approved,
+raising money, public, not finished), the organiser has **News updates**: a short update (up to 500
+characters, its words checked like the supporter wall's) and, if they like, a photo (a JPG, PNG or
+WebP, shrunk in the browser first exactly as a staff upload is, 2 MB at most). Five a day for each
+fundraiser, counted in the database under the fundraiser's lock. Every update waits for staff. Their
+updates are listed below the form, newest first, each saying where it is up to: "Waiting for us to
+check", "On your page" or "Not used". A finished fundraiser keeps its list, with no form.
+
+In **Admin > Fundraising**, a sign up with updates waiting shows **Updates to check** on its row, and
+the open sign up has a **News updates** panel: each update with its words and its photo (fetched
+with the admin's own sign in, as a waiting photo has no public address, and shown small), and
+**Approve update** or **Don't use it**, with an optional reason that stays in the admin, for staff
+only. One on the page can be **hidden**, and shown again. Approving emails the organiser "Your news
+update is live!" (with the page link while their page is up), not using one emails "About your news
+update" (we'll give you a ring); hiding emails nobody. Every decision records who and when in
+`audit_log` (History shows it, with the reason). Viewers see the panel without the buttons; edit
+access decides. The Monday summary counts "N news updates to check" under Waiting on us.
+
+On the page, approved updates show in a **News** section after the story, newest first, with their
+date: the first three, then **Show all** grows the page. A photo sits in a small frame of one shape
+(4 by 3, cropped to fill it, 180 pixels wide beside the words, at most 280 above them on a phone),
+never across the page: a whole flyer on a card looked bad live, so a poster can never take the page
+over. Its alt text is the start of the update.
+
+What keeps a waiting photo private: it is stored in its update's row with an address of its own (a
+uuid), and `GET /media/fundraiser-news/<uuid>` serves it only while its update is approved, on a
+public raising money page that is up (approved or finished), with fundraising switched on. Before
+then only the organiser (behind their session, by their own email) and staff (behind the admin's
+token) can see it, never kept by a cache. Every photo goes out with its checked type and `nosniff`;
+its first bytes must match the type it claims, so nothing else can be served as a picture.
+
+| Method + path | Who | Body | Answer |
+|---|---|---|---|
+| `GET /api/fundraise/manage/news` | the signed in organiser | | `{ fundraisers: [{ id, canPost, updates: [{ id, text, status, statusWords, createdAt, photoUrl }] }] }`, `no-store`. Never the internal reason or who decided |
+| `POST /api/fundraise/manage/fundraisers/:id/news` | the signed in organiser, from our own page | `{ text, photo?: { mime, dataBase64 } }` | `202 { status: "waiting", update }`; `400 { fields: { text \| photo } }`; `413` a photo over 2 MB; `429` the sixth in a day; `410` not running with a page; `404` anyone else's; `401` signed out (checked before the body is read) |
+| `GET /api/fundraise/manage/news/:updateId/photo` | the signed in organiser | | their own photo, whatever its status, `private, no-store` |
+| `GET /media/fundraiser-news/:photoId` | anyone | | the photo, only once its update is approved (see above), `public, max-age=300`, so a hidden one stops being served within minutes; otherwise `404` |
+| `GET /api/admin/fundraising/news-waiting` | fundraising view | | `{ counts: { <fundraiser id>: <waiting> } }` |
+| `GET /api/admin/fundraisers/:id/news` | fundraising view | | `{ updates: [{ ..., decidedAt, decidedBy, rejectReason, photoUrl }] }` |
+| `GET /api/admin/fundraisers/:id/news/:updateId/photo` | fundraising view | | the photo, waiting ones included, `private, no-store` |
+| `POST /api/admin/fundraisers/:id/news/:updateId/approve` \| `/reject` \| `/hide` \| `/show` | fundraising edit | reject: `{ reason? }` (up to 500) | `{ update }`; `409` already decided; `404` not there |
+
+The post's body (a photo as base64) is read with a 4 MB limit on that path only, and only when the
+request carries a session cookie. The news router is mounted before the private area's, whose
+retired link route (`GET /api/fundraise/manage/:token`) would otherwise take "news".
+
+### Data (`migrations/1791200000100_fundraiser-updates.js`, additive only)
+
+`fundraiser_updates`: the fundraiser (cleared with it), the words (1 to 500 characters), the photo
+(`photo_id` uuid, its type, bytes and size, all or none), `status` (`pending` by default, then
+`approved`, `rejected` or `hidden`), when it was posted, who decided and when, and the internal
+reason. Indexed by fundraiser, newest first, and by those waiting. In the nightly backup's table
+count (65).
+
+### Where it lives, and tests
+
+Rules (pure): `src/fundraising/news.ts` (the countdown, the update form, the photo check, the
+statuses, what the public sees). Drawing the page: `src/fundraising/render.ts`. SQL:
+`src/db/fundraiser-updates.ts`. Routes: `src/routes/fundraiser-news.ts` (reusing the private area's
+session, ownership and same origin checks, exported from `src/routes/fundraise.ts`); the page reads
+its news in `src/routes/fundraise-pages.ts`. Emails: `buildNewsApprovedEmail` and
+`buildNewsRejectedEmail` in `src/fundraising/emails.ts`, sent by `sendNewsDecisionEmail` in
+`src/fundraising/send.ts` (kinds `fundraiseNewsApproved`, `fundraiseNewsRejected`). The private
+area's part: `assets/js/fundraise-news.js` and the `<template data-news-pattern>` in
+`fundraise-manage.html`. The page's Show all: `initNews` in `assets/js/fundraiser.js`. The admin
+panel: the "news updates (TASK-506)" block in `assets/js/admin/app.js`. Styles at the end of
+`assets/css/fundraising.css` and `assets/css/admin.css`. Unit tests: `fundraising-news` (the days to
+go across both clock changes and on the day itself, the photo check, the form, the rate limit, what
+is public), `fundraiser-page-extras` and `fundraiser-page-news-script` (the page drawn and in the
+browser), `fundraiser-page-news-route`, `fundraiser-news-routes` (owner only, five a day, the words,
+the photo, a waiting photo never public, staff approve, reject and hide by permission, the emails,
+how the app mounts it), `fundraiser-updates-db`, `fundraiser-updates-migration`,
+`fundraising-news-emails`, `fundraising-summary-news`, `fundraise-news-page` (the private area in
+jsdom), `admin-fundraising-news-panel` (the admin in jsdom), `admin-email-kinds` and `backup-plan`.
+BDD: `features/fundraising-news.feature` (post, approve, on the page; a waiting photo is not public;
+the sixth in a day; the countdown and the day itself).
 
 ## A QR code encoder for fundraiser pages (TASK-493)
 

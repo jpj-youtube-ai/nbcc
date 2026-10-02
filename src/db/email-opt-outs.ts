@@ -9,17 +9,28 @@ import { pool } from "./pool";
 export type OptOutKind = "all" | "thank_you";
 export type OptOutSource = "preferences" | "backfill";
 
-/** Add an address. Idempotent: one already opted out keeps its first record. True when added now. */
+/**
+ * Add an address. Idempotent, and safe against two at once (a double submit): the live row's unique
+ * index (email_opt_outs_live_idx) decides, ON CONFLICT. An address already opted out keeps its first
+ * record, except that Stop all emails after thank yous only makes it "all" (never the other way).
+ * True when added or made "all" now.
+ */
 export async function addOptOut(email: string, kind: OptOutKind, source: OptOutSource): Promise<boolean> {
   const address = email.trim().toLowerCase();
   if (!address) return false;
-  const { rowCount } = await pool.query(
-    `INSERT INTO email_opt_outs (email, kind, source)
-     SELECT $1, $2, $3
-      WHERE NOT EXISTS (SELECT 1 FROM email_opt_outs WHERE email = $1 AND removed_at IS NULL)`,
-    [address, kind, source],
-  );
-  return (rowCount ?? 0) > 0;
+  try {
+    const { rowCount } = await pool.query(
+      `INSERT INTO email_opt_outs (email, kind, source) VALUES ($1, $2, $3)
+       ON CONFLICT (email) WHERE removed_at IS NULL
+       DO UPDATE SET kind = 'all' WHERE email_opt_outs.kind = 'thank_you' AND EXCLUDED.kind = 'all'`,
+      [address, kind, source],
+    );
+    return (rowCount ?? 0) > 0;
+  } catch (err) {
+    // A unique clash can only mean the row is already there: that is the outcome wanted.
+    if (typeof err === "object" && err !== null && (err as { code?: string }).code === "23505") return false;
+    throw err;
+  }
 }
 
 /** Lift it (they turned thank yous back on). Tombstoned, never deleted. True when one was lifted. */

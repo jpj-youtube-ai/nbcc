@@ -56,6 +56,26 @@ describe("the preference centre and the opt out list", () => {
     expect(optOuts.liftOptOut).not.toHaveBeenCalled();
   });
 
+  it("records the opt out before the consents, so a failure part way never loses it", async () => {
+    const order: string[] = [];
+    optOuts.addOptOut.mockImplementation(async () => (order.push("opt out"), true));
+    newsletters.setDonorConsents.mockImplementation(async () => (order.push("consents"), undefined));
+    lists.unsubscribeListMember.mockImplementation(async () => (order.push("lists"), null));
+    await post({ all: "off" });
+    expect(order[0]).toBe("opt out");
+  });
+
+  it("still saves the rest and shows the saved page when the opt out cannot be written, and says so loudly", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    optOuts.addOptOut.mockRejectedValue(new Error("db down"));
+    const res = await post({ all: "off" });
+    expect(res.statusCode).toBe(200);
+    expect(newsletters.setDonorConsents).toHaveBeenCalledWith("robin@example.com", { newsletter: false, thankYou: false });
+    expect(lists.unsubscribeListMember).toHaveBeenCalledWith(11);
+    expect(String(err.mock.calls[0]?.[0])).toMatch(/opt out/i);
+    err.mockRestore();
+  });
+
   it("records Stop all emails for an address with no donor row too", async () => {
     newsletters.donorConsentForEmail.mockResolvedValue(null);
     await post({ all: "off" });

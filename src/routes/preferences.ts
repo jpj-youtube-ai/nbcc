@@ -187,19 +187,28 @@ export async function postPreferences(req: Request, res: Response): Promise<Resp
     }
   }
 
+  // TASK-507: the address level opt out list, which a fundraiser's thank you (email 20) respects.
+  // Written FIRST, so a failure later in the save never loses someone's "stop". "Stop all emails"
+  // always records it, donor row or not; thank yous turned off records it; thank yous turned back on
+  // lifts it (a tombstone, never a delete). A failure here is logged loudly and the rest still saves,
+  // so the person's choice about everything else is never lost to it.
+  try {
+    if (stopAll) await addOptOut(email, "all", "preferences");
+    else if (plan.setThankYou === false) await addOptOut(email, "thank_you", "preferences");
+    else if (plan.setThankYou === true) await liftOptOut(email, "preferences");
+  } catch (err) {
+    console.error(
+      "PREFERENCES OPT OUT NOT RECORDED: the email_opt_outs write failed; check this address by hand:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+
   // Memberships first, then donor consent. A person can hold both, and the plan already covers
   // each independently — "stop all emails" simply produces a plan where everything is off.
   for (const memberId of plan.unsubscribeMemberIds) await unsubscribeListMember(memberId);
   if (plan.setNewsletter !== null && plan.setThankYou !== null) {
     await setDonorConsents(email, { newsletter: plan.setNewsletter, thankYou: plan.setThankYou });
   }
-
-  // TASK-507: the address level opt out list, which a fundraiser's thank you (email 20) respects.
-  // "Stop all emails" always records it, donor row or not; thank yous turned off records it; thank
-  // yous turned back on lifts it (a tombstone, never a delete).
-  if (stopAll) await addOptOut(email, "all", "preferences");
-  else if (plan.setThankYou === false) await addOptOut(email, "thank_you", "preferences");
-  else if (plan.setThankYou === true) await liftOptOut(email, "preferences");
 
   const after = await viewFor(email);
   return res.type("html").send(render(after.view, after.offers, req.params.token, true));

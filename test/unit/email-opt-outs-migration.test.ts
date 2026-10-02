@@ -63,14 +63,20 @@ describe("the opt out list migration", () => {
   it("backfills every donor address whose thank you consent is off and that could have reached Stop all emails", () => {
     expect(sql).toMatch(/INSERT INTO email_opt_outs \(email, kind, source\)/);
     expect(sql).toMatch(/dn\.thankyou_consent = false/);
-    // Thank yous off while the newsletter is on: only the preference centre does that.
-    expect(sql).toMatch(/d2\.email_consent = true/);
-    // Sent a newsletter, a welcome, or on a list: they held a link to the preference centre.
+    // Thank yous off while the newsletter is on, on the same row: only the preference centre does that.
+    expect(sql).toMatch(/AND \(\s*(--[^\n]*\n\s*)?dn\.email_consent = true/);
+    expect(sql).not.toMatch(/d2\.email_consent/);
+    // Sent a newsletter (recorded, or sent from the queue), an event, or on a list: they held a link.
     expect(sql).toMatch(/FROM newsletter_sends/);
+    expect(sql).toMatch(/FROM newsletter_send_queue q WHERE q\.status = 'sent'/);
     expect(sql).toMatch(/FROM newsletter_email_events/);
     expect(sql).toMatch(/FROM list_subscribers/);
-    // A newsletter that went out before each recipient was recorded: everyone on file then.
+    // The catch up letters to individual donors carried a signed link to their preference page.
+    expect(sql).toMatch(/FROM thank_you_sent ty WHERE ty\.sent_by = 'script:catchup-individuals'/);
+    expect(sql).toMatch(/ty\.recipient_email/);
+    // A sent newsletter with no recipients recorded: everyone on file when it went.
     expect(sql).toMatch(/FROM newsletters n/);
+    expect(sql).toMatch(/NOT EXISTS \(SELECT 1 FROM newsletter_sends ns2 WHERE ns2\.newsletter_id = n\.id\)/);
     expect(sql).toMatch(/'backfill'/);
   });
 

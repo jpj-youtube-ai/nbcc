@@ -8262,15 +8262,19 @@ at the moment of sending. Numbered 110, above main's 080 and the 100 another ope
 that asked us to stop (`kind` `all` for Stop all emails, `thank_you` for thank yous turned off;
 `source` `preferences` or `backfill`), lifted by a tombstone (`removed_at`, `removed_by`), never
 deleted. It also widens the gifts' skip reasons. All three tables are in the nightly backup's table
-count (68).
+count (69).
 
 ### The opt out list, and the backfill
 
 The preference centre (`src/routes/preferences.ts`, `postPreferences`) now writes the opt out list as
-well as everything it did before: **Stop all emails** always adds the address (kind `all`), donor row
-or not; turning thank yous off adds it (kind `thank_you`); turning thank yous back on lifts it.
-`src/db/email-opt-outs.ts` (`addOptOut`, `liftOptOut`, `optedOutAmong`). A new gift with the box
-ticked does not lift it: only the preference centre does.
+well as everything it did before, and writes it FIRST: **Stop all emails** always adds the address
+(kind `all`, and a `thank_you` one already there becomes `all`), donor row or not; turning thank yous
+off adds it (kind `thank_you`); turning thank yous back on lifts it. If that write fails, it is
+logged loudly ("PREFERENCES OPT OUT NOT RECORDED") and the rest still saves and shows the saved page.
+The write is safe against a double submit (`INSERT ... ON CONFLICT (email) WHERE removed_at IS NULL`,
+the live row's unique index). Staff adding a newsletter subscriber by hand ("all our emails back
+on", `addNewsletterSubscriber`) also lifts it, recorded as that member of staff. A new gift with the
+box ticked does not lift it. `src/db/email-opt-outs.ts` (`addOptOut`, `liftOptOut`, `optedOutAmong`).
 
 **What could be found for people who pressed Stop all emails before this.** Nothing direct. The
 preference centre wrote no `audit_log` row and kept no history: it set `email_consent` and
@@ -8279,13 +8283,15 @@ memberships. Both flags false is also how a giver who never ticked the newslette
 flags alone cannot tell the two apart; the newsletter unsubscribe events (`newsletter_email_events`)
 record newsletter unsubscribes only, and `email_log` records sends, not choices.
 
-**The rule used (conservative).** The preference centre can only be reached from a link in a
-newsletter or the list welcome email. So the migration backfills as opted out (kind `all`, source
-`backfill`) every donor address with `thankyou_consent` false on some row that could have reached
-it: some row for it has `email_consent` true (thank yous off with the newsletter kept, which only the
-preference centre does), it was sent a newsletter (`newsletter_sends`), it has a newsletter
-unsubscribe or complaint event, it is on any list (live or tombstoned), or it was on file when a
-newsletter went out before each recipient was recorded. Some who never asked to stop are counted as
+**The rule used (conservative).** A signed link into the preference centre is in every newsletter,
+the list welcome email, and the catch up letters `src/scripts/catchup-individuals.ts` emailed to
+individual donors. So the migration backfills as opted out (kind `all`, source `backfill`) every
+donor address with a row whose `thankyou_consent` is false where: that same row has `email_consent`
+true (thank yous off with the newsletter kept, which only the preference centre does), or the
+address was sent a newsletter (`newsletter_sends`, or a `sent` row in `newsletter_send_queue`), has
+a newsletter unsubscribe or complaint event, is on any list (live or tombstoned), was sent a catch
+up letter (`thank_you_sent.sent_by = 'script:catchup-individuals'`), or was on file when a sent
+newsletter with no recipients recorded went out. Some who never asked to stop are counted as
 opted out (a thank you they do not get); never the other way round. A giver whose address no
 newsletter, welcome or list ever reached could not have opened the preference centre, so is emailed.
 
@@ -8354,16 +8360,16 @@ lives in; the Drive copy is not immutable.
 
 ### There are THREE databases, not one
 
-This is the trap this feature was built around. `DATABASE_URL` holds 65 tables
+This is the trap this feature was built around. `DATABASE_URL` holds 66 tables
 (42 when this was built; the Events page added three in TASK-453, the Festive Ball ticket
 report one in TASK-464, the admin's New pills one, `admin_seen`, in TASK-478, site analytics
 four in TASK-479, the business supporter call log in TASK-491, community fundraising five
 in TASK-493, the private area's sign in codes and sessions two in TASK-501, the invites and
-calls two in TASK-503, the requests one in TASK-505, and the thank yous to supporters and the
-address level opt out list three in TASK-507),
+calls two in TASK-503, the requests one in TASK-505, the news updates one in TASK-506, and the
+thank yous to supporters and the address level opt out list three in TASK-507),
 but `STORIES_DATABASE_URL` and `CONTACT_DATABASE_URL` are separate databases
 (deliberately, so the public story and contact forms can never reach donor
-data). A `pg_dump $DATABASE_URL` captures 65 of **68** tables and silently
+data). A `pg_dump $DATABASE_URL` captures 66 of **69** tables and silently
 drops every My Story submission (and, since TASK-475, the fingerprints in
 `erased_stories` that keep erased stories from coming back) and every contact
 enquiry, while producing a

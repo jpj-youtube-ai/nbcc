@@ -41,19 +41,22 @@ function expectPlainEnglish(text: string) {
 }
 
 describe("thanks for signing up", () => {
-  const mail = buildSignUpThanksEmail({ name: signUp.name, title: signUp.title });
+  const mail = buildSignUpThanksEmail();
 
-  it("thanks them by first name and says what happens next", () => {
+  it("thanks them and says what happens next", () => {
     expect(mail.subject).toContain("Thank you");
-    expect(mail.text).toContain("Hi Robin");
     expect(mail.text).toMatch(/be in touch/);
     expect(mail.text).toContain(FUNDRAISING_EMAIL);
+    expect(mail.html).toContain("<!doctype html>");
   });
 
-  it("is in NBCC's shell, with their words escaped", () => {
-    expect(mail.html).toContain("<!doctype html>");
-    expect(mail.html).toContain("Robin&#39;s &lt;Santa&gt; Dash");
-    expect(mail.html).not.toContain("<Santa>");
+  // Anyone can type any address into the form, so this email must carry nothing they typed: no
+  // name, title or description. Otherwise the form is a way to send any words, from NBCC, to anyone.
+  it("is the same fixed message whoever signs up, carrying none of their words", () => {
+    expect(buildSignUpThanksEmail()).toEqual(mail);
+    for (const typed of ["Robin", "Santa", signUp.description]) {
+      expect(mail.subject + mail.text + mail.html).not.toContain(typed);
+    }
   });
 
   it("is plain English", () => expectPlainEnglish(mail.text));
@@ -89,6 +92,15 @@ describe("approved", () => {
     expect(mail.text).toContain("https://nbcc.scot/fundraise/robins-santa-dash");
     expect(mail.html).toContain('href="https://nbcc.scot/fundraise/robins-santa-dash"');
     expect(mail.text).toContain("https://nbcc.scot/fundraise/manage");
+    expectPlainEnglish(mail.text);
+  });
+
+  it("says the page will appear when our fundraising pages open, with no link, while fundraising is off", () => {
+    const mail = buildApprovedEmail({ name: signUp.name, title: signUp.title }, { pageUrl: null, manageUrl: null, pagesOpen: false });
+    expect(mail.text).toMatch(/approved/);
+    expect(mail.text).toMatch(/when our fundraising pages open/);
+    expect(mail.text).not.toContain("/fundraise/");
+    expect(mail.subject).not.toMatch(/live/i);
     expectPlainEnglish(mail.text);
   });
 

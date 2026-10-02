@@ -30,7 +30,7 @@ export function fundraiserPageUrl(slug: string): string {
 /** Thank the organiser, and tell the events inbox, after a sign up. */
 export async function sendSignUpEmails(f: FundraiserRecord): Promise<void> {
   try {
-    const mail = buildSignUpThanksEmail(f);
+    const mail = buildSignUpThanksEmail();
     await sendFundraiseThanks(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
   } catch (err) {
     logFailure("sign up thanks", err);
@@ -43,13 +43,18 @@ export async function sendSignUpEmails(f: FundraiserRecord): Promise<void> {
   }
 }
 
-/** Their page link (raising money and public), or "you're on our list" for anyone else. */
-export async function sendApprovedEmail(f: FundraiserRecord): Promise<void> {
+/**
+ * Their page link (raising money and public), or "you're on our list" for anyone else. While
+ * fundraising is switched off a page link would 404, so a page holder is told it will appear when
+ * the pages open instead.
+ */
+export async function sendApprovedEmail(f: FundraiserRecord, pagesOpen: boolean): Promise<void> {
   try {
-    const page = hasPage(f);
+    const page = hasPage(f) && pagesOpen;
     const mail = buildApprovedEmail(f, {
       pageUrl: page ? fundraiserPageUrl(f.slug) : null,
       manageUrl: page ? `${base()}/fundraise/manage` : null,
+      pagesOpen: hasPage(f) ? pagesOpen : undefined,
     });
     await sendFundraiseApproved(f.name, { email: f.email, from: config.BALL_FROM_EMAIL, replyTo: config.BALL_FROM_EMAIL, ...mail });
   } catch (err) {

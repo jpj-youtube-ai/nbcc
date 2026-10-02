@@ -5,7 +5,11 @@ import { decodeQr, functionPatternProblems, penalty, readFormat, type Ecc } from
 // TASK-493: a dependency-free QR code encoder (ISO/IEC 18004, byte mode, versions 1 to 10) for
 // fundraiser pages. Correctness is shown three independent ways:
 //   1. exact module-for-module agreement with reference grids produced once, offline, by a
-//      different encoder (node-qrcode 1.5.0, forced to byte mode); it is not a dependency;
+//      different encoder: node-qrcode 1.5.0, one byte mode segment of the UTF-8 text, the error
+//      correction level listed, version and mask left to node-qrcode. It is not a dependency, and the
+//      grids could not be regenerated inside this repository (no npm access). The recipe is
+//      scripts/qr-reference-grids.mjs: run it where the package can be installed to regenerate or
+//      check them. Points 2 and 3 do not rely on these grids at all;
 //   2. published worked values from the standard (Reed-Solomon, format and version bits);
 //   3. a separate strict decoder (helpers/qr-decode.ts) that round-trips every generated code:
 //      fixed patterns, format BCH, zigzag read, de-interleave, zero RS syndromes, byte mode back.

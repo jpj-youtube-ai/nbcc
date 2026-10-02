@@ -10,18 +10,18 @@ import { config } from "../config";
 // Someone joining the newsletter THEMSELVES. Moved out of the footer route (TASK-261, TASK-276)
 // unchanged in TASK-493, so the fundraising sign up's newsletter tick box subscribes an organiser
 // exactly as the footer form does:
-//   - the NEWSLETTER list, consent_source 'footer' (a self signup: the person, not staff), added_by NULL;
+//   - the NEWSLETTER list, consent_source 'footer' from the footer or 'fundraise' from the fundraising
+//     form (a self signup either way: the person, not staff), added_by NULL;
 //   - deduped by address (addListSubscriber); the person may revive their own earlier opt out;
 //   - the welcome email at once, with its one click unsubscribe, recorded in the audit log, best
 //     effort and after the write: the person IS subscribed whether or not it goes.
 // Suppressed addresses (bounces, complaints) are held back where every newsletter send is
 // (suppressedAmong in src/db/newsletters.ts), exactly as for a footer signup.
 
-export async function subscribeSelf(person: {
-  name: string;
-  email: string;
-  phone: string | null;
-}): Promise<AddSubscriberOutcome | "no_list"> {
+export async function subscribeSelf(
+  person: { name: string; email: string; phone: string | null },
+  source: "footer" | "fundraise" = "footer",
+): Promise<AddSubscriberOutcome | "no_list"> {
   const list = await getSubscriberListBySlug("newsletter");
   if (!list) {
     // Seeded by migration: missing means the deploy is broken, not the visitor's problem.
@@ -31,10 +31,10 @@ export async function subscribeSelf(person: {
   const outcome = await addListSubscriber(
     list.id,
     { name: person.name, email: person.email, phone: person.phone },
-    "footer",
+    source,
     { revive: true }, // the person themselves is consenting again
   );
-  if (shouldSendWelcome("footer")) {
+  if (shouldSendWelcome(source)) {
     void sendWelcome(list.id, person.email).catch((err) =>
       console.error("welcome email failed:", err instanceof Error ? err.message : err),
     );

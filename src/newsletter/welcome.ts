@@ -36,8 +36,9 @@ export const WELCOME_SUBJECT = "Thanks for signing up — welcome to NBCC";
 //
 // A predicate, not a comment, so wiring the welcome into another path later cannot silently mail a
 // whole import — it would have to change this rule and the test that pins it.
-export function shouldSendWelcome(source: "footer" | "import" | "admin"): boolean {
-  return source === "footer";
+// TASK-493: the fundraising sign up's tick box is a self signup too, so it is welcomed the same way.
+export function shouldSendWelcome(source: "footer" | "import" | "admin" | "fundraise"): boolean {
+  return source === "footer" || source === "fundraise";
 }
 
 export function welcomeDoc(): NewsletterDoc {

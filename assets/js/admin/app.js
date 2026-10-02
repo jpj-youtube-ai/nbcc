@@ -5613,7 +5613,8 @@
     // TASK-278: the full provenance of a membership — when they joined, how consent arrived, and
     // which of us added them. "Who put this person on the list?" is the first question asked when an
     // address turns out to be wrong, or when someone says they never signed up.
-    var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff" };
+    var howLabel = { footer: "Signed up on the website", import: "Imported", admin: "Added by staff", fundraise: "Signed up while fundraising" };
+    var selfSignup = function (m) { return m.consentSource === "footer" || m.consentSource === "fundraise"; };
     // TASK-287: three columns, not seven. Seven never fitted the card, and .admin-table sets
     // white-space:nowrap on every cell, so the table grew to its longest email address and the card
     // scrolled sideways with Remove pushed off the edge. Nothing is lost — the same six facts are
@@ -5625,13 +5626,13 @@
       var contact = [m.email, m.phone].filter(Boolean).map(H.escapeHtml).join(" · ");
       var by = m.addedBy
         ? H.escapeHtml(m.addedBy)
-        : m.consentSource === "footer" ? "themselves" : "not recorded";
+        : selfSignup(m) ? "themselves" : "not recorded";
       var how = [H.escapeHtml(howLabel[m.consentSource] || m.consentSource), "by " + by].join(" · ");
       html +=
         '<tr><td><span class="nl-person-nm">' + (H.escapeHtml(m.name || "") || '<span class="admin-muted">No name</span>') +
         '</span><span class="nl-meta">' + contact + "</span></td>" +
         '<td><span class="nl-person-nm">' + (m.consentedAt ? H.fmtDate(m.consentedAt) : "-") +
-        rowNewPill("newsletter", m.consentSource === "footer" ? m.consentedAt : null) +
+        rowNewPill("newsletter", selfSignup(m) ? m.consentedAt : null) +
         '</span><span class="nl-meta">' + how + "</span></td>" +
         '<td class="nl-r">' +
         (canWrite ? '<button class="admin-link admin-link-danger" type="button" data-remove-member="' + m.id + '">Remove</button>' : "") +

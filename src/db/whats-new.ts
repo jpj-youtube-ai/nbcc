@@ -66,7 +66,7 @@ const LATEST: Record<Exclude<Area, "events" | "analytics">, { db: "main" | "cont
   newsletter: {
     db: "main",
     sql: `SELECT max(consented_at) AS at FROM list_subscribers
-           WHERE consent_source = 'footer' AND unsubscribed_at IS NULL AND consented_at > $1`,
+           WHERE consent_source IN ('footer', 'fundraise') AND unsubscribed_at IS NULL AND consented_at > $1`,
   },
   // TASK-493: a new sign up at /fundraise, when it was made.
   fundraising: { db: "main", sql: "SELECT max(created_at) AS at FROM fundraisers WHERE created_at > $1" },

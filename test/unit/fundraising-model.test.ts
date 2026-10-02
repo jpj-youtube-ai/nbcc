@@ -275,8 +275,20 @@ describe("the supporter wall", () => {
     expect(wallEntries([row({ showAmount: false })])[0].amountPence).toBeNull();
   });
 
-  it("never shows a hidden message, or a gift refunded in full", () => {
-    expect(wallEntries([row({ hidden: true }), row({ refundedPence: 2000 })])).toEqual([]);
+  // Staff hide the MESSAGE; the gift itself, with its name and amount rules, stays on the wall.
+  it("never shows a hidden message, but keeps the gift on the wall", () => {
+    expect(wallEntries([row({ hidden: true })])).toEqual([
+      { name: "Alex E.", amountPence: 2000, message: null, createdAt: "2026-10-02T10:00:00.000Z" },
+    ]);
+  });
+
+  it("never shows a gift refunded in full", () => {
+    expect(wallEntries([row({ refundedPence: 2000 })])).toEqual([]);
+  });
+
+  // A donor whose details were redacted at the end of the retention period (src/db/admin.ts).
+  it("shows a redacted giver as Anonymous", () => {
+    expect(wallEntries([row({ fullName: "Redacted" })])[0].name).toBe("Anonymous");
   });
 
   it("shows what is left of a part refunded gift, and no blank message", () => {

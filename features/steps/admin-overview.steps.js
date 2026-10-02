@@ -16,7 +16,11 @@ const ORGANISER = "ola.overview.fr.bdd@example.com";
 // TASK-509: the invented donor behind the money scenario (the @admin hooks clear it before, too).
 const DONOR = "dee.overview.admin.bdd@example.com";
 
+// TASK-510: test events are named "Overview test ...", and removed by that name.
+const EVENT_MARK = "Overview test %";
+
 async function reset() {
+  await pool.query("DELETE FROM events WHERE name LIKE $1", [EVENT_MARK]);
   await pool.query("DELETE FROM donations WHERE donor_id IN (SELECT id FROM donors WHERE email = $1)", [DONOR]);
   await pool.query("DELETE FROM donors WHERE email = $1", [DONOR]);
   await pool.query("DELETE FROM fundraisers WHERE organiser_email = $1", [ORGANISER]);
@@ -195,6 +199,31 @@ Then("this month's donations have not changed", function () {
 
 Then("last month's money has gone up by £{int}", function (pounds) {
   assert.equal(moneyFigures(this.ovBody).lastMonth - this.ovMoneyBefore.lastMonth, pounds, JSON.stringify(this.ovBody));
+});
+
+// TASK-510: Coming up.
+Given("an event {string} in {int} days at {word}", async function (name, days, time) {
+  const slug = `${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${randomBytes(3).toString("hex")}`;
+  await pool.query(
+    `INSERT INTO events (slug, name, gist, event_date, start_time, venue, town, booking_how, status, created_by, updated_by)
+     VALUES ($1, $2, 'A test event.', (now() AT TIME ZONE 'Europe/London')::date + $3::int, $4::time,
+             'Annbank Village Hall', 'Annbank', 'none', 'live', 'bdd', 'bdd')`,
+    [slug, name, days, time],
+  );
+});
+
+Then("{string} is coming up at {string}, with a button to {string}", function (text, when, button) {
+  const items = (this.ovBody.comingUp || []).flatMap((d) => d.items);
+  const item = items.find((i) => i.text === text);
+  assert.ok(item, JSON.stringify(this.ovBody.comingUp));
+  assert.equal(item.when, when);
+  assert.equal(item.button, button);
+});
+
+Then("nothing is coming up", function () {
+  assert.ok(Array.isArray(this.ovBody.comingUp), JSON.stringify(this.ovBody));
+  assert.deepEqual(this.ovBody.comingUp, []);
+  assert.deepEqual(this.ovBody.failed, []);
 });
 
 Then("it shows no numbers", function () {

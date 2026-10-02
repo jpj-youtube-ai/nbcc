@@ -773,6 +773,37 @@
     el("overviewNumbers").innerHTML = list.length ? numbersHtml(list) : "";
     el("ovNumbersCard").hidden = !list.length;
   }
+  // TASK-510: Coming up, the next 14 days by day, from src/admin/overview-coming-up.ts. Hidden when
+  // nothing this person may see is coming.
+  function comingHtml(days) {
+    var esc = H.escapeHtml;
+    return days
+      .map(function (d) {
+        return (
+          '<section class="ov-day">' +
+          '<h4 class="ov-day-label">' + esc(d.label) + "</h4>" +
+          '<ul class="ov-events">' +
+          (d.items || [])
+            .map(function (i) {
+              return (
+                '<li class="ov-event">' +
+                '<span class="ov-event-when">' + esc(i.when) + "</span>" +
+                '<span class="ov-event-text">' + esc(i.text) + "</span>" +
+                '<button type="button" class="admin-btn admin-btn--small ov-go" data-ov-view="' + esc(i.view) + '">' + esc(i.button) + "</button>" +
+                "</li>"
+              );
+            })
+            .join("") +
+          "</ul></section>"
+        );
+      })
+      .join("");
+  }
+  function showComing(days) {
+    var list = days || [];
+    el("overviewComing").innerHTML = list.length ? comingHtml(list) : "";
+    el("ovComingCard").hidden = !list.length;
+  }
   function overviewTime(iso) {
     var t = new Date(iso);
     if (isNaN(t.getTime())) return "";
@@ -789,12 +820,14 @@
       };
       el("overviewNeeds").addEventListener("click", openView);
       el("overviewNumbers").addEventListener("click", openView);
+      el("overviewComing").addEventListener("click", openView);
     }
     authFetch("/api/admin/overview")
       .then(okJson)
       .then(function (d) {
         el("overviewNeeds").innerHTML = needsHtml(d);
         showNumbers(d.numbers);
+        showComing(d.comingUp);
         el("overviewUpdated").textContent = overviewTime(d.updatedAt);
       })
       .catch(function (err) {
@@ -802,6 +835,7 @@
         el("overviewNeeds").innerHTML = unavailableHtml("The overview could not load. Open it again in a moment.");
         // Never last visit's numbers under a message that says nothing could load.
         showNumbers([]);
+        showComing([]);
         el("overviewUpdated").textContent = "";
       });
     authFetch("/api/admin/donations?limit=5")

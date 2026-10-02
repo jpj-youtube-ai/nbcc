@@ -31,11 +31,23 @@ const m = vi.hoisted(() => ({
   sumFundraisingCash: vi.fn(),
   sumBallTaken: vi.fn(),
   readWebsiteGlance: vi.fn(),
+  listAllEvents: vi.fn(),
+  listInflightJobs: vi.fn(),
+  getNewsletter: vi.fn(),
+  getReportSettings: vi.fn(),
+  scheduledSendExists: vi.fn(),
 }));
 vi.mock("../../src/db/admin-users", () => ({ getUserAuthRow: m.getUserAuthRow }));
 vi.mock("../../src/db/ball-transfer", () => ({ listAwaitingTransfers: m.listAwaitingTransfers }));
 vi.mock("../../src/db/ball", () => ({ getSettings: m.getSettings, listGuestProgress: m.listGuestProgress, getDashboard: m.getDashboard }));
-vi.mock("../../src/db/ball-report", () => ({ readSalesInputs: m.readSalesInputs }));
+vi.mock("../../src/db/ball-report", () => ({
+  readSalesInputs: m.readSalesInputs,
+  getReportSettings: m.getReportSettings,
+  scheduledSendExists: m.scheduledSendExists,
+}));
+vi.mock("../../src/db/events", () => ({ listAllEvents: m.listAllEvents }));
+vi.mock("../../src/db/newsletter-send-jobs", () => ({ listInflightJobs: m.listInflightJobs }));
+vi.mock("../../src/db/newsletters", () => ({ getNewsletter: m.getNewsletter }));
 vi.mock("../../src/db/overview-numbers", () => ({ sumDonations: m.sumDonations, sumFundraisingCash: m.sumFundraisingCash, sumBallTaken: m.sumBallTaken }));
 vi.mock("../../src/db/analytics-report", () => ({ readWebsiteGlance: m.readWebsiteGlance }));
 // The Ball's night, without the run up's email sending behind it.
@@ -128,6 +140,12 @@ beforeEach(() => {
   m.readSalesInputs.mockResolvedValue({ seatsSold: 212, totalSeats: 300, awaitingTransferSeats: 16 });
   m.getDashboard.mockResolvedValue({ totalPence: 1_840_000 });
   m.readWebsiteGlance.mockResolvedValue({ visitors: 1_240, visitorsBefore: 1_100, onNow: 3, topChannel: "search" });
+  // Coming up (TASK-510): nothing dated unless a test says so.
+  m.listAllEvents.mockResolvedValue([]);
+  m.listInflightJobs.mockResolvedValue([]);
+  m.getNewsletter.mockResolvedValue(null);
+  m.getReportSettings.mockResolvedValue({ reportOn: false, recipients: [] });
+  m.scheduledSendExists.mockResolvedValue(false);
 });
 
 describe("GET /api/admin/overview", () => {
@@ -280,5 +298,82 @@ describe("GET /api/admin/overview: the numbers (TASK-509)", () => {
     const res = await call(tokenFor("admin"));
     expect(numberKeys(res)).not.toContain("website");
     expect((res.body as Answer).failed).toEqual([]);
+  });
+});
+
+describe("GET /api/admin/overview: Coming up (TASK-510)", () => {
+  // Days from today in the UK, as YYYY-MM-DD.
+  const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  type Day = { day: string; label: string; items: Array<{ text: string; when: string; view: string; button: string }> };
+  const coming = (res: MockRes) => (res.body as Answer & { comingUp: Day[] }).comingUp;
+  const texts = (res: MockRes) => coming(res).flatMap((d) => d.items.map((i) => i.text));
+
+  beforeEach(() => {
+    m.listAllEvents.mockResolvedValue([
+      { name: "Quiz night", date: inDays(3), start: "19:30", timeTbc: false, status: "live" },
+      { name: "Far off", date: inDays(30), start: null, timeTbc: false, status: "live" },
+    ]);
+    m.listAllFundraisers.mockResolvedValue([
+      fundraiser({ id: 7, title: "Bake sale", eventDate: inDays(5), startTime: null, offListAt: null }),
+    ]);
+    m.listInflightJobs.mockResolvedValue([{ newsletterId: 9, status: "queued", scheduledAt: new Date(Date.now() + 2 * 86_400_000) }]);
+    m.getNewsletter.mockResolvedValue({ id: 9, subject: "October news" });
+  });
+
+  it("tells an admin what is coming in the next 14 days, in date order", async () => {
+    const res = await call(tokenFor("admin"));
+    expect(texts(res)).toEqual(["The newsletter goes out: October news", "Quiz night", "Bake sale (a fundraiser)"]);
+    expect(coming(res)[1]).toMatchObject({ day: inDays(3), items: [{ when: "7:30pm", view: "events", button: "Events" }] });
+    expect((res.body as Answer).failed).toEqual([]);
+  });
+
+  it("shows each thing only to someone who may see its screen, and never asks for the rest", async () => {
+    const res = await call(tokenFor("editor", { events: "view" }));
+    expect(texts(res)).toEqual(["Quiz night"]);
+    expect(m.listInflightJobs).not.toHaveBeenCalled();
+    expect(m.getSettings).not.toHaveBeenCalled();
+  });
+
+  // The ticket report's own screen needs Events and Festive Ball both.
+  it("gives the next ticket report only to someone who may see Events and the Festive Ball", async () => {
+    m.getReportSettings.mockResolvedValue({ reportOn: true, recipients: [{ email: "ivy@example.com", name: "Ivy" }] });
+    await call(tokenFor("editor", { ball: "view" }));
+    expect(m.getReportSettings).not.toHaveBeenCalled();
+    const res = await call(tokenFor("editor", { ball: "view", events: "view" }));
+    expect(m.getReportSettings).toHaveBeenCalled();
+    // The ticket report lives on the Events screen.
+    const report = coming(res).flatMap((d) => d.items).find((i) => i.text === "The Festive Ball ticket report goes out");
+    expect(report).toMatchObject({ view: "events", button: "Events", when: "8am" });
+  });
+
+  it("leaves the ticket report out while it is switched off", async () => {
+    const res = await call(tokenFor("admin"));
+    expect(texts(res)).not.toContain("The Festive Ball ticket report goes out");
+  });
+
+  it("lists the Festive Ball's dates that fall in the fortnight", async () => {
+    m.getSettings.mockResolvedValue({ guestDetailsLockAt: new Date(Date.now() + 4 * 86_400_000), salesCloseAt: null, gateOpensAt: null });
+    const res = await call(tokenFor("admin"));
+    expect(texts(res)).toContain("Festive Ball guest details and menu choices close");
+  });
+
+  it("gives the Ball's dates to someone who may see the Festive Ball but not Events", async () => {
+    m.getSettings.mockResolvedValue({ guestDetailsLockAt: new Date(Date.now() + 4 * 86_400_000), salesCloseAt: null, gateOpensAt: null });
+    const res = await call(tokenFor("editor", { ball: "view" }));
+    expect(texts(res)).toEqual(["Festive Ball guest details and menu choices close"]);
+  });
+
+  it("leaves out ticket sales closing once staff have closed them by hand", async () => {
+    m.getSettings.mockResolvedValue({ guestDetailsLockAt: null, salesCloseAt: new Date(Date.now() + 4 * 86_400_000), gateOpensAt: null, salesClosed: true });
+    const res = await call(tokenFor("admin"));
+    expect(texts(res)).not.toContain("Festive Ball ticket sales close");
+  });
+
+  it("names a part it could not check, and still shows the rest", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    m.listInflightJobs.mockRejectedValue(new Error("down"));
+    const res = await call(tokenFor("admin"));
+    expect((res.body as Answer).failed).toEqual(["Newsletter"]);
+    expect(texts(res)).toEqual(["Quiz night", "Bake sale (a fundraiser)"]);
   });
 });

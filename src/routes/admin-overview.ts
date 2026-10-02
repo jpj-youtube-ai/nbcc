@@ -1,14 +1,26 @@
 import { Router, type Request, type Response } from "express";
 import { authorizeAny, loadEffectivePermissions } from "./admin-authz";
 import { needsLines, type NeedCounts } from "../admin/overview";
-import { can } from "../admin/permissions";
+import { can, type Section } from "../admin/permissions";
 import { gather, type Source } from "../admin/overview-sources";
 import { giversFrom, monthSoFar, numbersLines, type NowAndBefore, type NumberCounts } from "../admin/overview-numbers";
 import { listAwaitingTransfers } from "../db/ball-transfer";
 import { isOverdue } from "../ball/transfer";
-import { londonDate } from "../ball/sales-report";
+import { londonDate, nextSendDay, REPORT_HOUR } from "../ball/sales-report";
+import {
+  ballDateItems,
+  comingUp,
+  eventItems,
+  fundraiserItems,
+  newsletterItems,
+  withoutListedNight,
+  type Upcoming,
+} from "../admin/overview-coming-up";
+import { listAllEvents } from "../db/events";
+import { listInflightJobs } from "../db/newsletter-send-jobs";
+import { getNewsletter } from "../db/newsletters";
 import { getDashboard, getSettings, listGuestProgress } from "../db/ball";
-import { readSalesInputs } from "../db/ball-report";
+import { getReportSettings, readSalesInputs, scheduledSendExists } from "../db/ball-report";
 import { BALL_EVENT_DATE } from "../ball/run-up-runner";
 import { daysToGo } from "../ball/sales-report";
 import { sumBallTaken, sumDonations, sumFundraisingCash } from "../db/overview-numbers";
@@ -59,7 +71,24 @@ type NumberReads = {
   ballSales?: NumberCounts["ball"];
   website?: NumberCounts["website"];
 };
-type OverviewCounts = NeedCounts & NumberReads;
+// TASK-510: Coming up, a list from each screen that has dates.
+type ComingReads = {
+  upEvents?: Upcoming[];
+  upFundraisers?: Upcoming[];
+  upNewsletters?: Upcoming[];
+  upReport?: Upcoming[];
+  upBall?: Upcoming[];
+};
+type OverviewCounts = NeedCounts & NumberReads & ComingReads;
+
+type Gate = { section: Section; level: "view" | "edit" };
+// Money in's parts and their gates, used both for the reads and for knowing whether every part a
+// person may see was read: one list, so the two cannot drift apart.
+const MONEY_GATES: Record<"donations" | "ball" | "fundraising", Gate> = {
+  donations: { section: "donations", level: "view" },
+  ball: { section: "ball", level: "view" },
+  fundraising: { section: "fundraising", level: "view" },
+};
 const count = (n: number) => ({ count: n });
 
 // The Festive Ball's guest details only become a "needs you" in the three weeks before they close.
@@ -199,12 +228,11 @@ function sources(email: string, now: Date): Source<OverviewCounts>[] {
     },
 
     // --- the numbers (TASK-509): how we are doing, each behind its own screen's gate ---------------
-    { name: "Donations", section: "donations", level: "view", read: async () => ({ moneyDonations: await sumDonations(months, false) }) },
-    { name: "Festive Ball", section: "ball", level: "view", read: async () => ({ moneyBall: await sumBallTaken(months) }) },
+    { name: "Donations", ...MONEY_GATES.donations, read: async () => ({ moneyDonations: await sumDonations(months, false) }) },
+    { name: "Festive Ball", ...MONEY_GATES.ball, read: async () => ({ moneyBall: await sumBallTaken(months) }) },
     {
       name: "Fundraising",
-      section: "fundraising",
-      level: "view",
+      ...MONEY_GATES.fundraising,
       read: async () => {
         // Gifts through the pages, and cash organisers paid in: the two halves of the meter.
         const online = await sumDonations(months, true);
@@ -241,6 +269,62 @@ function sources(email: string, now: Date): Source<OverviewCounts>[] {
         return website ? { website } : {};
       },
     },
+
+    // --- Coming up (TASK-510): the next 14 days, each behind its own screen's gate ------------------
+    { name: "Events", section: "events", level: "view", read: async () => ({ upEvents: eventItems(await listAllEvents()) }) },
+    {
+      name: "Fundraising",
+      section: "fundraising",
+      level: "view",
+      read: async () => ({ upFundraisers: fundraiserItems((await fundraisingData()).fundraisers) }),
+    },
+    {
+      name: "Newsletter",
+      section: "newsletter",
+      level: "view",
+      read: async () => {
+        const jobs = (await listInflightJobs()).filter((j) => j.status === "queued" && j.scheduledAt);
+        const rows = [];
+        // One after another: this source holds one connection.
+        for (const j of jobs) rows.push({ ...j, subject: (await getNewsletter(j.newsletterId))?.subject ?? "a newsletter" });
+        return { upNewsletters: newsletterItems(rows) };
+      },
+    },
+    {
+      // Worked out as the ticket report's own screen does, and gated as it is: Events and Festive Ball.
+      name: "Festive Ball",
+      section: "ball",
+      level: "view",
+      also: { section: "events", level: "view" },
+      read: async () => {
+        const settings = await getReportSettings();
+        if (!settings.reportOn || settings.recipients.length === 0) return {};
+        const day = nextSendDay({ now, eventDate: londonDate(BALL_EVENT_DATE), sentToday: await scheduledSendExists(londonDate(now)) });
+        if (!day) return {};
+        const time = `${String(REPORT_HOUR).padStart(2, "0")}:00`;
+        // The report's own panel is on the Events screen.
+        return { upReport: [{ day, time, text: "The Festive Ball ticket report goes out", view: "events", button: "Events" }] };
+      },
+    },
+    {
+      name: "Festive Ball",
+      section: "ball",
+      level: "view",
+      read: async () => {
+        const s = await getSettings();
+        return {
+          upBall: ballDateItems({
+            gateOpensAt: s.gateOpensAt ?? null,
+            salesCloseAt: s.salesCloseAt ?? null,
+            guestDetailsLockAt: s.guestDetailsLockAt ?? null,
+            night: BALL_EVENT_DATE,
+            gateOpen: s.gateOpen,
+            salesClosed: s.salesClosed,
+            now,
+          }),
+        };
+      },
+    },
   ];
 }
 
@@ -254,17 +338,29 @@ export async function getAdminOverview(req: Request, res: Response): Promise<Res
     const { counts: c, failed } = await gather(perms, sources(claims.email, now));
     // Money in only when every part this person may see was read: a total from the parts that
     // answered would read as all the money in. "Could not check" names the part that failed.
+    const may = (g: Gate) => can(perms, g.section, g.level);
     const moneyWhole =
-      (!can(perms, "donations", "view") || c.moneyDonations) &&
-      (!can(perms, "ball", "view") || c.moneyBall) &&
-      (!can(perms, "fundraising", "view") || c.moneyFundraising);
+      (!may(MONEY_GATES.donations) || c.moneyDonations) &&
+      (!may(MONEY_GATES.ball) || c.moneyBall) &&
+      (!may(MONEY_GATES.fundraising) || c.moneyFundraising);
     const numbers = numbersLines({
       money: moneyWhole ? { donations: c.moneyDonations, ball: c.moneyBall, fundraising: c.moneyFundraising } : undefined,
       monthly: c.givers,
       ball: c.ballSales,
       website: c.website,
     });
-    return res.status(200).json({ updatedAt: now.toISOString(), needs: needsLines(c), numbers, failed });
+    const coming = comingUp(
+      [
+        ...(c.upEvents ?? []),
+        ...(c.upFundraisers ?? []),
+        ...(c.upNewsletters ?? []),
+        ...(c.upReport ?? []),
+        // The night once, when the Events screen already has its own row for it.
+        ...withoutListedNight(c.upBall ?? [], c.upEvents ?? []),
+      ],
+      londonToday(now),
+    );
+    return res.status(200).json({ updatedAt: now.toISOString(), needs: needsLines(c), numbers, comingUp: coming, failed });
   } catch (err) {
     console.error("admin overview failed:", err instanceof Error ? err.message : err);
     return res.status(500).json({ error: "The overview could not load. Try again." });

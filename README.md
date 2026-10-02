@@ -6065,11 +6065,11 @@ there.** Everyone whose account is older than it sees a pill on that section unt
 - `features/whats-new.feature` covers two admins against a real database: one opens the
   Newsletter, and only theirs clears.
 
-## The admin Overview: Needs you (TASK-508) and How we are doing (TASK-509)
+## The admin Overview: Needs you (TASK-508), How we are doing (TASK-509) and Coming up (TASK-510)
 
 The Overview opens with **Needs you**: everything waiting on a person that they may see, most urgent
 first, each with a button to the screen that deals with it. Under it, **How we are doing** gives the
-numbers, one line each. The design, and the stage still to come (Coming up), are in
+numbers, one line each, and **Coming up** the next 14 days. The design is in
 `docs/superpowers/specs/2026-10-03-admin-overview-design.md`.
 
 - **Three levels**, marked by a dot (and said in words to a screen reader), in this order:
@@ -6136,7 +6136,28 @@ by `numbersLines` in `src/admin/overview-numbers.ts`:
 
 The numbers share the Needs you pass (`gather`), so the 3 at a time limit covers both, and a number
 that cannot be read is named in the same "Could not check". The card is hidden for someone who may
-see none of them.
+see none of them. Money in's gates are one list (`MONEY_GATES` in the route), used both for the reads
+and for knowing whether every part was read.
+
+**Coming up** (TASK-510): today and the 13 days after it, by day ("Today", "Tomorrow", "Wednesday 7
+October"), timed things first and earliest first, each with its UK time ("7:30pm") and a button to
+its screen (`comingUp` in `src/admin/overview-coming-up.ts`). Each source carries its screen's gate:
+
+- **Events** (Events: view): every event on the Events screen, a draft said to be one ("still a
+  draft"), and no time when it is still to be confirmed.
+- **Fundraisers' event days** (Fundraising: view): approved fundraisers still on the list. One read
+  of the sign ups serves this and Needs you.
+- **Newsletters going out at a set time** (Newsletter: view): queued sends with a time, in UK time.
+- **The next Festive Ball ticket report** (Events and Festive Ball: view, as its own screen needs;
+  a source's `also` gate): worked out with the screen's own `nextSendDay`, and only while the report
+  is switched on with someone to send to. Its button opens Events, where the report's panel is.
+- **The Festive Ball's dates** (Festive Ball: view): ticket sales open and close, guest details and
+  menu choices close, and the night itself, when they are set. A date already done by hand (sales
+  opened or closed early) or already past is left out, and the night is shown once when the Events
+  screen already lists the Festive Ball that day (`withoutListedNight`).
+
+The card is hidden when nothing this person may see is coming up, and a source that fails is named
+in "Could not check" like the rest.
 
 ## QR codes for every page (TASK-492)
 

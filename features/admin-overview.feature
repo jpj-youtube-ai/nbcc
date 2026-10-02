@@ -45,6 +45,16 @@ Feature: The admin Overview says what needs us (TASK-508)
     And this month's donations have not changed
     And last month's money has gone up by £40
 
+  # TASK-510: Coming up, the next 14 days. Every dated read runs against the real tables here.
+  Scenario: an event in three days is coming up, for whoever can see Events
+    Given an event "Overview test quiz" in 3 days at 19:30
+    When "ann.overview.admin.bdd@example.com" reads the overview
+    Then the overview answer is 200
+    And every number could be checked
+    And "Overview test quiz" is coming up at "7:30pm", with a button to "Events"
+    When "cal.overview.admin.bdd@example.com" reads the overview
+    Then nothing is coming up
+
   Scenario: someone who can see only the contact form sees none of the numbers
     When "cal.overview.admin.bdd@example.com" reads the overview
     Then the overview answer is 200

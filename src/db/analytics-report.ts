@@ -8,6 +8,8 @@
 import { pool } from "./pool";
 import { getCollecting } from "./analytics";
 import { labelQrScans } from "../site/qr";
+import { fundraiserTitles } from "./fundraiser-materials";
+import { labelScanCampaigns, parseScanCampaign } from "../fundraising/material-codes";
 import { SITE_PAGES } from "../site/pages";
 import {
   countriesFrom,
@@ -146,15 +148,31 @@ async function newsletterSubjects(ids: number[]): Promise<Map<number, string>> {
   return new Map(r.rows.map((row) => [row.id, row.subject]));
 }
 
+/**
+ * TASK-512: a fundraiser's printed piece is tagged f<id>-<size>; it is named for the fundraiser and
+ * the piece. Best effort: if the names cannot be read, the tags show as they are.
+ */
+async function fundraiserScanNames(rows: { campaign: string | null }[]): Promise<Map<string, string>> {
+  const ids = rows.map((r) => parseScanCampaign(r.campaign)?.id).filter((id): id is number => id !== undefined);
+  if (!ids.length) return new Map();
+  try {
+    return labelScanCampaigns(rows.map((r) => r.campaign), await fundraiserTitles(ids));
+  } catch (err) {
+    console.error("analytics: fundraiser scan names failed:", err instanceof Error ? err.message : err);
+    return new Map();
+  }
+}
+
 async function panels(p: Period): Promise<Panels> {
   const head = await headline(p);
+  const qrRows = await visitsBy<{ campaign: string | null; visits: number }>(p, "campaign", "channel = 'qr'");
   const campaigns = await visitsBy<{ campaign: string | null; visits: number }>(p, "campaign", "channel = 'newsletter'");
   return {
     headline: headlineFrom(head),
     daily: await daily(p),
     channels: await visitsBy<Panels["channels"][number]>(p, "channel", "true"),
     otherWebsites: await visitsBy<Panels["otherWebsites"][number]>(p, "source", "channel = 'other_websites' AND source IS NOT NULL"),
-    qrCodes: labelQrScans(await visitsBy<{ campaign: string | null; visits: number }>(p, "campaign", "channel = 'qr'"), SITE_PAGES),
+    qrCodes: labelQrScans(qrRows, SITE_PAGES, await fundraiserScanNames(qrRows)),
     newsletters: labelNewsletters(campaigns, await newsletterSubjects(newsletterIds(campaigns))),
     cities: await visitorsBy<Panels["cities"][number]>(p, "city, region, country", "city IS NOT NULL"),
     countries: countriesFrom(await visitorsBy<{ country: string; visitors: number }>(p, "upper(country) AS country", "country IS NOT NULL", 300)),

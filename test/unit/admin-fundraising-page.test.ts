@@ -95,6 +95,8 @@ let cashRows: Record<number, Rec[]> = {};
 let wallRows: Record<number, Wall[]> = {};
 let waiting: Record<number, Rec | null> = {};
 let historyRows: Record<number, unknown[]> = {};
+// TASK-512: each fundraiser's QR code scans per printed piece.
+let scanRows: Record<number, unknown> = {};
 let online: Record<number, number> = {};
 let settings: { pageOn: boolean; updatedAt: string | null; updatedBy: string | null; liveEmailsWaiting?: number } = {
   pageOn: false,
@@ -179,6 +181,7 @@ function respond(url: string, init?: { method?: string; body?: string }) {
     return j({ fundraiser: f });
   }
   if (rest === "/history") return j({ history: historyRows[id] || [] });
+  if (rest === "/scans") return scanRows[id] ? j(scanRows[id]) : j({ error: "not here" }, 404);
   // TASK-504: a piece of its materials, a whole HTML page.
   const mat = rest.match(/^\/materials\/([a-z-]+)$/);
   if (mat && method === "GET") {
@@ -271,6 +274,7 @@ beforeEach(() => {
   wallRows = {};
   waiting = {};
   historyRows = {};
+  scanRows = {};
   online = {};
   settings = { pageOn: false, updatedAt: null, updatedBy: null };
   perms = effectivePermissions({ role: "admin", permissions: null });
@@ -1901,11 +1905,13 @@ describe("its materials", () => {
 
   const buttons = () => qa("#frList [data-frmaterial]").map((b) => b.getAttribute("data-frmaterial"));
 
-  it("offers the poster, pictures, sponsor form and a certificate preview for an approved one", async () => {
+  it("offers the posters, leaflet, pictures, sponsor form, a certificate preview and everything at once for an approved one", async () => {
     records = [fundraiser(1, { status: "approved", pageUrl: "https://nbcc.scot/fundraise/test-dash-1" })];
     await openFundraising();
     await openRow(1);
-    expect(buttons()).toEqual(["poster", "social", "sponsor-form", "certificate"]);
+    // TASK-512: the A3 poster, the A5 leaflet, and Download everything.
+    expect(buttons()).toEqual(["everything", "poster", "poster-a3", "leaflet", "social", "sponsor-form", "certificate"]);
+    expect(text(q('#frList [data-frmaterial="everything"]'))).toBe("Download everything");
     expect(text(q('#frList [data-frmaterial="certificate"]'))).toContain("preview");
   });
 
@@ -1954,4 +1960,88 @@ describe("its materials", () => {
     expect(png.getAttribute("href")).toBe("/fundraise/test-dash-1/qr.png");
     expect(png.getAttribute("download")).toBe("qr-test-dash-1.png");
   });
+});
+
+// TASK-512: Download everything, the scans of each printed piece's QR code, and an organiser's ask to
+// print in the History.
+describe("materials, round two", () => {
+  let tabs: Array<{ closed: boolean; location: { href: string } }>;
+  beforeEach(() => {
+    tabs = [];
+    window.open = (() => {
+      const tab = { closed: false, location: { href: "" }, document: { title: "", body: { textContent: "" } }, close: () => (tab.closed = true) };
+      tabs.push(tab);
+      return tab;
+    }) as unknown as typeof window.open;
+    URL.createObjectURL = (() => "blob:nbcc.test/everything") as typeof URL.createObjectURL;
+    URL.revokeObjectURL = () => undefined;
+  });
+
+  it("Download everything opens the one print page in its own tab", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    await openFundraising();
+    await openRow(1);
+    (q('#frList [data-frmaterial="everything"]') as HTMLButtonElement).click();
+    await settle();
+    expect(sent("GET", "/api/admin/fundraisers/1/materials/everything").length).toBe(1);
+    expect(tabs[0].location.href).toBe("blob:nbcc.test/everything");
+  });
+
+  it("shows how many times each printed piece's QR code was scanned", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    scanRows = {
+      1: {
+        scans: [
+          { piece: "poster", code: "a4", label: "A4 poster", scans: 7, link: "https://nbcc.scot/q/1-a4" },
+          { piece: "poster-a3", code: "a3", label: "A3 poster", scans: 0, link: "https://nbcc.scot/q/1-a3" },
+          { piece: "leaflet", code: "a5", label: "A5 leaflet", scans: 1, link: "https://nbcc.scot/q/1-a5" },
+        ],
+        total: 8,
+      },
+    };
+    await openFundraising();
+    await openRow(1);
+    await settle();
+    const box = text(el("frScans"));
+    expect(box).toContain("A4 poster: 7 scans");
+    expect(box).toContain("A3 poster: none yet");
+    expect(box).toContain("A5 leaflet: 1 scan");
+  });
+
+  it("says so when the scans cannot load, and the rest still works", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    await openFundraising();
+    await openRow(1);
+    await settle();
+    expect(text(el("frScans"))).toMatch(/could not load/i);
+    expect(buttons2()).toContain("poster");
+  });
+
+  it("shows no scans for a sign up that is not approved", async () => {
+    records = [fundraiser(1, { status: "new" })];
+    await openFundraising();
+    await openRow(1);
+    await settle();
+    expect(el("frScans")).toBeNull();
+  });
+
+  it("names an organiser's ask to print in the History", async () => {
+    records = [fundraiser(1, { status: "approved" })];
+    historyRows = {
+      1: [
+        {
+          id: 4,
+          actor: "organiser:sam@example.com",
+          action: "fundraiser.print_requested",
+          data: { words: "Posters: they asked us to print 10 A4 posters and 2 A3 posters" },
+          createdAt: "2026-10-03T09:00:00.000Z",
+        },
+      ],
+    };
+    await openFundraising();
+    await openRow(1);
+    expect(text(el("frHistory"))).toContain("Posters: they asked us to print 10 A4 posters and 2 A3 posters");
+  });
+
+  const buttons2 = () => qa("#frList [data-frmaterial]").map((b) => b.getAttribute("data-frmaterial"));
 });

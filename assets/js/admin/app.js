@@ -9052,6 +9052,7 @@
   var frDetail = null; // GET /api/admin/fundraisers/:id for the open one
   var frDetailFailed = false;
   var frHistoryRows = null; // null loading, false failed, else the rows
+  var frScans = null; // TASK-512: GET /api/admin/fundraisers/:id/scans; null loading, false failed
   var frMore = {}; // list, wall, history -> showing everything
   var frNotice = {}; // detail, edit, cash, photo -> { msg, error }: said once after an action
   var frEditDraft = null; // the edit form's boxes someone typed in (name -> value), so a redraw keeps them
@@ -9110,7 +9111,7 @@
     var a = String(actor || "");
     if (a.indexOf("admin:") === 0) return a.slice(6);
     if (a === "public") return "the sign up form";
-    if (a === "organiser") return "the organiser";
+    if (a === "organiser" || a.indexOf("organiser:") === 0) return "the organiser"; // TASK-512: "organiser:<email>"
     if (a === "stripe") return "a gift by card";
     return a || "unknown";
   }
@@ -9223,6 +9224,7 @@
         frRenderList();
         frLoadHistory(id);
         frLoadNews(id); // TASK-506
+        if (d && d.fundraiser && (d.fundraiser.status === "approved" || d.fundraiser.status === "finished")) frLoadScans(id); // TASK-512
       })
       .catch(function (err) {
         if (err && err.message === "unauthorized") return;
@@ -9231,6 +9233,42 @@
         frDetailFailed = true;
         frRenderList();
       });
+  }
+
+  // TASK-512: how many times each printed piece's own QR code was scanned (the site's visit counter
+  // counts them; src/fundraising/material-codes.ts). Best effort: the rest of the detail never waits.
+  function frLoadScans(id) {
+    return authFetch("/api/admin/fundraisers/" + encodeURIComponent(id) + "/scans")
+      .then(okJson)
+      .then(function (d) {
+        if (frOpenId !== id) return;
+        frScans = d && Array.isArray(d.scans) ? d.scans : false;
+        frPaintScans();
+      })
+      .catch(function (err) {
+        if (err && err.message === "unauthorized") return;
+        if (frOpenId !== id) return;
+        frScans = false;
+        frPaintScans();
+      });
+  }
+
+  function frPaintScans() {
+    var box = el("frScans");
+    if (!box) return;
+    if (frScans === null) {
+      box.innerHTML = '<span class="admin-loading">Loading…</span>';
+      return;
+    }
+    if (frScans === false) {
+      box.innerHTML = '<span class="fx-empty">The scans could not load just now.</span>';
+      return;
+    }
+    box.innerHTML = '<ul class="fr-scans">' + frScans.map(function (s) {
+      var n = Number(s.scans) || 0;
+      var words = n === 0 ? "none yet" : n === 1 ? "1 scan" : n + " scans";
+      return "<li>" + H.escapeHtml(String(s.label || "") + ": " + words) + "</li>";
+    }).join("") + "</ul>";
   }
 
   function frLoadHistory(id) {
@@ -9465,6 +9503,7 @@
     frPaintThanks(); // TASK-507
     frPaintHistory();
     frPaintNews(); // TASK-506
+    frPaintScans(); // TASK-512
     frRestDetail();
     frRestoreFocus(wrap);
   }
@@ -9475,6 +9514,7 @@
     frDetail = null;
     frDetailFailed = false;
     frHistoryRows = null;
+    frScans = null;
     frMore = { list: frMore.list };
     frNotice = {};
     frEditDraft = null;
@@ -9568,11 +9608,19 @@
     // its own tab (frOpenMaterial). The certificate is the organiser's once finished; before then
     // staff can preview it.
     if (f.status === "approved" || f.status === "finished") {
-      var mats = [["poster", "Poster"], ["social", "Pictures to share"], ["sponsor-form", "Sponsor form"],
-        ["certificate", f.status === "finished" ? "Certificate of thanks" : "Certificate (preview)"]];
-      rows += fulfilRow("Materials", '<span class="fr-materials-admin">' + mats.map(function (m) {
-        return '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frmaterial="' + m[0] + '">' + H.escapeHtml(m[1]) + "</button>";
-      }).join("") + "</span>" + '<span class="fr-field-hint">Made from the approved details. Each opens in a new tab, ready to print.</span>');
+      // TASK-512: the A3 poster and the A5 leaflet, and Download everything first: every printed
+      // piece on one page to print or save as one PDF, with every picture as a zip.
+      var mats = [["poster", "Poster, A4"], ["poster-a3", "Poster, A3"], ["leaflet", "Leaflet, A5"], ["social", "Pictures to share"],
+        ["sponsor-form", "Sponsor form"], ["certificate", f.status === "finished" ? "Certificate of thanks" : "Certificate (preview)"]];
+      rows += fulfilRow("Materials", '<span class="fr-materials-admin">' +
+        '<button class="admin-btn admin-btn--small" type="button" data-frmaterial="everything">Download everything</button>' +
+        mats.map(function (m) {
+          return '<button class="admin-btn admin-btn--small fr-btn-quiet" type="button" data-frmaterial="' + m[0] + '">' + H.escapeHtml(m[1]) + "</button>";
+        }).join("") + "</span>" +
+        '<span class="fr-field-hint">Made from the approved details. Each opens in a new tab, ready to print. Download everything puts every printed piece on one page, to print or save as one PDF, with every picture to share as a zip.</span>');
+      // TASK-512: each printed piece has its own QR code, so its scans are counted apart.
+      rows += fulfilRow("QR code scans", '<div id="frScans" class="fr-scans-box"></div>' +
+        '<span class="fr-field-hint">Each poster and leaflet has its own QR code. Counted once per person a day, by our visitor counter, so people who ask not to be counted are not.</span>');
     }
     var actions = "";
     if (write) {
@@ -10066,6 +10114,8 @@
     "fundraiser.news_rejected": "News update not used",
     "fundraiser.news_hidden": "News update hidden from the page",
     "fundraiser.news_shown": "News update shown on the page again",
+    // TASK-512: "Ask us to print these" in their private area.
+    "fundraiser.print_requested": "The organiser asked us to print some",
   };
 
   function frPaintHistory() {
@@ -10092,7 +10142,7 @@
         if (h.action === "fundraiser.cash_added") what = "Cash added: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.cash_removed" && data.amountPence) what = "Cash removed: " + frMoney(data.amountPence);
         if (h.action === "fundraiser.called") what = data.which === "after" ? "Called, a week after its date" : "Called, a week before its date";
-        if (h.action === "fundraiser.request_updated" && typeof data.words === "string" && data.words) what = data.words;
+        if ((h.action === "fundraiser.request_updated" || h.action === "fundraiser.print_requested") && typeof data.words === "string" && data.words) what = data.words;
         var said = h.action === "fundraiser.declined" || h.action === "fundraiser.news_rejected" ? data.reason : h.action === "fundraiser.called" ? data.note : "";
         var note = said ? '<span class="fx-hist-note">' + H.escapeHtml(said) + "</span>" : "";
         return '<li><span class="fx-hist-what">' + H.escapeHtml(what) + "</span>" +

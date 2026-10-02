@@ -46,6 +46,8 @@ vi.mock("../../src/db/fundraisers", async () => {
 });
 vi.mock("../../src/db/fundraiser-sign-in", () => signIn);
 vi.mock("../../src/db/fundraising-requests", () => requestsDb);
+// TASK-512: the organiser's last asks to print, read back from the audit log.
+vi.mock("../../src/db/fundraiser-materials", () => ({ lastPrintAsks: vi.fn(async () => []), materialScans: vi.fn(), askToPrint: vi.fn(), PrintAskError: Error }));
 vi.mock("../../src/fundraising/send", () => send);
 vi.mock("../../src/newsletter/self-signup", () => ({ subscribeSelf: vi.fn() }));
 vi.mock("../../src/clients/turnstile", () => ({ captchaEnabled: () => false, captchaSiteKey: () => null, verifyCaptcha: vi.fn() }));
@@ -677,6 +679,9 @@ describe("your materials", () => {
     const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<Record<string, unknown>> }).fundraisers[0];
     expect(f.materials).toEqual({
       poster: at(9, "poster"),
+      // TASK-512: the same poster on A3, and as an A5 leaflet.
+      posterA3: at(9, "poster-a3"),
+      leaflet: at(9, "leaflet"),
       social: at(9, "social"),
       sponsorForm: at(9, "sponsor-form"),
       certificate: null,
@@ -688,6 +693,25 @@ describe("your materials", () => {
     db.listForOrganiser.mockResolvedValue([record({ status: "finished" })]);
     const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<{ materials: Record<string, unknown> }> }).fundraisers[0];
     expect(f.materials.certificate).toBe(at(9, "certificate"));
+  });
+
+  // TASK-512: "Ask us to print these": whether they can ask, and where each ask is up to.
+  it("says whether they can ask us to print, and where their posters and leaflets are up to", async () => {
+    requestsDb.listRequestRowsFor.mockResolvedValue([]);
+    db.listForOrganiser.mockResolvedValue([record({ eventDate: "2099-12-05", wants: { ...record().wants, posterCount: 0, leafletCount: 40 } })]);
+    const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<Record<string, unknown>> }).fundraisers[0];
+    expect(f.print).toEqual({
+      canAsk: true,
+      posters: null,
+      leaflets: { asked: 40, words: "You asked for 40 leaflets. We're getting them ready.", status: "to_send" },
+    });
+  });
+
+  it("cannot ask once finished", async () => {
+    requestsDb.listRequestRowsFor.mockResolvedValue([]);
+    db.listForOrganiser.mockResolvedValue([record({ status: "finished" })]);
+    const f = ((await run(getManageSession, { cookie: SAM })).body as { fundraisers: Array<{ print: { canAsk: boolean } }> }).fundraisers[0];
+    expect(f.print.canAsk).toBe(false);
   });
 
   it("gives one with no page its poster and sponsor form, but no QR code to download", async () => {

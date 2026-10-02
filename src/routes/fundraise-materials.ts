@@ -1,13 +1,19 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { authorizeSection } from "./admin-authz";
 import { fundraisingIsOn, getFundraiser } from "../db/fundraisers";
 import { findSession } from "../db/fundraiser-sign-in";
-import { SESSION_COOKIE, hashSessionId } from "../fundraising/sign-in";
+import { askToPrint, lastPrintAsks, materialScans, PrintAskError } from "../db/fundraiser-materials";
+import { listRequestRowsFor } from "../db/fundraising-requests";
+import { SESSION_COOKIE, hashSessionId, sentFromOurOwnPage } from "../fundraising/sign-in";
 import { fundraiserPageUrl, siteUrl } from "../fundraising/send";
 import { readCookie } from "../ball/gate";
 import { dateParts } from "../events/render";
 import { londonToday } from "../events/model";
+import { createRateLimiter } from "../portal/request-limiter";
 import type { FundraiserRecord, Meter } from "../fundraising/model";
+import { materialScanCounts, parseShortCode, scanTarget, trackedPath } from "../fundraising/material-codes";
+import { printAskSchema, printStatus, type PrintStatus } from "../fundraising/print-requests";
+import { parseWants, type RequestRow } from "../fundraising/requests";
 import {
   MATERIALS,
   materialAllowed,
@@ -15,6 +21,7 @@ import {
   materialFacts,
   materialsMessagePage,
   renderCertificate,
+  renderEverything,
   renderPoster,
   renderSocial,
   renderSponsorForm,
@@ -28,7 +35,8 @@ import {
 //   GET /api/fundraise/manage/fundraisers/:id/materials/:piece   the signed in organiser, their own
 //   GET /api/admin/fundraisers/:id/materials/:piece              staff with fundraising: view
 //
-// :piece is poster, social, sponsor-form or certificate. Each answer is a whole HTML page.
+// :piece is poster, poster-a3, leaflet (TASK-512), social, sponsor-form or certificate. Each answer
+// is a whole HTML page. Staff also have `everything` (TASK-512): every printed piece on one page.
 //
 // The organiser's address sits under /api/fundraise/manage because that is where their session
 // cookie goes (src/fundraising/sign-in.ts scopes it there), so a plain link from the private area
@@ -44,6 +52,18 @@ import {
 // Every piece is drawn from the stored record, which is the APPROVED version: a change an organiser
 // has asked for waits in fundraiser_edits and is never read here. Never kept, never indexed, and
 // never handed to another website as a referrer.
+//
+// TASK-512, round two, also here:
+//
+//   GET  /q/:code                                               a printed piece's own QR code
+//   GET  /api/admin/fundraisers/:id/scans                       its scans per printed piece (staff, view)
+//   POST /api/fundraise/manage/fundraisers/:id/print-request    "Ask us to print these" (the organiser)
+//
+// /q/<id>-<size> (src/fundraising/material-codes.ts) answers with a 302 to wherever the fundraiser
+// is now, found by its id, so it keeps working for good, whatever its page's address becomes. Never
+// kept by a browser, so a change of address is followed at once. Anything that is not one of ours,
+// or a fundraiser with nowhere to show, falls through to the site's own 404 page. The scan is counted
+// by the visit counter on the page it lands on (the utm tags the link adds), as every QR code is.
 
 export const fundraiseMaterialsRouter = Router();
 
@@ -63,7 +83,9 @@ function html(res: Response, status: number, body: string): Response {
 const notThere = (res: Response) =>
   html(res, 404, materialsMessagePage("Not found", "We could not find that. It may not be ready yet.", { href: "/fundraise/manage", text: "Go to your fundraising area" }));
 
-function pieceOf(raw: unknown): MaterialPiece | null {
+/** One of the pieces; `everything` too, for staff. */
+function pieceOf(raw: unknown, who: Who): MaterialPiece | "everything" | null {
+  if (who === "staff" && raw === "everything") return "everything";
   return (MATERIALS as readonly string[]).includes(String(raw)) ? (raw as MaterialPiece) : null;
 }
 
@@ -81,32 +103,44 @@ function todayInWords(now: Date): string {
 }
 
 /** Draw one piece of one fundraiser. */
-export function buildMaterial(piece: MaterialPiece, f: Loaded, who: Who, now: Date = new Date()): string {
+export function buildMaterial(piece: MaterialPiece | "everything", f: Loaded, who: Who, now: Date = new Date()): string {
   const facts = materialFacts(f, f.meter, { pageUrl: fundraiserPageUrl(f.slug), getInvolvedUrl: siteUrl("/get-involved") });
   const assets = materialAssets();
   switch (piece) {
     case "poster":
-      return renderPoster(facts, assets);
+      return renderPoster(facts, assets, "a4");
+    case "poster-a3":
+      return renderPoster(facts, assets, "a3");
+    case "leaflet":
+      return renderPoster(facts, assets, "a5");
     case "social":
       return renderSocial(facts, assets, socialScript());
     case "sponsor-form":
       return renderSponsorForm(facts, assets);
     case "certificate":
       return renderCertificate(facts, assets, { date: todayInWords(now), preview: who === "staff" && f.status !== "finished" });
+    case "everything":
+      return renderEverything(facts, assets, { date: todayInWords(now), script: socialScript() });
   }
+}
+
+/** The signed in organiser's email, from their session cookie, or null. */
+async function organiserEmail(req: Request): Promise<string | null> {
+  const raw = readCookie(req.headers.cookie, SESSION_COOKIE);
+  const sessionId = raw && raw.length <= 100 && /^[A-Za-z0-9_-]+$/.test(raw) ? raw : null;
+  const session = sessionId ? await findSession(hashSessionId(sessionId)) : null;
+  return session ? session.email.trim().toLowerCase() : null;
 }
 
 export async function getOrganiserMaterial(req: Request, res: Response): Promise<Response> {
   privatePage(res);
   try {
     if (!(await fundraisingIsOn())) return notThere(res);
-    const piece = pieceOf(req.params.piece);
+    const piece = pieceOf(req.params.piece, "organiser");
     const id = idOf(req.params.id);
-    if (!piece || !id) return notThere(res);
-    const raw = readCookie(req.headers.cookie, SESSION_COOKIE);
-    const sessionId = raw && raw.length <= 100 && /^[A-Za-z0-9_-]+$/.test(raw) ? raw : null;
-    const session = sessionId ? await findSession(hashSessionId(sessionId)) : null;
-    if (!session) {
+    if (!piece || piece === "everything" || !id) return notThere(res);
+    const email = await organiserEmail(req);
+    if (!email) {
       return html(
         res,
         401,
@@ -117,7 +151,7 @@ export async function getOrganiserMaterial(req: Request, res: Response): Promise
       );
     }
     const f = await getFundraiser(id);
-    if (!f || f.email.trim().toLowerCase() !== session.email.trim().toLowerCase()) return notThere(res);
+    if (!f || f.email.trim().toLowerCase() !== email) return notThere(res);
     if (!materialAllowed(piece, f.status, "organiser")) return notThere(res);
     return html(res, 200, buildMaterial(piece, f, "organiser"));
   } catch (err) {
@@ -130,11 +164,13 @@ export async function getStaffMaterial(req: Request, res: Response): Promise<Res
   if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
   privatePage(res);
   try {
-    const piece = pieceOf(req.params.piece);
+    const piece = pieceOf(req.params.piece, "staff");
     const id = idOf(req.params.id);
     if (!piece || !id) return notThere(res);
     const f = await getFundraiser(id);
-    if (!f || !materialAllowed(piece, f.status, "staff")) return notThere(res);
+    // Everything follows the poster's rule: approved or finished. The certificate inside it only
+    // once finished (renderEverything).
+    if (!f || !materialAllowed(piece === "everything" ? "poster" : piece, f.status, "staff")) return notThere(res);
     return html(res, 200, buildMaterial(piece, f, "staff"));
   } catch (err) {
     console.error("admin fundraising materials failed:", err instanceof Error ? err.message : err);
@@ -142,5 +178,108 @@ export async function getStaffMaterial(req: Request, res: Response): Promise<Res
   }
 }
 
+// --- a printed piece's own QR code (TASK-512) ---------------------------------------------------------
+
+export async function getShortLink(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const parsed = parseShortCode(req.params.code);
+    if (!parsed || !(await fundraisingIsOn())) return next();
+    const f = await getFundraiser(parsed.id);
+    const target = f ? scanTarget(f, parsed.code) : null;
+    if (!target) return next();
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Robots-Tag", "noindex, nofollow");
+    res.redirect(302, target);
+  } catch (err) {
+    console.error("fundraising short link failed:", err instanceof Error ? err.message : err);
+    next();
+  }
+}
+
+// --- scans per printed piece, for staff (TASK-512) -------------------------------------------------
+
+export async function getMaterialScans(req: Request, res: Response): Promise<Response | void> {
+  if (!(await authorizeSection(req, res, "fundraising", "view"))) return;
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const id = idOf(req.params.id);
+    const f = id ? await getFundraiser(id) : null;
+    if (!id || !f) return res.status(404).json({ error: "Not found" });
+    const scans = materialScanCounts(id, await materialScans(id)).map((s) => ({ ...s, link: siteUrl(trackedPath(id, s.piece)) }));
+    return res.status(200).json({ scans, total: scans.reduce((n, s) => n + s.scans, 0) });
+  } catch (err) {
+    console.error("admin fundraising scans failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "The scans could not load just now." });
+  }
+}
+
+// --- "Ask us to print these", for the organiser (TASK-512) --------------------------------------------
+
+// 10 asks an hour for one signed in organiser: room to change their mind, never a flood. Not lifted
+// for requests from the box itself: nothing in the BDD suite asks more than a couple of times.
+const printAskLimiter = createRateLimiter({ max: 10, windowMs: 60 * 60_000 });
+
+/** Where their posters and leaflets are up to, for their private area. Best effort: null on a failure. */
+export async function printStatusFor(
+  f: FundraiserRecord,
+  today: string,
+  read: Promise<RequestRow[]> = listRequestRowsFor(f.id),
+): Promise<PrintStatus | null> {
+  try {
+    const [rows, last] = await Promise.all([read, lastPrintAsks(f.id)]);
+    // As stored, old keys and odd values read as none (parseWants), as the requests read them.
+    return printStatus({ ...f, wants: parseWants(f.wants) }, rows, last, today);
+  } catch (err) {
+    console.error("fundraise print status read failed:", err instanceof Error ? err.message : err);
+    return null;
+  }
+}
+
+type Headers = Record<string, string | string[] | undefined>;
+const header = (req: Request, name: string): string | undefined => {
+  const v = (req.headers as Headers)[name];
+  return Array.isArray(v) ? v[0] : v;
+};
+
+function fieldErrors(issues: { path: (string | number)[]; message: string }[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const issue of issues) {
+    const key = issue.path.join(".") || "form";
+    if (!(key in out)) out[key] = issue.message;
+  }
+  return out;
+}
+
+export async function postPrintRequest(req: Request, res: Response): Promise<Response> {
+  res.setHeader("Cache-Control", "no-store");
+  if (!sentFromOurOwnPage({ secFetchSite: header(req, "sec-fetch-site"), origin: header(req, "origin") }, header(req, "host") ?? "")) {
+    return res.status(403).json({ error: "Please use the form on our website." });
+  }
+  try {
+    if (!(await fundraisingIsOn())) return res.status(404).json({ error: "Not found" });
+    const email = await organiserEmail(req);
+    if (!email) return res.status(401).json({ error: "Please sign in again." });
+    const id = idOf(req.params.id);
+    const f = id ? await getFundraiser(id) : null;
+    if (!id || !f || f.email.trim().toLowerCase() !== email) return res.status(404).json({ error: "Not found" });
+    if (!printAskLimiter.allow(email, Date.now())) {
+      return res.status(429).json({ error: "You have asked a lot of times just now. Please wait a while, or give us a call on 01292 811 015." });
+    }
+    const parsed = printAskSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Please check how many you would like.", fields: fieldErrors(parsed.error.issues) });
+    const today = londonToday(new Date());
+    await askToPrint(id, parsed.data, `organiser:${email}`, today);
+    const fresh = (await getFundraiser(id)) ?? f;
+    return res.status(200).json({ status: "asked", print: await printStatusFor(fresh, today) });
+  } catch (err) {
+    if (err instanceof PrintAskError) return res.status(409).json({ error: err.message });
+    console.error("fundraise print request failed:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "We could not take that just now. Please try again in a few minutes." });
+  }
+}
+
 fundraiseMaterialsRouter.get("/api/fundraise/manage/fundraisers/:id/materials/:piece", getOrganiserMaterial);
 fundraiseMaterialsRouter.get("/api/admin/fundraisers/:id/materials/:piece", getStaffMaterial);
+fundraiseMaterialsRouter.get("/api/admin/fundraisers/:id/scans", getMaterialScans);
+fundraiseMaterialsRouter.post("/api/fundraise/manage/fundraisers/:id/print-request", postPrintRequest);
+fundraiseMaterialsRouter.get("/q/:code", getShortLink);

@@ -177,12 +177,49 @@
                 <h3 id="mineMaterialsHeading">Your materials</h3>
                 <p>Ready to print and share, made from your approved details. Each one opens in a new tab.</p>
                 <ul class="fr-materials" role="list">
-                  <li data-f-mat="poster"><a href="/" target="_blank" rel="noopener">Your poster</a><span>A4, with your QR code</span></li>
-                  <li data-f-mat="social"><a href="/" target="_blank" rel="noopener">Pictures to share</a><span>For Facebook and Instagram</span></li>
+                  <!-- TASK-512: the poster on A4 and A3, and the A5 leaflet, each with "Ask us to print
+                       these" beside it. Each size has its own QR code, so we can see which is scanned. -->
+                  <li class="fr-mat-print">
+                    <div class="fr-mat-print__pieces">
+                      <span data-f-mat="poster"><a href="/" target="_blank" rel="noopener">Your A4 poster</a></span>
+                      <span data-f-mat="posterA3"><a href="/" target="_blank" rel="noopener">Your A3 poster</a></span>
+                    </div>
+                    <span class="fr-mat-print__about">With your own QR code. Each size has its own, so we can see which one people scan.</span>
+                    <form class="fr-print" data-f-print="posters" novalidate hidden>
+                      <fieldset>
+                        <legend>Ask us to print these</legend>
+                        <div class="fr-print__row">
+                          <span class="fr-print__count"><label for="printCountA4">A4 posters</label><input class="give-field-input" id="printCountA4" type="number" name="a4" min="0" max="100" step="1" inputmode="numeric" /></span>
+                          <span class="fr-print__count"><label for="printCountA3">A3 posters</label><input class="give-field-input" id="printCountA3" type="number" name="a3" min="0" max="50" step="1" inputmode="numeric" /></span>
+                          <button class="btn btn-secondary fr-print__go" type="submit">Ask us to print these</button>
+                        </div>
+                      </fieldset>
+                      <p class="form-status" role="status" aria-live="polite" data-f-print-status></p>
+                    </form>
+                  </li>
+                  <li class="fr-mat-print">
+                    <div class="fr-mat-print__pieces">
+                      <span data-f-mat="leaflet"><a href="/" target="_blank" rel="noopener">Your A5 leaflet</a></span>
+                    </div>
+                    <span class="fr-mat-print__about">The same as your poster, smaller, to hand out or put through doors.</span>
+                    <form class="fr-print" data-f-print="leaflets" novalidate hidden>
+                      <fieldset>
+                        <legend>Ask us to print these</legend>
+                        <div class="fr-print__row">
+                          <span class="fr-print__count"><label for="printCountA5">A5 leaflets</label><input class="give-field-input" id="printCountA5" type="number" name="a5" min="1" max="500" step="1" inputmode="numeric" /></span>
+                          <button class="btn btn-secondary fr-print__go" type="submit">Ask us to print these</button>
+                        </div>
+                      </fieldset>
+                      <p class="form-status" role="status" aria-live="polite" data-f-print-status></p>
+                    </form>
+                  </li>
+                  <li data-f-mat="social"><a href="/" target="_blank" rel="noopener">Pictures to share</a><span>In five sizes, for Facebook and Instagram</span></li>
                   <li data-f-mat="sponsorForm"><a href="/" target="_blank" rel="noopener">Your sponsor form</a><span>A4, with the Gift Aid boxes</span></li>
                   <li data-f-mat="certificate" hidden><a href="/" target="_blank" rel="noopener">Your certificate of thanks</a><span>For everything you raised</span></li>
-                  <li data-f-mat="logos"><a href="/fundraise/logos" target="_blank" rel="noopener">Our logos</a><span>For your own designs</span></li>
+                  <li data-f-mat="logos"><a href="/fundraise/logos" target="_blank" rel="noopener">Our logos</a><span>To show you are fundraising for NBCC</span></li>
                 </ul>
+                <p class="fr-print-closed" data-f-print-closed hidden>Your fundraiser has finished or its day has passed, so we can&rsquo;t take an order to print online. If you still need some, give us a call on <a href="tel:+441292811015">01292 811 015</a>.</p>
+                <p class="fr-ask-us">Need something else, like a banner or a different size? Give us a call on <a href="tel:+441292811015">01292 811 015</a> or email <a href="mailto:events@nbcc.scot">events@nbcc.scot</a> and we'll make it for you. Please don't make your own versions of our logo or materials.</p>
               </section>
 
               <section class="fr-mine__part" data-f-gifts-part aria-labelledby="mineGiftsHeading">

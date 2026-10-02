@@ -116,9 +116,10 @@ describe("the organiser's own materials", () => {
     });
   }
 
-  it("puts the public page's address in the poster's QR code", async () => {
+  // TASK-512: the poster's own short link, which leads to the public page.
+  it("puts the A4 poster's own short link in its QR code", async () => {
     const html = await (await mine(12, "poster")).text();
-    const path = /<path fill="#000" d="([^"]+)"/.exec(qrSvg("https://nbcc.test/fundraise/sams-santa-dash"))?.[1];
+    const path = /<path fill="#000" d="([^"]+)"/.exec(qrSvg("https://nbcc.test/q/12-a4"))?.[1];
     expect(html).toContain(`d="${path}"`);
   });
 
@@ -168,7 +169,7 @@ describe("the organiser's own materials", () => {
   });
 
   it("knows nothing of a piece it does not make, or an id that is not one", async () => {
-    expect((await mine(12, "leaflet")).status).toBe(404);
+    expect((await mine(12, "banner")).status).toBe(404);
     expect((await mine(0, "poster")).status).toBe(404);
     const res = await fetch(`${base}/api/fundraise/manage/fundraisers/abc/materials/poster`, { headers: { cookie: `nbcc_fr_session=${SAM}` } });
     expect(res.status).toBe(404);
@@ -216,6 +217,6 @@ describe("staff, from Admin > Fundraising", () => {
     state.fundraisers = [record({ status: "new" })];
     expect((await staff(12, "poster", token)).status).toBe(404);
     expect((await staff(99, "poster", token)).status).toBe(404);
-    expect((await staff(12, "leaflet", token)).status).toBe(404);
+    expect((await staff(12, "banner", token)).status).toBe(404);
   });
 });

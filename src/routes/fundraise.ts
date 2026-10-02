@@ -51,8 +51,9 @@ import { subscribeSelf } from "../newsletter/self-signup";
 import { useInvite } from "./fundraise-invite";
 import { readCookie } from "../ball/gate";
 import { listRequestRowsFor } from "../db/fundraising-requests";
-import { organiserRequestLines, parseWants, requestViews, type OrganiserRequestLine } from "../fundraising/requests";
+import { organiserRequestLines, parseWants, requestViews, type OrganiserRequestLine, type RequestRow } from "../fundraising/requests";
 import { config } from "../config";
+import { printStatusFor } from "./fundraise-materials";
 
 // TASK-493: the public side of community fundraising. Everything here is OFF while the fundraising
 // switch is off (Admin > Fundraising, admins only): sign ups are refused and nothing is listed.
@@ -455,9 +456,10 @@ function linkBoxesOf(f: FundraiserRecord): "one" | "two" {
 async function theirRequests(
   f: Pick<Parameters<typeof requestViews>[0], "socialOk" | "eventDate" | "status"> & { id: number; wants?: unknown },
   today: string,
+  read: Promise<RequestRow[]> = listRequestRowsFor(f.id),
 ): Promise<OrganiserRequestLine[] | null> {
   try {
-    const rows = await listRequestRowsFor(f.id);
+    const rows = await read;
     return organiserRequestLines(requestViews({ ...f, wants: parseWants(f.wants) }, rows, today), today, f);
   } catch (err) {
     console.error("fundraise private area requests read failed:", err instanceof Error ? err.message : err);
@@ -473,7 +475,15 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
     const today = londonToday(new Date());
     const fundraisers = await Promise.all(
       mine.map(async (f) => {
-        const [waiting, rows, requests] = await Promise.all([waitingEditFor(f.id), wallRows(f.id), theirRequests(f, today)]);
+        // Their requests are read once, for both "What you asked for" and "Ask us to print these".
+        const requestRows = listRequestRowsFor(f.id);
+        requestRows.catch(() => undefined); // each reader below reports its own failure
+        const [waiting, rows, requests, print] = await Promise.all([
+          waitingEditFor(f.id),
+          wallRows(f.id),
+          theirRequests(f, today, requestRows),
+          printStatusFor(f, today, requestRows),
+        ]);
         // TASK-502: a finished one keeps its public page (and so its QR code) for good.
         const page = hasPage(f);
         return {
@@ -501,11 +511,18 @@ export async function getManageSession(req: Request, res: Response): Promise<Res
           // is finished; the print size QR code only where there is a page, like the SVG.
           materials: {
             poster: `/api/fundraise/manage/fundraisers/${f.id}/materials/poster`,
+            // TASK-512: the same poster on A3, and as an A5 leaflet.
+            posterA3: `/api/fundraise/manage/fundraisers/${f.id}/materials/poster-a3`,
+            leaflet: `/api/fundraise/manage/fundraisers/${f.id}/materials/leaflet`,
             social: `/api/fundraise/manage/fundraisers/${f.id}/materials/social`,
             sponsorForm: `/api/fundraise/manage/fundraisers/${f.id}/materials/sponsor-form`,
             certificate: f.status === "finished" ? `/api/fundraise/manage/fundraisers/${f.id}/materials/certificate` : null,
             qrPng: page ? `/fundraise/${f.slug}/qr.png` : null,
           },
+          // TASK-512: "Ask us to print these": whether they can, and where their posters and
+          // leaflets are up to (POST .../print-request, src/routes/fundraise-materials.ts); null when
+          // it could not be read, so the rest still shows.
+          print,
         };
       }),
     );

@@ -95,6 +95,24 @@ describe("naming the codes that were scanned", () => {
       { label: "Not named", visits: 1 },
     ]);
   });
+
+  // TASK-512: a fundraiser's printed piece has its own code; its tag is named for the fundraiser and
+  // the piece ("Sam's Santa Dash, A4 poster"), from names looked up for it.
+  it("names a fundraiser's piece from the names it is given", () => {
+    expect(
+      labelQrScans(
+        [
+          { campaign: "f12-a4", visits: 4 },
+          { campaign: "ball-terms", visits: 1 },
+        ],
+        SITE_PAGES,
+        new Map([["f12-a4", "Sam's Santa Dash, A4 poster"]]),
+      ),
+    ).toEqual([
+      { label: "Sam's Santa Dash, A4 poster", visits: 4 },
+      { label: "Ticket terms", visits: 1 },
+    ]);
+  });
 });
 
 const allPaths = (pages: SitePage[]): string[] => pages.flatMap((p) => [p.path, ...allPaths(p.children ?? [])]);

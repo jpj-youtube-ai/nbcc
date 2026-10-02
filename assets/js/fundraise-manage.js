@@ -67,6 +67,7 @@
     payFailed: "Card payments are not working just now. Please try again in a few minutes.",
     opening: "Opening the secure payment page…",
     finishFailed: "We could not send that just now. Please try again in a few minutes.",
+    printFailed: "We could not send that just now. Please try again in a few minutes, or give us a call on 01292 811 015.",
   };
 
   var LONG_DATE = (function () {
@@ -404,7 +405,8 @@
       if (matsPart) {
         matsPart.hidden = !mats;
         if (mats) {
-          ["poster", "social", "sponsorForm", "certificate"].forEach(function (key) {
+          // TASK-512: the A3 poster and the A5 leaflet too.
+          ["poster", "posterA3", "leaflet", "social", "sponsorForm", "certificate"].forEach(function (key) {
             var item = q('[data-f-mat="' + key + '"]');
             if (!item) return;
             item.hidden = !mats[key];
@@ -412,6 +414,7 @@
           });
         }
       }
+      wirePrint(card, f);
 
       var m = f.meter || {};
       q("[data-f-raised]").textContent =
@@ -737,6 +740,70 @@
     }
 
     // --- I've finished ------------------------------------------------------------------------------
+    // TASK-512: "Ask us to print these", beside the posters and the leaflet. Each ask becomes the
+    // posters or leaflets request staff track; the words say where it is up to. Only while the
+    // fundraiser is approved and still to come (print.canAsk); after that, a line to call us instead.
+    function wirePrint(card, f) {
+      var print = f.print || null;
+      var closed = card.querySelector("[data-f-print-closed]");
+      var forms = card.querySelectorAll("form[data-f-print]");
+      function show(p) {
+        Array.prototype.forEach.call(forms, function (form) {
+          var kind = form.getAttribute("data-f-print");
+          var line = p && p[kind];
+          var status = form.querySelector("[data-f-print-status]");
+          if (status && line && line.words) say(status, String(line.words), line.status === "sent" ? "success" : "pending");
+        });
+      }
+      Array.prototype.forEach.call(forms, function (form) {
+        form.hidden = !(print && print.canAsk);
+      });
+      if (closed) closed.hidden = !(print && !print.canAsk);
+      if (!print) return;
+      show(print);
+      Array.prototype.forEach.call(forms, function (form) {
+        var kind = form.getAttribute("data-f-print");
+        var status = form.querySelector("[data-f-print-status]");
+        var button = form.querySelector("button[type=submit]");
+        var count = function (name) {
+          var input = form.querySelector('input[name="' + name + '"]');
+          var raw = input ? String(input.value || "").trim() : "";
+          return raw === "" ? 0 : Number(raw);
+        };
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          var body = kind === "posters" ? { kind: "posters", a4: count("a4"), a3: count("a3") } : { kind: "leaflets", a5: count("a5") };
+          var numbers = kind === "posters" ? [body.a4, body.a3] : [body.a5];
+          var total = numbers.reduce(function (n, x) {
+            return n + x;
+          }, 0);
+          if (!numbers.every(function (x) { return Number.isInteger(x) && x >= 0; }) || total < 1) {
+            say(status, "Say how many you would like, as a whole number.", "error");
+            return;
+          }
+          if (button) button.disabled = true;
+          say(status, MSG.sending, "pending");
+          post(API + "/fundraisers/" + encodeURIComponent(f.id) + "/print-request", body)
+            .then(function (r) {
+              if (button) button.disabled = false;
+              if (r.status === 200) {
+                form.reset();
+                var line = r.data.print && r.data.print[kind];
+                return say(status, line && line.words ? String(line.words) : "Thank you. We have your order and will be in touch.", "success");
+              }
+              if (r.status === 401) return sessionOver();
+              var fields = r.data.fields || {};
+              var first = fields[Object.keys(fields)[0]];
+              say(status, String(first || r.data.error || MSG.printFailed), "error");
+            })
+            .catch(function () {
+              if (button) button.disabled = false;
+              say(status, MSG.printFailed, "error");
+            });
+        });
+      });
+    }
+
     function wireFinished(card, f) {
       var button = card.querySelector("[data-f-finished]");
       var thanks = card.querySelector("[data-f-finished-thanks]");

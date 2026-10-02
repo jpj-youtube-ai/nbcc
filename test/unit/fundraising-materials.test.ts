@@ -138,8 +138,8 @@ describe("the facts a piece is drawn from", () => {
 });
 
 describe("who may open which piece", () => {
-  it("lists the four pages", () => {
-    expect([...MATERIALS]).toEqual(["poster", "social", "sponsor-form", "certificate"]);
+  it("lists the pages (TASK-512 adds the A3 poster and the A5 leaflet)", () => {
+    expect([...MATERIALS]).toEqual(["poster", "poster-a3", "leaflet", "social", "sponsor-form", "certificate"]);
   });
 
   it("gives an organiser every piece of an approved fundraiser except the certificate", () => {
@@ -183,8 +183,9 @@ describe("the poster", () => {
     expect(html).toContain(ASSETS.logo);
   });
 
-  it("carries a big QR code of exactly the public page's address, and the address in words", () => {
-    const path = /<path fill="#000" d="([^"]+)"/.exec(qrSvg(PAGE))?.[1];
+  // TASK-512: the code is the A4 poster's own short link, which leads to the public page.
+  it("carries a big QR code of the A4 poster's own short link, and the page's address in words", () => {
+    const path = /<path fill="#000" d="([^"]+)"/.exec(qrSvg("https://nbcc.test/q/12-a4"))?.[1];
     expect(path).toBeTruthy();
     expect(html).toContain(`d="${path}"`);
     expect(html).toContain("nbcc.test/fundraise/sams-santa-dash");

@@ -262,3 +262,14 @@ describe("the raw files", () => {
     }
   });
 });
+
+// The pages are read from disk at request time, so a page missing from the image is a 404 in
+// production that no test running against the repo would ever see.
+describe("the image", () => {
+  it("ships every page these routes read", async () => {
+    const { readFileSync } = await import("node:fs");
+    const docker = readFileSync(resolve(ROOT, "Dockerfile"), "utf8");
+    const copy = docker.split(/\r?\n/).find((l) => l.startsWith("COPY index.html")) ?? "";
+    for (const f of ["events.html", "fundraise.html", "fundraiser.html", "fundraise-manage.html"]) expect(copy.split(/\s+/), f).toContain(f);
+  });
+});

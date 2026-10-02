@@ -9874,7 +9874,7 @@
     var box = el("evSwitch");
     box.classList.toggle("is-on", on);
     el("evSwitchState").innerHTML = on
-      ? "<b>Yes.</b> The page is at nbcc.scot/events, and every page’s menu offers it. Visitors see every event marked “On the website”."
+      ? "<b>Yes.</b> The page is at nbcc.scot/get-involved, and every page’s menu offers it as Get involved. Visitors see every event marked “On the website”."
       : "<b>No.</b> The page is switched off: nobody can see it and no menu mentions it. Build and check events here, then switch it on when you are ready.";
     el("evSwitchWho").textContent = evData && evData.updatedBy && evData.updatedBy.indexOf("admin:") === 0
       ? "Last " + (on ? "switched on" : "switched off") + " by " + evData.updatedBy.slice(6) + " on " + H.fmtDate(evData.updatedAt) + "."

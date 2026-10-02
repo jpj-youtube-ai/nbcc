@@ -1,3 +1,4 @@
+import QRCode from "qrcode";
 import type { SitePage } from "./pages";
 
 // TASK-492: QR codes for the pages of nbcc.scot, made in the admin for posters, leaflets and
@@ -57,4 +58,16 @@ export function qrRows(
       ...qrRows(p.children ?? [], gates, live),
     ];
   });
+}
+
+// Black on white with the standard four-module margin, and error correction M (15%): the most
+// reliable to scan in print, from a poster across a room or a leaflet in poor light.
+const DRAW = { errorCorrectionLevel: "M" as const, margin: 4, color: { dark: "#000000", light: "#ffffff" } };
+
+export type QrFormat = "svg" | "png";
+
+/** The code for a link: an SVG (text) for printing at any size, or a 1200 pixel PNG. */
+export async function drawQr(link: string, format: QrFormat): Promise<string | Buffer> {
+  if (format === "svg") return QRCode.toString(link, { ...DRAW, type: "svg" });
+  return QRCode.toBuffer(link, { ...DRAW, type: "png", width: 1200 });
 }

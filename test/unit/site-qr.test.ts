@@ -1,6 +1,35 @@
 import { describe, it, expect } from "vitest";
-import { qrSlug, qrLink, qrPath, qrRows } from "../../src/site/qr";
+import sharp from "sharp";
+import jsQR from "jsqr";
+import { qrSlug, qrLink, qrPath, qrRows, drawQr } from "../../src/site/qr";
 import { SITE_PAGES, type SitePage } from "../../src/site/pages";
+
+// Reads a code back the way a phone would: the image's pixels, decoded.
+async function scan(image: Buffer): Promise<{ text: string | null; width: number }> {
+  const { data, info } = await sharp(image).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const found = jsQR(new Uint8ClampedArray(data.buffer, data.byteOffset, data.length), info.width, info.height);
+  return { text: found ? found.data : null, width: info.width };
+}
+
+describe("drawing a code", () => {
+  const link = qrLink("/ball/terms");
+
+  it("draws a PNG, 1200 pixels across, that scans as the page's link", async () => {
+    const png = await drawQr(link, "png");
+    expect(Buffer.isBuffer(png)).toBe(true);
+    const read = await scan(png as Buffer);
+    expect(read.width).toBe(1200);
+    expect(read.text).toBe(link);
+  });
+
+  it("draws an SVG, for printing at any size, that scans as the same link", async () => {
+    const svg = (await drawQr(link, "svg")) as string;
+    expect(svg.startsWith("<svg")).toBe(true);
+    expect(svg).not.toMatch(/<script/i);
+    const read = await scan(await sharp(Buffer.from(svg), { density: 300 }).png().toBuffer());
+    expect(read.text).toBe(link);
+  });
+});
 
 // TASK-492: QR codes for every page of the site, in the admin. These are the pure rules: which
 // pages get a code, the link a code carries, and which typed addresses are allowed.

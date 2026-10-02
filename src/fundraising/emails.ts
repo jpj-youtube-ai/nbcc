@@ -44,23 +44,25 @@ ${FOOTER_TEXT}`;
 
 // --- thanks for signing up ------------------------------------------------------------------------
 
-export function buildSignUpThanksEmail(f: { name: string; title: string }): BuiltEmail {
-  const hi = `Hi ${firstName(f.name)},`;
-  const title = escapeHtml(f.title);
+// Fixed words only: anyone can type any address into the public form, so this email carries
+// nothing they typed (no name, title or description). Otherwise the form would send any words, from
+// NBCC's own domain, to anyone. Everything they told us goes to the events inbox instead.
+export function buildSignUpThanksEmail(): BuiltEmail {
+  const hi = "Hello,";
   const body =
     eyebrow("Fundraising for NBCC") +
     heading("Thank you for signing up") +
-    bodyP(escapeHtml(hi)) +
-    bodyP(`Thank you for wanting to raise money for NBCC with <b>${title}</b>. It means a great deal to the families we help.`) +
-    bodyP("Someone from our team will look at what you sent and be in touch soon, usually within a few days. Nothing goes on our website until we have spoken.") +
+    bodyP(hi) +
+    bodyP("Thank you for wanting to raise money for NBCC. It means a great deal to the families we help.") +
+    bodyP("Someone from our team will look at what you sent and be in touch soon, usually within a few days. Nothing goes on our website until we have spoken. If this was not you, you can ignore this email.") +
     note(`Any questions in the meantime? Just reply to this email, or write to ${FUNDRAISING_EMAIL}.`);
   const text = [
     hi,
     "",
-    `Thank you for wanting to raise money for NBCC with ${f.title}. It means a great deal to the families we help.`,
+    "Thank you for wanting to raise money for NBCC. It means a great deal to the families we help.",
     "",
     "Someone from our team will look at what you sent and be in touch soon, usually within a few days.",
-    "Nothing goes on our website until we have spoken.",
+    "Nothing goes on our website until we have spoken. If this was not you, you can ignore this email.",
     "",
     TEXT_FOOTER,
   ].join("\n");
@@ -133,10 +135,30 @@ export function buildSignUpStaffEmail(f: SignUp & { id: number }, o: { adminUrl:
 
 export function buildApprovedEmail(
   f: { name: string; title: string },
-  o: { pageUrl: string | null; manageUrl: string | null },
+  o: { pageUrl: string | null; manageUrl: string | null; pagesOpen?: boolean },
 ): BuiltEmail {
   const hi = `Hi ${firstName(f.name)},`;
   const title = escapeHtml(f.title);
+  // Approved while fundraising is still switched off: a page link would be a 404, so say when.
+  if (o.pagesOpen === false) {
+    const body =
+      eyebrow("Fundraising for NBCC") +
+      heading("You're approved") +
+      bodyP(escapeHtml(hi)) +
+      bodyP(`Good news: <b>${title}</b> is approved. Your page will appear when our fundraising pages open, and we will be in touch about anything you asked us for.`) +
+      note(`Thank you. Any questions, just reply to this email or write to ${FUNDRAISING_EMAIL}.`);
+    const text = [
+      hi,
+      "",
+      `Good news: ${f.title} is approved. Your page will appear when our fundraising pages open, and`,
+      "we will be in touch about anything you asked us for.",
+      "",
+      "Thank you.",
+      "",
+      TEXT_FOOTER,
+    ].join("\n");
+    return { subject: `You're approved: ${f.title}`, html: shell(body), text };
+  }
   if (o.pageUrl) {
     const manage = o.manageUrl
       ? `To change your description, target, date or place, go to ${escapeHtml(o.manageUrl)} and we will email you a link. We check every change before it shows.`

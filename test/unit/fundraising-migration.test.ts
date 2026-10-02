@@ -92,7 +92,25 @@ describe("the fundraising migration", () => {
       .join("\n");
     expect(checks).toContain("path IN ('raising', 'event')");
     expect(checks).toContain("status IN ('new', 'approved', 'declined', 'finished')");
-    expect(checks).toContain("status IN ('waiting', 'approved', 'rejected')");
+    // A waiting change an organiser has since replaced is kept, marked replaced, never rewritten.
+    expect(checks).toContain("status IN ('waiting', 'approved', 'rejected', 'replaced')");
     expect(checks).toContain("/media/events/");
+  });
+});
+
+// TASK-493: organisers who tick the newsletter box are recorded as having joined from the
+// fundraising form: a fourth consent source, widened in its own small migration.
+describe("the newsletter consent source migration", () => {
+  const SOURCE = resolve(ROOT, "migrations/1791200000002_newsletter-source-fundraise.js");
+  const m = createRequire(import.meta.url)(SOURCE) as { up: (pgm: unknown) => void };
+  const { calls, pgm } = fakePgm();
+  m.up(pgm);
+
+  it("only widens the list of sources, keeping every one already there", () => {
+    const add = calls.find((c) => c.op === "addConstraint");
+    expect(add?.args[0]).toBe("list_subscribers");
+    expect(JSON.stringify(add?.args[2])).toContain("consent_source IN ('footer', 'import', 'admin', 'fundraise')");
+    expect(calls.filter((c) => c.op.startsWith("drop")).map((c) => c.args[1])).toEqual(["list_subscribers_consent_source_check"]);
+    expect(calls.some((c) => c.op === "dropTable" || c.op === "dropColumns" || c.op === "dropColumn")).toBe(false);
   });
 });

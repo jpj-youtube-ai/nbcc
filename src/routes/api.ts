@@ -207,6 +207,14 @@ const checkoutBodySchema = z
         message: "Please choose a different name to show on our supporters page.",
       });
     }
+    // TASK-493: the same check for a message on a fundraiser's supporter wall, which is public too.
+    if (b.supporterMessage && containsBlockedWord(b.supporterMessage)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["supporterMessage"],
+        message: "Please choose different words for your message on the supporter wall.",
+      });
+    }
   });
 
 type CheckoutBody = z.infer<typeof checkoutBodySchema>;

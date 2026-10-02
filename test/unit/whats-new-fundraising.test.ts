@@ -27,3 +27,11 @@ describe("the fundraising section's arrivals", () => {
     expect(storiesQuery).not.toHaveBeenCalled();
   });
 });
+
+describe("the newsletter section's arrivals", () => {
+  it("count people who joined from the fundraising form, as well as the footer", async () => {
+    mainQuery.mockReset().mockResolvedValue({ rows: [{ at: null }] });
+    await latestArrival("newsletter", new Date("2026-10-01T00:00:00Z"));
+    expect(mainQuery.mock.calls[0][0]).toMatch(/consent_source IN \('footer', 'fundraise'\)/);
+  });
+});

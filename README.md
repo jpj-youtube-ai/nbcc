@@ -7092,7 +7092,7 @@ is listed, every page is a 404, and manage links do nothing, until an admin swit
 | Public API | `src/routes/fundraise.ts` |
 | Admin API | `src/routes/admin-fundraising.ts` |
 | Checkout and webhook additions | `src/routes/api.ts`, `src/db/stripe-webhook-model.ts`, `src/db/stripe-webhook.ts` |
-| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js` |
+| Tables | `migrations/1791200000000_fundraising.js`; access backfill `1791200000001_permissions-fundraising.js`; newsletter source `1791200000002_newsletter-source-fundraise.js` |
 
 ### Data
 
@@ -7142,9 +7142,12 @@ Answers: `200 { "status": "received" }` (also for a filled honeypot, which store
 `400 { "error": "...", "fields": { "phone": "Please give us a phone number, so we can call you." } }`
 with a plain English message per field; `400 { "error": "captcha" }`; `404` while switched off;
 `429` after 5 sign ups from one address in 10 minutes. On success the organiser is emailed a thank
-you and `events@` a summary. A ticked `newsletterOk` subscribes the organiser **exactly as the footer
-form does**: both call `subscribeSelf` (`src/newsletter/self-signup.ts`, moved unchanged out of
-`src/routes/subscribe.ts`): the newsletter list, `consent_source` `footer`, deduped by address, an
+you and `events@` a summary. The thank you is a **fixed message carrying nothing the visitor typed**
+(no name, title or description), so the form cannot be used to send any words from NBCC to any
+address; everything they told us goes to `events@`. A ticked `newsletterOk` subscribes the organiser
+**exactly as the footer form does**: both call `subscribeSelf` (`src/newsletter/self-signup.ts`, moved
+unchanged out of `src/routes/subscribe.ts`): the newsletter list, `consent_source` `fundraise` (the
+footer's is `footer`; both are self signups and both are welcomed), deduped by address, an
 earlier opt out of their own revived, the welcome email with its one click unsubscribe, and
 suppressed addresses held back at send time like every newsletter. Unticked changes nothing.
 
@@ -7171,8 +7174,9 @@ No email, phone, address or social link is ever in a public answer.
 
 **`GET /api/fundraisers/:slug`**: a Card plus
 `"wall": [{ "name": "Alex E." | "Anonymous", "amountPence": 2500 | null, "message": "..." | null, "createdAt": "ISO" }]`
-(newest first, every entry; the page shows the top 10 then Show all; hidden messages and gifts
-refunded in full never appear) and `"giving": { "fundraiserId": 9, "minimumPence": 200 }`. `404`
+(newest first, every entry; the page shows the top 10 then Show all; a message staff hid shows as
+`message: null` with the gift kept; a gift refunded in full never appears; a giver whose details were
+redacted at the end of retention shows as Anonymous) and `"giving": { "fundraiserId": 9, "minimumPence": 200 }`. `404`
 unless approved, public, raising money and switched on.
 
 **`POST /api/fundraise/manage/request`** `{ "email": "..." }`: always
@@ -7189,14 +7193,17 @@ nothing (or while switched off), `410` for one that has run out or a fundraiser 
 
 **`POST /api/fundraise/manage/:token`**: any of the seven editable fields (send only what changed;
 an empty string or `null` clears a date, time, target or link). `202 { "status": "waiting", "edit":
-{ "id", "changes", "createdAt" } }`. A change already waiting is replaced, so there is only ever one.
+{ "id", "changes", "createdAt" } }`. A change already waiting is marked `replaced` and the new one added (never rewritten in place), so
+staff can never approve words they did not see.
 The live page keeps the approved version until staff approve it. `400` with `fields` for anything
 else (title, slug and status cannot be changed this way), `404` and `410` as above.
 
 ### Giving on a fundraiser's page
 
 `POST /api/checkout-session` takes four more optional fields: `fundraiserId` (positive integer),
-`supporterMessage` (up to 200), `showName` and `showAmount` (both default true). With
+`supporterMessage` (up to 200, held to the supporters wall's word check: `400` with "Please choose
+different words for your message on the supporter wall."), `showName` and `showAmount` (both default
+true). With
 `fundraiserId` the gift must be one off (`mode: "once"`) and at least 200 pence, and the four are
 stamped on the Stripe metadata. **Without `fundraiserId` nothing changes**: the other three are
 dropped and the session is exactly what the donate page always got (tested). Everything else
@@ -7223,8 +7230,8 @@ transaction, with the actor `admin:<email>`.
 | `POST /api/admin/fundraisers/:id/approve` | | `{ fundraiser }`; emails the organiser (see below); from New or Declined |
 | `POST /api/admin/fundraisers/:id/decline` | `{ reason? }` (internal, up to 500) | `{ fundraiser }`; from New or Approved; no email |
 | `POST /api/admin/fundraisers/:id/finish` | | `{ fundraiser }`; from Approved |
-| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied |
-| `POST /api/admin/fundraisers/:id/edits/:editId/reject` | | `{ fundraiser }`; `409` if already dealt with |
+| `POST /api/admin/fundraisers/:id/edits/:editId/approve` | | `{ fundraiser }` with the change applied; `409` "This change has been replaced; look again" if the organiser saved a newer one |
+| `POST /api/admin/fundraisers/:id/edits/:editId/reject` | | `{ fundraiser }`; `409` if already dealt with or replaced |
 | `POST /api/admin/fundraisers/:id/cash` | `{ amountPence, paidInOn, note? }` | `201 { cash }` |
 | `DELETE /api/admin/fundraisers/:id/cash/:cashId` | | `{ removed }` |
 | `POST /api/admin/fundraisers/:id/wall/:donationId/hide` and `/show` | | `{ donationId, hidden }` |
@@ -7235,14 +7242,14 @@ A **Fundraiser** (admin) is every column: `id, slug, path, kind, kindLabel, titl
 eventDate, startTime, venue, town, targetPence, public, status (new | approved | declined |
 finished), name, email, phone, socialLink, socialOk, wants, postAddress, newsletterOk, imageSrc,
 declinedReason, createdAt, approvedAt, approvedBy, updatedAt, updatedBy, pageUrl`. `edits` are
-`{ id, changes, status (waiting | approved | rejected), createdAt, decidedAt, decidedBy }`, the
+`{ id, changes, status (waiting | approved | rejected | replaced), createdAt, decidedAt, decidedBy }`, the
 waiting one first. `cash` rows are `{ id, amountPence, paidInOn, note, createdBy, createdAt }`.
 `wall` rows (hidden ones included) are `{ donationId, fullName, shortName, anonymous, showName,
 showAmount, amountPence, refundedPence, message, hidden, createdAt }`. Refusals are
 `{ error }` in plain English: `400` (with `fields`), `403`, `404`, `409`.
 
-Admin > Fundraising has a **New pill** (area `fundraising`, lit by each new sign up) and a line in
-the admin's new features list.
+Admin > Fundraising has a **New pill** (area `fundraising`, lit by each new sign up). Its line in the
+admin's new features list arrives with the screen itself.
 
 ### Emails
 
@@ -7251,9 +7258,9 @@ kind on the Email audit:
 
 | Kind | To | When |
 |---|---|---|
-| `fundraiseThanks` | the organiser | they sign up: thank you, we'll be in touch |
+| `fundraiseThanks` | the address typed in the form | they sign up: a fixed thank you, we'll be in touch, with none of their words |
 | `fundraiseStaff` | `events@` (Reply-To the organiser) | they sign up: everything they told us and asked for. Staff only, so its links are never tagged |
-| `fundraiseApproved` | the organiser | approved: their page link (raising money and public), or "you're on our list" |
+| `fundraiseApproved` | the organiser | approved: their page link (raising money and public), "approved, your page will appear when our fundraising pages open" while fundraising is switched off, or "you're on our list" |
 | `fundraiseManage` | the organiser | they ask for a manage link |
 
 ### For the page builders
@@ -7276,7 +7283,7 @@ later stages.
 
 Unit: `fundraising-model`, `fundraising-manage-token`, `fundraising-emails`, `fundraisers-db`,
 `fundraise-routes`, `admin-fundraising-routes`, `checkout-fundraiser`, `stripe-webhook-fundraiser`,
-`fundraising-migration`, `whats-new-fundraising`, `newsletter-self-signup`, plus the permission, backfill, backup, email kind
+`fundraising-migration`, `whats-new-fundraising`, `newsletter-self-signup`, `fundraising-send`, `fundraising-qr`, plus the permission, backfill, backup, email kind
 and tracked link tests. BDD: `features/fundraising.feature` (approval and the switch, a gift raising
 the meter and joining the wall, cash, hiding a message, a gift for an unapproved fundraiser, a
 manage change waiting for staff, who may do what).

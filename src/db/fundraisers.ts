@@ -18,7 +18,7 @@ import {
 // writes its audit_log row in the SAME transaction, against entity "fundraiser" and the
 // fundraiser's id, so the admin's History for a fundraiser is one query.
 
-export type FundraiserErrorReason = "not_found" | "bad_status" | "slug_taken" | "not_waiting";
+export type FundraiserErrorReason = "not_found" | "bad_status" | "slug_taken" | "not_waiting" | "replaced";
 
 export class FundraiserError extends Error {
   constructor(public readonly reason: FundraiserErrorReason) {
@@ -235,31 +235,49 @@ async function freeSlug(client: PoolClient, title: string): Promise<string> {
   return `${base}-${n}`;
 }
 
+const isSlugClash = (err: unknown): boolean =>
+  typeof err === "object" && err !== null && (err as { code?: string }).code === "23505" &&
+  /slug/.test(String((err as { constraint?: string }).constraint ?? "fundraisers_slug_key"));
+
 export async function createFundraiser(s: SignUp): Promise<FundraiserRecord> {
   return inTransaction(async (client) => {
-    const slug = await freeSlug(client, s.title);
-    const inserted = await client.query<{ id: number }>(
-      `INSERT INTO fundraisers
-         (slug, path, kind, title, description, event_date, start_time, venue, town, target_pence, public,
-          organiser_name, organiser_email, organiser_phone, social_link, social_ok, wants, post_address,
-          newsletter_ok, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'public')
-       RETURNING id`,
-      [
-        slug, s.path, s.kind, s.title, s.description, s.eventDate, s.startTime, s.venue, s.town, s.targetPence, s.public,
-        s.name, s.email, s.phone, s.socialLink, s.socialOk, JSON.stringify(s.wants), s.postAddress, s.newsletterOk,
-      ],
-    );
-    const id = Number(inserted.rows[0].id);
-    await insertAudit(client, {
-      actor: "public",
-      action: "fundraiser.signed_up",
-      entity: "fundraiser",
-      entityId: id,
-      data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public },
-    });
-    return reread(client, id);
+    // Two sign ups with the same name at the same moment can both pick the same free address; the
+    // second then clashes on the unique slug. A savepoint lets it look again and take the next one.
+    for (let attempt = 1; ; attempt += 1) {
+      const slug = await freeSlug(client, s.title);
+      await client.query("SAVEPOINT fundraiser_slug");
+      try {
+        return await insertSignUp(client, s, slug);
+      } catch (err) {
+        if (!isSlugClash(err) || attempt >= 5) throw err;
+        await client.query("ROLLBACK TO SAVEPOINT fundraiser_slug");
+      }
+    }
   });
+}
+
+async function insertSignUp(client: PoolClient, s: SignUp, slug: string): Promise<FundraiserRecord> {
+  const inserted = await client.query<{ id: number }>(
+    `INSERT INTO fundraisers
+       (slug, path, kind, title, description, event_date, start_time, venue, town, target_pence, public,
+        organiser_name, organiser_email, organiser_phone, social_link, social_ok, wants, post_address,
+        newsletter_ok, updated_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, 'public')
+     RETURNING id`,
+    [
+      slug, s.path, s.kind, s.title, s.description, s.eventDate, s.startTime, s.venue, s.town, s.targetPence, s.public,
+      s.name, s.email, s.phone, s.socialLink, s.socialOk, JSON.stringify(s.wants), s.postAddress, s.newsletterOk,
+    ],
+  );
+  const id = Number(inserted.rows[0].id);
+  await insertAudit(client, {
+    actor: "public",
+    action: "fundraiser.signed_up",
+    entity: "fundraiser",
+    entityId: id,
+    data: { slug, path: s.path, kind: s.kind, title: s.title, public: s.public },
+  });
+  return reread(client, id);
 }
 
 // --- reading -------------------------------------------------------------------------------------
@@ -328,7 +346,7 @@ export async function wallRows(fundraiserId: number): Promise<WallSourceRow[]> {
 export interface EditRow {
   id: number;
   changes: FundraiserEdit;
-  status: "waiting" | "approved" | "rejected";
+  status: "waiting" | "approved" | "rejected" | "replaced";
   createdAt: string;
   decidedAt: string | null;
   decidedBy: string | null;
@@ -459,7 +477,7 @@ export async function moveFundraiser(
 
 // --- changes from the organiser ------------------------------------------------------------------
 
-/** Store an organiser's change as waiting. A change of theirs already waiting is replaced. */
+/** Store an organiser's change as waiting. A change of theirs already waiting is marked replaced. */
 export async function requestEdit(fundraiserId: number, changes: FundraiserEdit, tokenHash: string): Promise<EditRow> {
   return inTransaction(async (client) => {
     const f = await lockFundraiser(client, fundraiserId);
@@ -468,24 +486,23 @@ export async function requestEdit(fundraiserId: number, changes: FundraiserEdit,
       "SELECT id FROM fundraiser_edits WHERE fundraiser_id = $1 AND status = 'waiting' FOR UPDATE",
       [fundraiserId],
     );
-    let editId: number;
-    if (waiting.rows[0]) {
-      editId = Number(waiting.rows[0].id);
-      await client.query("UPDATE fundraiser_edits SET changes = $1, created_at = now() WHERE id = $2", [JSON.stringify(changes), editId]);
-    } else {
-      const ins = await client.query<{ id: number }>(
-        "INSERT INTO fundraiser_edits (fundraiser_id, changes) VALUES ($1, $2) RETURNING id",
-        [fundraiserId, JSON.stringify(changes)],
-      );
-      editId = Number(ins.rows[0].id);
+    // Never rewritten in place: a change staff are reading cannot be swapped under them. The one
+    // waiting is marked replaced and the new one added, so approving the old one is refused (409).
+    for (const row of waiting.rows) {
+      await client.query("UPDATE fundraiser_edits SET status = 'replaced', decided_at = now(), decided_by = 'organiser' WHERE id = $1", [Number(row.id)]);
     }
+    const ins = await client.query<{ id: number }>(
+      "INSERT INTO fundraiser_edits (fundraiser_id, changes) VALUES ($1, $2) RETURNING id",
+      [fundraiserId, JSON.stringify(changes)],
+    );
+    const editId = Number(ins.rows[0].id);
     await client.query("UPDATE fundraiser_manage_tokens SET used_at = COALESCE(used_at, now()) WHERE token_hash = $1", [tokenHash]);
     await insertAudit(client, {
       actor: "organiser",
       action: "fundraiser.edit_requested",
       entity: "fundraiser",
       entityId: fundraiserId,
-      data: { editId, fields: Object.keys(changes), replaced: Boolean(waiting.rows[0]) },
+      data: { editId, fields: Object.keys(changes), replaced: waiting.rows.map((r) => Number(r.id)) },
     });
     const r = await client.query(
       "SELECT id, changes, status, created_at, decided_at, decided_by FROM fundraiser_edits WHERE id = $1",
@@ -518,6 +535,7 @@ export async function decideEdit(
     );
     const edit = r.rows[0];
     if (!edit) throw new FundraiserError("not_found");
+    if (edit.status === "replaced") throw new FundraiserError("replaced");
     if (edit.status !== "waiting") throw new FundraiserError("not_waiting");
     let changed: string[] = [];
     if (approve) changed = await applyPatch(client, fundraiserId, edit.changes as Partial<Record<PatchField, unknown>>, actor);

@@ -63,6 +63,14 @@ describe("joining the newsletter yourself", () => {
     expect(recordAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "welcome.sent", entityId: 41 }));
   });
 
+  it("records the fundraising form as the source when it is the one asking", async () => {
+    lists.addListSubscriber.mockResolvedValue("added");
+    await subscribeSelf({ name: "Robin Testperson", email: "robin@example.com", phone: null }, "fundraise");
+    expect(lists.addListSubscriber.mock.calls[0][2]).toBe("fundraise");
+    await flush();
+    expect(sendNewsletter).toHaveBeenCalledTimes(1); // a self signup, so welcomed like the footer
+  });
+
   it("does not add an address already on the list twice (the list dedupes it)", async () => {
     lists.addListSubscriber.mockResolvedValue("exists");
     expect(await subscribeSelf({ name: "Robin Testperson", email: "robin@example.com", phone: null })).toBe("exists");

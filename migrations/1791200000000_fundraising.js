@@ -98,7 +98,8 @@ exports.up = (pgm) => {
     { comment: "Changes an organiser asked for by their manage link, waiting for staff (TASK-493)." },
   );
   pgm.addConstraint("fundraiser_edits", "fundraiser_edits_status_check", {
-    check: "status IN ('waiting', 'approved', 'rejected')",
+    // replaced: the organiser saved another change while this one waited. Kept, never rewritten.
+    check: "status IN ('waiting', 'approved', 'rejected', 'replaced')",
   });
   pgm.createIndex("fundraiser_edits", ["fundraiser_id", "status"]);
 

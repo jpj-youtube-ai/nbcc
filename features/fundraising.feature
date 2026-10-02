@@ -29,9 +29,9 @@ Feature: Community fundraising, the core (TASK-493)
     Given fundraising is switched on
     When someone signs up "Jo's Coffee Morning (bdd-fr)" to raise 20000 pence, ticking the newsletter box
     Then the fundraising answer is 200
-    And "jo.fr.bdd@example.com" is on the newsletter list as a self signup
+    And "jo.fr.bdd@example.com" is on the newsletter list as a self signup from the fundraising form
 
-  Scenario: a gift on the page raises the meter and joins the wall; cash adds; a hidden message goes
+  Scenario: a gift on the page raises the meter and joins the wall; cash adds; a hidden message goes, the gift stays
     Given fundraising is switched on
     And a fundraising staff member "e2.fr.bdd@example.com" with role "editor"
     And an approved fundraiser "Sam's Walk (bdd-fr)" raising 50000 pence
@@ -44,7 +44,7 @@ Feature: Community fundraising, the core (TASK-493)
     And the page for "Sam's Walk (bdd-fr)" shows 3500 pence raised of 50000
     When "e2.fr.bdd@example.com" hides the message paid as "pi_fr_bdd_gift_1" on "Sam's Walk (bdd-fr)"
     Then the fundraising answer is 200
-    And the wall for "Sam's Walk (bdd-fr)" is empty
+    And the wall for "Sam's Walk (bdd-fr)" shows "Alex E." with no message
     And the page for "Sam's Walk (bdd-fr)" shows 3500 pence raised of 50000
     And the history of "Sam's Walk (bdd-fr)" records "fundraiser.cash_added" and "fundraiser.message_hidden" by "e2.fr.bdd@example.com"
 

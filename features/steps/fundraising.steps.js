@@ -185,14 +185,14 @@ When(
   },
 );
 
-Then("{string} is on the newsletter list as a self signup", async function (email) {
+Then("{string} is on the newsletter list as a self signup from the fundraising form", async function (email) {
   const r = await pool.query(
     `SELECT s.consent_source, s.unsubscribed_at, s.added_by FROM list_subscribers s JOIN subscriber_lists l ON l.id = s.list_id
       WHERE l.slug = 'newsletter' AND lower(s.email) = lower($1)`,
     [email],
   );
   assert.equal(r.rows.length, 1, `${email} is not on the newsletter list`);
-  assert.equal(r.rows[0].consent_source, "footer");
+  assert.equal(r.rows[0].consent_source, "fundraise");
   assert.equal(r.rows[0].unsubscribed_at, null);
   assert.equal(r.rows[0].added_by, null);
 });
@@ -296,10 +296,10 @@ Then("the wall for {string} shows {string} saying {string}", async function (tit
   );
 });
 
-Then("the wall for {string} is empty", async function (title) {
+Then("the wall for {string} shows {string} with no message", async function (title, name) {
   const f = await fundraiser(title);
   const body = await call(this, "GET", `/api/fundraisers/${f.slug}`);
-  assert.deepEqual(body.wall, []);
+  assert.deepEqual(body.wall.map((w) => [w.name, w.message]), [[name, null]]);
 });
 
 When(
